@@ -55,7 +55,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 3. ✅ TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
 5. TM Forum Open API conformance (CTK).
-6. Observability (Micrometer/Prometheus) + infrastructure-as-code for the chosen deploy target.
+6. ✅ Observability (Micrometer/Prometheus/Grafana). Infrastructure-as-code for the chosen deploy target still open.
 
 ## Build status
 All four services compile and their tests pass under JDK 17 + Maven 3.9, locally and
@@ -207,6 +207,25 @@ Watch the stream:
 docker exec -it bss-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic bss.ordering.events --from-beginning
 ```
+
+## Observability
+Every service (gateway included) exposes Prometheus metrics at
+`/actuator/prometheus`, tagged with `application=<service>` — JVM, HTTP server,
+datasource, and Kafka producer metrics out of the box, plus two business counters
+from the event pipeline:
+
+- `bss_events_published_total{event_type=...}` — TMF688 events that reached Kafka
+- `bss_events_failed_total{event_type=...}` — events lost to broker failures
+
+The failed counter matters: event publishing is deliberately best-effort (a dead
+broker never fails an API request), so this metric is where those losses become
+visible. Alert on it.
+
+`docker compose up` includes **Prometheus** (port 9090) scraping all five services
+every 10s, and **Grafana** (port 3000, admin/admin) with the Prometheus datasource
+pre-provisioned — import dashboard `4701` (JVM Micrometer) for an instant overview.
+The scrape endpoint is deliberately unauthenticated, like health; in production,
+keep the actuator port network-internal.
 
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and

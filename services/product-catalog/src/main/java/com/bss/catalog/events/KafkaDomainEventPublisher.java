@@ -1,5 +1,6 @@
 package com.bss.catalog.events;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -24,10 +25,13 @@ public class KafkaDomainEventPublisher implements DomainEventPublisher {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final String topic;
+    private final MeterRegistry meterRegistry;
 
-    public KafkaDomainEventPublisher(KafkaTemplate<String, Object> kafkaTemplate, String topic) {
+    public KafkaDomainEventPublisher(KafkaTemplate<String, Object> kafkaTemplate, String topic,
+            MeterRegistry meterRegistry) {
         this.kafkaTemplate = kafkaTemplate;
         this.topic = topic;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -53,11 +57,15 @@ public class KafkaDomainEventPublisher implements DomainEventPublisher {
         try {
             kafkaTemplate.send(topic, event.eventId(), event).whenComplete((result, ex) -> {
                 if (ex != null) {
+                    meterRegistry.counter("bss.events.failed", "event_type", event.eventType()).increment();
                     log.warn("failed to publish {} {} to {}: {}",
                             event.eventType(), event.eventId(), topic, ex.getMessage());
+                } else {
+                    meterRegistry.counter("bss.events.published", "event_type", event.eventType()).increment();
                 }
             });
         } catch (Exception e) {
+            meterRegistry.counter("bss.events.failed", "event_type", event.eventType()).increment();
             log.warn("failed to publish {} {} to {}: {}",
                     event.eventType(), event.eventId(), topic, e.getMessage());
         }

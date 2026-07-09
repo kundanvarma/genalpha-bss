@@ -1,6 +1,7 @@
 package com.bss.catalog.events;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,8 +28,8 @@ public class EventConfig {
     @Bean
     @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
     DomainEventPublisher kafkaDomainEventPublisher(KafkaTemplate<String, Object> eventKafkaTemplate,
-            @Value("${bss.events.topic}") String topic) {
-        return new KafkaDomainEventPublisher(eventKafkaTemplate, topic);
+            @Value("${bss.events.topic}") String topic, MeterRegistry meterRegistry) {
+        return new KafkaDomainEventPublisher(eventKafkaTemplate, topic, meterRegistry);
     }
 
     @Bean
