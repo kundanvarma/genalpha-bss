@@ -45,7 +45,7 @@ curl -X POST localhost:8080/tmf-api/productCatalogManagement/v4/productOffering 
 curl localhost:8080/tmf-api/productCatalogManagement/v4/productOffering
 ```
 
-## Roadmap (see ../bss-oda/PROJECT_NOTES.md for the full backlog)
+## Roadmap
 1. ✅ All four services scaffolded on the shared Spring Boot template.
 2. Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. TMF688 domain events over Kafka.
@@ -53,5 +53,18 @@ curl localhost:8080/tmf-api/productCatalogManagement/v4/productOffering
 5. TM Forum Open API conformance (CTK).
 6. Observability (Micrometer/Prometheus) + infrastructure-as-code for the chosen deploy target.
 
-## Note on how this was built
-Service code generated with Claude Fable and reviewed for correctness. Because the authoring sandbox has no Java 17/Maven/Docker, compilation and tests are validated by CI, not locally — which is exactly what the GitHub Actions pipeline is for.
+## Build status
+All four services compile and their tests pass under JDK 17 + Maven 3.9 (9 tests total).
+The Docker images and `docker compose up` path have not yet been exercised — CI is the
+first place those run.
+
+## Known gaps before production
+- **Schema management.** Every service uses Hibernate `ddl-auto: update`, and
+  `docker-compose.yml` points all four at a single shared `bss` database. Four services
+  mutating one schema concurrently on startup is unsafe; replace with versioned
+  migrations (Flyway) and `ddl-auto: validate`.
+- **Unbounded list endpoints.** Every `list()` is a `findAll()` with no paging.
+  Needs TMF-standard `offset`/`limit` plus `X-Total-Count`.
+- **No authentication.** All endpoints, including `DELETE`, are open.
+- **Container hardening.** Images run as root, with no `HEALTHCHECK` and no layered-jar
+  caching. There is no parent aggregator POM, so services build one at a time.
