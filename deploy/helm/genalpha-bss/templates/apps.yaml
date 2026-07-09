@@ -1,0 +1,82 @@
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/part-of: genalpha-bss
+spec:
+  replicas: {{ $.Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/part-of: genalpha-bss
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: {{ $name }}
+          image: "{{ $.Values.image.prefix }}{{ $name }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- if $svc.db }}
+            - name: DB_URL
+              value: "jdbc:postgresql://{{ $.Values.config.dbHost }}:{{ $.Values.config.dbPort }}/{{ $svc.db }}"
+            - name: DB_USERNAME
+              value: {{ $.Values.config.dbUsername | quote }}
+            - name: DB_PASSWORD
+              value: {{ $.Values.config.dbPassword | quote }}
+            - name: OIDC_ISSUER_URI
+              value: {{ $.Values.config.oidcIssuerUri | quote }}
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ $.Values.config.kafkaBootstrapServers | quote }}
+            {{- end }}
+            {{- if eq $name "product-ordering" }}
+            - name: OIDC_TOKEN_URI
+              value: {{ $.Values.config.oidcTokenUri | quote }}
+            {{- end }}
+            {{- range $k, $v := $svc.extraEnv }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 15
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/part-of: genalpha-bss
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+{{- end }}

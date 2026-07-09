@@ -1,0 +1,64 @@
+{
+  "realm": "bss",
+  "enabled": true,
+  "roles": {
+    "realm": [
+      { "name": "catalog:read" },
+      { "name": "catalog:write" },
+      { "name": "ordering:read" },
+      { "name": "ordering:write" },
+      { "name": "inventory:read" },
+      { "name": "inventory:write" },
+      { "name": "party:read" },
+      { "name": "party:write" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bss-ordering",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ordering-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-demo",
+      "name": "BSS demo client (password grant, local development only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-bss-ordering",
+      "enabled": true,
+      "serviceAccountClientId": "bss-ordering",
+      "realmRoles": ["catalog:read", "party:read", "inventory:write"]
+    },
+    {
+      "username": "demo",
+      "enabled": true,
+      "email": "demo@bss.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "requiredActions": [],
+      "credentials": [
+        { "type": "password", "value": "demo", "temporary": false }
+      ],
+      "realmRoles": [
+        "catalog:read", "catalog:write",
+        "ordering:read", "ordering:write",
+        "inventory:read", "inventory:write",
+        "party:read", "party:write"
+      ]
+    }
+  ]
+}

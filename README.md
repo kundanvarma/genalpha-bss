@@ -55,7 +55,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 3. ✅ TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
 5. ✅ TM Forum Open API conformance — all five CTKs passing (TMF620/622/632/637/666).
-6. ✅ Observability (Micrometer/Prometheus/Grafana). Infrastructure-as-code for the chosen deploy target still open.
+6. ✅ Observability (Micrometer/Prometheus/Grafana) + infrastructure-as-code (Helm chart, EKS/AKS Terraform).
 
 ## Build status
 All four services compile and their tests pass under JDK 17 + Maven 3.9, locally and
@@ -260,6 +260,34 @@ To reproduce: clone the CTK, point `config.json` at
 database (`docker compose down -v && docker compose up -d`), and run the kit
 with Node 16. Formal certification is a TM Forum program; the kit passing is
 the technical prerequisite.
+
+## Deploying (Helm + Terraform)
+`deploy/helm/genalpha-bss` is a Helm chart installing all five services with
+readiness/liveness probes on `/actuator/health`, non-root security contexts
+(uid 1001), and — for local/dev clusters — in-cluster PostgreSQL, Kafka, and
+Keycloak. The same chart runs unchanged on any conformant cluster:
+
+```bash
+helm install bss deploy/helm/genalpha-bss --namespace bss --create-namespace
+```
+
+On cloud, disable the in-cluster dependencies and point the values at managed
+services (`config.dbHost`, `config.kafkaBootstrapServers`,
+`config.oidcIssuerUri`, `image.prefix` for your registry). The vendor-neutral
+service design means every environment difference is a values entry, not a
+code change — Azure Event Hubs speaks the Kafka protocol, any OIDC issuer
+works, any PostgreSQL works.
+
+`deploy/terraform/aws` provisions EKS + RDS PostgreSQL; `deploy/terraform/azure`
+provisions AKS + Azure Database for PostgreSQL Flexible Server (per-service
+databases included). Both are Terraform-compatible HCL (validated with
+OpenTofu) and end by handing values to the same chart — see the header comment
+in each `main.tf` for the post-apply `helm install`.
+
+Verified on a local Kubernetes (k3s): `helm install` brings up all eight pods,
+and the full order-to-cash flow passes — token from in-cluster Keycloak,
+gateway routing, M2M reference validation, inventory provisioning, and both
+TMF688 events consumed from in-cluster Kafka.
 
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and

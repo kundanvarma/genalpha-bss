@@ -19,3 +19,6 @@ target/
 
 # Local tooling
 .claude/settings.local.json
+
+# Terraform / OpenTofu working directories (provider binaries, module clones)
+.terraform/

@@ -1,0 +1,64 @@
+# Image source. The default expects images built locally by docker compose
+# (repository prefix "bss-java-"). For a registry deployment set e.g.
+#   image.prefix: ghcr.io/kundanvarma/genalpha-bss/
+image:
+  prefix: bss-java-
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicas: 1
+
+# Cross-cutting endpoints. Defaults target the in-cluster dependencies below;
+# on EKS/AKS point these at RDS / Azure Database / MSK / Event Hubs / your IdP.
+config:
+  oidcIssuerUri: http://keycloak:8080/realms/bss
+  oidcTokenUri: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+  kafkaBootstrapServers: kafka:9092
+  dbHost: postgres
+  dbPort: "5432"
+  dbUsername: postgres
+  # Local/dev only. In cloud, use an existingSecret instead.
+  dbPassword: postgres
+
+# In-cluster dependencies for local/dev clusters. Disable each on cloud.
+local:
+  postgres:
+    enabled: true
+    storage: 1Gi
+  kafka:
+    enabled: true
+  keycloak:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 768Mi
+
+# The five application services. `db` names the per-service database;
+# `extraEnv` is appended verbatim.
+services:
+  gateway:
+    db: ""
+    extraEnv:
+      CATALOG_URL: http://product-catalog:8080
+      ORDERING_URL: http://product-ordering:8080
+      INVENTORY_URL: http://product-inventory:8080
+      PARTY_URL: http://party-account:8080
+  product-catalog:
+    db: product_catalog
+    extraEnv: {}
+  product-ordering:
+    db: product_ordering
+    extraEnv:
+      CATALOG_BASE_URL: http://product-catalog:8080
+      PARTY_BASE_URL: http://party-account:8080
+      INVENTORY_BASE_URL: http://product-inventory:8080
+  product-inventory:
+    db: product_inventory
+    extraEnv: {}
+  party-account:
+    db: party_account
+    extraEnv: {}
