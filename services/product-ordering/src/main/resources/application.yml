@@ -23,6 +23,11 @@ spring:
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        max.block.ms: 2000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -50,6 +55,8 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  events:
+    topic: bss.ordering.events
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}

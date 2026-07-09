@@ -8,6 +8,7 @@ import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.dto.ProductOrderDto;
 import com.bss.ordering.entity.ProductOrder;
+import com.bss.ordering.events.DomainEventPublisher;
 import com.bss.ordering.exception.NotFoundException;
 import com.bss.ordering.exception.OrderValidationException;
 import com.bss.ordering.mapper.ProductOrderMapper;
@@ -32,14 +33,17 @@ public class ProductOrderService {
     private final CatalogClient catalogClient;
     private final PartyClient partyClient;
     private final InventoryClient inventoryClient;
+    private final DomainEventPublisher events;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
-            CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient) {
+            CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
         this.partyClient = partyClient;
         this.inventoryClient = inventoryClient;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -65,7 +69,9 @@ public class ProductOrderService {
         if (entity.getOrderDate() == null) {
             entity.setOrderDate(OffsetDateTime.now());
         }
-        return mapper.toDto(repository.save(entity));
+        ProductOrderDto created = mapper.toDto(repository.save(entity));
+        events.publish("ProductOrderCreateEvent", "productOrder", created);
+        return created;
     }
 
     @Transactional
@@ -77,20 +83,25 @@ public class ProductOrderService {
                     "order '" + id + "' is in terminal state '" + entity.getState() + "' and cannot be changed");
         }
         validateReferences(patch);
+        boolean stateChanged = patch.getState() != null && !patch.getState().equals(entity.getState());
         boolean completing = STATE_COMPLETED.equals(patch.getState());
         mapper.applyPatch(patch, entity);
         if (completing) {
             provision(entity);
         }
-        return mapper.toDto(repository.save(entity));
+        ProductOrderDto updated = mapper.toDto(repository.save(entity));
+        events.publish(stateChanged ? "ProductOrderStateChangeEvent" : "ProductOrderAttributeValueChangeEvent",
+                "productOrder", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        ProductOrder entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        ProductOrderDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
     }
 
     /**

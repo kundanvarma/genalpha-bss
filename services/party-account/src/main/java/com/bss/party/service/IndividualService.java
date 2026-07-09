@@ -5,6 +5,7 @@ import com.bss.party.api.OffsetPageRequest;
 import com.bss.party.api.PagedResult;
 import com.bss.party.dto.IndividualDto;
 import com.bss.party.entity.Individual;
+import com.bss.party.events.DomainEventPublisher;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.IndividualMapper;
 import com.bss.party.repository.IndividualRepository;
@@ -21,10 +22,13 @@ public class IndividualService {
 
     private final IndividualRepository repository;
     private final IndividualMapper mapper;
+    private final DomainEventPublisher events;
 
-    public IndividualService(IndividualRepository repository, IndividualMapper mapper) {
+    public IndividualService(IndividualRepository repository, IndividualMapper mapper,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,9 @@ public class IndividualService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.PARTY_BASE + "/individual/" + id);
-        return mapper.toDto(repository.save(entity));
+        IndividualDto created = mapper.toDto(repository.save(entity));
+        events.publish("IndividualCreateEvent", "individual", created);
+        return created;
     }
 
     @Transactional
@@ -54,14 +60,17 @@ public class IndividualService {
         Individual entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        IndividualDto updated = mapper.toDto(repository.save(entity));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        Individual entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        IndividualDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("IndividualDeleteEvent", "individual", deleted);
     }
 }

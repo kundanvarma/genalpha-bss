@@ -5,6 +5,7 @@ import com.bss.catalog.api.OffsetPageRequest;
 import com.bss.catalog.api.PagedResult;
 import com.bss.catalog.dto.ProductSpecificationDto;
 import com.bss.catalog.entity.ProductSpecification;
+import com.bss.catalog.events.DomainEventPublisher;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductSpecificationMapper;
 import com.bss.catalog.repository.ProductSpecificationRepository;
@@ -21,11 +22,13 @@ public class ProductSpecificationService {
 
     private final ProductSpecificationRepository repository;
     private final ProductSpecificationMapper mapper;
+    private final DomainEventPublisher events;
 
-    public ProductSpecificationService(ProductSpecificationRepository repository,
-                                       ProductSpecificationMapper mapper) {
+    public ProductSpecificationService(ProductSpecificationRepository repository, ProductSpecificationMapper mapper,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -47,7 +50,9 @@ public class ProductSpecificationService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productSpecification/" + id);
-        return mapper.toDto(repository.save(entity));
+        ProductSpecificationDto created = mapper.toDto(repository.save(entity));
+        events.publish("ProductSpecificationCreateEvent", "productSpecification", created);
+        return created;
     }
 
     @Transactional
@@ -55,14 +60,17 @@ public class ProductSpecificationService {
         ProductSpecification entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        ProductSpecificationDto updated = mapper.toDto(repository.save(entity));
+        events.publish("ProductSpecificationAttributeValueChangeEvent", "productSpecification", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        ProductSpecification entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        ProductSpecificationDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("ProductSpecificationDeleteEvent", "productSpecification", deleted);
     }
 }

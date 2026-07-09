@@ -5,6 +5,7 @@ import com.bss.party.api.OffsetPageRequest;
 import com.bss.party.api.PagedResult;
 import com.bss.party.dto.BillingAccountDto;
 import com.bss.party.entity.BillingAccount;
+import com.bss.party.events.DomainEventPublisher;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.BillingAccountMapper;
 import com.bss.party.repository.BillingAccountRepository;
@@ -21,10 +22,13 @@ public class BillingAccountService {
 
     private final BillingAccountRepository repository;
     private final BillingAccountMapper mapper;
+    private final DomainEventPublisher events;
 
-    public BillingAccountService(BillingAccountRepository repository, BillingAccountMapper mapper) {
+    public BillingAccountService(BillingAccountRepository repository, BillingAccountMapper mapper,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,9 @@ public class BillingAccountService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.ACCOUNT_BASE + "/billingAccount/" + id);
-        return mapper.toDto(repository.save(entity));
+        BillingAccountDto created = mapper.toDto(repository.save(entity));
+        events.publish("BillingAccountCreateEvent", "billingAccount", created);
+        return created;
     }
 
     @Transactional
@@ -54,14 +60,17 @@ public class BillingAccountService {
         BillingAccount entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        BillingAccountDto updated = mapper.toDto(repository.save(entity));
+        events.publish("BillingAccountAttributeValueChangeEvent", "billingAccount", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        BillingAccount entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        BillingAccountDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("BillingAccountDeleteEvent", "billingAccount", deleted);
     }
 }

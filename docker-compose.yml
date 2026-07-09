@@ -17,6 +17,18 @@ services:
       timeout: 3s
       retries: 10
 
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: bss-kafka
+    environment:
+      KAFKA_CFG_NODE_ID: 0
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: bss-keycloak
@@ -40,12 +52,15 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8081:8080"
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      kafka:
         condition: service_started
 
   product-ordering:
@@ -56,6 +71,7 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
       PARTY_BASE_URL: http://party-account:8080
@@ -66,6 +82,8 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      kafka:
         condition: service_started
       product-catalog:
         condition: service_started
@@ -82,12 +100,15 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8083:8080"
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      kafka:
         condition: service_started
 
   party-account:
@@ -98,12 +119,15 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8084:8080"
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      kafka:
         condition: service_started
 
 volumes:

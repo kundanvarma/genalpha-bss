@@ -5,6 +5,7 @@ import com.bss.inventory.api.OffsetPageRequest;
 import com.bss.inventory.api.PagedResult;
 import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
+import com.bss.inventory.events.DomainEventPublisher;
 import com.bss.inventory.exception.NotFoundException;
 import com.bss.inventory.mapper.ProductMapper;
 import com.bss.inventory.repository.ProductRepository;
@@ -21,10 +22,13 @@ public class ProductService {
 
     private final ProductRepository repository;
     private final ProductMapper mapper;
+    private final DomainEventPublisher events;
 
-    public ProductService(ProductRepository repository, ProductMapper mapper) {
+    public ProductService(ProductRepository repository, ProductMapper mapper,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,9 @@ public class ProductService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/product/" + id);
-        return mapper.toDto(repository.save(entity));
+        ProductDto created = mapper.toDto(repository.save(entity));
+        events.publish("ProductCreateEvent", "product", created);
+        return created;
     }
 
     @Transactional
@@ -54,14 +60,17 @@ public class ProductService {
         Product entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        ProductDto updated = mapper.toDto(repository.save(entity));
+        events.publish("ProductAttributeValueChangeEvent", "product", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        Product entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        ProductDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("ProductDeleteEvent", "product", deleted);
     }
 }

@@ -5,6 +5,7 @@ import com.bss.party.api.OffsetPageRequest;
 import com.bss.party.api.PagedResult;
 import com.bss.party.dto.OrganizationDto;
 import com.bss.party.entity.Organization;
+import com.bss.party.events.DomainEventPublisher;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.OrganizationMapper;
 import com.bss.party.repository.OrganizationRepository;
@@ -21,10 +22,13 @@ public class OrganizationService {
 
     private final OrganizationRepository repository;
     private final OrganizationMapper mapper;
+    private final DomainEventPublisher events;
 
-    public OrganizationService(OrganizationRepository repository, OrganizationMapper mapper) {
+    public OrganizationService(OrganizationRepository repository, OrganizationMapper mapper,
+            DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,9 @@ public class OrganizationService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.PARTY_BASE + "/organization/" + id);
-        return mapper.toDto(repository.save(entity));
+        OrganizationDto created = mapper.toDto(repository.save(entity));
+        events.publish("OrganizationCreateEvent", "organization", created);
+        return created;
     }
 
     @Transactional
@@ -54,14 +60,17 @@ public class OrganizationService {
         Organization entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        OrganizationDto updated = mapper.toDto(repository.save(entity));
+        events.publish("OrganizationAttributeValueChangeEvent", "organization", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        Organization entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        OrganizationDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("OrganizationDeleteEvent", "organization", deleted);
     }
 }

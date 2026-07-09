@@ -52,7 +52,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 ## Roadmap
 1. ✅ All four services scaffolded on the shared Spring Boot template.
 2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
-3. TMF688 domain events over Kafka.
+3. ✅ TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev). API gateway still open.
 5. TM Forum Open API conformance (CTK).
 6. Observability (Micrometer/Prometheus) + infrastructure-as-code for the chosen deploy target.
@@ -158,6 +158,30 @@ applies to users. Downstream locations come from `CATALOG_BASE_URL`,
 `OIDC_TOKEN_URI` (deliberately not issuer discovery, so no IdP is needed at
 startup). The dev client secret in the bundled realm is for local use only —
 override `OIDC_CLIENT_SECRET` in any real deployment.
+
+## Domain events (TMF688)
+Every resource mutation publishes a TMF688-style event to Kafka — per-service
+topics `bss.{catalog,ordering,inventory,party}.events`, envelope
+`{eventId, eventTime, eventType, event: {<resource>: {...}}}`. Event types follow
+TMF naming: `<Resource>CreateEvent`, `<Resource>AttributeValueChangeEvent`,
+`<Resource>DeleteEvent`, and `ProductOrderStateChangeEvent` on order state
+transitions.
+
+Delivery semantics, honestly stated: events publish **after the database
+transaction commits** (no phantom events from rolled-back changes) and are
+**best-effort** — a dead broker degrades to a logged warning, never a failed API
+request. Exactly-once/at-least-once delivery would require a transactional
+outbox; that is a known, deliberate gap. `docker compose up` includes a
+single-node Kafka (KRaft); tests run against a no-op publisher for speed, event
+emission is verified at the publisher boundary per service, and one
+Testcontainers test in product-ordering asserts a real envelope lands on a real
+broker.
+
+Watch the stream:
+```bash
+docker exec -it bss-kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic bss.ordering.events --from-beginning
+```
 
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and

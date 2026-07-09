@@ -5,6 +5,7 @@ import com.bss.catalog.api.OffsetPageRequest;
 import com.bss.catalog.api.PagedResult;
 import com.bss.catalog.dto.CategoryDto;
 import com.bss.catalog.entity.Category;
+import com.bss.catalog.events.DomainEventPublisher;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.CategoryMapper;
 import com.bss.catalog.repository.CategoryRepository;
@@ -21,10 +22,12 @@ public class CategoryService {
 
     private final CategoryRepository repository;
     private final CategoryMapper mapper;
+    private final DomainEventPublisher events;
 
-    public CategoryService(CategoryRepository repository, CategoryMapper mapper) {
+    public CategoryService(CategoryRepository repository, CategoryMapper mapper, DomainEventPublisher events) {
         this.repository = repository;
         this.mapper = mapper;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +49,9 @@ public class CategoryService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/category/" + id);
-        return mapper.toDto(repository.save(entity));
+        CategoryDto created = mapper.toDto(repository.save(entity));
+        events.publish("CategoryCreateEvent", "category", created);
+        return created;
     }
 
     @Transactional
@@ -54,14 +59,17 @@ public class CategoryService {
         Category entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
-        return mapper.toDto(repository.save(entity));
+        CategoryDto updated = mapper.toDto(repository.save(entity));
+        events.publish("CategoryAttributeValueChangeEvent", "category", updated);
+        return updated;
     }
 
     @Transactional
     public void delete(String id) {
-        if (!repository.existsById(id)) {
-            throw NotFoundException.forResource(RESOURCE, id);
-        }
+        Category entity = repository.findById(id)
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        CategoryDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
+        events.publish("CategoryDeleteEvent", "category", deleted);
     }
 }
