@@ -13,6 +13,8 @@ public class ProductSpecificationMapper {
         dto.setHref(entity.getHref());
         dto.setName(entity.getName());
         dto.setBrand(entity.getBrand());
+        dto.setLifecycleStatus(entity.getLifecycleStatus());
+        dto.setLastUpdate(entity.getLastUpdate());
         dto.setType("ProductSpecification");
         return dto;
     }
@@ -23,6 +25,8 @@ public class ProductSpecificationMapper {
         entity.setHref(dto.getHref());
         entity.setName(dto.getName());
         entity.setBrand(dto.getBrand());
+        entity.setLifecycleStatus(dto.getLifecycleStatus());
+        entity.setLastUpdate(dto.getLastUpdate());
         return entity;
     }
 
@@ -32,6 +36,9 @@ public class ProductSpecificationMapper {
         }
         if (patch.getBrand() != null) {
             entity.setBrand(patch.getBrand());
+        }
+        if (patch.getLifecycleStatus() != null) {
+            entity.setLifecycleStatus(patch.getLifecycleStatus());
         }
     }
 }

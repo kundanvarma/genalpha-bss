@@ -16,7 +16,7 @@ public class Organization {
     @Column(name = "href")
     private String href;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name")
     private String name;
 
     @Column(name = "trading_name")

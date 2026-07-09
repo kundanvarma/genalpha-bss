@@ -22,11 +22,22 @@ public class Product {
     @Column(name = "status")
     private String status;
 
-    @Column(name = "product_offering_id")
-    private String productOfferingId;
+    /** JSON object referencing the catalog offering, echoed verbatim. */
+    @Column(name = "product_offering", length = 4000)
+    private String productOfferingJson;
 
-    @Column(name = "billing_account_id")
-    private String billingAccountId;
+    /** JSON object referencing the billing account, echoed verbatim. */
+    @Column(name = "billing_account", length = 4000)
+    private String billingAccountJson;
+
+    @Column(name = "product_characteristic", length = 4000)
+    private String productCharacteristicJson;
+
+    @Column(name = "product_price", length = 4000)
+    private String productPriceJson;
+
+    @Column(name = "related_party", length = 4000)
+    private String relatedPartyJson;
 
     public Product() {
     }
@@ -63,19 +74,43 @@ public class Product {
         this.status = status;
     }
 
-    public String getProductOfferingId() {
-        return productOfferingId;
+    public String getProductOfferingJson() {
+        return productOfferingJson;
     }
 
-    public void setProductOfferingId(String productOfferingId) {
-        this.productOfferingId = productOfferingId;
+    public void setProductOfferingJson(String productOfferingJson) {
+        this.productOfferingJson = productOfferingJson;
     }
 
-    public String getBillingAccountId() {
-        return billingAccountId;
+    public String getBillingAccountJson() {
+        return billingAccountJson;
     }
 
-    public void setBillingAccountId(String billingAccountId) {
-        this.billingAccountId = billingAccountId;
+    public void setBillingAccountJson(String billingAccountJson) {
+        this.billingAccountJson = billingAccountJson;
+    }
+
+    public String getProductCharacteristicJson() {
+        return productCharacteristicJson;
+    }
+
+    public void setProductCharacteristicJson(String productCharacteristicJson) {
+        this.productCharacteristicJson = productCharacteristicJson;
+    }
+
+    public String getProductPriceJson() {
+        return productPriceJson;
+    }
+
+    public void setProductPriceJson(String productPriceJson) {
+        this.productPriceJson = productPriceJson;
+    }
+
+    public String getRelatedPartyJson() {
+        return relatedPartyJson;
+    }
+
+    public void setRelatedPartyJson(String relatedPartyJson) {
+        this.relatedPartyJson = relatedPartyJson;
     }
 }

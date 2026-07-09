@@ -54,7 +54,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. ✅ TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
-5. TM Forum Open API conformance (CTK) — TMF622 passing; TMF620/632/637/666 kits pending.
+5. ✅ TM Forum Open API conformance — all five CTKs passing (TMF620/622/632/637/666).
 6. ✅ Observability (Micrometer/Prometheus/Grafana). Infrastructure-as-code for the chosen deploy target still open.
 
 ## Build status
@@ -229,16 +229,30 @@ keep the actuator port network-internal.
 
 ## TM Forum conformance (CTK)
 The official TM Forum Conformance Test Kits are public at
-[github.com/tmforum-rand](https://github.com/tmforum-rand). The **TMF622 Product
-Ordering v4.0.0 CTK passes with zero failures** (9 requests, 63 assertions)
-against this stack, run through the gateway with a real Keycloak token.
+[github.com/tmforum-rand](https://github.com/tmforum-rand). **All five kits pass
+with zero failures** against this stack, run through the gateway with a real
+Keycloak token (191 requests, 2,062 assertions in total):
 
-What conformance required beyond the original scaffold: `productOrderItem` (the
-spec-mandatory order content, at least one item required) and `relatedParty`,
-both stored and echoed verbatim; server-set `state` defaulting to
-`acknowledged`; TMF630 attribute filtering (`?id=`, `?orderDate=`, any scalar
-attribute — unknown attributes are rejected with 400); and `?fields=` attribute
-selection (id always included).
+| CTK | API | Requests | Assertions |
+|---|---|---|---|
+| TMF620 v4.0.0 | Product Catalog | 47 | 396 |
+| TMF622 v4.0.0 | Product Ordering | 9 | 63 |
+| TMF632 v4.0.0 | Party | 29 | 320 |
+| TMF637 v4.0.0 | Product Inventory | 8 | 85 |
+| TMF666 v4.0.0 | Account | 98 | 1,198 |
+
+What conformance required beyond the original scaffold: spec-mandatory
+sub-resources stored and echoed verbatim (`productOrderItem`, `relatedParty`,
+nested `productOffering`/`billingAccount` references, `productCharacteristic`,
+`productPrice`); server-set fields (`state`, `lastUpdate`, `lifecycleStatus`
+defaults); TMF630 attribute filtering and `?fields=` selection on every tested
+resource (unknown filter attributes are rejected with 400); new spec resources
+(`productOfferingPrice`, `billFormat`, `partyAccount`,
+`billingCycleSpecification`, `financialAccount`, `settlementAccount`,
+`billPresentationMedia`); the spec base path `/tmf-api/productInventory/v4`;
+and an Organization without a `name` (the spec requires only `tradingName`).
+The TMF637 kit creates nothing — it audits existing inventory, so seed at
+least two spec-shaped products before running it.
 
 To reproduce: clone the CTK, point `config.json` at
 `http://localhost:8080/tmf-api/productOrderingManagement/v4/`, add an

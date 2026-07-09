@@ -20,7 +20,7 @@ public class RestInventoryClient implements InventoryClient {
     public void createProduct(NewProduct product) {
         try {
             restClient.post()
-                    .uri("/tmf-api/productInventoryManagement/v4/product")
+                    .uri("/tmf-api/productInventory/v4/product")
                     .body(product)
                     .retrieve()
                     .toBodilessEntity();

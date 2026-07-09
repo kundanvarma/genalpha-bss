@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class ProductApiTest {
 
-    private static final String BASE = "/tmf-api/productInventoryManagement/v4/product";
+    private static final String BASE = "/tmf-api/productInventory/v4/product";
 
     @Autowired
     private MockMvc mockMvc;

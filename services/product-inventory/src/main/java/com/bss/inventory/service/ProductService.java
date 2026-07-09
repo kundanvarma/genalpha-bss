@@ -6,13 +6,16 @@ import com.bss.inventory.api.PagedResult;
 import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
 import com.bss.inventory.events.DomainEventPublisher;
+import com.bss.inventory.exception.BadRequestException;
 import com.bss.inventory.exception.NotFoundException;
 import com.bss.inventory.mapper.ProductMapper;
 import com.bss.inventory.repository.ProductRepository;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,9 +35,27 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<ProductDto> findAll(int offset, int limit) {
-        Page<Product> page = repository.findAll(new OffsetPageRequest(offset, limit));
+    public PagedResult<ProductDto> findAll(int offset, int limit, Map<String, String> filters) {
+        Page<Product> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * TMF630 attribute filtering: exact match on scalar attributes via
+     * query-by-example. Unknown attributes are rejected rather than silently
+     * matching everything.
+     */
+    private Example<Product> probeFor(Map<String, String> filters) {
+        Product probe = new Product();
+        for (Map.Entry<String, String> f : filters.entrySet()) {
+            switch (f.getKey()) {
+                case "id" -> probe.setId(f.getValue());
+                case "name" -> probe.setName(f.getValue());
+                case "status" -> probe.setStatus(f.getValue());
+                default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
+            }
+        }
+        return Example.of(probe);
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +67,9 @@ public class ProductService {
 
     @Transactional
     public ProductDto create(ProductDto dto) {
+        if (dto.getStatus() == null) {
+            dto.setStatus("created");
+        }
         Product entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);

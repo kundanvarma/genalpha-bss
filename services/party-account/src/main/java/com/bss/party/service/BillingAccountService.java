@@ -6,13 +6,16 @@ import com.bss.party.api.PagedResult;
 import com.bss.party.dto.BillingAccountDto;
 import com.bss.party.entity.BillingAccount;
 import com.bss.party.events.DomainEventPublisher;
+import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.BillingAccountMapper;
 import com.bss.party.repository.BillingAccountRepository;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,9 +35,27 @@ public class BillingAccountService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<BillingAccountDto> findAll(int offset, int limit) {
-        Page<BillingAccount> page = repository.findAll(new OffsetPageRequest(offset, limit));
+    public PagedResult<BillingAccountDto> findAll(int offset, int limit, Map<String, String> filters) {
+        Page<BillingAccount> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * TMF630 attribute filtering: exact match on scalar attributes via
+     * query-by-example. Unknown attributes are rejected rather than silently
+     * matching everything.
+     */
+    private Example<BillingAccount> probeFor(Map<String, String> filters) {
+        BillingAccount probe = new BillingAccount();
+        for (Map.Entry<String, String> f : filters.entrySet()) {
+            switch (f.getKey()) {
+                case "id" -> probe.setId(f.getValue());
+                case "name" -> probe.setName(f.getValue());
+                case "state" -> probe.setState(f.getValue());
+                default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
+            }
+        }
+        return Example.of(probe);
     }
 
     @Transactional(readOnly = true)

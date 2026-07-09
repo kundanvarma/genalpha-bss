@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.OffsetDateTime;
+
 @Entity
 @Table(name = "product_specification")
 public class ProductSpecification {
@@ -21,6 +23,12 @@ public class ProductSpecification {
 
     @Column(name = "brand")
     private String brand;
+
+    @Column(name = "lifecycle_status")
+    private String lifecycleStatus;
+
+    @Column(name = "last_update")
+    private OffsetDateTime lastUpdate;
 
     public ProductSpecification() {
     }
@@ -55,5 +63,21 @@ public class ProductSpecification {
 
     public void setBrand(String brand) {
         this.brand = brand;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public OffsetDateTime getLastUpdate() {
+        return lastUpdate;
+    }
+
+    public void setLastUpdate(OffsetDateTime lastUpdate) {
+        this.lastUpdate = lastUpdate;
     }
 }

@@ -2,10 +2,27 @@ package com.bss.inventory.mapper;
 
 import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class ProductMapper {
+
+    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
+    };
+    private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
+    };
+
+    private final ObjectMapper objectMapper;
+
+    public ProductMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public ProductDto toDto(Product entity) {
         ProductDto dto = new ProductDto();
@@ -13,8 +30,12 @@ public class ProductMapper {
         dto.setHref(entity.getHref());
         dto.setName(entity.getName());
         dto.setStatus(entity.getStatus());
-        dto.setProductOfferingId(entity.getProductOfferingId());
-        dto.setBillingAccountId(entity.getBillingAccountId());
+        dto.setProductOffering(readObject(entity.getProductOfferingJson()));
+        dto.setBillingAccount(readObject(entity.getBillingAccountJson()));
+        // TMF637 marks the collections mandatory in responses: default to empty.
+        dto.setProductCharacteristic(orEmpty(readArray(entity.getProductCharacteristicJson())));
+        dto.setProductPrice(orEmpty(readArray(entity.getProductPriceJson())));
+        dto.setRelatedParty(orEmpty(readArray(entity.getRelatedPartyJson())));
         dto.setType("Product");
         return dto;
     }
@@ -25,8 +46,11 @@ public class ProductMapper {
         entity.setHref(dto.getHref());
         entity.setName(dto.getName());
         entity.setStatus(dto.getStatus());
-        entity.setProductOfferingId(dto.getProductOfferingId());
-        entity.setBillingAccountId(dto.getBillingAccountId());
+        entity.setProductOfferingJson(writeJson(dto.getProductOffering()));
+        entity.setBillingAccountJson(writeJson(dto.getBillingAccount()));
+        entity.setProductCharacteristicJson(writeJson(dto.getProductCharacteristic()));
+        entity.setProductPriceJson(writeJson(dto.getProductPrice()));
+        entity.setRelatedPartyJson(writeJson(dto.getRelatedParty()));
         return entity;
     }
 
@@ -40,11 +64,54 @@ public class ProductMapper {
         if (patch.getStatus() != null) {
             entity.setStatus(patch.getStatus());
         }
-        if (patch.getProductOfferingId() != null) {
-            entity.setProductOfferingId(patch.getProductOfferingId());
+        if (patch.getProductOffering() != null) {
+            entity.setProductOfferingJson(writeJson(patch.getProductOffering()));
         }
-        if (patch.getBillingAccountId() != null) {
-            entity.setBillingAccountId(patch.getBillingAccountId());
+        if (patch.getBillingAccount() != null) {
+            entity.setBillingAccountJson(writeJson(patch.getBillingAccount()));
+        }
+        if (patch.getProductCharacteristic() != null) {
+            entity.setProductCharacteristicJson(writeJson(patch.getProductCharacteristic()));
+        }
+        if (patch.getProductPrice() != null) {
+            entity.setProductPriceJson(writeJson(patch.getProductPrice()));
+        }
+        if (patch.getRelatedParty() != null) {
+            entity.setRelatedPartyJson(writeJson(patch.getRelatedParty()));
+        }
+    }
+
+    private List<Map<String, Object>> orEmpty(List<Map<String, Object>> value) {
+        return value != null ? value : List.of();
+    }
+
+    private String writeJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("unserializable JSON value", e);
+        }
+    }
+
+    private Map<String, Object> readObject(String json) {
+        return read(json, JSON_OBJECT);
+    }
+
+    private List<Map<String, Object>> readArray(String json) {
+        return read(json, JSON_ARRAY);
+    }
+
+    private <T> T read(String json, TypeReference<T> type) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored JSON is unreadable", e);
         }
     }
 }

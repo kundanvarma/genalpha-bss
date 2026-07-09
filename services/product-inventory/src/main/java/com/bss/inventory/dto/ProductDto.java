@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
+import java.util.List;
+import java.util.Map;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductDto {
 
@@ -20,11 +23,20 @@ public class ProductDto {
     @JsonProperty("status")
     private String status;
 
-    @JsonProperty("productOfferingId")
-    private String productOfferingId;
+    @JsonProperty("productOffering")
+    private Map<String, Object> productOffering;
 
-    @JsonProperty("billingAccountId")
-    private String billingAccountId;
+    @JsonProperty("billingAccount")
+    private Map<String, Object> billingAccount;
+
+    @JsonProperty("productCharacteristic")
+    private List<Map<String, Object>> productCharacteristic;
+
+    @JsonProperty("productPrice")
+    private List<Map<String, Object>> productPrice;
+
+    @JsonProperty("relatedParty")
+    private List<Map<String, Object>> relatedParty;
 
     @JsonProperty("@type")
     private String type = "Product";
@@ -64,20 +76,44 @@ public class ProductDto {
         this.status = status;
     }
 
-    public String getProductOfferingId() {
-        return productOfferingId;
+    public Map<String, Object> getProductOffering() {
+        return productOffering;
     }
 
-    public void setProductOfferingId(String productOfferingId) {
-        this.productOfferingId = productOfferingId;
+    public void setProductOffering(Map<String, Object> productOffering) {
+        this.productOffering = productOffering;
     }
 
-    public String getBillingAccountId() {
-        return billingAccountId;
+    public Map<String, Object> getBillingAccount() {
+        return billingAccount;
     }
 
-    public void setBillingAccountId(String billingAccountId) {
-        this.billingAccountId = billingAccountId;
+    public void setBillingAccount(Map<String, Object> billingAccount) {
+        this.billingAccount = billingAccount;
+    }
+
+    public List<Map<String, Object>> getProductCharacteristic() {
+        return productCharacteristic;
+    }
+
+    public void setProductCharacteristic(List<Map<String, Object>> productCharacteristic) {
+        this.productCharacteristic = productCharacteristic;
+    }
+
+    public List<Map<String, Object>> getProductPrice() {
+        return productPrice;
+    }
+
+    public void setProductPrice(List<Map<String, Object>> productPrice) {
+        this.productPrice = productPrice;
+    }
+
+    public List<Map<String, Object>> getRelatedParty() {
+        return relatedParty;
+    }
+
+    public void setRelatedParty(List<Map<String, Object>> relatedParty) {
+        this.relatedParty = relatedParty;
     }
 
     public String getType() {

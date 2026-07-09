@@ -25,6 +25,10 @@ public class BillingAccount {
     @Column(name = "related_party_id")
     private String relatedPartyId;
 
+    /** JSON array of related parties, echoed verbatim (TMF666 mandatory in responses). */
+    @Column(name = "related_party", length = 4000)
+    private String relatedPartyJson;
+
     public BillingAccount() {
     }
 
@@ -66,5 +70,13 @@ public class BillingAccount {
 
     public void setRelatedPartyId(String relatedPartyId) {
         this.relatedPartyId = relatedPartyId;
+    }
+
+    public String getRelatedPartyJson() {
+        return relatedPartyJson;
+    }
+
+    public void setRelatedPartyJson(String relatedPartyJson) {
+        this.relatedPartyJson = relatedPartyJson;
     }
 }

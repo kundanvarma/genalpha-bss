@@ -2,7 +2,6 @@ package com.bss.party.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.NotBlank;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class OrganizationDto {
@@ -13,7 +12,6 @@ public class OrganizationDto {
     @JsonProperty("href")
     private String href;
 
-    @NotBlank(message = "name is required")
     @JsonProperty("name")
     private String name;
 

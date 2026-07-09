@@ -6,13 +6,18 @@ import com.bss.catalog.api.PagedResult;
 import com.bss.catalog.dto.ProductSpecificationDto;
 import com.bss.catalog.entity.ProductSpecification;
 import com.bss.catalog.events.DomainEventPublisher;
+import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductSpecificationMapper;
 import com.bss.catalog.repository.ProductSpecificationRepository;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,9 +37,35 @@ public class ProductSpecificationService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<ProductSpecificationDto> findAll(int offset, int limit) {
-        Page<ProductSpecification> page = repository.findAll(new OffsetPageRequest(offset, limit));
+    public PagedResult<ProductSpecificationDto> findAll(int offset, int limit, Map<String, String> filters) {
+        Page<ProductSpecification> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * TMF630 attribute filtering: exact match on scalar attributes via
+     * query-by-example. Unknown attributes are rejected rather than silently
+     * matching everything.
+     */
+    private Example<ProductSpecification> probeFor(Map<String, String> filters) {
+        ProductSpecification probe = new ProductSpecification();
+        for (Map.Entry<String, String> f : filters.entrySet()) {
+            switch (f.getKey()) {
+                case "id" -> probe.setId(f.getValue());
+                case "name" -> probe.setName(f.getValue());
+                case "lifecycleStatus" -> probe.setLifecycleStatus(f.getValue());
+                case "brand" -> probe.setBrand(f.getValue());
+                case "lastUpdate" -> {
+                    try {
+                        probe.setLastUpdate(OffsetDateTime.parse(f.getValue()));
+                    } catch (DateTimeParseException e) {
+                        throw new BadRequestException("lastUpdate filter is not a valid date-time");
+                    }
+                }
+                default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
+            }
+        }
+        return Example.of(probe);
     }
 
     @Transactional(readOnly = true)
@@ -46,10 +77,14 @@ public class ProductSpecificationService {
 
     @Transactional
     public ProductSpecificationDto create(ProductSpecificationDto dto) {
+        if (dto.getLifecycleStatus() == null) {
+            dto.setLifecycleStatus("Active");
+        }
         ProductSpecification entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productSpecification/" + id);
+        entity.setLastUpdate(OffsetDateTime.now());
         ProductSpecificationDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductSpecificationCreateEvent", "productSpecification", created);
         return created;
@@ -60,6 +95,7 @@ public class ProductSpecificationService {
         ProductSpecification entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
+        entity.setLastUpdate(OffsetDateTime.now());
         ProductSpecificationDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductSpecificationAttributeValueChangeEvent", "productSpecification", updated);
         return updated;

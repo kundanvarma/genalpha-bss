@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
+import java.time.OffsetDateTime;
+import java.util.Map;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductOfferingDto {
 
@@ -25,6 +28,12 @@ public class ProductOfferingDto {
 
     @JsonProperty("version")
     private String version;
+
+    @JsonProperty("lastUpdate")
+    private OffsetDateTime lastUpdate;
+
+    @JsonProperty("productSpecification")
+    private Map<String, Object> productSpecification;
 
     @JsonProperty("@type")
     private String type = "ProductOffering";
@@ -86,5 +95,21 @@ public class ProductOfferingDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public OffsetDateTime getLastUpdate() {
+        return lastUpdate;
+    }
+
+    public void setLastUpdate(OffsetDateTime lastUpdate) {
+        this.lastUpdate = lastUpdate;
+    }
+
+    public Map<String, Object> getProductSpecification() {
+        return productSpecification;
+    }
+
+    public void setProductSpecification(Map<String, Object> productSpecification) {
+        this.productSpecification = productSpecification;
     }
 }

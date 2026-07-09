@@ -164,7 +164,14 @@ public class ProductOrderService {
         String name = order.getDescription() != null && !order.getDescription().isBlank()
                 ? order.getDescription()
                 : "productOrder " + order.getId();
+        Map<String, Object> offering = order.getProductOfferingId() != null
+                ? Map.of("id", order.getProductOfferingId())
+                : null;
+        Map<String, Object> billingAccount = order.getBillingAccountId() != null
+                ? Map.of("id", order.getBillingAccountId())
+                : null;
         inventoryClient.createProduct(new InventoryClient.NewProduct(
-                name, "active", order.getProductOfferingId(), order.getBillingAccountId()));
+                name, "active", offering, billingAccount,
+                mapper.toDto(order).getRelatedParty()));
     }
 }

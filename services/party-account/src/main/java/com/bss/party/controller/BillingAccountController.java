@@ -1,6 +1,7 @@
 package com.bss.party.controller;
 
 import com.bss.party.api.ApiConstants;
+import com.bss.party.api.FieldSelector;
 import com.bss.party.api.PagedResult;
 import com.bss.party.dto.BillingAccountDto;
 import com.bss.party.service.BillingAccountService;
@@ -21,7 +22,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @Validated
@@ -29,20 +32,29 @@ import java.util.List;
 public class BillingAccountController {
 
     private final BillingAccountService service;
+    private final FieldSelector fieldSelector;
 
-    public BillingAccountController(BillingAccountService service) {
+    public BillingAccountController(BillingAccountService service, FieldSelector fieldSelector) {
         this.service = service;
+        this.fieldSelector = fieldSelector;
     }
 
     @GetMapping
-    public ResponseEntity<List<BillingAccountDto>> list(
+    public ResponseEntity<List<?>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
-            @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit) {
-        PagedResult<BillingAccountDto> result = service.findAll(offset, limit);
+            @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(name = "fields", required = false) String fields,
+            @RequestParam Map<String, String> allParams) {
+        Map<String, String> filters = new HashMap<>(allParams);
+        filters.remove("offset");
+        filters.remove("limit");
+        filters.remove("fields");
+        PagedResult<BillingAccountDto> result = service.findAll(offset, limit, filters);
+        List<?> body = fields == null ? result.items() : fieldSelector.select(result.items(), fields);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))
-                .body(result.items());
+                .body(body);
     }
 
     @GetMapping("/{id}")

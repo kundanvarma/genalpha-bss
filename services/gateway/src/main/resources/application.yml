@@ -15,7 +15,7 @@ spring:
         - id: product-inventory
           uri: ${INVENTORY_URL:http://localhost:8083}
           predicates:
-            - Path=/tmf-api/productInventoryManagement/**
+            - Path=/tmf-api/productInventory/**
         - id: party-account
           uri: ${PARTY_URL:http://localhost:8084}
           predicates:

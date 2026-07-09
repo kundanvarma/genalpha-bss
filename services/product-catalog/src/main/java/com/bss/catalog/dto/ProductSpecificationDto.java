@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
+import java.time.OffsetDateTime;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductSpecificationDto {
 
@@ -19,6 +21,12 @@ public class ProductSpecificationDto {
 
     @JsonProperty("brand")
     private String brand;
+
+    @JsonProperty("lifecycleStatus")
+    private String lifecycleStatus;
+
+    @JsonProperty("lastUpdate")
+    private OffsetDateTime lastUpdate;
 
     @JsonProperty("@type")
     private String type = "ProductSpecification";
@@ -64,5 +72,21 @@ public class ProductSpecificationDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public OffsetDateTime getLastUpdate() {
+        return lastUpdate;
+    }
+
+    public void setLastUpdate(OffsetDateTime lastUpdate) {
+        this.lastUpdate = lastUpdate;
     }
 }

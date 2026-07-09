@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.time.OffsetDateTime;
+
 @Entity
 @Table(name = "product_offering")
 public class ProductOffering {
@@ -27,6 +29,13 @@ public class ProductOffering {
 
     @Column(name = "version")
     private String version;
+
+    @Column(name = "last_update")
+    private OffsetDateTime lastUpdate;
+
+    /** JSON object referencing the product specification, echoed verbatim. */
+    @Column(name = "product_specification", length = 4000)
+    private String productSpecificationJson;
 
     public ProductOffering() {
     }
@@ -77,5 +86,21 @@ public class ProductOffering {
 
     public void setVersion(String version) {
         this.version = version;
+    }
+
+    public OffsetDateTime getLastUpdate() {
+        return lastUpdate;
+    }
+
+    public void setLastUpdate(OffsetDateTime lastUpdate) {
+        this.lastUpdate = lastUpdate;
+    }
+
+    public String getProductSpecificationJson() {
+        return productSpecificationJson;
+    }
+
+    public void setProductSpecificationJson(String productSpecificationJson) {
+        this.productSpecificationJson = productSpecificationJson;
     }
 }

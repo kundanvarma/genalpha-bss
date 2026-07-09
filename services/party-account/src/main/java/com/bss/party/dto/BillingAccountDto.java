@@ -4,6 +4,9 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
+import java.util.List;
+import java.util.Map;
+
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class BillingAccountDto {
 
@@ -22,6 +25,9 @@ public class BillingAccountDto {
 
     @JsonProperty("relatedPartyId")
     private String relatedPartyId;
+
+    @JsonProperty("relatedParty")
+    private List<Map<String, Object>> relatedParty;
 
     @JsonProperty("@type")
     private String type = "BillingAccount";
@@ -75,5 +81,13 @@ public class BillingAccountDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public List<Map<String, Object>> getRelatedParty() {
+        return relatedParty;
+    }
+
+    public void setRelatedParty(List<Map<String, Object>> relatedParty) {
+        this.relatedParty = relatedParty;
     }
 }

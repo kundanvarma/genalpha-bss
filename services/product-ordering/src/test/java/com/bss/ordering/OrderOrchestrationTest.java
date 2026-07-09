@@ -144,8 +144,8 @@ class OrderOrchestrationTest {
         verify(inventoryClient).createProduct(product.capture());
         assertThat(product.getValue().name()).isEqualTo("Fibre 1G subscription");
         assertThat(product.getValue().status()).isEqualTo("active");
-        assertThat(product.getValue().productOfferingId()).isEqualTo("po-1");
-        assertThat(product.getValue().billingAccountId()).isEqualTo("ba-1");
+        assertThat(product.getValue().productOffering()).isEqualTo(java.util.Map.of("id", "po-1"));
+        assertThat(product.getValue().billingAccount()).isEqualTo(java.util.Map.of("id", "ba-1"));
     }
 
     @Test
