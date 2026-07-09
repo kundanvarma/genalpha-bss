@@ -38,22 +38,22 @@ docker run -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:5432/pr
 
 ## Try the API
 All endpoints require a JWT — see the **Security** section below for getting a token
-from the bundled Keycloak, then:
+from the bundled Keycloak. Everything goes through the gateway on port 8080:
 ```bash
-curl -X POST localhost:8081/tmf-api/productCatalogManagement/v4/productOffering \
+curl -X POST localhost:8080/tmf-api/productCatalogManagement/v4/productOffering \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"5G Unlimited","lifecycleStatus":"Active","version":"1.0"}'
 
 curl -H "Authorization: Bearer $TOKEN" \
-  "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering?offset=0&limit=10"
+  "localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?offset=0&limit=10"
 ```
 
 ## Roadmap
 1. ✅ All four services scaffolded on the shared Spring Boot template.
 2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. ✅ TMF688 domain events over Kafka.
-4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev). API gateway still open.
+4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
 5. TM Forum Open API conformance (CTK).
 6. Observability (Micrometer/Prometheus) + infrastructure-as-code for the chosen deploy target.
 
@@ -141,6 +141,24 @@ curl -H "Authorization: Bearer $TOKEN" \
 Without a token the same request returns 401; with a token lacking `catalog:write`,
 POST returns 403. Tests fabricate JWTs via `spring-security-test`, so the full
 401/403/200 matrix runs in CI with no identity provider.
+
+## API gateway
+`services/gateway` (Spring Cloud Gateway) is the single entry point, on port **8080**
+in compose. It routes by TMF API path to the owning service — no path rewriting,
+since every service serves its full TMF path:
+
+| Path prefix | Service |
+|---|---|
+| `/tmf-api/productCatalogManagement/**` | product-catalog |
+| `/tmf-api/productOrderingManagement/**` | product-ordering |
+| `/tmf-api/productInventoryManagement/**` | product-inventory |
+| `/tmf-api/party/**`, `/tmf-api/accountManagement/**` | party-account |
+
+The gateway forwards `Authorization` headers untouched: the services stay the
+authorization enforcement point, so the gateway adds a front door without a second
+security implementation to keep in sync. Downstream locations come from
+`CATALOG_URL` / `ORDERING_URL` / `INVENTORY_URL` / `PARTY_URL`. Direct service
+ports (8081–8084) remain exposed in compose for debugging.
 
 ## Order-to-cash orchestration
 `product-ordering` orchestrates the order lifecycle across the other services,

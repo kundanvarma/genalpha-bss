@@ -136,6 +136,26 @@ services:
       kafka:
         condition: service_started
 
+  gateway:
+    build: ./services/gateway
+    container_name: bss-gateway
+    environment:
+      CATALOG_URL: http://product-catalog:8080
+      ORDERING_URL: http://product-ordering:8080
+      INVENTORY_URL: http://product-inventory:8080
+      PARTY_URL: http://party-account:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      product-catalog:
+        condition: service_started
+      product-ordering:
+        condition: service_started
+      product-inventory:
+        condition: service_started
+      party-account:
+        condition: service_started
+
 volumes:
   postgres-data:
 

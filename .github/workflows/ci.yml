@@ -18,6 +18,7 @@ jobs:
           - product-ordering
           - product-inventory
           - party-account
+          - gateway
     defaults:
       run:
         working-directory: services/${{ matrix.service }}

@@ -19,5 +19,6 @@
         <module>services/product-ordering</module>
         <module>services/product-inventory</module>
         <module>services/party-account</module>
+        <module>services/gateway</module>
     </modules>
 </project>
