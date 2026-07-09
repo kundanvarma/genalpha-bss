@@ -134,3 +134,8 @@ curl -H "Authorization: Bearer $TOKEN" \
 Without a token the same request returns 401; with a token lacking `catalog:write`,
 POST returns 403. Tests fabricate JWTs via `spring-security-test`, so the full
 401/403/200 matrix runs in CI with no identity provider.
+
+## License
+[Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and
+chosen for its explicit patent grant, which matters in a standards-heavy telecom
+domain.
