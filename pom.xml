@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.bss</groupId>
+    <artifactId>bss</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+    <name>genalpha-bss</name>
+    <description>TM Forum ODA BSS — aggregator for all service modules</description>
+
+    <!-- Pure aggregator: each service keeps spring-boot-starter-parent as its
+         parent and stays independently buildable; this POM only lets one
+         `mvn -B verify` at the repo root build and test everything. -->
+    <modules>
+        <module>services/product-catalog</module>
+        <module>services/product-ordering</module>
+        <module>services/product-inventory</module>
+        <module>services/party-account</module>
+    </modules>
+</project>

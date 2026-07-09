@@ -85,7 +85,20 @@ produce a 400 with the TMF error body.
 curl -i "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering?offset=20&limit=10"
 ```
 
+## Building
+An aggregator POM at the repo root builds and tests everything in one command:
+```bash
+mvn -B verify
+```
+Each service also remains independently buildable from its own directory.
+
+## Container images
+Each Dockerfile is multi-stage: the Spring Boot jar is exploded into layers
+(dependencies / loader / snapshot-dependencies / application, least- to most-volatile)
+so a code-only change rebuilds a single layer. The runtime stage runs as a non-root
+user (uid 1001, compatible with Kubernetes `runAsNonRoot`), declares a `HEALTHCHECK`
+against `/actuator/health`, sizes the heap with `-XX:MaxRAMPercentage=75`, and execs
+the JVM as PID 1 so SIGTERM reaches it for graceful shutdown.
+
 ## Known gaps before production
 - **No authentication.** All endpoints, including `DELETE`, are open.
-- **Container hardening.** Images run as root, with no `HEALTHCHECK` and no layered-jar
-  caching. There is no parent aggregator POM, so services build one at a time.
