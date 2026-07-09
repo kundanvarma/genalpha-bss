@@ -19,6 +19,9 @@
 
     <properties>
         <java.version>17</java.version>
+        <!-- Boot 3.2 manages 1.19.x, whose docker-java negotiates an API version
+             modern Docker daemons (29+) reject outright. -->
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencies>

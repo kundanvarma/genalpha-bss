@@ -45,6 +45,11 @@
     {
       "username": "demo",
       "enabled": true,
+      "email": "demo@bss.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "requiredActions": [],
       "credentials": [
         { "type": "password", "value": "demo", "temporary": false }
       ],

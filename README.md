@@ -59,9 +59,16 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## Build status
 All four services compile and their tests pass under JDK 17 + Maven 3.9, locally and
-in CI (which also runs the Testcontainers Postgres tests and builds every Docker image).
-The full `docker compose up` interaction path (Keycloak-issued tokens against running
-containers) is the one flow not yet covered by automation.
+in CI (which also runs the Testcontainers Postgres and Kafka tests and builds every
+Docker image). The full `docker compose up` stack — all seven containers — has been
+exercised end to end manually (2026-07-09): Keycloak-issued user token, offering and
+billing account created, order validated via machine-to-machine calls, completion
+provisioning the product into inventory, and both TMF688 events consumed from Kafka.
+That flow is verified but not yet automated in CI.
+
+Local note: very new Docker daemons (29+) reject the API version Testcontainers'
+docker-java opens with; run tests with `-Dapi.version=1.44` if containers report
+"client version 1.32 is too old".
 
 ## Schema management
 Each service owns a private database and applies its own **Flyway** migrations from
@@ -179,7 +186,7 @@ broker.
 
 Watch the stream:
 ```bash
-docker exec -it bss-kafka /opt/bitnami/kafka/bin/kafka-console-consumer.sh \
+docker exec -it bss-kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic bss.ordering.events --from-beginning
 ```
 
