@@ -1,15 +1,17 @@
 package com.bss.ordering.service;
 
 import com.bss.ordering.api.ApiConstants;
+import com.bss.ordering.api.OffsetPageRequest;
+import com.bss.ordering.api.PagedResult;
 import com.bss.ordering.dto.ProductOrderDto;
 import com.bss.ordering.entity.ProductOrder;
 import com.bss.ordering.exception.NotFoundException;
 import com.bss.ordering.mapper.ProductOrderMapper;
 import com.bss.ordering.repository.ProductOrderRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,8 +28,9 @@ public class ProductOrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductOrderDto> findAll() {
-        return repository.findAll().stream().map(mapper::toDto).toList();
+    public PagedResult<ProductOrderDto> findAll(int offset, int limit) {
+        Page<ProductOrder> page = repository.findAll(new OffsetPageRequest(offset, limit));
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)

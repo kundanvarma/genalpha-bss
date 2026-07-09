@@ -76,9 +76,16 @@ applied migration — Flyway checksums them.
 If you ran an older revision that used the shared `bss` database, reset the volume
 before starting: `docker compose down -v`.
 
+## Pagination
+Every list endpoint takes TMF630-style `offset` (default 0) and `limit` (default 20,
+max 100) query params and returns the slice ordered by id, plus `X-Total-Count`
+(total rows) and `X-Result-Count` (rows in this response) headers. Invalid values
+produce a 400 with the TMF error body.
+```bash
+curl -i "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering?offset=20&limit=10"
+```
+
 ## Known gaps before production
-- **Unbounded list endpoints.** Every `list()` is a `findAll()` with no paging.
-  Needs TMF-standard `offset`/`limit` plus `X-Total-Count`.
 - **No authentication.** All endpoints, including `DELETE`, are open.
 - **Container hardening.** Images run as root, with no `HEALTHCHECK` and no layered-jar
   caching. There is no parent aggregator POM, so services build one at a time.

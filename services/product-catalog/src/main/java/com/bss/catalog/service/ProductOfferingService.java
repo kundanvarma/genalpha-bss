@@ -1,15 +1,17 @@
 package com.bss.catalog.service;
 
 import com.bss.catalog.api.ApiConstants;
+import com.bss.catalog.api.OffsetPageRequest;
+import com.bss.catalog.api.PagedResult;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.entity.ProductOffering;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductOfferingMapper;
 import com.bss.catalog.repository.ProductOfferingRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,8 +28,9 @@ public class ProductOfferingService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductOfferingDto> findAll() {
-        return repository.findAll().stream().map(mapper::toDto).toList();
+    public PagedResult<ProductOfferingDto> findAll(int offset, int limit) {
+        Page<ProductOffering> page = repository.findAll(new OffsetPageRequest(offset, limit));
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)

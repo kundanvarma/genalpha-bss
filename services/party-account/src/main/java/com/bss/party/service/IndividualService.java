@@ -1,15 +1,17 @@
 package com.bss.party.service;
 
 import com.bss.party.api.ApiConstants;
+import com.bss.party.api.OffsetPageRequest;
+import com.bss.party.api.PagedResult;
 import com.bss.party.dto.IndividualDto;
 import com.bss.party.entity.Individual;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.IndividualMapper;
 import com.bss.party.repository.IndividualRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,8 +28,9 @@ public class IndividualService {
     }
 
     @Transactional(readOnly = true)
-    public List<IndividualDto> findAll() {
-        return repository.findAll().stream().map(mapper::toDto).toList();
+    public PagedResult<IndividualDto> findAll(int offset, int limit) {
+        Page<Individual> page = repository.findAll(new OffsetPageRequest(offset, limit));
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)

@@ -1,15 +1,17 @@
 package com.bss.inventory.service;
 
 import com.bss.inventory.api.ApiConstants;
+import com.bss.inventory.api.OffsetPageRequest;
+import com.bss.inventory.api.PagedResult;
 import com.bss.inventory.dto.ProductDto;
 import com.bss.inventory.entity.Product;
 import com.bss.inventory.exception.NotFoundException;
 import com.bss.inventory.mapper.ProductMapper;
 import com.bss.inventory.repository.ProductRepository;
+import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -26,8 +28,9 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductDto> findAll() {
-        return repository.findAll().stream().map(mapper::toDto).toList();
+    public PagedResult<ProductDto> findAll(int offset, int limit) {
+        Page<Product> page = repository.findAll(new OffsetPageRequest(offset, limit));
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
     @Transactional(readOnly = true)
