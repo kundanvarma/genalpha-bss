@@ -13,11 +13,14 @@ import com.bss.ordering.exception.NotFoundException;
 import com.bss.ordering.exception.OrderValidationException;
 import com.bss.ordering.mapper.ProductOrderMapper;
 import com.bss.ordering.repository.ProductOrderRepository;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -47,9 +50,36 @@ public class ProductOrderService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<ProductOrderDto> findAll(int offset, int limit) {
-        Page<ProductOrder> page = repository.findAll(new OffsetPageRequest(offset, limit));
+    public PagedResult<ProductOrderDto> findAll(int offset, int limit, Map<String, String> filters) {
+        Page<ProductOrder> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * TMF630 attribute filtering: exact match on scalar attributes via
+     * query-by-example. Unknown attributes are rejected rather than silently
+     * matching everything.
+     */
+    private Example<ProductOrder> probeFor(Map<String, String> filters) {
+        ProductOrder probe = new ProductOrder();
+        for (Map.Entry<String, String> f : filters.entrySet()) {
+            switch (f.getKey()) {
+                case "id" -> probe.setId(f.getValue());
+                case "state" -> probe.setState(f.getValue());
+                case "category" -> probe.setCategory(f.getValue());
+                case "productOfferingId" -> probe.setProductOfferingId(f.getValue());
+                case "billingAccountId" -> probe.setBillingAccountId(f.getValue());
+                case "orderDate" -> {
+                    try {
+                        probe.setOrderDate(OffsetDateTime.parse(f.getValue()));
+                    } catch (DateTimeParseException e) {
+                        throw new OrderValidationException("orderDate filter is not a valid date-time");
+                    }
+                }
+                default -> throw new OrderValidationException("unsupported filter attribute '" + f.getKey() + "'");
+            }
+        }
+        return Example.of(probe);
     }
 
     @Transactional(readOnly = true)
@@ -62,6 +92,9 @@ public class ProductOrderService {
     @Transactional
     public ProductOrderDto create(ProductOrderDto dto) {
         validateReferences(dto);
+        if (dto.getState() == null || dto.getState().isBlank()) {
+            dto.setState("acknowledged");
+        }
         ProductOrder entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);

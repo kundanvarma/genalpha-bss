@@ -55,6 +55,7 @@ class ProductOrderPaginationTest {
         for (int i = 1; i <= 3; i++) {
             String body = """
                     {
+                      "productOrderItem": [{"id": "1", "action": "add"}],
                       "state": "acknowledged",
                       "description": "Pagination test order %d",
                       "productOfferingId": "po-001"

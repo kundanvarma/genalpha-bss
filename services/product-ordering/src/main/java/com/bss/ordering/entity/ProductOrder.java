@@ -33,6 +33,14 @@ public class ProductOrder {
     @Column(name = "billing_account_id")
     private String billingAccountId;
 
+    /** JSON array of order items, stored verbatim (TMF622 mandatory). */
+    @Column(name = "product_order_item", length = 4000)
+    private String productOrderItemJson;
+
+    /** JSON array of related parties, stored verbatim. */
+    @Column(name = "related_party", length = 4000)
+    private String relatedPartyJson;
+
     @Column(name = "order_date")
     private OffsetDateTime orderDate;
 
@@ -93,6 +101,22 @@ public class ProductOrder {
 
     public void setBillingAccountId(String billingAccountId) {
         this.billingAccountId = billingAccountId;
+    }
+
+    public String getProductOrderItemJson() {
+        return productOrderItemJson;
+    }
+
+    public void setProductOrderItemJson(String productOrderItemJson) {
+        this.productOrderItemJson = productOrderItemJson;
+    }
+
+    public String getRelatedPartyJson() {
+        return relatedPartyJson;
+    }
+
+    public void setRelatedPartyJson(String relatedPartyJson) {
+        this.relatedPartyJson = relatedPartyJson;
     }
 
     public OffsetDateTime getOrderDate() {

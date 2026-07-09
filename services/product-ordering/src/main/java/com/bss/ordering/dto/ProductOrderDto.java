@@ -2,7 +2,10 @@ package com.bss.ordering.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+
+import java.util.List;
+import java.util.Map;
 
 import java.time.OffsetDateTime;
 
@@ -15,9 +18,15 @@ public class ProductOrderDto {
     @JsonProperty("href")
     private String href;
 
-    @NotBlank(message = "state is required")
     @JsonProperty("state")
     private String state;
+
+    @NotEmpty(message = "productOrderItem must contain at least one item")
+    @JsonProperty("productOrderItem")
+    private List<Map<String, Object>> productOrderItem;
+
+    @JsonProperty("relatedParty")
+    private List<Map<String, Object>> relatedParty;
 
     @JsonProperty("description")
     private String description;
@@ -86,6 +95,22 @@ public class ProductOrderDto {
 
     public void setProductOfferingId(String productOfferingId) {
         this.productOfferingId = productOfferingId;
+    }
+
+    public List<Map<String, Object>> getProductOrderItem() {
+        return productOrderItem;
+    }
+
+    public void setProductOrderItem(List<Map<String, Object>> productOrderItem) {
+        this.productOrderItem = productOrderItem;
+    }
+
+    public List<Map<String, Object>> getRelatedParty() {
+        return relatedParty;
+    }
+
+    public void setRelatedParty(List<Map<String, Object>> relatedParty) {
+        this.relatedParty = relatedParty;
     }
 
     public String getBillingAccountId() {

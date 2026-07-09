@@ -86,7 +86,7 @@ class OrderEventsKafkaIntegrationTest {
                             .with(jwt().authorities(new SimpleGrantedAuthority("ordering:write")))
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
-                                    {"state": "acknowledged", "description": "kafka wire test"}
+                                    {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "description": "kafka wire test"}
                                     """))
                     .andExpect(status().isCreated())
                     .andReturn().getResponse().getContentAsString();

@@ -48,7 +48,8 @@ class ProductOrderApiTest {
     void createProductOrder_returns201WithGeneratedId() throws Exception {
         String body = """
                 {
-                  "state": "acknowledged",
+                  "productOrderItem": [{"id": "1", "action": "add"}],
+                      "state": "acknowledged",
                   "description": "New mobile subscription order",
                   "productOfferingId": "po-001"
                 }

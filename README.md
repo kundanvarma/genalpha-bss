@@ -54,7 +54,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. ✅ TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
-5. TM Forum Open API conformance (CTK).
+5. TM Forum Open API conformance (CTK) — TMF622 passing; TMF620/632/637/666 kits pending.
 6. ✅ Observability (Micrometer/Prometheus/Grafana). Infrastructure-as-code for the chosen deploy target still open.
 
 ## Build status
@@ -226,6 +226,26 @@ every 10s, and **Grafana** (port 3000, admin/admin) with the Prometheus datasour
 pre-provisioned — import dashboard `4701` (JVM Micrometer) for an instant overview.
 The scrape endpoint is deliberately unauthenticated, like health; in production,
 keep the actuator port network-internal.
+
+## TM Forum conformance (CTK)
+The official TM Forum Conformance Test Kits are public at
+[github.com/tmforum-rand](https://github.com/tmforum-rand). The **TMF622 Product
+Ordering v4.0.0 CTK passes with zero failures** (9 requests, 63 assertions)
+against this stack, run through the gateway with a real Keycloak token.
+
+What conformance required beyond the original scaffold: `productOrderItem` (the
+spec-mandatory order content, at least one item required) and `relatedParty`,
+both stored and echoed verbatim; server-set `state` defaulting to
+`acknowledged`; TMF630 attribute filtering (`?id=`, `?orderDate=`, any scalar
+attribute — unknown attributes are rejected with 400); and `?fields=` attribute
+selection (id always included).
+
+To reproduce: clone the CTK, point `config.json` at
+`http://localhost:8080/tmf-api/productOrderingManagement/v4/`, add an
+`Authorization: Bearer <token>` header (see Security), start from a clean
+database (`docker compose down -v && docker compose up -d`), and run the kit
+with Node 16. Formal certification is a TM Forum program; the kit passing is
+the technical prerequisite.
 
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and

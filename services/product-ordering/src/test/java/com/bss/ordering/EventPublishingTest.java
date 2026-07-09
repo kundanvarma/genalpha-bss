@@ -103,7 +103,7 @@ class EventPublishingTest {
         String response = mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged"}
                                 """))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();

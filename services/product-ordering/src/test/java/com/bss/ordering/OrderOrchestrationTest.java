@@ -69,7 +69,7 @@ class OrderOrchestrationTest {
         mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged", "productOfferingId": "missing-po"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "productOfferingId": "missing-po"}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
@@ -85,7 +85,7 @@ class OrderOrchestrationTest {
         mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged", "productOfferingId": "po-1", "billingAccountId": "missing-ba"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "productOfferingId": "po-1", "billingAccountId": "missing-ba"}
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
@@ -100,7 +100,7 @@ class OrderOrchestrationTest {
         mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged", "productOfferingId": "po-1", "billingAccountId": "ba-1"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "productOfferingId": "po-1", "billingAccountId": "ba-1"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.billingAccountId").value("ba-1"))
@@ -115,7 +115,7 @@ class OrderOrchestrationTest {
         mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged"}
                                 """))
                 .andExpect(status().isCreated());
         verifyNoInteractions(catalogClient, partyClient, inventoryClient);
@@ -127,7 +127,7 @@ class OrderOrchestrationTest {
                 .willReturn(Optional.of(new CatalogClient.OfferingRef("po-1", "5G Plan")));
         given(partyClient.billingAccountExists(anyString())).willReturn(true);
         String id = createOrder("""
-                {"state": "acknowledged", "description": "Fibre 1G subscription",
+                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "description": "Fibre 1G subscription",
                  "productOfferingId": "po-1", "billingAccountId": "ba-1"}
                 """);
 
@@ -151,7 +151,7 @@ class OrderOrchestrationTest {
     @Test
     void completedOrder_isTerminal_andProvisionsOnlyOnce() throws Exception {
         String id = createOrder("""
-                {"state": "acknowledged", "description": "One-shot order"}
+                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "description": "One-shot order"}
                 """);
         mockMvc.perform(patch(BASE + "/" + id).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -174,7 +174,7 @@ class OrderOrchestrationTest {
     @Test
     void completion_whenInventoryFails_returns502AndOrderStaysUncompleted() throws Exception {
         String id = createOrder("""
-                {"state": "acknowledged", "description": "Doomed order"}
+                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "description": "Doomed order"}
                 """);
         willThrow(new DownstreamException("product-inventory rejected or is unreachable", new RuntimeException()))
                 .given(inventoryClient).createProduct(any());
@@ -201,7 +201,7 @@ class OrderOrchestrationTest {
         mockMvc.perform(post(BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"state": "acknowledged", "productOfferingId": "po-1"}
+                                {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "productOfferingId": "po-1"}
                                 """))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.code").value("502"));
