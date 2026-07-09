@@ -15,6 +15,7 @@ public class ProductOrderMapper {
         dto.setDescription(entity.getDescription());
         dto.setCategory(entity.getCategory());
         dto.setProductOfferingId(entity.getProductOfferingId());
+        dto.setBillingAccountId(entity.getBillingAccountId());
         dto.setOrderDate(entity.getOrderDate());
         dto.setType("ProductOrder");
         return dto;
@@ -28,6 +29,7 @@ public class ProductOrderMapper {
         entity.setDescription(dto.getDescription());
         entity.setCategory(dto.getCategory());
         entity.setProductOfferingId(dto.getProductOfferingId());
+        entity.setBillingAccountId(dto.getBillingAccountId());
         entity.setOrderDate(dto.getOrderDate());
         return entity;
     }
@@ -47,6 +49,9 @@ public class ProductOrderMapper {
         }
         if (patch.getProductOfferingId() != null) {
             entity.setProductOfferingId(patch.getProductOfferingId());
+        }
+        if (patch.getBillingAccountId() != null) {
+            entity.setBillingAccountId(patch.getBillingAccountId());
         }
         if (patch.getOrderDate() != null) {
             entity.setOrderDate(patch.getOrderDate());

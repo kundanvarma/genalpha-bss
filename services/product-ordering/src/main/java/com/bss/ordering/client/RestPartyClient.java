@@ -1,0 +1,34 @@
+package com.bss.ordering.client;
+
+import com.bss.ordering.exception.DownstreamException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+@Component
+public class RestPartyClient implements PartyClient {
+
+    private final RestClient restClient;
+
+    public RestPartyClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.party-base-url}") String baseUrl) {
+        this.restClient = builder.baseUrl(baseUrl).requestInterceptor(tokenInterceptor).build();
+    }
+
+    @Override
+    public boolean billingAccountExists(String id) {
+        try {
+            restClient.get()
+                    .uri("/tmf-api/accountManagement/v4/billingAccount/{id}", id)
+                    .retrieve()
+                    .toBodilessEntity();
+            return true;
+        } catch (HttpClientErrorException.NotFound e) {
+            return false;
+        } catch (RestClientException e) {
+            throw new DownstreamException("party-account is unreachable", e);
+        }
+    }
+}

@@ -56,12 +56,22 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      CATALOG_BASE_URL: http://product-catalog:8080
+      PARTY_BASE_URL: http://party-account:8080
+      INVENTORY_BASE_URL: http://product-inventory:8080
     ports:
       - "8082:8080"
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
+        condition: service_started
+      product-catalog:
+        condition: service_started
+      product-inventory:
+        condition: service_started
+      party-account:
         condition: service_started
 
   product-inventory:

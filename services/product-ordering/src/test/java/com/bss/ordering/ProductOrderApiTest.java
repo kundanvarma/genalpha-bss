@@ -1,9 +1,12 @@
 package com.bss.ordering;
 
+import com.bss.ordering.client.CatalogClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -13,6 +16,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,6 +32,17 @@ class ProductOrderApiTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Orders in these tests reference offering "po-001"; orchestration validates
+    // references against the catalog, which is not running here.
+    @MockBean
+    private CatalogClient catalogClient;
+
+    @BeforeEach
+    void stubCatalog() {
+        given(catalogClient.findOffering(anyString()))
+                .willReturn(java.util.Optional.of(new CatalogClient.OfferingRef("po-001", "Stub Offering")));
+    }
 
     @Test
     void createProductOrder_returns201WithGeneratedId() throws Exception {

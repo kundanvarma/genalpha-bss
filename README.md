@@ -51,7 +51,7 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## Roadmap
 1. ✅ All four services scaffolded on the shared Spring Boot template.
-2. Cross-service order-to-cash orchestration (order → inventory → billing account).
+2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. TMF688 domain events over Kafka.
 4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev). API gateway still open.
 5. TM Forum Open API conformance (CTK).
@@ -134,6 +134,30 @@ curl -H "Authorization: Bearer $TOKEN" \
 Without a token the same request returns 401; with a token lacking `catalog:write`,
 POST returns 403. Tests fabricate JWTs via `spring-security-test`, so the full
 401/403/200 matrix runs in CI with no identity provider.
+
+## Order-to-cash orchestration
+`product-ordering` orchestrates the order lifecycle across the other services,
+synchronously over their TMF APIs:
+
+- **Creation** validates references: an order pointing at a `productOfferingId`
+  unknown to the catalog, or a `billingAccountId` unknown to party-account, is
+  rejected with 400. Orders without references are accepted untouched.
+- **Completion** (`PATCH {"state": "completed"}`) provisions the ordered product
+  into product-inventory (status `active`, carrying the offering and billing
+  account references). Provisioning runs inside the order transaction: if
+  inventory fails, the response is 502 and the order stays in its previous state.
+- `completed` and `cancelled` are terminal — further changes are rejected, so an
+  order can never provision twice.
+
+Service-to-service calls authenticate via **OAuth2 client credentials**: the
+ordering service has its own machine identity (`bss-ordering` in the dev realm)
+whose scopes are exactly what orchestration needs — `catalog:read`, `party:read`,
+`inventory:write` — so the API security model applies to machines the same way it
+applies to users. Downstream locations come from `CATALOG_BASE_URL`,
+`PARTY_BASE_URL`, and `INVENTORY_BASE_URL`; the token endpoint from
+`OIDC_TOKEN_URI` (deliberately not issuer discovery, so no IdP is needed at
+startup). The dev client secret in the bundled realm is for local use only —
+override `OIDC_CLIENT_SECRET` in any real deployment.
 
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and

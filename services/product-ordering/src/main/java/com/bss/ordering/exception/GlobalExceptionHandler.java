@@ -58,4 +58,24 @@ public class GlobalExceptionHandler {
                 "400");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
+
+    @ExceptionHandler(OrderValidationException.class)
+    public ResponseEntity<ErrorResponse> handleOrderValidation(OrderValidationException ex) {
+        ErrorResponse body = new ErrorResponse(
+                "400",
+                "Bad Request",
+                ex.getMessage(),
+                "400");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    @ExceptionHandler(DownstreamException.class)
+    public ResponseEntity<ErrorResponse> handleDownstream(DownstreamException ex) {
+        ErrorResponse body = new ErrorResponse(
+                "502",
+                "Bad Gateway",
+                ex.getMessage(),
+                "502");
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+    }
 }

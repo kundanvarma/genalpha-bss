@@ -30,6 +30,9 @@ public class ProductOrder {
     @Column(name = "product_offering_id")
     private String productOfferingId;
 
+    @Column(name = "billing_account_id")
+    private String billingAccountId;
+
     @Column(name = "order_date")
     private OffsetDateTime orderDate;
 
@@ -82,6 +85,14 @@ public class ProductOrder {
 
     public void setProductOfferingId(String productOfferingId) {
         this.productOfferingId = productOfferingId;
+    }
+
+    public String getBillingAccountId() {
+        return billingAccountId;
+    }
+
+    public void setBillingAccountId(String billingAccountId) {
+        this.billingAccountId = billingAccountId;
     }
 
     public OffsetDateTime getOrderDate() {

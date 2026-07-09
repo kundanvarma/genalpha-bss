@@ -28,6 +28,9 @@ public class ProductOrderDto {
     @JsonProperty("productOfferingId")
     private String productOfferingId;
 
+    @JsonProperty("billingAccountId")
+    private String billingAccountId;
+
     @JsonProperty("orderDate")
     private OffsetDateTime orderDate;
 
@@ -83,6 +86,14 @@ public class ProductOrderDto {
 
     public void setProductOfferingId(String productOfferingId) {
         this.productOfferingId = productOfferingId;
+    }
+
+    public String getBillingAccountId() {
+        return billingAccountId;
+    }
+
+    public void setBillingAccountId(String billingAccountId) {
+        this.billingAccountId = billingAccountId;
     }
 
     public OffsetDateTime getOrderDate() {

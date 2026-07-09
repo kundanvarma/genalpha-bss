@@ -6,6 +6,18 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+      client:
+        registration:
+          bss-m2m:
+            client-id: ${OIDC_CLIENT_ID:bss-ordering}
+            client-secret: ${OIDC_CLIENT_SECRET:ordering-secret}
+            authorization-grant-type: client_credentials
+            provider: bss
+        provider:
+          bss:
+            # token-uri directly (not issuer discovery): the client registration
+            # must not require the IdP to be reachable at startup.
+            token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/product_ordering}
     username: ${DB_USERNAME:postgres}
@@ -36,3 +48,9 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+bss:
+  downstream:
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
+    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
