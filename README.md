@@ -192,15 +192,17 @@ TMF naming: `<Resource>CreateEvent`, `<Resource>AttributeValueChangeEvent`,
 `<Resource>DeleteEvent`, and `ProductOrderStateChangeEvent` on order state
 transitions.
 
-Delivery semantics, honestly stated: events publish **after the database
-transaction commits** (no phantom events from rolled-back changes) and are
-**best-effort** — a dead broker degrades to a logged warning, never a failed API
-request. Exactly-once/at-least-once delivery would require a transactional
-outbox; that is a known, deliberate gap. `docker compose up` includes a
-single-node Kafka (KRaft); tests run against a no-op publisher for speed, event
-emission is verified at the publisher boundary per service, and one
-Testcontainers test in product-ordering asserts a real envelope lands on a real
-broker.
+Delivery is **at-least-once via a transactional outbox**: the event row is
+written in the same database transaction as the business change, so a rolled-back
+change never produces an event and a committed change never loses one. A relay
+drains the outbox to Kafka in order every 2s (`bss.events.relay-interval-ms`),
+deleting rows only after the broker acknowledges; a dead broker retains events
+for retry and never fails an API request. A crash between send and delete can
+produce a duplicate — consumers should deduplicate by `eventId` (the Kafka
+message key). Tests run against a no-op publisher for speed; outbox semantics
+(same-transaction commit, rollback, drain, broker-failure retention) are tested
+in product-ordering, and one Testcontainers test asserts a real envelope lands
+on a real broker through the outbox path.
 
 Watch the stream:
 ```bash
@@ -214,12 +216,12 @@ Every service (gateway included) exposes Prometheus metrics at
 datasource, and Kafka producer metrics out of the box, plus two business counters
 from the event pipeline:
 
-- `bss_events_published_total{event_type=...}` — TMF688 events that reached Kafka
-- `bss_events_failed_total{event_type=...}` — events lost to broker failures
+- `bss_events_published_total{event_type=...}` — TMF688 events acknowledged by Kafka
+- `bss_events_failed_total{event_type=...}` — failed delivery attempts (the event
+  stays in the outbox and retries; rising values mean the broker is unhealthy)
 
-The failed counter matters: event publishing is deliberately best-effort (a dead
-broker never fails an API request), so this metric is where those losses become
-visible. Alert on it.
+Alert on `bss_events_failed_total` growth and on outbox backlog age if you add a
+gauge; with the transactional outbox, failures mean delayed delivery, not loss.
 
 `docker compose up` includes **Prometheus** (port 9090) scraping all five services
 every 10s, and **Grafana** (port 3000, admin/admin) with the Prometheus datasource

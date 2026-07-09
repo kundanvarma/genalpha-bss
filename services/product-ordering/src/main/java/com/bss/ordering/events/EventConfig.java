@@ -11,8 +11,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 @Configuration
+@EnableScheduling
 public class EventConfig {
 
     @Bean
@@ -27,9 +29,15 @@ public class EventConfig {
 
     @Bean
     @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
-    DomainEventPublisher kafkaDomainEventPublisher(KafkaTemplate<String, Object> eventKafkaTemplate,
-            @Value("${bss.events.topic}") String topic, MeterRegistry meterRegistry) {
-        return new KafkaDomainEventPublisher(eventKafkaTemplate, topic, meterRegistry);
+    DomainEventPublisher outboxDomainEventPublisher(OutboxEventRepository outbox, ObjectMapper objectMapper) {
+        return new OutboxDomainEventPublisher(outbox, objectMapper);
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
+    OutboxRelay outboxRelay(OutboxEventRepository outbox, KafkaTemplate<String, Object> eventKafkaTemplate,
+            @Value("${bss.events.topic}") String topic, ObjectMapper objectMapper, MeterRegistry meterRegistry) {
+        return new OutboxRelay(outbox, eventKafkaTemplate, topic, objectMapper, meterRegistry);
     }
 
     @Bean
