@@ -58,11 +58,20 @@ All four services compile and their tests pass under JDK 17 + Maven 3.9 (9 tests
 The Docker images and `docker compose up` path have not yet been exercised — CI is the
 first place those run.
 
+## Schema management
+Each service owns a private database and applies its own **Flyway** migrations from
+`src/main/resources/db/migration` at startup. Hibernate runs with `ddl-auto: validate`,
+so a mismatch between the JPA entities and the migrated schema fails startup instead of
+silently altering tables. The test suite runs the same migrations against H2, which means
+entity/schema drift is caught by CI.
+
+To add a column: write a new `V2__*.sql` alongside the entity change. Never edit an
+applied migration — Flyway checksums them.
+
+If you ran an older revision that used the shared `bss` database, reset the volume
+before starting: `docker compose down -v`.
+
 ## Known gaps before production
-- **Schema management.** Every service uses Hibernate `ddl-auto: update`, and
-  `docker-compose.yml` points all four at a single shared `bss` database. Four services
-  mutating one schema concurrently on startup is unsafe; replace with versioned
-  migrations (Flyway) and `ddl-auto: validate`.
 - **Unbounded list endpoints.** Every `list()` is a `findAll()` with no paging.
   Needs TMF-standard `offset`/`limit` plus `X-Total-Count`.
 - **No authentication.** All endpoints, including `DELETE`, are open.

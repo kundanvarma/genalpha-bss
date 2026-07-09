@@ -4,10 +4,13 @@ services:
     container_name: bss-postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: bss
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
+    volumes:
+      - ./infra/postgres/init-databases.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -18,9 +21,9 @@ services:
     build: ./services/product-catalog
     container_name: bss-product-catalog
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/bss
+      DB_URL: jdbc:postgresql://postgres:5432/product_catalog
       DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8081:8080"
     depends_on:
@@ -31,9 +34,9 @@ services:
     build: ./services/product-ordering
     container_name: bss-product-ordering
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/bss
+      DB_URL: jdbc:postgresql://postgres:5432/product_ordering
       DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8082:8080"
     depends_on:
@@ -44,9 +47,9 @@ services:
     build: ./services/product-inventory
     container_name: bss-product-inventory
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/bss
+      DB_URL: jdbc:postgresql://postgres:5432/product_inventory
       DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8083:8080"
     depends_on:
@@ -57,15 +60,19 @@ services:
     build: ./services/party-account
     container_name: bss-party-account
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/bss
+      DB_URL: jdbc:postgresql://postgres:5432/party_account
       DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8084:8080"
     depends_on:
       postgres:
         condition: service_healthy
 
-# All four services share one Postgres database "bss"; their table names are
-# distinct per TMF resource, so there are no collisions. Each service creates
-# its own schema via JPA ddl-auto=update on startup.
+volumes:
+  postgres-data:
+
+# Each service owns a private database, created by infra/postgres/init-databases.sql,
+# and manages its own schema through Flyway migrations. Schema is applied at startup
+# by Flyway; Hibernate runs with ddl-auto=validate and will refuse to start if the
+# entities and the migrated schema disagree.
