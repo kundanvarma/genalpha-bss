@@ -65,6 +65,11 @@ so a mismatch between the JPA entities and the migrated schema fails startup ins
 silently altering tables. The test suite runs the same migrations against H2, which means
 entity/schema drift is caught by CI.
 
+Each service also has a `PostgresMigrationTest` that runs the migrations against a real
+PostgreSQL 16 via Testcontainers, loading the production config rather than the H2 test
+profile. It is skipped when Docker is unavailable and runs in CI, so the schema is
+verified on the engine it actually deploys against — not only on H2.
+
 To add a column: write a new `V2__*.sql` alongside the entity change. Never edit an
 applied migration — Flyway checksums them.
 
