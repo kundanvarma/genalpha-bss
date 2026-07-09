@@ -1,0 +1,21 @@
+# Maven / Java build output
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS / logs / env
+.DS_Store
+*.log
+.env
+
+# Local tooling
+.claude/settings.local.json

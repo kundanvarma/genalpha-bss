@@ -1,0 +1,103 @@
+package com.bss.ordering.dto;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotBlank;
+
+import java.time.OffsetDateTime;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ProductOrderDto {
+
+    @JsonProperty("id")
+    private String id;
+
+    @JsonProperty("href")
+    private String href;
+
+    @NotBlank(message = "state is required")
+    @JsonProperty("state")
+    private String state;
+
+    @JsonProperty("description")
+    private String description;
+
+    @JsonProperty("category")
+    private String category;
+
+    @JsonProperty("productOfferingId")
+    private String productOfferingId;
+
+    @JsonProperty("orderDate")
+    private OffsetDateTime orderDate;
+
+    @JsonProperty("@type")
+    private String type = "ProductOrder";
+
+    public ProductOrderDto() {
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getHref() {
+        return href;
+    }
+
+    public void setHref(String href) {
+        this.href = href;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
+    }
+
+    public String getProductOfferingId() {
+        return productOfferingId;
+    }
+
+    public void setProductOfferingId(String productOfferingId) {
+        this.productOfferingId = productOfferingId;
+    }
+
+    public OffsetDateTime getOrderDate() {
+        return orderDate;
+    }
+
+    public void setOrderDate(OffsetDateTime orderDate) {
+        this.orderDate = orderDate;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
+    }
+}

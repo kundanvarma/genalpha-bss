@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: ${{ matrix.service }} (build, test, docker)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - product-catalog
+          - product-ordering
+          - product-inventory
+          - party-account
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build & run tests (mvn verify)
+        run: mvn -B verify
+
+      - name: Build Docker image
+        run: docker build -t bss/${{ matrix.service }}:${{ github.sha }} .
+
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.service }}-jar
+          path: services/${{ matrix.service }}/target/*.jar
+          if-no-files-found: warn
