@@ -8,7 +8,7 @@ Production-oriented Business Support System aligned to **TM Forum ODA**, impleme
 - ✅ **product-inventory (TMF637)** — product — port 8083
 - ✅ **party-account (TMF632 + TMF666)** — individual, organization, billingAccount — port 8084
 
-All four share the same production template: Spring Boot 3.2, JPA/PostgreSQL (H2 for tests), DTO/mapper, validation, `@type` handling, `@RestControllerAdvice` errors, springdoc OpenAPI, a MockMvc test, and a multi-stage Dockerfile. `docker compose up --build` runs all four + Postgres. CI builds/tests/containers every service on each push.
+All four share the same production template: Spring Boot 3.2, JPA/PostgreSQL (H2 for tests), DTO/mapper, validation, `@type` handling, `@RestControllerAdvice` errors, springdoc OpenAPI, a MockMvc test, and a multi-stage Dockerfile. `docker compose up --build` runs all four + Postgres + Keycloak. CI builds/tests/containers every service on each push.
 
 ## Stack
 Java 17 · Spring Boot 3.2 · Spring Web · Spring Data JPA · PostgreSQL (H2 for tests) · springdoc-openapi · Maven · Docker · GitHub Actions.
@@ -37,26 +37,31 @@ docker run -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:5432/pr
 `.github/workflows/ci.yml` runs on every push/PR: sets up JDK 17, runs `mvn verify` (compile + tests), and builds the Docker image. Add a job per new service as they land. **CI is the source of truth for "it builds and passes"** — this is where the Java toolchain actually runs.
 
 ## Try the API
+All endpoints require a JWT — see the **Security** section below for getting a token
+from the bundled Keycloak, then:
 ```bash
-curl -X POST localhost:8080/tmf-api/productCatalogManagement/v4/productOffering \
+curl -X POST localhost:8081/tmf-api/productCatalogManagement/v4/productOffering \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name":"5G Unlimited","lifecycleStatus":"Active","version":"1.0"}'
 
-curl localhost:8080/tmf-api/productCatalogManagement/v4/productOffering
+curl -H "Authorization: Bearer $TOKEN" \
+  "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering?offset=0&limit=10"
 ```
 
 ## Roadmap
 1. ✅ All four services scaffolded on the shared Spring Boot template.
 2. Cross-service order-to-cash orchestration (order → inventory → billing account).
 3. TMF688 domain events over Kafka.
-4. API gateway + OAuth2/OIDC.
+4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev). API gateway still open.
 5. TM Forum Open API conformance (CTK).
 6. Observability (Micrometer/Prometheus) + infrastructure-as-code for the chosen deploy target.
 
 ## Build status
-All four services compile and their tests pass under JDK 17 + Maven 3.9 (9 tests total).
-The Docker images and `docker compose up` path have not yet been exercised — CI is the
-first place those run.
+All four services compile and their tests pass under JDK 17 + Maven 3.9, locally and
+in CI (which also runs the Testcontainers Postgres tests and builds every Docker image).
+The full `docker compose up` interaction path (Keycloak-issued tokens against running
+containers) is the one flow not yet covered by automation.
 
 ## Schema management
 Each service owns a private database and applies its own **Flyway** migrations from
@@ -100,5 +105,32 @@ user (uid 1001, compatible with Kubernetes `runAsNonRoot`), declares a `HEALTHCH
 against `/actuator/health`, sizes the heap with `-XX:MaxRAMPercentage=75`, and execs
 the JVM as PID 1 so SIGTERM reaches it for graceful shutdown.
 
-## Known gaps before production
-- **No authentication.** All endpoints, including `DELETE`, are open.
+## Security
+Every service is a pure **OAuth2 resource server**: it never performs login or issues
+tokens — it validates JWTs from whatever OIDC issuer `OIDC_ISSUER_URI` points at.
+Any spec-compliant provider works unchanged (Keycloak, IdentityServer/Duende,
+Ping Identity, Okta, Entra ID, Auth0, Cognito); the provider is deployment
+configuration, not a code dependency.
+
+Authorization is scope-based and coarse: reads require `<service>:read`
+(`catalog:read`, `ordering:read`, `inventory:read`, `party:read`), writes
+(POST/PATCH/DELETE) require the matching `<service>:write`. `/actuator/health` and
+the OpenAPI docs stay open for probes and discovery. Providers differ in which claim
+carries permissions (`scope`, `scp`, `realm_access.roles`, ...), so the claim paths are
+configurable via `bss.security.authority-claims` — switching identity providers is
+configuration, not code.
+
+`docker compose up` includes a **Keycloak** (port 8085) with a pre-provisioned `bss`
+realm and a `demo`/`demo` user holding all scopes — a working secured system out of
+the box, no cloud account needed. Try it:
+```bash
+TOKEN=$(curl -s -d grant_type=password -d client_id=bss-demo \
+  -d username=demo -d password=demo \
+  http://localhost:8085/realms/bss/protocol/openid-connect/token | jq -r .access_token)
+
+curl -H "Authorization: Bearer $TOKEN" \
+  "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering"
+```
+Without a token the same request returns 401; with a token lacking `catalog:write`,
+POST returns 403. Tests fabricate JWTs via `spring-security-test`, so the full
+401/403/200 matrix runs in CI with no identity provider.

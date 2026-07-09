@@ -8,11 +8,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -40,19 +43,19 @@ class IndividualPaginationTest {
                       "familyName": "Doe"
                     }
                     """.formatted(i);
-            mockMvc.perform(post(INDIVIDUAL_BASE)
+            mockMvc.perform(post(INDIVIDUAL_BASE).with(writeToken())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
                     .andExpect(status().isCreated());
         }
 
-        MvcResult fullResult = mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=0&limit=100")
+        MvcResult fullResult = mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=0&limit=100").with(readToken())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode fullList = objectMapper.readTree(fullResult.getResponse().getContentAsString());
 
-        MvcResult sliceResult = mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=1&limit=2")
+        MvcResult sliceResult = mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=1&limit=2").with(readToken())
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andReturn();
@@ -71,22 +74,30 @@ class IndividualPaginationTest {
 
     @Test
     void pagination_rejectsZeroLimit() throws Exception {
-        mockMvc.perform(get(INDIVIDUAL_BASE + "?limit=0").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get(INDIVIDUAL_BASE + "?limit=0").with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
     }
 
     @Test
     void pagination_rejectsNegativeOffset() throws Exception {
-        mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=-1").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get(INDIVIDUAL_BASE + "?offset=-1").with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
     }
 
     @Test
     void pagination_rejectsLimitOver100() throws Exception {
-        mockMvc.perform(get(INDIVIDUAL_BASE + "?limit=101").accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get(INDIVIDUAL_BASE + "?limit=101").with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    private static RequestPostProcessor readToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("party:read"));
+    }
+
+    private static RequestPostProcessor writeToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("party:write"));
     }
 }

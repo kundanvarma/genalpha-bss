@@ -6,10 +6,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.hamcrest.Matchers.emptyOrNullString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -35,7 +38,7 @@ class PartyAccountApiTest {
                 }
                 """;
 
-        mockMvc.perform(post(INDIVIDUAL_BASE)
+        mockMvc.perform(post(INDIVIDUAL_BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -55,7 +58,7 @@ class PartyAccountApiTest {
                 }
                 """;
 
-        mockMvc.perform(post(BILLING_ACCOUNT_BASE)
+        mockMvc.perform(post(BILLING_ACCOUNT_BASE).with(writeToken())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isCreated())
@@ -68,8 +71,16 @@ class PartyAccountApiTest {
 
     @Test
     void listIndividuals_returns200() throws Exception {
-        mockMvc.perform(get(INDIVIDUAL_BASE).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get(INDIVIDUAL_BASE).with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
+    }
+
+    private static RequestPostProcessor readToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("party:read"));
+    }
+
+    private static RequestPostProcessor writeToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("party:write"));
     }
 }

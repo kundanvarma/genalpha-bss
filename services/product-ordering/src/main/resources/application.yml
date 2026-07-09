@@ -1,6 +1,11 @@
 spring:
   application:
     name: product-ordering
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/product_ordering}
     username: ${DB_USERNAME:postgres}

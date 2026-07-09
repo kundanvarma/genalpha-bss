@@ -8,11 +8,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.web.servlet.MvcResult;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -41,13 +44,13 @@ class ProductPaginationTest {
                       "productOfferingId": "po-001"
                     }
                     """.formatted(i);
-            mockMvc.perform(post(BASE)
+            mockMvc.perform(post(BASE).with(writeToken())
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
                     .andExpect(status().isCreated());
         }
 
-        MvcResult fullResult = mockMvc.perform(get(BASE)
+        MvcResult fullResult = mockMvc.perform(get(BASE).with(readToken())
                         .param("offset", "0")
                         .param("limit", "100")
                         .accept(MediaType.APPLICATION_JSON))
@@ -55,7 +58,7 @@ class ProductPaginationTest {
                 .andReturn();
         JsonNode fullList = objectMapper.readTree(fullResult.getResponse().getContentAsString());
 
-        MvcResult sliceResult = mockMvc.perform(get(BASE)
+        MvcResult sliceResult = mockMvc.perform(get(BASE).with(readToken())
                         .param("offset", "1")
                         .param("limit", "2")
                         .accept(MediaType.APPLICATION_JSON))
@@ -76,7 +79,7 @@ class ProductPaginationTest {
 
     @Test
     void pagination_rejectsZeroLimit() throws Exception {
-        mockMvc.perform(get(BASE)
+        mockMvc.perform(get(BASE).with(readToken())
                         .param("limit", "0")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
@@ -85,7 +88,7 @@ class ProductPaginationTest {
 
     @Test
     void pagination_rejectsNegativeOffset() throws Exception {
-        mockMvc.perform(get(BASE)
+        mockMvc.perform(get(BASE).with(readToken())
                         .param("offset", "-1")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
@@ -94,10 +97,18 @@ class ProductPaginationTest {
 
     @Test
     void pagination_rejectsLimitOver100() throws Exception {
-        mockMvc.perform(get(BASE)
+        mockMvc.perform(get(BASE).with(readToken())
                         .param("limit", "101")
                         .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    private static RequestPostProcessor readToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("inventory:read"));
+    }
+
+    private static RequestPostProcessor writeToken() {
+        return jwt().authorities(new SimpleGrantedAuthority("inventory:write"));
     }
 }
