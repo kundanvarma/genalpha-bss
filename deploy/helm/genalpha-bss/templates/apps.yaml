@@ -38,6 +38,10 @@ spec:
               value: {{ $.Values.config.dbPassword | quote }}
             - name: OIDC_ISSUER_URI
               value: {{ $.Values.config.oidcIssuerUri | quote }}
+            {{- if $.Values.config.oidcJwksUri }}
+            - name: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI
+              value: {{ $.Values.config.oidcJwksUri | quote }}
+            {{- end }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ $.Values.config.kafkaBootstrapServers | quote }}
             {{- end }}
@@ -51,14 +55,14 @@ spec:
             {{- end }}
           readinessProbe:
             httpGet:
-              path: /actuator/health
+              path: {{ $svc.healthPath | default "/actuator/health" }}
               port: http
             initialDelaySeconds: 15
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
             httpGet:
-              path: /actuator/health
+              path: {{ $svc.healthPath | default "/actuator/health" }}
               port: http
             initialDelaySeconds: 60
             periodSeconds: 15

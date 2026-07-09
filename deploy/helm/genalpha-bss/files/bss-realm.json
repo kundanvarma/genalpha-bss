@@ -26,6 +26,18 @@
       "directAccessGrantsEnabled": false
     },
     {
+      "clientId": "bss-console",
+      "name": "Catalog admin console (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8080/console/*"],
+      "webOrigins": ["http://localhost:8080"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    },
+    {
       "clientId": "bss-demo",
       "name": "BSS demo client (password grant, local development only)",
       "enabled": true,

@@ -42,9 +42,12 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-      # Fixed hostname so tokens minted via localhost:8085 carry the same issuer
-      # (http://keycloak:8080/realms/bss) that the services validate against.
-      KC_HOSTNAME: http://keycloak:8080
+      # Browsers must reach every interactive URL on localhost:8085, so that is
+      # the pinned frontend hostname (and the token issuer). Backchannel-dynamic
+      # lets in-network callers (JWKS fetch, client-credentials) keep using
+      # keycloak:8080.
+      KC_HOSTNAME: http://localhost:8085
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     ports:
       - "8085:8080"
     volumes:
@@ -57,7 +60,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8081:8080"
@@ -76,7 +80,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/product_ordering
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -105,7 +110,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/product_inventory
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8083:8080"
@@ -124,7 +130,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/party_account
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      OIDC_ISSUER_URI: http://keycloak:8080/realms/bss
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8084:8080"
@@ -144,6 +151,7 @@ services:
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080
       PARTY_URL: http://party-account:8080
+      CONSOLE_URL: http://console:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -155,6 +163,12 @@ services:
         condition: service_started
       party-account:
         condition: service_started
+      console:
+        condition: service_started
+
+  console:
+    build: ./apps/admin-console
+    container_name: bss-console
 
   prometheus:
     image: prom/prometheus:v2.53.0

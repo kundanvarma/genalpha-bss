@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss · catalog console</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark">genalpha-bss</span>
+    <span class="area">catalog console</span>
+  </div>
+  <div class="who">
+    <span id="username" class="user"></span>
+    <button id="logout" class="ghost" hidden>Sign out</button>
+  </div>
+</header>
+
+<main id="main" hidden>
+  <nav id="tabs" class="tabs"></nav>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h1 id="resource-title"></h1>
+      <span id="total" class="count"></span>
+    </div>
+
+    <form id="editor" class="editor" autocomplete="off">
+      <h2 id="editor-title">New</h2>
+      <div id="fields" class="fields"></div>
+      <div class="actions">
+        <button type="submit" id="save" class="primary">Create</button>
+        <button type="button" id="cancel-edit" class="ghost" hidden>Cancel</button>
+      </div>
+      <p id="editor-error" class="error" hidden></p>
+    </form>
+
+    <div class="table-wrap">
+      <table id="listing">
+        <thead id="listing-head"></thead>
+        <tbody id="listing-body"></tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <button id="prev" class="ghost">&larr; Previous</button>
+      <span id="page-label"></span>
+      <button id="next" class="ghost">Next &rarr;</button>
+    </div>
+  </section>
+</main>
+
+<div id="signin" class="gatepost" hidden>
+  <p>Signing in with your identity provider&hellip;</p>
+</div>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -11,7 +11,10 @@ replicas: 1
 # Cross-cutting endpoints. Defaults target the in-cluster dependencies below;
 # on EKS/AKS point these at RDS / Azure Database / MSK / Event Hubs / your IdP.
 config:
-  oidcIssuerUri: http://keycloak:8080/realms/bss
+  oidcIssuerUri: http://localhost:8085/realms/bss
+  # Backchannel JWKS fetch; set empty when the issuer is directly reachable
+  # from the pods (e.g. a real cloud IdP) to fall back to issuer discovery.
+  oidcJwksUri: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
   oidcTokenUri: http://keycloak:8080/realms/bss/protocol/openid-connect/token
   kafkaBootstrapServers: kafka:9092
   dbHost: postgres
@@ -29,6 +32,7 @@ local:
     enabled: true
   keycloak:
     enabled: true
+    frontendUrl: http://localhost:8085
 
 resources:
   requests:
@@ -47,6 +51,11 @@ services:
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080
       PARTY_URL: http://party-account:8080
+      CONSOLE_URL: http://console:8080
+  console:
+    db: ""
+    healthPath: /healthz
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     extraEnv: {}

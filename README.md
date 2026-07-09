@@ -291,6 +291,23 @@ and the full order-to-cash flow passes — token from in-cluster Keycloak,
 gateway routing, M2M reference validation, inventory provisioning, and both
 TMF688 events consumed from in-cluster Kafka.
 
+## Catalog console (first channel UI)
+`apps/admin-console` is a web interface for managing the catalog — product offerings,
+specifications, and prices: list, create, edit, delete. It is the seed of the channels
+layer (assisted/self-service UIs will grow alongside it).
+
+Open **http://localhost:8080/console/** and sign in as `demo`/`demo`. The console is a
+zero-build vanilla-JS SPA served by unprivileged nginx through the gateway (same origin,
+no CORS), authenticating with the standard OIDC authorization-code + PKCE flow — the
+`bss-console` public client in the dev realm; any OIDC provider works by overriding
+`window.BSS_CONSOLE_CONFIG`. It calls the same TMF APIs as every other client, so it
+inherits validation, scopes, pagination, and events for free.
+
+Note on the dev Keycloak: browsers need every interactive URL on `localhost:8085`, so
+that is the pinned frontend hostname (and token issuer), while in-network callers use
+`keycloak:8080` via `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` — services validate the frontend
+issuer but fetch JWKS over the backchannel (`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`).
+
 ## License
 [Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and
 chosen for its explicit patent grant, which matters in a standards-heavy telecom

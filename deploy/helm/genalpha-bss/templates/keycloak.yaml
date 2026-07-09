@@ -34,10 +34,12 @@ spec:
               value: admin
             - name: KC_BOOTSTRAP_ADMIN_PASSWORD
               value: admin
-            # Fixed hostname so tokens minted through a port-forward carry the
-            # same issuer the services validate against.
+            # Frontend URLs (and the token issuer) pin to the port-forward
+            # address browsers use; backchannel stays on the cluster DNS name.
             - name: KC_HOSTNAME
-              value: http://keycloak:8080
+              value: {{ .Values.local.keycloak.frontendUrl | quote }}
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
           ports:
             - name: http
               containerPort: 8080
