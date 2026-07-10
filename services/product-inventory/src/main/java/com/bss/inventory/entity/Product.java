@@ -39,6 +39,10 @@ public class Product {
     @Column(name = "related_party", length = 4000)
     private String relatedPartyJson;
 
+    /** The customer party this product belongs to; drives channel scoping. */
+    @Column(name = "owner_party_id", length = 36)
+    private String ownerPartyId;
+
     public Product() {
     }
 
@@ -112,5 +116,13 @@ public class Product {
 
     public void setRelatedPartyJson(String relatedPartyJson) {
         this.relatedPartyJson = relatedPartyJson;
+    }
+
+    public String getOwnerPartyId() {
+        return ownerPartyId;
+    }
+
+    public void setOwnerPartyId(String ownerPartyId) {
+        this.ownerPartyId = ownerPartyId;
     }
 }

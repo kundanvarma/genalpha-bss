@@ -26,6 +26,12 @@ spring:
             - Path=/console/**
           filters:
             - StripPrefix=1
+        - id: storefront
+          uri: ${STOREFRONT_URL:http://localhost:8091}
+          predicates:
+            - Path=/shop/**
+          filters:
+            - StripPrefix=1
 
 server:
   port: 8080

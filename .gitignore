@@ -22,3 +22,7 @@ target/
 
 # Terraform / OpenTofu working directories (provider binaries, module clones)
 .terraform/
+
+# Node / Vite (apps/storefront)
+node_modules/
+dist/

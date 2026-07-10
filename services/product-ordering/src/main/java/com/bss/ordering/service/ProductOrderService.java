@@ -13,6 +13,7 @@ import com.bss.ordering.exception.NotFoundException;
 import com.bss.ordering.exception.OrderValidationException;
 import com.bss.ordering.mapper.ProductOrderMapper;
 import com.bss.ordering.repository.ProductOrderRepository;
+import com.bss.ordering.security.PartyScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -37,21 +40,26 @@ public class ProductOrderService {
     private final PartyClient partyClient;
     private final InventoryClient inventoryClient;
     private final DomainEventPublisher events;
+    private final PartyScope partyScope;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, PartyScope partyScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
         this.partyClient = partyClient;
         this.inventoryClient = inventoryClient;
         this.events = events;
+        this.partyScope = partyScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<ProductOrderDto> findAll(int offset, int limit, Map<String, String> filters) {
-        Page<ProductOrder> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
+        ProductOrder probe = probeFor(filters);
+        // Customers see their own orders only, whatever else they filter on.
+        partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
+        Page<ProductOrder> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
@@ -60,7 +68,7 @@ public class ProductOrderService {
      * query-by-example. Unknown attributes are rejected rather than silently
      * matching everything.
      */
-    private Example<ProductOrder> probeFor(Map<String, String> filters) {
+    private ProductOrder probeFor(Map<String, String> filters) {
         ProductOrder probe = new ProductOrder();
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
@@ -79,23 +87,26 @@ public class ProductOrderService {
                 default -> throw new OrderValidationException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
-        return Example.of(probe);
+        return probe;
     }
 
     @Transactional(readOnly = true)
     public ProductOrderDto findById(String id) {
         ProductOrder entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
         return mapper.toDto(entity);
     }
 
     @Transactional
     public ProductOrderDto create(ProductOrderDto dto) {
+        partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
         validateReferences(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState("acknowledged");
         }
         ProductOrder entity = mapper.toEntity(dto);
+        entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productOrder/" + id);
@@ -111,6 +122,8 @@ public class ProductOrderService {
     public ProductOrderDto patch(String id, ProductOrderDto patch) {
         ProductOrder entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
+        requireCancelOnlyWhenScoped(patch);
         if (TERMINAL_STATES.contains(entity.getState())) {
             throw new OrderValidationException(
                     "order '" + id + "' is in terminal state '" + entity.getState() + "' and cannot be changed");
@@ -130,11 +143,67 @@ public class ProductOrderService {
 
     @Transactional
     public void delete(String id) {
+        if (partyScope.scopedPartyId().isPresent()) {
+            throw new OrderValidationException(
+                    "customers cancel orders by patching state to 'cancelled'; deletion is a back-office operation");
+        }
         ProductOrder entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOrderDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
         events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
+    }
+
+    /**
+     * Scoped tokens address only their own orders; anything else is a 404, not
+     * a 403, so foreign ids do not leak existence.
+     */
+    private void requireOwn(ProductOrder entity) {
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(entity.getOwnerPartyId())) {
+                throw NotFoundException.forResource(RESOURCE, entity.getId());
+            }
+        });
+    }
+
+    /** The only change a customer may make to an order is cancelling it. */
+    private void requireCancelOnlyWhenScoped(ProductOrderDto patch) {
+        if (partyScope.scopedPartyId().isEmpty()) {
+            return;
+        }
+        boolean onlyCancel = "cancelled".equals(patch.getState())
+                && patch.getDescription() == null && patch.getCategory() == null
+                && patch.getProductOfferingId() == null && patch.getBillingAccountId() == null
+                && patch.getProductOrderItem() == null && patch.getRelatedParty() == null;
+        if (!onlyCancel) {
+            throw new OrderValidationException("customers may only cancel an order (state: 'cancelled')");
+        }
+    }
+
+    /** Orders placed through a customer channel always carry their owner as a related party. */
+    private void claimForParty(ProductOrderDto dto, String partyId) {
+        List<Map<String, Object>> parties =
+                dto.getRelatedParty() == null ? new ArrayList<>() : new ArrayList<>(dto.getRelatedParty());
+        parties.removeIf(p -> !partyId.equals(p.get("id")) && "customer".equals(p.get("role")));
+        if (parties.stream().noneMatch(p -> partyId.equals(p.get("id")))) {
+            parties.add(Map.of(
+                    "id", partyId,
+                    "role", "customer",
+                    "@referredType", "Individual"));
+        }
+        dto.setRelatedParty(parties);
+    }
+
+    /** Owner of a staff-placed order: the related party in the customer role, if any. */
+    private String customerPartyIn(List<Map<String, Object>> relatedParty) {
+        if (relatedParty == null) {
+            return null;
+        }
+        return relatedParty.stream()
+                .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
+                .map(p -> String.valueOf(p.get("id")))
+                .findFirst()
+                .orElse(null);
     }
 
     /**

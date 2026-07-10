@@ -152,6 +152,7 @@ services:
       INVENTORY_URL: http://product-inventory:8080
       PARTY_URL: http://party-account:8080
       CONSOLE_URL: http://console:8080
+      STOREFRONT_URL: http://storefront:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -165,10 +166,16 @@ services:
         condition: service_started
       console:
         condition: service_started
+      storefront:
+        condition: service_started
 
   console:
     build: ./apps/admin-console
     container_name: bss-console
+
+  storefront:
+    build: ./apps/storefront
+    container_name: bss-storefront
 
   prometheus:
     image: prom/prometheus:v2.53.0

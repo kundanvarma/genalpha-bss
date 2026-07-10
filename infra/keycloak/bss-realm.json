@@ -1,6 +1,10 @@
 {
   "realm": "bss",
   "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "resetPasswordAllowed": true,
+  "defaultRoles": ["customer"],
   "roles": {
     "realm": [
       { "name": "catalog:read" },
@@ -10,7 +14,20 @@
       { "name": "inventory:read" },
       { "name": "inventory:write" },
       { "name": "party:read" },
-      { "name": "party:write" }
+      { "name": "party:write" },
+      {
+        "name": "customer",
+        "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "catalog:read",
+            "ordering:read", "ordering:write",
+            "inventory:read",
+            "party:read", "party:write"
+          ]
+        }
+      }
     ]
   },
   "clients": [
@@ -34,6 +51,18 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": ["http://localhost:8080/console/*"],
+      "webOrigins": ["http://localhost:8080"],
+      "attributes": { "pkce.code.challenge.method": "S256" }
+    },
+    {
+      "clientId": "bss-storefront",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://localhost:8080/shop/*"],
       "webOrigins": ["http://localhost:8080"],
       "attributes": { "pkce.code.challenge.method": "S256" }
     },

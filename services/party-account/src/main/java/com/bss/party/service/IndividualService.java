@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.IndividualMapper;
 import com.bss.party.repository.IndividualRepository;
+import com.bss.party.security.PartyScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -26,17 +27,22 @@ public class IndividualService {
     private final IndividualRepository repository;
     private final IndividualMapper mapper;
     private final DomainEventPublisher events;
+    private final PartyScope partyScope;
 
     public IndividualService(IndividualRepository repository, IndividualMapper mapper,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, PartyScope partyScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.partyScope = partyScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<IndividualDto> findAll(int offset, int limit, Map<String, String> filters) {
-        Page<Individual> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
+        Individual probe = probeFor(filters);
+        // A customer sees exactly one individual: their own.
+        partyScope.scopedPartyId().ifPresent(probe::setId);
+        Page<Individual> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
@@ -45,7 +51,7 @@ public class IndividualService {
      * query-by-example. Unknown attributes are rejected rather than silently
      * matching everything.
      */
-    private Example<Individual> probeFor(Map<String, String> filters) {
+    private Individual probeFor(Map<String, String> filters) {
         Individual probe = new Individual();
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
@@ -55,20 +61,30 @@ public class IndividualService {
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
-        return Example.of(probe);
+        return probe;
     }
 
     @Transactional(readOnly = true)
     public IndividualDto findById(String id) {
+        requireOwn(id);
         Individual entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
 
+    /**
+     * A customer's individual id IS their token subject, so self-registration
+     * needs no id hand-shake: the first create after signup provisions the
+     * party, and repeating it returns the existing record (idempotent).
+     */
     @Transactional
     public IndividualDto create(IndividualDto dto) {
+        String id = partyScope.scopedPartyId().orElseGet(() -> UUID.randomUUID().toString());
+        Individual existing = repository.findById(id).orElse(null);
+        if (existing != null) {
+            return mapper.toDto(existing);
+        }
         Individual entity = mapper.toEntity(dto);
-        String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.PARTY_BASE + "/individual/" + id);
         IndividualDto created = mapper.toDto(repository.save(entity));
@@ -78,6 +94,7 @@ public class IndividualService {
 
     @Transactional
     public IndividualDto patch(String id, IndividualDto patch) {
+        requireOwn(id);
         Individual entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
@@ -88,10 +105,23 @@ public class IndividualService {
 
     @Transactional
     public void delete(String id) {
+        requireOwn(id);
         Individual entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         IndividualDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
         events.publish("IndividualDeleteEvent", "individual", deleted);
+    }
+
+    /**
+     * Scoped tokens address only their own individual; anything else is a 404,
+     * not a 403, so foreign ids do not leak existence.
+     */
+    private void requireOwn(String id) {
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(id)) {
+                throw NotFoundException.forResource(RESOURCE, id);
+            }
+        });
     }
 }

@@ -25,6 +25,7 @@ const RESOURCES = [
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
       { name: 'bundledProductOffering', label: 'Bundled offerings', kind: 'reflist', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice' },
     ],
     columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
   },

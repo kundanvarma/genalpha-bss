@@ -59,6 +59,9 @@ class ProductOfferingApiTest {
                   "bundledProductOffering": [
                     {"id": "po-mobile", "name": "Mobile Plan", "@referredType": "ProductOffering"},
                     {"id": "po-fiber", "name": "Fiber Broadband", "@referredType": "ProductOffering"}
+                  ],
+                  "productOfferingPrice": [
+                    {"id": "price-1", "name": "Bundle Monthly", "@referredType": "ProductOfferingPrice"}
                   ]
                 }
                 """;
@@ -70,7 +73,8 @@ class ProductOfferingApiTest {
                 .andExpect(jsonPath("$.isBundle").value(true))
                 .andExpect(jsonPath("$.bundledProductOffering.length()").value(2))
                 .andExpect(jsonPath("$.bundledProductOffering[0].id").value("po-mobile"))
-                .andExpect(jsonPath("$.bundledProductOffering[1].name").value("Fiber Broadband"));
+                .andExpect(jsonPath("$.bundledProductOffering[1].name").value("Fiber Broadband"))
+                .andExpect(jsonPath("$.productOfferingPrice[0].name").value("Bundle Monthly"));
     }
 
     @Test
