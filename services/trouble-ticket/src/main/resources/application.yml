@@ -49,4 +49,4 @@ bss:
   org:
     default-org: ${DEFAULT_ORG:genalpha-retail}
   events:
-    topic: bss.inventory.events
+    topic: bss.ticket.events

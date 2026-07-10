@@ -40,6 +40,7 @@ spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
+          args: ["-c", "max_connections=300"]
           env:
             - name: POSTGRES_USER
               value: {{ .Values.config.dbUsername | quote }}

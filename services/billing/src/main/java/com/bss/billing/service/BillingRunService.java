@@ -127,8 +127,12 @@ public class BillingRunService {
             bills.save(bill);
             billRates.forEach(r -> r.setBillId(id));
             rates.saveAll(billRates);
-            events.publish("CustomerBillCreateEvent", "customerBill",
-                    Map.of("id", id, "billNo", bill.getBillNo(), "amountDue", total));
+            events.publish("CustomerBillCreateEvent", "customerBill", Map.of(
+                    "id", id,
+                    "billNo", bill.getBillNo(),
+                    "amountDue", Map.of("unit", unit, "value", total),
+                    "relatedParty", List.of(Map.of(
+                            "id", owner.getKey(), "role", "customer", "@referredType", "Individual"))));
             created++;
         }
         return Map.of("billsCreated", created, "customersSkipped", skipped,

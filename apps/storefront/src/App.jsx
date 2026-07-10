@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
-import { ensureParty } from './api.js';
+import { ensureParty, myNotifications } from './api.js';
 import { CART_EVENT, cartCount, cartLines, clearCart } from './cart.js';
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
@@ -11,6 +11,7 @@ import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
 import Bills from './pages/Bills.jsx';
 import Support from './pages/Support.jsx';
+import Notifications from './pages/Notifications.jsx';
 import Services from './pages/Services.jsx';
 import Account from './pages/Account.jsx';
 
@@ -18,6 +19,7 @@ export default function App() {
   const [state, setState] = useState('boot'); // boot | guest | ready | error
   const [error, setError] = useState(null);
   const [count, setCount] = useState(cartCount());
+  const [unread, setUnread] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -35,6 +37,9 @@ export default function App() {
           return;
         }
         await ensureParty();
+        myNotifications()
+          .then((ms) => setUnread(ms.filter((m) => m.status !== 'read').length))
+          .catch(() => {});
         // Checkout started as a guest? The cart survived in localStorage —
         // place the order they were building.
         if (takePendingCheckout() && cartLines().length) {
@@ -80,6 +85,9 @@ export default function App() {
           <NavLink to="/orders">My orders</NavLink>
           <NavLink to="/bills">My bills</NavLink>
           <NavLink to="/services">My services</NavLink>
+          <NavLink to="/notifications" className="cartlink">
+            Inbox{unread > 0 && <span className="badge">{unread}</span>}
+          </NavLink>
           <NavLink to="/support">Support</NavLink>
           <NavLink to="/account">Account</NavLink>
         </nav>
@@ -102,6 +110,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/support" element={<Support />} />
           <Route path="/account" element={<Account />} />
         </Routes>

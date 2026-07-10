@@ -3,6 +3,7 @@ services:
     image: postgres:16-alpine
     container_name: bss-postgres
     restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=300"]
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -67,6 +68,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8081:8080"
     depends_on:
@@ -88,6 +90,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
       PARTY_BASE_URL: http://party-account:8080
@@ -125,6 +128,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8083:8080"
     depends_on:
@@ -146,6 +150,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8092:8080"
     depends_on:
@@ -167,8 +172,31 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8093:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  communication:
+    build: ./services/communication
+    container_name: bss-communication
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/communication
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+    ports:
+      - "8095:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,6 +216,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8089:8080"
     depends_on:
@@ -209,6 +238,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8091:8080"
     depends_on:
@@ -231,6 +261,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       INVENTORY_BASE_URL: http://product-inventory:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
@@ -259,6 +290,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8087:8080"
     depends_on:
@@ -280,6 +312,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8086:8080"
     depends_on:
@@ -301,6 +334,7 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
       - "8084:8080"
     depends_on:
@@ -329,6 +363,7 @@ services:
       APPOINTMENT_URL: http://appointment:8080
       TICKET_URL: http://trouble-ticket:8080
       INTERACTION_URL: http://party-interaction:8080
+      COMMUNICATION_URL: http://communication:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -354,6 +389,8 @@ services:
       trouble-ticket:
         condition: service_started
       party-interaction:
+        condition: service_started
+      communication:
         condition: service_started
       csr-console:
         condition: service_started

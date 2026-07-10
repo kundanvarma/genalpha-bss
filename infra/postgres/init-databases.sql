@@ -20,3 +20,4 @@ CREATE DATABASE qualification;
 CREATE DATABASE appointment;
 CREATE DATABASE trouble_ticket;
 CREATE DATABASE party_interaction;
+CREATE DATABASE communication;

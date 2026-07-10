@@ -44,6 +44,8 @@ spec:
             {{- end }}
             - name: KAFKA_BOOTSTRAP_SERVERS
               value: {{ $.Values.config.kafkaBootstrapServers | quote }}
+            - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              value: "5"
             {{- end }}
             {{- if $svc.machineIdentity }}
             - name: OIDC_TOKEN_URI
