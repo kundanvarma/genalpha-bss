@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getOffering, getSpec, placeOrder, priceIndex } from '../api.js';
-import { beginLogin, isSignedIn } from '../auth.js';
+import { getOffering, getSpec, priceIndex } from '../api.js';
+import { addToCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
-import { stashPendingOrder } from '../pending.js';
 
 const isChoice = (entry) => Array.isArray(entry.options);
 
@@ -17,7 +16,6 @@ export default function Offering() {
   const [specs, setSpecs] = useState({});                     // spec id -> spec
   const [chars, setChars] = useState({});                     // characteristic name -> value
   const [error, setError] = useState(null);
-  const [ordering, setOrdering] = useState(false);
 
   const bundled = offering?.bundledProductOffering || [];
   const fixed = bundled.filter((e) => !isChoice(e));
@@ -88,29 +86,18 @@ export default function Offering() {
   const allPrices = [...own, ...optionPrices];
   const monthly = monthlyTotal(allPrices);
 
-  const configuredItems = selectedOptions.map((option) => ({
-    offering: option,
+  const selections = selectedOptions.map((option) => ({
+    offeringId: option.id,
+    name: option.name,
     characteristics: Object.fromEntries(
       activeCharacteristics
         .filter((ac) => ac.option.id === option.id && chars[ac.characteristic.name] != null)
         .map((ac) => [ac.characteristic.name, chars[ac.characteristic.name]])),
   }));
 
-  async function order() {
-    if (!isSignedIn()) {
-      // Guests register or sign in at checkout; the order resumes after.
-      stashPendingOrder(offering, configuredItems);
-      await beginLogin();
-      return;
-    }
-    setOrdering(true);
-    try {
-      await placeOrder(offering, configuredItems);
-      navigate('/orders');
-    } catch (e) {
-      setError(e.message);
-      setOrdering(false);
-    }
+  function add() {
+    addToCart(offering, selections);
+    navigate('/cart');
   }
 
   return (
@@ -192,9 +179,7 @@ export default function Offering() {
         </>
       )}
 
-      <button className="primary big" onClick={order} disabled={ordering}>
-        {ordering ? 'Placing order…' : 'Order now'}
-      </button>
+      <button className="primary big" onClick={add}>Add to cart</button>
     </div>
   );
 }

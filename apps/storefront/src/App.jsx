@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
-import { ensureParty, getOffering, placeOrder } from './api.js';
-import { takePendingOrder } from './pending.js';
+import { checkoutCart, ensureParty } from './api.js';
+import { CART_EVENT, cartCount, cartLines, clearCart } from './cart.js';
+import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
+import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
 import Services from './pages/Services.jsx';
 import Account from './pages/Account.jsx';
@@ -12,7 +14,14 @@ import Account from './pages/Account.jsx';
 export default function App() {
   const [state, setState] = useState('boot'); // boot | guest | ready | error
   const [error, setError] = useState(null);
+  const [count, setCount] = useState(cartCount());
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const refresh = () => setCount(cartCount());
+    window.addEventListener(CART_EVENT, refresh);
+    return () => window.removeEventListener(CART_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -23,15 +32,11 @@ export default function App() {
           return;
         }
         await ensureParty();
-        // Checkout started as a guest? Finish the interrupted order now.
-        const pending = takePendingOrder();
-        if (pending) {
-          const offering = await getOffering(pending.offeringId);
-          const configuredItems = await Promise.all((pending.selections || []).map(async (s) => ({
-            offering: await getOffering(s.offeringId),
-            characteristics: s.characteristics,
-          })));
-          await placeOrder(offering, configuredItems);
+        // Checkout started as a guest? The cart survived in localStorage —
+        // place the order they were building.
+        if (takePendingCheckout() && cartLines().length) {
+          await checkoutCart(cartLines());
+          clearCart();
           navigate('/orders');
         }
         setState('ready');
@@ -59,6 +64,9 @@ export default function App() {
         </div>
         <nav className="nav">
           <NavLink to="/" end>Offers</NavLink>
+          <NavLink to="/cart" className="cartlink">
+            Cart{count > 0 && <span className="badge">{count}</span>}
+          </NavLink>
           <NavLink to="/orders">My orders</NavLink>
           <NavLink to="/services">My services</NavLink>
           <NavLink to="/account">Account</NavLink>
@@ -78,6 +86,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
+          <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/services" element={<Services />} />
           <Route path="/account" element={<Account />} />
