@@ -9,6 +9,7 @@ import com.bss.catalog.events.DomainEventPublisher;
 import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductOfferingMapper;
+import com.bss.catalog.security.TenantScope;
 import com.bss.catalog.repository.ProductOfferingRepository;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -28,11 +29,13 @@ public class ProductOfferingService {
     private final ProductOfferingRepository repository;
     private final ProductOfferingMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
-    public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events) {
+    public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -48,6 +51,7 @@ public class ProductOfferingService {
      */
     private Example<ProductOffering> probeFor(Map<String, String> filters) {
         ProductOffering probe = new ProductOffering();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -75,7 +79,7 @@ public class ProductOfferingService {
 
     @Transactional(readOnly = true)
     public ProductOfferingDto findById(String id) {
-        ProductOffering entity = repository.findById(id)
+        ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -88,6 +92,7 @@ public class ProductOfferingService {
         ProductOffering entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/productOffering/" + id);
         entity.setLastUpdate(OffsetDateTime.now());
         ProductOfferingDto created = mapper.toDto(repository.save(entity));
@@ -97,7 +102,7 @@ public class ProductOfferingService {
 
     @Transactional
     public ProductOfferingDto patch(String id, ProductOfferingDto patch) {
-        ProductOffering entity = repository.findById(id)
+        ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
@@ -108,10 +113,10 @@ public class ProductOfferingService {
 
     @Transactional
     public void delete(String id) {
-        ProductOffering entity = repository.findById(id)
+        ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOfferingDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductOfferingDeleteEvent", "productOffering", deleted);
     }
 }
