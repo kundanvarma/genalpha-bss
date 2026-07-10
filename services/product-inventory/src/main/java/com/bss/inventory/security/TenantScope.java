@@ -25,6 +25,10 @@ public class TenantScope {
     }
 
     public String currentTenantId() {
+        String contextual = TenantContext.current();
+        if (contextual != null) {
+            return contextual;
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth instanceof JwtAuthenticationToken jwt && jwt.getToken().getIssuer() != null) {
             String issuer = jwt.getToken().getIssuer().toString();

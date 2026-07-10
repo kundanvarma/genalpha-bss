@@ -1,5 +1,6 @@
 package com.bss.communication.notify;
 
+import com.bss.communication.security.TenantContext;
 import com.bss.communication.service.CommunicationMessageService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,8 +51,14 @@ public class EventStreamListener {
             @SuppressWarnings("unchecked")
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : null;
-            mapper.map(eventType, event).ifPresent(notification ->
-                    messages.mint(eventId, eventType, tenantId, notification));
+            mapper.map(eventType, event).ifPresent(notification -> {
+                // Act as the producing tenant so the row-level policies admit
+                // the insert; pre-tenancy envelopes fall back to the default.
+                try (TenantContext ignored = TenantContext.actAs(
+                        tenantId != null ? tenantId : "genalpha")) {
+                    messages.mint(eventId, eventType, tenantId, notification);
+                }
+            });
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());
         }
