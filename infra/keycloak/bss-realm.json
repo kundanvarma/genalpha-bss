@@ -103,7 +103,8 @@
             "ticket:write",
             "interaction:read",
             "communication:read",
-            "communication:write"
+            "communication:write",
+            "usage:read"
           ]
         }
       },
@@ -126,9 +127,19 @@
             "ticket:read",
             "ticket:write",
             "interaction:read",
-            "interaction:write"
+            "interaction:write",
+            "usage:read",
+            "usage:write"
           ]
         }
+      },
+      {
+        "name": "usage:read",
+        "description": "usage:read"
+      },
+      {
+        "name": "usage:write",
+        "description": "usage:write"
       }
     ]
   },
@@ -256,7 +267,9 @@
         "inventory:read",
         "catalog:read",
         "payment:read",
-        "payment:write"
+        "payment:write",
+        "usage:read",
+        "usage:write"
       ]
     },
     {
@@ -298,7 +311,9 @@
         "interaction:read",
         "interaction:write",
         "communication:read",
-        "communication:write"
+        "communication:write",
+        "usage:read",
+        "usage:write"
       ]
     },
     {

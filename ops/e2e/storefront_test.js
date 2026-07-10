@@ -358,6 +358,43 @@ async function apiGet(page, path, token) {
   }
   tokenA = await shopToken(a);
 
+  // --- Usage: mediation posts roaming data for Alice; the meter shows it.
+  // Fresh staff token: the setup one is near its 5-minute lifetime by now.
+  const usageTokenRes = await setup.request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } });
+  const usageStaffHeaders = { Authorization: 'Bearer ' + (await usageTokenRes.json()).access_token };
+  const alicePartyId = JSON.parse(Buffer.from(tokenA.split('.')[1], 'base64url').toString()).sub;
+  const allOfferings = await (await setup.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
+    { headers: usageStaffHeaders })).json();
+  const bundleOfferingId = allOfferings.find((o) => o.name === 'GenAlpha One Home & Mobile').id;
+  const usageRes = await setup.request.post(`${API}/tmf-api/usageManagement/v4/usage`, {
+    headers: usageStaffHeaders,
+    data: {
+      usageType: 'EU roaming data',
+      usageCharacteristic: { value: 12.3, units: 'GB' },
+      productOffering: { id: bundleOfferingId },
+      relatedParty: [{ id: alicePartyId, role: 'customer' }],
+    },
+  });
+  if (usageRes.status() !== 201) fail(`usage ingest failed: ${usageRes.status()} ${await usageRes.text()}`);
+  console.log('OK mediation posted 12.3 GB EU roaming data for Alice');
+
+  await a.click('.nav >> text=My services');
+  const meter = a.locator('[data-testid="usage-meter"]', { hasText: 'EU roaming data' });
+  await meter.waitFor({ timeout: 15000 });
+  const meterText = await meter.textContent();
+  if (!meterText.includes('12.3 / 10 GB')) fail(`usage meter wrong: "${meterText}"`);
+  if (!meterText.includes('over allowance')) fail(`meter missing over-allowance flag: "${meterText}"`);
+  console.log('OK My services shows usage meter: 12.3 / 10 GB, over allowance');
+
+  // Usage is party-scoped like everything else.
+  const bUsage = JSON.parse((await apiGet(b,
+    '/tmf-api/usageConsumption/v4/queryUsageConsumption', tokenB)).body);
+  if ((bUsage.bucket || []).length !== 0) fail('customer B sees foreign usage: ' + JSON.stringify(bUsage).slice(0, 200));
+  console.log('OK customer B has no usage buckets');
+
   // --- Billing: a run rates Alice's provisioned products into one bill
   const runRes = await setup.request.post(
     `${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: staffHeaders });
@@ -368,13 +405,16 @@ async function apiGet(page, path, token) {
   const billRow = a.locator('.row', { hasText: 'BILL-' }).first();
   await billRow.waitFor({ timeout: 15000 });
   const billTotal = (await billRow.locator('.linetotal').textContent()).trim();
-  // 2× bundle (64.98 + Samsung 37.49) + iPhone 17 (33.29) = 238.23/month
-  if (!billTotal.startsWith('238.23')) fail(`expected bill 238.23, got "${billTotal}"`);
+  // 2× bundle (64.98 + Samsung 37.49) + iPhone 17 (33.29) = 238.23 recurring,
+  // + 2.3 GB roaming overage × 2.50 = 5.75 usage → 243.98 total.
+  if (!billTotal.startsWith('243.98')) fail(`expected bill 243.98, got "${billTotal}"`);
   await billRow.locator('.linkish').click();
   await a.locator('.billitems .row').first().waitFor({ timeout: 10000 });
   const itemCount = await a.locator('.billitems .row').count();
-  if (itemCount !== 5) fail(`expected 5 bill line items (2 bundle, 2 samsung, 1 iphone), got ${itemCount}`);
-  console.log('OK bill for', billTotal, 'with', itemCount, 'recurring line items');
+  if (itemCount !== 6) fail(`expected 6 bill line items (2 bundle, 2 samsung, 1 iphone, 1 usage), got ${itemCount}`);
+  const usageLine = a.locator('.billitems .row', { hasText: 'EU roaming data overage' });
+  if (!(await usageLine.count())) fail('bill missing the usage overage line item');
+  console.log('OK bill for', billTotal, 'with', itemCount, 'line items incl usage overage');
 
   // Pay the bill: card in, bill settled, payment captured by billing
   await billRow.locator('button', { hasText: 'Pay' }).click();
@@ -390,7 +430,7 @@ async function apiGet(page, path, token) {
   const billPaymentId = settledBill.payment[0].id;
   const billPayment = JSON.parse((await apiGet(a,
     `/tmf-api/paymentManagement/v4/payment/${billPaymentId}`, tokenA)).body);
-  if (billPayment.status !== 'captured' || billPayment.amount.value !== 238.23) {
+  if (billPayment.status !== 'captured' || billPayment.amount.value !== 243.98) {
     fail('bill payment wrong: ' + JSON.stringify(billPayment).slice(0, 200));
   }
   console.log('OK bill settled, payment of', billPayment.amount.value, billPayment.amount.unit, 'captured');

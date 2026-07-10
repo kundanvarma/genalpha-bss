@@ -48,6 +48,9 @@ class BillingApiTest {
     @MockBean
     private DownstreamClients.PaymentClient paymentClient;
 
+    @MockBean
+    private DownstreamClients.UsageClient usageClient;
+
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(
                 new SimpleGrantedAuthority("customer"),
@@ -109,6 +112,24 @@ class BillingApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.billsCreated").value(0))
                 .andExpect(jsonPath("$.customersSkipped").value(1));
+    }
+
+    @Test
+    void billingRun_addsRatedUsageChargesToTheBill() throws Exception {
+        given(usageClient.rateForParty(org.mockito.ArgumentMatchers.eq("cust-usage"),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
+                .willReturn(List.of(Map.of(
+                        "name", "EU roaming data overage: 2.3 GB over 10 GB included",
+                        "amount", Map.of("unit", "EUR", "value", 5.75))));
+
+        String billId = runAndGetBillId("cust-usage");
+
+        mockMvc.perform(get(BASE + "/customerBill/" + billId).with(customer("cust-usage")))
+                .andExpect(jsonPath("$.amountDue.value").value(60.73));
+        mockMvc.perform(get(BASE + "/customerBill/" + billId + "/appliedCustomerBillingRate")
+                        .with(customer("cust-usage")))
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[*].type").value(org.hamcrest.Matchers.hasItem("usageCharge")));
     }
 
     @Test

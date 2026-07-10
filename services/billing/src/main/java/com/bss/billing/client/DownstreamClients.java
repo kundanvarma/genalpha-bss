@@ -26,6 +26,11 @@ public final class DownstreamClients {
         Map<String, Object> price(String id);
     }
 
+    public interface UsageClient {
+        /** Rate a party's usage for the period; returns the period's charges. */
+        List<Map<String, Object>> rateForParty(String ownerPartyId, String periodStart, String periodEnd);
+    }
+
     public interface PaymentClient {
         /** Empty message means valid; otherwise the reason the ref is unusable. */
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);

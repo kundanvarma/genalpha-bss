@@ -37,16 +37,18 @@ public class BillingRunService {
     private final AppliedBillingRateRepository rates;
     private final DownstreamClients.InventoryClient inventory;
     private final DownstreamClients.CatalogClient catalog;
+    private final DownstreamClients.UsageClient usage;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
-            DomainEventPublisher events, PartyScope partyScope) {
+            DownstreamClients.UsageClient usage, DomainEventPublisher events, PartyScope partyScope) {
         this.bills = bills;
         this.rates = rates;
         this.inventory = inventory;
         this.catalog = catalog;
+        this.usage = usage;
         this.events = events;
         this.partyScope = partyScope;
     }
@@ -106,6 +108,22 @@ public class BillingRunService {
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.add(monthly);
+            }
+            // Metered charges: rate this party's usage for the period and put
+            // the overage on the same bill as the recurring charges.
+            for (Map<String, Object> usageCharge : usage.rateForParty(
+                    owner.getKey(), periodStart.toString(), periodEnd.toString())) {
+                Map<String, Object> amount = (Map<String, Object>) usageCharge.get("amount");
+                AppliedBillingRate rate = new AppliedBillingRate();
+                rate.setId(UUID.randomUUID().toString());
+                rate.setName(String.valueOf(usageCharge.get("name")));
+                rate.setRateType("usageCharge");
+                rate.setAmountValue(new BigDecimal(String.valueOf(amount.get("value"))));
+                rate.setAmountUnit(String.valueOf(amount.getOrDefault("unit", unit)));
+                rate.setOwnerPartyId(owner.getKey());
+                rate.setRateDate(OffsetDateTime.now());
+                billRates.add(rate);
+                total = total.add(rate.getAmountValue());
             }
             if (billRates.isEmpty()) {
                 continue;

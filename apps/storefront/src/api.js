@@ -160,6 +160,12 @@ export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
 
+const CONSUMPTION = '/tmf-api/usageConsumption/v4';
+
+export async function myUsage() {
+  return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption`));
+}
+
 const BILLING = '/tmf-api/customerBillManagement/v4';
 
 export async function myBills() {

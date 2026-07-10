@@ -62,6 +62,7 @@ services:
       INTERACTION_URL: http://party-interaction:8080
       COMMUNICATION_URL: http://communication:8080
       CART_URL: http://shopping-cart:8080
+      USAGE_URL: http://usage:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -110,6 +111,7 @@ services:
       INVENTORY_BASE_URL: http://product-inventory:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
+      USAGE_BASE_URL: http://usage:8080
   qualification:
     db: qualification
     extraEnv: {}
@@ -127,4 +129,7 @@ services:
     extraEnv: {}
   shopping-cart:
     db: shopping_cart
+    extraEnv: {}
+  usage:
+    db: usage
     extraEnv: {}
