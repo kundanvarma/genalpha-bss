@@ -9,6 +9,7 @@ import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
 import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
+import Bills from './pages/Bills.jsx';
 import Services from './pages/Services.jsx';
 import Account from './pages/Account.jsx';
 
@@ -76,6 +77,7 @@ export default function App() {
             Cart{count > 0 && <span className="badge">{count}</span>}
           </NavLink>
           <NavLink to="/orders">My orders</NavLink>
+          <NavLink to="/bills">My bills</NavLink>
           <NavLink to="/services">My services</NavLink>
           <NavLink to="/account">Account</NavLink>
         </nav>
@@ -96,6 +98,7 @@ export default function App() {
           <Route path="/offering/:id" element={<Offering />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />
+          <Route path="/bills" element={<Bills />} />
           <Route path="/services" element={<Services />} />
           <Route path="/account" element={<Account />} />
         </Routes>

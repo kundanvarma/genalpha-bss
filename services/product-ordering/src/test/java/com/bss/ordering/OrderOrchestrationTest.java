@@ -149,6 +149,41 @@ class OrderOrchestrationTest {
     }
 
     @Test
+    void completingACartOrder_provisionsOneProductPerItemUnit() throws Exception {
+        String id = createOrder("""
+                {"description": "cart order", "productOrderItem": [
+                  {"id": "1", "action": "add", "quantity": 2,
+                   "productOffering": {"id": "po-bundle", "name": "Bundle"},
+                   "productOrderItem": [
+                     {"id": "1.1", "action": "add", "quantity": 2,
+                      "productOffering": {"id": "po-phone", "name": "Phone"},
+                      "product": {"productCharacteristic": [{"name": "color", "value": "Blue"}]}}
+                   ]},
+                  {"id": "2", "action": "add", "quantity": 1,
+                   "productOffering": {"id": "po-solo", "name": "Solo Phone"}}
+                ]}
+                """);
+
+        mockMvc.perform(patch(BASE + "/" + id).with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"state": "completed"}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<InventoryClient.NewProduct> products =
+                ArgumentCaptor.forClass(InventoryClient.NewProduct.class);
+        verify(inventoryClient, times(5)).createProduct(products.capture());
+        java.util.List<String> names = products.getAllValues().stream()
+                .map(InventoryClient.NewProduct::name).toList();
+        assertThat(names).containsExactlyInAnyOrder("Bundle", "Bundle", "Phone", "Phone", "Solo Phone");
+        InventoryClient.NewProduct phone = products.getAllValues().stream()
+                .filter(np -> np.name().equals("Phone")).findFirst().orElseThrow();
+        assertThat(phone.productCharacteristic())
+                .isEqualTo(java.util.List.of(java.util.Map.of("name", "color", "value", "Blue")));
+    }
+
+    @Test
     void completedOrder_isTerminal_andProvisionsOnlyOnce() throws Exception {
         String id = createOrder("""
                 {"productOrderItem": [{"id": "1", "action": "add"}], "state": "acknowledged", "description": "One-shot order"}

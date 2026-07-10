@@ -314,22 +314,66 @@ public class ProductOrderService {
     }
 
     /**
-     * Order completion provisions the ordered product into inventory. Runs
-     * inside the order transaction: if inventory rejects the product, the
-     * state change rolls back and the order stays in its previous state.
+     * Order completion provisions the ordered products into inventory — one
+     * product per item unit (an item with quantity 2 becomes two products,
+     * matching the two devices that shipped), each carrying its offering ref
+     * and configured characteristics so billing can rate it. Items without an
+     * offering fall back to a single order-level product. Runs inside the
+     * order transaction: if inventory rejects, the state change rolls back.
      */
+    @SuppressWarnings("unchecked")
     private void provision(ProductOrder order) {
-        String name = order.getDescription() != null && !order.getDescription().isBlank()
-                ? order.getDescription()
-                : "productOrder " + order.getId();
-        Map<String, Object> offering = order.getProductOfferingId() != null
-                ? Map.of("id", order.getProductOfferingId())
-                : null;
+        ProductOrderDto dto = mapper.toDto(order);
         Map<String, Object> billingAccount = order.getBillingAccountId() != null
                 ? Map.of("id", order.getBillingAccountId())
                 : null;
-        inventoryClient.createProduct(new InventoryClient.NewProduct(
-                name, "active", offering, billingAccount,
-                mapper.toDto(order).getRelatedParty()));
+
+        boolean provisioned = false;
+        for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
+            if (!(item.get("productOffering") instanceof Map<?, ?> offering) || offering.get("id") == null) {
+                continue;
+            }
+            int quantity = item.get("quantity") instanceof Number n ? n.intValue() : 1;
+            List<Map<String, Object>> characteristics = item.get("product") instanceof Map<?, ?> product
+                    && product.get("productCharacteristic") instanceof List<?> chars
+                    ? (List<Map<String, Object>>) chars
+                    : null;
+            String name = String.valueOf(offering.get("name") != null ? offering.get("name") : offering.get("id"));
+            for (int unit = 0; unit < quantity; unit++) {
+                inventoryClient.createProduct(new InventoryClient.NewProduct(
+                        name, "active", (Map<String, Object>) offering, billingAccount,
+                        dto.getRelatedParty(), characteristics));
+                provisioned = true;
+            }
+        }
+        if (!provisioned) {
+            String name = order.getDescription() != null && !order.getDescription().isBlank()
+                    ? order.getDescription()
+                    : "productOrder " + order.getId();
+            Map<String, Object> offering = order.getProductOfferingId() != null
+                    ? Map.of("id", order.getProductOfferingId())
+                    : null;
+            inventoryClient.createProduct(new InventoryClient.NewProduct(
+                    name, "active", offering, billingAccount, dto.getRelatedParty(), null));
+        }
+    }
+
+    private List<Map<String, Object>> flattenItemMaps(List<Map<String, Object>> items) {
+        List<Map<String, Object>> flat = new ArrayList<>();
+        collectItemMaps(items, flat);
+        return flat;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectItemMaps(List<Map<String, Object>> items, List<Map<String, Object>> into) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            into.add(item);
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                collectItemMaps((List<Map<String, Object>>) children, into);
+            }
+        }
     }
 }

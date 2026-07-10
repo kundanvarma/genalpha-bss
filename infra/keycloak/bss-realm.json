@@ -19,6 +19,8 @@
       { "name": "stock:write" },
       { "name": "payment:read" },
       { "name": "payment:write" },
+      { "name": "billing:read" },
+      { "name": "billing:write" },
       {
         "name": "customer",
         "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
@@ -29,7 +31,8 @@
             "ordering:read", "ordering:write",
             "inventory:read",
             "party:read", "party:write",
-            "payment:read", "payment:write"
+            "payment:read", "payment:write",
+            "billing:read", "billing:write"
           ]
         }
       }
@@ -43,6 +46,17 @@
       "protocol": "openid-connect",
       "publicClient": false,
       "secret": "ordering-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-billing",
+      "name": "billing machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "billing-secret",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
@@ -89,6 +103,12 @@
       "realmRoles": ["catalog:read", "party:read", "inventory:write", "stock:write", "payment:read", "payment:write"]
     },
     {
+      "username": "service-account-bss-billing",
+      "enabled": true,
+      "serviceAccountClientId": "bss-billing",
+      "realmRoles": ["inventory:read", "catalog:read", "payment:read", "payment:write"]
+    },
+    {
       "username": "demo",
       "enabled": true,
       "email": "demo@bss.local",
@@ -105,7 +125,8 @@
         "inventory:read", "inventory:write",
         "party:read", "party:write",
         "stock:read", "stock:write",
-        "payment:read", "payment:write"
+        "payment:read", "payment:write",
+        "billing:read", "billing:write"
       ]
     }
   ]

@@ -15,3 +15,4 @@ CREATE DATABASE product_inventory;
 CREATE DATABASE party_account;
 CREATE DATABASE product_stock;
 CREATE DATABASE payment;
+CREATE DATABASE billing;

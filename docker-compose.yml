@@ -129,6 +129,34 @@ services:
       kafka:
         condition: service_started
 
+  billing:
+    build: ./services/billing
+    container_name: bss-billing
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/billing
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      INVENTORY_BASE_URL: http://product-inventory:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      PAYMENT_BASE_URL: http://payment:8080
+    ports:
+      - "8088:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+      product-inventory:
+        condition: service_started
+      payment:
+        condition: service_started
+
   payment:
     build: ./services/payment
     container_name: bss-payment
@@ -201,6 +229,7 @@ services:
       STOREFRONT_URL: http://storefront:8080
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
+      BILLING_URL: http://billing:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -215,6 +244,8 @@ services:
       product-stock:
         condition: service_started
       payment:
+        condition: service_started
+      billing:
         condition: service_started
       console:
         condition: service_started
