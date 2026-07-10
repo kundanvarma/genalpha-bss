@@ -64,8 +64,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: catalog_app
+      DB_PASSWORD: catalog_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -87,8 +90,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_ordering
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: ordering_app
+      DB_PASSWORD: ordering_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -127,8 +133,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_inventory
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: inventory_app
+      DB_PASSWORD: inventory_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -150,8 +159,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/trouble_ticket
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: ticket_app
+      DB_PASSWORD: ticket_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -173,8 +185,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/party_interaction
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: interaction_app
+      DB_PASSWORD: interaction_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -196,8 +211,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/shopping_cart
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: cart_app
+      DB_PASSWORD: cart_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -219,8 +237,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/usage
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: usage_app
+      DB_PASSWORD: usage_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -242,8 +263,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/communication
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: communication_app
+      DB_PASSWORD: communication_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -265,8 +289,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/qualification
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: qualification_app
+      DB_PASSWORD: qualification_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -288,8 +315,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/appointment
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: appointment_app
+      DB_PASSWORD: appointment_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -311,8 +341,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/billing
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: billing_app
+      DB_PASSWORD: billing_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -346,8 +379,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/payment
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: payment_app
+      DB_PASSWORD: payment_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -369,8 +405,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_stock
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: stock_app
+      DB_PASSWORD: stock_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -392,8 +431,11 @@ services:
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/party_account
-      DB_USERNAME: postgres
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: party_app
+      DB_PASSWORD: party_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs

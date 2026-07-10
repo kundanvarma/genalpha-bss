@@ -10,6 +10,7 @@ import com.bss.cart.exception.ConflictException;
 import com.bss.cart.exception.NotFoundException;
 import com.bss.cart.repository.ShoppingCartRepository;
 import com.bss.cart.security.PartyScope;
+import com.bss.cart.security.TenantContext;
 import com.bss.cart.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -155,19 +156,21 @@ public class ShoppingCartService {
     @Scheduled(fixedDelayString = "${bss.cart.sweep-interval-ms:60000}")
     @Transactional
     public int sweepAbandoned() {
-        OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(abandonMinutes);
-        // System job, deliberately NOT tenant-scoped: it sweeps every
-        // tenant's idle carts in one pass (there is no request tenant here).
-        List<ShoppingCart> idle = repository
-                .findByStatusAndOwnerPartyIdNotNullAndLastUpdateBefore(ShoppingCart.ACTIVE, cutoff);
-        for (ShoppingCart cart : idle) {
-            cart.setStatus(ShoppingCart.ABANDONED);
-            cart.setLastUpdate(OffsetDateTime.now());
-            // No request tenant here: the event's tenant comes from the row.
-            events.publish("ShoppingCartAbandonedEvent", "shoppingCart", toMap(cart), cart.getTenantId());
+        // System job, deliberately tenant-spanning: it sweeps every tenant's
+        // idle carts in one pass. The SYSTEM context opens the row-level
+        // security escape hatch; each event still carries its row's tenant.
+        try (TenantContext ignored = TenantContext.actAsSystem()) {
+            OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(abandonMinutes);
+            List<ShoppingCart> idle = repository
+                    .findByStatusAndOwnerPartyIdNotNullAndLastUpdateBefore(ShoppingCart.ACTIVE, cutoff);
+            for (ShoppingCart cart : idle) {
+                cart.setStatus(ShoppingCart.ABANDONED);
+                cart.setLastUpdate(OffsetDateTime.now());
+                events.publish("ShoppingCartAbandonedEvent", "shoppingCart", toMap(cart), cart.getTenantId());
+            }
+            repository.saveAll(idle);
+            return idle.size();
         }
-        repository.saveAll(idle);
-        return idle.size();
     }
 
     /**
