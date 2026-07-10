@@ -11,6 +11,9 @@ import java.time.OffsetDateTime;
 @Table(name = "product_specification")
 public class ProductSpecification {
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
@@ -91,5 +94,13 @@ public class ProductSpecification {
 
     public void setProductSpecCharacteristicJson(String productSpecCharacteristicJson) {
         this.productSpecCharacteristicJson = productSpecCharacteristicJson;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

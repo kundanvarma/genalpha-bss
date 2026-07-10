@@ -9,6 +9,7 @@ import com.bss.catalog.events.DomainEventPublisher;
 import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductOfferingPriceMapper;
+import com.bss.catalog.security.TenantScope;
 import com.bss.catalog.repository.ProductOfferingPriceRepository;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -28,12 +29,14 @@ public class ProductOfferingPriceService {
     private final ProductOfferingPriceRepository repository;
     private final ProductOfferingPriceMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
     public ProductOfferingPriceService(ProductOfferingPriceRepository repository,
-            ProductOfferingPriceMapper mapper, DomainEventPublisher events) {
+            ProductOfferingPriceMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -49,6 +52,7 @@ public class ProductOfferingPriceService {
      */
     private Example<ProductOfferingPrice> probeFor(Map<String, String> filters) {
         ProductOfferingPrice probe = new ProductOfferingPrice();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -71,7 +75,7 @@ public class ProductOfferingPriceService {
 
     @Transactional(readOnly = true)
     public ProductOfferingPriceDto findById(String id) {
-        ProductOfferingPrice entity = repository.findById(id)
+        ProductOfferingPrice entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -84,6 +88,7 @@ public class ProductOfferingPriceService {
         ProductOfferingPrice entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/productOfferingPrice/" + id);
         entity.setLastUpdate(OffsetDateTime.now());
         ProductOfferingPriceDto created = mapper.toDto(repository.save(entity));
@@ -93,7 +98,7 @@ public class ProductOfferingPriceService {
 
     @Transactional
     public ProductOfferingPriceDto patch(String id, ProductOfferingPriceDto patch) {
-        ProductOfferingPrice entity = repository.findById(id)
+        ProductOfferingPrice entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
@@ -104,10 +109,10 @@ public class ProductOfferingPriceService {
 
     @Transactional
     public void delete(String id) {
-        ProductOfferingPrice entity = repository.findById(id)
+        ProductOfferingPrice entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOfferingPriceDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductOfferingPriceDeleteEvent", "productOfferingPrice", deleted);
     }
 }

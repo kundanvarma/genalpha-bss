@@ -9,6 +9,7 @@ import com.bss.catalog.events.DomainEventPublisher;
 import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.exception.NotFoundException;
 import com.bss.catalog.mapper.ProductSpecificationMapper;
+import com.bss.catalog.security.TenantScope;
 import com.bss.catalog.repository.ProductSpecificationRepository;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -28,12 +29,14 @@ public class ProductSpecificationService {
     private final ProductSpecificationRepository repository;
     private final ProductSpecificationMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
     public ProductSpecificationService(ProductSpecificationRepository repository, ProductSpecificationMapper mapper,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -49,6 +52,7 @@ public class ProductSpecificationService {
      */
     private Example<ProductSpecification> probeFor(Map<String, String> filters) {
         ProductSpecification probe = new ProductSpecification();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -70,7 +74,7 @@ public class ProductSpecificationService {
 
     @Transactional(readOnly = true)
     public ProductSpecificationDto findById(String id) {
-        ProductSpecification entity = repository.findById(id)
+        ProductSpecification entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -83,6 +87,7 @@ public class ProductSpecificationService {
         ProductSpecification entity = mapper.toEntity(dto);
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/productSpecification/" + id);
         entity.setLastUpdate(OffsetDateTime.now());
         ProductSpecificationDto created = mapper.toDto(repository.save(entity));
@@ -92,7 +97,7 @@ public class ProductSpecificationService {
 
     @Transactional
     public ProductSpecificationDto patch(String id, ProductSpecificationDto patch) {
-        ProductSpecification entity = repository.findById(id)
+        ProductSpecification entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
@@ -103,10 +108,10 @@ public class ProductSpecificationService {
 
     @Transactional
     public void delete(String id) {
-        ProductSpecification entity = repository.findById(id)
+        ProductSpecification entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductSpecificationDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductSpecificationDeleteEvent", "productSpecification", deleted);
     }
 }

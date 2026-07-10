@@ -9,6 +9,9 @@ import jakarta.persistence.Table;
 @Table(name = "category")
 public class Category {
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
@@ -55,5 +58,13 @@ public class Category {
 
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }
