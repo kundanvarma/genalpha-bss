@@ -1,0 +1,13 @@
+{
+  "name": "GenAlpha CSR",
+  "short_name": "GenAlpha",
+  "description": "GenAlpha self-service: assisted channel console",
+  "start_url": "/csr/",
+  "scope": "/csr/",
+  "display": "standalone",
+  "background_color": "#FAFBFA",
+  "theme_color": "#0E7C7B",
+  "icons": [
+    { "src": "/csr/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

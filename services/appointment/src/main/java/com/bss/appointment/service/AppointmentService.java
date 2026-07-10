@@ -83,8 +83,11 @@ public class AppointmentService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResult<Map<String, Object>> findAll(int offset, int limit) {
+    public PagedResult<Map<String, Object>> findAll(int offset, int limit, String relatedPartyId) {
         Appointment probe = new Appointment();
+        if (relatedPartyId != null) {
+            probe.setOwnerPartyId(relatedPartyId);
+        }
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<Appointment> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());

@@ -19,6 +19,7 @@ staff user through the gateway.
     node storefront_test.js   # register, configure, cart, ship, pay, stock, bill
     node guest_test.js        # anonymous browse -> register at checkout
     node console_test.js      # admin console incl. stock tab
+    node csr_test.js          # CSR channel: ticket workflow + org isolation
 
 The storefront suite pins Samsung stock availability to 10 at the start, so
 repeated runs stay deterministic. Keycloak access tokens live five minutes;

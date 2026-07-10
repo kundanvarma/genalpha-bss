@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: bss-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
@@ -22,6 +23,7 @@ services:
     # Docker Hub in 2025.
     image: apache/kafka:3.9.0
     container_name: bss-kafka
+    restart: unless-stopped
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
@@ -38,6 +40,7 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: bss-keycloak
+    restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -56,6 +59,7 @@ services:
   product-catalog:
     build: ./services/product-catalog
     container_name: bss-product-catalog
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
       DB_USERNAME: postgres
@@ -76,6 +80,7 @@ services:
   product-ordering:
     build: ./services/product-ordering
     container_name: bss-product-ordering
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_ordering
       DB_USERNAME: postgres
@@ -112,6 +117,7 @@ services:
   product-inventory:
     build: ./services/product-inventory
     container_name: bss-product-inventory
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_inventory
       DB_USERNAME: postgres
@@ -129,9 +135,52 @@ services:
       kafka:
         condition: service_started
 
+  trouble-ticket:
+    build: ./services/trouble-ticket
+    container_name: bss-trouble-ticket
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/trouble_ticket
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8092:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  party-interaction:
+    build: ./services/party-interaction
+    container_name: bss-party-interaction
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/party_interaction
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8093:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   qualification:
     build: ./services/qualification
     container_name: bss-qualification
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/qualification
       DB_USERNAME: postgres
@@ -152,6 +201,7 @@ services:
   appointment:
     build: ./services/appointment
     container_name: bss-appointment
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/appointment
       DB_USERNAME: postgres
@@ -172,6 +222,7 @@ services:
   billing:
     build: ./services/billing
     container_name: bss-billing
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/billing
       DB_USERNAME: postgres
@@ -200,6 +251,7 @@ services:
   payment:
     build: ./services/payment
     container_name: bss-payment
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/payment
       DB_USERNAME: postgres
@@ -220,6 +272,7 @@ services:
   product-stock:
     build: ./services/product-stock
     container_name: bss-product-stock
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/product_stock
       DB_USERNAME: postgres
@@ -240,6 +293,7 @@ services:
   party-account:
     build: ./services/party-account
     container_name: bss-party-account
+    restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/party_account
       DB_USERNAME: postgres
@@ -260,6 +314,7 @@ services:
   gateway:
     build: ./services/gateway
     container_name: bss-gateway
+    restart: unless-stopped
     environment:
       CATALOG_URL: http://product-catalog:8080
       ORDERING_URL: http://product-ordering:8080
@@ -272,6 +327,9 @@ services:
       BILLING_URL: http://billing:8080
       QUALIFICATION_URL: http://qualification:8080
       APPOINTMENT_URL: http://appointment:8080
+      TICKET_URL: http://trouble-ticket:8080
+      INTERACTION_URL: http://party-interaction:8080
+      CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -293,6 +351,12 @@ services:
         condition: service_started
       appointment:
         condition: service_started
+      trouble-ticket:
+        condition: service_started
+      party-interaction:
+        condition: service_started
+      csr-console:
+        condition: service_started
       console:
         condition: service_started
       storefront:
@@ -301,14 +365,22 @@ services:
   console:
     build: ./apps/admin-console
     container_name: bss-console
+    restart: unless-stopped
+
+  csr-console:
+    build: ./apps/csr-console
+    container_name: bss-csr-console
+    restart: unless-stopped
 
   storefront:
     build: ./apps/storefront
     container_name: bss-storefront
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v2.53.0
     container_name: bss-prometheus
+    restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -317,6 +389,7 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     container_name: bss-grafana
+    restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:

@@ -221,3 +221,26 @@ export async function settleBill(billId, paymentRef) {
     body: JSON.stringify({ state: 'settled', payment: [paymentRef] }),
   }));
 }
+
+const TICKET = '/tmf-api/troubleTicket/v4';
+
+export async function myTickets() {
+  return json(await authFetch(`${TICKET}/troubleTicket?limit=100`));
+}
+
+export async function raiseTicket(name, description) {
+  return json(await authFetch(`${TICKET}/troubleTicket`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description, severity: 'minor' }),
+  }));
+}
+
+/** Customers may close a ticket once an agent has resolved it. */
+export async function closeTicket(id) {
+  return json(await authFetch(`${TICKET}/troubleTicket/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'closed' }),
+  }));
+}

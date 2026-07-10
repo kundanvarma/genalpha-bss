@@ -59,6 +59,7 @@ public class ProductService {
                 case "id" -> probe.setId(f.getValue());
                 case "name" -> probe.setName(f.getValue());
                 case "status" -> probe.setStatus(f.getValue());
+                case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }

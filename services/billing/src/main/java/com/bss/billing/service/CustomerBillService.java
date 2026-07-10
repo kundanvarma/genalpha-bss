@@ -67,6 +67,7 @@ public class CustomerBillService {
                 case "id" -> probe.setId(f.getValue());
                 case "state" -> probe.setState(f.getValue());
                 case "billNo" -> probe.setBillNo(f.getValue());
+                case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
