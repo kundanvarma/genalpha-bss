@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
 import { ensureParty, myNotifications } from './api.js';
-import { CART_EVENT, cartCount, cartLines, clearCart } from './cart.js';
+import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from './cart.js';
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
@@ -18,12 +18,13 @@ import Account from './pages/Account.jsx';
 export default function App() {
   const [state, setState] = useState('boot'); // boot | guest | ready | error
   const [error, setError] = useState(null);
-  const [count, setCount] = useState(cartCount());
+  const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const refresh = () => setCount(cartCount());
+    const refresh = () => { cartCount().then(setCount).catch(() => {}); };
+    refresh();
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
@@ -37,15 +38,17 @@ export default function App() {
           return;
         }
         await ensureParty();
+        await claimCart();
         myNotifications()
           .then((ms) => setUnread(ms.filter((m) => m.status !== 'read').length))
           .catch(() => {});
         // Checkout started as a guest? The cart survived in localStorage —
         // place the order they were building.
-        if (takePendingCheckout() && cartLines().length) {
+        const pendingLines = takePendingCheckout() ? await cartLines() : [];
+        if (pendingLines.length) {
           try {
-            await performCheckout(cartLines());
-            clearCart();
+            const order = await performCheckout(pendingLines);
+            await markCartCheckedOut(order.id);
             navigate('/orders');
           } catch (e) {
             if (e.message !== PAYMENT_REQUIRED) throw e;

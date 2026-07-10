@@ -1,22 +1,52 @@
 /*
- * The cart lives in localStorage: it survives page loads and — importantly —
- * the Keycloak redirect when a guest signs in at checkout. Lines with the
- * same offering and configuration merge into one line's quantity.
+ * Thin client over the TMF663 shopping-cart service — the cart is
+ * core-commerce state, not channel state. The browser keeps only the cart id
+ * (a guest cart's bearer secret); signing in claims the cart for the party,
+ * after which it follows the customer across devices and channels. Lines with
+ * the same offering and configuration merge into one line's quantity.
  */
+import { publicFetch } from './auth.js';
 
-const CART_KEY = 'bss.shop.cart';
+const CART_ID_KEY = 'bss.shop.cartId';
+const CART = '/tmf-api/shoppingCart/v4/shoppingCart';
 export const CART_EVENT = 'bss-cart-changed';
 
-function load() {
-  try {
-    return JSON.parse(localStorage.getItem(CART_KEY)) || [];
-  } catch {
-    return [];
+async function json(res) {
+  if (!res.ok) {
+    const problem = await res.json().catch(() => ({}));
+    throw new Error(problem.message || `HTTP ${res.status}`);
   }
+  return res.json();
 }
 
-function save(lines) {
-  localStorage.setItem(CART_KEY, JSON.stringify(lines));
+/** The active server cart, creating one when none exists or ours went stale. */
+async function fetchCart() {
+  const id = localStorage.getItem(CART_ID_KEY);
+  if (id) {
+    const res = await publicFetch(`${CART}/${id}`);
+    if (res.ok) {
+      const cart = await res.json();
+      if (cart.status === 'active') {
+        return cart;
+      }
+    }
+    localStorage.removeItem(CART_ID_KEY);
+  }
+  const cart = await json(await publicFetch(CART, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  }));
+  localStorage.setItem(CART_ID_KEY, cart.id);
+  return cart;
+}
+
+async function saveItems(cartId, lines) {
+  await json(await publicFetch(`${CART}/${cartId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cartItem: lines }),
+  }));
   window.dispatchEvent(new Event(CART_EVENT));
 }
 
@@ -27,39 +57,65 @@ function lineKey(offeringId, selections) {
   return `${offeringId}#${config}`;
 }
 
-export function cartLines() {
-  return load();
+export async function cartLines() {
+  return (await fetchCart()).cartItem || [];
 }
 
-export function cartCount() {
-  return load().reduce((n, l) => n + l.quantity, 0);
+export async function cartCount() {
+  return (await cartLines()).reduce((n, l) => n + (l.quantity || 0), 0);
 }
 
 /** selections: [{offeringId, name, characteristics}] for configured bundles. */
-export function addToCart(offering, selections = [], quantity = 1) {
-  const lines = load();
+export async function addToCart(offering, selections = [], quantity = 1) {
+  const cart = await fetchCart();
+  const lines = cart.cartItem || [];
   const key = lineKey(offering.id, selections);
   const existing = lines.find((l) => l.key === key);
   if (existing) {
     existing.quantity += quantity;
   } else {
-    lines.push({ key, offeringId: offering.id, name: offering.name, quantity, selections });
+    lines.push({ id: key, key, offeringId: offering.id, name: offering.name, quantity, selections });
   }
-  save(lines);
+  await saveItems(cart.id, lines);
 }
 
-export function setQuantity(key, quantity) {
-  const lines = load();
-  const line = lines.find((l) => l.key === key);
-  if (!line) return;
-  line.quantity = quantity;
-  save(quantity > 0 ? lines : lines.filter((l) => l.key !== key));
+export async function setQuantity(key, quantity) {
+  const cart = await fetchCart();
+  const lines = (cart.cartItem || []).map((l) => l.key === key ? { ...l, quantity } : l)
+    .filter((l) => l.quantity > 0);
+  await saveItems(cart.id, lines);
 }
 
-export function removeLine(key) {
-  save(load().filter((l) => l.key !== key));
+export async function removeLine(key) {
+  const cart = await fetchCart();
+  await saveItems(cart.id, (cart.cartItem || []).filter((l) => l.key !== key));
 }
 
-export function clearCart() {
-  save([]);
+/** Signing in claims the guest cart for the party (no-op when already owned). */
+export async function claimCart() {
+  const id = localStorage.getItem(CART_ID_KEY);
+  if (!id) return;
+  await publicFetch(`${CART}/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  }).catch(() => {});
+  window.dispatchEvent(new Event(CART_EVENT));
+}
+
+/** Checkout closes the cart into immutable history, linked to its order. */
+export async function markCartCheckedOut(orderId) {
+  const id = localStorage.getItem(CART_ID_KEY);
+  if (id) {
+    await publicFetch(`${CART}/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: 'checkedOut',
+        relatedEntity: [{ id: orderId, '@referredType': 'ProductOrder' }],
+      }),
+    }).catch(() => {});
+    localStorage.removeItem(CART_ID_KEY);
+  }
+  window.dispatchEvent(new Event(CART_EVENT));
 }

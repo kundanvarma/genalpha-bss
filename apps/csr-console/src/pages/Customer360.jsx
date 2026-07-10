@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { appointmentsOf, billsOf, createTicket, getCustomer, interactionsOf, logInteraction,
+import { appointmentsOf, billsOf, cartsOf, createTicket, getCustomer, interactionsOf, logInteraction,
   ordersOf, patchOrder, productsOf, ticketsOf, workTicket } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 
@@ -15,6 +15,7 @@ export default function Customer360() {
   const [bills, setBills] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [tickets, setTickets] = useState([]);
+  const [carts, setCarts] = useState([]);
   const [interactions, setInteractions] = useState([]);
   const [note, setNote] = useState('');
   const [ticketName, setTicketName] = useState('');
@@ -27,6 +28,7 @@ export default function Customer360() {
     billsOf(id).then(setBills).catch(() => {});
     appointmentsOf(id).then(setAppointments).catch(() => {});
     ticketsOf(id).then(setTickets).catch(() => {});
+    cartsOf(id).then(setCarts).catch(() => {});
     interactionsOf(id).then(setInteractions).catch(() => {});
   };
   useEffect(reload, [id]);
@@ -123,6 +125,29 @@ export default function Customer360() {
         </section>
 
         <section>
+          {carts.length > 0 && (
+            <>
+              <h2>Active cart</h2>
+              <div className="rows">
+                {carts.flatMap((cart) => (cart.cartItem || []).map((line) => (
+                  <div className="row" key={cart.id + line.key}>
+                    <div>
+                      <span>{line.name}</span>
+                      {(line.selections || []).map((sel) => (
+                        <div className="dim small" key={sel.offeringId}>
+                          {sel.name}
+                          {Object.values(sel.characteristics || {}).map((v) => ` · ${v}`).join('')}
+                        </div>
+                      ))}
+                    </div>
+                    <span className="dim small">× {line.quantity}</span>
+                  </div>
+                )))}
+              </div>
+              <p className="dim small">The customer's cart, live — assisted checkout starts here.</p>
+            </>
+          )}
+
           <h2>Tickets</h2>
           {tickets.map((t) => <TicketCard key={t.id} ticket={t} onChanged={reload} />)}
           {!tickets.length && <p className="dim small">No tickets.</p>}

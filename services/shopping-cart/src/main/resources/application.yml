@@ -1,13 +1,13 @@
 spring:
   application:
-    name: communication
+    name: shopping-cart
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/communication}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/shopping_cart}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -46,8 +46,7 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
-  notify:
-    consumer-enabled: ${NOTIFY_CONSUMER_ENABLED:true}
-    topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events}
   events:
-    topic: bss.communication.events
+    topic: bss.cart.events
+  cart:
+    abandon-minutes: ${CART_ABANDON_MINUTES:1440}

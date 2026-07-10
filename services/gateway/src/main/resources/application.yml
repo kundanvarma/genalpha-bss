@@ -52,6 +52,10 @@ spring:
           uri: ${COMMUNICATION_URL:http://localhost:8095}
           predicates:
             - Path=/tmf-api/communicationManagement/**
+        - id: shopping-cart
+          uri: ${CART_URL:http://localhost:8096}
+          predicates:
+            - Path=/tmf-api/shoppingCart/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

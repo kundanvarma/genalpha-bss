@@ -13,6 +13,7 @@ const STOCK = '/tmf-api/productStockManagement/v4';
 const BILLING = '/tmf-api/customerBillManagement/v4';
 const APPOINTMENT = '/tmf-api/appointment/v4';
 const TICKET = '/tmf-api/troubleTicket/v4';
+const CART = '/tmf-api/shoppingCart/v4';
 const INTERACTION = '/tmf-api/partyInteraction/v4';
 
 async function json(res) {
@@ -91,6 +92,10 @@ export async function logInteraction(body) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   }));
+}
+
+export async function cartsOf(customerId) {
+  return json(await authFetch(`${CART}/shoppingCart?limit=10&status=active&relatedPartyId=${customerId}`));
 }
 
 export async function stockLevels() {
