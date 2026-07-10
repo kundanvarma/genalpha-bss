@@ -9,6 +9,7 @@ const CATALOG = '/tmf-api/productCatalogManagement/v4';
 const ORDERING = '/tmf-api/productOrderingManagement/v4';
 const INVENTORY = '/tmf-api/productInventory/v4';
 const PARTY = '/tmf-api/party/v4';
+const STOCK = '/tmf-api/productStockManagement/v4';
 
 async function json(res) {
   if (!res.ok) {
@@ -28,6 +29,16 @@ export async function getOffering(id) {
 
 export async function getSpec(id) {
   return json(await publicFetch(`${CATALOG}/productSpecification/${id}`));
+}
+
+/**
+ * Units available for an offering, or null when it is not stock-managed
+ * (services and subscriptions have no shelf).
+ */
+export async function availabilityFor(offeringId) {
+  const rows = await json(await publicFetch(`${STOCK}/productStock?productOfferingId=${offeringId}`));
+  if (!rows.length) return null;
+  return rows.reduce((sum, r) => sum + (r.availableQuantity?.amount ?? 0), 0);
 }
 
 /** All active prices indexed by id, so offering price refs resolve locally. */

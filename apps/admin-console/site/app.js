@@ -10,6 +10,7 @@
 'use strict';
 
 const API_BASE = '/tmf-api/productCatalogManagement/v4';
+const STOCK_BASE = '/tmf-api/productStockManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -56,6 +57,17 @@ const RESOURCES = [
     ],
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
+  {
+    path: 'productStock',
+    base: STOCK_BASE,
+    title: 'Product Stock',
+    fields: [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'productOffering', label: 'Offering', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'stockedQuantity', label: 'Stocked', kind: 'quantity' },
+    ],
+    columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
+  },
 ];
 
 const el = (id) => document.getElementById(id);
@@ -70,6 +82,7 @@ function fmtCell(value) {
   if (Array.isArray(value)) return value.map((v) => v.name || v.id).join(', ') || '—';
   if (typeof value === 'object') {
     if (value.value != null) return `${value.value} ${value.unit || ''}`.trim();
+    if (value.amount != null) return `${value.amount} ${value.units || ''}`.trim();
     return value.name || value.id || '—';
   }
   if (/^\d{4}-\d{2}-\d{2}T/.test(String(value))) {
@@ -81,14 +94,14 @@ function fmtCell(value) {
 function refObject(field, option) {
   return {
     id: option.value,
-    href: `${API_BASE}/${field.resource}/${option.value}`,
+    href: `${field.base || API_BASE}/${field.resource}/${option.value}`,
     name: option.dataset.name,
     '@referredType': field.referredType,
   };
 }
 
 async function loadPicklist(field) {
-  const res = await authFetch(`${API_BASE}/${field.resource}?offset=0&limit=${REF_PICKLIST_LIMIT}`);
+  const res = await authFetch(`${field.base || API_BASE}/${field.resource}?offset=0&limit=${REF_PICKLIST_LIMIT}`);
   return res.json();
 }
 
@@ -177,6 +190,31 @@ function moneyControl(field) {
   return [row];
 }
 
+function quantityControl(field) {
+  const amount = document.createElement('input');
+  amount.type = 'number';
+  amount.step = '1';
+  amount.min = '0';
+  amount.placeholder = 'amount';
+  const units = document.createElement('input');
+  units.placeholder = 'units (unit)';
+  units.className = 'unit';
+  const row = document.createElement('div');
+  row.className = 'moneyrow';
+  row.append(amount, units);
+  controls[field.name] = {
+    get: () => {
+      if (!amount.value.trim()) return undefined;
+      return { amount: Number(amount.value), units: units.value.trim() || 'unit' };
+    },
+    set: (item) => {
+      amount.value = item[field.name]?.amount ?? '';
+      units.value = item[field.name]?.units ?? '';
+    },
+  };
+  return [row];
+}
+
 function refControl(field, multiple) {
   const select = document.createElement('select');
   select.name = field.name;
@@ -243,6 +281,7 @@ function renderEditor() {
     const parts =
       f.kind === 'checkbox' ? checkboxControl(f) :
       f.kind === 'money' ? moneyControl(f) :
+      f.kind === 'quantity' ? quantityControl(f) :
       f.kind === 'ref' ? refControl(f, false) :
       f.kind === 'reflist' ? refControl(f, true) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
@@ -278,7 +317,7 @@ function startEditing(item) {
 async function loadList() {
   el('resource-title').textContent = active.title;
   renderEditor();
-  const res = await authFetch(`${API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}`);
+  const res = await authFetch(`${active.base || API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}`);
   const items = await res.json();
   const total = Number(res.headers.get('X-Total-Count') || items.length);
 
@@ -312,7 +351,7 @@ async function loadList() {
     del.className = 'ghost danger';
     del.addEventListener('click', async () => {
       if (!confirm(`Delete "${item.name || item.id}"?`)) return;
-      await authFetch(`${API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
+      await authFetch(`${active.base || API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
       loadList();
     });
     td.append(edit, del);
@@ -341,8 +380,8 @@ async function save(event) {
     return;
   }
   const url = editingId
-    ? `${API_BASE}/${active.path}/${editingId}`
-    : `${API_BASE}/${active.path}`;
+    ? `${active.base || API_BASE}/${active.path}/${editingId}`
+    : `${active.base || API_BASE}/${active.path}`;
   const res = await authFetch(url, {
     method: editingId ? 'PATCH' : 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -85,6 +85,12 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .option input { accent-color: var(--teal); }
 .optname { flex: 1; }
 .optprice { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--teal); }
+.stocknote {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--danger);
+}
+.stocknote.out { font-weight: 700; }
+.stockline { margin: 14px 0 6px; font-size: 13.5px; }
 .chars { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 4px; }
 .charfield { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dim); }
 .charfield select {
