@@ -41,6 +41,10 @@ public class ProductOrder {
     @Column(name = "related_party", length = 4000)
     private String relatedPartyJson;
 
+    /** The customer party this order belongs to; drives channel scoping. */
+    @Column(name = "owner_party_id", length = 36)
+    private String ownerPartyId;
+
     @Column(name = "order_date")
     private OffsetDateTime orderDate;
 
@@ -125,5 +129,13 @@ public class ProductOrder {
 
     public void setOrderDate(OffsetDateTime orderDate) {
         this.orderDate = orderDate;
+    }
+
+    public String getOwnerPartyId() {
+        return ownerPartyId;
+    }
+
+    public void setOwnerPartyId(String ownerPartyId) {
+        this.ownerPartyId = ownerPartyId;
     }
 }

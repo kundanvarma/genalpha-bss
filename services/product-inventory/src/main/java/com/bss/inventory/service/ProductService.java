@@ -10,11 +10,13 @@ import com.bss.inventory.exception.BadRequestException;
 import com.bss.inventory.exception.NotFoundException;
 import com.bss.inventory.mapper.ProductMapper;
 import com.bss.inventory.repository.ProductRepository;
+import com.bss.inventory.security.PartyScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -26,17 +28,22 @@ public class ProductService {
     private final ProductRepository repository;
     private final ProductMapper mapper;
     private final DomainEventPublisher events;
+    private final PartyScope partyScope;
 
     public ProductService(ProductRepository repository, ProductMapper mapper,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, PartyScope partyScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.partyScope = partyScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<ProductDto> findAll(int offset, int limit, Map<String, String> filters) {
-        Page<Product> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
+        Product probe = probeFor(filters);
+        // Customers see their own products only, whatever else they filter on.
+        partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
+        Page<Product> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 
@@ -45,7 +52,7 @@ public class ProductService {
      * query-by-example. Unknown attributes are rejected rather than silently
      * matching everything.
      */
-    private Example<Product> probeFor(Map<String, String> filters) {
+    private Product probeFor(Map<String, String> filters) {
         Product probe = new Product();
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
@@ -55,13 +62,14 @@ public class ProductService {
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
-        return Example.of(probe);
+        return probe;
     }
 
     @Transactional(readOnly = true)
     public ProductDto findById(String id) {
         Product entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
         return mapper.toDto(entity);
     }
 
@@ -71,6 +79,7 @@ public class ProductService {
             dto.setStatus("created");
         }
         Product entity = mapper.toEntity(dto);
+        entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/product/" + id);
@@ -83,6 +92,7 @@ public class ProductService {
     public ProductDto patch(String id, ProductDto patch) {
         Product entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
         mapper.applyPatch(patch, entity);
         ProductDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductAttributeValueChangeEvent", "product", updated);
@@ -93,8 +103,36 @@ public class ProductService {
     public void delete(String id) {
         Product entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
         ProductDto deleted = mapper.toDto(entity);
         repository.deleteById(id);
         events.publish("ProductDeleteEvent", "product", deleted);
+    }
+
+    /**
+     * Scoped tokens address only their own products; anything else is a 404,
+     * not a 403, so foreign ids do not leak existence.
+     */
+    private void requireOwn(Product entity) {
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(entity.getOwnerPartyId())) {
+                throw NotFoundException.forResource(RESOURCE, entity.getId());
+            }
+        });
+    }
+
+    /**
+     * Owner of a machine- or staff-created product (order provisioning sends
+     * the order's relatedParty): the party in the customer role, if any.
+     */
+    private String customerPartyIn(List<Map<String, Object>> relatedParty) {
+        if (relatedParty == null) {
+            return null;
+        }
+        return relatedParty.stream()
+                .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
+                .map(p -> String.valueOf(p.get("id")))
+                .findFirst()
+                .orElse(null);
     }
 }

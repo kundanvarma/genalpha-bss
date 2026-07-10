@@ -1,0 +1,13 @@
+{
+  "name": "GenAlpha Shop",
+  "short_name": "GenAlpha",
+  "description": "GenAlpha self-service: browse offers, order, and manage your services",
+  "start_url": "/shop/",
+  "scope": "/shop/",
+  "display": "standalone",
+  "background_color": "#FAFBFA",
+  "theme_color": "#0E7C7B",
+  "icons": [
+    { "src": "/shop/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
