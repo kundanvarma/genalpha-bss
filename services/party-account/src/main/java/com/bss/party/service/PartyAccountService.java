@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.PartyAccountMapper;
 import com.bss.party.repository.PartyAccountRepository;
+import com.bss.party.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,13 @@ public class PartyAccountService {
     private final PartyAccountRepository repository;
     private final PartyAccountMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
-    public PartyAccountService(PartyAccountRepository repository, PartyAccountMapper mapper, DomainEventPublisher events) {
+    public PartyAccountService(PartyAccountRepository repository, PartyAccountMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +49,7 @@ public class PartyAccountService {
      */
     private Example<PartyAccount> probeFor(Map<String, String> filters) {
         PartyAccount probe = new PartyAccount();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -58,7 +62,7 @@ public class PartyAccountService {
 
     @Transactional(readOnly = true)
     public PartyAccountDto findById(String id) {
-        PartyAccount entity = repository.findById(id)
+        PartyAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -69,6 +73,7 @@ public class PartyAccountService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.ACCOUNT_BASE + "/partyAccount/" + id);
+        entity.setTenantId(tenantScope.currentTenantId());
         PartyAccountDto created = mapper.toDto(repository.save(entity));
         events.publish("PartyAccountCreateEvent", "partyAccount", created);
         return created;
@@ -76,7 +81,7 @@ public class PartyAccountService {
 
     @Transactional
     public PartyAccountDto patch(String id, PartyAccountDto patch) {
-        PartyAccount entity = repository.findById(id)
+        PartyAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         PartyAccountDto updated = mapper.toDto(repository.save(entity));
@@ -86,10 +91,10 @@ public class PartyAccountService {
 
     @Transactional
     public void delete(String id) {
-        PartyAccount entity = repository.findById(id)
+        PartyAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         PartyAccountDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("PartyAccountDeleteEvent", "partyAccount", deleted);
     }
 }

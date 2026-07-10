@@ -13,6 +13,7 @@ import com.bss.payment.exception.NotFoundException;
 import com.bss.payment.psp.PspAdapter;
 import com.bss.payment.repository.PaymentRepository;
 import com.bss.payment.security.PartyScope;
+import com.bss.payment.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -37,18 +38,21 @@ public class PaymentService {
     private final PspAdapter psp;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
 
     public PaymentService(PaymentRepository repository, PspAdapter psp, DomainEventPublisher events,
-            PartyScope partyScope) {
+            PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.psp = psp;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<PaymentDto> findAll(int offset, int limit, Map<String, String> filters) {
         Payment probe = probeFor(filters);
+        probe.setTenantId(tenantScope.currentTenantId());
         // Customers see their own payments only, whatever else they filter on.
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<Payment> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
@@ -70,7 +74,7 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public PaymentDto findById(String id) {
-        Payment entity = repository.findById(id)
+        Payment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return toDto(entity);
@@ -95,6 +99,7 @@ public class PaymentService {
         }
 
         Payment entity = new Payment();
+        entity.setTenantId(tenantScope.currentTenantId());
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/payment/" + id);
@@ -118,7 +123,7 @@ public class PaymentService {
     /** Status transitions (capture/void) and correlator linkage; nothing else changes after authorization. */
     @Transactional
     public PaymentDto patch(String id, PaymentDto patch) {
-        Payment entity = repository.findById(id)
+        Payment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         if (patch.getCorrelatorId() != null) {

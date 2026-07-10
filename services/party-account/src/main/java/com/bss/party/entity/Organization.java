@@ -16,6 +16,9 @@ public class Organization {
     @Column(name = "href")
     private String href;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "name")
     private String name;
 
@@ -55,5 +58,13 @@ public class Organization {
 
     public void setTradingName(String tradingName) {
         this.tradingName = tradingName;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

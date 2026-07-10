@@ -7,5 +7,8 @@ import java.util.List;
 
 public interface UsageAllowanceRepository extends JpaRepository<UsageAllowance, String> {
 
-    List<UsageAllowance> findByProductOfferingIdAndUsageSpecName(String offeringId, String specName);
+    List<UsageAllowance> findByTenantIdAndProductOfferingIdAndUsageSpecName(
+            String tenantId, String offeringId, String specName);
+
+    List<UsageAllowance> findByTenantId(String tenantId);
 }

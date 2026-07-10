@@ -14,6 +14,7 @@ import com.bss.billing.exception.NotFoundException;
 import com.bss.billing.repository.AppliedBillingRateRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
+import com.bss.billing.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,22 +39,25 @@ public class CustomerBillService {
     private final DownstreamClients.PaymentClient paymentClient;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
             DownstreamClients.PaymentClient paymentClient, DomainEventPublisher events, PartyScope partyScope,
-            ObjectMapper objectMapper) {
+            TenantScope tenantScope, ObjectMapper objectMapper) {
         this.repository = repository;
         this.rateRepository = rateRepository;
         this.paymentClient = paymentClient;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<CustomerBillDto> findAll(int offset, int limit, Map<String, String> filters) {
         CustomerBill probe = probeFor(filters);
+        probe.setTenantId(tenantScope.currentTenantId());
         // Customers see their own bills only, whatever else they filter on.
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<CustomerBill> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
@@ -76,7 +80,7 @@ public class CustomerBillService {
 
     @Transactional(readOnly = true)
     public CustomerBillDto findById(String id) {
-        CustomerBill entity = repository.findById(id)
+        CustomerBill entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return toDto(entity);
@@ -84,10 +88,11 @@ public class CustomerBillService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> ratesOf(String billId) {
-        CustomerBill bill = repository.findById(billId)
+        String tenantId = tenantScope.currentTenantId();
+        CustomerBill bill = repository.findByIdAndTenantId(billId, tenantId)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
         requireOwn(bill);
-        return rateRepository.findByBillId(billId).stream().map(this::rateToMap).toList();
+        return rateRepository.findByTenantIdAndBillId(tenantId, billId).stream().map(this::rateToMap).toList();
     }
 
     /**
@@ -96,7 +101,7 @@ public class CustomerBillService {
      */
     @Transactional
     public CustomerBillDto settle(String id, CustomerBillDto patch) {
-        CustomerBill entity = repository.findById(id)
+        CustomerBill entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         if (!CustomerBill.SETTLED.equals(patch.getState())) {

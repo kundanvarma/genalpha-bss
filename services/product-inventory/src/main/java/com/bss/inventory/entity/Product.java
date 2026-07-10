@@ -43,7 +43,19 @@ public class Product {
     @Column(name = "owner_party_id", length = 36)
     private String ownerPartyId;
 
+    /** The tenant this row belongs to; never exposed in API responses. */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     public Product() {
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getId() {

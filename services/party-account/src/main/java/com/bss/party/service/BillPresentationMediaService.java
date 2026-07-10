@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.BillPresentationMediaMapper;
 import com.bss.party.repository.BillPresentationMediaRepository;
+import com.bss.party.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,13 @@ public class BillPresentationMediaService {
     private final BillPresentationMediaRepository repository;
     private final BillPresentationMediaMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
-    public BillPresentationMediaService(BillPresentationMediaRepository repository, BillPresentationMediaMapper mapper, DomainEventPublisher events) {
+    public BillPresentationMediaService(BillPresentationMediaRepository repository, BillPresentationMediaMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +49,7 @@ public class BillPresentationMediaService {
      */
     private Example<BillPresentationMedia> probeFor(Map<String, String> filters) {
         BillPresentationMedia probe = new BillPresentationMedia();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -58,7 +62,7 @@ public class BillPresentationMediaService {
 
     @Transactional(readOnly = true)
     public BillPresentationMediaDto findById(String id) {
-        BillPresentationMedia entity = repository.findById(id)
+        BillPresentationMedia entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -69,6 +73,7 @@ public class BillPresentationMediaService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.ACCOUNT_BASE + "/billPresentationMedia/" + id);
+        entity.setTenantId(tenantScope.currentTenantId());
         BillPresentationMediaDto created = mapper.toDto(repository.save(entity));
         events.publish("BillPresentationMediaCreateEvent", "billPresentationMedia", created);
         return created;
@@ -76,7 +81,7 @@ public class BillPresentationMediaService {
 
     @Transactional
     public BillPresentationMediaDto patch(String id, BillPresentationMediaDto patch) {
-        BillPresentationMedia entity = repository.findById(id)
+        BillPresentationMedia entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         BillPresentationMediaDto updated = mapper.toDto(repository.save(entity));
@@ -86,10 +91,10 @@ public class BillPresentationMediaService {
 
     @Transactional
     public void delete(String id) {
-        BillPresentationMedia entity = repository.findById(id)
+        BillPresentationMedia entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         BillPresentationMediaDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("BillPresentationMediaDeleteEvent", "billPresentationMedia", deleted);
     }
 }

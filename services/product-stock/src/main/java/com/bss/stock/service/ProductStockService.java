@@ -11,6 +11,7 @@ import com.bss.stock.exception.NotFoundException;
 import com.bss.stock.mapper.ProductStockMapper;
 import com.bss.stock.repository.ProductStockRepository;
 import com.bss.stock.repository.StockReservationRepository;
+import com.bss.stock.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -29,17 +30,19 @@ public class ProductStockService {
     private final StockReservationRepository reservations;
     private final ProductStockMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
     public ProductStockService(ProductStockRepository repository, StockReservationRepository reservations,
-            ProductStockMapper mapper, DomainEventPublisher events) {
+            ProductStockMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.reservations = reservations;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     private ProductStockDto toDto(ProductStock entity) {
-        return mapper.toDto(entity, reservations.activeQuantityFor(entity.getId()));
+        return mapper.toDto(entity, reservations.activeQuantityFor(entity.getId(), tenantScope.currentTenantId()));
     }
 
     @Transactional(readOnly = true)
@@ -56,6 +59,7 @@ public class ProductStockService {
      */
     private ProductStock probeFor(Map<String, String> filters) {
         ProductStock probe = new ProductStock();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -69,7 +73,7 @@ public class ProductStockService {
 
     @Transactional(readOnly = true)
     public ProductStockDto findById(String id) {
-        ProductStock entity = repository.findById(id)
+        ProductStock entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return toDto(entity);
     }
@@ -77,6 +81,7 @@ public class ProductStockService {
     @Transactional
     public ProductStockDto create(ProductStockDto dto) {
         ProductStock entity = mapper.toEntity(dto);
+        entity.setTenantId(tenantScope.currentTenantId());
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/productStock/" + id);
@@ -88,7 +93,7 @@ public class ProductStockService {
 
     @Transactional
     public ProductStockDto patch(String id, ProductStockDto patch) {
-        ProductStock entity = repository.findForUpdateById(id)
+        ProductStock entity = repository.findForUpdateById(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
@@ -99,10 +104,10 @@ public class ProductStockService {
 
     @Transactional
     public void delete(String id) {
-        ProductStock entity = repository.findById(id)
+        ProductStock entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductStockDto deleted = toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductStockDeleteEvent", "productStock", deleted);
     }
 }

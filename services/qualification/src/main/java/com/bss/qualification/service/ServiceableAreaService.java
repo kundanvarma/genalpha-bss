@@ -8,6 +8,7 @@ import com.bss.qualification.events.DomainEventPublisher;
 import com.bss.qualification.exception.BadRequestException;
 import com.bss.qualification.exception.NotFoundException;
 import com.bss.qualification.repository.ServiceableAreaRepository;
+import com.bss.qualification.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,17 +32,20 @@ public class ServiceableAreaService {
     private final ServiceableAreaRepository repository;
     private final DomainEventPublisher events;
     private final ObjectMapper objectMapper;
+    private final TenantScope tenantScope;
 
     public ServiceableAreaService(ServiceableAreaRepository repository, DomainEventPublisher events,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, TenantScope tenantScope) {
         this.repository = repository;
         this.events = events;
         this.objectMapper = objectMapper;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
         ServiceableArea probe = new ServiceableArea();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -56,7 +60,7 @@ public class ServiceableAreaService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        return toMap(repository.findById(id)
+        return toMap(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id)));
     }
 
@@ -71,6 +75,7 @@ public class ServiceableAreaService {
             throw new BadRequestException("productOffering.id is required");
         }
         ServiceableArea entity = new ServiceableArea();
+        entity.setTenantId(tenantScope.currentTenantId());
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/serviceableArea/" + id);
@@ -86,10 +91,10 @@ public class ServiceableAreaService {
 
     @Transactional
     public void delete(String id) {
-        ServiceableArea entity = repository.findById(id)
+        ServiceableArea entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         Map<String, Object> deleted = toMap(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ServiceableAreaDeleteEvent", "serviceableArea", deleted);
     }
 

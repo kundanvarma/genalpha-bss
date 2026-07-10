@@ -16,6 +16,9 @@ public class Individual {
     @Column(name = "href")
     private String href;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "given_name")
     private String givenName;
 
@@ -67,5 +70,13 @@ public class Individual {
 
     public void setContactMediumJson(String contactMediumJson) {
         this.contactMediumJson = contactMediumJson;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

@@ -53,6 +53,10 @@ public class Payment {
     @Column(name = "owner_party_id", length = 36)
     private String ownerPartyId;
 
+    /** The tenant this row belongs to; never exposed in API responses. */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "payment_date")
     private OffsetDateTime paymentDate;
 
@@ -60,6 +64,14 @@ public class Payment {
     private OffsetDateTime lastUpdate;
 
     public Payment() {
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getId() {

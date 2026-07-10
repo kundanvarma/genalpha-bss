@@ -9,6 +9,7 @@ import com.bss.billing.exception.BadRequestException;
 import com.bss.billing.repository.AppliedBillingRateRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
+import com.bss.billing.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,10 +41,12 @@ public class BillingRunService {
     private final DownstreamClients.UsageClient usage;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
-            DownstreamClients.UsageClient usage, DomainEventPublisher events, PartyScope partyScope) {
+            DownstreamClients.UsageClient usage, DomainEventPublisher events, PartyScope partyScope,
+            TenantScope tenantScope) {
         this.bills = bills;
         this.rates = rates;
         this.inventory = inventory;
@@ -51,6 +54,7 @@ public class BillingRunService {
         this.usage = usage;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional
@@ -59,6 +63,9 @@ public class BillingRunService {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("billing runs are a back-office operation");
         }
+        // The run is triggered by an authenticated staff request, so the
+        // caller's tenant scopes everything the run reads and creates.
+        String tenantId = tenantScope.currentTenantId();
         LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
         LocalDate periodEnd = periodStart.plusMonths(1).minusDays(1);
 
@@ -79,7 +86,7 @@ public class BillingRunService {
         int created = 0;
         int skipped = 0;
         for (Map.Entry<String, List<Map<String, Object>>> owner : byOwner.entrySet()) {
-            if (bills.existsByOwnerPartyIdAndPeriodStart(owner.getKey(), periodStart)) {
+            if (bills.existsByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, owner.getKey(), periodStart)) {
                 skipped++;
                 continue;
             }
@@ -99,6 +106,7 @@ public class BillingRunService {
                 unit = unitCache.getOrDefault(offeringId, unit);
                 AppliedBillingRate rate = new AppliedBillingRate();
                 rate.setId(UUID.randomUUID().toString());
+                rate.setTenantId(tenantId);
                 rate.setName(String.valueOf(product.getOrDefault("name", offeringId)));
                 rate.setRateType("recurringCharge");
                 rate.setAmountValue(monthly);
@@ -116,6 +124,7 @@ public class BillingRunService {
                 Map<String, Object> amount = (Map<String, Object>) usageCharge.get("amount");
                 AppliedBillingRate rate = new AppliedBillingRate();
                 rate.setId(UUID.randomUUID().toString());
+                rate.setTenantId(tenantId);
                 rate.setName(String.valueOf(usageCharge.get("name")));
                 rate.setRateType("usageCharge");
                 rate.setAmountValue(new BigDecimal(String.valueOf(amount.get("value"))));
@@ -131,6 +140,7 @@ public class BillingRunService {
             CustomerBill bill = new CustomerBill();
             String id = UUID.randomUUID().toString();
             bill.setId(id);
+            bill.setTenantId(tenantId);
             bill.setHref(ApiConstants.BASE_PATH + "/customerBill/" + id);
             bill.setBillNo("BILL-" + periodStart.format(DateTimeFormatter.ofPattern("yyyyMM"))
                     + "-" + id.substring(0, 8).toUpperCase());

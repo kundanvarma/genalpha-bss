@@ -36,6 +36,9 @@ public class Appointment {
     @Column(name = "owner_party_id")
     private String ownerPartyId;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "related_entity")
     private String relatedEntityJson;
 
@@ -105,6 +108,14 @@ public class Appointment {
 
     public void setOwnerPartyId(String ownerPartyId) {
         this.ownerPartyId = ownerPartyId;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getRelatedEntityJson() {

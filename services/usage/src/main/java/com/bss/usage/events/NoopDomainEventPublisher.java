@@ -10,4 +10,9 @@ public class NoopDomainEventPublisher implements DomainEventPublisher {
     public void publish(String eventType, String resourceKey, Object resource) {
         // intentionally empty
     }
+
+    @Override
+    public void publish(String eventType, String resourceKey, Object resource, String tenantId) {
+        // intentionally empty
+    }
 }

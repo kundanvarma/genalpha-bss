@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.IndividualMapper;
 import com.bss.party.repository.IndividualRepository;
+import com.bss.party.security.TenantScope;
 import com.bss.party.security.PartyScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -28,13 +29,15 @@ public class IndividualService {
     private final IndividualMapper mapper;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
 
     public IndividualService(IndividualRepository repository, IndividualMapper mapper,
-            DomainEventPublisher events, PartyScope partyScope) {
+            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -53,6 +56,7 @@ public class IndividualService {
      */
     private Individual probeFor(Map<String, String> filters) {
         Individual probe = new Individual();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -67,7 +71,7 @@ public class IndividualService {
     @Transactional(readOnly = true)
     public IndividualDto findById(String id) {
         requireOwn(id);
-        Individual entity = repository.findById(id)
+        Individual entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -80,13 +84,14 @@ public class IndividualService {
     @Transactional
     public IndividualDto create(IndividualDto dto) {
         String id = partyScope.scopedPartyId().orElseGet(() -> UUID.randomUUID().toString());
-        Individual existing = repository.findById(id).orElse(null);
+        Individual existing = repository.findByIdAndTenantId(id, tenantScope.currentTenantId()).orElse(null);
         if (existing != null) {
             return mapper.toDto(existing);
         }
         Individual entity = mapper.toEntity(dto);
         entity.setId(id);
         entity.setHref(ApiConstants.PARTY_BASE + "/individual/" + id);
+        entity.setTenantId(tenantScope.currentTenantId());
         IndividualDto created = mapper.toDto(repository.save(entity));
         events.publish("IndividualCreateEvent", "individual", created);
         return created;
@@ -95,7 +100,7 @@ public class IndividualService {
     @Transactional
     public IndividualDto patch(String id, IndividualDto patch) {
         requireOwn(id);
-        Individual entity = repository.findById(id)
+        Individual entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         IndividualDto updated = mapper.toDto(repository.save(entity));
@@ -106,10 +111,10 @@ public class IndividualService {
     @Transactional
     public void delete(String id) {
         requireOwn(id);
-        Individual entity = repository.findById(id)
+        Individual entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         IndividualDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("IndividualDeleteEvent", "individual", deleted);
     }
 

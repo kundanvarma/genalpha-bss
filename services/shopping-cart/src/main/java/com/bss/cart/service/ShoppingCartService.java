@@ -10,6 +10,7 @@ import com.bss.cart.exception.ConflictException;
 import com.bss.cart.exception.NotFoundException;
 import com.bss.cart.repository.ShoppingCartRepository;
 import com.bss.cart.security.PartyScope;
+import com.bss.cart.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,15 +48,17 @@ public class ShoppingCartService {
     private final ShoppingCartRepository repository;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
     private final long abandonMinutes;
 
     public ShoppingCartService(ShoppingCartRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, ObjectMapper objectMapper,
+            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper,
             @Value("${bss.cart.abandon-minutes:1440}") long abandonMinutes) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
         this.abandonMinutes = abandonMinutes;
     }
@@ -65,6 +68,8 @@ public class ShoppingCartService {
         ShoppingCart entity = new ShoppingCart();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        // Anonymous (guest) carts belong to the default tenant.
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/shoppingCart/" + id);
         entity.setStatus(ShoppingCart.ACTIVE);
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
@@ -78,7 +83,7 @@ public class ShoppingCartService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        ShoppingCart entity = repository.findById(id)
+        ShoppingCart entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireAccess(entity);
         return toMap(entity);
@@ -91,6 +96,7 @@ public class ShoppingCartService {
             throw new BadRequestException("listing carts requires identity; guests fetch by cart id");
         }
         ShoppingCart probe = new ShoppingCart();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -110,7 +116,9 @@ public class ShoppingCartService {
      */
     @Transactional
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
-        ShoppingCart entity = repository.findById(id)
+        // The claim-on-login lookup carries the tenant predicate too: a
+        // customer can only claim a cart inside their own tenant.
+        ShoppingCart entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireAccess(entity);
         if (!ShoppingCart.ACTIVE.equals(entity.getStatus())) {
@@ -148,12 +156,15 @@ public class ShoppingCartService {
     @Transactional
     public int sweepAbandoned() {
         OffsetDateTime cutoff = OffsetDateTime.now().minusMinutes(abandonMinutes);
+        // System job, deliberately NOT tenant-scoped: it sweeps every
+        // tenant's idle carts in one pass (there is no request tenant here).
         List<ShoppingCart> idle = repository
                 .findByStatusAndOwnerPartyIdNotNullAndLastUpdateBefore(ShoppingCart.ACTIVE, cutoff);
         for (ShoppingCart cart : idle) {
             cart.setStatus(ShoppingCart.ABANDONED);
             cart.setLastUpdate(OffsetDateTime.now());
-            events.publish("ShoppingCartAbandonedEvent", "shoppingCart", toMap(cart));
+            // No request tenant here: the event's tenant comes from the row.
+            events.publish("ShoppingCartAbandonedEvent", "shoppingCart", toMap(cart), cart.getTenantId());
         }
         repository.saveAll(idle);
         return idle.size();

@@ -10,6 +10,7 @@ import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.exception.NotFoundException;
 import com.bss.appointment.repository.AppointmentRepository;
 import com.bss.appointment.security.PartyScope;
+import com.bss.appointment.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.data.domain.Example;
@@ -47,13 +48,15 @@ public class AppointmentService {
     private final AppointmentRepository repository;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public AppointmentService(AppointmentRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, ObjectMapper objectMapper) {
+            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
     }
 
@@ -68,7 +71,7 @@ public class AppointmentService {
             }
             for (LocalTime startTime : SLOT_STARTS) {
                 OffsetDateTime start = day.atTime(startTime).atOffset(ZoneOffset.UTC);
-                if (repository.confirmedAt(start) < SLOT_CAPACITY) {
+                if (repository.confirmedAt(start, tenantScope.currentTenantId()) < SLOT_CAPACITY) {
                     free.add(Map.of("validFor", Map.of(
                             "startDateTime", start.toString(),
                             "endDateTime", start.plusHours(SLOT_HOURS).toString())));
@@ -85,6 +88,7 @@ public class AppointmentService {
     @Transactional(readOnly = true)
     public PagedResult<Map<String, Object>> findAll(int offset, int limit, String relatedPartyId) {
         Appointment probe = new Appointment();
+        probe.setTenantId(tenantScope.currentTenantId());
         if (relatedPartyId != null) {
             probe.setOwnerPartyId(relatedPartyId);
         }
@@ -95,7 +99,7 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        Appointment entity = repository.findById(id)
+        Appointment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return toMap(entity);
@@ -117,7 +121,7 @@ public class AppointmentService {
         if (start.isBefore(OffsetDateTime.now())) {
             throw new BadRequestException("appointments are booked in the future");
         }
-        if (repository.confirmedAt(start) >= SLOT_CAPACITY) {
+        if (repository.confirmedAt(start, tenantScope.currentTenantId()) >= SLOT_CAPACITY) {
             throw new ConflictException("time slot " + start + " is fully booked");
         }
 
@@ -130,6 +134,7 @@ public class AppointmentService {
         entity.setStartAt(start);
         entity.setEndAt(end);
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setRelatedEntityJson(writeJson(dto.get("relatedEntity")));
         entity.setPlaceJson(writeJson(dto.get("place")));
         entity.setCreationDate(OffsetDateTime.now());
@@ -142,7 +147,7 @@ public class AppointmentService {
     /** The one legal change: cancelling a confirmed appointment (frees its slot). */
     @Transactional
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
-        Appointment entity = repository.findById(id)
+        Appointment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         if (!Appointment.CANCELLED.equals(patch.get("status"))) {

@@ -10,6 +10,7 @@ import com.bss.communication.exception.NotFoundException;
 import com.bss.communication.notify.EventNotificationMapper;
 import com.bss.communication.repository.CommunicationMessageRepository;
 import com.bss.communication.security.PartyScope;
+import com.bss.communication.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Sort;
@@ -35,23 +36,31 @@ public class CommunicationMessageService {
     private final CommunicationMessageRepository repository;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
 
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
-            PartyScope partyScope) {
+            PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
     }
 
     /** Consumer path: idempotent on the source event id (at-least-once upstream). */
     @Transactional
-    public void mint(String sourceEventId, String sourceEventType, EventNotificationMapper.Notification n) {
-        if (repository.existsBySourceEventId(sourceEventId)) {
+    public void mint(String sourceEventId, String sourceEventType, String envelopeTenantId,
+            EventNotificationMapper.Notification n) {
+        // The notification lives in the tenant that produced the event.
+        // Pre-tenancy envelopes carry no tenantId; those land in the default
+        // tenant (the Kafka consumer has no request context of its own).
+        String tenantId = envelopeTenantId != null ? envelopeTenantId : tenantScope.currentTenantId();
+        if (repository.existsByTenantIdAndSourceEventId(tenantId, sourceEventId)) {
             return;
         }
         CommunicationMessage entity = new CommunicationMessage();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantId);
         entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
         entity.setSubject(n.subject());
         entity.setContent(n.content());
@@ -76,6 +85,7 @@ public class CommunicationMessageService {
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
+        probe.setTenantId(tenantScope.currentTenantId());
         partyScope.scopedPartyId().ifPresent(probe::setReceiverPartyId);
         Page<CommunicationMessage> page = repository.findAll(Example.of(probe),
                 new OffsetPageRequest(offset, limit, Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -84,7 +94,7 @@ public class CommunicationMessageService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        CommunicationMessage entity = repository.findById(id)
+        CommunicationMessage entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return toMap(entity);
@@ -103,6 +113,7 @@ public class CommunicationMessageService {
         CommunicationMessage entity = new CommunicationMessage();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
         entity.setSubject(String.valueOf(dto.get("subject")));
         entity.setContent(dto.get("content") == null ? null : String.valueOf(dto.get("content")));
@@ -119,7 +130,7 @@ public class CommunicationMessageService {
     /** The one legal change: the receiver marking their message read. */
     @Transactional
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
-        CommunicationMessage entity = repository.findById(id)
+        CommunicationMessage entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         if (!CommunicationMessage.READ.equals(patch.get("status"))) {

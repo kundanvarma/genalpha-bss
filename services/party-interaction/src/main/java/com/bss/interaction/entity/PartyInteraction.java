@@ -11,6 +11,9 @@ import java.time.OffsetDateTime;
 @Table(name = "party_interaction")
 public class PartyInteraction {
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
@@ -134,5 +137,13 @@ public class PartyInteraction {
 
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

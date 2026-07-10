@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.FinancialAccountMapper;
 import com.bss.party.repository.FinancialAccountRepository;
+import com.bss.party.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,13 @@ public class FinancialAccountService {
     private final FinancialAccountRepository repository;
     private final FinancialAccountMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
-    public FinancialAccountService(FinancialAccountRepository repository, FinancialAccountMapper mapper, DomainEventPublisher events) {
+    public FinancialAccountService(FinancialAccountRepository repository, FinancialAccountMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +49,7 @@ public class FinancialAccountService {
      */
     private Example<FinancialAccount> probeFor(Map<String, String> filters) {
         FinancialAccount probe = new FinancialAccount();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -58,7 +62,7 @@ public class FinancialAccountService {
 
     @Transactional(readOnly = true)
     public FinancialAccountDto findById(String id) {
-        FinancialAccount entity = repository.findById(id)
+        FinancialAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -69,6 +73,7 @@ public class FinancialAccountService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.ACCOUNT_BASE + "/financialAccount/" + id);
+        entity.setTenantId(tenantScope.currentTenantId());
         FinancialAccountDto created = mapper.toDto(repository.save(entity));
         events.publish("FinancialAccountCreateEvent", "financialAccount", created);
         return created;
@@ -76,7 +81,7 @@ public class FinancialAccountService {
 
     @Transactional
     public FinancialAccountDto patch(String id, FinancialAccountDto patch) {
-        FinancialAccount entity = repository.findById(id)
+        FinancialAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         FinancialAccountDto updated = mapper.toDto(repository.save(entity));
@@ -86,10 +91,10 @@ public class FinancialAccountService {
 
     @Transactional
     public void delete(String id) {
-        FinancialAccount entity = repository.findById(id)
+        FinancialAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         FinancialAccountDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("FinancialAccountDeleteEvent", "financialAccount", deleted);
     }
 }

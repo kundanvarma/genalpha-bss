@@ -66,8 +66,8 @@ class CommunicationApiTest {
         assertThat(n).isPresent();
         assertThat(n.get().subject()).isEqualTo("Order received");
 
-        service.mint("evt-1", "ProductOrderCreateEvent", n.get());
-        service.mint("evt-1", "ProductOrderCreateEvent", n.get()); // duplicate delivery
+        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get());
+        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get()); // duplicate delivery
 
         // Noise events map to nothing.
         assertThat(mapper.map("ProductOrderAttributeValueChangeEvent",
@@ -77,7 +77,7 @@ class CommunicationApiTest {
 
     @Test
     void customerSeesOwnNotifications_marksThemRead_neverSends() throws Exception {
-        service.mint("evt-2", "ProductOrderCreateEvent",
+        service.mint("evt-2", "ProductOrderCreateEvent", null,
                 new EventNotificationMapper.Notification("cust-n2", "Order received", "hello"));
 
         // Own list, newest first, dedup proven by evt-1 above appearing once for its owner.

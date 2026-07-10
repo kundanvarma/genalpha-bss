@@ -16,6 +16,7 @@ import com.bss.ordering.exception.OrderValidationException;
 import com.bss.ordering.mapper.ProductOrderMapper;
 import com.bss.ordering.repository.ProductOrderRepository;
 import com.bss.ordering.security.PartyScope;
+import com.bss.ordering.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -43,13 +44,14 @@ public class ProductOrderService {
     private final InventoryClient inventoryClient;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
     private final StockClient stockClient;
     private final PaymentClient paymentClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
-            DomainEventPublisher events, PartyScope partyScope, StockClient stockClient,
-            PaymentClient paymentClient) {
+            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
+            StockClient stockClient, PaymentClient paymentClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -57,6 +59,7 @@ public class ProductOrderService {
         this.inventoryClient = inventoryClient;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
         this.stockClient = stockClient;
         this.paymentClient = paymentClient;
     }
@@ -77,6 +80,7 @@ public class ProductOrderService {
      */
     private ProductOrder probeFor(Map<String, String> filters) {
         ProductOrder probe = new ProductOrder();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -100,7 +104,7 @@ public class ProductOrderService {
 
     @Transactional(readOnly = true)
     public ProductOrderDto findById(String id) {
-        ProductOrder entity = repository.findById(id)
+        ProductOrder entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return mapper.toDto(entity);
@@ -114,6 +118,7 @@ public class ProductOrderService {
             dto.setState("acknowledged");
         }
         ProductOrder entity = mapper.toEntity(dto);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         String id = UUID.randomUUID().toString();
         entity.setId(id);
@@ -174,7 +179,7 @@ public class ProductOrderService {
 
     @Transactional
     public ProductOrderDto patch(String id, ProductOrderDto patch) {
-        ProductOrder entity = repository.findById(id)
+        ProductOrder entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         requireCancelOnlyWhenScoped(patch);
@@ -208,11 +213,11 @@ public class ProductOrderService {
             throw new OrderValidationException(
                     "customers cancel orders by patching state to 'cancelled'; deletion is a back-office operation");
         }
-        ProductOrder entity = repository.findById(id)
+        ProductOrder entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOrderDto deleted = mapper.toDto(entity);
         stockClient.release(id);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
     }
 

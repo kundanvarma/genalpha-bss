@@ -9,9 +9,9 @@ import java.util.List;
 
 public interface StockReservationRepository extends JpaRepository<StockReservation, String> {
 
-    List<StockReservation> findByOrderIdAndState(String orderId, String state);
+    List<StockReservation> findByTenantIdAndOrderIdAndState(String tenantId, String orderId, String state);
 
     @Query("select coalesce(sum(r.quantity), 0) from StockReservation r "
-            + "where r.productStockId = :stockId and r.state = 'active'")
-    int activeQuantityFor(@Param("stockId") String stockId);
+            + "where r.productStockId = :stockId and r.state = 'active' and r.tenantId = :tenantId")
+    int activeQuantityFor(@Param("stockId") String stockId, @Param("tenantId") String tenantId);
 }

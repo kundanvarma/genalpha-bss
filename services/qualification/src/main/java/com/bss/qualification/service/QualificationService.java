@@ -2,6 +2,7 @@ package com.bss.qualification.service;
 
 import com.bss.qualification.entity.ServiceableArea;
 import com.bss.qualification.repository.ServiceableAreaRepository;
+import com.bss.qualification.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,9 +24,11 @@ public class QualificationService {
     public static final String UNQUALIFIED = "unqualified";
 
     private final ServiceableAreaRepository areas;
+    private final TenantScope tenantScope;
 
-    public QualificationService(ServiceableAreaRepository areas) {
+    public QualificationService(ServiceableAreaRepository areas, TenantScope tenantScope) {
         this.areas = areas;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -64,7 +67,8 @@ public class QualificationService {
                     Map.of("code", "missingOffering", "label", "qualification item without productOffering.id")));
             return result;
         }
-        List<ServiceableArea> gates = areas.findByProductOfferingId(offeringId);
+        List<ServiceableArea> gates = areas.findByTenantIdAndProductOfferingId(
+                tenantScope.currentTenantId(), offeringId);
         result.put("serviceabilityGated", !gates.isEmpty());
         if (gates.isEmpty()) {
             result.put("qualificationItemResult", QUALIFIED);
