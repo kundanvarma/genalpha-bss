@@ -129,6 +129,46 @@ services:
       kafka:
         condition: service_started
 
+  qualification:
+    build: ./services/qualification
+    container_name: bss-qualification
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/qualification
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8089:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  appointment:
+    build: ./services/appointment
+    container_name: bss-appointment
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/appointment
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8091:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   billing:
     build: ./services/billing
     container_name: bss-billing
@@ -230,6 +270,8 @@ services:
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
       BILLING_URL: http://billing:8080
+      QUALIFICATION_URL: http://qualification:8080
+      APPOINTMENT_URL: http://appointment:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -246,6 +288,10 @@ services:
       payment:
         condition: service_started
       billing:
+        condition: service_started
+      qualification:
+        condition: service_started
+      appointment:
         condition: service_started
       console:
         condition: service_started

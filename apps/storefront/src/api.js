@@ -170,6 +170,49 @@ export async function billRates(billId) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}/appliedCustomerBillingRate`));
 }
 
+const QUALIFICATION = '/tmf-api/productOfferingQualification/v4';
+const APPOINTMENT = '/tmf-api/appointment/v4';
+
+/**
+ * TMF679 serviceability check — anonymous shop-window functionality.
+ * items: [{offeringId, name}]; every item is checked against the place.
+ */
+export async function checkQualification(items, place) {
+  return json(await publicFetch(`${QUALIFICATION}/checkProductOfferingQualification`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productOfferingQualificationItem: items.map((item, i) => ({
+        id: String(i + 1),
+        productOffering: { id: item.offeringId, name: item.name, '@referredType': 'ProductOffering' },
+        place,
+      })),
+    }),
+  }));
+}
+
+/** TMF646 free installer slots — also anonymous. */
+export async function searchTimeSlots() {
+  return json(await publicFetch(`${APPOINTMENT}/searchTimeSlot`, { method: 'POST' }));
+}
+
+export async function createAppointment(slot, orderId, place, description) {
+  return json(await authFetch(`${APPOINTMENT}/appointment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      validFor: slot,
+      description,
+      relatedEntity: [{ id: orderId, '@referredType': 'ProductOrder' }],
+      place,
+    }),
+  }));
+}
+
+export async function myAppointments() {
+  return json(await authFetch(`${APPOINTMENT}/appointment?limit=100`));
+}
+
 /** Settle a bill with an authorized payment; billing captures it. */
 export async function settleBill(billId, paymentRef) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}`, {

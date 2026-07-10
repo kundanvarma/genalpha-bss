@@ -1,15 +1,55 @@
 /*
  * The one checkout path, used by the cart page and by the post-login resume:
  * mark physical lines via the stock service, require + persist the shipping
- * address when anything ships, authorize the one-time charges when there are
- * any, and place the single TMF622 order.
+ * address when anything ships, verify serviceability, authorize the one-time
+ * charges when there are any, place the single TMF622 order, and book the
+ * install appointment when the cart contains serviceability-gated offerings.
  */
-import { availabilityFor, checkoutCart, createPayment, getOffering, myParty, priceIndex, updateMyParty } from './api.js';
+import { availabilityFor, checkQualification, checkoutCart, createAppointment, createPayment,
+  getOffering, myParty, priceIndex, updateMyParty } from './api.js';
 import { addressOf, isComplete, loadDraft, shippingPlace, withPostalAddress } from './address.js';
 import { oneTimeTotal, pricesOf } from './money.js';
 
 /** Card details never persist anywhere — reaching here without them stops the flow. */
 export const PAYMENT_REQUIRED = 'PAYMENT_REQUIRED';
+
+/** A chosen install slot survives the login redirect like the address does. */
+const SLOT_KEY = 'bss.shop.installSlot';
+
+export function saveSlotDraft(slot) {
+  if (slot) {
+    localStorage.setItem(SLOT_KEY, JSON.stringify(slot));
+  } else {
+    localStorage.removeItem(SLOT_KEY);
+  }
+}
+
+export function loadSlotDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(SLOT_KEY));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Everything orderable in these cart lines, bundle children included —
+ * the unit for serviceability checks.
+ */
+export function qualificationItems(lines, offerings) {
+  const seen = new Map();
+  for (const line of lines) {
+    const bundle = offerings[line.offeringId];
+    seen.set(line.offeringId, line.name);
+    for (const child of (bundle?.bundledProductOffering || [])) {
+      if (child.id) seen.set(child.id, child.name);
+    }
+    for (const s of (line.selections || [])) {
+      seen.set(s.offeringId, s.name);
+    }
+  }
+  return [...seen.entries()].map(([offeringId, name]) => ({ offeringId, name }));
+}
 
 /** What the cart owes at checkout: one-time charges across all lines. */
 export function dueNow(lines, offerings, prices) {
@@ -46,18 +86,40 @@ export async function performCheckout(lines, card = null) {
   }));
   const needsShipping = annotated.some((l) => l.physical || l.selections.some((s) => s.physical));
 
+  // A first qualification probe tells us whether anything is
+  // serviceability-gated — gated offerings need an address even when nothing
+  // physically ships (a fiber install has a "where").
+  const qItems = qualificationItems(lines, offerings);
   let address = loadDraft();
-  if (needsShipping && !isComplete(address)) {
+  let check = await checkQualification(qItems,
+      { postCode: address.postCode, city: address.city, country: address.country });
+  let items = check.productOfferingQualificationItem || [];
+  const needsInstall = items.some((i) => i.serviceabilityGated);
+
+  if ((needsShipping || needsInstall) && !isComplete(address)) {
     const saved = addressOf(await myParty());
     if (saved && isComplete(saved)) {
       address = saved;
+      check = await checkQualification(qItems,
+          { postCode: address.postCode, city: address.city, country: address.country });
+      items = check.productOfferingQualificationItem || [];
     } else {
       throw new Error('shipping address required');
     }
   }
-  if (needsShipping) {
+  if (needsShipping || needsInstall) {
     const party = await myParty();
     await updateMyParty({ contactMedium: withPostalAddress(party, address) });
+  }
+
+  // One unqualified gated offering sinks the checkout with its reason.
+  const unqualified = items.find((i) => i.qualificationItemResult === 'unqualified');
+  if (unqualified) {
+    throw new Error(unqualified.eligibilityUnavailabilityReason?.[0]?.label || 'not serviceable at this address');
+  }
+  const slot = loadSlotDraft();
+  if (needsInstall && !slot) {
+    throw new Error('installation time slot required');
   }
 
   let paymentRefs = null;
@@ -71,5 +133,11 @@ export async function performCheckout(lines, card = null) {
     paymentRefs = [{ id: payment.id, href: payment.href, '@referredType': 'Payment' }];
   }
 
-  return checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs);
+  const order = await checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs);
+  if (needsInstall) {
+    await createAppointment(slot, order.id, shippingPlace(address),
+        'Installation: ' + lines.map((l) => l.name).join(', '));
+    saveSlotDraft(null);
+  }
+  return order;
 }

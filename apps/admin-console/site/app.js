@@ -12,6 +12,8 @@
 const API_BASE = '/tmf-api/productCatalogManagement/v4';
 const STOCK_BASE = '/tmf-api/productStockManagement/v4';
 const BILLING_BASE = '/tmf-api/customerBillManagement/v4';
+const QUALIFICATION_BASE = '/tmf-api/productOfferingQualification/v4';
+const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -76,6 +78,26 @@ const RESOURCES = [
     readOnly: true,
     fields: [],
     columns: ['billNo', 'relatedParty', 'billingPeriod', 'amountDue', 'state', 'lastUpdate'],
+  },
+  {
+    path: 'serviceableArea',
+    base: QUALIFICATION_BASE,
+    title: 'Serviceable Areas',
+    noEdit: true,
+    fields: [
+      { name: 'name', label: 'Name' },
+      { name: 'productOffering', label: 'Offering', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'postcodePrefix', label: 'Postcode prefix', required: true },
+    ],
+    columns: ['name', 'productOffering', 'postcodePrefix', 'lastUpdate'],
+  },
+  {
+    path: 'appointment',
+    base: APPOINTMENT_BASE,
+    title: 'Appointments',
+    readOnly: true,
+    fields: [],
+    columns: ['description', 'validFor', 'status', 'relatedParty', 'lastUpdate'],
   },
 ];
 
@@ -360,6 +382,7 @@ async function loadList() {
     const edit = document.createElement('button');
     edit.textContent = 'Edit';
     edit.className = 'ghost';
+    edit.hidden = Boolean(active.noEdit);
     edit.addEventListener('click', () => startEditing(item));
     const del = document.createElement('button');
     del.textContent = 'Delete';

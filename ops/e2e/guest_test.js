@@ -32,6 +32,11 @@ const run = Date.now();
   await page.fill('.shipping input[name="postCode"]', '22233');
   await page.fill('.shipping input[name="city"]', 'Göteborg');
   await page.fill('.shipping input[name="country"]', 'SE');
+  // Fiber install: serviceable in Göteborg, slot required — guests see both
+  await page.locator('.serviceability.ok').waitFor({ timeout: 10000 });
+  await page.locator('.slotgrid .option').first().waitFor({ timeout: 10000 });
+  await page.locator('.slotgrid .option').first().click();
+  console.log('OK guest sees serviceability + picked install slot');
   await page.locator('.cartactions button.primary.big').click(); // Checkout -> Keycloak
   await page.waitForSelector('a[href*="registration"], input[name="username"]', { timeout: 20000 });
   console.log('OK guest cart built; checkout hands guest to the identity provider');

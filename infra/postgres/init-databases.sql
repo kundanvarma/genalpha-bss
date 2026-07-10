@@ -16,3 +16,5 @@ CREATE DATABASE party_account;
 CREATE DATABASE product_stock;
 CREATE DATABASE payment;
 CREATE DATABASE billing;
+CREATE DATABASE qualification;
+CREATE DATABASE appointment;

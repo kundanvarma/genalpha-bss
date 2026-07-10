@@ -21,6 +21,10 @@
       { "name": "payment:write" },
       { "name": "billing:read" },
       { "name": "billing:write" },
+      { "name": "qualification:read" },
+      { "name": "qualification:write" },
+      { "name": "appointment:read" },
+      { "name": "appointment:write" },
       {
         "name": "customer",
         "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
@@ -32,7 +36,8 @@
             "inventory:read",
             "party:read", "party:write",
             "payment:read", "payment:write",
-            "billing:read", "billing:write"
+            "billing:read", "billing:write",
+            "appointment:read", "appointment:write"
           ]
         }
       }
@@ -126,7 +131,9 @@
         "party:read", "party:write",
         "stock:read", "stock:write",
         "payment:read", "payment:write",
-        "billing:read", "billing:write"
+        "billing:read", "billing:write",
+        "qualification:read", "qualification:write",
+        "appointment:read", "appointment:write"
       ]
     }
   ]

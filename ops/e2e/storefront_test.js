@@ -120,10 +120,28 @@ async function apiGet(page, path, token) {
     fail('checkout button should ask for the address');
   }
   await a.fill('.shipping input[name="street1"]', 'Storgatan 1');
-  await a.fill('.shipping input[name="postCode"]', '11122');
   await a.fill('.shipping input[name="city"]', 'Stockholm');
   await a.fill('.shipping input[name="country"]', 'SE');
-  console.log('OK shipping form required and filled');
+
+  // Serviceability: fiber is not available everywhere — 99999 blocks checkout
+  await a.fill('.shipping input[name="postCode"]', '99999');
+  await a.locator('.serviceability.error').waitFor({ timeout: 10000 });
+  const reason = await a.locator('.serviceability.error').textContent();
+  if (!reason.includes('not available at postcode 99999')) fail(`unexpected reason: ${reason}`);
+  if (!(await a.locator('.cartactions button.primary.big').textContent()).includes('Not serviceable')) {
+    fail('checkout not blocked at unserviceable address');
+  }
+  console.log('OK unserviceable postcode blocks checkout:', reason.trim());
+
+  // Back in the fiber footprint: serviceable, and an install slot is required
+  await a.fill('.shipping input[name="postCode"]', '11122');
+  await a.locator('.serviceability.ok').waitFor({ timeout: 10000 });
+  await a.locator('.slotgrid .option').first().waitFor({ timeout: 10000 });
+  if (!(await a.locator('.cartactions button.primary.big').textContent()).includes('Pick an installation slot')) {
+    fail('checkout should demand an install slot');
+  }
+  await a.locator('.slotgrid .option').first().click();
+  console.log('OK serviceable at 11122; install slot picked');
 
   // One-time charges are due now (fiber install 49 × qty 2) and need a card
   const dueRow = a.locator('.row.duenow .linetotal');
@@ -226,6 +244,17 @@ async function apiGet(page, path, token) {
   console.log('OK payment authorized:', payment.amount.value, payment.amount.unit,
     '|', payment.paymentMethod.label, '| correlated to order');
 
+  // The install appointment exists, confirmed, linked to the order
+  const appts = JSON.parse((await apiGet(a, '/tmf-api/appointment/v4/appointment?limit=10', tokenA)).body);
+  const appt = appts.find((x) => (x.relatedEntity || [])[0]?.id === aOrderId);
+  if (!appt || appt.status !== 'confirmed' || appt.place?.postCode !== '11122') {
+    fail('appointment missing or wrong: ' + JSON.stringify(appts).slice(0, 300));
+  }
+  await a.click('.nav >> text=My orders');
+  const installNote = await a.locator('.installnote').first().textContent();
+  if (!installNote.includes('Install:')) fail('orders page missing install note');
+  console.log('OK install appointment confirmed for the order:', appt.validFor.startDateTime, '|', installNote.trim());
+
   // The address was saved on the TMF632 party
   const partyRes = await apiGet(a, '/tmf-api/party/v4/individual?limit=10', tokenA);
   const medium = (JSON.parse(partyRes.body)[0].contactMedium || [])
@@ -276,8 +305,9 @@ async function apiGet(page, path, token) {
   if (done.status() !== 200) fail(`staff completing order expected 200, got ${done.status()}`);
 
   await a.click('.nav >> text=My services');
-  const serviceRow = a.locator('.row', { hasText: 'GenAlpha One Home & Mobile' }).first();
-  await serviceRow.waitFor({ timeout: 15000 });
+  // A Samsung row exists only on the services page (order description has no
+  // Samsung) — route transitions render async, so anchor on that.
+  await a.locator('.row', { hasText: 'Samsung Galaxy S26' }).first().waitFor({ timeout: 15000 });
   const serviceCount = await a.locator('.row').count();
   if (serviceCount !== 5) fail(`expected 5 provisioned products (2 bundle, 2 phone, 1 solo), got ${serviceCount}`);
   console.log('OK completion provisioned 5 per-item products into customer A inventory');
