@@ -34,6 +34,7 @@ public class ProductOrderMapper {
         dto.setBillingAccountId(entity.getBillingAccountId());
         dto.setProductOrderItem(readJsonArray(entity.getProductOrderItemJson()));
         dto.setRelatedParty(readJsonArray(entity.getRelatedPartyJson()));
+        dto.setPayment(readJsonArray(entity.getPaymentJson()));
         dto.setOrderDate(entity.getOrderDate());
         dto.setType("ProductOrder");
         return dto;
@@ -50,6 +51,7 @@ public class ProductOrderMapper {
         entity.setBillingAccountId(dto.getBillingAccountId());
         entity.setProductOrderItemJson(writeJsonArray(dto.getProductOrderItem()));
         entity.setRelatedPartyJson(writeJsonArray(dto.getRelatedParty()));
+        entity.setPaymentJson(writeJsonArray(dto.getPayment()));
         entity.setOrderDate(dto.getOrderDate());
         return entity;
     }
@@ -78,6 +80,9 @@ public class ProductOrderMapper {
         }
         if (patch.getRelatedParty() != null) {
             entity.setRelatedPartyJson(writeJsonArray(patch.getRelatedParty()));
+        }
+        if (patch.getPayment() != null) {
+            entity.setPaymentJson(writeJsonArray(patch.getPayment()));
         }
         if (patch.getOrderDate() != null) {
             entity.setOrderDate(patch.getOrderDate());

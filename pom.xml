@@ -19,6 +19,7 @@
         <module>services/product-ordering</module>
         <module>services/product-inventory</module>
         <module>services/product-stock</module>
+        <module>services/payment</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>

@@ -10,6 +10,7 @@ const ORDERING = '/tmf-api/productOrderingManagement/v4';
 const INVENTORY = '/tmf-api/productInventory/v4';
 const PARTY = '/tmf-api/party/v4';
 const STOCK = '/tmf-api/productStockManagement/v4';
+const PAYMENT = '/tmf-api/paymentManagement/v4';
 
 async function json(res) {
   if (!res.ok) {
@@ -78,13 +79,30 @@ export async function updateMyParty(patch) {
 }
 
 /**
+ * Authorizes the one-time charges with the payment service (mock PSP in dev).
+ * Card details go straight to the API and are never stored client-side.
+ * A decline surfaces as an Error with the PSP's reason.
+ */
+export async function createPayment(amount, card, description) {
+  return json(await authFetch(`${PAYMENT}/payment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description,
+      amount: { unit: amount.unit, value: amount.value },
+      paymentMethod: { '@type': 'bankCard', ...card },
+    }),
+  }));
+}
+
+/**
  * One TMF622 order for the whole cart: a top-level item per cart line with
  * its quantity, and a configured bundle's choices (phone, color, storage) as
  * nested productOrderItem children carrying product.productCharacteristic.
  * `shippingPlace` (a GeographicAddress) rides every physical item — callers
  * mark lines/selections physical via the stock service.
  */
-export async function checkoutCart(lines, shippingPlace = null) {
+export async function checkoutCart(lines, shippingPlace = null, paymentRefs = null) {
   const productFor = (characteristics, physical) => {
     const product = {};
     if (characteristics && Object.keys(characteristics).length) {
@@ -118,7 +136,11 @@ export async function checkoutCart(lines, shippingPlace = null) {
   return json(await authFetch(`${ORDERING}/productOrder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description, productOrderItem: items }),
+    body: JSON.stringify({
+      description,
+      productOrderItem: items,
+      ...(paymentRefs?.length ? { payment: paymentRefs } : {}),
+    }),
   }));
 }
 

@@ -35,7 +35,9 @@ export default function Offering() {
         for (const c of (o.bundledProductOffering || []).filter(isChoice)) {
           defaults[c.name] = c.default || c.options[0]?.id;
         }
-        setChosen(defaults);
+        // The radios render before this data arrives — a choice the user
+        // already made must never be clobbered by the defaults.
+        setChosen((prev) => ({ ...defaults, ...prev }));
         // Shelf check for everything orderable on this page.
         const stockIds = [o.id, ...optionRefs.map((r) => r.id)];
         const availability = await Promise.all(stockIds.map(availabilityFor));

@@ -45,6 +45,10 @@ public class ProductOrder {
     @Column(name = "owner_party_id", length = 36)
     private String ownerPartyId;
 
+    /** JSON array of payment references, stored verbatim. */
+    @Column(name = "payment", length = 2000)
+    private String paymentJson;
+
     @Column(name = "order_date")
     private OffsetDateTime orderDate;
 
@@ -137,5 +141,13 @@ public class ProductOrder {
 
     public void setOwnerPartyId(String ownerPartyId) {
         this.ownerPartyId = ownerPartyId;
+    }
+
+    public String getPaymentJson() {
+        return paymentJson;
+    }
+
+    public void setPaymentJson(String paymentJson) {
+        this.paymentJson = paymentJson;
     }
 }
