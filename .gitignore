@@ -26,3 +26,6 @@ target/
 # Node / Vite (apps/storefront)
 node_modules/
 dist/
+
+# Claude Code local settings (per-developer permissions)
+.claude/
