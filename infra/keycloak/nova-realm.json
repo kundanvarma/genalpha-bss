@@ -175,9 +175,11 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
+        "http://console.nova.localhost:8080/*",
         "http://localhost:8080/console/*"
       ],
       "webOrigins": [
+        "http://console.nova.localhost:8080",
         "http://localhost:8080"
       ],
       "attributes": {
@@ -222,9 +224,11 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
       "redirectUris": [
+        "http://csr.nova.localhost:8080/*",
         "http://localhost:8080/csr/*"
       ],
       "webOrigins": [
+        "http://csr.nova.localhost:8080",
         "http://localhost:8080"
       ],
       "attributes": {
