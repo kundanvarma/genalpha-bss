@@ -11,6 +11,7 @@
 
 const API_BASE = '/tmf-api/productCatalogManagement/v4';
 const STOCK_BASE = '/tmf-api/productStockManagement/v4';
+const BILLING_BASE = '/tmf-api/customerBillManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -68,6 +69,14 @@ const RESOURCES = [
     ],
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
+  {
+    path: 'customerBill',
+    base: BILLING_BASE,
+    title: 'Customer Bills',
+    readOnly: true,
+    fields: [],
+    columns: ['billNo', 'relatedParty', 'billingPeriod', 'amountDue', 'state', 'lastUpdate'],
+  },
 ];
 
 const el = (id) => document.getElementById(id);
@@ -83,6 +92,7 @@ function fmtCell(value) {
   if (typeof value === 'object') {
     if (value.value != null) return `${value.value} ${value.unit || ''}`.trim();
     if (value.amount != null) return `${value.amount} ${value.units || ''}`.trim();
+    if (value.startDateTime) return `${value.startDateTime} → ${value.endDateTime || ''}`.trim();
     return value.name || value.id || '—';
   }
   if (/^\d{4}-\d{2}-\d{2}T/.test(String(value))) {
@@ -273,6 +283,7 @@ function applySelection(select, ids) {
 function renderEditor() {
   controls = {};
   pendingSelection = {};
+  el('editor').hidden = Boolean(active.readOnly);
   el('fields').replaceChildren(...active.fields.map((f) => {
     const wrap = document.createElement('label');
     wrap.className = f.kind === 'checkbox' ? 'field check' : 'field';
@@ -342,6 +353,10 @@ async function loadList() {
     }
     const td = document.createElement('td');
     td.className = 'rowactions';
+    if (active.readOnly) {
+      tr.append(td);
+      return tr;
+    }
     const edit = document.createElement('button');
     edit.textContent = 'Edit';
     edit.className = 'ghost';

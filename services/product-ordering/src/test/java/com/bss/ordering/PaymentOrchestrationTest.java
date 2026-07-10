@@ -1,6 +1,7 @@
 package com.bss.ordering;
 
 import com.bss.ordering.client.PaymentClient;
+import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.StockClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +45,9 @@ class PaymentOrchestrationTest {
 
     @MockBean
     private StockClient stockClient;
+
+    @MockBean
+    private InventoryClient inventoryClient;
 
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(

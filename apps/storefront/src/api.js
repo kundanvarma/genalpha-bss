@@ -159,3 +159,22 @@ export async function cancelOrder(id) {
 export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
+
+const BILLING = '/tmf-api/customerBillManagement/v4';
+
+export async function myBills() {
+  return json(await authFetch(`${BILLING}/customerBill?limit=100`));
+}
+
+export async function billRates(billId) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/appliedCustomerBillingRate`));
+}
+
+/** Settle a bill with an authorized payment; billing captures it. */
+export async function settleBill(billId, paymentRef) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ state: 'settled', payment: [paymentRef] }),
+  }));
+}
