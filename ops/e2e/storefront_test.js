@@ -112,6 +112,19 @@ async function apiGet(page, path, token) {
   const grand = (await a.locator('.row.granded:not(.duenow) .linetotal').textContent()).trim();
   console.log('OK 2 cart lines, total per month', grand);
 
+  // TMF663: the cart is core-commerce state — another "device" (raw API with
+  // Alice's token, no browser storage) sees the same cart.
+  const tokenA0 = await shopToken(a);
+  const serverCarts = JSON.parse((await apiGet(a,
+    '/tmf-api/shoppingCart/v4/shoppingCart?limit=10&status=active', tokenA0)).body);
+  if (serverCarts.length !== 1) fail(`expected 1 active server cart, got ${serverCarts.length}`);
+  const serverLines = serverCarts[0].cartItem || [];
+  const serverBundle = serverLines.find((l) => l.name === 'GenAlpha One Home & Mobile');
+  if (serverLines.length !== 2 || serverBundle?.quantity !== 2) {
+    fail('server cart wrong: ' + JSON.stringify(serverLines).slice(0, 200));
+  }
+  console.log('OK server cart visible cross-device: 2 lines, bundle ×2, owned by Alice');
+
   // Physical goods in the cart: checkout is blocked until an address is given
   await a.locator('.shipping').waitFor({ timeout: 10000 });
   const blocked = a.locator('.cartactions button.primary.big');
@@ -173,6 +186,14 @@ async function apiGet(page, path, token) {
   console.log('OK cart checked out as one order, state:', orderState);
   await a.locator('.badge').waitFor({ state: 'detached', timeout: 5000 })
     .catch(() => fail('cart badge did not clear after checkout'));
+
+  // The checked-out cart is immutable history, linked to its order.
+  const closedCarts = JSON.parse((await apiGet(a,
+    '/tmf-api/shoppingCart/v4/shoppingCart?limit=10&status=checkedOut', tokenA0)).body);
+  if (!closedCarts.length || !(closedCarts[0].relatedEntity || []).length) {
+    fail('checked-out cart missing or unlinked: ' + JSON.stringify(closedCarts).slice(0, 200));
+  }
+  console.log('OK cart checked out into history, linked to order', closedCarts[0].relatedEntity[0].id.slice(0, 8));
 
   // Account page shows the provisioned party (wait for the fetch to land)
   await a.click('.nav >> text=Account');

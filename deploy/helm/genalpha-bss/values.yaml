@@ -61,6 +61,7 @@ services:
       TICKET_URL: http://trouble-ticket:8080
       INTERACTION_URL: http://party-interaction:8080
       COMMUNICATION_URL: http://communication:8080
+      CART_URL: http://shopping-cart:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -123,4 +124,7 @@ services:
     extraEnv: {}
   communication:
     db: communication
+    extraEnv: {}
+  shopping-cart:
+    db: shopping_cart
     extraEnv: {}

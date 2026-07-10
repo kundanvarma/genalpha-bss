@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { availabilityFor, checkQualification, getOffering, myParty, priceIndex, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
-import { CART_EVENT, cartLines, clearCart, removeLine, setQuantity } from '../cart.js';
+import { CART_EVENT, cartLines, markCartCheckedOut, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
 import { monthlyTotal, pricesOf } from '../money.js';
@@ -10,7 +10,7 @@ import { setPendingCheckout } from '../pending.js';
 
 export default function Cart() {
   const navigate = useNavigate();
-  const [lines, setLines] = useState(cartLines());
+  const [lines, setLines] = useState(null);
   const [offerings, setOfferings] = useState({}); // offering id -> full offering
   const [prices, setPrices] = useState({});
   const [physical, setPhysical] = useState({});   // offering id -> boolean (stock-managed)
@@ -23,12 +23,14 @@ export default function Cart() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const refresh = () => setLines(cartLines());
+    const refresh = () => { cartLines().then(setLines).catch((e) => setError(e.message)); };
+    refresh();
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
 
   useEffect(() => {
+    if (!lines) return;
     const allIds = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
     const newIds = allIds.filter((id) => !offerings[id]);
     Promise.all([
@@ -66,7 +68,7 @@ export default function Cart() {
   // never judges a newer address.
   useEffect(() => {
     const ids = Object.keys(offerings);
-    if (!lines.length || !ids.length) return;
+    if (!lines || !lines.length || !ids.length) return;
     const postCode = address.postCode;
     checkQualification(qualificationItems(lines, offerings),
         { postCode, city: address.city, country: address.country })
@@ -94,11 +96,14 @@ export default function Cart() {
     saveSlotDraft(next);
   }
 
+  if (!lines) {
+    return <p className="dim">Loading your cart…</p>;
+  }
   if (!lines.length) {
     return <p className="dim">Your cart is empty — <Link to="/">browse the offers</Link>.</p>;
   }
 
-  const needsShipping = lines.some((l) =>
+  const needsShipping = (lines || []).some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
   const serviceable = !unqualifiedItem;
@@ -141,8 +146,8 @@ export default function Cart() {
     }
     setBusy(true);
     try {
-      await performCheckout(lines, due ? card : null);
-      clearCart();
+      const order = await performCheckout(lines, due ? card : null);
+      await markCartCheckedOut(order.id);
       navigate('/orders');
     } catch (e) {
       setError(e.message);

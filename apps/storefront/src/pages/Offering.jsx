@@ -108,9 +108,13 @@ export default function Offering() {
   const scarcest = managed.length ? Math.min(...managed.map((rid) => avail[rid])) : null;
   const outOfStock = scarcest === 0;
 
-  function add() {
-    addToCart(offering, selections);
-    navigate('/cart');
+  async function add() {
+    try {
+      await addToCart(offering, selections);
+      navigate('/cart');
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   return (

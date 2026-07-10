@@ -47,6 +47,11 @@ public class EventNotificationMapper {
                                     "Good news — \"" + ticket.getOrDefault("name", "your ticket")
                                             + "\" is resolved. Close it under Support if all is well."))
                             : Optional.empty());
+            case "ShoppingCartAbandonedEvent" -> resource(event, "shoppingCart").flatMap(cart ->
+                    customer(cart).map(party -> new Notification(party,
+                            "Still thinking it over?",
+                            "You left " + firstItemName(cart)
+                                    + " in your cart. It's saved — pick up right where you stopped.")));
             case "AppointmentCreateEvent" -> resource(event, "appointment").flatMap(appt ->
                     customer(appt).map(party -> new Notification(party,
                             "Installer booked",
@@ -82,6 +87,14 @@ public class EventNotificationMapper {
             return m.get("value") + " " + (unit == null ? "" : unit);
         }
         return "see your bill";
+    }
+
+    private String firstItemName(Map<String, Object> cart) {
+        if (cart.get("cartItem") instanceof List<?> items && !items.isEmpty()
+                && items.get(0) instanceof Map<?, ?> first && first.get("name") != null) {
+            return String.valueOf(first.get("name"));
+        }
+        return "something";
     }
 
     private String validForStart(Map<String, Object> appt) {

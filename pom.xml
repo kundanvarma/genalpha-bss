@@ -26,6 +26,7 @@
         <module>services/trouble-ticket</module>
         <module>services/party-interaction</module>
         <module>services/communication</module>
+        <module>services/shopping-cart</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>
