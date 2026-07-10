@@ -58,37 +58,38 @@ export async function myParty() {
 }
 
 /**
- * Places an order for an offering. `configuredItems` carries a configured
- * bundle's choices — one item per chosen option, with its characteristics
- * (color, storage, ...) as TMF622 product.productCharacteristic.
+ * One TMF622 order for the whole cart: a top-level item per cart line with
+ * its quantity, and a configured bundle's choices (phone, color, storage) as
+ * nested productOrderItem children carrying product.productCharacteristic.
  */
-export async function placeOrder(offering, configuredItems = []) {
-  const items = [{
-    id: '1',
+export async function checkoutCart(lines) {
+  const items = lines.map((line, i) => ({
+    id: String(i + 1),
     action: 'add',
-    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
-  }];
-  for (const extra of configuredItems) {
-    items.push({
-      id: String(items.length + 1),
-      action: 'add',
-      productOffering: { id: extra.offering.id, name: extra.offering.name, '@referredType': 'ProductOffering' },
-      ...(extra.characteristics && Object.keys(extra.characteristics).length ? {
-        product: {
-          productCharacteristic: Object.entries(extra.characteristics)
-            .map(([name, value]) => ({ name, value })),
-        },
-      } : {}),
-    });
-  }
+    quantity: line.quantity,
+    productOffering: { id: line.offeringId, name: line.name, '@referredType': 'ProductOffering' },
+    ...(line.selections?.length ? {
+      productOrderItem: line.selections.map((s, j) => ({
+        id: `${i + 1}.${j + 1}`,
+        action: 'add',
+        quantity: line.quantity,
+        productOffering: { id: s.offeringId, name: s.name, '@referredType': 'ProductOffering' },
+        ...(s.characteristics && Object.keys(s.characteristics).length ? {
+          product: {
+            productCharacteristic: Object.entries(s.characteristics)
+              .map(([name, value]) => ({ name, value })),
+          },
+        } : {}),
+      })),
+    } : {}),
+  }));
+  const description = lines
+    .map((l) => l.quantity > 1 ? `${l.name} ×${l.quantity}` : l.name)
+    .join(', ');
   return json(await authFetch(`${ORDERING}/productOrder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      description: offering.name,
-      productOfferingId: offering.id,
-      productOrderItem: items,
-    }),
+    body: JSON.stringify({ description, productOrderItem: items }),
   }));
 }
 
