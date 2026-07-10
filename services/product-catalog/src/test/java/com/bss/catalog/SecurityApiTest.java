@@ -25,17 +25,19 @@ class SecurityApiTest {
     private MockMvc mockMvc;
 
     @Test
-    void list_withoutToken_returns401() throws Exception {
+    void list_withoutToken_returns200_catalogIsThePublicPriceList() throws Exception {
         mockMvc.perform(get(BASE).accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isOk());
     }
 
     @Test
-    void list_withForeignScope_returns403() throws Exception {
-        mockMvc.perform(get(BASE)
-                        .with(jwt().authorities(new SimpleGrantedAuthority("other:read")))
-                        .accept(MediaType.APPLICATION_JSON))
-                .andExpect(status().isForbidden());
+    void create_withoutToken_returns401() throws Exception {
+        mockMvc.perform(post(BASE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name": "Security Probe"}
+                                """))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -12,15 +12,15 @@ import org.springframework.security.web.SecurityFilterChain;
 
 /**
  * OAuth2 resource server: this service never issues tokens or performs login; it
- * validates JWTs from whatever OIDC issuer OIDC_ISSUER_URI points at. Reads
- * require the "catalog:read" authority, writes "catalog:write". Health and the
- * OpenAPI docs stay open for probes and discovery.
+ * validates JWTs from whatever OIDC issuer OIDC_ISSUER_URI points at. The catalog
+ * is the public price list, so reads are anonymous — guests browse offers before
+ * they have any identity. Writes require "catalog:write". Health and the OpenAPI
+ * docs stay open for probes and discovery.
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private static final String READ = "catalog:read";
     private static final String WRITE = "catalog:write";
 
     @Bean
@@ -34,7 +34,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

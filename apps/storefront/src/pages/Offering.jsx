@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getOffering, placeOrder, priceIndex } from '../api.js';
+import { beginLogin, isSignedIn } from '../auth.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { PENDING_OFFER_KEY } from '../pending.js';
 
 export default function Offering() {
   const { id } = useParams();
@@ -24,6 +26,12 @@ export default function Offering() {
   const monthly = monthlyTotal(own);
 
   async function order() {
+    if (!isSignedIn()) {
+      // Guests register or sign in at checkout; the order resumes after.
+      sessionStorage.setItem(PENDING_OFFER_KEY, offering.id);
+      await beginLogin();
+      return;
+    }
     setOrdering(true);
     try {
       await placeOrder(offering);
