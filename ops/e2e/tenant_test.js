@@ -143,6 +143,24 @@ async function staffToken(request, realm) {
   if (!inbox.includes('Order received')) fail('Nova customer never got the Order received notification: ' + inbox.slice(0, 200));
   console.log('OK tenant-tagged event minted Nova\'s notification in the nova tenant');
 
+  // --- The CSR channel is white-labeled too: Nova's agents work Nova's
+  // customer base through csr.nova.localhost, against the nova realm.
+  const csrCtx = await browser.newContext();
+  const csr = await csrCtx.newPage();
+  await csr.goto('http://csr.nova.localhost:8080/csr/');
+  await csr.waitForSelector('input[name="username"]', { timeout: 20000 });
+  if (!csr.url().includes('/realms/nova/')) {
+    fail('Nova CSR console login left the nova realm: ' + csr.url());
+  }
+  await csr.fill('input[name="username"]', 'agent-anna');
+  await csr.fill('input[name="password"]', 'agent');
+  await csr.click('input[type="submit"], button[type="submit"]');
+  await csr.waitForSelector('.searchbar', { timeout: 20000 });
+  await csr.fill('.searchbar input', 'Nova');
+  await csr.click('.searchbar button');
+  await csr.locator('.rowlink', { hasText: 'Nia' }).first().waitFor({ timeout: 15000 });
+  console.log('OK Nova agent works Nova\'s customers in the white-labeled CSR console');
+
   await browser.close();
   console.log('\nALL TENANT ISOLATION CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

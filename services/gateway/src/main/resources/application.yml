@@ -95,7 +95,7 @@ bss:
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
-        hosts: [shop.nova.localhost]
+        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost]
 
 management:
   endpoints:
