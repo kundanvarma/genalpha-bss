@@ -3,7 +3,7 @@
  * party scoping ("my orders", "my products"); this client never filters by
  * party itself.
  */
-import { authFetch, tokenClaims } from './auth.js';
+import { authFetch, publicFetch, tokenClaims } from './auth.js';
 
 const CATALOG = '/tmf-api/productCatalogManagement/v4';
 const ORDERING = '/tmf-api/productOrderingManagement/v4';
@@ -19,16 +19,16 @@ async function json(res) {
 }
 
 export async function listOfferings() {
-  return json(await authFetch(`${CATALOG}/productOffering?limit=100&lifecycleStatus=Active`));
+  return json(await publicFetch(`${CATALOG}/productOffering?limit=100&lifecycleStatus=Active`));
 }
 
 export async function getOffering(id) {
-  return json(await authFetch(`${CATALOG}/productOffering/${id}`));
+  return json(await publicFetch(`${CATALOG}/productOffering/${id}`));
 }
 
 /** All active prices indexed by id, so offering price refs resolve locally. */
 export async function priceIndex() {
-  const prices = await json(await authFetch(`${CATALOG}/productOfferingPrice?limit=100`));
+  const prices = await json(await publicFetch(`${CATALOG}/productOfferingPrice?limit=100`));
   return Object.fromEntries(prices.map((p) => [p.id, p]));
 }
 

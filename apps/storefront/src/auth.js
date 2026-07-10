@@ -103,6 +103,10 @@ export function signOut() {
   }));
 }
 
+export function isSignedIn() {
+  return currentToken() != null;
+}
+
 /** Fetch with the bearer token; a 401 restarts login (token expired/revoked). */
 export async function authFetch(url, options) {
   const token = currentToken();
@@ -121,19 +125,32 @@ export async function authFetch(url, options) {
   return res;
 }
 
-/** Resolves true when authenticated (handling the redirect leg if present). */
-export async function ensureSignedIn() {
+/**
+ * Fetch for anonymous-readable resources (the catalog): sends the token when
+ * one exists, but never forces a login — guests browse before they register.
+ */
+export async function publicFetch(url, options) {
+  const token = currentToken();
+  if (!token) {
+    return fetch(url, options);
+  }
+  const opts = Object.assign({}, options);
+  opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + token });
+  return fetch(url, opts);
+}
+
+/**
+ * Completes the OIDC redirect leg if this load is one; resolves true when a
+ * login just finished. Never initiates a login — checkout does that.
+ */
+export async function handleCallback() {
   const params = new URLSearchParams(location.search);
-  if (params.has('code')) {
-    if (params.get('state') !== sessionStorage.getItem(STATE_KEY)) {
-      throw new Error('OIDC state mismatch');
-    }
-    await completeLogin(params.get('code'));
-    return true;
+  if (!params.has('code')) {
+    return false;
   }
-  if (currentToken()) {
-    return true;
+  if (params.get('state') !== sessionStorage.getItem(STATE_KEY)) {
+    throw new Error('OIDC state mismatch');
   }
-  await beginLogin();
-  return false;
+  await completeLogin(params.get('code'));
+  return true;
 }
