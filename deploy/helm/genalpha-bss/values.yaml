@@ -41,7 +41,9 @@ resources:
   limits:
     memory: 768Mi
 
-# The five application services. `db` names the per-service database;
+# All application services and channel UIs. `db` names the per-service
+# database (empty for stateless apps); `machineIdentity: true` injects the
+# client-credentials token endpoint (services that call other services);
 # `extraEnv` is appended verbatim.
 services:
   gateway:
@@ -51,8 +53,25 @@ services:
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080
       PARTY_URL: http://party-account:8080
+      STOCK_URL: http://product-stock:8080
+      PAYMENT_URL: http://payment:8080
+      BILLING_URL: http://billing:8080
+      QUALIFICATION_URL: http://qualification:8080
+      APPOINTMENT_URL: http://appointment:8080
+      TICKET_URL: http://trouble-ticket:8080
+      INTERACTION_URL: http://party-interaction:8080
       CONSOLE_URL: http://console:8080
+      STOREFRONT_URL: http://storefront:8080
+      CSR_URL: http://csr-console:8080
   console:
+    db: ""
+    healthPath: /healthz
+    extraEnv: {}
+  storefront:
+    db: ""
+    healthPath: /healthz
+    extraEnv: {}
+  csr-console:
     db: ""
     healthPath: /healthz
     extraEnv: {}
@@ -61,13 +80,43 @@ services:
     extraEnv: {}
   product-ordering:
     db: product_ordering
+    machineIdentity: true
     extraEnv:
       CATALOG_BASE_URL: http://product-catalog:8080
       PARTY_BASE_URL: http://party-account:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
+      STOCK_BASE_URL: http://product-stock:8080
+      PAYMENT_BASE_URL: http://payment:8080
   product-inventory:
     db: product_inventory
     extraEnv: {}
   party-account:
     db: party_account
+    extraEnv: {}
+  product-stock:
+    db: product_stock
+    extraEnv: {}
+  payment:
+    db: payment
+    extraEnv: {}
+  billing:
+    db: billing
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-billing
+      OIDC_CLIENT_SECRET: billing-secret
+      INVENTORY_BASE_URL: http://product-inventory:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      PAYMENT_BASE_URL: http://payment:8080
+  qualification:
+    db: qualification
+    extraEnv: {}
+  appointment:
+    db: appointment
+    extraEnv: {}
+  trouble-ticket:
+    db: trouble_ticket
+    extraEnv: {}
+  party-interaction:
+    db: party_interaction
     extraEnv: {}
