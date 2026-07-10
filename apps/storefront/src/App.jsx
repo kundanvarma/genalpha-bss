@@ -10,6 +10,7 @@ import Offering from './pages/Offering.jsx';
 import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
 import Bills from './pages/Bills.jsx';
+import Support from './pages/Support.jsx';
 import Services from './pages/Services.jsx';
 import Account from './pages/Account.jsx';
 
@@ -79,6 +80,7 @@ export default function App() {
           <NavLink to="/orders">My orders</NavLink>
           <NavLink to="/bills">My bills</NavLink>
           <NavLink to="/services">My services</NavLink>
+          <NavLink to="/support">Support</NavLink>
           <NavLink to="/account">Account</NavLink>
         </nav>
         <div className="who">
@@ -100,6 +102,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/support" element={<Support />} />
           <Route path="/account" element={<Account />} />
         </Routes>
       </main>

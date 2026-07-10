@@ -84,6 +84,7 @@ public class ProductOrderService {
                 case "category" -> probe.setCategory(f.getValue());
                 case "productOfferingId" -> probe.setProductOfferingId(f.getValue());
                 case "billingAccountId" -> probe.setBillingAccountId(f.getValue());
+                case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
                 case "orderDate" -> {
                     try {
                         probe.setOrderDate(OffsetDateTime.parse(f.getValue()));

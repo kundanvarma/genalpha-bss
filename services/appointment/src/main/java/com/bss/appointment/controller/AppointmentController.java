@@ -44,8 +44,9 @@ public class AppointmentController {
     @GetMapping("/appointment")
     public ResponseEntity<List<Map<String, Object>>> list(
             @RequestParam(name = "offset", defaultValue = "0") @Min(0) int offset,
-            @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit) {
-        PagedResult<Map<String, Object>> result = service.findAll(offset, limit);
+            @RequestParam(name = "limit", defaultValue = "20") @Min(1) @Max(100) int limit,
+            @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
+        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, relatedPartyId);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
                 .header("X-Result-Count", String.valueOf(result.items().size()))

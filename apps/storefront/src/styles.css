@@ -184,3 +184,14 @@ button:disabled { opacity: 0.5; cursor: default; }
   main { padding: 18px 14px 60px; }
   .nav { order: 3; width: 100%; }
 }
+
+.supportform { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.supportform input {
+  flex: 1; min-width: 200px; font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 8px 12px;
+}
+.ticketnote { margin: 2px 0 8px 12px; }
+.state.acknowledged { color: var(--danger); border-color: var(--danger); }
+.state.inProgress { color: var(--teal); border-color: var(--teal); }
+.state.resolved { color: var(--ok); border-color: var(--ok); }
+.state.closed { color: var(--dim); border-color: var(--line); }

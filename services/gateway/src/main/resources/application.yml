@@ -40,6 +40,20 @@ spring:
           uri: ${APPOINTMENT_URL:http://localhost:8091}
           predicates:
             - Path=/tmf-api/appointment/**
+        - id: trouble-ticket
+          uri: ${TICKET_URL:http://localhost:8092}
+          predicates:
+            - Path=/tmf-api/troubleTicket/**
+        - id: party-interaction
+          uri: ${INTERACTION_URL:http://localhost:8093}
+          predicates:
+            - Path=/tmf-api/partyInteraction/**
+        - id: csr-console
+          uri: ${CSR_URL:http://localhost:8094}
+          predicates:
+            - Path=/csr/**
+          filters:
+            - StripPrefix=1
         - id: admin-console
           uri: ${CONSOLE_URL:http://localhost:8090}
           predicates:

@@ -23,6 +23,8 @@
         <module>services/billing</module>
         <module>services/qualification</module>
         <module>services/appointment</module>
+        <module>services/trouble-ticket</module>
+        <module>services/party-interaction</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>
