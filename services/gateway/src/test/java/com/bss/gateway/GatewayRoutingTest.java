@@ -52,11 +52,13 @@ class GatewayRoutingTest {
     }
 
     @Test
-    void allFourServiceRoutesAreConfigured() {
+    void everyComponentAndChannelHasARoute() {
         List<String> ids = routeLocator.getRoutes().map(Route::getId).collectList().block();
         assertThat(ids).containsExactlyInAnyOrder(
                 "product-catalog", "product-ordering", "product-inventory", "party-account",
-                "admin-console");
+                "product-stock", "payment", "billing", "qualification", "appointment",
+                "trouble-ticket", "party-interaction", "communication", "shopping-cart",
+                "usage", "csr-console", "admin-console", "storefront");
     }
 
     @Test

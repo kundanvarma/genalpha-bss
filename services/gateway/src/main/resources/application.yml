@@ -82,6 +82,21 @@ spring:
 server:
   port: 8080
 
+bss:
+  # White-label host map: anonymous traffic on these hostnames belongs to
+  # these tenants (X-Tenant-Id stamped by TenantHostFilter); the issuer feeds
+  # /shop/tenant-config.js so one storefront build logs in per tenant.
+  # *.localhost resolves to 127.0.0.1 in browsers — no DNS needed for dev.
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
+      - id: nova
+        issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        hosts: [shop.nova.localhost]
+
 management:
   endpoints:
     web:

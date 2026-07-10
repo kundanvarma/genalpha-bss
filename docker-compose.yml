@@ -56,6 +56,7 @@ services:
       - "8085:8080"
     volumes:
       - ./infra/keycloak/bss-realm.json:/opt/keycloak/data/import/bss-realm.json:ro
+      - ./infra/keycloak/nova-realm.json:/opt/keycloak/data/import/nova-realm.json:ro
 
   product-catalog:
     build: ./services/product-catalog
@@ -67,6 +68,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -89,9 +91,11 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
       PARTY_BASE_URL: http://party-account:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
@@ -127,6 +131,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -149,6 +154,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -171,6 +177,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -193,6 +200,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -215,6 +223,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -237,6 +246,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -259,6 +269,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -281,6 +292,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -303,7 +315,9 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       INVENTORY_BASE_URL: http://product-inventory:8080
@@ -336,6 +350,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -358,6 +373,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
@@ -380,6 +396,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
     ports:
