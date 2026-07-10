@@ -27,6 +27,13 @@ public class TenantRegistry {
         return registry.stream().filter(t -> issuer.equals(t.getIssuer())).findFirst().orElse(null);
     }
 
+    public TenantEntry byId(String tenantId) {
+        if (tenantId == null) {
+            return null;
+        }
+        return registry.stream().filter(t -> tenantId.equals(t.getId())).findFirst().orElse(null);
+    }
+
     public String defaultTenantId() {
         return defaultTenant;
     }
@@ -53,6 +60,11 @@ public class TenantRegistry {
         private String issuer;
         /** Backchannel JWKS endpoint; empty means discover from the issuer. */
         private String jwksUri;
+        /** Client-credentials endpoint + machine client for THIS tenant's IdP
+         * (only services that call other services use these). */
+        private String tokenUri;
+        private String machineClientId;
+        private String machineClientSecret;
 
         public String getId() {
             return id;
@@ -76,6 +88,30 @@ public class TenantRegistry {
 
         public void setJwksUri(String jwksUri) {
             this.jwksUri = jwksUri;
+        }
+
+        public String getTokenUri() {
+            return tokenUri;
+        }
+
+        public void setTokenUri(String tokenUri) {
+            this.tokenUri = tokenUri;
+        }
+
+        public String getMachineClientId() {
+            return machineClientId;
+        }
+
+        public void setMachineClientId(String machineClientId) {
+            this.machineClientId = machineClientId;
+        }
+
+        public String getMachineClientSecret() {
+            return machineClientSecret;
+        }
+
+        public void setMachineClientSecret(String machineClientSecret) {
+            this.machineClientSecret = machineClientSecret;
         }
     }
 }

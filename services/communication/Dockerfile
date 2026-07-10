@@ -1,11 +1,11 @@
-# Build stage
-FROM maven:3.9-eclipse-temurin-17 AS build
+# Runtime image from the HOST-BUILT Spring Boot jar: run `mvn -q package`
+# before `docker compose build`. In-container Maven builds made a full-stack
+# rebuild take ~30 min and thrash the VM; extracting the prebuilt jar takes
+# seconds and keeps the same runtime layering.
+FROM eclipse-temurin:17-jre AS build
 WORKDIR /build
-COPY pom.xml .
-RUN mvn -B -q dependency:go-offline || true
-COPY src ./src
-RUN mvn -B -DskipTests package \
- && java -Djarmode=layertools -jar target/*.jar extract --destination target/extracted
+COPY target/*.jar app.jar
+RUN java -Djarmode=layertools -jar app.jar extract --destination target/extracted
 
 # Runtime stage
 FROM eclipse-temurin:17-jre
