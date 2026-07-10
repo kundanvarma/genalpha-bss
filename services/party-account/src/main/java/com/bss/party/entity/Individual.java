@@ -22,6 +22,10 @@ public class Individual {
     @Column(name = "family_name", nullable = false)
     private String familyName;
 
+    /** JSON array of TMF632 contact media (postal address, email, ...), echoed verbatim. */
+    @Column(name = "contact_medium", length = 4000)
+    private String contactMediumJson;
+
     public Individual() {
     }
 
@@ -55,5 +59,13 @@ public class Individual {
 
     public void setFamilyName(String familyName) {
         this.familyName = familyName;
+    }
+
+    public String getContactMediumJson() {
+        return contactMediumJson;
+    }
+
+    public void setContactMediumJson(String contactMediumJson) {
+        this.contactMediumJson = contactMediumJson;
     }
 }

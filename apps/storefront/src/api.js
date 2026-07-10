@@ -68,29 +68,47 @@ export async function myParty() {
   return json(await authFetch(`${PARTY}/individual/${claims.sub}`));
 }
 
+export async function updateMyParty(patch) {
+  const claims = tokenClaims();
+  return json(await authFetch(`${PARTY}/individual/${claims.sub}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }));
+}
+
 /**
  * One TMF622 order for the whole cart: a top-level item per cart line with
  * its quantity, and a configured bundle's choices (phone, color, storage) as
  * nested productOrderItem children carrying product.productCharacteristic.
+ * `shippingPlace` (a GeographicAddress) rides every physical item — callers
+ * mark lines/selections physical via the stock service.
  */
-export async function checkoutCart(lines) {
+export async function checkoutCart(lines, shippingPlace = null) {
+  const productFor = (characteristics, physical) => {
+    const product = {};
+    if (characteristics && Object.keys(characteristics).length) {
+      product.productCharacteristic = Object.entries(characteristics)
+        .map(([name, value]) => ({ name, value }));
+    }
+    if (physical && shippingPlace) {
+      product.place = [shippingPlace];
+    }
+    return Object.keys(product).length ? { product } : {};
+  };
   const items = lines.map((line, i) => ({
     id: String(i + 1),
     action: 'add',
     quantity: line.quantity,
     productOffering: { id: line.offeringId, name: line.name, '@referredType': 'ProductOffering' },
+    ...productFor(null, line.physical),
     ...(line.selections?.length ? {
       productOrderItem: line.selections.map((s, j) => ({
         id: `${i + 1}.${j + 1}`,
         action: 'add',
         quantity: line.quantity,
         productOffering: { id: s.offeringId, name: s.name, '@referredType': 'ProductOffering' },
-        ...(s.characteristics && Object.keys(s.characteristics).length ? {
-          product: {
-            productCharacteristic: Object.entries(s.characteristics)
-              .map(([name, value]) => ({ name, value })),
-          },
-        } : {}),
+        ...productFor(s.characteristics, s.physical),
       })),
     } : {}),
   }));

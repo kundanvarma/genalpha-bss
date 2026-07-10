@@ -70,6 +70,32 @@ class IndividualScopingTest {
     }
 
     @Test
+    void customerSavesShippingAddress_onOwnIndividual() throws Exception {
+        mockMvc.perform(post(BASE).with(customer("cust-ship"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"givenName\": \"Shippy\", \"familyName\": \"McShipface\"}"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .patch(BASE + "/cust-ship").with(customer("cust-ship"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"contactMedium": [{"mediumType": "postalAddress", "characteristic":
+                                  {"street1": "Storgatan 1", "city": "Stockholm", "postCode": "11122",
+                                   "country": "SE"}}]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contactMedium[0].mediumType").value("postalAddress"))
+                .andExpect(jsonPath("$.contactMedium[0].characteristic.city").value("Stockholm"));
+
+        // The address round-trips on GET, and stays invisible to others.
+        mockMvc.perform(get(BASE + "/cust-ship").with(customer("cust-ship")))
+                .andExpect(jsonPath("$.contactMedium[0].characteristic.postCode").value("11122"));
+        mockMvc.perform(get(BASE + "/cust-ship").with(customer("cust-nosy")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void customerList_returnsOnlyOwnIndividual() throws Exception {
         mockMvc.perform(post(BASE).with(customer("cust-carol"))
                         .contentType(MediaType.APPLICATION_JSON)
