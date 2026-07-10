@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, getOffering, myParty, priceIndex } from '../api.js';
+import { availabilityFor, checkQualification, getOffering, myParty, priceIndex, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, clearCart, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
-import { dueNow, performCheckout } from '../checkout.js';
+import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 
@@ -16,6 +16,9 @@ export default function Cart() {
   const [physical, setPhysical] = useState({});   // offering id -> boolean (stock-managed)
   const [address, setAddress] = useState(loadDraft());
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
+  const [serviceability, setServiceability] = useState(null); // TMF679 check result
+  const [slots, setSlots] = useState(null);
+  const [slot, setSlot] = useState(loadSlotDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -51,9 +54,45 @@ export default function Cart() {
     if (!isSignedIn() || isComplete(loadDraft())) return;
     myParty().then((party) => {
       const saved = addressOf(party);
-      if (saved) setAddress(saved);
+      if (saved) {
+        setAddress(saved);
+        saveDraft(saved);
+      }
     }).catch(() => {});
   }, []);
+
+  // Serviceability: re-check whenever the postcode or the cart changes. The
+  // result is tagged with the postcode it was computed for so a stale answer
+  // never judges a newer address.
+  useEffect(() => {
+    const ids = Object.keys(offerings);
+    if (!lines.length || !ids.length) return;
+    const postCode = address.postCode;
+    checkQualification(qualificationItems(lines, offerings),
+        { postCode, city: address.city, country: address.country })
+      .then((check) => setServiceability({ check, postCode }))
+      .catch(() => setServiceability(null));
+  }, [lines, offerings, address.postCode]);
+
+  const qualificationItemsResult = serviceability?.check?.productOfferingQualificationItem || [];
+  const needsInstall = qualificationItemsResult.some((i) => i.serviceabilityGated);
+  const current = serviceability?.postCode === address.postCode;
+  const unqualifiedItem = isComplete(address) && current
+    ? qualificationItemsResult.find((i) => i.qualificationItemResult === 'unqualified')
+    : null;
+
+  // Installer slots appear once an install is needed.
+  useEffect(() => {
+    if (!needsInstall || slots) return;
+    searchTimeSlots()
+      .then((result) => setSlots((result.availableTimeSlot || []).slice(0, 6)))
+      .catch((e) => setError(e.message));
+  }, [needsInstall]);
+
+  function pickSlot(next) {
+    setSlot(next);
+    saveSlotDraft(next);
+  }
 
   if (!lines.length) {
     return <p className="dim">Your cart is empty — <Link to="/">browse the offers</Link>.</p>;
@@ -61,7 +100,9 @@ export default function Cart() {
 
   const needsShipping = lines.some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
-  const addressReady = !needsShipping || isComplete(address);
+  const addressReady = !(needsShipping || needsInstall) || isComplete(address);
+  const serviceable = !unqualifiedItem;
+  const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
   const signedIn = isSignedIn();
   const cardReady = !due || !signedIn
@@ -155,10 +196,13 @@ export default function Cart() {
         )}
       </div>
 
-      {needsShipping && (
+      {(needsShipping || needsInstall) && (
         <div className="shipping">
           <h2>Shipping address</h2>
-          <p className="dim small">Your cart contains devices that will be delivered.</p>
+          <p className="dim small">
+            {needsShipping ? 'Your cart contains devices that will be delivered.'
+              : 'The installation address for your services.'}
+          </p>
           <div className="addressgrid">
             {ADDRESS_FIELDS.map((f) => (
               <label className="charfield" key={f.name}>
@@ -168,6 +212,37 @@ export default function Cart() {
               </label>
             ))}
           </div>
+          {isComplete(address) && needsInstall && (
+            <p className={serviceable ? 'serviceability ok' : 'serviceability error'}>
+              {serviceable
+                ? '✓ Serviceable at your address'
+                : unqualifiedItem.eligibilityUnavailabilityReason?.[0]?.label || 'Not serviceable at this address'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {needsInstall && serviceable && (
+        <div className="install">
+          <h2>Installation appointment</h2>
+          <p className="dim small">A technician installs your connection — pick a two-hour window.</p>
+          {!slots ? <p className="dim">Loading slots…</p> : (
+            <div className="options slotgrid">
+              {slots.map((s) => {
+                const start = s.validFor.startDateTime;
+                const label = new Date(start).toLocaleString(undefined,
+                  { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const on = slot?.startDateTime === start;
+                return (
+                  <label key={start} className={on ? 'option on' : 'option'}>
+                    <input type="radio" name="slot" checked={on}
+                           onChange={() => pickSlot({ startDateTime: start, endDateTime: s.validFor.endDateTime })} />
+                    <span className="optname">{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -195,9 +270,12 @@ export default function Cart() {
 
       <div className="cartactions">
         <Link to="/" className="dim">Continue shopping</Link>
-        <button className="primary big" onClick={checkout} disabled={busy || !addressReady || !cardReady}>
+        <button className="primary big" onClick={checkout}
+                disabled={busy || !addressReady || !serviceable || !slotReady || !cardReady}>
           {busy ? 'Placing order…'
             : !addressReady ? 'Enter shipping address'
+            : !serviceable ? 'Not serviceable at this address'
+            : !slotReady ? 'Pick an installation slot'
             : !cardReady ? 'Enter card details'
             : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
             : 'Checkout'}

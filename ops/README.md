@@ -8,6 +8,7 @@ Run against a fresh stack (`docker compose up -d`), in this order:
     python3 ops/seed/reshape_bundle.py      # phone choice group + characteristics
     python3 ops/seed/link_prices.py         # offering -> price references
     python3 ops/seed/seed_stock.py          # TMF687 stock for the phones
+    python3 ops/seed/seed_serviceable_areas.py  # TMF679 fiber footprint (111/222/333)
 
 All scripts are idempotent-ish (safe to re-run) and authenticate as the demo
 staff user through the gateway.

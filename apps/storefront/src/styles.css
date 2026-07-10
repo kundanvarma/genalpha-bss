@@ -160,6 +160,13 @@ button:disabled { opacity: 0.5; cursor: default; }
 .row.duenow { padding-top: 4px; }
 .row.duenow .linetotal { color: var(--danger); }
 .paynote { margin-top: 18px; }
+.serviceability { margin: 12px 0 0; font-size: 13.5px; }
+.serviceability.ok { color: var(--ok); }
+.install { margin-top: 26px; }
+.slotgrid {
+  display: grid !important; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
 .addressgrid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px; margin-top: 10px;

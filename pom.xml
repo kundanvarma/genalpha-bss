@@ -21,6 +21,8 @@
         <module>services/product-stock</module>
         <module>services/payment</module>
         <module>services/billing</module>
+        <module>services/qualification</module>
+        <module>services/appointment</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>

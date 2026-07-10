@@ -1,14 +1,25 @@
 import { useEffect, useState } from 'react';
-import { cancelOrder, myOrders } from '../api.js';
+import { cancelOrder, myAppointments, myOrders } from '../api.js';
 
 const TERMINAL = ['completed', 'cancelled'];
 
 export default function Orders() {
   const [orders, setOrders] = useState(null);
+  const [visits, setVisits] = useState({}); // order id -> appointment
   const [error, setError] = useState(null);
 
   const load = () => myOrders().then(setOrders).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    myAppointments().then((appointments) => {
+      const byOrder = {};
+      for (const appt of appointments) {
+        const orderId = (appt.relatedEntity || [])[0]?.id;
+        if (orderId && appt.status === 'confirmed') byOrder[orderId] = appt;
+      }
+      setVisits(byOrder);
+    }).catch(() => {});
+  }, []);
 
   if (error) return <p className="error">{error}</p>;
   if (!orders) return <p className="dim">Loading your orders…</p>;
@@ -35,6 +46,12 @@ export default function Orders() {
               <div className="dim small">
                 {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
               </div>
+              {visits[o.id] && (
+                <div className="small installnote">
+                  🔧 Install: {new Date(visits[o.id].validFor.startDateTime).toLocaleString(undefined,
+                    { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
             </div>
             <div className="rowend">
               <span className={`state ${o.state}`}>{o.state}</span>
