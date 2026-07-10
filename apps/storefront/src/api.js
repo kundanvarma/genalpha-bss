@@ -244,3 +244,17 @@ export async function closeTicket(id) {
     body: JSON.stringify({ status: 'closed' }),
   }));
 }
+
+const COMMUNICATION = '/tmf-api/communicationManagement/v4';
+
+export async function myNotifications() {
+  return json(await authFetch(`${COMMUNICATION}/communicationMessage?limit=100`));
+}
+
+export async function markNotificationRead(id) {
+  return json(await authFetch(`${COMMUNICATION}/communicationMessage/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'read' }),
+  }));
+}

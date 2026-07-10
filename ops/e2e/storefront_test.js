@@ -374,6 +374,34 @@ async function apiGet(page, path, token) {
   }
   console.log('OK bill settled, payment of', billPayment.amount.value, billPayment.amount.unit, 'captured');
 
+  // --- Notifications: the event stream became customer-visible messages.
+  // Outbox relays every 2s and the consumer follows; poll the inbox briefly.
+  const wantSubjects = ['Order received', 'Order complete', 'Installer booked', 'Your bill is ready'];
+  let inboxText = '';
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const res = await apiGet(a, '/tmf-api/communicationManagement/v4/communicationMessage?limit=100', tokenA);
+    inboxText = res.body;
+    if (wantSubjects.every((subj) => inboxText.includes(subj))) break;
+    await a.waitForTimeout(2000);
+  }
+  for (const subj of wantSubjects) {
+    if (!inboxText.includes(subj)) fail(`inbox missing "${subj}": ${inboxText.slice(0, 300)}`);
+  }
+  console.log('OK event stream minted all 4 notifications:', wantSubjects.join(' | '));
+
+  await a.click('.nav >> text=Inbox');
+  const note = a.locator('.row', { hasText: 'Order received' }).first();
+  await note.waitFor({ timeout: 15000 });
+  await note.locator('button', { hasText: 'Mark read' }).click();
+  await a.locator('.row.noteread', { hasText: 'Order received' }).first().waitFor({ timeout: 10000 });
+  console.log('OK inbox renders; mark-read works');
+
+  // Notifications are party-scoped like everything else.
+  const bInbox = JSON.parse((await apiGet(b,
+    '/tmf-api/communicationManagement/v4/communicationMessage?limit=100', tokenB)).body);
+  if (bInbox.length !== 0) fail('customer B sees foreign notifications: ' + JSON.stringify(bInbox).slice(0, 200));
+  console.log('OK customer B has an empty inbox');
+
   // Idempotency + isolation: rerun bills nobody twice; B has no bills
   const rerun = await (await setup.request.post(
     `${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: staffHeaders })).json();

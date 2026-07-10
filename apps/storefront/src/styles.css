@@ -195,3 +195,5 @@ button:disabled { opacity: 0.5; cursor: default; }
 .state.inProgress { color: var(--teal); border-color: var(--teal); }
 .state.resolved { color: var(--ok); border-color: var(--ok); }
 .state.closed { color: var(--dim); border-color: var(--line); }
+
+.row.noteread { opacity: 0.55; }

@@ -76,6 +76,12 @@
         "name": "interaction:write"
       },
       {
+        "name": "communication:read"
+      },
+      {
+        "name": "communication:write"
+      },
+      {
         "name": "customer",
         "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
         "composite": true,
@@ -95,7 +101,9 @@
             "appointment:write",
             "ticket:read",
             "ticket:write",
-            "interaction:read"
+            "interaction:read",
+            "communication:read",
+            "communication:write"
           ]
         }
       },
@@ -288,7 +296,9 @@
         "ticket:read",
         "ticket:write",
         "interaction:read",
-        "interaction:write"
+        "interaction:write",
+        "communication:read",
+        "communication:write"
       ]
     },
     {
