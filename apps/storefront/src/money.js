@@ -25,3 +25,11 @@ export function monthlyTotal(prices) {
   const total = monthly.reduce((sum, p) => sum + p.price.value, 0);
   return { value: total, unit: monthly[0].price.unit || 'EUR' };
 }
+
+/** Total one-time charge across resolved prices (what is due at checkout). */
+export function oneTimeTotal(prices) {
+  const once = prices.filter((p) => p.priceType === 'oneTime' && p.price?.value != null);
+  if (!once.length) return null;
+  const total = once.reduce((sum, p) => sum + p.price.value, 0);
+  return { value: total, unit: once[0].price.unit || 'EUR' };
+}

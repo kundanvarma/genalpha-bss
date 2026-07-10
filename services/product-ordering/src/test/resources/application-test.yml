@@ -17,3 +17,5 @@ bss:
     enabled: false
   stock:
     enabled: false
+  payment:
+    enabled: false

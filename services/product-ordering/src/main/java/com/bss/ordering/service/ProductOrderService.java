@@ -6,6 +6,7 @@ import com.bss.ordering.api.PagedResult;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
+import com.bss.ordering.client.PaymentClient;
 import com.bss.ordering.client.StockClient;
 import com.bss.ordering.dto.ProductOrderDto;
 import com.bss.ordering.entity.ProductOrder;
@@ -43,10 +44,12 @@ public class ProductOrderService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final StockClient stockClient;
+    private final PaymentClient paymentClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
-            DomainEventPublisher events, PartyScope partyScope, StockClient stockClient) {
+            DomainEventPublisher events, PartyScope partyScope, StockClient stockClient,
+            PaymentClient paymentClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -55,6 +58,7 @@ public class ProductOrderService {
         this.events = events;
         this.partyScope = partyScope;
         this.stockClient = stockClient;
+        this.paymentClient = paymentClient;
     }
 
     @Transactional(readOnly = true)
@@ -116,6 +120,7 @@ public class ProductOrderService {
         if (entity.getOrderDate() == null) {
             entity.setOrderDate(OffsetDateTime.now());
         }
+        validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
@@ -184,9 +189,11 @@ public class ProductOrderService {
         if (completing) {
             provision(entity);
             stockClient.consume(entity.getId());
+            paymentRefIds(entity).forEach(paymentClient::capture);
         }
         if (cancelling) {
             stockClient.release(entity.getId());
+            paymentRefIds(entity).forEach(paymentClient::voidPayment);
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish(stateChanged ? "ProductOrderStateChangeEvent" : "ProductOrderAttributeValueChangeEvent",
@@ -228,10 +235,38 @@ public class ProductOrderService {
         boolean onlyCancel = "cancelled".equals(patch.getState())
                 && patch.getDescription() == null && patch.getCategory() == null
                 && patch.getProductOfferingId() == null && patch.getBillingAccountId() == null
-                && patch.getProductOrderItem() == null && patch.getRelatedParty() == null;
+                && patch.getProductOrderItem() == null && patch.getRelatedParty() == null
+                && patch.getPayment() == null;
         if (!onlyCancel) {
             throw new OrderValidationException("customers may only cancel an order (state: 'cancelled')");
         }
+    }
+
+    /**
+     * Every payment ref on the order must be an authorized payment belonging
+     * to the order's owner; one bad ref sinks the order before anything is
+     * reserved or saved.
+     */
+    private void validatePayments(ProductOrderDto dto, String ownerPartyId, String orderId) {
+        if (dto.getPayment() == null) {
+            return;
+        }
+        for (Map<String, Object> ref : dto.getPayment()) {
+            Object paymentId = ref.get("id");
+            if (paymentId == null) {
+                throw new OrderValidationException("payment reference without id");
+            }
+            String problem = paymentClient.validateAuthorized(String.valueOf(paymentId), ownerPartyId, orderId);
+            if (!problem.isEmpty()) {
+                throw new OrderValidationException(problem);
+            }
+        }
+    }
+
+    private List<String> paymentRefIds(ProductOrder entity) {
+        List<Map<String, Object>> refs = mapper.toDto(entity).getPayment();
+        return refs == null ? List.of()
+                : refs.stream().map(r -> String.valueOf(r.get("id"))).toList();
     }
 
     /** Orders placed through a customer channel always carry their owner as a related party. */

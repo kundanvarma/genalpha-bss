@@ -88,6 +88,7 @@ services:
       PARTY_BASE_URL: http://party-account:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
       STOCK_BASE_URL: http://product-stock:8080
+      PAYMENT_BASE_URL: http://payment:8080
     ports:
       - "8082:8080"
     depends_on:
@@ -105,6 +106,8 @@ services:
         condition: service_started
       product-stock:
         condition: service_started
+      payment:
+        condition: service_started
 
   product-inventory:
     build: ./services/product-inventory
@@ -118,6 +121,26 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     ports:
       - "8083:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  payment:
+    build: ./services/payment
+    container_name: bss-payment
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/payment
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "8087:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -177,6 +200,7 @@ services:
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       STOCK_URL: http://product-stock:8080
+      PAYMENT_URL: http://payment:8080
     ports:
       - "8080:8080"
     depends_on:
@@ -189,6 +213,8 @@ services:
       party-account:
         condition: service_started
       product-stock:
+        condition: service_started
+      payment:
         condition: service_started
       console:
         condition: service_started

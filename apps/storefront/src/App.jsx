@@ -3,7 +3,7 @@ import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
 import { ensureParty } from './api.js';
 import { CART_EVENT, cartCount, cartLines, clearCart } from './cart.js';
-import { performCheckout } from './checkout.js';
+import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
@@ -36,9 +36,16 @@ export default function App() {
         // Checkout started as a guest? The cart survived in localStorage —
         // place the order they were building.
         if (takePendingCheckout() && cartLines().length) {
-          await performCheckout(cartLines());
-          clearCart();
-          navigate('/orders');
+          try {
+            await performCheckout(cartLines());
+            clearCart();
+            navigate('/orders');
+          } catch (e) {
+            if (e.message !== PAYMENT_REQUIRED) throw e;
+            // Card details never survive a redirect: back to the cart, now
+            // signed in, to confirm payment.
+            navigate('/cart');
+          }
         }
         setState('ready');
       } catch (e) {

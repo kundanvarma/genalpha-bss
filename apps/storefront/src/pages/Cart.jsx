@@ -4,7 +4,7 @@ import { availabilityFor, getOffering, myParty, priceIndex } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, clearCart, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
-import { performCheckout } from '../checkout.js';
+import { dueNow, performCheckout } from '../checkout.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 
@@ -15,6 +15,7 @@ export default function Cart() {
   const [prices, setPrices] = useState({});
   const [physical, setPhysical] = useState({});   // offering id -> boolean (stock-managed)
   const [address, setAddress] = useState(loadDraft());
+  const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +62,10 @@ export default function Cart() {
   const needsShipping = lines.some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
   const addressReady = !needsShipping || isComplete(address);
+  const due = dueNow(lines, offerings, prices);
+  const signedIn = isSignedIn();
+  const cardReady = !due || !signedIn
+    || (card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim());
 
   function setField(name, value) {
     const next = { ...address, [name]: value };
@@ -95,7 +100,7 @@ export default function Cart() {
     }
     setBusy(true);
     try {
-      await performCheckout(lines);
+      await performCheckout(lines, due ? card : null);
       clearCart();
       navigate('/orders');
     } catch (e) {
@@ -142,6 +147,12 @@ export default function Cart() {
             <strong className="linetotal">{grand.value.toFixed(2)} {grand.unit}</strong>
           </div>
         )}
+        {due && (
+          <div className="row granded duenow">
+            <strong>Due now</strong>
+            <strong className="linetotal">{due.value.toFixed(2)} {due.unit}</strong>
+          </div>
+        )}
       </div>
 
       {needsShipping && (
@@ -160,10 +171,36 @@ export default function Cart() {
         </div>
       )}
 
+      {due && (signedIn ? (
+        <div className="payment">
+          <h2>Payment</h2>
+          <p className="dim small">Card is charged for the one-time amount due now. Dev PSP: any card
+            works, a number ending 0002 declines.</p>
+          <div className="addressgrid">
+            <label className="charfield"><span>Card number</span>
+              <input name="cardNumber" value={card.cardNumber} inputMode="numeric"
+                     placeholder="4242 4242 4242 4242"
+                     onChange={(e) => setCard({ ...card, cardNumber: e.target.value })} /></label>
+            <label className="charfield"><span>Expiry</span>
+              <input name="expiry" value={card.expiry} placeholder="MM/YY"
+                     onChange={(e) => setCard({ ...card, expiry: e.target.value })} /></label>
+            <label className="charfield"><span>CVC</span>
+              <input name="cvc" value={card.cvc} inputMode="numeric" placeholder="123"
+                     onChange={(e) => setCard({ ...card, cvc: e.target.value })} /></label>
+          </div>
+        </div>
+      ) : (
+        <p className="dim small paynote">You'll confirm the payment after signing in.</p>
+      ))}
+
       <div className="cartactions">
         <Link to="/" className="dim">Continue shopping</Link>
-        <button className="primary big" onClick={checkout} disabled={busy || !addressReady}>
-          {busy ? 'Placing order…' : !addressReady ? 'Enter shipping address' : 'Checkout'}
+        <button className="primary big" onClick={checkout} disabled={busy || !addressReady || !cardReady}>
+          {busy ? 'Placing order…'
+            : !addressReady ? 'Enter shipping address'
+            : !cardReady ? 'Enter card details'
+            : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
+            : 'Checkout'}
         </button>
       </div>
     </>

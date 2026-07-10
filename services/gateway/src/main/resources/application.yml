@@ -24,6 +24,10 @@ spring:
           uri: ${STOCK_URL:http://localhost:8086}
           predicates:
             - Path=/tmf-api/productStockManagement/**
+        - id: payment
+          uri: ${PAYMENT_URL:http://localhost:8087}
+          predicates:
+            - Path=/tmf-api/paymentManagement/**
         - id: admin-console
           uri: ${CONSOLE_URL:http://localhost:8090}
           predicates:

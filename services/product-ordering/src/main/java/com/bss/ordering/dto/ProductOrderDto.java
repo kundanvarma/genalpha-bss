@@ -28,6 +28,9 @@ public class ProductOrderDto {
     @JsonProperty("relatedParty")
     private List<Map<String, Object>> relatedParty;
 
+    @JsonProperty("payment")
+    private List<Map<String, Object>> payment;
+
     @JsonProperty("description")
     private String description;
 
@@ -135,5 +138,13 @@ public class ProductOrderDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public List<Map<String, Object>> getPayment() {
+        return payment;
+    }
+
+    public void setPayment(List<Map<String, Object>> payment) {
+        this.payment = payment;
     }
 }
