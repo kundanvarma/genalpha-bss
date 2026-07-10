@@ -205,6 +205,28 @@ services:
       kafka:
         condition: service_started
 
+  usage:
+    build: ./services/usage
+    container_name: bss-usage
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/usage
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+    ports:
+      - "8097:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -287,6 +309,7 @@ services:
       INVENTORY_BASE_URL: http://product-inventory:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
+      USAGE_BASE_URL: http://usage:8080
     ports:
       - "8088:8080"
     depends_on:
@@ -299,6 +322,8 @@ services:
       product-inventory:
         condition: service_started
       payment:
+        condition: service_started
+      usage:
         condition: service_started
 
   payment:
@@ -387,6 +412,7 @@ services:
       INTERACTION_URL: http://party-interaction:8080
       COMMUNICATION_URL: http://communication:8080
       CART_URL: http://shopping-cart:8080
+      USAGE_URL: http://usage:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -416,6 +442,8 @@ services:
       communication:
         condition: service_started
       shopping-cart:
+        condition: service_started
+      usage:
         condition: service_started
       csr-console:
         condition: service_started

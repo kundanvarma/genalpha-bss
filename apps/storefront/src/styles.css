@@ -197,3 +197,9 @@ button:disabled { opacity: 0.5; cursor: default; }
 .state.closed { color: var(--dim); border-color: var(--line); }
 
 .row.noteread { opacity: 0.55; }
+
+.usage-meter { padding: 0.9rem 0; border-bottom: 1px solid var(--line); }
+.usage-meter-head { display: flex; justify-content: space-between; margin-bottom: 0.45rem; }
+.usage-meter-track { height: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.usage-meter-fill { height: 100%; border-radius: 4px; background: var(--teal); }
+.usage-meter-fill.over { background: var(--err, #d64545); }

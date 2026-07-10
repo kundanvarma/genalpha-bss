@@ -83,6 +83,26 @@ public class RestDownstreamClients {
     }
 
     @Bean
+    DownstreamClients.UsageClient usageClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.usage-base-url}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return (ownerPartyId, periodStart, periodEnd) -> {
+            try {
+                return rest.post().uri("/tmf-api/usageManagement/v4/rateUsage")
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("relatedPartyId", ownerPartyId,
+                                "periodStart", periodStart, "periodEnd", periodEnd))
+                        .retrieve()
+                        .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
+                        });
+            } catch (RestClientException e) {
+                throw new DownstreamException("usage service is unreachable", e);
+            }
+        };
+    }
+
+    @Bean
     DownstreamClients.PaymentClient paymentClient(RestClient.Builder builder,
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.payment-base-url}") String baseUrl) {

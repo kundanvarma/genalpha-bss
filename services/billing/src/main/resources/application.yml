@@ -62,5 +62,6 @@ bss:
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
+    usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
   events:
     topic: bss.billing.events
