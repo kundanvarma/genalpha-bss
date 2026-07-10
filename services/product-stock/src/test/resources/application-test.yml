@@ -15,5 +15,3 @@ spring:
 bss:
   events:
     enabled: false
-  stock:
-    enabled: false

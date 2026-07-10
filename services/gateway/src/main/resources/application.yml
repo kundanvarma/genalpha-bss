@@ -20,6 +20,10 @@ spring:
           uri: ${PARTY_URL:http://localhost:8084}
           predicates:
             - Path=/tmf-api/party/**,/tmf-api/accountManagement/**
+        - id: product-stock
+          uri: ${STOCK_URL:http://localhost:8086}
+          predicates:
+            - Path=/tmf-api/productStockManagement/**
         - id: admin-console
           uri: ${CONSOLE_URL:http://localhost:8090}
           predicates:

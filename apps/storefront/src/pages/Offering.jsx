@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getOffering, getSpec, priceIndex } from '../api.js';
+import { availabilityFor, getOffering, getSpec, priceIndex } from '../api.js';
 import { addToCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 
@@ -15,6 +15,7 @@ export default function Offering() {
   const [chosen, setChosen] = useState({});                   // choice name -> option id
   const [specs, setSpecs] = useState({});                     // spec id -> spec
   const [chars, setChars] = useState({});                     // characteristic name -> value
+  const [avail, setAvail] = useState({});                     // offering id -> units | null (unmanaged)
   const [error, setError] = useState(null);
 
   const bundled = offering?.bundledProductOffering || [];
@@ -35,6 +36,10 @@ export default function Offering() {
           defaults[c.name] = c.default || c.options[0]?.id;
         }
         setChosen(defaults);
+        // Shelf check for everything orderable on this page.
+        const stockIds = [o.id, ...optionRefs.map((r) => r.id)];
+        const availability = await Promise.all(stockIds.map(availabilityFor));
+        setAvail(Object.fromEntries(stockIds.map((sid, i) => [sid, availability[i]])));
       })
       .catch((e) => setError(e.message));
   }, [id]);
@@ -95,6 +100,12 @@ export default function Offering() {
         .map((ac) => [ac.characteristic.name, chars[ac.characteristic.name]])),
   }));
 
+  // The page is orderable unless a stock-managed part of it is gone.
+  const relevantIds = [offering.id, ...Object.values(chosen)].filter(Boolean);
+  const managed = relevantIds.filter((rid) => avail[rid] != null);
+  const scarcest = managed.length ? Math.min(...managed.map((rid) => avail[rid])) : null;
+  const outOfStock = scarcest === 0;
+
   function add() {
     addToCart(offering, selections);
     navigate('/cart');
@@ -131,6 +142,11 @@ export default function Offering() {
                     onChange={() => setChosen((c) => ({ ...c, [choice.name]: opt.id }))}
                   />
                   <span className="optname">{opt.name}</span>
+                  {avail[opt.id] != null && avail[opt.id] <= 5 && (
+                    <span className={avail[opt.id] === 0 ? 'stocknote out' : 'stocknote'}>
+                      {avail[opt.id] === 0 ? 'out of stock' : `only ${avail[opt.id]} left`}
+                    </span>
+                  )}
                   {optMonthly && <span className="optprice">+{optMonthly.value.toFixed(2)} {optMonthly.unit}/mo</span>}
                 </label>
               );
@@ -179,7 +195,14 @@ export default function Offering() {
         </>
       )}
 
-      <button className="primary big" onClick={add}>Add to cart</button>
+      {scarcest != null && (
+        <p className={outOfStock ? 'stockline error' : 'stockline dim'}>
+          {outOfStock ? 'Out of stock' : scarcest <= 5 ? `Only ${scarcest} left in stock` : 'In stock'}
+        </p>
+      )}
+      <button className="primary big" onClick={add} disabled={outOfStock}>
+        {outOfStock ? 'Out of stock' : 'Add to cart'}
+      </button>
     </div>
   );
 }

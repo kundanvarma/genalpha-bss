@@ -6,6 +6,7 @@ import com.bss.ordering.api.PagedResult;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
+import com.bss.ordering.client.StockClient;
 import com.bss.ordering.dto.ProductOrderDto;
 import com.bss.ordering.entity.ProductOrder;
 import com.bss.ordering.events.DomainEventPublisher;
@@ -41,10 +42,11 @@ public class ProductOrderService {
     private final InventoryClient inventoryClient;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final StockClient stockClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
-            DomainEventPublisher events, PartyScope partyScope) {
+            DomainEventPublisher events, PartyScope partyScope, StockClient stockClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -52,6 +54,7 @@ public class ProductOrderService {
         this.inventoryClient = inventoryClient;
         this.events = events;
         this.partyScope = partyScope;
+        this.stockClient = stockClient;
     }
 
     @Transactional(readOnly = true)
@@ -113,9 +116,54 @@ public class ProductOrderService {
         if (entity.getOrderDate() == null) {
             entity.setOrderDate(OffsetDateTime.now());
         }
+        reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
         return created;
+    }
+
+    /**
+     * Every item naming an offering reserves stock — offerings without a
+     * stock record are not stock-managed and pass through. One insufficient
+     * item sinks the whole order: earlier reservations for it are released
+     * (compensation) and the client gets a 400 naming the shortage.
+     */
+    private void reserveStock(ProductOrderDto dto, String orderId) {
+        for (ItemRef item : flattenItems(dto.getProductOrderItem())) {
+            StockClient.ReserveOutcome outcome =
+                    stockClient.reserve(item.offeringId(), item.name(), item.quantity(), orderId);
+            if (!outcome.ok()) {
+                stockClient.release(orderId);
+                throw new OrderValidationException(outcome.message());
+            }
+        }
+    }
+
+    private record ItemRef(String offeringId, String name, int quantity) {
+    }
+
+    private List<ItemRef> flattenItems(List<Map<String, Object>> items) {
+        List<ItemRef> refs = new ArrayList<>();
+        collectItems(items, refs);
+        return refs;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectItems(List<Map<String, Object>> items, List<ItemRef> into) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            Object offering = item.get("productOffering");
+            if (offering instanceof Map<?, ?> ref && ref.get("id") != null) {
+                int quantity = item.get("quantity") instanceof Number n ? n.intValue() : 1;
+                Object name = ref.get("name") != null ? ref.get("name") : ref.get("id");
+                into.add(new ItemRef(String.valueOf(ref.get("id")), String.valueOf(name), quantity));
+            }
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                collectItems((List<Map<String, Object>>) children, into);
+            }
+        }
     }
 
     @Transactional
@@ -131,9 +179,14 @@ public class ProductOrderService {
         validateReferences(patch);
         boolean stateChanged = patch.getState() != null && !patch.getState().equals(entity.getState());
         boolean completing = STATE_COMPLETED.equals(patch.getState());
+        boolean cancelling = stateChanged && "cancelled".equals(patch.getState());
         mapper.applyPatch(patch, entity);
         if (completing) {
             provision(entity);
+            stockClient.consume(entity.getId());
+        }
+        if (cancelling) {
+            stockClient.release(entity.getId());
         }
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish(stateChanged ? "ProductOrderStateChangeEvent" : "ProductOrderAttributeValueChangeEvent",
@@ -150,6 +203,7 @@ public class ProductOrderService {
         ProductOrder entity = repository.findById(id)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         ProductOrderDto deleted = mapper.toDto(entity);
+        stockClient.release(id);
         repository.deleteById(id);
         events.publish("ProductOrderDeleteEvent", "productOrder", deleted);
     }

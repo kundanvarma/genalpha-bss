@@ -60,7 +60,10 @@ springdoc:
 bss:
   events:
     topic: bss.ordering.events
+  stock:
+    enabled: ${STOCK_ENABLED:true}
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
+    stock-base-url: ${STOCK_BASE_URL:http://localhost:8086}

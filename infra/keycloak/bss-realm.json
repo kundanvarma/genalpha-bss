@@ -15,6 +15,8 @@
       { "name": "inventory:write" },
       { "name": "party:read" },
       { "name": "party:write" },
+      { "name": "stock:read" },
+      { "name": "stock:write" },
       {
         "name": "customer",
         "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
@@ -81,7 +83,7 @@
       "username": "service-account-bss-ordering",
       "enabled": true,
       "serviceAccountClientId": "bss-ordering",
-      "realmRoles": ["catalog:read", "party:read", "inventory:write"]
+      "realmRoles": ["catalog:read", "party:read", "inventory:write", "stock:write"]
     },
     {
       "username": "demo",
@@ -98,7 +100,8 @@
         "catalog:read", "catalog:write",
         "ordering:read", "ordering:write",
         "inventory:read", "inventory:write",
-        "party:read", "party:write"
+        "party:read", "party:write",
+        "stock:read", "stock:write"
       ]
     }
   ]
