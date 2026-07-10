@@ -63,6 +63,16 @@ h1 { font-size: 20px; margin: 0 0 4px; }
   border: 1px solid var(--line); padding: 7px 10px;
 }
 .field input:focus { outline: 2px solid var(--teal); outline-offset: -1px; border-color: var(--teal); }
+.field select {
+  font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 7px 10px;
+}
+.field select:focus { outline: 2px solid var(--teal); outline-offset: -1px; border-color: var(--teal); }
+.field.check { flex-direction: row; align-items: center; gap: 8px; }
+.field.check input { accent-color: var(--teal); width: 16px; height: 16px; }
+.moneyrow { display: flex; gap: 8px; }
+.moneyrow input { flex: 1; min-width: 0; }
+.moneyrow input.unit { flex: 0 0 110px; }
 .actions { margin-top: 14px; display: flex; gap: 10px; }
 button.primary {
   background: var(--teal); color: #fff; border: 1px solid var(--teal);

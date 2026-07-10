@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.OffsetDateTime;
+import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductOfferingPriceDto {
@@ -24,6 +25,15 @@ public class ProductOfferingPriceDto {
 
     @JsonProperty("isBundle")
     private Boolean isBundle;
+
+    @JsonProperty("price")
+    private Map<String, Object> price;
+
+    @JsonProperty("recurringChargePeriodType")
+    private String recurringChargePeriodType;
+
+    @JsonProperty("recurringChargePeriodLength")
+    private Integer recurringChargePeriodLength;
 
     @JsonProperty("lifecycleStatus")
     private String lifecycleStatus;
@@ -78,6 +88,30 @@ public class ProductOfferingPriceDto {
 
     public void setIsBundle(Boolean isBundle) {
         this.isBundle = isBundle;
+    }
+
+    public Map<String, Object> getPrice() {
+        return price;
+    }
+
+    public void setPrice(Map<String, Object> price) {
+        this.price = price;
+    }
+
+    public String getRecurringChargePeriodType() {
+        return recurringChargePeriodType;
+    }
+
+    public void setRecurringChargePeriodType(String recurringChargePeriodType) {
+        this.recurringChargePeriodType = recurringChargePeriodType;
+    }
+
+    public Integer getRecurringChargePeriodLength() {
+        return recurringChargePeriodLength;
+    }
+
+    public void setRecurringChargePeriodLength(Integer recurringChargePeriodLength) {
+        this.recurringChargePeriodLength = recurringChargePeriodLength;
     }
 
     public String getLifecycleStatus() {

@@ -2,11 +2,16 @@
  * Catalog console: list / create / edit / delete over the TMF620 API through
  * the gateway (same origin — no CORS). Resources are configuration, so
  * extending the console is a data change, not new code.
+ *
+ * Field kinds: text (default), number, checkbox, money ({unit, value}),
+ * ref (single entity reference), reflist (array of entity references).
+ * Refs load their pick-lists from the API when the editor renders.
  */
 'use strict';
 
 const API_BASE = '/tmf-api/productCatalogManagement/v4';
 const PAGE_SIZE = 10;
+const REF_PICKLIST_LIMIT = 100;
 
 const RESOURCES = [
   {
@@ -17,8 +22,11 @@ const RESOURCES = [
       { name: 'description', label: 'Description' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
       { name: 'version', label: 'Version' },
+      { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification' },
+      { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
+      { name: 'bundledProductOffering', label: 'Bundled offerings', kind: 'reflist', resource: 'productOffering', referredType: 'ProductOffering' },
     ],
-    columns: ['name', 'lifecycleStatus', 'version', 'lastUpdate'],
+    columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
   },
   {
     path: 'productSpecification',
@@ -36,10 +44,14 @@ const RESOURCES = [
     fields: [
       { name: 'name', label: 'Name', required: true },
       { name: 'priceType', label: 'Price type', placeholder: 'recurring' },
+      { name: 'price', label: 'Price', kind: 'money' },
+      { name: 'recurringChargePeriodType', label: 'Charge period', placeholder: 'month' },
+      { name: 'recurringChargePeriodLength', label: 'Period length', kind: 'number', placeholder: '1' },
+      { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
       { name: 'version', label: 'Version' },
     ],
-    columns: ['name', 'priceType', 'lifecycleStatus', 'lastUpdate'],
+    columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
 ];
 
@@ -47,13 +59,34 @@ const el = (id) => document.getElementById(id);
 let active = RESOURCES[0];
 let offset = 0;
 let editingId = null;
+let controls = {}; // field name -> {get, set, reset}
 
 function fmtCell(value) {
   if (value == null) return '—';
+  if (typeof value === 'boolean') return value ? 'yes' : '—';
+  if (Array.isArray(value)) return value.map((v) => v.name || v.id).join(', ') || '—';
+  if (typeof value === 'object') {
+    if (value.value != null) return `${value.value} ${value.unit || ''}`.trim();
+    return value.name || value.id || '—';
+  }
   if (/^\d{4}-\d{2}-\d{2}T/.test(String(value))) {
     return String(value).slice(0, 19).replace('T', ' ');
   }
   return String(value);
+}
+
+function refObject(field, option) {
+  return {
+    id: option.value,
+    href: `${API_BASE}/${field.resource}/${option.value}`,
+    name: option.dataset.name,
+    '@referredType': field.referredType,
+  };
+}
+
+async function loadPicklist(field) {
+  const res = await authFetch(`${API_BASE}/${field.resource}?offset=0&limit=${REF_PICKLIST_LIMIT}`);
+  return res.json();
 }
 
 function renderTabs() {
@@ -66,17 +99,123 @@ function renderTabs() {
   }));
 }
 
+function textControl(field, type) {
+  const input = document.createElement('input');
+  input.type = type;
+  if (type === 'number') input.step = 'any';
+  input.name = field.name;
+  input.placeholder = field.placeholder || '';
+  input.required = Boolean(field.required);
+  controls[field.name] = {
+    get: () => {
+      const v = input.value.trim();
+      if (!v) return undefined;
+      return type === 'number' ? Number(v) : v;
+    },
+    set: (item) => { input.value = item[field.name] ?? ''; },
+  };
+  return [input];
+}
+
+function checkboxControl(field) {
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.name = field.name;
+  controls[field.name] = {
+    get: () => input.checked,
+    set: (item) => { input.checked = Boolean(item[field.name]); },
+  };
+  return [input];
+}
+
+function moneyControl(field) {
+  const amount = document.createElement('input');
+  amount.type = 'number';
+  amount.step = 'any';
+  amount.placeholder = 'amount';
+  const unit = document.createElement('input');
+  unit.placeholder = 'currency (EUR)';
+  unit.className = 'unit';
+  const row = document.createElement('div');
+  row.className = 'moneyrow';
+  row.append(amount, unit);
+  controls[field.name] = {
+    get: () => {
+      if (!amount.value.trim()) return undefined;
+      return { unit: unit.value.trim() || 'EUR', value: Number(amount.value) };
+    },
+    set: (item) => {
+      amount.value = item[field.name]?.value ?? '';
+      unit.value = item[field.name]?.unit ?? '';
+    },
+  };
+  return [row];
+}
+
+function refControl(field, multiple) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  if (multiple) {
+    select.multiple = true;
+    select.size = 4;
+  } else {
+    select.append(new Option('—', ''));
+  }
+  loadPicklist(field).then((items) => {
+    for (const item of items) {
+      const option = new Option(item.name || item.id, item.id);
+      option.dataset.name = item.name || item.id;
+      option.disabled = item.id === editingId;
+      select.append(option);
+    }
+    if (pendingSelection[field.name]) {
+      applySelection(select, pendingSelection[field.name]);
+      delete pendingSelection[field.name];
+    }
+  });
+  controls[field.name] = {
+    get: () => {
+      const picked = [...select.selectedOptions].filter((o) => o.value);
+      if (!picked.length) return undefined;
+      return multiple ? picked.map((o) => refObject(field, o)) : refObject(field, picked[0]);
+    },
+    set: (item) => {
+      const refs = item[field.name];
+      const ids = multiple ? (refs || []).map((r) => r.id) : [refs?.id].filter(Boolean);
+      if (select.options.length > (multiple ? 0 : 1)) {
+        applySelection(select, ids);
+      } else {
+        pendingSelection[field.name] = ids; // picklist still loading
+      }
+    },
+  };
+  return [select];
+}
+
+let pendingSelection = {};
+
+function applySelection(select, ids) {
+  for (const option of select.options) {
+    option.selected = ids.includes(option.value);
+    if (option.value) option.disabled = option.value === editingId;
+  }
+}
+
 function renderEditor() {
+  controls = {};
+  pendingSelection = {};
   el('fields').replaceChildren(...active.fields.map((f) => {
     const wrap = document.createElement('label');
-    wrap.className = 'field';
+    wrap.className = f.kind === 'checkbox' ? 'field check' : 'field';
     const caption = document.createElement('span');
     caption.textContent = f.label + (f.required ? ' *' : '');
-    const input = document.createElement('input');
-    input.name = f.name;
-    input.placeholder = f.placeholder || '';
-    input.required = Boolean(f.required);
-    wrap.append(caption, input);
+    const parts =
+      f.kind === 'checkbox' ? checkboxControl(f) :
+      f.kind === 'money' ? moneyControl(f) :
+      f.kind === 'ref' ? refControl(f, false) :
+      f.kind === 'reflist' ? refControl(f, true) :
+      textControl(f, f.kind === 'number' ? 'number' : 'text');
+    wrap.append(caption, ...parts);
     return wrap;
   }));
 }
@@ -88,6 +227,9 @@ function stopEditing() {
   el('cancel-edit').hidden = true;
   el('editor').reset();
   el('editor-error').hidden = true;
+  for (const option of el('fields').querySelectorAll('option')) {
+    option.disabled = false;
+  }
 }
 
 function startEditing(item) {
@@ -96,7 +238,7 @@ function startEditing(item) {
   el('save').textContent = 'Save changes';
   el('cancel-edit').hidden = false;
   for (const f of active.fields) {
-    el('editor').elements[f.name].value = item[f.name] || '';
+    controls[f.name].set(item);
   }
   el('editor').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -157,8 +299,8 @@ async function save(event) {
   event.preventDefault();
   const body = {};
   for (const f of active.fields) {
-    const value = el('editor').elements[f.name].value.trim();
-    if (value) body[f.name] = value;
+    const value = controls[f.name].get();
+    if (value !== undefined) body[f.name] = value;
   }
   const url = editingId
     ? `${API_BASE}/${active.path}/${editingId}`

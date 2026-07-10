@@ -37,6 +37,13 @@ public class ProductOffering {
     @Column(name = "product_specification", length = 4000)
     private String productSpecificationJson;
 
+    @Column(name = "is_bundle")
+    private Boolean isBundle;
+
+    /** JSON array of child offering references, echoed verbatim. */
+    @Column(name = "bundled_product_offering", length = 4000)
+    private String bundledProductOfferingJson;
+
     public ProductOffering() {
     }
 
@@ -102,5 +109,21 @@ public class ProductOffering {
 
     public void setProductSpecificationJson(String productSpecificationJson) {
         this.productSpecificationJson = productSpecificationJson;
+    }
+
+    public Boolean getIsBundle() {
+        return isBundle;
+    }
+
+    public void setIsBundle(Boolean isBundle) {
+        this.isBundle = isBundle;
+    }
+
+    public String getBundledProductOfferingJson() {
+        return bundledProductOfferingJson;
+    }
+
+    public void setBundledProductOfferingJson(String bundledProductOfferingJson) {
+        this.bundledProductOfferingJson = bundledProductOfferingJson;
     }
 }

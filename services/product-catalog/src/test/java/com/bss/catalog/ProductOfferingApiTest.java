@@ -51,6 +51,36 @@ class ProductOfferingApiTest {
     }
 
     @Test
+    void createBundleOffering_echoesBundleFields() throws Exception {
+        String body = """
+                {
+                  "name": "Triple Play Bundle",
+                  "isBundle": true,
+                  "bundledProductOffering": [
+                    {"id": "po-mobile", "name": "Mobile Plan", "@referredType": "ProductOffering"},
+                    {"id": "po-fiber", "name": "Fiber Broadband", "@referredType": "ProductOffering"}
+                  ]
+                }
+                """;
+
+        mockMvc.perform(post(BASE).with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.isBundle").value(true))
+                .andExpect(jsonPath("$.bundledProductOffering.length()").value(2))
+                .andExpect(jsonPath("$.bundledProductOffering[0].id").value("po-mobile"))
+                .andExpect(jsonPath("$.bundledProductOffering[1].name").value("Fiber Broadband"));
+    }
+
+    @Test
+    void listProductOfferings_filterByIsBundle_returns200() throws Exception {
+        mockMvc.perform(get(BASE + "?isBundle=true").with(readToken()).accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
     void listProductOfferings_returns200() throws Exception {
         mockMvc.perform(get(BASE).with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())

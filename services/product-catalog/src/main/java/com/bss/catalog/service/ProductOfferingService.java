@@ -54,6 +54,12 @@ public class ProductOfferingService {
                 case "name" -> probe.setName(f.getValue());
                 case "lifecycleStatus" -> probe.setLifecycleStatus(f.getValue());
                 case "version" -> probe.setVersion(f.getValue());
+                case "isBundle" -> {
+                    if (!"true".equals(f.getValue()) && !"false".equals(f.getValue())) {
+                        throw new BadRequestException("isBundle filter must be 'true' or 'false'");
+                    }
+                    probe.setIsBundle(Boolean.valueOf(f.getValue()));
+                }
                 case "lastUpdate" -> {
                     try {
                         probe.setLastUpdate(OffsetDateTime.parse(f.getValue()));

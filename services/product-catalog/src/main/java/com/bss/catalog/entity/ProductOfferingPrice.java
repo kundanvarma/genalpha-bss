@@ -27,6 +27,16 @@ public class ProductOfferingPrice {
     @Column(name = "is_bundle")
     private Boolean isBundle;
 
+    /** JSON Money object ({unit, value}), echoed verbatim. */
+    @Column(name = "price", length = 1000)
+    private String priceJson;
+
+    @Column(name = "recurring_charge_period_type")
+    private String recurringChargePeriodType;
+
+    @Column(name = "recurring_charge_period_length")
+    private Integer recurringChargePeriodLength;
+
     @Column(name = "lifecycle_status")
     private String lifecycleStatus;
 
@@ -77,6 +87,30 @@ public class ProductOfferingPrice {
 
     public void setIsBundle(Boolean isBundle) {
         this.isBundle = isBundle;
+    }
+
+    public String getPriceJson() {
+        return priceJson;
+    }
+
+    public void setPriceJson(String priceJson) {
+        this.priceJson = priceJson;
+    }
+
+    public String getRecurringChargePeriodType() {
+        return recurringChargePeriodType;
+    }
+
+    public void setRecurringChargePeriodType(String recurringChargePeriodType) {
+        this.recurringChargePeriodType = recurringChargePeriodType;
+    }
+
+    public Integer getRecurringChargePeriodLength() {
+        return recurringChargePeriodLength;
+    }
+
+    public void setRecurringChargePeriodLength(Integer recurringChargePeriodLength) {
+        this.recurringChargePeriodLength = recurringChargePeriodLength;
     }
 
     public String getLifecycleStatus() {

@@ -7,12 +7,16 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 @Component
 public class ProductOfferingMapper {
 
     private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
+    };
+
+    private static final TypeReference<List<Map<String, Object>>> JSON_OBJECT_LIST = new TypeReference<>() {
     };
 
     private final ObjectMapper objectMapper;
@@ -31,6 +35,8 @@ public class ProductOfferingMapper {
         dto.setVersion(entity.getVersion());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setProductSpecification(readJsonObject(entity.getProductSpecificationJson()));
+        dto.setIsBundle(entity.getIsBundle());
+        dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setType("ProductOffering");
         return dto;
     }
@@ -45,6 +51,8 @@ public class ProductOfferingMapper {
         entity.setVersion(dto.getVersion());
         entity.setLastUpdate(dto.getLastUpdate());
         entity.setProductSpecificationJson(writeJsonObject(dto.getProductSpecification()));
+        entity.setIsBundle(dto.getIsBundle());
+        entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         return entity;
     }
 
@@ -67,6 +75,12 @@ public class ProductOfferingMapper {
         if (patch.getProductSpecification() != null) {
             entity.setProductSpecificationJson(writeJsonObject(patch.getProductSpecification()));
         }
+        if (patch.getIsBundle() != null) {
+            entity.setIsBundle(patch.getIsBundle());
+        }
+        if (patch.getBundledProductOffering() != null) {
+            entity.setBundledProductOfferingJson(writeJsonObjectList(patch.getBundledProductOffering()));
+        }
     }
 
     private String writeJsonObject(Map<String, Object> value) {
@@ -88,6 +102,28 @@ public class ProductOfferingMapper {
             return objectMapper.readValue(json, JSON_OBJECT);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
+        }
+    }
+
+    private String writeJsonObjectList(List<Map<String, Object>> value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("unserializable JSON array", e);
+        }
+    }
+
+    private List<Map<String, Object>> readJsonObjectList(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, JSON_OBJECT_LIST);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }
 }

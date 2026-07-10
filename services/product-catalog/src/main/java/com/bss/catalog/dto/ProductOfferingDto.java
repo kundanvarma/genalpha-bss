@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -34,6 +35,12 @@ public class ProductOfferingDto {
 
     @JsonProperty("productSpecification")
     private Map<String, Object> productSpecification;
+
+    @JsonProperty("isBundle")
+    private Boolean isBundle;
+
+    @JsonProperty("bundledProductOffering")
+    private List<Map<String, Object>> bundledProductOffering;
 
     @JsonProperty("@type")
     private String type = "ProductOffering";
@@ -111,5 +118,21 @@ public class ProductOfferingDto {
 
     public void setProductSpecification(Map<String, Object> productSpecification) {
         this.productSpecification = productSpecification;
+    }
+
+    public Boolean getIsBundle() {
+        return isBundle;
+    }
+
+    public void setIsBundle(Boolean isBundle) {
+        this.isBundle = isBundle;
+    }
+
+    public List<Map<String, Object>> getBundledProductOffering() {
+        return bundledProductOffering;
+    }
+
+    public void setBundledProductOffering(List<Map<String, Object>> bundledProductOffering) {
+        this.bundledProductOffering = bundledProductOffering;
     }
 }
