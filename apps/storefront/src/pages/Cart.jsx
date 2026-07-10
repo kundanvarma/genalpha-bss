@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { checkoutCart, getOffering, priceIndex } from '../api.js';
+import { availabilityFor, getOffering, myParty, priceIndex } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, clearCart, removeLine, setQuantity } from '../cart.js';
+import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
+import { performCheckout } from '../checkout.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 
@@ -11,6 +13,8 @@ export default function Cart() {
   const [lines, setLines] = useState(cartLines());
   const [offerings, setOfferings] = useState({}); // offering id -> full offering
   const [prices, setPrices] = useState({});
+  const [physical, setPhysical] = useState({});   // offering id -> boolean (stock-managed)
+  const [address, setAddress] = useState(loadDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -21,20 +25,47 @@ export default function Cart() {
   }, []);
 
   useEffect(() => {
-    const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))]
-      .filter((id) => !offerings[id]);
-    Promise.all([ids.length ? Promise.all(ids.map(getOffering)) : [], priceIndex()])
-      .then(([loaded, p]) => {
+    const allIds = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
+    const newIds = allIds.filter((id) => !offerings[id]);
+    Promise.all([
+      newIds.length ? Promise.all(newIds.map(getOffering)) : [],
+      priceIndex(),
+      Promise.all(allIds.filter((id) => physical[id] === undefined)
+        .map(async (id) => [id, (await availabilityFor(id)) != null])),
+    ])
+      .then(([loaded, p, phys]) => {
         setPrices(p);
         if (loaded.length) {
           setOfferings((o) => ({ ...o, ...Object.fromEntries(loaded.map((f) => [f.id, f])) }));
+        }
+        if (phys.length) {
+          setPhysical((prev) => ({ ...prev, ...Object.fromEntries(phys) }));
         }
       })
       .catch((e) => setError(e.message));
   }, [lines]);
 
+  // Prefill from the saved party address once signed in (draft wins if typed).
+  useEffect(() => {
+    if (!isSignedIn() || isComplete(loadDraft())) return;
+    myParty().then((party) => {
+      const saved = addressOf(party);
+      if (saved) setAddress(saved);
+    }).catch(() => {});
+  }, []);
+
   if (!lines.length) {
     return <p className="dim">Your cart is empty — <Link to="/">browse the offers</Link>.</p>;
+  }
+
+  const needsShipping = lines.some((l) =>
+    physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
+  const addressReady = !needsShipping || isComplete(address);
+
+  function setField(name, value) {
+    const next = { ...address, [name]: value };
+    setAddress(next);
+    saveDraft(next);
   }
 
   function lineMonthly(line) {
@@ -56,15 +87,15 @@ export default function Cart() {
 
   async function checkout() {
     if (!isSignedIn()) {
-      // The cart survives the redirect in localStorage; this flag makes the
-      // checkout resume automatically after registration or sign-in.
+      // Cart and typed address survive the redirect in localStorage; this
+      // flag makes the checkout resume automatically after sign-in.
       setPendingCheckout();
       await beginLogin();
       return;
     }
     setBusy(true);
     try {
-      await checkoutCart(lines);
+      await performCheckout(lines);
       clearCart();
       navigate('/orders');
     } catch (e) {
@@ -112,10 +143,27 @@ export default function Cart() {
           </div>
         )}
       </div>
+
+      {needsShipping && (
+        <div className="shipping">
+          <h2>Shipping address</h2>
+          <p className="dim small">Your cart contains devices that will be delivered.</p>
+          <div className="addressgrid">
+            {ADDRESS_FIELDS.map((f) => (
+              <label className="charfield" key={f.name}>
+                <span>{f.label}</span>
+                <input name={f.name} value={address[f.name] || ''}
+                       onChange={(e) => setField(f.name, e.target.value)} />
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="cartactions">
         <Link to="/" className="dim">Continue shopping</Link>
-        <button className="primary big" onClick={checkout} disabled={busy}>
-          {busy ? 'Placing order…' : 'Checkout'}
+        <button className="primary big" onClick={checkout} disabled={busy || !addressReady}>
+          {busy ? 'Placing order…' : !addressReady ? 'Enter shipping address' : 'Checkout'}
         </button>
       </div>
     </>

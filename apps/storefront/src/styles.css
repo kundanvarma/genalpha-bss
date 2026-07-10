@@ -146,6 +146,16 @@ button:disabled { opacity: 0.5; cursor: default; }
 .cartactions {
   display: flex; justify-content: space-between; align-items: center; margin-top: 22px;
 }
+.shipping { margin-top: 26px; }
+.addressgrid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px; margin-top: 10px;
+}
+.charfield input {
+  font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 7px 10px;
+}
+.charfield input:focus { outline: 2px solid var(--teal); outline-offset: -1px; border-color: var(--teal); }
 
 .gatepost { max-width: 460px; margin: 18vh auto; text-align: center; color: var(--dim); }
 

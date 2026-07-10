@@ -2,6 +2,9 @@ package com.bss.party.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
+import java.util.Map;
 import jakarta.validation.constraints.NotBlank;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -19,6 +22,9 @@ public class IndividualDto {
     @NotBlank(message = "familyName is required")
     @JsonProperty("familyName")
     private String familyName;
+
+    @JsonProperty("contactMedium")
+    private List<Map<String, Object>> contactMedium;
 
     @JsonProperty("@type")
     private String type = "Individual";
@@ -64,5 +70,13 @@ public class IndividualDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public List<Map<String, Object>> getContactMedium() {
+        return contactMedium;
+    }
+
+    public void setContactMedium(List<Map<String, Object>> contactMedium) {
+        this.contactMedium = contactMedium;
     }
 }
