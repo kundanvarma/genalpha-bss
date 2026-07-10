@@ -33,9 +33,13 @@ spec:
             - name: DB_URL
               value: "jdbc:postgresql://{{ $.Values.config.dbHost }}:{{ $.Values.config.dbPort }}/{{ $svc.db }}"
             - name: DB_USERNAME
-              value: {{ $.Values.config.dbUsername | quote }}
+              value: {{ $svc.dbRole | default $.Values.config.dbUsername | quote }}
             - name: DB_PASSWORD
-              value: {{ $.Values.config.dbPassword | quote }}
+              value: {{ $svc.dbPassword | default $svc.dbRole | default $.Values.config.dbPassword | quote }}
+            - name: DB_MIGRATION_USERNAME
+              value: {{ $.Values.config.dbMigrationUsername | quote }}
+            - name: DB_MIGRATION_PASSWORD
+              value: {{ $.Values.config.dbMigrationPassword | quote }}
             - name: OIDC_ISSUER_URI
               value: {{ $.Values.config.oidcIssuerUri | quote }}
             {{- if $.Values.config.oidcJwksUri }}
@@ -47,9 +51,19 @@ spec:
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: "5"
             {{- end }}
+            {{- if $.Values.config.novaIssuerUri }}
+            - name: OIDC_ISSUER_URI_NOVA
+              value: {{ $.Values.config.novaIssuerUri | quote }}
+            - name: OIDC_JWKS_URI_NOVA
+              value: {{ $.Values.config.novaJwksUri | quote }}
+            {{- end }}
             {{- if $svc.machineIdentity }}
             - name: OIDC_TOKEN_URI
               value: {{ $.Values.config.oidcTokenUri | quote }}
+            {{- if $.Values.config.novaTokenUri }}
+            - name: OIDC_TOKEN_URI_NOVA
+              value: {{ $.Values.config.novaTokenUri | quote }}
+            {{- end }}
             {{- end }}
             {{- range $k, $v := $svc.extraEnv }}
             - name: {{ $k }}
