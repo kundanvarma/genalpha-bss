@@ -5,6 +5,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductSpecificationDto {
@@ -27,6 +29,9 @@ public class ProductSpecificationDto {
 
     @JsonProperty("lastUpdate")
     private OffsetDateTime lastUpdate;
+
+    @JsonProperty("productSpecCharacteristic")
+    private List<Map<String, Object>> productSpecCharacteristic;
 
     @JsonProperty("@type")
     private String type = "ProductSpecification";
@@ -88,5 +93,13 @@ public class ProductSpecificationDto {
 
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public List<Map<String, Object>> getProductSpecCharacteristic() {
+        return productSpecCharacteristic;
+    }
+
+    public void setProductSpecCharacteristic(List<Map<String, Object>> productSpecCharacteristic) {
+        this.productSpecCharacteristic = productSpecCharacteristic;
     }
 }

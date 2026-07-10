@@ -68,6 +68,11 @@ h1 { font-size: 20px; margin: 0 0 4px; }
   border: 1px solid var(--line); padding: 7px 10px;
 }
 .field select:focus { outline: 2px solid var(--teal); outline-offset: -1px; border-color: var(--teal); }
+.field textarea {
+  font: 12.5px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--line); padding: 7px 10px; resize: vertical;
+}
+.field textarea:focus { outline: 2px solid var(--teal); outline-offset: -1px; border-color: var(--teal); }
 .field.check { flex-direction: row; align-items: center; gap: 8px; }
 .field.check input { accent-color: var(--teal); width: 16px; height: 16px; }
 .moneyrow { display: flex; gap: 8px; }

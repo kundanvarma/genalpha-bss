@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
 import { ensureParty, getOffering, placeOrder } from './api.js';
-import { PENDING_OFFER_KEY } from './pending.js';
+import { takePendingOrder } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
 import Orders from './pages/Orders.jsx';
@@ -24,10 +24,14 @@ export default function App() {
         }
         await ensureParty();
         // Checkout started as a guest? Finish the interrupted order now.
-        const pendingOffer = sessionStorage.getItem(PENDING_OFFER_KEY);
-        if (pendingOffer) {
-          sessionStorage.removeItem(PENDING_OFFER_KEY);
-          await placeOrder(await getOffering(pendingOffer));
+        const pending = takePendingOrder();
+        if (pending) {
+          const offering = await getOffering(pending.offeringId);
+          const configuredItems = await Promise.all((pending.selections || []).map(async (s) => ({
+            offering: await getOffering(s.offeringId),
+            characteristics: s.characteristics,
+          })));
+          await placeOrder(offering, configuredItems);
           navigate('/orders');
         }
         setState('ready');

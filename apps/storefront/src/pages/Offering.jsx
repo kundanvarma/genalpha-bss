@@ -1,40 +1,111 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getOffering, placeOrder, priceIndex } from '../api.js';
+import { getOffering, getSpec, placeOrder, priceIndex } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
-import { PENDING_OFFER_KEY } from '../pending.js';
+import { stashPendingOrder } from '../pending.js';
+
+const isChoice = (entry) => Array.isArray(entry.options);
 
 export default function Offering() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [offering, setOffering] = useState(null);
   const [prices, setPrices] = useState({});
+  const [optionOfferings, setOptionOfferings] = useState({}); // option id -> full offering
+  const [chosen, setChosen] = useState({});                   // choice name -> option id
+  const [specs, setSpecs] = useState({});                     // spec id -> spec
+  const [chars, setChars] = useState({});                     // characteristic name -> value
   const [error, setError] = useState(null);
   const [ordering, setOrdering] = useState(false);
 
+  const bundled = offering?.bundledProductOffering || [];
+  const fixed = bundled.filter((e) => !isChoice(e));
+  const choices = bundled.filter(isChoice);
+
   useEffect(() => {
     Promise.all([getOffering(id), priceIndex()])
-      .then(([o, p]) => { setOffering(o); setPrices(p); })
+      .then(async ([o, p]) => {
+        setOffering(o);
+        setPrices(p);
+        // Resolve every choice option to its full offering (price + spec refs).
+        const optionRefs = (o.bundledProductOffering || []).filter(isChoice).flatMap((c) => c.options);
+        const full = await Promise.all(optionRefs.map((r) => getOffering(r.id)));
+        setOptionOfferings(Object.fromEntries(full.map((f) => [f.id, f])));
+        const defaults = {};
+        for (const c of (o.bundledProductOffering || []).filter(isChoice)) {
+          defaults[c.name] = c.default || c.options[0]?.id;
+        }
+        setChosen(defaults);
+      })
       .catch((e) => setError(e.message));
   }, [id]);
+
+  // The chosen options' specs carry the variant characteristics.
+  useEffect(() => {
+    const specRefs = Object.values(chosen)
+      .map((optionId) => optionOfferings[optionId]?.productSpecification?.id)
+      .filter((specId) => specId && !specs[specId]);
+    if (!specRefs.length) return;
+    Promise.all(specRefs.map(getSpec))
+      .then((loaded) => setSpecs((s) => ({
+        ...s, ...Object.fromEntries(loaded.map((sp) => [sp.id, sp])),
+      })))
+      .catch((e) => setError(e.message));
+  }, [chosen, optionOfferings]);
+
+  const selectedOptions = useMemo(
+    () => Object.values(chosen).map((oid) => optionOfferings[oid]).filter(Boolean),
+    [chosen, optionOfferings]);
+
+  const activeCharacteristics = useMemo(() => selectedOptions.flatMap((option) => {
+    const spec = specs[option.productSpecification?.id];
+    return (spec?.productSpecCharacteristic || []).map((c) => ({ option, characteristic: c }));
+  }), [selectedOptions, specs]);
+
+  // Selecting a different phone swaps the characteristic set: keep picks that
+  // remain valid, default the rest. Bail out unchanged to avoid re-renders.
+  useEffect(() => {
+    setChars((prev) => {
+      const next = {};
+      let changed = false;
+      for (const { characteristic } of activeCharacteristics) {
+        const values = characteristic.productSpecCharacteristicValue || [];
+        const keep = prev[characteristic.name] != null
+          && values.some((v) => v.value === prev[characteristic.name]);
+        next[characteristic.name] = keep ? prev[characteristic.name] : values[0]?.value;
+        if (next[characteristic.name] !== prev[characteristic.name]) changed = true;
+      }
+      return changed || Object.keys(next).length !== Object.keys(prev).length ? next : prev;
+    });
+  }, [activeCharacteristics]);
 
   if (error) return <p className="error">{error}</p>;
   if (!offering) return <p className="dim">Loading…</p>;
 
   const own = pricesOf(offering, prices);
-  const monthly = monthlyTotal(own);
+  const optionPrices = selectedOptions.flatMap((o) => pricesOf(o, prices));
+  const allPrices = [...own, ...optionPrices];
+  const monthly = monthlyTotal(allPrices);
+
+  const configuredItems = selectedOptions.map((option) => ({
+    offering: option,
+    characteristics: Object.fromEntries(
+      activeCharacteristics
+        .filter((ac) => ac.option.id === option.id && chars[ac.characteristic.name] != null)
+        .map((ac) => [ac.characteristic.name, chars[ac.characteristic.name]])),
+  }));
 
   async function order() {
     if (!isSignedIn()) {
       // Guests register or sign in at checkout; the order resumes after.
-      sessionStorage.setItem(PENDING_OFFER_KEY, offering.id);
+      stashPendingOrder(offering, configuredItems);
       await beginLogin();
       return;
     }
     setOrdering(true);
     try {
-      await placeOrder(offering);
+      await placeOrder(offering, configuredItems);
       navigate('/orders');
     } catch (e) {
       setError(e.message);
@@ -48,21 +119,63 @@ export default function Offering() {
       <h1>{offering.name}</h1>
       <p>{offering.description}</p>
 
-      {offering.isBundle && (
+      {fixed.length > 0 && (
         <>
           <h2>What's included</h2>
           <ul className="includes big">
-            {(offering.bundledProductOffering || []).map((c) => <li key={c.id}>{c.name}</li>)}
+            {fixed.map((c) => <li key={c.id}>{c.name}</li>)}
           </ul>
         </>
       )}
 
-      {own.length > 0 && (
+      {choices.map((choice) => (
+        <div key={choice.name} className="choice">
+          <h2>{choice.name}</h2>
+          <div className="options">
+            {choice.options.map((opt) => {
+              const full = optionOfferings[opt.id];
+              const optMonthly = full ? monthlyTotal(pricesOf(full, prices)) : null;
+              return (
+                <label key={opt.id} className={chosen[choice.name] === opt.id ? 'option on' : 'option'}>
+                  <input
+                    type="radio"
+                    name={choice.name}
+                    checked={chosen[choice.name] === opt.id}
+                    onChange={() => setChosen((c) => ({ ...c, [choice.name]: opt.id }))}
+                  />
+                  <span className="optname">{opt.name}</span>
+                  {optMonthly && <span className="optprice">+{optMonthly.value.toFixed(2)} {optMonthly.unit}/mo</span>}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+
+      {activeCharacteristics.length > 0 && (
+        <div className="chars">
+          {activeCharacteristics.map(({ characteristic }) => (
+            <label key={characteristic.name} className="charfield">
+              <span>{characteristic.name}</span>
+              <select
+                value={chars[characteristic.name] || ''}
+                onChange={(e) => setChars((c) => ({ ...c, [characteristic.name]: e.target.value }))}
+              >
+                {(characteristic.productSpecCharacteristicValue || []).map((v) => (
+                  <option key={v.value} value={v.value}>{v.value}</option>
+                ))}
+              </select>
+            </label>
+          ))}
+        </div>
+      )}
+
+      {allPrices.length > 0 && (
         <>
           <h2>Pricing</h2>
           <table className="pricetable">
             <tbody>
-              {own.map((p) => (
+              {allPrices.map((p) => (
                 <tr key={p.id}>
                   <td>{p.name}</td>
                   <td className="num">{fmtPrice(p)}</td>

@@ -76,6 +76,21 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .pricing strong { color: var(--teal); font-size: 15.5px; }
 
 .detail { max-width: 620px; }
+.choice .options { display: flex; flex-direction: column; gap: 8px; }
+.option {
+  display: flex; align-items: center; gap: 10px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--card); padding: 10px 14px;
+}
+.option.on { border-color: var(--teal); background: var(--teal-soft); }
+.option input { accent-color: var(--teal); }
+.optname { flex: 1; }
+.optprice { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--teal); }
+.chars { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 4px; }
+.charfield { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dim); }
+.charfield select {
+  font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 7px 10px; min-width: 160px;
+}
 .pricetable { border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 18px; }
 .pricetable td { border-bottom: 1px solid var(--line); padding: 8px 0; }
 .pricetable .num { text-align: right; }

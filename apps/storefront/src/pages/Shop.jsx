@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { listOfferings, priceIndex } from '../api.js';
+import { getOffering, listOfferings, priceIndex } from '../api.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 
 export default function Shop() {
@@ -37,6 +37,24 @@ export default function Shop() {
 function OfferingCard({ offering, prices }) {
   const own = pricesOf(offering, prices);
   const monthly = monthlyTotal(own);
+  const bundled = offering.bundledProductOffering || [];
+  const choices = bundled.filter((e) => Array.isArray(e.options));
+  const [fromMonthly, setFromMonthly] = useState(null);
+
+  // A configurable bundle advertises "from": fixed charges + cheapest option.
+  useEffect(() => {
+    if (!choices.length || !monthly) return;
+    Promise.all(choices.map(async (choice) => {
+      const optionMonthlies = await Promise.all(choice.options.map(async (opt) => {
+        const full = await getOffering(opt.id);
+        return monthlyTotal(pricesOf(full, prices))?.value ?? 0;
+      }));
+      return Math.min(...optionMonthlies);
+    })).then((cheapest) => {
+      setFromMonthly({ value: monthly.value + cheapest.reduce((a, b) => a + b, 0), unit: monthly.unit });
+    }).catch(() => {});
+  }, [offering.id, prices]);
+
   return (
     <Link className={offering.isBundle ? 'card bundle' : 'card'} to={`/offering/${offering.id}`}>
       {offering.isBundle && <span className="tag">Bundle</span>}
@@ -44,13 +62,15 @@ function OfferingCard({ offering, prices }) {
       <p className="dim">{offering.description}</p>
       {offering.isBundle && (
         <ul className="includes">
-          {(offering.bundledProductOffering || []).map((c) => <li key={c.id}>{c.name}</li>)}
+          {bundled.map((c) => <li key={c.id || c.name}>{c.name}</li>)}
         </ul>
       )}
       <div className="pricing">
-        {monthly
-          ? <strong>{monthly.value.toFixed(2)} {monthly.unit}/month</strong>
-          : own.length > 0 && <strong>{fmtPrice(own[0])}</strong>}
+        {choices.length && fromMonthly
+          ? <strong>from {fromMonthly.value.toFixed(2)} {fromMonthly.unit}/month</strong>
+          : monthly
+            ? <strong>{monthly.value.toFixed(2)} {monthly.unit}/month</strong>
+            : own.length > 0 && <strong>{fmtPrice(own[0])}</strong>}
       </div>
     </Link>
   );

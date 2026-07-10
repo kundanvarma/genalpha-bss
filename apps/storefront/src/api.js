@@ -26,6 +26,10 @@ export async function getOffering(id) {
   return json(await publicFetch(`${CATALOG}/productOffering/${id}`));
 }
 
+export async function getSpec(id) {
+  return json(await publicFetch(`${CATALOG}/productSpecification/${id}`));
+}
+
 /** All active prices indexed by id, so offering price refs resolve locally. */
 export async function priceIndex() {
   const prices = await json(await publicFetch(`${CATALOG}/productOfferingPrice?limit=100`));
@@ -53,18 +57,37 @@ export async function myParty() {
   return json(await authFetch(`${PARTY}/individual/${claims.sub}`));
 }
 
-export async function placeOrder(offering) {
+/**
+ * Places an order for an offering. `configuredItems` carries a configured
+ * bundle's choices — one item per chosen option, with its characteristics
+ * (color, storage, ...) as TMF622 product.productCharacteristic.
+ */
+export async function placeOrder(offering, configuredItems = []) {
+  const items = [{
+    id: '1',
+    action: 'add',
+    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
+  }];
+  for (const extra of configuredItems) {
+    items.push({
+      id: String(items.length + 1),
+      action: 'add',
+      productOffering: { id: extra.offering.id, name: extra.offering.name, '@referredType': 'ProductOffering' },
+      ...(extra.characteristics && Object.keys(extra.characteristics).length ? {
+        product: {
+          productCharacteristic: Object.entries(extra.characteristics)
+            .map(([name, value]) => ({ name, value })),
+        },
+      } : {}),
+    });
+  }
   return json(await authFetch(`${ORDERING}/productOrder`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       description: offering.name,
       productOfferingId: offering.id,
-      productOrderItem: [{
-        id: '1',
-        action: 'add',
-        productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
-      }],
+      productOrderItem: items,
     }),
   }));
 }
