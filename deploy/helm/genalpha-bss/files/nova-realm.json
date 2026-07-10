@@ -1,0 +1,373 @@
+{
+  "realm": "nova",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "resetPasswordAllowed": true,
+  "defaultRoles": [
+    "customer"
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "catalog:read"
+      },
+      {
+        "name": "catalog:write"
+      },
+      {
+        "name": "ordering:read"
+      },
+      {
+        "name": "ordering:write"
+      },
+      {
+        "name": "inventory:read"
+      },
+      {
+        "name": "inventory:write"
+      },
+      {
+        "name": "party:read"
+      },
+      {
+        "name": "party:write"
+      },
+      {
+        "name": "stock:read"
+      },
+      {
+        "name": "stock:write"
+      },
+      {
+        "name": "payment:read"
+      },
+      {
+        "name": "payment:write"
+      },
+      {
+        "name": "billing:read"
+      },
+      {
+        "name": "billing:write"
+      },
+      {
+        "name": "qualification:read"
+      },
+      {
+        "name": "qualification:write"
+      },
+      {
+        "name": "appointment:read"
+      },
+      {
+        "name": "appointment:write"
+      },
+      {
+        "name": "ticket:read"
+      },
+      {
+        "name": "ticket:write"
+      },
+      {
+        "name": "interaction:read"
+      },
+      {
+        "name": "interaction:write"
+      },
+      {
+        "name": "communication:read"
+      },
+      {
+        "name": "communication:write"
+      },
+      {
+        "name": "customer",
+        "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "catalog:read",
+            "ordering:read",
+            "ordering:write",
+            "inventory:read",
+            "party:read",
+            "party:write",
+            "payment:read",
+            "payment:write",
+            "billing:read",
+            "billing:write",
+            "appointment:read",
+            "appointment:write",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "communication:read",
+            "communication:write",
+            "usage:read"
+          ]
+        }
+      },
+      {
+        "name": "agent",
+        "description": "Assisted-channel agent: org-scoped via the token's org claim; works tickets and interactions, fulfils orders",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "catalog:read",
+            "ordering:read",
+            "ordering:write",
+            "inventory:read",
+            "party:read",
+            "stock:read",
+            "billing:read",
+            "payment:read",
+            "appointment:read",
+            "qualification:read",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "interaction:write",
+            "usage:read",
+            "usage:write"
+          ]
+        }
+      },
+      {
+        "name": "usage:read",
+        "description": "usage:read"
+      },
+      {
+        "name": "usage:write",
+        "description": "usage:write"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bss-ordering",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ordering-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-billing",
+      "name": "billing machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "billing-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-console",
+      "name": "Catalog admin console (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://console.nova.localhost:8080/*",
+        "http://localhost:8080/console/*"
+      ],
+      "webOrigins": [
+        "http://console.nova.localhost:8080",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "bss-storefront",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/shop/*",
+        "http://shop.nova.localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://shop.nova.localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "bss-demo",
+      "name": "BSS demo client (password grant, local development only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false
+    },
+    {
+      "clientId": "bss-csr",
+      "name": "CSR console (assisted channel; SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://csr.nova.localhost:8080/*",
+        "http://localhost:8080/csr/*"
+      ],
+      "webOrigins": [
+        "http://csr.nova.localhost:8080",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "org",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "org",
+            "claim.name": "org",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-bss-ordering",
+      "enabled": true,
+      "serviceAccountClientId": "bss-ordering",
+      "realmRoles": [
+        "catalog:read",
+        "party:read",
+        "inventory:write",
+        "stock:write",
+        "payment:read",
+        "payment:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-billing",
+      "enabled": true,
+      "serviceAccountClientId": "bss-billing",
+      "realmRoles": [
+        "inventory:read",
+        "catalog:read",
+        "payment:read",
+        "payment:write",
+        "usage:read",
+        "usage:write"
+      ]
+    },
+    {
+      "username": "demo",
+      "enabled": true,
+      "email": "demo@bss.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "ordering:read",
+        "ordering:write",
+        "inventory:read",
+        "inventory:write",
+        "party:read",
+        "party:write",
+        "stock:read",
+        "stock:write",
+        "payment:read",
+        "payment:write",
+        "billing:read",
+        "billing:write",
+        "qualification:read",
+        "qualification:write",
+        "appointment:read",
+        "appointment:write",
+        "ticket:read",
+        "ticket:write",
+        "interaction:read",
+        "interaction:write",
+        "communication:read",
+        "communication:write",
+        "usage:read",
+        "usage:write"
+      ]
+    },
+    {
+      "username": "agent-anna",
+      "enabled": true,
+      "email": "anna@genalpha.example",
+      "emailVerified": true,
+      "firstName": "Anna",
+      "lastName": "Agent",
+      "attributes": {
+        "org": [
+          "genalpha-retail"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "agent",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agent"
+      ]
+    },
+    {
+      "username": "partner-paul",
+      "enabled": true,
+      "email": "paul@partner-north.example",
+      "emailVerified": true,
+      "firstName": "Paul",
+      "lastName": "Partner",
+      "attributes": {
+        "org": [
+          "partner-north"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "agent",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agent"
+      ]
+    }
+  ],
+  "displayName": "Nova Telecom"
+}

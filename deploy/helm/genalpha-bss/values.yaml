@@ -22,6 +22,15 @@ config:
   dbUsername: postgres
   # Local/dev only. In cloud, use an existingSecret instead.
   dbPassword: postgres
+  # Owner credentials for Flyway; the runtime uses each service's RLS-
+  # restricted dbRole (dev convention: password == role name — override
+  # per environment).
+  dbMigrationUsername: postgres
+  dbMigrationPassword: postgres
+  # Second demo tenant (Nova Telecom). Remove or extend per deployment.
+  novaIssuerUri: http://localhost:8085/realms/nova
+  novaJwksUri: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+  novaTokenUri: http://keycloak:8080/realms/nova/protocol/openid-connect/token
 
 # In-cluster dependencies for local/dev clusters. Disable each on cloud.
 local:
@@ -80,9 +89,11 @@ services:
     extraEnv: {}
   product-catalog:
     db: product_catalog
+    dbRole: catalog_app
     extraEnv: {}
   product-ordering:
     db: product_ordering
+    dbRole: ordering_app
     machineIdentity: true
     extraEnv:
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -92,18 +103,23 @@ services:
       PAYMENT_BASE_URL: http://payment:8080
   product-inventory:
     db: product_inventory
+    dbRole: inventory_app
     extraEnv: {}
   party-account:
     db: party_account
+    dbRole: party_app
     extraEnv: {}
   product-stock:
     db: product_stock
+    dbRole: stock_app
     extraEnv: {}
   payment:
     db: payment
+    dbRole: payment_app
     extraEnv: {}
   billing:
     db: billing
+    dbRole: billing_app
     machineIdentity: true
     extraEnv:
       OIDC_CLIENT_ID: bss-billing
@@ -114,22 +130,29 @@ services:
       USAGE_BASE_URL: http://usage:8080
   qualification:
     db: qualification
+    dbRole: qualification_app
     extraEnv: {}
   appointment:
     db: appointment
+    dbRole: appointment_app
     extraEnv: {}
   trouble-ticket:
     db: trouble_ticket
+    dbRole: ticket_app
     extraEnv: {}
   party-interaction:
     db: party_interaction
+    dbRole: interaction_app
     extraEnv: {}
   communication:
     db: communication
+    dbRole: communication_app
     extraEnv: {}
   shopping-cart:
     db: shopping_cart
+    dbRole: cart_app
     extraEnv: {}
   usage:
     db: usage
+    dbRole: usage_app
     extraEnv: {}

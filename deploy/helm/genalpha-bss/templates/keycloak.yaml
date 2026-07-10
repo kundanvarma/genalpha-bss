@@ -6,6 +6,8 @@ metadata:
 data:
   bss-realm.json: |
 {{ .Files.Get "files/bss-realm.json" | indent 4 }}
+  nova-realm.json: |
+{{ .Files.Get "files/nova-realm.json" | indent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment

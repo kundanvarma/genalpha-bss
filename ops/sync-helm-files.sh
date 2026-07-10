@@ -4,5 +4,6 @@
 set -e
 cd "$(dirname "$0")/.."
 cp infra/keycloak/bss-realm.json deploy/helm/genalpha-bss/files/bss-realm.json
+cp infra/keycloak/nova-realm.json deploy/helm/genalpha-bss/files/nova-realm.json
 cp infra/postgres/init-databases.sql deploy/helm/genalpha-bss/files/init-databases.sql
 echo "helm chart files synced from infra/"
