@@ -8,4 +8,11 @@ package com.bss.ordering.events;
 public interface DomainEventPublisher {
 
     void publish(String eventType, String resourceKey, Object resource);
+
+    /**
+     * Same, but with an explicit tenant — for system jobs that act on rows
+     * outside any request context (sweepers, relays) where the tenant comes
+     * from the row, not the caller.
+     */
+    void publish(String eventType, String resourceKey, Object resource, String tenantId);
 }

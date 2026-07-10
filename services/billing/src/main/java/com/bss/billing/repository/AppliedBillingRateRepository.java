@@ -7,5 +7,5 @@ import java.util.List;
 
 public interface AppliedBillingRateRepository extends JpaRepository<AppliedBillingRate, String> {
 
-    List<AppliedBillingRate> findByBillId(String billId);
+    List<AppliedBillingRate> findByTenantIdAndBillId(String tenantId, String billId);
 }

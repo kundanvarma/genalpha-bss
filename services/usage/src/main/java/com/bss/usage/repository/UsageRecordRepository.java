@@ -8,9 +8,9 @@ import java.util.List;
 
 public interface UsageRecordRepository extends JpaRepository<UsageRecord, String> {
 
-    List<UsageRecord> findByOwnerPartyIdAndStatusAndUsageDateBetween(
-            String ownerPartyId, String status, OffsetDateTime from, OffsetDateTime to);
+    List<UsageRecord> findByTenantIdAndOwnerPartyIdAndStatusAndUsageDateBetween(
+            String tenantId, String ownerPartyId, String status, OffsetDateTime from, OffsetDateTime to);
 
-    List<UsageRecord> findByOwnerPartyIdAndUsageDateBetween(
-            String ownerPartyId, OffsetDateTime from, OffsetDateTime to);
+    List<UsageRecord> findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
+            String tenantId, String ownerPartyId, OffsetDateTime from, OffsetDateTime to);
 }

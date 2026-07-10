@@ -11,6 +11,7 @@ import com.bss.ticket.exception.NotFoundException;
 import com.bss.ticket.repository.TroubleTicketRepository;
 import com.bss.ticket.security.OrgScope;
 import com.bss.ticket.security.PartyScope;
+import com.bss.ticket.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,16 +50,18 @@ public class TroubleTicketService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final OrgScope orgScope;
+    private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
     private final String defaultOrg;
 
     public TroubleTicketService(TroubleTicketRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, OrgScope orgScope, ObjectMapper objectMapper,
+            PartyScope partyScope, OrgScope orgScope, TenantScope tenantScope, ObjectMapper objectMapper,
             @Value("${bss.org.default-org:genalpha-retail}") String defaultOrg) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.orgScope = orgScope;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
         this.defaultOrg = defaultOrg;
     }
@@ -66,6 +69,7 @@ public class TroubleTicketService {
     @Transactional(readOnly = true)
     public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
         TroubleTicket probe = new TroubleTicket();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -83,7 +87,7 @@ public class TroubleTicketService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        TroubleTicket entity = repository.findById(id)
+        TroubleTicket entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireVisible(entity);
         return toMap(entity);
@@ -109,6 +113,7 @@ public class TroubleTicketService {
         String customerParty = partyScope.scopedPartyId().orElseGet(() -> customerIn(dto));
         entity.setOwnerPartyId(customerParty);
         entity.setOrgId(orgScope.scopedOrgId().orElse(defaultOrg));
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setRelatedEntityJson(writeJson(dto.get("relatedEntity")));
         entity.setNoteJson(writeJson(normalizeNotes(dto.get("note"))));
         entity.setCreationDate(OffsetDateTime.now());
@@ -127,7 +132,7 @@ public class TroubleTicketService {
     @Transactional
     @SuppressWarnings("unchecked")
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
-        TroubleTicket entity = repository.findById(id)
+        TroubleTicket entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireVisible(entity);
 

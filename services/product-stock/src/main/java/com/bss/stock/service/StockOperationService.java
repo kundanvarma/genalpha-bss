@@ -8,6 +8,7 @@ import com.bss.stock.exception.BadRequestException;
 import com.bss.stock.exception.ConflictException;
 import com.bss.stock.repository.ProductStockRepository;
 import com.bss.stock.repository.StockReservationRepository;
+import com.bss.stock.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +33,14 @@ public class StockOperationService {
     private final ProductStockRepository stocks;
     private final StockReservationRepository reservations;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
     public StockOperationService(ProductStockRepository stocks, StockReservationRepository reservations,
-            DomainEventPublisher events) {
+            DomainEventPublisher events, TenantScope tenantScope) {
         this.stocks = stocks;
         this.reservations = reservations;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional
@@ -49,13 +52,14 @@ public class StockOperationService {
             throw new BadRequestException("quantity must be at least 1");
         }
 
-        ProductStock stock = stocks.findForUpdateByProductOfferingId(offeringId).orElse(null);
+        String tenantId = tenantScope.currentTenantId();
+        ProductStock stock = stocks.findForUpdateByProductOfferingId(offeringId, tenantId).orElse(null);
         if (stock == null) {
             request.setState(NOT_MANAGED);
             return request;
         }
 
-        int reserved = reservations.activeQuantityFor(stock.getId());
+        int reserved = reservations.activeQuantityFor(stock.getId(), tenantId);
         int available = stock.getStockedAmount() - reserved;
         if (quantity > available) {
             throw new ConflictException("insufficient stock for '" + stock.getName()
@@ -63,6 +67,7 @@ public class StockOperationService {
         }
 
         StockReservation reservation = new StockReservation();
+        reservation.setTenantId(tenantId);
         reservation.setId(UUID.randomUUID().toString());
         reservation.setProductStockId(stock.getId());
         reservation.setOrderId(orderId);
@@ -80,7 +85,8 @@ public class StockOperationService {
     @Transactional
     public int release(StockOperationDto request) {
         String orderId = refId(request.getRelatedOrder(), "relatedOrder");
-        List<StockReservation> active = reservations.findByOrderIdAndState(orderId, StockReservation.ACTIVE);
+        List<StockReservation> active = reservations.findByTenantIdAndOrderIdAndState(
+                tenantScope.currentTenantId(), orderId, StockReservation.ACTIVE);
         for (StockReservation r : active) {
             r.setState(StockReservation.RELEASED);
         }
@@ -92,9 +98,11 @@ public class StockOperationService {
     @Transactional
     public int consume(StockOperationDto request) {
         String orderId = refId(request.getRelatedOrder(), "relatedOrder");
-        List<StockReservation> active = reservations.findByOrderIdAndState(orderId, StockReservation.ACTIVE);
+        String tenantId = tenantScope.currentTenantId();
+        List<StockReservation> active = reservations.findByTenantIdAndOrderIdAndState(
+                tenantId, orderId, StockReservation.ACTIVE);
         for (StockReservation r : active) {
-            ProductStock stock = stocks.findForUpdateById(r.getProductStockId())
+            ProductStock stock = stocks.findForUpdateById(r.getProductStockId(), tenantId)
                     .orElseThrow(() -> new IllegalStateException("reservation without stock row"));
             stock.setStockedAmount(stock.getStockedAmount() - r.getQuantity());
             stock.setLastUpdate(OffsetDateTime.now());

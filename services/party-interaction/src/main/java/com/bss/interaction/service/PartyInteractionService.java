@@ -10,6 +10,7 @@ import com.bss.interaction.exception.NotFoundException;
 import com.bss.interaction.repository.PartyInteractionRepository;
 import com.bss.interaction.security.OrgScope;
 import com.bss.interaction.security.PartyScope;
+import com.bss.interaction.security.TenantScope;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -37,21 +38,24 @@ public class PartyInteractionService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final OrgScope orgScope;
+    private final TenantScope tenantScope;
     private final String defaultOrg;
 
     public PartyInteractionService(PartyInteractionRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, OrgScope orgScope,
+            PartyScope partyScope, OrgScope orgScope, TenantScope tenantScope,
             @Value("${bss.org.default-org:genalpha-retail}") String defaultOrg) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.orgScope = orgScope;
+        this.tenantScope = tenantScope;
         this.defaultOrg = defaultOrg;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<Map<String, Object>> findAll(int offset, int limit, Map<String, String> filters) {
         PartyInteraction probe = new PartyInteraction();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -68,7 +72,7 @@ public class PartyInteractionService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> findById(String id) {
-        PartyInteraction entity = repository.findById(id)
+        PartyInteraction entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         partyScope.scopedPartyId().ifPresent(own -> {
             if (!own.equals(entity.getCustomerPartyId())) {
@@ -95,6 +99,7 @@ public class PartyInteractionService {
         PartyInteraction entity = new PartyInteraction();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/partyInteraction/" + id);
         entity.setDescription(String.valueOf(dto.get("description")));
         entity.setChannel(dto.get("channel") == null ? "phone" : String.valueOf(dto.get("channel")));

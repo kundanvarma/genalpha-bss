@@ -41,6 +41,9 @@ public class TroubleTicket {
     @Column(name = "org_id")
     private String orgId;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "related_entity")
     private String relatedEntityJson;
 
@@ -121,6 +124,14 @@ public class TroubleTicket {
 
     public void setOrgId(String orgId) {
         this.orgId = orgId;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getRelatedEntityJson() {

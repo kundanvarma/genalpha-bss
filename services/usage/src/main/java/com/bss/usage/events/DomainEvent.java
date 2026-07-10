@@ -11,5 +11,6 @@ public record DomainEvent(
         String eventId,
         OffsetDateTime eventTime,
         String eventType,
+        String tenantId,
         Map<String, Object> event) {
 }

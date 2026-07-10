@@ -33,7 +33,19 @@ public class ServiceableArea {
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
+    /** The tenant this row belongs to; never exposed in API responses. */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     public ServiceableArea() {
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getId() {

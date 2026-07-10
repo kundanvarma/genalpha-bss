@@ -10,6 +10,7 @@ import com.bss.usage.repository.RatedChargeRepository;
 import com.bss.usage.repository.UsageAllowanceRepository;
 import com.bss.usage.repository.UsageRecordRepository;
 import com.bss.usage.security.PartyScope;
+import com.bss.usage.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -44,16 +45,18 @@ public class UsageService {
     private final RatedChargeRepository ratedCharges;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             RatedChargeRepository ratedCharges, DomainEventPublisher events, PartyScope partyScope,
-            ObjectMapper objectMapper) {
+            TenantScope tenantScope, ObjectMapper objectMapper) {
         this.records = records;
         this.allowances = allowances;
         this.ratedCharges = ratedCharges;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
     }
 
@@ -79,6 +82,7 @@ public class UsageService {
         UsageRecord entity = new UsageRecord();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/usage/" + id);
         entity.setUsageSpecName(String.valueOf(dto.get("usageType")));
         entity.setUsageDate(dto.get("usageDate") == null ? OffsetDateTime.now()
@@ -103,10 +107,11 @@ public class UsageService {
      */
     @Transactional
     public List<Map<String, Object>> rateForParty(String ownerPartyId, LocalDate periodStart, LocalDate periodEnd) {
+        String tenantId = tenantScope.currentTenantId();
         OffsetDateTime from = periodStart.atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime to = periodEnd.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
-        List<UsageRecord> unrated = records.findByOwnerPartyIdAndStatusAndUsageDateBetween(
-                ownerPartyId, RECEIVED, from, to);
+        List<UsageRecord> unrated = records.findByTenantIdAndOwnerPartyIdAndStatusAndUsageDateBetween(
+                tenantId, ownerPartyId, RECEIVED, from, to);
 
         // (offeringId, spec) -> summed usage
         Map<String, List<UsageRecord>> groups = new LinkedHashMap<>();
@@ -120,14 +125,15 @@ public class UsageService {
             BigDecimal total = rs.stream().map(UsageRecord::getValue)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             List<UsageAllowance> rules = first.getProductOfferingId() == null ? List.of()
-                    : allowances.findByProductOfferingIdAndUsageSpecName(
-                            first.getProductOfferingId(), first.getUsageSpecName());
+                    : allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
+                            tenantId, first.getProductOfferingId(), first.getUsageSpecName());
             if (!rules.isEmpty()) {
                 UsageAllowance rule = rules.get(0);
                 BigDecimal over = total.subtract(rule.getAllowanceValue());
                 if (over.signum() > 0) {
                     RatedCharge charge = new RatedCharge();
                     charge.setId(UUID.randomUUID().toString());
+                    charge.setTenantId(tenantId);
                     charge.setOwnerPartyId(ownerPartyId);
                     charge.setName(first.getUsageSpecName() + " overage: " + over.stripTrailingZeros().toPlainString()
                             + " " + rule.getUnits() + " over " + rule.getAllowanceValue().stripTrailingZeros().toPlainString()
@@ -144,21 +150,22 @@ public class UsageService {
             rs.forEach(r -> r.setStatus(RATED));
             records.saveAll(rs);
         }
-        return ratedCharges.findByOwnerPartyIdAndPeriodStart(ownerPartyId, periodStart)
+        return ratedCharges.findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, ownerPartyId, periodStart)
                 .stream().map(this::chargeMap).toList();
     }
 
     /** TMF677: this month's buckets for the calling customer (or a named party for staff). */
     @Transactional(readOnly = true)
     public Map<String, Object> consumptionReport(String requestedPartyId) {
+        String tenantId = tenantScope.currentTenantId();
         String party = partyScope.scopedPartyId().orElse(requestedPartyId);
         if (party == null) {
             throw new BadRequestException("relatedPartyId is required for unscoped callers");
         }
         LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
         OffsetDateTime from = periodStart.atStartOfDay().atOffset(ZoneOffset.UTC);
-        List<UsageRecord> monthly = records.findByOwnerPartyIdAndUsageDateBetween(
-                party, from, OffsetDateTime.now());
+        List<UsageRecord> monthly = records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
+                tenantId, party, from, OffsetDateTime.now());
 
         Map<String, Map<String, Object>> buckets = new LinkedHashMap<>();
         for (UsageRecord r : monthly) {
@@ -169,8 +176,8 @@ public class UsageService {
                 b.put("usedValue", BigDecimal.ZERO);
                 b.put("units", r.getUnits());
                 List<UsageAllowance> rules = r.getProductOfferingId() == null ? List.of()
-                        : allowances.findByProductOfferingIdAndUsageSpecName(
-                                r.getProductOfferingId(), r.getUsageSpecName());
+                        : allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
+                                tenantId, r.getProductOfferingId(), r.getUsageSpecName());
                 if (!rules.isEmpty()) {
                     b.put("allowedValue", rules.get(0).getAllowanceValue());
                 }
@@ -220,6 +227,7 @@ public class UsageService {
         UsageAllowance entity = new UsageAllowance();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/usageAllowance/" + id);
         entity.setProductOfferingJson(writeJson(dto.get("productOffering")));
         entity.setProductOfferingId(String.valueOf(off.get("id")));
@@ -235,7 +243,8 @@ public class UsageService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> listAllowances() {
-        return allowances.findAll().stream().map(this::allowanceMap).toList();
+        return allowances.findByTenantId(tenantScope.currentTenantId())
+                .stream().map(this::allowanceMap).toList();
     }
 
     private Map<String, Object> allowanceMap(UsageAllowance entity) {

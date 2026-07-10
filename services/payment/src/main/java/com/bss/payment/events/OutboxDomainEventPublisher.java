@@ -1,5 +1,6 @@
 package com.bss.payment.events;
 
+import com.bss.payment.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -17,18 +18,27 @@ public class OutboxDomainEventPublisher implements DomainEventPublisher {
 
     private final OutboxEventRepository outbox;
     private final ObjectMapper objectMapper;
+    private final TenantScope tenantScope;
 
-    public OutboxDomainEventPublisher(OutboxEventRepository outbox, ObjectMapper objectMapper) {
+    public OutboxDomainEventPublisher(OutboxEventRepository outbox, ObjectMapper objectMapper,
+            TenantScope tenantScope) {
         this.outbox = outbox;
         this.objectMapper = objectMapper;
+        this.tenantScope = tenantScope;
     }
 
     @Override
     public void publish(String eventType, String resourceKey, Object resource) {
+        publish(eventType, resourceKey, resource, tenantScope.currentTenantId());
+    }
+
+    @Override
+    public void publish(String eventType, String resourceKey, Object resource, String tenantId) {
         DomainEvent event = new DomainEvent(
                 UUID.randomUUID().toString(),
                 OffsetDateTime.now(),
                 eventType,
+                tenantId,
                 Map.of(resourceKey, resource));
         OutboxEvent row = new OutboxEvent();
         row.setId(event.eventId());

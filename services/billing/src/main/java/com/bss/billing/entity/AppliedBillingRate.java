@@ -17,6 +17,9 @@ public class AppliedBillingRate {
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "bill_id")
     private String billId;
 
@@ -50,6 +53,14 @@ public class AppliedBillingRate {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getBillId() {

@@ -15,6 +15,14 @@ public class ShoppingCart {
     public static final String CHECKED_OUT = "checkedOut";
     public static final String ABANDONED = "abandoned";
 
+    /**
+     * Initialized to the deployment default (mirroring the column DEFAULT) so
+     * carts persisted outside a request context — system jobs, tests — land in
+     * the default tenant; request paths always set it from TenantScope.
+     */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId = "genalpha";
+
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
@@ -105,5 +113,13 @@ public class ShoppingCart {
 
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

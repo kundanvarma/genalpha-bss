@@ -1,5 +1,6 @@
 package com.bss.catalog.events;
 
+import com.bss.catalog.security.TenantScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -29,8 +30,8 @@ public class EventConfig {
 
     @Bean
     @ConditionalOnProperty(name = "bss.events.enabled", havingValue = "true", matchIfMissing = true)
-    DomainEventPublisher outboxDomainEventPublisher(OutboxEventRepository outbox, ObjectMapper objectMapper) {
-        return new OutboxDomainEventPublisher(outbox, objectMapper);
+    DomainEventPublisher outboxDomainEventPublisher(OutboxEventRepository outbox, ObjectMapper objectMapper, TenantScope tenantScope) {
+        return new OutboxDomainEventPublisher(outbox, objectMapper, tenantScope);
     }
 
     @Bean

@@ -17,6 +17,9 @@ public class UsageSpecification {
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "href")
     private String href;
 
@@ -38,6 +41,14 @@ public class UsageSpecification {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getHref() {

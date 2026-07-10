@@ -34,7 +34,19 @@ public class StockReservation {
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
+    /** The tenant this row belongs to; never exposed in API responses. */
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     public StockReservation() {
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 
     public String getId() {

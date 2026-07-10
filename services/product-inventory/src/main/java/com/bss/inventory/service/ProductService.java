@@ -11,6 +11,7 @@ import com.bss.inventory.exception.NotFoundException;
 import com.bss.inventory.mapper.ProductMapper;
 import com.bss.inventory.repository.ProductRepository;
 import com.bss.inventory.security.PartyScope;
+import com.bss.inventory.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -29,18 +30,21 @@ public class ProductService {
     private final ProductMapper mapper;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
+    private final TenantScope tenantScope;
 
     public ProductService(ProductRepository repository, ProductMapper mapper,
-            DomainEventPublisher events, PartyScope partyScope) {
+            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
         this.partyScope = partyScope;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<ProductDto> findAll(int offset, int limit, Map<String, String> filters) {
         Product probe = probeFor(filters);
+        probe.setTenantId(tenantScope.currentTenantId());
         // Customers see their own products only, whatever else they filter on.
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         Page<Product> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
@@ -68,7 +72,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductDto findById(String id) {
-        Product entity = repository.findById(id)
+        Product entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         return mapper.toDto(entity);
@@ -80,6 +84,7 @@ public class ProductService {
             dto.setStatus("created");
         }
         Product entity = mapper.toEntity(dto);
+        entity.setTenantId(tenantScope.currentTenantId());
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
         String id = UUID.randomUUID().toString();
         entity.setId(id);
@@ -91,7 +96,7 @@ public class ProductService {
 
     @Transactional
     public ProductDto patch(String id, ProductDto patch) {
-        Product entity = repository.findById(id)
+        Product entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         mapper.applyPatch(patch, entity);
@@ -102,11 +107,11 @@ public class ProductService {
 
     @Transactional
     public void delete(String id) {
-        Product entity = repository.findById(id)
+        Product entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
         ProductDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("ProductDeleteEvent", "product", deleted);
     }
 

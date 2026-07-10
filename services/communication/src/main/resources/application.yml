@@ -1,11 +1,6 @@
 spring:
   application:
     name: communication
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/communication}
     username: ${DB_USERNAME:postgres}
@@ -51,3 +46,12 @@ bss:
     topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events}
   events:
     topic: bss.communication.events
+  # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
+  # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
+  # leave it empty when the issuer is directly reachable for discovery.
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}

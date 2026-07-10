@@ -16,6 +16,9 @@ public class BillFormat {
     @Column(name = "href")
     private String href;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "name", nullable = false)
     private String name;
 
@@ -44,5 +47,13 @@ public class BillFormat {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

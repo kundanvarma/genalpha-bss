@@ -43,11 +43,15 @@ public class EventStreamListener {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
             String eventId = String.valueOf(envelope.get("eventId"));
             String eventType = String.valueOf(envelope.get("eventType"));
+            // Envelope tenant keeps the notification inside the tenant that
+            // produced the event; pre-tenancy events carry none and land in
+            // the default tenant.
+            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
             @SuppressWarnings("unchecked")
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : null;
             mapper.map(eventType, event).ifPresent(notification ->
-                    messages.mint(eventId, eventType, notification));
+                    messages.mint(eventId, eventType, tenantId, notification));
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());
         }

@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.SettlementAccountMapper;
 import com.bss.party.repository.SettlementAccountRepository;
+import com.bss.party.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -26,11 +27,13 @@ public class SettlementAccountService {
     private final SettlementAccountRepository repository;
     private final SettlementAccountMapper mapper;
     private final DomainEventPublisher events;
+    private final TenantScope tenantScope;
 
-    public SettlementAccountService(SettlementAccountRepository repository, SettlementAccountMapper mapper, DomainEventPublisher events) {
+    public SettlementAccountService(SettlementAccountRepository repository, SettlementAccountMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
+        this.tenantScope = tenantScope;
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +49,7 @@ public class SettlementAccountService {
      */
     private Example<SettlementAccount> probeFor(Map<String, String> filters) {
         SettlementAccount probe = new SettlementAccount();
+        probe.setTenantId(tenantScope.currentTenantId());
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
@@ -58,7 +62,7 @@ public class SettlementAccountService {
 
     @Transactional(readOnly = true)
     public SettlementAccountDto findById(String id) {
-        SettlementAccount entity = repository.findById(id)
+        SettlementAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return mapper.toDto(entity);
     }
@@ -69,6 +73,7 @@ public class SettlementAccountService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.ACCOUNT_BASE + "/settlementAccount/" + id);
+        entity.setTenantId(tenantScope.currentTenantId());
         SettlementAccountDto created = mapper.toDto(repository.save(entity));
         events.publish("SettlementAccountCreateEvent", "settlementAccount", created);
         return created;
@@ -76,7 +81,7 @@ public class SettlementAccountService {
 
     @Transactional
     public SettlementAccountDto patch(String id, SettlementAccountDto patch) {
-        SettlementAccount entity = repository.findById(id)
+        SettlementAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
         SettlementAccountDto updated = mapper.toDto(repository.save(entity));
@@ -86,10 +91,10 @@ public class SettlementAccountService {
 
     @Transactional
     public void delete(String id) {
-        SettlementAccount entity = repository.findById(id)
+        SettlementAccount entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         SettlementAccountDto deleted = mapper.toDto(entity);
-        repository.deleteById(id);
+        repository.delete(entity);
         events.publish("SettlementAccountDeleteEvent", "settlementAccount", deleted);
     }
 }

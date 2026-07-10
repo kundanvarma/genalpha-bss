@@ -16,6 +16,9 @@ public class BillingAccount {
     @Column(name = "href")
     private String href;
 
+    @Column(name = "tenant_id", nullable = false, length = 64)
+    private String tenantId;
+
     @Column(name = "name", nullable = false)
     private String name;
 
@@ -78,5 +81,13 @@ public class BillingAccount {
 
     public void setRelatedPartyJson(String relatedPartyJson) {
         this.relatedPartyJson = relatedPartyJson;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
     }
 }

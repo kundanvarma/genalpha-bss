@@ -40,6 +40,7 @@ public class OutboxRelay {
     @Scheduled(fixedDelayString = "${bss.events.relay-interval-ms:2000}")
     @Transactional
     public void flush() {
+        // System job: drains the outbox across ALL tenants — deliberately unscoped.
         List<OutboxEvent> batch = outbox.findTop100ByOrderByCreatedAtAsc();
         for (OutboxEvent row : batch) {
             try {
