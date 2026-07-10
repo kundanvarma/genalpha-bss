@@ -30,6 +30,10 @@ public class ProductSpecification {
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
+    /** JSON array of TMF620 characteristics (variants: color, storage, ...), echoed verbatim. */
+    @Column(name = "product_spec_characteristic", length = 4000)
+    private String productSpecCharacteristicJson;
+
     public ProductSpecification() {
     }
 
@@ -79,5 +83,13 @@ public class ProductSpecification {
 
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
+    }
+
+    public String getProductSpecCharacteristicJson() {
+        return productSpecCharacteristicJson;
+    }
+
+    public void setProductSpecCharacteristicJson(String productSpecCharacteristicJson) {
+        this.productSpecCharacteristicJson = productSpecCharacteristicJson;
     }
 }

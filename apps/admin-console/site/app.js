@@ -36,6 +36,8 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true },
       { name: 'brand', label: 'Brand' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
+      { name: 'productSpecCharacteristic', label: 'Characteristics (JSON array)', kind: 'jsontext',
+        placeholder: '[{"name": "color", "productSpecCharacteristicValue": [{"value": "Black"}]}]' },
     ],
     columns: ['name', 'brand', 'lifecycleStatus', 'lastUpdate'],
   },
@@ -129,6 +131,28 @@ function checkboxControl(field) {
   return [input];
 }
 
+function jsonTextControl(field) {
+  const input = document.createElement('textarea');
+  input.name = field.name;
+  input.placeholder = field.placeholder || '';
+  input.rows = 3;
+  controls[field.name] = {
+    get: () => {
+      const v = input.value.trim();
+      if (!v) return undefined;
+      try {
+        return JSON.parse(v);
+      } catch {
+        throw new Error(`${field.label}: not valid JSON`);
+      }
+    },
+    set: (item) => {
+      input.value = item[field.name] ? JSON.stringify(item[field.name], null, 1) : '';
+    },
+  };
+  return [input];
+}
+
 function moneyControl(field) {
   const amount = document.createElement('input');
   amount.type = 'number';
@@ -156,6 +180,9 @@ function moneyControl(field) {
 function refControl(field, multiple) {
   const select = document.createElement('select');
   select.name = field.name;
+  // Entries that are not plain refs (e.g. bundle choice groups, edited via the
+  // API) must survive an edit-save round trip untouched.
+  let passthrough = [];
   if (multiple) {
     select.multiple = true;
     select.size = 4;
@@ -177,12 +204,15 @@ function refControl(field, multiple) {
   controls[field.name] = {
     get: () => {
       const picked = [...select.selectedOptions].filter((o) => o.value);
-      if (!picked.length) return undefined;
-      return multiple ? picked.map((o) => refObject(field, o)) : refObject(field, picked[0]);
+      if (!picked.length && !passthrough.length) return undefined;
+      return multiple
+        ? [...picked.map((o) => refObject(field, o)), ...passthrough]
+        : refObject(field, picked[0]);
     },
     set: (item) => {
-      const refs = item[field.name];
-      const ids = multiple ? (refs || []).map((r) => r.id) : [refs?.id].filter(Boolean);
+      const refs = multiple ? (item[field.name] || []) : [item[field.name]].filter(Boolean);
+      passthrough = multiple ? refs.filter((r) => !r.id || r.options) : [];
+      const ids = refs.filter((r) => r.id && !r.options).map((r) => r.id);
       if (select.options.length > (multiple ? 0 : 1)) {
         applySelection(select, ids);
       } else {
@@ -215,6 +245,7 @@ function renderEditor() {
       f.kind === 'money' ? moneyControl(f) :
       f.kind === 'ref' ? refControl(f, false) :
       f.kind === 'reflist' ? refControl(f, true) :
+      f.kind === 'jsontext' ? jsonTextControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');
     wrap.append(caption, ...parts);
     return wrap;
@@ -299,9 +330,15 @@ async function loadList() {
 async function save(event) {
   event.preventDefault();
   const body = {};
-  for (const f of active.fields) {
-    const value = controls[f.name].get();
-    if (value !== undefined) body[f.name] = value;
+  try {
+    for (const f of active.fields) {
+      const value = controls[f.name].get();
+      if (value !== undefined) body[f.name] = value;
+    }
+  } catch (e) {
+    el('editor-error').textContent = e.message;
+    el('editor-error').hidden = false;
+    return;
   }
   const url = editingId
     ? `${API_BASE}/${active.path}/${editingId}`

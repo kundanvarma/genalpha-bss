@@ -2,10 +2,25 @@ package com.bss.catalog.mapper;
 
 import com.bss.catalog.dto.ProductSpecificationDto;
 import com.bss.catalog.entity.ProductSpecification;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
 
 @Component
 public class ProductSpecificationMapper {
+
+    private static final TypeReference<List<Map<String, Object>>> JSON_OBJECT_LIST = new TypeReference<>() {
+    };
+
+    private final ObjectMapper objectMapper;
+
+    public ProductSpecificationMapper(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     public ProductSpecificationDto toDto(ProductSpecification entity) {
         ProductSpecificationDto dto = new ProductSpecificationDto();
@@ -15,6 +30,7 @@ public class ProductSpecificationMapper {
         dto.setBrand(entity.getBrand());
         dto.setLifecycleStatus(entity.getLifecycleStatus());
         dto.setLastUpdate(entity.getLastUpdate());
+        dto.setProductSpecCharacteristic(readJsonObjectList(entity.getProductSpecCharacteristicJson()));
         dto.setType("ProductSpecification");
         return dto;
     }
@@ -27,6 +43,7 @@ public class ProductSpecificationMapper {
         entity.setBrand(dto.getBrand());
         entity.setLifecycleStatus(dto.getLifecycleStatus());
         entity.setLastUpdate(dto.getLastUpdate());
+        entity.setProductSpecCharacteristicJson(writeJsonObjectList(dto.getProductSpecCharacteristic()));
         return entity;
     }
 
@@ -39,6 +56,31 @@ public class ProductSpecificationMapper {
         }
         if (patch.getLifecycleStatus() != null) {
             entity.setLifecycleStatus(patch.getLifecycleStatus());
+        }
+        if (patch.getProductSpecCharacteristic() != null) {
+            entity.setProductSpecCharacteristicJson(writeJsonObjectList(patch.getProductSpecCharacteristic()));
+        }
+    }
+
+    private String writeJsonObjectList(List<Map<String, Object>> value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("unserializable JSON array", e);
+        }
+    }
+
+    private List<Map<String, Object>> readJsonObjectList(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, JSON_OBJECT_LIST);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored JSON array is unreadable", e);
         }
     }
 }
