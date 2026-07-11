@@ -110,6 +110,12 @@ spring:
             - Path=/shop/**
           filters:
             - StripPrefix=1
+        - id: mobile-app
+          uri: ${APP_URL:http://localhost:8107}
+          predicates:
+            - Path=/app/**
+          filters:
+            - StripPrefix=1
 
 server:
   port: 8080
@@ -124,9 +130,13 @@ bss:
     registry:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        brand-name: MyGenAlpha
+        brand-color: "#0E7C7B"
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        brand-name: MyNova
+        brand-color: "#5B3FA8"
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost]
 
 management:

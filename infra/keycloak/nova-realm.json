@@ -108,7 +108,8 @@
             "agreement:read",
             "recommendation:read",
             "paymentmethod:read",
-            "paymentmethod:write"
+            "paymentmethod:write",
+            "service:read"
           ]
         }
       },
@@ -368,6 +369,29 @@
       "directAccessGrantsEnabled": false,
       "id": "a4a97bcb-578b-55cc-be00-8ccba21ee892",
       "description": "thin SOM: completes product orders after activation"
+    },
+    {
+      "clientId": "bss-app",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://app.nova.localhost:8080/*",
+        "http://localhost:8080/app/*",
+        "http://shop.nova.localhost:8080/app/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://shop.nova.localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "id": "a9ca7328-1959-5e9a-9fa8-38ca8640598c",
+      "description": "mobile app channel (public, PKCE)"
     }
   ],
   "users": [

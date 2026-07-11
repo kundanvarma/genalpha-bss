@@ -29,6 +29,22 @@ public class StorefrontTenantConfigController {
         this.tenants = tenants;
     }
 
+    /** The app's tenant manifest: identity + branding, JSON-shaped. */
+    @GetMapping(value = "/app/tenant-config.json")
+    public ResponseEntity<Map<String, Object>> appManifest(ServerHttpRequest request) {
+        TenantHosts.Entry tenant = tenants.byHost(request.getURI().getHost());
+        if (tenant == null) {
+            tenant = tenants.byId(tenants.getDefaultTenant());
+        }
+        Map<String, Object> manifest = new java.util.LinkedHashMap<>();
+        manifest.put("tenantId", tenant.getId());
+        manifest.put("issuer", tenant.getIssuer());
+        manifest.put("clientId", "bss-app");
+        if (tenant.getBrandName() != null) manifest.put("brandName", tenant.getBrandName());
+        if (tenant.getBrandColor() != null) manifest.put("brandColor", tenant.getBrandColor());
+        return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
+    }
+
     @GetMapping(value = "/{channel}/tenant-config.js", produces = "application/javascript")
     public ResponseEntity<String> channelConfig(@PathVariable String channel, ServerHttpRequest request) {
         String global = CHANNEL_GLOBALS.get(channel);

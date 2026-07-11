@@ -95,6 +95,7 @@ services:
       ASSURANCE_URL: http://assurance:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
+      APP_URL: http://mobile-app:8080
       CSR_URL: http://csr-console:8080
   console:
     db: ""
@@ -105,6 +106,10 @@ services:
     healthPath: /healthz
     extraEnv: {}
   csr-console:
+    db: ""
+    healthPath: /healthz
+    extraEnv: {}
+  mobile-app:
     db: ""
     healthPath: /healthz
     extraEnv: {}

@@ -50,6 +50,8 @@ public class TenantHosts {
 
         private String id;
         private String issuer;
+        private String brandName;
+        private String brandColor;
         private List<String> hosts = new ArrayList<>();
 
         public String getId() {
@@ -66,6 +68,22 @@ public class TenantHosts {
 
         public void setIssuer(String issuer) {
             this.issuer = issuer;
+        }
+
+        public String getBrandName() {
+            return brandName;
+        }
+
+        public void setBrandName(String brandName) {
+            this.brandName = brandName;
+        }
+
+        public String getBrandColor() {
+            return brandColor;
+        }
+
+        public void setBrandColor(String brandColor) {
+            this.brandColor = brandColor;
         }
 
         public List<String> getHosts() {

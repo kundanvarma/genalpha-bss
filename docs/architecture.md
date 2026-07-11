@@ -15,6 +15,7 @@ flowchart TB
         SHOP["storefront /shop"]
         CSR["csr-console /csr"]
         ADMIN["admin-console /console"]
+        APP["mobile-app /app\n(Expo RN: web + iOS/Android)"]
     end
 
     GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\nper-channel tenant-config.js"]
@@ -62,7 +63,7 @@ TMF642/656"]
     IDP[("OIDC IdPs\none issuer per tenant\n(Keycloak realms in dev)")]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
-    SHOP & CSR & ADMIN --> GW
+    SHOP & CSR & ADMIN & APP --> GW
     GW --> Party & Core & Revenue & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
