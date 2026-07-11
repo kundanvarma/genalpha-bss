@@ -21,6 +21,7 @@ Run against a fresh stack (`docker compose up -d`), in this order:
     python3 ops/seed/seed_agreement_terms.py    # TMF620/651 bundle commitment term
     python3 ops/seed/seed_promotions.py         # TMF671 WELCOME10 (10% off the bundle)
     python3 ops/seed/seed_resource_pools.py     # TMF685 per-tenant MSISDN pools
+    python3 ops/seed/seed_ai_slice.py           # AI-slice PoC: edge GPU pool, slice + token-metered AI
     python3 ops/seed/seed_content.py            # TMF667 logos + offering artwork (run AFTER seed_nova)
     python3 ops/seed/seed_nova.py           # second tenant: Nova Telecom's catalog
 
@@ -37,7 +38,8 @@ tenant's demo staff user through the gateway.
     node tenant_test.js       # two operators, one BSS: white-label hosts + isolation
     node app_test.js          # mobile app (web target): register, one-tap plan, SOM number, inbox
     node roles_test.js        # TMF672: tenant admins manage staff over their own IdP
-    node martech_test.js      # campaign engine: journey fires once per customer, tenant-local
+    node martech_test.js      # campaign engine + AI copy + churn scorer -> retention
+    node ai_slice_test.js     # AI-slice PoC: intent -> quote -> order -> fibre-cut self-heal
 
 The storefront suite pins Samsung stock availability to 10 at the start, so
 repeated runs stay deterministic. Keycloak access tokens live five minutes;

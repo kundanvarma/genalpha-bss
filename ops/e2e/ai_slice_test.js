@@ -25,13 +25,25 @@ async function staffToken(request) {
   const org = `stadium-e2e-${run}`;
   const path = 'fibre-route-stadium-north';
 
-  // 1. Business intent: a sub-10ms slice for a stadium, with AI capacity.
+  // 0. The AI chat seam: a plain-language ask becomes a structured intent.
+  const drafted = await (await ctx.request.post(`${API}/ai/v1/intentDraft`, {
+    headers: H,
+    data: { ask: 'a 5G slice with AI glasses for the stadium-north tournament' },
+  })).json();
+  if (drafted.expression.place !== 'stadium-north' || drafted.expression.latencyMs >= 20
+      || !drafted.expression.aiTokensMillions) {
+    fail('intent draft did not infer a low-latency AI slice: ' + JSON.stringify(drafted.expression));
+  }
+  console.log('OK AI turned the sales ask into an intent:', drafted.expression.place,
+    drafted.expression.latencyMs + 'ms, AI', drafted.expression.aiTokensMillions, 'Mtok');
+
+  // 1. Business intent: submit the drafted expression (a sub-10ms AI slice).
   const intent = await (await ctx.request.post(`${API}/tmf-api/intentManagement/v4/intent`, {
     headers: H,
     data: {
       name: `Tournament slice ${run}`,
       relatedParty: [{ id: org, role: 'customer' }],
-      expression: { place: 'stadium-north', latencyMs: 8, bandwidthMbps: 2000, aiTokensMillions: 80 },
+      expression: drafted.expression,
     },
   })).json();
   if (intent.status !== 'feasibilityChecked') fail('intent not feasible: ' + JSON.stringify(intent));

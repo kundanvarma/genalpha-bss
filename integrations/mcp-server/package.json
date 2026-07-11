@@ -1,0 +1,10 @@
+{
+  "name": "genalpha-bss-mcp",
+  "version": "1.0.0",
+  "description": "MCP server exposing genalpha-bss as tools for AI agents — the A2A/agentic connective tissue of the AI-slice PoC",
+  "type": "module",
+  "bin": { "genalpha-bss-mcp": "server.js" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
