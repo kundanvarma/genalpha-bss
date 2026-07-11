@@ -1,0 +1,175 @@
+package com.bss.intelligence.service;
+
+import com.bss.intelligence.audit.AiAudit;
+import com.bss.intelligence.audit.AiAuditRepository;
+import com.bss.intelligence.exception.BadRequestException;
+import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.security.TenantScope;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * The CSR copilot: summarize a customer's 360 and draft ticket replies.
+ * The console sends the data the agent can already see — the copilot never
+ * fetches on its own credentials, so it can never show an agent more than
+ * their token could. Drafts land in editable fields; the agent sends.
+ */
+@Service
+public class CopilotService {
+
+    private static final int CONTEXT_CHARS = 3000;
+
+    private final LlmAdapter llm;
+    private final Redactor redactor;
+    private final AiAuditRepository audits;
+    private final TenantScope tenantScope;
+    private final ObjectMapper objectMapper;
+
+    public CopilotService(LlmAdapter llm, Redactor redactor, AiAuditRepository audits,
+            TenantScope tenantScope, ObjectMapper objectMapper) {
+        this.llm = llm;
+        this.redactor = redactor;
+        this.audits = audits;
+        this.tenantScope = tenantScope;
+        this.objectMapper = objectMapper;
+    }
+
+    @Transactional
+    public Map<String, Object> summarizeCustomer(Map<String, Object> request) {
+        String context = contextOf(request);
+        String system = "You are a telecom customer-service copilot. From the customer data,"
+                + " tell the agent what is going on and what to do next. Respond with ONLY"
+                + " these labeled lines and nothing else:\n"
+                + "SUMMARY: <2-3 sentences: situation, anything unusual>\n"
+                + "NEXT: <one concrete action>\n"
+                + "NEXT: <another action (1 to 3 NEXT lines total)>";
+        String user = "Customer data (JSON):\n" + context;
+
+        String raw = completeWithRetry(system, user, "customer-summary");
+        String summary = lineAfter(raw, "SUMMARY:");
+        List<String> next = new ArrayList<>();
+        for (String line : raw.split("\\R")) {
+            String value = valueOf(line, "NEXT:");
+            if (value != null) {
+                next.add(value);
+            }
+        }
+        if (summary == null || next.isEmpty()) {
+            throw new BadRequestException("the model did not follow the SUMMARY/NEXT contract");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("summary", summary);
+        result.put("nextActions", next.subList(0, Math.min(3, next.size())));
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> draftTicketReply(Map<String, Object> request) {
+        if (!(request.get("ticket") instanceof Map<?, ?> ticket) || ticket.get("name") == null) {
+            throw new BadRequestException("ticket {name, ...} is required");
+        }
+        String system = "You are a telecom customer-service copilot. Draft a short, empathetic"
+                + " reply the agent can send to the customer about their support ticket."
+                + " Do not promise refunds or deadlines. Respond with ONLY one labeled line:\n"
+                + "REPLY: <the reply, max 400 characters>";
+        String user = "Ticket (JSON):\n" + contextOf(request);
+
+        String raw = completeWithRetry(system, user, "ticket-reply");
+        String reply = lineAfter(raw, "REPLY:");
+        if (reply == null) {
+            throw new BadRequestException("the model did not follow the REPLY contract");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("reply", reply);
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
+    /** Serialize, cap and redact whatever slice of the 360 the console sent. */
+    private String contextOf(Map<String, Object> request) {
+        if (request == null || request.isEmpty()) {
+            throw new BadRequestException("a context payload is required");
+        }
+        try {
+            String json = objectMapper.writeValueAsString(request);
+            if (json.length() > CONTEXT_CHARS) {
+                json = json.substring(0, CONTEXT_CHARS);
+            }
+            return redactor.redact(json);
+        } catch (Exception e) {
+            throw new BadRequestException("context payload is not serializable");
+        }
+    }
+
+    private String completeWithRetry(String system, String user, String useCase) {
+        String raw = llm.complete(system, user);
+        if (looksUnlabeled(raw)) {
+            recordAudit(raw, user, system, useCase + "-contract-miss");
+            raw = llm.complete(system, user
+                    + "\nYour previous answer did not follow the format. Respond again using"
+                    + " ONLY the labeled lines from the instructions.");
+        }
+        recordAudit(raw, user, system, useCase);
+        return raw;
+    }
+
+    private static boolean looksUnlabeled(String raw) {
+        for (String line : raw.split("\\R")) {
+            String t = line.trim().replaceFirst("^[*#>\\-\\s]+", "");
+            if (t.regionMatches(true, 0, "SUMMARY:", 0, 8)
+                    || t.regionMatches(true, 0, "REPLY:", 0, 6)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void recordAudit(String raw, String user, String system, String useCase) {
+        AiAudit audit = new AiAudit();
+        audit.setId(UUID.randomUUID().toString());
+        audit.setTenantId(tenantScope.currentTenantId());
+        audit.setUseCase(useCase);
+        audit.setProvider(llm.provider());
+        audit.setModel(llm.model());
+        audit.setPrompt(truncate(system + "\n---\n" + user));
+        audit.setResponse(truncate(raw));
+        audit.setCreatedAt(OffsetDateTime.now());
+        audits.save(audit);
+    }
+
+    private static String lineAfter(String raw, String label) {
+        for (String line : raw.split("\\R")) {
+            String value = valueOf(line, label);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    /** Tolerant of markdown-happy models: "**NEXT:** call" still parses. */
+    private static String valueOf(String line, String label) {
+        String trimmed = line.trim().replaceFirst("^[*#>\\-\\s]+", "");
+        if (trimmed.regionMatches(true, 0, label, 0, label.length())) {
+            String value = trimmed.substring(label.length())
+                    .replaceAll("^[*\\s]+|[*\\s]+$", "").trim();
+            return value.isEmpty() ? null : value;
+        }
+        return null;
+    }
+
+    private static String truncate(String s) {
+        return s.length() <= 4000 ? s : s.substring(0, 4000);
+    }
+}

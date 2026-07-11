@@ -75,6 +75,7 @@ TMF642/656"]
     REC -.-> CAT & INV
     CAMP -.->|"delivers via\nmachine identity"| COMM
     AI -.->|"drafts campaign copy\n(stub/Ollama/OpenAI/Anthropic)"| CAMP
+    CSR -.->|"copilot: 360 summary,\nticket reply drafts"| AI
     ROLES -.-> IDP
 
     Core & Revenue & Care -->|events| KAFKA

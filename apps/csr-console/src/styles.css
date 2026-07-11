@@ -276,3 +276,9 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 }
 .hero h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: #fff; }
 .hero p { margin: 0; font-size: 15px; opacity: 0.88; max-width: 46ch; }
+.copilot {
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+  box-shadow: var(--shadow); padding: 14px 18px; margin: 14px 0 4px;
+}
+.copilot p { margin: 4px 0; }
+.copilot ul { margin: 6px 0 4px; padding-left: 20px; }

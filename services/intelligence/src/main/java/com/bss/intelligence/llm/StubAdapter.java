@@ -15,6 +15,18 @@ public class StubAdapter implements LlmAdapter {
 
     @Override
     public String complete(String system, String user) {
+        if (system.contains("SUMMARY:")) {
+            return "SUMMARY: The provided customer data is summarized deterministically (stub"
+                    + " provider — configure a real model for genuine insight). Nothing here"
+                    + " left the machine.\n"
+                    + "NEXT: Review the open items in the 360 with the customer.\n"
+                    + "NEXT: Check whether the current plan still fits their usage.";
+        }
+        if (system.contains("REPLY:")) {
+            return "REPLY: Hi! Thanks for reaching out — we are looking into your case and"
+                    + " will keep you posted here. (Drafted by the stub provider; configure"
+                    + " a real model for tailored replies.)";
+        }
         String brief = user.replaceAll("(?s).*Brief:\\s*", "").replaceAll("(?s)\\n.*", "").trim();
         String subject = brief.isEmpty() ? "A little something for you"
                 : Character.toUpperCase(brief.charAt(0)) + brief.substring(1);
