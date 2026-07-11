@@ -379,6 +379,8 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       AGREEMENT_BASE_URL: http://agreement:8080
       USAGE_BASE_URL: http://usage:8080
+      TICKET_BASE_URL: http://trouble-ticket:8080
+      ASSURANCE_BASE_URL: http://assurance:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # The vendor seam: stub needs no network/keys. Point AI_PROVIDER /
       # AI_BASE_URL / AI_MODEL / AI_API_KEY at Ollama, OpenAI, Azure,

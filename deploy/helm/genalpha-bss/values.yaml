@@ -220,6 +220,8 @@ services:
       OIDC_CLIENT_SECRET: intelligence-secret
       AGREEMENT_BASE_URL: http://agreement:8080
       USAGE_BASE_URL: http://usage:8080
+      TICKET_BASE_URL: http://trouble-ticket:8080
+      ASSURANCE_BASE_URL: http://assurance:8080
   user-roles:
     db: ""
     machineIdentity: true

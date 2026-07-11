@@ -49,7 +49,7 @@ failures.
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
 | document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
-| intelligence | AI | 8109 | Any-LLM seam (stub / OpenAI-compatible / Anthropic, per-tenant overrides): copy assistant + CSR copilot + churn/NBO scorer; PII redaction, audit ledger with a console viewer |
+| intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 

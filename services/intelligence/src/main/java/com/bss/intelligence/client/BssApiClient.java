@@ -23,17 +23,39 @@ public class BssApiClient {
 
     private final RestClient agreementClient;
     private final RestClient usageClient;
+    private final RestClient ticketClient;
+    private final RestClient assuranceClient;
     private final ObjectMapper objectMapper;
 
     public BssApiClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             ObjectMapper objectMapper,
             @Value("${bss.downstream.agreement-base-url:http://localhost:8098}") String agreementBaseUrl,
-            @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBaseUrl) {
+            @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBaseUrl,
+            @Value("${bss.downstream.ticket-base-url:http://localhost:8092}") String ticketBaseUrl,
+            @Value("${bss.downstream.assurance-base-url:http://localhost:8105}") String assuranceBaseUrl) {
         this.agreementClient = builder.baseUrl(agreementBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.usageClient = builder.baseUrl(usageBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
+        this.ticketClient = builder.baseUrl(ticketBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
+        this.assuranceClient = builder.baseUrl(assuranceBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
+    }
+
+    public List<Map<String, Object>> ticketsOf(String partyId) {
+        String body = ticketClient.get()
+                .uri("/tmf-api/troubleTicket/v4/troubleTicket?relatedPartyId=" + partyId + "&limit=50")
+                .retrieve().body(String.class);
+        return parse(body);
+    }
+
+    public List<Map<String, Object>> openServiceProblems() {
+        String body = assuranceClient.get()
+                .uri("/tmf-api/serviceProblemManagement/v4/serviceProblem?status=open")
+                .retrieve().body(String.class);
+        return parse(body);
     }
 
     public List<Map<String, Object>> activeAgreements() {

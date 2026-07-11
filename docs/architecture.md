@@ -76,7 +76,7 @@ TMF642/656"]
     CAMP -.->|"delivers via\nmachine identity"| COMM
     AI -.->|"drafts campaign copy\n(stub/Ollama/OpenAI/Anthropic)"| CAMP
     CSR -.->|"copilot: 360 summary,\nticket reply drafts"| AI
-    AI -.->|"churn/NBO sweep (rules):\nChurnRiskDetectedEvent"| KAFKA
+    AI -.->|"churn engine: rules + learned model\n(snapshots -> outcomes -> train)\nChurnRiskDetectedEvent"| KAFKA
     ROLES -.-> IDP
 
     Core & Revenue & Care -->|events| KAFKA
