@@ -392,6 +392,20 @@ services:
       keycloak:
         condition: service_started
 
+  # Opt-in local LLM: `docker compose --profile ai up -d ollama`, pull a model,
+  # then point the intelligence service at it:
+  #   AI_PROVIDER=openai-compatible AI_BASE_URL=http://ollama:11434 \
+  #   AI_MODEL=llama3.2:1b docker compose up -d intelligence
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bss-ollama
+    restart: unless-stopped
+    profiles: ["ai"]
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "11434:11434"
+
   user-roles:
     build: ./services/user-roles
     container_name: bss-user-roles
@@ -922,6 +936,7 @@ services:
         condition: service_started
 
 volumes:
+  ollama-models:
   postgres-data:
 
 # Each service owns a private database, created by infra/postgres/init-databases.sql,
