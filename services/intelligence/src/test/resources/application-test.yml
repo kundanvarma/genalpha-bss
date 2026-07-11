@@ -19,6 +19,7 @@ bss:
   events:
     enabled: false
   intelligence:
+    porting-consumer-enabled: false
     provider: stub
     churn:
       initial-delay-ms: 86400000
