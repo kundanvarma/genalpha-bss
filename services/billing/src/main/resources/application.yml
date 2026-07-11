@@ -51,6 +51,7 @@ bss:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
+    promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
   events:
     topic: bss.billing.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

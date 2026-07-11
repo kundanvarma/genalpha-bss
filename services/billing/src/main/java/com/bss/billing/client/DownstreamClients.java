@@ -31,6 +31,11 @@ public final class DownstreamClients {
         List<Map<String, Object>> rateForParty(String ownerPartyId, String periodStart, String periodEnd);
     }
 
+    public interface PromotionClient {
+        /** The customer's earned discounts (promotion redemptions). */
+        List<Map<String, Object>> redemptionsFor(String ownerPartyId);
+    }
+
     public interface PaymentClient {
         /** Empty message means valid; otherwise the reason the ref is unusable. */
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);

@@ -131,7 +131,8 @@
             "interaction:write",
             "usage:read",
             "usage:write",
-            "agreement:read"
+            "agreement:read",
+            "promotion:read"
           ]
         }
       },
@@ -150,6 +151,14 @@
       {
         "name": "agreement:write",
         "description": "agreement:write"
+      },
+      {
+        "name": "promotion:read",
+        "description": "promotion:read"
+      },
+      {
+        "name": "promotion:write",
+        "description": "promotion:write"
       }
     ]
   },
@@ -274,7 +283,9 @@
         "payment:read",
         "payment:write",
         "agreement:read",
-        "agreement:write"
+        "agreement:write",
+        "promotion:write",
+        "promotion:read"
       ]
     },
     {
@@ -287,7 +298,8 @@
         "payment:read",
         "payment:write",
         "usage:read",
-        "usage:write"
+        "usage:write",
+        "promotion:read"
       ]
     },
     {
@@ -333,7 +345,9 @@
         "usage:read",
         "usage:write",
         "agreement:read",
-        "agreement:write"
+        "agreement:write",
+        "promotion:read",
+        "promotion:write"
       ]
     },
     {

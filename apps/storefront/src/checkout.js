@@ -69,7 +69,7 @@ export function dueNow(lines, offerings, prices) {
   return total;
 }
 
-export async function performCheckout(lines, card = null) {
+export async function performCheckout(lines, card = null, promotionCode = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -133,7 +133,8 @@ export async function performCheckout(lines, card = null) {
     paymentRefs = [{ id: payment.id, href: payment.href, '@referredType': 'Payment' }];
   }
 
-  const order = await checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs);
+  const order = await checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs,
+    promotionCode);
   if (needsInstall) {
     await createAppointment(slot, order.id, shippingPlace(address),
         'Installation: ' + lines.map((l) => l.name).join(', '));

@@ -5,6 +5,7 @@ import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, markCartCheckedOut, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
+import { checkPromotion } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 
@@ -18,6 +19,12 @@ export default function Cart() {
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
   const [serviceability, setServiceability] = useState(null); // TMF679 check result
   const [slots, setSlots] = useState(null);
+  const [promoInput, setPromoInput] = useState('');
+  // Survives the sign-in redirect, like the address draft.
+  const [promo, setPromo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('bss.shop.promo')) || null; } catch { return null; }
+  });
+  const [promoError, setPromoError] = useState(null);
   const [slot, setSlot] = useState(loadSlotDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -136,6 +143,35 @@ export default function Cart() {
     ? { value: totals.reduce((a, m) => a + m.value, 0), unit: totals[0].unit }
     : null;
 
+  async function applyPromo() {
+    setPromoError(null);
+    try {
+      const result = await checkPromotion(promoInput.trim());
+      if (!result.valid) {
+        setPromo(null);
+        setPromoError('That code is not valid.');
+        return;
+      }
+      const applied = { code: promoInput.trim(), ...result };
+      setPromo(applied);
+      localStorage.setItem('bss.shop.promo', JSON.stringify(applied));
+    } catch (e) {
+      setPromoError(e.message);
+    }
+  }
+
+  // The promo's monthly value against the lines it applies to.
+  function promoDiscount() {
+    if (!promo || !grand) return null;
+    const base = lines.reduce((sum, line) => {
+      const applies = !promo.appliesTo?.length || promo.appliesTo.includes(line.offeringId);
+      const m = lineMonthly(line);
+      return applies && m ? sum + m.value : sum;
+    }, 0);
+    if (base <= 0) return null;
+    return { value: -(base * promo.percentage) / 100, unit: grand.unit };
+  }
+
   async function checkout() {
     if (!isSignedIn()) {
       // Cart and typed address survive the redirect in localStorage; this
@@ -146,7 +182,8 @@ export default function Cart() {
     }
     setBusy(true);
     try {
-      const order = await performCheckout(lines, due ? card : null);
+      const order = await performCheckout(lines, due ? card : null, promo?.code || null);
+      localStorage.removeItem('bss.shop.promo');
       await markCartCheckedOut(order.id);
       navigate('/orders');
     } catch (e) {
@@ -193,12 +230,25 @@ export default function Cart() {
             <strong className="linetotal">{grand.value.toFixed(2)} {grand.unit}</strong>
           </div>
         )}
+        {promo && promoDiscount() && (
+          <div className="row promo" data-testid="promo-row">
+            <span>Promo <strong>{promo.code}</strong> — {promo.name} (−{promo.percentage}%)</span>
+            <span className="linetotal ok">{promoDiscount().value.toFixed(2)} {promoDiscount().unit}/mo</span>
+          </div>
+        )}
         {due && (
           <div className="row granded duenow">
             <strong>Due now</strong>
             <strong className="linetotal">{due.value.toFixed(2)} {due.unit}</strong>
           </div>
         )}
+      </div>
+
+      <div className="promobar">
+        <input placeholder="Promo code" value={promoInput}
+               onChange={(e) => setPromoInput(e.target.value)} />
+        <button className="ghost" onClick={applyPromo} disabled={!promoInput.trim()}>Apply</button>
+        {promoError && <span className="error small">{promoError}</span>}
       </div>
 
       {(needsShipping || needsInstall) && (

@@ -48,6 +48,9 @@ public class ProductOrder {
     @Column(name = "owner_party_id", length = 36)
     private String ownerPartyId;
 
+    @Column(name = "promo_code", length = 64)
+    private String promoCode;
+
     /** JSON array of payment references, stored verbatim. */
     @Column(name = "payment", length = 2000)
     private String paymentJson;
@@ -136,6 +139,14 @@ public class ProductOrder {
 
     public void setOrderDate(OffsetDateTime orderDate) {
         this.orderDate = orderDate;
+    }
+
+    public String getPromoCode() {
+        return promoCode;
+    }
+
+    public void setPromoCode(String promoCode) {
+        this.promoCode = promoCode;
     }
 
     public String getOwnerPartyId() {

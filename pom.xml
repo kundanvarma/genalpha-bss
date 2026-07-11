@@ -29,6 +29,7 @@
         <module>services/shopping-cart</module>
         <module>services/usage</module>
         <module>services/agreement</module>
+        <module>services/promotion</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>

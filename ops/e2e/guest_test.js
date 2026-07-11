@@ -37,6 +37,12 @@ const run = Date.now();
   await page.locator('.slotgrid .option').first().waitFor({ timeout: 10000 });
   await page.locator('.slotgrid .option').first().click();
   console.log('OK guest sees serviceability + picked install slot');
+
+  // TMF671: the guest applies a promo code before having any identity.
+  await page.fill('.promobar input', 'WELCOME10');
+  await page.click('.promobar button');
+  await page.locator('[data-testid="promo-row"]', { hasText: 'WELCOME10' }).waitFor({ timeout: 10000 });
+  console.log('OK promo WELCOME10 accepted anonymously, discount shown in cart');
   await page.locator('.cartactions button.primary.big').click(); // Checkout -> Keycloak
   await page.waitForSelector('a[href*="registration"], input[name="username"]', { timeout: 20000 });
   console.log('OK guest cart built; checkout hands guest to the identity provider');
@@ -65,6 +71,50 @@ const run = Date.now();
   await orderRow.waitFor({ timeout: 15000 });
   const state = await orderRow.locator('.state').textContent();
   console.log('OK guest order paid and placed after registration, state:', state);
+
+  // 5. The discount lands on the real bill: staff completes the order,
+  //    the billing run applies the redeemed promotion.
+  const token = await page.evaluate(() => sessionStorage.getItem('bss.shop.token'));
+  const orders = await page.evaluate(async ({ token }) => {
+    const res = await fetch('/tmf-api/productOrderingManagement/v4/productOrder?limit=10',
+      { headers: { Authorization: 'Bearer ' + token } });
+    return res.json();
+  }, { token });
+  if (orders[0].promotionCode !== 'WELCOME10') fail('order lost the promo code: ' + JSON.stringify(orders[0]).slice(0, 200));
+
+  const staffRes = await page.context().request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } });
+  const staff = (await staffRes.json()).access_token;
+  const done = await page.context().request.patch(
+    `http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder/${orders[0].id}`,
+    { headers: { Authorization: 'Bearer ' + staff }, data: { state: 'completed' } });
+  if (done.status() !== 200) fail('staff completion failed: ' + done.status() + ' ' + await done.text());
+  const runRes = await page.context().request.post(
+    'http://localhost:8080/tmf-api/customerBillManagement/v4/billingRun',
+    { headers: { Authorization: 'Bearer ' + staff } });
+  if (runRes.status() !== 200) fail('billing run failed: ' + runRes.status());
+
+  const bills = await page.evaluate(async ({ token }) => {
+    const res = await fetch('/tmf-api/customerBillManagement/v4/customerBill?limit=10',
+      { headers: { Authorization: 'Bearer ' + token } });
+    return res.json();
+  }, { token });
+  if (!bills.length) fail('guest has no bill after the run');
+  const rates = await page.evaluate(async ({ token, id }) => {
+    const res = await fetch(`/tmf-api/customerBillManagement/v4/customerBill/${id}/appliedCustomerBillingRate`,
+      { headers: { Authorization: 'Bearer ' + token } });
+    return res.json();
+  }, { token, id: bills[0].id });
+  const discount = rates.find((r) => (r.name || '').includes('WELCOME10'));
+  if (!discount) fail('bill has no WELCOME10 discount line: ' + JSON.stringify(rates).slice(0, 300));
+  if (!(discount.taxExcludedAmount.value < 0)) fail('discount is not negative: ' + JSON.stringify(discount));
+  const sum = rates.reduce((a, r) => a + r.taxExcludedAmount.value, 0);
+  if (Math.abs(sum - bills[0].amountDue.value) > 0.005) {
+    fail(`bill total ${bills[0].amountDue.value} != sum of rates ${sum.toFixed(2)}`);
+  }
+  console.log('OK redeemed promo discounts the bill:', discount.name, discount.taxExcludedAmount.value,
+    '| total', bills[0].amountDue.value, bills[0].amountDue.unit);
 
   await browser.close();
   console.log('\nALL GUEST CHECKS PASSED');

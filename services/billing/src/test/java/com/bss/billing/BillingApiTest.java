@@ -51,6 +51,9 @@ class BillingApiTest {
     @MockBean
     private DownstreamClients.UsageClient usageClient;
 
+    @MockBean
+    private DownstreamClients.PromotionClient promotionClient;
+
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(
                 new SimpleGrantedAuthority("customer"),
@@ -130,6 +133,23 @@ class BillingApiTest {
                         .with(customer("cust-usage")))
                 .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[*].type").value(org.hamcrest.Matchers.hasItem("usageCharge")));
+    }
+
+    @Test
+    void billingRun_appliesEarnedPromotionDiscounts() throws Exception {
+        given(promotionClient.redemptionsFor("cust-promo")).willReturn(List.of(Map.of(
+                "code", "WELCOME10", "name", "Welcome offer", "percentage", 10,
+                "appliesTo", List.of("po-fiber"))));
+
+        String billId = runAndGetBillId("cust-promo");
+
+        // 10% off the fiber's 39.99 = -4.00; 54.98 - 4.00 = 50.98
+        mockMvc.perform(get(BASE + "/customerBill/" + billId).with(customer("cust-promo")))
+                .andExpect(jsonPath("$.amountDue.value").value(50.98));
+        mockMvc.perform(get(BASE + "/customerBill/" + billId + "/appliedCustomerBillingRate")
+                        .with(customer("cust-promo")))
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[*].type").value(org.hamcrest.Matchers.hasItem("discount")));
     }
 
     @Test

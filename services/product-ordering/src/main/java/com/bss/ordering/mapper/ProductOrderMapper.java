@@ -29,6 +29,7 @@ public class ProductOrderMapper {
         dto.setHref(entity.getHref());
         dto.setState(entity.getState());
         dto.setDescription(entity.getDescription());
+        dto.setPromotionCode(entity.getPromoCode());
         dto.setCategory(entity.getCategory());
         dto.setProductOfferingId(entity.getProductOfferingId());
         dto.setBillingAccountId(entity.getBillingAccountId());
@@ -46,6 +47,7 @@ public class ProductOrderMapper {
         entity.setHref(dto.getHref());
         entity.setState(dto.getState());
         entity.setDescription(dto.getDescription());
+        entity.setPromoCode(dto.getPromotionCode());
         entity.setCategory(dto.getCategory());
         entity.setProductOfferingId(dto.getProductOfferingId());
         entity.setBillingAccountId(dto.getBillingAccountId());
