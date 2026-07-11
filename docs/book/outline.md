@@ -41,6 +41,13 @@ caught by the tests. The memoir is, quietly, a field report on a new way of buil
 honestly; engineers curious about AI-assisted building at real scale; and anyone who has watched a
 "platform" demo and wondered what was actually underneath.
 
+**On the jargon:** this is a book about a TM Forum ODA BSS, so it can't avoid the vocabulary —
+catalog, ordering, assurance, TMF620, ODA, CTK. The book's rule is that it never assumes the reader
+already knows a term: each chapter explains the one or two standards it needs *as the story reaches
+them*, in plain English, and **Appendix C** collects the full "what each TMF component means"
+reference for anyone who wants the whole map at once. You should be able to read this having never
+heard of TM Forum and come out fluent.
+
 ---
 
 ## The shape of the story (five acts)
@@ -330,9 +337,18 @@ Keycloak realm-import replacing built-in scopes, RLS-owner-vs-restricted-role, t
 From an empty machine to two branded operators serving traffic, seeded, with Live Flow open. So the
 reader can stop reading and start watching.
 
-### Appendix C — The component catalog
-A one-line-per-component reference (the thing this memoir deliberately *isn't*), for readers who
-want the map after they've had the story.
+### Appendix C — The TM Forum vocabulary, plain-English → [`tmf-reference.md`](tmf-reference.md)
+What every TMF component *means*: for each of the ~34 TM Forum Open APIs genalpha-bss implements
+(TMF620 Catalog, TMF622 Ordering, TMF641 Service Ordering, TMF921 Intent, and the rest), what the
+industry standard **is**, what it's **for**, and how genalpha-bss uses it — plus plain-English
+definitions of TM Forum, ODA, CTK, and BSS-vs-OSS. Written so a reader who has never touched TM
+Forum can follow the whole book; grouped to mirror the acts. **Drafted.**
+
+*Editorial note:* the TMF vocabulary is introduced twice, on purpose. Each chapter explains the one
+or two standards it needs *in the flow of the story* (Chapter 1 explains TMF620/622 as it builds
+them; Chapter 14 explains TMF642/656 as the network alarms fire). Appendix C is the collected
+reference for readers who want the whole map at once, or who read out of order. The book never
+makes the reader already know what a "TMF679" is before it's needed.
 
 ---
 
