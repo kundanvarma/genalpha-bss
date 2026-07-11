@@ -111,6 +111,19 @@ async function staffToken(request, realm) {
   if (genalphaServiceOrders.length) fail("GenAlpha staff can see Nova's service orders");
   console.log('OK TMF641 service orders exist behind the order, tenant-partitioned');
 
+  // TMF685: activation drew Nia's number from NOVA's pool, not GenAlpha's.
+  const allNovaServices = await (await setup.request.get(
+    `${API}/tmf-api/serviceInventory/v4/service`,
+    { headers: { Authorization: 'Bearer ' + novaStaff } })).json();
+  const withNumber = allNovaServices.find((sv) =>
+    (sv.supportingResource || []).some((r) => String(r.value).startsWith('+46731')));
+  if (!withNumber) fail('no nova service carries a +46731 number: ' + JSON.stringify(allNovaServices).slice(0, 300));
+  if (allNovaServices.some((sv) => (sv.supportingResource || []).some((r) => String(r.value).startsWith('+46701')))) {
+    fail("a nova service drew a number from GenAlpha's pool");
+  }
+  console.log('OK TMF685 activation assigned a nova-pool MSISDN:',
+    withNumber.supportingResource[0].value);
+
   const genalphaView = await (await setup.request.get(
     `${API}/tmf-api/productOrderingManagement/v4/productOrder?limit=100`,
     { headers: { Authorization: 'Bearer ' + genalphaStaff } })).json();

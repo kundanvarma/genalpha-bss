@@ -11,6 +11,24 @@ const run = Date.now();
   const page = await browser.newPage();
   const fail = (msg) => { console.error('FAIL: ' + msg); process.exit(1); };
 
+  // Pin every phone's availability so repeated runs never exhaust the shelf
+  // (the bundle's default phone must stay in stock for the guest flow).
+  const setup = await browser.newContext();
+  const staffRes0 = await setup.request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } });
+  const staff0 = (await staffRes0.json()).access_token;
+  const stockRows = await (await setup.request.get(
+    'http://localhost:8080/tmf-api/productStockManagement/v4/productStock?limit=100',
+    { headers: { Authorization: 'Bearer ' + staff0 } })).json();
+  for (const row of stockRows) {
+    await setup.request.patch(
+      `http://localhost:8080/tmf-api/productStockManagement/v4/productStock/${row.id}`,
+      { headers: { Authorization: 'Bearer ' + staff0 },
+        data: { stockedQuantity: { amount: row.reservedQuantity.amount + 40, units: 'unit' } } });
+  }
+  console.log('OK stock pinned for all phones');
+
   // 1. Anonymous browsing: catalog + prices visible, no login redirect
   await page.goto(SHOP);
   const bundleCard = page.locator('.card.bundle', { hasText: 'GenAlpha One Home & Mobile' });

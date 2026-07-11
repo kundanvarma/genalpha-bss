@@ -20,6 +20,7 @@ Run against a fresh stack (`docker compose up -d`), in this order:
     python3 ops/seed/seed_usage_allowances.py   # TMF635 bundle roaming allowance
     python3 ops/seed/seed_agreement_terms.py    # TMF620/651 bundle commitment term
     python3 ops/seed/seed_promotions.py         # TMF671 WELCOME10 (10% off the bundle)
+    python3 ops/seed/seed_resource_pools.py     # TMF685 per-tenant MSISDN pools
     python3 ops/seed/seed_nova.py           # second tenant: Nova Telecom's catalog
 
 All scripts are idempotent-ish (safe to re-run) and authenticate as each

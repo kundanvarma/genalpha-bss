@@ -87,7 +87,7 @@ spring:
         - id: service-orchestration
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
-            - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**
+            - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**,/tmf-api/resourcePoolManagement/**
         - id: assurance
           uri: ${ASSURANCE_URL:http://localhost:8105}
           predicates:

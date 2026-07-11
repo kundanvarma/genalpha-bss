@@ -65,7 +65,7 @@ const MODULES = [
   { id: 'recommendation',  api: 'TMF680', name: 'Recommendation',   deps: [], desc: 'Cross-sell: what this customer lacks, bundles first.' },
   { id: 'payment-method',  api: 'TMF670', name: 'Payment Methods',  deps: ['payment'], desc: 'Tokenized card vault: save at checkout, pay bills one-click.' },
 
-  { id: 'service-orchestration', api: 'TMF641/638/640', name: 'Service Orchestration (thin SOM)', group: 'production', deps: [], desc: 'Digital orders activate and complete themselves; physical ones wait for fulfilment.' },
+  { id: 'service-orchestration', api: 'TMF641/638/640/685', name: 'Service Orchestration (thin SOM)', group: 'production', deps: [], desc: 'Digital orders activate, draw numbers from resource pools and complete themselves; physical ones wait for fulfilment.' },
 
   { id: 'assurance', api: 'TMF642/656', name: 'Assurance (alarms & problems)', group: 'production', deps: [], desc: 'Critical alarms become service problems; the CSR console shows outages.' },
 

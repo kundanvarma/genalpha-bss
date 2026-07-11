@@ -44,7 +44,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.ORDER_BASE + "/**",
-                                ApiConstants.INVENTORY_BASE + "/**").hasAuthority(READ)
+                                ApiConstants.INVENTORY_BASE + "/**",
+                                "/tmf-api/resourcePoolManagement/v4/**").hasAuthority(READ)
+                        .requestMatchers(HttpMethod.POST,
+                                "/tmf-api/resourcePoolManagement/v4/**").hasAuthority(WRITE)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
