@@ -4,7 +4,7 @@
  * loop. Bundles/devices point to the full storefront configurator for now.
  */
 import { useCallback, useState } from 'react';
-import { Linking, ScrollView, Text } from 'react-native';
+import { Image, Linking, ScrollView, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { myOrders, offerings, orderOffering, prices } from '../api.js';
 import { Button, Card, Dim, Row, palette } from '../ui.js';
@@ -55,6 +55,11 @@ export default function Shop() {
       )}
       {items.map((o) => (
         <Card key={o.id} title={o.name} testID="offer-card">
+          {o.attachment?.[0]?.url && (
+            <Image source={{ uri: o.attachment[0].url }}
+                   style={{ width: '100%', height: 110, borderRadius: 10, marginBottom: 6 }}
+                   resizeMode="cover" />
+          )}
           {o.description ? <Dim>{o.description}</Dim> : null}
           {monthly(o, priceIndex) && <Row left={<Dim>from</Dim>} right={monthly(o, priceIndex)} />}
           {o.isBundle || (o.bundledProductOffering || []).length

@@ -210,3 +210,6 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .savecard { display: block; margin-top: 0.5rem; color: var(--dim); }
 .savedcards { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+
+.brandlogo { height: 30px; display: block; }
+.offerart { width: 100%; max-height: 120px; object-fit: cover; border-radius: 10px; margin-bottom: 0.5rem; }

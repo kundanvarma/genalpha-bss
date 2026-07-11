@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **24 TM Forum ODA components**
+A vendor-neutral telecom **Business Support System** built as **25 TM Forum ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **four channels** (three web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -47,6 +47,7 @@ failures.
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
 | recommendation | TMF680 | 8102 | Cross-sell: what this customer lacks, bundles first |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
+| document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
@@ -90,7 +91,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 # demo data (idempotent; order matters) — see ops/README.md
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
-         seed_promotions seed_resource_pools seed_nova; do python3 ops/seed/$s.py; done
+         seed_promotions seed_resource_pools seed_nova seed_content; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

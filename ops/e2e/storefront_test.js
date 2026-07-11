@@ -71,6 +71,15 @@ async function apiGet(page, path, token) {
   if (!/\d+\.\d{2} EUR\/month/.test(cardText)) fail(`bundle card shows no monthly price: ${cardText}`);
   console.log('OK bundle card with monthly total visible');
 
+  // TMF667: the card wears real artwork (the image must actually load).
+  const artLoaded = await bundleCard.locator('img.offerart').first().evaluate(
+    (img) => img.complete && img.naturalWidth > 0).catch(() => false);
+  if (!artLoaded) fail('offering artwork did not load on the bundle card');
+  const logoLoaded = await a.locator('img.brandlogo').first().evaluate(
+    (img) => img.complete && img.naturalWidth > 0).catch(() => false);
+  if (!logoLoaded) fail('brand logo did not load in the storefront header');
+  console.log('OK TMF667 content live: brand logo + offering artwork render');
+
   await bundleCard.click();
   await a.waitForSelector('.pricetable');
   const includes = await a.locator('.includes.big li').allTextContents();

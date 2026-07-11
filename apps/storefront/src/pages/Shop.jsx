@@ -74,6 +74,10 @@ function OfferingCard({ offering, prices }) {
 
   return (
     <Link className={offering.isBundle ? 'card bundle' : 'card'} to={`/offering/${offering.id}`}>
+      {offering.attachment?.[0]?.url && (
+        <img className="offerart" src={offering.attachment[0].url} alt=""
+             onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+      )}
       {offering.isBundle && <span className="tag">Bundle</span>}
       <h2>{offering.name}</h2>
       <p className="dim">{offering.description}</p>

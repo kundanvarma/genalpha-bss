@@ -39,7 +39,7 @@ export default function App() {
     <>
       <header className="top">
         <div className="brand">
-          <span className="mark">GenAlpha</span>
+          <img className="brandlogo" src="/tmf-api/documentManagement/v4/document/brand-logo" alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="area">csr console</span>
           {claims.org && <span className="orgbadge">{claims.org}</span>}
         </div>
