@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **22 TM Forum ODA components**
+A vendor-neutral telecom **Business Support System** built as **23 TM Forum ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **three web channels**, behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -46,6 +46,12 @@ failures.
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
 | recommendation | TMF680 | 8102 | Cross-sell: what this customer lacks, bundles first |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
+
+**Production (OSS)** — the layer below the BSS, thin but real
+
+| Component | TMF API | Port | What it does |
+|---|---|---|---|
+| service-orchestration | TMF641 / TMF638 / TMF640 | 8104 | Digital orders decompose, activate and complete themselves; physical ones wait for fulfilment |
 
 **Channels** — one build each, white-labeled per tenant by hostname
 

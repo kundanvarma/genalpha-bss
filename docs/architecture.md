@@ -45,6 +45,11 @@ flowchart TB
         USAGE["usage TMF635/677"]
     end
 
+    subgraph Production["Production (OSS, thin)"]
+        SOM["service-orchestration
+TMF641/638/640"]
+    end
+
     subgraph Care["Customer care"]
         TICKET["trouble-ticket TMF621"]
         INTER["party-interaction TMF683"]
@@ -66,6 +71,9 @@ flowchart TB
 
     Core & Revenue & Care -->|events| KAFKA
     KAFKA -->|"tenant-tagged envelopes"| COMM
+    KAFKA -->|"ProductOrderCreateEvent"| SOM
+    SOM -.->|"completes digital orders
+(acting tenant's identity)"| ORD
     Party & Core & Revenue & Care --- PG
 ```
 
@@ -134,7 +142,8 @@ sequenceDiagram
     C->>ORD: productOrder (items, promo code, payment ref)
     ORD->>STOCK: reserve devices
 
-    Note over ORD: staff completes (BSS→SOM seam)
+    Note over ORD: completion — the SOM auto-completes digital orders
+(via ProductOrderCreateEvent); staff/fulfilment completes physical ones
     ORD->>INV: provision products per item
     ORD->>STOCK: consume reservation
     ORD->>PAY: capture payment
@@ -173,9 +182,10 @@ trigger — the same stream is where a campaign engine would plug in.
 
 ## Boundary notes
 
-- **BSS only, by design.** The Production block (TMF641 service ordering, TMF638 service
-  inventory, TMF640 activation, TMF642/656 assurance) is the layer below; order completion is
-  its handoff seam.
+- **The Production seam is now real (thin).** service-orchestration consumes order events,
+  decomposes digital orders into TMF641 service orders, mock-activates (TMF640's stand-in),
+  records TMF638 services and completes the product order machine-side. Physical/install
+  orders still complete on fulfilment. Assurance (TMF642/656) remains future work.
 - **Composability is real**: cross-component calls go through conditional clients with Noop
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).

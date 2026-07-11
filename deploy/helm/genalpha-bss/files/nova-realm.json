@@ -135,7 +135,8 @@
             "usage:read",
             "usage:write",
             "agreement:read",
-            "promotion:read"
+            "promotion:read",
+            "service:read"
           ]
         }
       },
@@ -186,6 +187,14 @@
       {
         "name": "paymentmethod:write",
         "description": "paymentmethod:write"
+      },
+      {
+        "name": "service:read",
+        "description": "service:read"
+      },
+      {
+        "name": "service:write",
+        "description": "service:write"
       }
     ]
   },
@@ -334,6 +343,19 @@
       "directAccessGrantsEnabled": false,
       "id": "cb05a8ae-40f4-53bd-88eb-8793ecf663b2",
       "description": "payment service: resolves saved methods in the vault"
+    },
+    {
+      "clientId": "bss-som",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "som-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "a4a97bcb-578b-55cc-be00-8ccba21ee892",
+      "description": "thin SOM: completes product orders after activation"
     }
   ],
   "users": [
@@ -419,7 +441,9 @@
         "address:write",
         "recommendation:read",
         "paymentmethod:read",
-        "paymentmethod:write"
+        "paymentmethod:write",
+        "service:read",
+        "service:write"
       ]
     },
     {
@@ -501,6 +525,16 @@
         "paymentmethod:read"
       ],
       "id": "f6e07e00-1696-52fd-9aa2-b2913c67ab46"
+    },
+    {
+      "username": "service-account-bss-som",
+      "enabled": true,
+      "serviceAccountClientId": "bss-som",
+      "realmRoles": [
+        "ordering:read",
+        "ordering:write"
+      ],
+      "id": "1a01fd9b-0748-52ab-8ae0-8d170a5279c6"
     }
   ],
   "displayName": "Nova Telecom"
