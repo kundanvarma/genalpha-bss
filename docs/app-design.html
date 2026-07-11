@@ -51,21 +51,99 @@
 <body>
 
 <h1>The mobile app</h1>
-<p class="subtitle">Design proposal — “MyGenAlpha / MyNova”: one care-first app, white-labeled per tenant · React Native (Expo)</p>
+<p class="subtitle">Design proposal v2 — a MyJio-class modular app: “the app assembles itself from your BSS” · React Native (Expo)</p>
+
+<h2>The core idea: LOB modules, not fixed screens</h2>
+<p>Inspired by MyJio's super-app model (mobile, fiber, TV, engagement in one app), the app is a
+<b>composition of line-of-business modules</b> — mobile, broadband, TV, and future verticals like
+energy — assembled at runtime from three levels of configuration:</p>
+<table>
+<tr><th>Level</th><th>Decides</th><th>Driven by</th></tr>
+<tr><td>Operator</td><td>Which LOB modules exist at all</td><td>The ODA composer: deployed components + catalog categories, served in the gateway's tenant manifest with branding tokens</td></tr>
+<tr><td>Customer</td><td>Which modules show, in what order</td><td>TMF637 inventory: what they own becomes a live card; what they lack becomes a TMF680 cross-sell slot</td></tr>
+<tr><td>Catalog</td><td>New verticals without an app release</td><td>TMF620 categories + TMF635 usage types — kWh rates exactly like GB; energy is a catalog entry plus a module, not a new system</td></tr>
+</table>
 
 <h2>Design principles</h2>
 <ul>
-  <li><b>Care first, shop second.</b> Customers open a telco app to check usage, pay a bill or get
-  help — those are one tap from launch. Buying more is present but never in the way.</li>
-  <li><b>One binary, every operator.</b> The app resolves its tenant at first launch (same
-  gateway mechanism as the web channels) and pulls branding tokens — name, logo, colors. The demo:
-  switch operator in settings and the whole app rebrands and re-authenticates against the other
-  realm.</li>
-  <li><b>Nothing new on the backend.</b> Every screen below is powered by APIs that exist and are
-  E2E-tested today. The app is a fourth channel, not a new system.</li>
-  <li><b>Same auth model:</b> OIDC authorization-code + PKCE in the system browser, against the
-  tenant's issuer. Biometric unlock and push notifications are later additive steps.</li>
+  <li><b>Care first, shop second.</b> Usage, bill and help are one tap from launch; every LOB
+  card carries its own cross-sell slot instead of a separate store push.</li>
+  <li><b>One binary, every operator, every household shape.</b> A mobile-only customer, a
+  triple-play family and (later) an energy customer open visibly different apps — same code,
+  different BSS data.</li>
+  <li><b>Nothing new on the backend.</b> Every module below is powered by APIs that exist and
+  are E2E-tested today.</li>
+  <li><b>Engagement-ready.</b> Campaigns and gamification (missions, streaks, rewards) are the
+  planned martech engine reading the tenant-tagged event stream and paying out through TMF671
+  promotions — the app reserves the surface for it from day one.</li>
+  <li><b>Same auth model:</b> OIDC code + PKCE in the system browser, against the tenant's
+  issuer. Push notifications and biometric unlock are native-phase additions.</li>
 </ul>
+
+<h2>The adaptive Home — one binary, three customers</h2>
+<div class="phones">
+  <div class="phone"><h3>Mobile-only customer</h3>
+    <div class="screen">
+      <div class="appbar">MyGenAlpha <span class="tenant">Maya ▾</span></div>
+      <div class="pad">
+        <div class="widget"><b>📱 Mobile · +46 701 000 007</b>
+          <div class="meter ok"><i></i></div>
+          <span class="dim">23 / 50 GB · unlimited calls</span>
+        </div>
+        <div class="widget"><b>Your bill · 29.99 EUR</b>
+          <span class="btn">Pay</span>
+        </div>
+        <div class="widget"><b>Complete your home</b>
+          <div class="rowline"><span>➕ Fiber 1000 — serviceable at your address</span><span class="btn ghost">Add</span></div>
+          <div class="rowline"><span>➕ TV Max</span><span class="btn ghost">Add</span></div>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>Triple-play household</h3>
+    <div class="screen">
+      <div class="appbar">MyGenAlpha <span class="tenant">Alice ▾</span></div>
+      <div class="pad">
+        <div class="widget"><b>📱 Mobile · +46 701 000 001</b>
+          <div class="meter"><i></i></div>
+          <span class="err">12.3 / 10 GB roaming — over</span>
+        </div>
+        <div class="widget"><b>🌐 Fiber 1000</b>
+          <span class="ok">● online</span> <span class="dim">· install Mon 15:00</span>
+        </div>
+        <div class="widget"><b>📺 TV Max</b>
+          <span class="dim">4 profiles · continue watching…</span>
+        </div>
+        <div class="widget"><b>Household bill · 243.98 EUR</b>
+          <span class="btn">Pay with •••• 4242</span>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>Tomorrow: + energy</h3>
+    <div class="screen">
+      <div class="appbar" style="background:#2f6d4f">MyGenAlpha <span class="tenant">Erik ▾</span></div>
+      <div class="pad">
+        <div class="widget"><b>📱 Mobile · +46 701 000 042</b>
+          <div class="meter ok"><i></i></div>
+          <span class="dim">11 / 50 GB</span>
+        </div>
+        <div class="widget"><b>⚡ Home Energy</b>
+          <div class="meter ok"><i></i></div>
+          <span class="dim">412 kWh this month · spot + 0.04 EUR</span>
+        </div>
+        <div class="widget"><b>One bill · telecom + energy</b>
+          <span class="dim">TMF635 rates kWh exactly like GB</span>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+</div>
 
 <h2>The five tabs</h2>
 
@@ -205,6 +283,14 @@
 <tr><td>Agreements, profile, addresses</td><td>TMF651, TMF632/673</td></tr>
 <tr><td>Tenant branding + issuer</td><td>Gateway tenant-config (as the web channels)</td></tr>
 </table>
+
+<h2>Engagement layer (campaigns &amp; gamification) — reserved, phased</h2>
+<p>MyJio's stickiness comes from engagement, and the substrate is already live here: every
+business moment is a tenant-tagged event, promotions are the reward vehicle, TMF681 the delivery
+channel. The planned martech engine turns those into <b>campaigns</b> (“abandoned cart + 7 days →
+push WELCOME10”) and <b>missions</b> (“enable autopay → 10% off next bill”, usage streaks,
+badges). The app reserves a Home slot and a Rewards surface for it from day one, so the engine
+lands as a module — not a redesign.</p>
 
 <h2>Build approach</h2>
 <div class="callout">
