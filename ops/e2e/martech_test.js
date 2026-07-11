@@ -187,6 +187,12 @@ async function staffToken(request, realm) {
     .locator('button', { hasText: 'Resume' }).waitFor({ timeout: 10000 });
   console.log('OK paused from the GUI (button flipped to Resume)');
 
+  // --- The AI audit ledger is a console tab: the draft we just made is in it
+  await page.locator('.tab', { hasText: 'AI Audit' }).click();
+  await page.locator('#listing-body tr', { hasText: 'campaign-copy' }).first()
+    .waitFor({ timeout: 10000 });
+  console.log('OK AI audit tab lists the copy-assistant call (provider + model on record)');
+
   // --- The churn scorer closes the loop: structured facts become campaigns.
   // A retention campaign on the scorer's trigger, filtered to commitment-ending.
   const churnSubject = `We would hate to see you go ${run}`;

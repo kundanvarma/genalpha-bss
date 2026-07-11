@@ -15,5 +15,8 @@ public final class CommerceClients {
 
     public interface InventoryClient {
         List<Map<String, Object>> productsOf(String partyId);
+
+        /** Tenant-wide adoption data — what the popularity ranker learns from. */
+        List<Map<String, Object>> allProducts();
     }
 }

@@ -18,6 +18,11 @@ management:
       application: ${spring.application.name}
 
 bss:
+  recommendation:
+    # The learning seam: 'rules' (bundles first, catalog order) or
+    # 'popularity' (bundles first, then tenant-wide adoption). A trained
+    # model is a third implementation of the same Ranker interface.
+    ranker: ${RECOMMENDATION_RANKER:popularity}
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
