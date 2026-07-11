@@ -108,6 +108,58 @@ export async function cartsOf(customerId) {
   return json(await authFetch(`${CART}/shoppingCart?limit=10&status=active&relatedPartyId=${customerId}`));
 }
 
+const USAGE = '/tmf-api/usageConsumption/v4';
+const AGREEMENT = '/tmf-api/agreementManagement/v4';
+const SERVICE_INV = '/tmf-api/serviceInventory/v4';
+const PROMO = '/tmf-api/promotionManagement/v4';
+const VAULT = '/tmf-api/paymentMethods/v4';
+const RECOMMEND = '/tmf-api/recommendationManagement/v4';
+
+/* CSR 360 catch-up reads — all fail-soft: a deployment without the
+ * component simply shows an empty card. */
+export async function usageOf(customerId) {
+  try {
+    const report = await json(await authFetch(`${USAGE}/queryUsageConsumption?relatedPartyId=${customerId}`));
+    return report.bucket || [];
+  } catch { return []; }
+}
+
+export async function agreementsOf(customerId) {
+  try {
+    return await json(await authFetch(`${AGREEMENT}/agreement?relatedPartyId=${customerId}&limit=50`));
+  } catch { return []; }
+}
+
+export async function activeServicesOf(customerId) {
+  try {
+    return await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${customerId}`));
+  } catch { return []; }
+}
+
+export async function redemptionsOf(customerId) {
+  try {
+    return await json(await authFetch(`${PROMO}/redemption?relatedPartyId=${customerId}`));
+  } catch { return []; }
+}
+
+export async function paymentMethodsOf(customerId) {
+  try {
+    return await json(await authFetch(`${VAULT}/paymentMethod?relatedPartyId=${customerId}`));
+  } catch { return []; }
+}
+
+export async function revokePaymentMethod(id) {
+  const res = await authFetch(`${VAULT}/paymentMethod/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function recommendationsOf(customerId) {
+  try {
+    const recs = await json(await authFetch(`${RECOMMEND}/recommendation?relatedPartyId=${customerId}`));
+    return recs[0]?.recommendationItem || [];
+  } catch { return []; }
+}
+
 export async function stockLevels() {
   return json(await authFetch(`${STOCK}/productStock?limit=100`));
 }
