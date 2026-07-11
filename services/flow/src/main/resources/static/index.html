@@ -39,11 +39,16 @@
   .proc .counts { margin-left: auto; color: var(--dim); font-size: 12px; }
   .proc .counts b { color: var(--green); }
 
-  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding: 4px 0; }
   .stage {
     position: relative; min-width: 150px; flex: 1; border: 1.5px solid var(--line);
     background: var(--panel); border-radius: 12px; padding: 12px 14px; transition: all .35s ease;
+    cursor: pointer;
   }
+  .stage:hover { border-color: var(--teal); }
+  .stage:hover .more { opacity: 1; }
+  .more { position: absolute; bottom: 8px; right: 10px; font-size: 9.5px; color: var(--teal);
+    opacity: 0; transition: opacity .2s; }
   .stage + .stage { margin-left: 30px; }
   .stage::before {
     content: ''; position: absolute; left: -30px; top: 50%; width: 30px; height: 2px;
@@ -54,24 +59,23 @@
   .stage .who { font-size: 10.5px; color: var(--dim); margin-top: 3px; }
   .stage .tech { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; color: var(--dim);
     margin-top: 6px; opacity: 0.7; }
+  .stage .badge { position: absolute; top: -9px; left: 12px; background: var(--teal); color: #06110f;
+    font-size: 10px; font-weight: 700; border-radius: 9px; padding: 1px 7px; min-width: 18px; text-align: center; }
+  .stage .badge.zero { display: none; }
   .stage.ai { border-color: #3a2f4d; }
+  .stage.ai:hover { border-color: var(--violet); }
   .stage.ai .who { color: var(--violet); }
-  .stage.alert.hot { border-color: var(--rose); }
-  /* active pulse */
   .stage.hot {
     border-color: var(--gold); background: #1a2228;
-    box-shadow: 0 0 0 1px var(--gold), 0 6px 26px -10px var(--gold);
-    animation: hot .9s ease;
+    box-shadow: 0 0 0 1px var(--gold), 0 6px 26px -10px var(--gold); animation: hot .9s ease;
   }
   @keyframes hot { 0% { transform: scale(1.04); } 100% { transform: scale(1); } }
-  .stage.done { border-color: #2c4a3a; }
   .stage.done .label::after { content: ' ✓'; color: var(--green); }
   .stage .tokens { position: absolute; top: -9px; right: 10px; display: flex; gap: 4px; }
-  .tok { width: 9px; height: 9px; border-radius: 50%; background: var(--gold);
-    box-shadow: 0 0 8px var(--gold); }
+  .tok { width: 9px; height: 9px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); }
   .tok.ai { background: var(--violet); box-shadow: 0 0 8px var(--violet); }
 
-  footer { border-top: 1px solid var(--line); background: var(--panel2); padding: 10px 24px 12px; height: 200px; overflow-y: auto; }
+  footer { border-top: 1px solid var(--line); background: var(--panel2); padding: 10px 24px 12px; height: 190px; overflow-y: auto; }
   footer h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin: 2px 0 8px; }
   .story { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); animation: slidein .3s ease; }
   @keyframes slidein { from { opacity: 0; transform: translateY(-6px); } }
@@ -79,10 +83,43 @@
   .story .txt { font-size: 13.5px; }
   .story .txt b { color: var(--teal); font-weight: 600; }
   .story .txt .ai { color: var(--violet); font-weight: 600; }
-  .story .txt .hot { color: var(--gold); font-weight: 600; }
   .story .txt .warn { color: var(--rose); font-weight: 600; }
   .story .when { margin-left: auto; color: var(--dim); font-size: 11px; white-space: nowrap; }
   .idle { color: var(--dim); font-size: 13px; padding: 6px 0; }
+
+  /* detail drawer */
+  #scrim { position: fixed; inset: 0; background: rgba(4,10,12,0.55); opacity: 0; pointer-events: none;
+    transition: opacity .2s; z-index: 40; }
+  #scrim.open { opacity: 1; pointer-events: auto; }
+  #drawer { position: fixed; top: 0; right: 0; height: 100vh; width: 440px; max-width: 92vw;
+    background: var(--panel); border-left: 1px solid var(--line); transform: translateX(100%);
+    transition: transform .25s ease; z-index: 50; display: flex; flex-direction: column; box-shadow: -20px 0 50px -20px rgba(0,0,0,0.6); }
+  #drawer.open { transform: translateX(0); }
+  .dhead { padding: 18px 22px 14px; border-bottom: 1px solid var(--line); }
+  .dhead .crumb { color: var(--dim); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .dhead h3 { margin: 4px 0 0; font-size: 18px; }
+  .dhead .what { color: var(--dim); font-size: 13px; margin-top: 8px; line-height: 1.5; }
+  .dclose { position: absolute; top: 16px; right: 18px; cursor: pointer; color: var(--dim); font-size: 20px; border: none; background: none; }
+  .dclose:hover { color: var(--ink); }
+  .dbody { overflow-y: auto; padding: 8px 0 24px; flex: 1; }
+  .dsec { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); padding: 14px 22px 6px; }
+  .inst { padding: 11px 22px; border-bottom: 1px solid var(--grid); cursor: pointer; }
+  .inst:hover { background: var(--panel2); }
+  .inst .who { font-weight: 600; font-size: 13.5px; }
+  .inst .at { color: var(--dim); font-size: 11.5px; margin-top: 2px; }
+  .inst .pill { font-size: 10.5px; border-radius: 8px; padding: 1px 8px; margin-left: 6px; }
+  .pill.run { background: #1c2f38; color: var(--teal); }
+  .pill.dn { background: #17301f; color: var(--green); }
+  .step { display: flex; gap: 11px; padding: 9px 22px; border-bottom: 1px solid var(--grid); }
+  .step .rail { display: flex; flex-direction: column; align-items: center; }
+  .step .rail .d { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); margin-top: 5px; }
+  .step .rail .d.ai { background: var(--violet); }
+  .step .rail .l { width: 2px; flex: 1; background: var(--grid); margin-top: 3px; }
+  .step:last-child .rail .l { display: none; }
+  .step .body .t { font-size: 13.5px; }
+  .step .body .m { color: var(--dim); font-size: 11.5px; margin-top: 3px; font-family: ui-monospace, Menlo, monospace; }
+  .step .body .m b { color: var(--teal); font-family: inherit; }
+  .empty2 { color: var(--dim); padding: 16px 22px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -90,7 +127,7 @@
   <span class="dot"></span>
   <div>
     <h1>genalpha-bss · Live Flow</h1>
-    <div class="sub">watch a business process happen, step by step — <a href="choreography.html">see the architecture view →</a></div>
+    <div class="sub">watch a business process happen, step by step — click any box for detail · <a href="choreography.html">architecture view →</a></div>
   </div>
   <div class="stats">
     <div><b id="running">0</b><span>running</span></div>
@@ -103,11 +140,21 @@
 
 <footer>
   <h2>What's happening (plain English)</h2>
-  <div id="story"><div class="idle">Waiting… place an order in the storefront, or ask me to run a test. You'll see each step narrated here as it happens.</div></div>
+  <div id="story"><div class="idle">Waiting… place an order in the storefront, or ask me to run a test. Each step is narrated here — and every box above is clickable.</div></div>
 </footer>
 
+<div id="scrim"></div>
+<aside id="drawer">
+  <div class="dhead">
+    <button class="dclose" onclick="closeDrawer()">✕</button>
+    <div class="crumb" id="d-crumb"></div>
+    <h3 id="d-title"></h3>
+    <div class="what" id="d-what"></div>
+  </div>
+  <div class="dbody" id="d-body"></div>
+</aside>
+
 <script>
-// ---- Component display names ----
 const NAME = {
   'product-ordering': 'the Ordering component', 'service-orchestration': 'the Orchestrator',
   'communication': 'the Communications service', 'campaign': 'the Campaign Engine',
@@ -115,24 +162,22 @@ const NAME = {
   'quote': 'the Quote engine', 'shopping-cart': 'the Cart',
 };
 const nm = (c) => NAME[c] || c;
+const AIC = ['intelligence', 'campaign'];
 
-// ---- Process definitions (plain-language stages) ----
-// steps: eventType -> {stage index}. narrate: eventType -> html story line.
 const PROCESSES = [
   {
     id: 'order', name: 'Order → Activate', lane: 'a retail customer buying a plan',
     stages: [
-      { label: 'Customer orders', who: 'storefront / app', tech: 'ProductOrderCreateEvent' },
-      { label: 'Picked up', who: 'communications + orchestrator', tech: 'consumers react' },
-      { label: 'Provisioned', who: 'orchestrator (OSS)', tech: 'ServiceOrderStateChangeEvent' },
-      { label: 'Customer notified', who: 'communications', tech: 'CommunicationMessageCreateEvent' },
+      { label: 'Customer orders', who: 'storefront / app', tech: 'ProductOrderCreateEvent',
+        detail: 'A customer checks out. The ordering component validates the order, reserves stock, captures payment, then publishes an “order created” event onto the Kafka bus — the moment the whole choreography begins.' },
+      { label: 'Picked up', who: 'communications + orchestrator', tech: 'ProductOrderStateChangeEvent',
+        detail: 'Multiple components consume the order event independently: communications queues a notification, the orchestrator begins provisioning, and the campaign engine checks it against any active journeys. No component knows about the others — that is the loose coupling.' },
+      { label: 'Provisioned', who: 'orchestrator (OSS)', tech: 'ServiceOrderStateChangeEvent',
+        detail: 'The service-orchestration layer decomposes the order into a service order, “activates” it (a mock network adapter in dev), and draws the next phone number from the tenant’s resource pool. It then completes the order machine-side.' },
+      { label: 'Customer notified', who: 'communications', tech: 'CommunicationMessageCreateEvent',
+        detail: 'The communications service turns the activation into an in-app notification, delivered to the customer’s inbox — the visible end of an invisible chain of events.' },
     ],
-    steps: {
-      ProductOrderCreateEvent: 0,
-      ProductOrderStateChangeEvent: 1,
-      ServiceOrderStateChangeEvent: 2,
-      CommunicationMessageCreateEvent: 3,
-    },
+    steps: { ProductOrderCreateEvent: 0, ProductOrderStateChangeEvent: 1, ServiceOrderStateChangeEvent: 2, CommunicationMessageCreateEvent: 3 },
     narrate: {
       ProductOrderCreateEvent: (m) => `🛒|A <b>customer</b> placed an order. <b>${nm(m.source)}</b> captured it and published an <b>“order created”</b> event onto the bus.`,
       ProductOrderStateChangeEvent: (m) => `📡|The order event was picked up — <b>communications</b> queued a notification and <b>the orchestrator</b> began provisioning.`,
@@ -143,17 +188,20 @@ const PROCESSES = [
   {
     id: 'slice', name: 'Lead → Assure (5G AI slice)', lane: 'a B2B slice sold, provisioned, and self-healed',
     stages: [
-      { label: 'Sales intent', who: 'AI + OSS feasibility', tech: 'IntentCreateEvent', ai: true },
-      { label: 'Quoted', who: 'quote engine', tech: 'QuoteCreateEvent' },
-      { label: 'Ordered', who: 'ordering', tech: 'ProductOrderCreateEvent' },
-      { label: 'Provisioned', who: 'orchestrator', tech: 'ServiceOrderStateChangeEvent' },
-      { label: 'Fibre cut!', who: 'assurance alarm', tech: 'ServiceProblemCreateEvent', alert: true },
-      { label: 'Self-healed', who: 'assurance (autonomous)', tech: 'ServiceHealedEvent' },
+      { label: 'Sales intent', who: 'AI + OSS feasibility', tech: 'IntentCreateEvent', ai: true,
+        detail: 'A sales manager captures the customer’s intent in plain language; an LLM shapes it into a TMF921 network intent. The OSS runs autonomous feasibility (a sub-20ms round trip needs edge GPUs — physics, not policy) and proposes an edge-AI upsell.' },
+      { label: 'Quoted', who: 'quote engine', tech: 'QuoteCreateEvent',
+        detail: 'The quote engine (TMF648) prices the OSS proposal into a quote — the 5G slice as a recurring charge and the edge-AI service metered in tokens (an included allowance, then per-million). An LLM drafts the executive narrative.' },
+      { label: 'Ordered', who: 'ordering', tech: 'ProductOrderCreateEvent',
+        detail: 'The quote is approved and accepted, which places a product order — the same TMF622 order path the retail flow uses.' },
+      { label: 'Provisioned', who: 'orchestrator', tech: 'ServiceOrderStateChangeEvent',
+        detail: 'The orchestrator provisions the slice onto a fibre delivery path and records where it lives — the column assurance will later change to heal it.' },
+      { label: 'Fibre cut!', who: 'assurance alarm', tech: 'ServiceProblemCreateEvent', alert: true,
+        detail: 'Mid-service, a critical alarm hits the fibre route. Assurance (TMF642) opens a service problem — the outage the CSR console shows as a banner.' },
+      { label: 'Self-healed', who: 'assurance (autonomous)', tech: 'ServiceHealedEvent',
+        detail: 'The system works out the fix on its own: every service on the failed path is re-homed to the edge site, the SLA is restored, an ITSM ticket documents the incident, and the problem closes itself — no human in the loop.' },
     ],
-    steps: {
-      IntentCreateEvent: 0, QuoteCreateEvent: 1, ProductOrderCreateEvent: 2,
-      ServiceOrderStateChangeEvent: 3, ServiceProblemCreateEvent: 4, ServiceHealedEvent: 5,
-    },
+    steps: { IntentCreateEvent: 0, QuoteCreateEvent: 1, ProductOrderCreateEvent: 2, ServiceOrderStateChangeEvent: 3, ServiceProblemCreateEvent: 4, ServiceHealedEvent: 5 },
     narrate: {
       IntentCreateEvent: (m) => `🛰️|A sales manager captured a <span class="ai">business intent</span> — the OSS checked feasibility and proposed an <span class="ai">edge-AI upsell</span>.`,
       QuoteCreateEvent: (m) => `💶|<b>The quote engine</b> priced the proposal — token-metered AI on the line items.`,
@@ -166,13 +214,14 @@ const PROCESSES = [
   {
     id: 'retention', name: 'Churn → Retention', lane: 'the AI back-office winning a customer back',
     stages: [
-      { label: 'Risk detected', who: 'AI churn scorer', tech: 'ChurnRiskDetectedEvent', ai: true },
-      { label: 'Journey fired', who: 'campaign engine', tech: 'CampaignExecutionCreateEvent', ai: true },
-      { label: 'Message sent', who: 'communications', tech: 'CommunicationMessageCreateEvent' },
+      { label: 'Risk detected', who: 'AI churn scorer', tech: 'ChurnRiskDetectedEvent', ai: true,
+        detail: 'The intelligence component sweeps BSS, CSR and assurance signals (commitment ending, allowance pressure, support friction) — and, once trained, a per-tenant churn model — and emits a risk event for a customer worth keeping.' },
+      { label: 'Journey fired', who: 'campaign engine', tech: 'CampaignExecutionCreateEvent', ai: true,
+        detail: 'The campaign engine consumes the risk event like any business trigger and fires a matching retention journey — exactly once per customer, guaranteed by a unique execution record.' },
+      { label: 'Message sent', who: 'communications', tech: 'CommunicationMessageCreateEvent',
+        detail: 'The journey’s message — a win-back offer carrying a promo code — is delivered through the communications service, closing the loop the AI opened.' },
     ],
-    steps: {
-      ChurnRiskDetectedEvent: 0, CampaignExecutionCreateEvent: 1, CommunicationMessageCreateEvent: 2,
-    },
+    steps: { ChurnRiskDetectedEvent: 0, CampaignExecutionCreateEvent: 1, CommunicationMessageCreateEvent: 2 },
     narrate: {
       ChurnRiskDetectedEvent: (m) => `📉|<span class="ai">The AI churn scorer</span> flagged a customer whose commitment is ending — a retention risk.`,
       CampaignExecutionCreateEvent: (m) => `🎯|<span class="ai">The campaign engine</span> reacted and fired a win-back journey — exactly once for this customer.`,
@@ -181,7 +230,6 @@ const PROCESSES = [
   },
 ];
 
-// ---- Build the board ----
 const board = document.getElementById('board');
 PROCESSES.forEach((p) => {
   p.el = document.createElement('div'); p.el.className = 'proc';
@@ -191,63 +239,71 @@ PROCESSES.forEach((p) => {
   const flow = document.createElement('div'); flow.className = 'flow';
   p.stageEls = p.stages.map((s, i) => {
     const d = document.createElement('div');
-    d.className = 'stage' + (s.ai ? ' ai' : '') + (s.alert ? ' alert' : '');
-    d.innerHTML = `<div class="tokens"></div><div class="label">${s.label}</div>
-      <div class="who">${s.who}</div><div class="tech">${s.tech}</div>`;
+    d.className = 'stage' + (s.ai ? ' ai' : '');
+    d.innerHTML = `<span class="badge zero" id="b-${p.id}-${i}">0</span>
+      <div class="tokens"></div><div class="label">${s.label}</div>
+      <div class="who">${s.who}</div><div class="tech">${s.tech}</div><span class="more">details ›</span>`;
+    d.addEventListener('click', () => openStage(p, i));
     flow.append(d); return d;
   });
   p.el.append(flow); board.append(p.el);
   p.instances = []; p.completed = 0;
 });
 
-// ---- Correlation: thread events into the same running instance ----
-function keySet(keys) {
-  return new Set(Object.values(keys || {}).filter(Boolean));
-}
-function intersects(a, b) {
-  for (const v of b) if (a.has(v)) return true;
-  return false;
+function keySet(keys) { return new Set(Object.values(keys || {}).filter(Boolean)); }
+function intersects(a, b) { for (const v of b) if (a.has(v)) return true; return false; }
+function label(inst) {
+  const k = inst.keys;
+  const party = [...k].find((v) => v.length < 30 && !v.includes('-')) || [...k][0] || '?';
+  return 'Customer ' + String(party).slice(0, 10);
 }
 
-let events = 0, running = 0, done = 0;
+let events = 0, running = 0, done = 0, seq = 0;
 function stat() {
   document.getElementById('events').textContent = events;
   document.getElementById('running').textContent = Math.max(0, running);
   document.getElementById('done').textContent = done;
 }
 
-function hitStage(p, idx, isAi) {
+function hitStage(p, idx, isAi, move) {
   const el = p.stageEls[idx];
-  el.classList.add('hot');
-  if (p.stages[idx].alert) el.classList.add('hot');
-  setTimeout(() => el.classList.remove('hot'), 950);
-  // mark stages up to idx as "done" visually on the flow
+  el.classList.add('hot'); setTimeout(() => el.classList.remove('hot'), 950);
   const tokens = el.querySelector('.tokens');
   const t = document.createElement('span'); t.className = 'tok' + (isAi ? ' ai' : '');
   tokens.append(t); setTimeout(() => t.remove(), 2200);
+  const badge = document.getElementById(`b-${p.id}-${idx}`);
+  badge.dataset.n = (+(badge.dataset.n || 0)) + 1;
+  badge.textContent = badge.dataset.n; badge.classList.remove('zero');
+}
+
+function record(inst, p, stage, move) {
+  inst.steps.push({
+    stage, at: Date.now(), eventType: move.eventType, source: move.source,
+    reactors: move.reactors || [], ai: AIC.includes(move.source) || p.stages[stage].ai,
+    narration: p.narrate[move.eventType] ? p.narrate[move.eventType](move) : '',
+    ref: move.ref || '',
+  });
 }
 
 function advance(p, move, stage) {
   const mk = keySet(move.keys);
-  const isAi = ['intelligence', 'campaign'].includes(move.source) || p.stages[stage].ai;
+  const isAi = AIC.includes(move.source) || p.stages[stage].ai;
   if (stage === 0) {
-    // start a fresh instance
-    const inst = { keys: mk, stage: 0, born: Date.now() };
+    const inst = { id: ++seq, keys: mk, stage: 0, born: Date.now(), steps: [] };
+    record(inst, p, 0, move);
     p.instances.unshift(inst); running++;
-    while (p.instances.length > 12) p.instances.pop();
-    hitStage(p, 0, isAi);
-    return true;
+    while (p.instances.length > 40) p.instances.pop();
+    hitStage(p, 0, isAi, move); return true;
   }
-  // find a running instance this event belongs to
-  let inst = p.instances.find((x) => x.stage < p.stages.length - 0.5 && intersects(x.keys, mk));
-  // assurance events (fibre cut) may carry no party/order key — attach to the newest live slice
-  if (!inst && (mk.size === 0 || p.id === 'slice') && p.instances.length) {
-    inst = p.instances.find((x) => x.stage >= 2 && x.stage < stage);
+  let inst = p.instances.find((x) => !x.done && intersects(x.keys, mk));
+  if (!inst && p.id === 'slice' && p.instances.length) {
+    inst = p.instances.find((x) => !x.done && x.stage >= 2 && x.stage < stage);
   }
   if (!inst) return false;
   mk.forEach((v) => inst.keys.add(v));
-  if (stage > inst.stage) inst.stage = stage;
-  hitStage(p, stage, isAi);
+  if (stage >= inst.stage) inst.stage = stage;
+  record(inst, p, stage, move);
+  hitStage(p, stage, isAi, move);
   if (stage >= p.stages.length - 1) {
     inst.done = true; running--; done++; p.completed++;
     document.getElementById('c-' + p.id).textContent = p.completed;
@@ -256,35 +312,85 @@ function advance(p, move, stage) {
   return true;
 }
 
-// ---- Narration ----
 const story = document.getElementById('story');
 let idle = story.querySelector('.idle');
-function narrate(html, cls) {
+function narrate(html) {
   if (idle) { idle.remove(); idle = null; }
   const [emoji, ...rest] = html.split('|');
   const el = document.createElement('div'); el.className = 'story';
-  const now = new Date();
   el.innerHTML = `<span class="emoji">${emoji}</span><span class="txt">${rest.join('|')}</span>
-    <span class="when">${now.toLocaleTimeString()}</span>`;
+    <span class="when">${new Date().toLocaleTimeString()}</span>`;
   story.insertBefore(el, story.firstChild);
   while (story.querySelectorAll('.story').length > 40) story.querySelector('.story:last-child').remove();
 }
 
-// ---- Handle each event ----
 function onMove(m) {
-  events++; stat();
-  let told = false;
+  events++; let told = false;
   PROCESSES.forEach((p) => {
     const stage = p.steps[m.eventType];
     if (stage === undefined) return;
-    const ok = advance(p, m, stage);
-    if (ok && p.narrate[m.eventType] && !told) {
-      narrate(p.narrate[m.eventType](m));
-      told = true;
-    }
+    if (advance(p, m, stage) && p.narrate[m.eventType] && !told) { narrate(p.narrate[m.eventType](m)); told = true; }
   });
   stat();
+  if (currentStage) refreshDrawer();
 }
+
+// ---- detail drawer ----
+let currentStage = null;
+function openStage(p, idx) {
+  currentStage = { p, idx };
+  const s = p.stages[idx];
+  document.getElementById('d-crumb').textContent = p.name;
+  document.getElementById('d-title').textContent = s.label;
+  document.getElementById('d-what').textContent = s.detail;
+  refreshDrawer();
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('open');
+}
+function refreshDrawer() {
+  const { p, idx } = currentStage;
+  const body = document.getElementById('d-body');
+  const reached = p.instances.filter((x) => x.steps.some((st) => st.stage >= idx));
+  let html = `<div class="dsec">Instances that reached this step (${reached.length})</div>`;
+  if (!reached.length) {
+    html += `<div class="empty2">None yet. Run a flow and this fills in live — then click an instance to see its whole journey.</div>`;
+  } else {
+    reached.slice(0, 30).forEach((inst) => {
+      const st = inst.steps[inst.steps.length - 1];
+      const pill = inst.done ? '<span class="pill dn">completed</span>' : '<span class="pill run">running</span>';
+      html += `<div class="inst" onclick="showInstance('${p.id}',${inst.id})">
+        <div class="who">${label(inst)} ${pill}</div>
+        <div class="at">now at “${p.stages[inst.stage].label}” · ${inst.steps.length} steps · started ${new Date(inst.born).toLocaleTimeString()}</div></div>`;
+    });
+  }
+  body.innerHTML = html;
+}
+function showInstance(pid, id) {
+  const p = PROCESSES.find((x) => x.id === pid);
+  const inst = p.instances.find((x) => x.id === id);
+  if (!inst) return;
+  document.getElementById('d-crumb').textContent = p.name + ' · instance';
+  document.getElementById('d-title').textContent = label(inst);
+  document.getElementById('d-what').textContent =
+    (inst.done ? 'Completed' : 'Running') + ' — its full journey through the process, step by step:';
+  let html = `<div class="dsec">Journey · ${inst.steps.length} steps</div>`;
+  inst.steps.forEach((st) => {
+    const plain = st.narration ? st.narration.split('|').slice(1).join('|') : p.stages[st.stage].label;
+    const react = st.reactors.length ? ' → picked up by <b>' + st.reactors.join(', ') + '</b>' : '';
+    html += `<div class="step"><div class="rail"><div class="d${st.ai ? ' ai' : ''}"></div><div class="l"></div></div>
+      <div class="body"><div class="t">${plain}</div>
+      <div class="m">${new Date(st.at).toLocaleTimeString()} · <b>${st.source}</b> · ${st.eventType}${react}${st.ref ? ' · ' + st.ref : ''}</div></div></div>`;
+  });
+  html += `<div class="inst" onclick="openStage(PROCESSES.find(x=>x.id==='${p.id}'), ${currentStage.idx})" style="color:var(--teal)">‹ back to step instances</div>`;
+  document.getElementById('d-body').innerHTML = html;
+}
+function closeDrawer() {
+  currentStage = null;
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('scrim').classList.remove('open');
+}
+document.getElementById('scrim').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
 function connect() {
   const es = new EventSource('stream');
