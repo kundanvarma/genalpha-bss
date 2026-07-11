@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -29,11 +30,41 @@ public class PortingClient {
         this.enabled = enabled;
     }
 
-    /** @return the ported-in number for this party, or null to draw from the pool. */
+    /**
+     * The number this party is keeping. Provisioning WAITS for an in-flight
+     * port-in to cut over (up to a bounded window) rather than racing it and
+     * drawing a fresh number — "keep your number" only means something if the
+     * activation lands on the ported number. Fail-soft: no port / porting
+     * unreachable → null, and the caller draws from the pool.
+     */
     public String portedNumberFor(String partyId) {
         if (!enabled || partyId == null) {
             return null;
         }
+        String completed = completedNumber(partyId);
+        if (completed != null) {
+            return completed;
+        }
+        // If a port-in is scheduled, hold briefly for the cutover.
+        if (!hasScheduledPortIn(partyId)) {
+            return null;
+        }
+        for (int waited = 0; waited < 15000; waited += 1500) {
+            try {
+                Thread.sleep(1500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+            String number = completedNumber(partyId);
+            if (number != null) {
+                return number;
+            }
+        }
+        return null; // still pending after the window — activate on a pool number
+    }
+
+    private String completedNumber(String partyId) {
         try {
             String body = client.get()
                     .uri("/tmf-api/numberPortingManagement/v1/portedNumber?relatedPartyId=" + partyId)
@@ -41,7 +72,21 @@ public class PortingClient {
             Map<?, ?> map = objectMapper.readValue(body, Map.class);
             return map.get("phoneNumber") == null ? null : String.valueOf(map.get("phoneNumber"));
         } catch (Exception e) {
-            return null; // fail-soft to the pool
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean hasScheduledPortIn(String partyId) {
+        try {
+            String body = client.get()
+                    .uri("/tmf-api/numberPortingManagement/v1/numberPortingOrder?relatedPartyId="
+                            + partyId + "&status=scheduled")
+                    .retrieve().body(String.class);
+            List<Map<String, Object>> list = objectMapper.readValue(body, List.class);
+            return list.stream().anyMatch(o -> "portIn".equals(o.get("direction")));
+        } catch (Exception e) {
+            return false;
         }
     }
 }

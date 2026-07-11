@@ -42,8 +42,16 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("porting:read")
-                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("porting:write")
+                        // Cutover + the orchestrator's ported-number lookup are staff/machine.
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/numberPortingOrder/*/complete")
+                                .hasAuthority("porting:write")
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/portedNumber")
+                                .hasAuthority("porting:read")
+                        // A customer may request and see their OWN port-in (party-scoped in the service).
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/numberPortingOrder")
+                                .hasAnyAuthority("porting:write", "customer")
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**")
+                                .hasAnyAuthority("porting:read", "customer")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("porting:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("porting:write")
                         .anyRequest().authenticated())

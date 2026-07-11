@@ -39,13 +39,16 @@ public class PortingService {
     private final PortingGateway gateway;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.porting.security.PartyScope partyScope;
 
     public PortingService(PortingOrderRepository orders, PortingGateway gateway,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.porting.security.PartyScope partyScope) {
         this.orders = orders;
         this.gateway = gateway;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.partyScope = partyScope;
     }
 
     @Transactional
@@ -71,6 +74,8 @@ public class PortingService {
                 && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
             order.setOwnerPartyId(String.valueOf(party.get("id")));
         }
+        // A customer can only port their own number, whatever they send.
+        partyScope.scopedPartyId().ifPresent(order::setOwnerPartyId);
         order.setProductOrderId(dto.get("productOrderId") == null ? null
                 : String.valueOf(dto.get("productOrderId")));
         order.setGateway(gateway.name());
@@ -122,8 +127,9 @@ public class PortingService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> findAll(String relatedPartyId, String status) {
+        String scoped = partyScope.scopedPartyId().orElse(relatedPartyId);
         return orders.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
-                .filter(o -> relatedPartyId == null || relatedPartyId.equals(o.getOwnerPartyId()))
+                .filter(o -> scoped == null || scoped.equals(o.getOwnerPartyId()))
                 .filter(o -> status == null || status.equals(o.getStatus()))
                 .map(this::toMap).toList();
     }

@@ -53,6 +53,9 @@ bss:
     # or 'nrdb' (Norway — Nasjonal Referansedatabase). Overridable per tenant/
     # country; a real deployment implements the adapter against the clearinghouse.
     gateway: ${PORTING_GATEWAY:mock}
+    # Dev cutover compression: complete scheduled ports N seconds after request
+    # (0 = off; production waits for the clearinghouse's agreed window).
+    auto-complete-seconds: ${PORTING_AUTO_COMPLETE_SECONDS:0}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
