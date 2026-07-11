@@ -121,11 +121,20 @@ public class OrchestrationService {
             instance.setOwnerPartyId(owner);
             instance.setCreatedAt(OffsetDateTime.now());
             instance.setLastUpdate(OffsetDateTime.now());
+
+            // Slice services ride a delivery path (assurance re-homes them on
+            // failure); AI services draw a GPU from the edge pool; everything
+            // else draws an MSISDN as before.
+            boolean isSlice = name != null && name.contains("Slice");
+            boolean isEdgeAi = name != null && name.contains("Edge AI");
+            if (isSlice) {
+                instance.setDeliveryPath("fibre-route-stadium-north");
+            }
             services.save(instance);
 
-            // TMF685: the activation draws the next number from the
-            // tenant's MSISDN pool — the locked read keeps draws unique.
-            pools.findFirstByTenantIdAndResourceType(tenant, ResourcePool.MSISDN).ifPresent(pool -> {
+            String poolType = isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            if (poolType != null)
+            pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
                 ResourceAssignment assignment = new ResourceAssignment();
                 assignment.setId(UUID.randomUUID().toString());
                 assignment.setTenantId(tenant);

@@ -49,7 +49,8 @@ public class SecurityConfig {
                                 "/tmf-api/intentManagement/v4/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/resourcePoolManagement/v4/**",
-                                "/tmf-api/intentManagement/v4/**").hasAuthority(WRITE)
+                                "/tmf-api/intentManagement/v4/**",
+                                ApiConstants.INVENTORY_BASE + "/**").hasAuthority(WRITE)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));

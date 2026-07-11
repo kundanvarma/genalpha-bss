@@ -264,7 +264,12 @@ services:
   assurance:
     db: assurance
     dbRole: assurance_app
-    extraEnv: {}
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-assurance
+      OIDC_CLIENT_SECRET: assurance-secret
+      SOM_BASE_URL: http://service-orchestration:8080
+      TICKET_BASE_URL: http://trouble-ticket:8080
   recommendation:
     db: ""
     machineIdentity: true

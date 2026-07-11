@@ -175,7 +175,7 @@ public class QuoteService {
         for (Map<String, Object> item : readItems(quote)) {
             Map<?, ?> offering = (Map<?, ?>) item.get("offering");
             orderItems.add(Map.of("action", "add",
-                    "productOffering", Map.of("id", offering.get("id"))));
+                    "productOffering", Map.of("id", offering.get("id"), "name", offering.get("name"))));
         }
         Map<String, Object> order = downstream.placeOrder(Map.of(
                 "productOrderItem", orderItems,
