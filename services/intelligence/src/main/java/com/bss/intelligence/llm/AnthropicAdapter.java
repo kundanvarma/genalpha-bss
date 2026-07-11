@@ -17,14 +17,17 @@ public class AnthropicAdapter implements LlmAdapter {
     private final String model;
 
     public AnthropicAdapter(RestClient.Builder builder,
-            @Value("${bss.intelligence.base-url:https://api.anthropic.com}") String baseUrl,
+            @Value("${bss.intelligence.base-url:}") String baseUrl,
             @Value("${bss.intelligence.api-key}") String apiKey,
-            @Value("${bss.intelligence.model:claude-haiku-4-5-20251001}") String model) {
-        this.restClient = builder.baseUrl(baseUrl)
+            @Value("${bss.intelligence.model:}") String model) {
+        // Deployment env often sets these to "" rather than leaving them unset
+        // (compose passthrough) — blank must mean "use the default" too.
+        String base = baseUrl == null || baseUrl.isBlank() ? "https://api.anthropic.com" : baseUrl;
+        this.restClient = builder.baseUrl(base)
                 .defaultHeader("x-api-key", apiKey)
                 .defaultHeader("anthropic-version", "2023-06-01")
                 .build();
-        this.model = model;
+        this.model = model == null || model.isBlank() ? "claude-haiku-4-5-20251001" : model;
     }
 
     @Override

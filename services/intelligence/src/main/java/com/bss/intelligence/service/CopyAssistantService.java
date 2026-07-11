@@ -62,7 +62,8 @@ public class CopyAssistantService {
         }
         if (hasPromo) {
             user.append("Include the literal placeholder {code} exactly once — "
-                    + "it will be replaced with a promotion code.\n");
+                    + "it will be replaced with a promotion code. Do NOT state any discount"
+                    + " amount or percentage; you do not know what the code is worth.\n");
         }
 
         // Small models drift from the contract; one corrective retry fixes
