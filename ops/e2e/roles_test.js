@@ -69,6 +69,21 @@ async function staffToken(request, realm) {
   if (denied.status() !== 403) fail('agent should get 403 from TMF672, got ' + denied.status());
   console.log('OK agents are denied role administration (403)');
 
+  // TMF669: business roles on parties (distinct from IdP roles above).
+  const PARTY_ROLES = 'http://localhost:8080/tmf-api/partyRoleManagement/v4';
+  const grant669 = await ctx.request.post(`${PARTY_ROLES}/partyRole`, {
+    headers: { ...as(genalpha), 'Content-Type': 'application/json' },
+    data: { name: 'partner', engagedParty: { id: 'e2e-org-1' } },
+  });
+  if (grant669.status() !== 201) fail('TMF669 grant failed: ' + grant669.status() + ' ' + await grant669.text());
+  const roles669 = await (await ctx.request.get(
+    `${PARTY_ROLES}/partyRole?engagedPartyId=e2e-org-1`, { headers: as(genalpha) })).json();
+  if (!roles669.some((r) => r.name === 'partner')) fail('partner role missing: ' + JSON.stringify(roles669));
+  const novaView669 = await (await ctx.request.get(
+    `${PARTY_ROLES}/partyRole?engagedPartyId=e2e-org-1`, { headers: as(nova) })).json();
+  if (novaView669.length !== 0) fail('party roles leaked across tenants');
+  console.log('OK TMF669 party roles: partner granted, tenant-partitioned');
+
   await browser.close();
   console.log('\nALL USER-ROLES CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });
