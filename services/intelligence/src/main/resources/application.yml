@@ -1,6 +1,11 @@
 spring:
   application:
     name: intelligence
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        max.block.ms: 2000
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/intelligence}
     username: ${DB_USERNAME:postgres}
@@ -41,7 +46,18 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  events:
+    topic: bss.intelligence.events
+  downstream:
+    agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
+    usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
   intelligence:
+    churn:
+      # Structured rules, not a model: commitment ending within N days;
+      # any meter at or past this share of its allowance.
+      agreement-days: ${CHURN_AGREEMENT_DAYS:30}
+      usage-threshold: ${CHURN_USAGE_THRESHOLD:0.9}
+      interval-ms: ${CHURN_INTERVAL_MS:300000}
     # The vendor seam. "stub" is deterministic and needs no network or keys —
     # the stack and its E2E suites run AI features out of the box. Point at a
     # real model per deployment (or per tenant, later) via:
@@ -59,6 +75,12 @@ bss:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-intelligence}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-intelligence}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}

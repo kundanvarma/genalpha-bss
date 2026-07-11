@@ -213,8 +213,13 @@ services:
   intelligence:
     db: intelligence
     dbRole: intelligence_app
+    machineIdentity: true
     extraEnv:
       AI_PROVIDER: stub
+      OIDC_CLIENT_ID: bss-intelligence
+      OIDC_CLIENT_SECRET: intelligence-secret
+      AGREEMENT_BASE_URL: http://agreement:8080
+      USAGE_BASE_URL: http://usage:8080
   user-roles:
     db: ""
     machineIdentity: true

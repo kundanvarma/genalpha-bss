@@ -187,6 +187,65 @@ async function staffToken(request, realm) {
     .locator('button', { hasText: 'Resume' }).waitFor({ timeout: 10000 });
   console.log('OK paused from the GUI (button flipped to Resume)');
 
+  // --- The churn scorer closes the loop: structured facts become campaigns.
+  // A retention campaign on the scorer's trigger, filtered to commitment-ending.
+  const churnSubject = `We would hate to see you go ${run}`;
+  const churnCamp = await ctx.request.post(`${API}/tmf-api/campaignManagement/v4/campaign`, {
+    headers: { ...as(genalpha), ...json },
+    data: {
+      name: `Retention ${run}`,
+      triggerEventType: 'ChurnRiskDetectedEvent',
+      triggerState: 'commitment-ending',
+      promotionCode: 'WELCOME10',
+      message: { subject: churnSubject, content: 'Stay with us — {code} is yours.' },
+    },
+  });
+  if (churnCamp.status() !== 201) fail('churn campaign create failed');
+
+  // A commitment that ends in 10 days, held by a fresh customer.
+  const churnParty = `churn-${run}`;
+  const soon = new Date(Date.now() + 10 * 86400e3).toISOString();
+  const started = new Date(Date.now() - 355 * 86400e3).toISOString();
+  const agr = await ctx.request.post(`${API}/tmf-api/agreementManagement/v4/agreement`, {
+    headers: { ...as(genalpha), ...json },
+    data: {
+      name: '12-month term (martech e2e)', status: 'active',
+      engagedParty: [{ id: churnParty, role: 'customer' }],
+      agreementPeriod: { startDateTime: started, endDateTime: soon },
+    },
+  });
+  if (agr.status() !== 201) fail('agreement create failed: ' + agr.status());
+
+  // Sweep on demand (the scheduler would find it within minutes).
+  const sweep = await ctx.request.post(`${API}/ai/v1/churnSweep`, { headers: as(genalpha) });
+  if (sweep.status() !== 200) fail('churn sweep failed: ' + sweep.status());
+
+  let churnHits = [];
+  for (let attempt = 0; attempt < 20 && !churnHits.length; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    churnHits = (await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?relatedPartyId=${churnParty}&limit=20`,
+      { headers: as(genalpha) })).json()).filter((m) => m.subject === churnSubject);
+  }
+  if (churnHits.length !== 1 || !churnHits[0].content.includes('WELCOME10')) {
+    fail('churn retention message wrong: ' + JSON.stringify(churnHits));
+  }
+  console.log('OK churn scorer -> event -> retention campaign, code substituted');
+
+  // A second sweep re-detects nothing; the customer is not spammed.
+  await ctx.request.post(`${API}/ai/v1/churnSweep`, { headers: as(genalpha) });
+  await new Promise((r) => setTimeout(r, 6000));
+  churnHits = (await (await ctx.request.get(
+    `${API}/tmf-api/communicationManagement/v4/communicationMessage?relatedPartyId=${churnParty}&limit=20`,
+    { headers: as(genalpha) })).json()).filter((m) => m.subject === churnSubject);
+  if (churnHits.length !== 1) fail('second sweep duplicated the retention message');
+  console.log('OK second sweep is silent — scorer dedupe + campaign dedupe hold');
+
+  // Hygiene: retire this run's retention campaign so reruns don't stack sends.
+  await ctx.request.patch(
+    `${API}/tmf-api/campaignManagement/v4/campaign/${(await churnCamp.json()).id}`,
+    { headers: { ...as(genalpha), ...json }, data: { status: 'paused' } });
+
   await browser.close();
   console.log('\nALL MARTECH CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

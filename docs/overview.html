@@ -132,7 +132,7 @@ cryptographic identity isolation and database row-level security between them.</
 <tr><td>payment-method</td><td class="api">TMF670</td><td>8103</td><td>Tokenized card vault: save at checkout, pay bills one-click</td></tr>
 <tr><td>document</td><td class="api">TMF667</td><td>8106</td><td>Content store: tenant logos and offering artwork the channels wear</td></tr>
 <tr><td>campaign</td><td class="api">martech</td><td>8108</td><td>Event-triggered journeys: once-per-customer messages carrying promo codes — marketers run them from the console GUI</td></tr>
-<tr><td>intelligence</td><td class="api">AI</td><td>8109</td><td>Any-LLM seam (stub / OpenAI-compatible / Anthropic dialects): campaign copy assistant + CSR copilot (360 summaries, ticket reply drafts), always-on PII redaction, per-tenant audit ledger</td></tr>
+<tr><td>intelligence</td><td class="api">AI</td><td>8109</td><td>Any-LLM seam (stub / OpenAI-compatible / Anthropic dialects): campaign copy assistant + CSR copilot + churn/NBO scorer (deterministic rules whose alerts trigger campaigns), always-on PII redaction, per-tenant audit ledger</td></tr>
 </table>
 
 <h3>Production (OSS) — the layer below, thin but real</h3>
@@ -233,10 +233,10 @@ chart with one tenant configured — the pool and silo models are one codebase.<
   <li><b>BankID step-up</b> at checkout for offerings requiring verified identity (brokered IdP,
   no service changes — the vendor-neutral JWT model already carries it).</li>
   <li><b>Real PSP adapter</b> (Stripe/Adyen) behind the existing payment seam.</li>
-  <li><b>More intelligence</b>: copy assistant and CSR copilot are live on the any-LLM seam
-  (stub, Ollama, OpenAI-compatible or Anthropic via config). Next: a churn/next-best-offer
-  scorer (rules on structured data, not an LLM) that emits campaign triggers, and ML ranking
-  behind TMF680.</li>
+  <li><b>More intelligence</b>: copy assistant, CSR copilot and the churn/next-best-offer
+  scorer are live (the scorer is deterministic rules — commitment ending, allowance nearly
+  spent — whose alerts trigger retention campaigns). Next: ML ranking behind TMF680, an AI
+  audit viewer, per-tenant model config.</li>
   <li>Deeper production internals where a concrete integration demands them: pluggable
   activation adapters, alarm correlation, TMF648 Quote for B2B.</li>
 </ul>

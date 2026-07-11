@@ -424,6 +424,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-intelligence",
+      "name": "intelligence machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "intelligence-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -618,6 +629,15 @@
       "realmRoles": [
         "communication:write",
         "communication:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-intelligence",
+      "enabled": true,
+      "serviceAccountClientId": "bss-intelligence",
+      "realmRoles": [
+        "agreement:read",
+        "usage:read"
       ]
     }
   ],
