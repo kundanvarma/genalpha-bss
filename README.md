@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **27 composable ODA components**
+A vendor-neutral telecom **Business Support System** built as **28 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **four channels** (three web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -49,6 +49,7 @@ failures.
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
 | document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
+| quote | TMF648 | 8110 | B2B quotes born from intents: the OSS proposal priced, token allowances on line items, acceptance places the order |
 | intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
 
 **Production (OSS)** — the layer below the BSS, thin but real

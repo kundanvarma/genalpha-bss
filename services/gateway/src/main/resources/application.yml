@@ -76,6 +76,10 @@ spring:
           uri: ${INTELLIGENCE_URL:http://localhost:8109}
           predicates:
             - Path=/ai/**
+        - id: quote
+          uri: ${QUOTE_URL:http://localhost:8110}
+          predicates:
+            - Path=/tmf-api/quoteManagement/**
         - id: user-roles
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:

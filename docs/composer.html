@@ -63,6 +63,7 @@ const MODULES = [
   { id: 'promotion',       api: 'TMF671', name: 'Promotion',        deps: [], desc: 'Promo codes: anonymous validation, redemption, bill discounts.' },
   { id: 'campaign',        api: 'martech', name: 'Campaign Engine',  deps: ['communication'], desc: 'Event-triggered journeys: once-per-customer messages carrying promo codes.' },
   { id: 'intelligence',    api: 'AI',      name: 'Intelligence',     deps: [], desc: 'Any-LLM seam (stub/OpenAI-compatible/Anthropic): copy assistant, CSR copilot, churn/NBO scorer feeding campaign triggers, redaction, per-tenant audit.' },
+  { id: 'quote',           api: 'TMF648',  name: 'Quote (B2B)',      deps: ['service-orchestration'], desc: 'Quotes born from TMF921 intents: OSS proposal priced, token allowances on the line items, acceptance places the order.' },
   { id: 'user-roles',      api: 'TMF672', name: 'User Roles & Permissions', deps: [], desc: 'Tenant admins manage staff via TMF API over their own IdP.' },
   { id: 'recommendation',  api: 'TMF680', name: 'Recommendation',   deps: [], desc: 'Cross-sell: what this customer lacks, bundles first.' },
   { id: 'document',        api: 'TMF667', name: 'Document / Content',  deps: [], desc: 'Brand assets and offering imagery — the channels\' content store.' },

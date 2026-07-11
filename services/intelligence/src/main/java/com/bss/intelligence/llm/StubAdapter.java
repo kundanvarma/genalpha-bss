@@ -22,6 +22,12 @@ public class StubAdapter implements LlmAdapter {
                     + "NEXT: Review the open items in the 360 with the customer.\n"
                     + "NEXT: Check whether the current plan still fits their usage.";
         }
+        if (system.contains("NARRATIVE:")) {
+            return "NARRATIVE: This quote packages guaranteed venue connectivity with"
+                    + " edge AI inference next to the crowd. AI usage is token-metered:"
+                    + " an included allowance, then a fixed price per million tokens —"
+                    + " costs scale with the event, not ahead of it. (Stub provider.)";
+        }
         if (system.contains("REPLY:")) {
             return "REPLY: Hi! Thanks for reaching out — we are looking into your case and"
                     + " will keep you posted here. (Drafted by the stub provider; configure"

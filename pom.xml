@@ -32,6 +32,7 @@
         <module>services/promotion</module>
         <module>services/campaign</module>
         <module>services/intelligence</module>
+        <module>services/quote</module>
         <module>services/user-roles</module>
         <module>services/geographic-address</module>
         <module>services/document</module>
