@@ -158,6 +158,26 @@ const RESOURCES = [
       const executions = await res.json();
       cell.textContent = `${executions.length} customer${executions.length === 1 ? '' : 's'}`;
     },
+    // The intelligence component drafts; the marketer edits and saves.
+    aiAssist: {
+      placeholder: 'Brief for AI, e.g. "thank first-time buyers, warm tone"',
+      draft: async (brief) => {
+        const res = await authFetch('/ai/v1/campaignCopy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            brief,
+            brandName: BRAND.brandName || undefined,
+            triggerEventType: controls.triggerEventType?.get(),
+            promotionCode: controls.promotionCode?.get(),
+          }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+        const copy = await res.json();
+        controls.messageSubject.set({ messageSubject: copy.subject });
+        controls.messageContent.set({ messageContent: copy.content });
+      },
+    },
   },
 ];
 
@@ -432,6 +452,44 @@ function renderEditor() {
     wrap.append(caption, ...parts);
     return wrap;
   }));
+  if (active.aiAssist) {
+    el('fields').append(aiAssistRow(active.aiAssist));
+  }
+}
+
+/** A brief in, a draft out — into the message fields, still editable. */
+function aiAssistRow(assist) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field aiassist';
+  const caption = document.createElement('span');
+  caption.textContent = 'AI assist';
+  const row = document.createElement('div');
+  row.className = 'moneyrow';
+  const brief = document.createElement('input');
+  brief.placeholder = assist.placeholder;
+  brief.id = 'ai-brief';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'ai-draft';
+  button.className = 'ghost';
+  button.textContent = '✨ Draft';
+  button.addEventListener('click', async () => {
+    if (!brief.value.trim()) return;
+    button.disabled = true;
+    button.textContent = 'Drafting…';
+    try {
+      await assist.draft(brief.value.trim());
+    } catch (e) {
+      el('editor-error').textContent = 'AI assist: ' + e.message;
+      el('editor-error').hidden = false;
+    } finally {
+      button.disabled = false;
+      button.textContent = '✨ Draft';
+    }
+  });
+  row.append(brief, button);
+  wrap.append(caption, row);
+  return wrap;
 }
 
 function stopEditing() {

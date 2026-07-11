@@ -72,6 +72,10 @@ spring:
           uri: ${CAMPAIGN_URL:http://localhost:8108}
           predicates:
             - Path=/tmf-api/campaignManagement/**
+        - id: intelligence
+          uri: ${INTELLIGENCE_URL:http://localhost:8109}
+          predicates:
+            - Path=/ai/**
         - id: user-roles
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:

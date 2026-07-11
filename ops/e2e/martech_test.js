@@ -134,8 +134,18 @@ async function staffToken(request, realm) {
   await page.waitForFunction(() =>
     document.querySelectorAll('select[name="promotionCode"] option').length > 1);
   await page.selectOption('select[name="promotionCode"]', 'WELCOME10');
+
+  // The intelligence component drafts the copy from a one-line brief...
+  await page.fill('#ai-brief', 'a warm welcome for brand-new customers');
+  await page.click('#ai-draft');
+  await page.waitForFunction(() =>
+    document.querySelector('input[name="messageSubject"]').value.length > 0, null, { timeout: 15000 });
+  const draft = await page.inputValue('textarea[name="messageContent"]');
+  if (!draft.includes('{code}')) fail('AI draft lost the {code} placeholder: ' + draft);
+  console.log('OK AI drafted the message; {code} placeholder survived');
+
+  // ...and the marketer stays in charge: edit the subject, then save.
   await page.fill('input[name="messageSubject"]', guiSubject);
-  await page.fill('textarea[name="messageContent"]', 'Console says: use {code}.');
   await page.click('#save');
   const row = page.locator('#listing-body tr', { hasText: guiName });
   await row.waitFor({ timeout: 10000 });
@@ -166,7 +176,7 @@ async function staffToken(request, realm) {
   const guiHits = (await (await ctx.request.get(
     `${API}/tmf-api/communicationManagement/v4/communicationMessage?relatedPartyId=${partyGui}&limit=50`,
     { headers: as(genalpha) })).json()).filter((m) => m.subject === guiSubject);
-  if (guiHits.length !== 1 || guiHits[0].content !== 'Console says: use WELCOME10.') {
+  if (guiHits.length !== 1 || !guiHits[0].content.includes('WELCOME10')) {
     fail('console-defined journey misdelivered: ' + JSON.stringify(guiHits));
   }
   console.log('OK console campaign fired once; reached counter shows', reached);
