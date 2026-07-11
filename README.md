@@ -1,12 +1,12 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
 A vendor-neutral telecom **Business Support System** built as **24 TM Forum ODA components**
-(Spring Boot microservices exposing TMF Open APIs) plus **three web channels**, behind one API
+(Spring Boot microservices exposing TMF Open APIs) plus **four channels** (three web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — six Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — seven Playwright suites drive the
 storefront, guest checkout, both consoles, tenant isolation and role administration against the
 full stack. The original five core components also pass the official TM Forum CTKs with zero
 failures.
@@ -62,6 +62,7 @@ failures.
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
 | csr-console | `/csr` | Assisted service: customer 360, ticket queue, org-scoped agents |
 | admin-console | `/console` | Back office: catalog and stock |
+| mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
 ## Multitenancy (pool model, hardened)
 
@@ -110,7 +111,7 @@ Serviceable fiber postcodes start with `111`, `222` or `333`.
 mvn -q clean test -Dapi.version=1.44        # ~250 tests incl. real-Postgres migrations + RLS proofs
 cd ops/e2e && npm i playwright && npx playwright install chromium
 node storefront_test.js && node guest_test.js && node console_test.js \
-  && node csr_test.js && node tenant_test.js && node roles_test.js
+  && node csr_test.js && node tenant_test.js && node roles_test.js && node app_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,

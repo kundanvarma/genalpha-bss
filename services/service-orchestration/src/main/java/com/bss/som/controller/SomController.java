@@ -8,6 +8,7 @@ import com.bss.som.entity.ResourcePool;
 import com.bss.som.repository.ResourceAssignmentRepository;
 import com.bss.som.repository.ResourcePoolRepository;
 import com.bss.som.repository.ServiceOrderRepository;
+import com.bss.som.security.PartyScope;
 import com.bss.som.security.TenantScope;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
@@ -30,15 +31,17 @@ public class SomController {
     private final ResourcePoolRepository pools;
     private final ResourceAssignmentRepository assignments;
     private final TenantScope tenantScope;
+    private final PartyScope partyScope;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
-            TenantScope tenantScope) {
+            TenantScope tenantScope, PartyScope partyScope) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
         this.assignments = assignments;
         this.tenantScope = tenantScope;
+        this.partyScope = partyScope;
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")
@@ -56,8 +59,10 @@ public class SomController {
     public ResponseEntity<List<Map<String, Object>>> services(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         String tenant = tenantScope.currentTenantId();
-        List<ServiceInstance> rows = relatedPartyId != null
-                ? services.findByTenantIdAndOwnerPartyId(tenant, relatedPartyId)
+        // Customers see their own running services; staff filter freely.
+        String party = partyScope.scopedPartyId().orElse(relatedPartyId);
+        List<ServiceInstance> rows = party != null
+                ? services.findByTenantIdAndOwnerPartyId(tenant, party)
                 : services.findAll().stream()
                         .filter(s -> tenant.equals(s.getTenantId())).toList();
         return ResponseEntity.ok(rows.stream().map(this::serviceMap).toList());

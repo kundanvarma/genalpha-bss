@@ -707,6 +707,7 @@ services:
       PARTY_URL: http://party-account:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
+      APP_URL: http://mobile-app:8080
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
       BILLING_URL: http://billing:8080
@@ -779,10 +780,17 @@ services:
         condition: service_started
       storefront:
         condition: service_started
+      mobile-app:
+        condition: service_started
 
   console:
     build: ./apps/admin-console
     container_name: bss-console
+    restart: unless-stopped
+
+  mobile-app:
+    build: ./apps/mobile
+    container_name: bss-mobile-app
     restart: unless-stopped
 
   csr-console:

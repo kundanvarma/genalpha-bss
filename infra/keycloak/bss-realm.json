@@ -108,7 +108,8 @@
             "agreement:read",
             "recommendation:read",
             "paymentmethod:read",
-            "paymentmethod:write"
+            "paymentmethod:write",
+            "service:read"
           ]
         }
       },
@@ -362,6 +363,26 @@
       "directAccessGrantsEnabled": false,
       "id": "9920e6d1-746c-5742-be9f-caa79fa2f5e1",
       "description": "thin SOM: completes product orders after activation"
+    },
+    {
+      "clientId": "bss-app",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/app/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "id": "0d3f62d6-6478-5d2e-a245-9d147b04fee2",
+      "description": "mobile app channel (public, PKCE)"
     }
   ],
   "users": [

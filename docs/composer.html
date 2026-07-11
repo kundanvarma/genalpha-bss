@@ -72,6 +72,7 @@ const MODULES = [
   { id: 'storefront',   api: 'channel', name: 'Self-service Storefront', deps: [], desc: '/shop — guest browse to checkout, bills, support.' },
   { id: 'csr-console',  api: 'channel', name: 'CSR Console',             deps: ['trouble-ticket', 'party-interaction'], desc: '/csr — customer 360 for agents, org-scoped.' },
   { id: 'console',      api: 'channel', name: 'Admin Console',           deps: [], desc: '/console — catalog and stock back office.' },
+  { id: 'mobile-app',   api: 'channel', name: 'Mobile App (Expo)',        deps: [], desc: '/app — the modular LOB app; web today, iOS/Android from the same code.' },
 ];
 
 const state = Object.fromEntries(MODULES.map((m) => [m.id, true]));
