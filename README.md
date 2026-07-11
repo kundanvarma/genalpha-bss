@@ -109,6 +109,23 @@ Then browse:
 Demo cards: `4242 4242 4242 4242` pays, anything ending `0002` declines. Promo code: `WELCOME10`.
 Serviceable fiber postcodes start with `111`, `222` or `333`.
 
+## AI with a real model (optional)
+
+The intelligence component ships with a deterministic `stub` provider, so AI features work with
+zero keys and zero network. To run against a real local model:
+
+```bash
+docker compose --profile ai up -d ollama
+docker exec bss-ollama ollama pull llama3.2:1b       # ~1.3 GB, fits the dev VM
+AI_PROVIDER=openai-compatible AI_BASE_URL=http://ollama:11434 AI_MODEL=llama3.2:1b \
+  docker compose up -d intelligence
+```
+
+The same two variables point at OpenAI, Azure OpenAI, Mistral, Groq or vLLM
+(`AI_PROVIDER=openai-compatible`, `AI_BASE_URL=…`, `AI_API_KEY=…`), or at Claude natively
+(`AI_PROVIDER=anthropic`, `AI_API_KEY=…`). Every call — including contract misses and retries —
+lands in the per-tenant `ai_audit` ledger.
+
 ## Verification
 
 ```bash
