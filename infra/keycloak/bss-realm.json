@@ -106,7 +106,9 @@
             "communication:write",
             "usage:read",
             "agreement:read",
-            "recommendation:read"
+            "recommendation:read",
+            "paymentmethod:read",
+            "paymentmethod:write"
           ]
         }
       },
@@ -176,6 +178,14 @@
       {
         "name": "recommendation:read",
         "description": "recommendation:read"
+      },
+      {
+        "name": "paymentmethod:read",
+        "description": "paymentmethod:read"
+      },
+      {
+        "name": "paymentmethod:write",
+        "description": "paymentmethod:write"
       }
     ]
   },
@@ -305,6 +315,19 @@
       "directAccessGrantsEnabled": false,
       "id": "5b82cbb3-29d4-5ec4-8a48-8b680e0d1ad6",
       "description": "TMF680 recommender: reads catalog and inventory"
+    },
+    {
+      "clientId": "bss-payment",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "payment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "56dc0b19-9404-5d75-8199-c5fd2f01b75f",
+      "description": "payment service: resolves saved methods in the vault"
     }
   ],
   "users": [
@@ -388,7 +411,9 @@
         "roles:admin",
         "address:read",
         "address:write",
-        "recommendation:read"
+        "recommendation:read",
+        "paymentmethod:read",
+        "paymentmethod:write"
       ]
     },
     {
@@ -461,6 +486,15 @@
         "inventory:read"
       ],
       "id": "34bdb2d2-9986-5600-b57e-8cb4fedf2d51"
+    },
+    {
+      "username": "service-account-bss-payment",
+      "enabled": true,
+      "serviceAccountClientId": "bss-payment",
+      "realmRoles": [
+        "paymentmethod:read"
+      ],
+      "id": "fa25b513-452f-52be-b0e2-2895de047131"
     }
   ]
 }

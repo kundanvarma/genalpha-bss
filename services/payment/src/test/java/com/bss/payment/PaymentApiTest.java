@@ -1,7 +1,9 @@
 package com.bss.payment;
 
 import org.junit.jupiter.api.Test;
+import com.bss.payment.client.PaymentMethodClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
@@ -27,6 +29,9 @@ class PaymentApiTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockBean
+    private PaymentMethodClient paymentMethodClient;
 
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(

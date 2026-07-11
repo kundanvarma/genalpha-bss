@@ -15,6 +15,13 @@ public class MockPspAdapter implements PspAdapter {
 
     @Override
     public Authorization authorize(BigDecimal amount, String currency, Map<String, Object> paymentMethod) {
+        // A vault token is a pre-validated reference: the PSP already knows
+        // the card behind it. Mock: token pays, label from the stored last4.
+        if (paymentMethod != null && paymentMethod.get("token") != null) {
+            return new Authorization(true,
+                    "AUTH-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase(),
+                    "bankCard •••• " + paymentMethod.getOrDefault("lastFourDigits", "????"), null);
+        }
         String number = String.valueOf(paymentMethod == null ? "" : paymentMethod.getOrDefault("cardNumber", ""))
                 .replaceAll("\\s", "");
         if (number.length() < 12) {

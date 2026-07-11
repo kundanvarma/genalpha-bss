@@ -46,6 +46,8 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  downstream:
+    payment-method-base-url: ${PAYMENT_METHOD_BASE_URL:http://localhost:8103}
   events:
     topic: bss.payment.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
@@ -57,6 +59,12 @@ bss:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-payment}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:payment-secret}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-payment}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:payment-secret}

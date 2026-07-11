@@ -64,7 +64,8 @@ async function apiGet(page, path, token) {
   await register(a, `alice-${run}@example.com`, 'Alice', 'Anders');
   console.log('OK customer A self-registered and signed in');
 
-  const bundleCard = a.locator('.card.bundle', { hasText: 'GenAlpha One Home & Mobile' });
+  // .first(): a fresh customer gets the bundle in Recommended-for-you TOO
+  const bundleCard = a.locator('.card.bundle', { hasText: 'GenAlpha One Home & Mobile' }).first();
   await bundleCard.waitFor({ timeout: 15000 });
   const cardText = await bundleCard.textContent();
   if (!/\d+\.\d{2} EUR\/month/.test(cardText)) fail(`bundle card shows no monthly price: ${cardText}`);
@@ -102,7 +103,7 @@ async function apiGet(page, path, token) {
 
   // Add a standalone phone as a second line
   await a.click('.nav >> text=Offers');
-  await a.locator('.card:has(h2:text-is("Apple iPhone 17"))').click();
+  await a.locator('.card:has(h2:text-is("Apple iPhone 17"))').first().click();
   await a.waitForSelector('.pricetable');
   await a.click('button.primary.big');
   await a.waitForURL('**/cart');
@@ -176,6 +177,7 @@ async function apiGet(page, path, token) {
 
   // A good card pays and checks out the whole cart as one order
   await a.fill('.payment input[name="cardNumber"]', '4242 4242 4242 4242');
+  await a.locator('.savecard input[type="checkbox"]').check(); // TMF670: vault it
   await a.locator('.cartactions button.primary.big').click();
   await a.waitForURL('**/orders');
   const orderRow = a.locator('.row', { hasText: 'GenAlpha One Home & Mobile' });
@@ -444,12 +446,14 @@ async function apiGet(page, path, token) {
   if (!(await usageLine.count())) fail('bill missing the usage overage line item');
   console.log('OK bill for', billTotal, 'with', itemCount, 'line items incl usage overage');
 
-  // Pay the bill: card in, bill settled, payment captured by billing
+  // Pay the bill with the card SAVED at checkout (TMF670) — no retyping.
   await billRow.locator('button', { hasText: 'Pay' }).click();
-  await a.fill('.billpay input[name="cardNumber"]', '4242 4242 4242 4242');
-  await a.fill('.billpay input[name="expiry"]', '01/29');
-  await a.fill('.billpay input[name="cvc"]', '321');
-  await a.locator('.billpay button.primary').click();
+  const savedCard = a.locator('[data-testid="saved-card"]').first();
+  await savedCard.waitFor({ timeout: 10000 });
+  const savedLabel = (await savedCard.textContent()).trim();
+  if (!savedLabel.includes('4242')) fail('saved card lost its last4: ' + savedLabel);
+  console.log('OK vaulted card offered on the bill:', savedLabel);
+  await savedCard.click();
   await a.locator('.row', { hasText: 'BILL-' }).first().locator('.state', { hasText: 'settled' })
     .waitFor({ timeout: 15000 });
   const billsAfter = JSON.parse((await apiGet(a,

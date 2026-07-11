@@ -7,6 +7,7 @@ import com.bss.payment.dto.MoneyDto;
 import com.bss.payment.dto.PaymentDto;
 import com.bss.payment.entity.Payment;
 import com.bss.payment.events.DomainEventPublisher;
+import com.bss.payment.client.PaymentMethodClient;
 import com.bss.payment.exception.BadRequestException;
 import com.bss.payment.exception.ConflictException;
 import com.bss.payment.exception.NotFoundException;
@@ -36,14 +37,16 @@ public class PaymentService {
 
     private final PaymentRepository repository;
     private final PspAdapter psp;
+    private final PaymentMethodClient paymentMethods;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
 
-    public PaymentService(PaymentRepository repository, PspAdapter psp, DomainEventPublisher events,
+    public PaymentService(PaymentRepository repository, PspAdapter psp, PaymentMethodClient paymentMethods, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.psp = psp;
+        this.paymentMethods = paymentMethods;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -92,8 +95,25 @@ public class PaymentService {
             throw new BadRequestException("amount must be positive");
         }
         String currency = dto.getAmount().getUnit() == null ? "EUR" : dto.getAmount().getUnit();
+        Map<String, Object> method = dto.getPaymentMethod();
+        // TMF670 seam: a saved method arrives as a reference, never as card
+        // data. Resolve it in the vault (machine call), prove it belongs to
+        // the payer, and pay with the vault token.
+        if (method != null && method.get("id") != null && method.get("cardNumber") == null) {
+            Map<String, Object> saved = paymentMethods.resolve(String.valueOf(method.get("id")));
+            if (saved == null) {
+                throw new BadRequestException("saved payment method not found");
+            }
+            Object methodOwner = ((java.util.List<Map<String, Object>>) saved.getOrDefault(
+                    "relatedParty", java.util.List.of())).stream().map(p -> p.get("id")).findFirst().orElse(null);
+            String payer = partyScope.scopedPartyId().orElse(null);
+            if (payer != null && !payer.equals(methodOwner)) {
+                throw new BadRequestException("saved payment method not found");
+            }
+            method = (Map<String, Object>) saved.get("details");
+        }
         PspAdapter.Authorization auth = psp.authorize(
-                dto.getAmount().getValue(), currency, dto.getPaymentMethod());
+                dto.getAmount().getValue(), currency, method);
         if (!auth.approved()) {
             throw new ConflictException(auth.declineReason());
         }

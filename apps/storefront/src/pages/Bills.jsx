@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, myBills, settleBill } from '../api.js';
+import { billRates, createPayment, myBills, myPaymentMethods, paymentWithSavedMethod, settleBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
   const [rates, setRates] = useState({});     // bill id -> line items
   const [paying, setPaying] = useState(null); // bill id with the card form open
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
+  const [savedMethods, setSavedMethods] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const load = () => myBills().then(setBills).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
+  // Hooks must run unconditionally, BEFORE the early returns below.
+  useEffect(() => {
+    if (paying) myPaymentMethods().then(setSavedMethods).catch(() => {});
+  }, [paying]);
 
   if (error && !bills) return <p className="error">{error}</p>;
   if (!bills) return <p className="dim">Loading your bills…</p>;
@@ -43,6 +48,19 @@ export default function Bills() {
       setError(e.message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function payWithSaved(bill, method) {
+    setError(null);
+    try {
+      const payment = await paymentWithSavedMethod(
+        bill.amountDue, method.id, `Bill ${bill.billNo}`);
+      await settleBill(bill.id, { id: payment.id, href: payment.href, '@referredType': 'Payment' });
+      setPaying(null);
+      load();
+    } catch (e) {
+      setError(e.message);
     }
   }
 
@@ -88,6 +106,16 @@ export default function Bills() {
             )}
             {paying === bill.id && (
               <div className="payment billpay">
+                {savedMethods.length > 0 && (
+                  <div className="savedcards">
+                    {savedMethods.map((m) => (
+                      <button key={m.id} className="ghost savedcard" data-testid="saved-card"
+                              onClick={() => payWithSaved(bill, m)}>
+                        Pay with {m.details.brand} •••• {m.details.lastFourDigits}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="addressgrid">
                   <label className="charfield"><span>Card number</span>
                     <input name="cardNumber" value={card.cardNumber} inputMode="numeric"

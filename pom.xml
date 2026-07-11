@@ -33,6 +33,7 @@
         <module>services/user-roles</module>
         <module>services/geographic-address</module>
         <module>services/recommendation</module>
+        <module>services/payment-method</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
     </modules>
