@@ -106,7 +106,9 @@
             "communication:write",
             "usage:read",
             "agreement:read",
-            "recommendation:read"
+            "recommendation:read",
+            "paymentmethod:read",
+            "paymentmethod:write"
           ]
         }
       },
@@ -176,6 +178,14 @@
       {
         "name": "recommendation:read",
         "description": "recommendation:read"
+      },
+      {
+        "name": "paymentmethod:read",
+        "description": "paymentmethod:read"
+      },
+      {
+        "name": "paymentmethod:write",
+        "description": "paymentmethod:write"
       }
     ]
   },
@@ -311,6 +321,19 @@
       "directAccessGrantsEnabled": false,
       "id": "ce9a0a9d-819d-5137-8600-9d4ecdba0e7d",
       "description": "TMF680 recommender: reads catalog and inventory"
+    },
+    {
+      "clientId": "bss-payment",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "payment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "cb05a8ae-40f4-53bd-88eb-8793ecf663b2",
+      "description": "payment service: resolves saved methods in the vault"
     }
   ],
   "users": [
@@ -394,7 +417,9 @@
         "roles:admin",
         "address:read",
         "address:write",
-        "recommendation:read"
+        "recommendation:read",
+        "paymentmethod:read",
+        "paymentmethod:write"
       ]
     },
     {
@@ -467,6 +492,15 @@
         "inventory:read"
       ],
       "id": "ce41a4b4-90a5-5c6e-852e-f8a0c8b0b1c8"
+    },
+    {
+      "username": "service-account-bss-payment",
+      "enabled": true,
+      "serviceAccountClientId": "bss-payment",
+      "realmRoles": [
+        "paymentmethod:read"
+      ],
+      "id": "f6e07e00-1696-52fd-9aa2-b2913c67ab46"
     }
   ],
   "displayName": "Nova Telecom"

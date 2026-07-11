@@ -5,7 +5,7 @@ import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, markCartCheckedOut, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
-import { checkPromotion } from '../api.js';
+import { checkPromotion, savePaymentMethod } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 
@@ -17,6 +17,7 @@ export default function Cart() {
   const [physical, setPhysical] = useState({});   // offering id -> boolean (stock-managed)
   const [address, setAddress] = useState(loadDraft());
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
+  const [saveCard, setSaveCard] = useState(false);
   const [serviceability, setServiceability] = useState(null); // TMF679 check result
   const [slots, setSlots] = useState(null);
   const [promoInput, setPromoInput] = useState('');
@@ -184,6 +185,10 @@ export default function Cart() {
     try {
       const order = await performCheckout(lines, due ? card : null, promo?.code || null);
       localStorage.removeItem('bss.shop.promo');
+      if (due && saveCard) {
+        // Vault only after the PSP accepted the card; failure is non-fatal.
+        await savePaymentMethod(card.cardNumber, card.expiry).catch(() => {});
+      }
       await markCartCheckedOut(order.id);
       navigate('/orders');
     } catch (e) {
@@ -318,6 +323,11 @@ export default function Cart() {
               <input name="cvc" value={card.cvc} inputMode="numeric" placeholder="123"
                      onChange={(e) => setCard({ ...card, cvc: e.target.value })} /></label>
           </div>
+          <label className="savecard small">
+            <input type="checkbox" checked={saveCard}
+                   onChange={(e) => setSaveCard(e.target.checked)} />
+            {' '}Save this card for future bills
+          </label>
         </div>
       ) : (
         <p className="dim small paynote">You'll confirm the payment after signing in.</p>

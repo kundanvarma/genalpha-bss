@@ -77,6 +77,7 @@ services:
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       RECOMMENDATION_URL: http://recommendation:8080
+      PAYMENT_METHOD_URL: http://payment-method:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -123,7 +124,11 @@ services:
   payment:
     db: payment
     dbRole: payment_app
-    extraEnv: {}
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-payment
+      OIDC_CLIENT_SECRET: payment-secret
+      PAYMENT_METHOD_BASE_URL: http://payment-method:8080
   billing:
     db: billing
     dbRole: billing_app
@@ -181,6 +186,10 @@ services:
   geographic-address:
     db: geographic_address
     dbRole: address_app
+    extraEnv: {}
+  payment-method:
+    db: payment_method
+    dbRole: paymentmethod_app
     extraEnv: {}
   recommendation:
     db: ""

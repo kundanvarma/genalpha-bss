@@ -74,6 +74,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8081:8080"
     depends_on:
@@ -100,6 +102,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -145,6 +149,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8083:8080"
     depends_on:
@@ -171,6 +177,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8092:8080"
     depends_on:
@@ -197,6 +205,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8093:8080"
     depends_on:
@@ -223,6 +233,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8096:8080"
     depends_on:
@@ -249,6 +261,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8097:8080"
     depends_on:
@@ -275,6 +289,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8098:8080"
     depends_on:
@@ -301,6 +317,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8099:8080"
     depends_on:
@@ -321,6 +339,7 @@ services:
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8100:8080"
     depends_on:
@@ -343,6 +362,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8101:8080"
     depends_on:
@@ -365,6 +386,7 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8102:8080"
     depends_on:
@@ -373,6 +395,34 @@ services:
       product-catalog:
         condition: service_started
       product-inventory:
+        condition: service_started
+
+  payment-method:
+    build: ./services/payment-method
+    container_name: bss-payment-method
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/payment_method
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: paymentmethod_app
+      DB_PASSWORD: paymentmethod_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    ports:
+      - "8103:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
         condition: service_started
 
   communication:
@@ -391,6 +441,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8095:8080"
     depends_on:
@@ -417,6 +469,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8089:8080"
     depends_on:
@@ -443,6 +497,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8091:8080"
     depends_on:
@@ -471,6 +527,8 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
       INVENTORY_BASE_URL: http://product-inventory:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
@@ -497,6 +555,9 @@ services:
     container_name: bss-payment
     restart: unless-stopped
     environment:
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      PAYMENT_METHOD_BASE_URL: http://payment-method:8080
       DB_URL: jdbc:postgresql://postgres:5432/payment
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: payment_app
@@ -508,6 +569,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8087:8080"
     depends_on:
@@ -534,6 +597,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8086:8080"
     depends_on:
@@ -560,6 +625,8 @@ services:
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8084:8080"
     depends_on:
@@ -596,6 +663,7 @@ services:
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       RECOMMENDATION_URL: http://recommendation:8080
+      PAYMENT_METHOD_URL: http://payment-method:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -637,6 +705,8 @@ services:
       geographic-address:
         condition: service_started
       recommendation:
+        condition: service_started
+      payment-method:
         condition: service_started
       csr-console:
         condition: service_started

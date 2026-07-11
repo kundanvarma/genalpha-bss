@@ -80,6 +80,10 @@ spring:
           uri: ${RECOMMENDATION_URL:http://localhost:8102}
           predicates:
             - Path=/tmf-api/recommendationManagement/**
+        - id: payment-method
+          uri: ${PAYMENT_METHOD_URL:http://localhost:8103}
+          predicates:
+            - Path=/tmf-api/paymentMethods/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

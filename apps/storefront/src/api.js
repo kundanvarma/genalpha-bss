@@ -186,6 +186,42 @@ export async function checkPromotion(code) {
 }
 
 const RECOMMENDATION = '/tmf-api/recommendationManagement/v4';
+const PAYMENT_METHODS = '/tmf-api/paymentMethods/v4';
+
+export async function myPaymentMethods() {
+  return json(await authFetch(`${PAYMENT_METHODS}/paymentMethod`));
+}
+
+/** Vault a card's PRESENTATION data (brand guess, last4, expiry) — never the PAN. */
+export async function savePaymentMethod(cardNumber, expiry) {
+  const digits = cardNumber.replace(/\s/g, '');
+  return json(await authFetch(`${PAYMENT_METHODS}/paymentMethod`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      '@type': 'bankCard',
+      details: {
+        brand: digits.startsWith('4') ? 'visa' : digits.startsWith('5') ? 'mastercard' : 'card',
+        lastFourDigits: digits.slice(-4),
+        expiry,
+      },
+    }),
+  }));
+}
+
+/** Pay with a vaulted method: the API resolves the token server-side. */
+export async function paymentWithSavedMethod(amount, methodId, description) {
+  return json(await authFetch(`${PAYMENT}/payment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      description,
+      amount: { unit: amount.unit, value: amount.value },
+      paymentMethod: { '@type': 'savedPaymentMethod', id: methodId },
+    }),
+  }));
+}
+
 
 export async function myRecommendations() {
   return json(await authFetch(`${RECOMMENDATION}/recommendation`));
