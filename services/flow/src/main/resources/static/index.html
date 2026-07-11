@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss · Live Flow</title>
+<style>
+  :root {
+    --bg: #0c1418; --panel: #121e24; --line: #22333b; --ink: #dbe7e9; --dim: #7d949b;
+    --teal: #45afac; --gold: #e0b15a; --violet: #b18ce0; --rose: #e0796f;
+    --grid: #16242b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: radial-gradient(1200px 700px at 70% -10%, #12242b 0%, var(--bg) 60%);
+    color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 12px 22px;
+    border-bottom: 1px solid var(--line); background: rgba(10,18,22,0.6); backdrop-filter: blur(8px);
+  }
+  header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--teal);
+    box-shadow: 0 0 12px var(--teal); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  header .sub { color: var(--dim); font-size: 12.5px; }
+  header .stats { margin-left: auto; display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
+  header .stats b { color: var(--teal); font-size: 18px; }
+  header .stats span { display: block; color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
+  #stage { position: relative; overflow: hidden; }
+  svg { width: 100%; height: 100%; display: block; }
+  .zone-label { fill: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; }
+  .node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 10; }
+  .node text { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
+  .node .kind { fill: var(--dim); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .node.ai rect { stroke: var(--violet); }
+  .node.ai .kind { fill: var(--violet); }
+  .bus rect { fill: #10201f; stroke: var(--teal); stroke-width: 1.5; }
+  .bus text { fill: var(--teal); font-weight: 700; letter-spacing: 0.05em; }
+  .edge { stroke: var(--line); stroke-width: 1.4; fill: none; opacity: 0.5; }
+  .feed { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 6px 0; }
+  .feed h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim);
+    margin: 10px 16px; }
+  .ev { padding: 8px 16px; border-bottom: 1px solid var(--grid); animation: slidein 0.3s ease; }
+  @keyframes slidein { from { opacity: 0; transform: translateX(10px); } }
+  .ev .type { font-weight: 600; font-size: 12.5px; }
+  .ev .type.ai { color: var(--violet); }
+  .ev .meta { color: var(--dim); font-size: 11px; margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .ev .chip { background: var(--grid); border-radius: 6px; padding: 0 6px; color: var(--teal); }
+  .ev .arrow { color: var(--dim); }
+  .empty { color: var(--dim); text-align: center; padding: 40px 20px; font-size: 13px; }
+  .legend { display: flex; gap: 16px; padding: 8px 22px; border-top: 1px solid var(--line);
+    color: var(--dim); font-size: 11px; grid-column: 1 / -1; }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; margin-right: 5px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <div>
+    <h1>genalpha-bss · Live Flow</h1>
+    <div class="sub">the event choreography, as it happens — every <code>bss.*.events</code> topic, streamed live</div>
+  </div>
+  <div class="stats">
+    <div><b id="count">0</b><span>events</span></div>
+    <div><b id="rate">0</b><span>per min</span></div>
+    <div><b id="active">idle</b><span>bus</span></div>
+  </div>
+</header>
+<main>
+  <div id="stage"><svg id="svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"></svg></div>
+  <div class="feed" id="feed"><h2>Event stream</h2><div class="empty" id="empty">Waiting for events… place an order in the storefront, or run an E2E suite.</div></div>
+  <div class="legend">
+    <span><span class="swatch" style="background:var(--teal)"></span>producer / consumer</span>
+    <span><span class="swatch" style="background:var(--violet)"></span><b>AI back-office agent</b></span>
+    <span><span class="swatch" style="background:var(--gold)"></span>event in flight</span>
+    <span>Read-only observability — event metadata only, no payloads.</span>
+  </div>
+</main>
+<script>
+const SVG = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('svg');
+const nodes = {};      // name -> {x,y,w,h,el}
+const AI = ['intelligence', 'campaign'];
+
+// Layout: producers (left) -> Kafka bus (center) -> reactors (right).
+const LAYOUT = {
+  producers: ['product-ordering', 'billing', 'trouble-ticket', 'shopping-cart',
+              'agreement', 'appointment', 'payment', 'quote', 'assurance', 'service-orchestration', 'intelligence'],
+  consumers: ['communication', 'campaign', 'service-orchestration'],
+};
+const LABEL = {
+  'product-ordering': 'Ordering', 'billing': 'Billing', 'trouble-ticket': 'Tickets',
+  'shopping-cart': 'Cart', 'agreement': 'Agreement', 'appointment': 'Appointment',
+  'payment': 'Payment', 'quote': 'Quote', 'assurance': 'Assurance',
+  'service-orchestration': 'Orchestration', 'intelligence': 'Intelligence',
+  'communication': 'Communication', 'campaign': 'Campaign Engine',
+};
+const KIND = {
+  'communication': 'TMF681 · notify', 'campaign': 'martech · AI', 'intelligence': 'AI agent',
+  'service-orchestration': 'OSS · provision', 'assurance': 'OSS · assure',
+};
+
+function node(name, x, y, cls) {
+  const w = 150, h = 44;
+  const g = document.createElementNS(SVG, 'g');
+  g.setAttribute('class', 'node' + (cls || ''));
+  g.setAttribute('transform', `translate(${x},${y})`);
+  const r = document.createElementNS(SVG, 'rect');
+  r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', 10);
+  const t = document.createElementNS(SVG, 'text');
+  t.setAttribute('x', 12); t.setAttribute('y', 20); t.textContent = LABEL[name] || name;
+  const k = document.createElementNS(SVG, 'text');
+  k.setAttribute('class', 'kind'); k.setAttribute('x', 12); k.setAttribute('y', 34);
+  k.textContent = KIND[name] || 'component';
+  g.append(r, t, k); svg.append(g);
+  nodes[name] = { x, y, w, h, rect: r, cx: x + w / 2, cy: y + h / 2 };
+}
+
+function label(x, y, text) {
+  const t = document.createElementNS(SVG, 'text');
+  t.setAttribute('class', 'zone-label'); t.setAttribute('x', x); t.setAttribute('y', y);
+  t.textContent = text; svg.append(t);
+}
+
+// Build the scene.
+label(20, 24, 'Producers');
+LAYOUT.producers.forEach((n, i) => node(n, 20, 44 + i * 50, AI.includes(n) ? ' ai' : ''));
+
+// Kafka bus in the middle.
+const busX = 375, busY = 250, busW = 150, busH = 90;
+const bg = document.createElementNS(SVG, 'g');
+bg.setAttribute('class', 'node bus'); bg.setAttribute('transform', `translate(${busX},${busY})`);
+const br = document.createElementNS(SVG, 'rect');
+br.setAttribute('width', busW); br.setAttribute('height', busH); br.setAttribute('rx', 12);
+const bt = document.createElementNS(SVG, 'text');
+bt.setAttribute('x', busW/2); bt.setAttribute('y', 40); bt.setAttribute('text-anchor', 'middle');
+bt.setAttribute('font-size', '15'); bt.textContent = 'Kafka';
+const bs = document.createElementNS(SVG, 'text');
+bs.setAttribute('x', busW/2); bs.setAttribute('y', 60); bs.setAttribute('text-anchor', 'middle');
+bs.setAttribute('font-size', '10'); bs.setAttribute('fill', 'var(--dim)'); bs.textContent = 'bss.*.events';
+bg.append(br, bt, bs); svg.append(bg);
+nodes['__bus'] = { cx: busX + busW/2, cy: busY + busH/2, rect: br };
+
+label(700, 24, 'Reactors');
+LAYOUT.consumers.forEach((n, i) => {
+  if (!nodes[n]) node(n, 700, 60 + i * 70, AI.includes(n) ? ' ai' : '');
+});
+
+// A curved edge helper.
+function flash(fromName, toName, color, delay) {
+  const a = nodes[fromName], b = nodes[toName];
+  if (!a || !b) return;
+  const ax = a.cx > 500 ? a.x : a.x + a.w, ay = a.cy;
+  const bx = b.x < 400 ? b.x + b.w : b.x, by = b.cy;
+  setTimeout(() => {
+    const p = document.createElementNS(SVG, 'path');
+    const mx = (ax + bx) / 2;
+    p.setAttribute('d', `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`);
+    p.setAttribute('fill', 'none'); p.setAttribute('stroke', color);
+    p.setAttribute('stroke-width', '2.4'); p.setAttribute('opacity', '0.9');
+    svg.append(p);
+    const len = p.getTotalLength();
+    p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+    p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+      { duration: 520, easing: 'ease-out' });
+    // a travelling dot
+    const dot = document.createElementNS(SVG, 'circle');
+    dot.setAttribute('r', '4'); dot.setAttribute('fill', color);
+    dot.setAttribute('filter', 'drop-shadow(0 0 5px ' + color + ')');
+    svg.append(dot);
+    const anim = dot.animate([{ offsetDistance: '0%' }, { offsetDistance: '100%' }],
+      { duration: 520, easing: 'ease-out' });
+    dot.style.offsetPath = `path('${p.getAttribute('d')}')`;
+    anim.onfinish = () => { dot.remove(); pop(toName, color); };
+    setTimeout(() => p.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 700 })
+      .onfinish = () => p.remove(), 520);
+  }, delay || 0);
+}
+
+function pop(name, color) {
+  const n = nodes[name]; if (!n) return;
+  n.rect.animate([
+    { stroke: color, filter: 'drop-shadow(0 0 10px ' + color + ')' },
+    { stroke: getComputedStyle(document.documentElement).getPropertyValue('--line'), filter: 'none' },
+  ], { duration: 900, easing: 'ease-out' });
+}
+
+// Stats + feed.
+let count = 0; const times = [];
+const feed = document.getElementById('feed');
+const empty = document.getElementById('empty');
+function stat() {
+  document.getElementById('count').textContent = count;
+  const now = Date.now();
+  while (times.length && now - times[0] > 60000) times.shift();
+  document.getElementById('rate').textContent = times.length;
+}
+setInterval(stat, 2000);
+
+function render(m) {
+  count++; times.push(Date.now());
+  if (empty) empty.style.display = 'none';
+  document.getElementById('active').textContent = 'live';
+  const gold = getComputedStyle(document.documentElement).getPropertyValue('--gold');
+  const violet = getComputedStyle(document.documentElement).getPropertyValue('--violet');
+  // producer -> bus, then bus -> each reactor
+  flash(m.source, '__bus', gold, 0);
+  pop(m.source, AI.includes(m.source) ? violet : gold);
+  (m.reactors || []).forEach((r, i) => flash('__bus', r, AI.includes(r) ? violet : gold, 300 + i * 120));
+
+  const el = document.createElement('div');
+  el.className = 'ev';
+  const aiType = AI.includes(m.source) || (m.reactors || []).some(r => AI.includes(r));
+  const reactors = (m.reactors || []).map(r => `<span class="chip">${LABEL[r] || r}</span>`).join(' ');
+  el.innerHTML = `<div class="type${aiType ? ' ai' : ''}">${m.eventType}</div>
+    <div class="meta"><span>${LABEL[m.source] || m.source}</span>
+      ${reactors ? '<span class="arrow">→</span> ' + reactors : ''}
+      ${m.ref ? '<span>· ' + m.ref + '</span>' : ''}
+      <span>· ${m.tenant}</span></div>`;
+  feed.insertBefore(el, feed.children[1]);
+  while (feed.querySelectorAll('.ev').length > 60) feed.querySelector('.ev:last-child').remove();
+}
+
+function connect() {
+  const es = new EventSource('stream');
+  es.addEventListener('flow', (e) => { try { render(JSON.parse(e.data)); } catch {} });
+  es.onerror = () => { document.getElementById('active').textContent = 'reconnecting'; };
+}
+connect();
+</script>
+</body>
+</html>

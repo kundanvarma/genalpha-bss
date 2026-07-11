@@ -33,6 +33,7 @@
         <module>services/campaign</module>
         <module>services/intelligence</module>
         <module>services/quote</module>
+        <module>services/flow</module>
         <module>services/user-roles</module>
         <module>services/geographic-address</module>
         <module>services/document</module>

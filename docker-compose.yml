@@ -435,6 +435,19 @@ services:
       kafka:
         condition: service_started
 
+  flow:
+    build: ./services/flow
+    container_name: bss-flow
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=112m"
+    ports:
+      - "8111:8080"
+    depends_on:
+      kafka:
+        condition: service_started
+
   # Opt-in local LLM: `docker compose --profile ai up -d ollama`, pull a model,
   # then point the intelligence service at it:
   #   AI_PROVIDER=openai-compatible AI_BASE_URL=http://ollama:11434 \
@@ -876,6 +889,7 @@ services:
       CAMPAIGN_URL: http://campaign:8080
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
+      FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       DOCUMENT_URL: http://document:8080
