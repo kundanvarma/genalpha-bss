@@ -92,6 +92,7 @@ services:
       CAMPAIGN_URL: http://campaign:8080
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
+      FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       DOCUMENT_URL: http://document:8080
@@ -212,6 +213,10 @@ services:
       OIDC_CLIENT_ID: bss-campaign
       OIDC_CLIENT_SECRET: campaign-secret
       COMMUNICATION_BASE_URL: http://communication:8080
+  flow:
+    db: ""
+    healthPath: /actuator/health
+    extraEnv: {}
   quote:
     db: quote
     dbRole: quote_app

@@ -80,6 +80,12 @@ spring:
           uri: ${QUOTE_URL:http://localhost:8110}
           predicates:
             - Path=/tmf-api/quoteManagement/**
+        - id: flow
+          uri: ${FLOW_URL:http://localhost:8111}
+          predicates:
+            - Path=/flow/**
+          filters:
+            - StripPrefix=1
         - id: user-roles
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:

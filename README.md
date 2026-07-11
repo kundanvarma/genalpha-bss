@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **28 composable ODA components**
+A vendor-neutral telecom **Business Support System** built as **29 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **four channels** (three web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -17,6 +17,16 @@ The original five core components also pass the official TM Forum CTKs with zero
 - 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
 
 ## A look at it
+
+**Live Flow** — the event choreography as it happens. An event-driven BSS's whole value is loose
+coupling, which makes the magic invisible; this makes it visceral. Consuming every
+`bss.*.events` topic and streaming it to the browser, you watch a customer's order hit Kafka and
+fan out to communication, the campaign engine and the orchestrator in real time — the AI
+back-office agents outlined in violet:
+
+<p align="center">
+  <img src="docs/img/live-flow.png" width="90%" alt="Live Flow — the event choreography streamed live">
+</p>
 
 One build of each channel serves every tenant; the host decides the brand. The same storefront,
 GenAlpha in teal and Nova Telecom in purple — logo, name **and** color from the tenant manifest:
@@ -75,6 +85,7 @@ mobile app recomposes around what the customer owns:
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
 | quote | TMF648 | 8110 | B2B quotes born from intents: the OSS proposal priced, token allowances on line items, acceptance places the order |
 | intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
+| flow | observability | 8111 | **Live Flow** — consumes every `bss.*.events` topic and streams the choreography to a browser (`/flow`); watch components react in real time |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
