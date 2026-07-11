@@ -88,6 +88,10 @@ spring:
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
             - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**
+        - id: assurance
+          uri: ${ASSURANCE_URL:http://localhost:8105}
+          predicates:
+            - Path=/tmf-api/alarmManagement/**,/tmf-api/serviceProblemManagement/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

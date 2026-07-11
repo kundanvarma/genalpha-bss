@@ -219,3 +219,5 @@ main.wide { max-width: 1100px; }
 .state.inProgress { color: var(--teal); border-color: var(--teal); }
 .state.resolved, .state.confirmed { color: var(--ok); border-color: var(--ok); }
 .state.closed { color: var(--dim); border-color: var(--line); }
+
+.outagebanner { background: #8b2f2f; color: #fff; padding: 0.55rem 1.2rem; font-size: 0.9rem; }
