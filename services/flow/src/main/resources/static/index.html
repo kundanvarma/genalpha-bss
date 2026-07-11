@@ -65,9 +65,15 @@
   .stage.ai { border-color: #3a2f4d; }
   .stage.ai:hover { border-color: var(--violet); }
   .stage.ai .who { color: var(--violet); }
+  /* persistent 'lit' — the path fills in as the process runs, fades when quiet */
+  .stage.lit { border-color: var(--teal); background: #14232a;
+    box-shadow: inset 3px 0 0 var(--teal); transition: all .6s ease; }
+  .stage.ai.lit { border-color: var(--violet); box-shadow: inset 3px 0 0 var(--violet); }
+  .stage.alert.lit { border-color: var(--rose); background: #241a1c; box-shadow: inset 3px 0 0 var(--rose); }
+  /* the momentary flash on the instant an event lands */
   .stage.hot {
-    border-color: var(--gold); background: #1a2228;
-    box-shadow: 0 0 0 1px var(--gold), 0 6px 26px -10px var(--gold); animation: hot .9s ease;
+    border-color: var(--gold) !important; background: #1a2228 !important;
+    box-shadow: 0 0 0 1px var(--gold), 0 6px 26px -10px var(--gold) !important; animation: hot .9s ease;
   }
   @keyframes hot { 0% { transform: scale(1.04); } 100% { transform: scale(1); } }
   .stage.done .label::after { content: ' ✓'; color: var(--green); }
@@ -239,7 +245,7 @@ PROCESSES.forEach((p) => {
   const flow = document.createElement('div'); flow.className = 'flow';
   p.stageEls = p.stages.map((s, i) => {
     const d = document.createElement('div');
-    d.className = 'stage' + (s.ai ? ' ai' : '');
+    d.className = 'stage' + (s.ai ? ' ai' : '') + (s.alert ? ' alert' : '');
     d.innerHTML = `<span class="badge zero" id="b-${p.id}-${i}">0</span>
       <div class="tokens"></div><div class="label">${s.label}</div>
       <div class="who">${s.who}</div><div class="tech">${s.tech}</div><span class="more">details ›</span>`;
@@ -265,9 +271,15 @@ function stat() {
   document.getElementById('done').textContent = done;
 }
 
+const litTimers = new Map();
 function hitStage(p, idx, isAi, move) {
   const el = p.stageEls[idx];
   el.classList.add('hot'); setTimeout(() => el.classList.remove('hot'), 950);
+  // stay lit: the path fills in as the process advances, then fades after a quiet spell
+  el.classList.add('lit');
+  const tkey = p.id + '-' + idx;
+  clearTimeout(litTimers.get(tkey));
+  litTimers.set(tkey, setTimeout(() => el.classList.remove('lit'), 8000));
   const tokens = el.querySelector('.tokens');
   const t = document.createElement('span'); t.className = 'tok' + (isAi ? ' ai' : '');
   tokens.append(t); setTimeout(() => t.remove(), 2200);
