@@ -34,6 +34,9 @@ public class ProductOrderDto {
     @JsonProperty("description")
     private String description;
 
+    @JsonProperty("promotionCode")
+    private String promotionCode;
+
     @JsonProperty("category")
     private String category;
 
@@ -74,6 +77,14 @@ public class ProductOrderDto {
 
     public void setState(String state) {
         this.state = state;
+    }
+
+    public String getPromotionCode() {
+        return promotionCode;
+    }
+
+    public void setPromotionCode(String promotionCode) {
+        this.promotionCode = promotionCode;
     }
 
     public String getDescription() {

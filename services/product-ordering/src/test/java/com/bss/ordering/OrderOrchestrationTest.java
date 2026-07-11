@@ -1,6 +1,7 @@
 package com.bss.ordering;
 
 import com.bss.ordering.client.AgreementClient;
+import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
@@ -59,6 +60,9 @@ class OrderOrchestrationTest {
 
     @MockBean
     private AgreementClient agreementClient;
+
+    @MockBean
+    private PromotionClient promotionClient;
 
     @MockBean
     private PartyClient partyClient;

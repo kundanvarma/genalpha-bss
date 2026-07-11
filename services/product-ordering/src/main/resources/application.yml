@@ -77,3 +77,4 @@ bss:
     stock-base-url: ${STOCK_BASE_URL:http://localhost:8086}
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
+    promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}

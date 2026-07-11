@@ -108,6 +108,7 @@ services:
       STOCK_BASE_URL: http://product-stock:8080
       PAYMENT_BASE_URL: http://payment:8080
       AGREEMENT_BASE_URL: http://agreement:8080
+      PROMOTION_BASE_URL: http://promotion:8080
     ports:
       - "8082:8080"
     depends_on:
@@ -284,6 +285,32 @@ services:
       kafka:
         condition: service_started
 
+  promotion:
+    build: ./services/promotion
+    container_name: bss-promotion
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/promotion
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: promotion_app
+      DB_PASSWORD: promotion_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+    ports:
+      - "8099:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -384,6 +411,7 @@ services:
       CATALOG_BASE_URL: http://product-catalog:8080
       PAYMENT_BASE_URL: http://payment:8080
       USAGE_BASE_URL: http://usage:8080
+      PROMOTION_BASE_URL: http://promotion:8080
     ports:
       - "8088:8080"
     depends_on:
@@ -500,6 +528,7 @@ services:
       CART_URL: http://shopping-cart:8080
       USAGE_URL: http://usage:8080
       AGREEMENT_URL: http://agreement:8080
+      PROMOTION_URL: http://promotion:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -533,6 +562,8 @@ services:
       usage:
         condition: service_started
       agreement:
+        condition: service_started
+      promotion:
         condition: service_started
       csr-console:
         condition: service_started

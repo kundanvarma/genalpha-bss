@@ -1,6 +1,7 @@
 package com.bss.ordering;
 
 import com.bss.ordering.client.AgreementClient;
+import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.CatalogClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,9 @@ class ProductOrderApiTest {
 
     @MockBean
     private AgreementClient agreementClient;
+
+    @MockBean
+    private PromotionClient promotionClient;
 
     @BeforeEach
     void stubCatalog() {

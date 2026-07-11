@@ -103,6 +103,24 @@ public class RestDownstreamClients {
     }
 
     @Bean
+    DownstreamClients.PromotionClient promotionClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.promotion-base-url}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return ownerPartyId -> {
+            try {
+                return rest.get()
+                        .uri("/tmf-api/promotionManagement/v4/redemption?relatedPartyId={o}", ownerPartyId)
+                        .retrieve()
+                        .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
+                        });
+            } catch (RestClientException e) {
+                throw new DownstreamException("promotion service is unreachable", e);
+            }
+        };
+    }
+
+    @Bean
     DownstreamClients.PaymentClient paymentClient(RestClient.Builder builder,
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.payment-base-url}") String baseUrl) {

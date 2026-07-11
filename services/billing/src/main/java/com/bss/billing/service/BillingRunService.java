@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -39,19 +40,22 @@ public class BillingRunService {
     private final DownstreamClients.InventoryClient inventory;
     private final DownstreamClients.CatalogClient catalog;
     private final DownstreamClients.UsageClient usage;
+    private final DownstreamClients.PromotionClient promotions;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
-            DownstreamClients.UsageClient usage, DomainEventPublisher events, PartyScope partyScope,
+            DownstreamClients.UsageClient usage, DownstreamClients.PromotionClient promotions,
+            DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope) {
         this.bills = bills;
         this.rates = rates;
         this.inventory = inventory;
         this.catalog = catalog;
         this.usage = usage;
+        this.promotions = promotions;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -93,6 +97,7 @@ public class BillingRunService {
             List<AppliedBillingRate> billRates = new ArrayList<>();
             BigDecimal total = BigDecimal.ZERO;
             String unit = "EUR";
+            Map<String, BigDecimal> monthlyByOffering = new HashMap<>();
             for (Map<String, Object> product : owner.getValue()) {
                 Object offeringRef = product.get("productOffering");
                 if (!(offeringRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
@@ -116,6 +121,7 @@ public class BillingRunService {
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.add(monthly);
+                monthlyByOffering.merge(offeringId, monthly, BigDecimal::add);
             }
             // Metered charges: rate this party's usage for the period and put
             // the overage on the same bill as the recurring charges.
@@ -133,6 +139,27 @@ public class BillingRunService {
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.add(rate.getAmountValue());
+            }
+            // Earned discounts: each redemption takes its percentage off the
+            // recurring charges of the offerings it applies to, while its
+            // duration window is open.
+            for (Map<String, Object> redemption : promotions.redemptionsFor(owner.getKey())) {
+                BigDecimal discount = discountFor(redemption, monthlyByOffering, periodStart);
+                if (discount.signum() <= 0) {
+                    continue;
+                }
+                AppliedBillingRate rate = new AppliedBillingRate();
+                rate.setId(UUID.randomUUID().toString());
+                rate.setTenantId(tenantId);
+                rate.setName("Promo " + redemption.get("code") + ": " + redemption.get("name")
+                        + " (-" + new BigDecimal(String.valueOf(redemption.get("percentage"))).stripTrailingZeros().toPlainString() + "%)");
+                rate.setRateType("discount");
+                rate.setAmountValue(discount.negate());
+                rate.setAmountUnit(unit);
+                rate.setOwnerPartyId(owner.getKey());
+                rate.setRateDate(OffsetDateTime.now());
+                billRates.add(rate);
+                total = total.subtract(discount);
             }
             if (billRates.isEmpty()) {
                 continue;
@@ -165,6 +192,28 @@ public class BillingRunService {
         }
         return Map.of("billsCreated", created, "customersSkipped", skipped,
                 "billingPeriod", Map.of("startDateTime", periodStart.toString(), "endDateTime", periodEnd.toString()));
+    }
+
+    /** A redemption's value against this bill's recurring base, 0 if expired or nothing matches. */
+    @SuppressWarnings("unchecked")
+    private BigDecimal discountFor(Map<String, Object> redemption,
+            Map<String, BigDecimal> monthlyByOffering, LocalDate periodStart) {
+        if (redemption.get("monthsLeft") instanceof Number monthsLeft) {
+            OffsetDateTime redeemedAt = redemption.get("createdAt") == null ? null
+                    : OffsetDateTime.parse(String.valueOf(redemption.get("createdAt")));
+            if (redeemedAt != null && java.time.temporal.ChronoUnit.MONTHS.between(
+                    redeemedAt.toLocalDate().withDayOfMonth(1), periodStart) >= monthsLeft.longValue()) {
+                return BigDecimal.ZERO;
+            }
+        }
+        List<String> appliesTo = redemption.get("appliesTo") instanceof List<?> list
+                ? list.stream().map(String::valueOf).toList() : List.of();
+        BigDecimal base = monthlyByOffering.entrySet().stream()
+                .filter(e -> appliesTo.isEmpty() || appliesTo.contains(e.getKey()))
+                .map(Map.Entry::getValue)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal percentage = new BigDecimal(String.valueOf(redemption.get("percentage")));
+        return base.multiply(percentage).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
     }
 
     /** Monthly recurring total of an offering's linked prices, per catalog right now. */

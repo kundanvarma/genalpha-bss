@@ -102,7 +102,7 @@ export async function createPayment(amount, card, description) {
  * `shippingPlace` (a GeographicAddress) rides every physical item — callers
  * mark lines/selections physical via the stock service.
  */
-export async function checkoutCart(lines, shippingPlace = null, paymentRefs = null) {
+export async function checkoutCart(lines, shippingPlace = null, paymentRefs = null, promotionCode = null) {
   const productFor = (characteristics, physical) => {
     const product = {};
     if (characteristics && Object.keys(characteristics).length) {
@@ -139,6 +139,7 @@ export async function checkoutCart(lines, shippingPlace = null, paymentRefs = nu
     body: JSON.stringify({
       description,
       productOrderItem: items,
+      ...(promotionCode ? { promotionCode } : {}),
       ...(paymentRefs?.length ? { payment: paymentRefs } : {}),
     }),
   }));
@@ -162,6 +163,17 @@ export async function myProducts() {
 
 const CONSUMPTION = '/tmf-api/usageConsumption/v4';
 const AGREEMENT = '/tmf-api/agreementManagement/v4';
+
+const PROMOTION = '/tmf-api/promotionManagement/v4';
+
+/** Anonymous promo-code check — the shop window prices the discount. */
+export async function checkPromotion(code) {
+  return json(await publicFetch(`${PROMOTION}/checkPromotion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  }));
+}
 
 export async function myAgreements() {
   return json(await authFetch(`${AGREEMENT}/agreement?limit=100`));

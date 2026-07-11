@@ -8,6 +8,7 @@ import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.client.PaymentClient;
+import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.StockClient;
 import com.bss.ordering.dto.ProductOrderDto;
 import com.bss.ordering.entity.ProductOrder;
@@ -42,6 +43,7 @@ public class ProductOrderService {
     private final ProductOrderMapper mapper;
     private final CatalogClient catalogClient;
     private final AgreementClient agreementClient;
+    private final PromotionClient promotionClient;
     private final PartyClient partyClient;
     private final InventoryClient inventoryClient;
     private final DomainEventPublisher events;
@@ -51,13 +53,14 @@ public class ProductOrderService {
     private final PaymentClient paymentClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
-            CatalogClient catalogClient, AgreementClient agreementClient, PartyClient partyClient, InventoryClient inventoryClient,
+            CatalogClient catalogClient, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
             StockClient stockClient, PaymentClient paymentClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
         this.agreementClient = agreementClient;
+        this.promotionClient = promotionClient;
         this.partyClient = partyClient;
         this.inventoryClient = inventoryClient;
         this.events = events;
@@ -115,6 +118,11 @@ public class ProductOrderService {
 
     @Transactional
     public ProductOrderDto create(ProductOrderDto dto) {
+        if (dto.getPromotionCode() != null && !dto.getPromotionCode().isBlank()
+                && !promotionClient.isValid(dto.getPromotionCode())) {
+            throw new OrderValidationException(
+                    "promotion code '" + dto.getPromotionCode() + "' is not valid");
+        }
         partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
         validateReferences(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
@@ -200,6 +208,9 @@ public class ProductOrderService {
             stockClient.consume(entity.getId());
             paymentRefIds(entity).forEach(paymentClient::capture);
             mintCommitments(entity);
+            if (entity.getPromoCode() != null && entity.getOwnerPartyId() != null) {
+                promotionClient.redeem(entity.getPromoCode(), entity.getOwnerPartyId());
+            }
         }
         if (cancelling) {
             stockClient.release(entity.getId());

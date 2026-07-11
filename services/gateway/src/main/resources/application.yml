@@ -64,6 +64,10 @@ spring:
           uri: ${AGREEMENT_URL:http://localhost:8098}
           predicates:
             - Path=/tmf-api/agreementManagement/**
+        - id: promotion
+          uri: ${PROMOTION_URL:http://localhost:8099}
+          predicates:
+            - Path=/tmf-api/promotionManagement/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:
