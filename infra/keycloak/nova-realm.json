@@ -142,7 +142,9 @@
             "paymentmethod:read",
             "paymentmethod:write",
             "recommendation:read",
-            "ai:use"
+            "ai:use",
+            "porting:read",
+            "porting:write"
           ]
         }
       },
@@ -237,6 +239,14 @@
       {
         "name": "quote:write",
         "description": "Create and manage B2B quotes"
+      },
+      {
+        "name": "porting:read",
+        "description": "View number porting orders"
+      },
+      {
+        "name": "porting:write",
+        "description": "Create/manage number porting"
       }
     ]
   },
@@ -598,7 +608,9 @@
         "campaign:write",
         "ai:use",
         "quote:read",
-        "quote:write"
+        "quote:write",
+        "porting:read",
+        "porting:write"
       ]
     },
     {
@@ -687,7 +699,8 @@
       "serviceAccountClientId": "bss-som",
       "realmRoles": [
         "ordering:read",
-        "ordering:write"
+        "ordering:write",
+        "porting:read"
       ],
       "id": "1a01fd9b-0748-52ab-8ae0-8d170a5279c6"
     },

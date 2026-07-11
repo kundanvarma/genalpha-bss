@@ -92,6 +92,7 @@ services:
       CAMPAIGN_URL: http://campaign:8080
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
+      PORTING_URL: http://porting:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
@@ -217,6 +218,11 @@ services:
     db: ""
     healthPath: /actuator/health
     extraEnv: {}
+  porting:
+    db: porting
+    dbRole: porting_app
+    extraEnv:
+      PORTING_GATEWAY: mock
   quote:
     db: quote
     dbRole: quote_app
@@ -228,6 +234,7 @@ services:
       CATALOG_BASE_URL: http://product-catalog:8080
       USAGE_BASE_URL: http://usage:8080
       ORDERING_BASE_URL: http://product-ordering:8080
+      PORTING_BASE_URL: http://porting:8080
       INTELLIGENCE_BASE_URL: http://intelligence:8080
   intelligence:
     db: intelligence
@@ -267,6 +274,7 @@ services:
       OIDC_CLIENT_ID: bss-som
       OIDC_CLIENT_SECRET: som-secret
       ORDERING_BASE_URL: http://product-ordering:8080
+      PORTING_BASE_URL: http://porting:8080
   assurance:
     db: assurance
     dbRole: assurance_app

@@ -38,17 +38,19 @@ public class OrchestrationService {
 
     private final ServiceOrderRepository serviceOrders;
     private final ServiceInstanceRepository services;
+    private final com.bss.som.client.PortingClient porting;
     private final ResourcePoolRepository pools;
     private final ResourceAssignmentRepository assignments;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
-    public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
+    public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
         this.serviceOrders = serviceOrders;
         this.services = services;
+        this.porting = porting;
         this.pools = pools;
         this.assignments = assignments;
         this.ordering = ordering;
@@ -133,6 +135,22 @@ public class OrchestrationService {
             services.save(instance);
 
             String poolType = isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            // Keep-your-number: if the customer ported a number in, activate on
+            // it and skip the pool draw entirely.
+            String portedNumber = poolType != null && ResourcePool.MSISDN.equals(poolType)
+                    ? porting.portedNumberFor(owner) : null;
+            if (portedNumber != null) {
+                ResourceAssignment assignment = new ResourceAssignment();
+                assignment.setId(UUID.randomUUID().toString());
+                assignment.setTenantId(tenant);
+                assignment.setPoolId("ported");
+                assignment.setValue(portedNumber);
+                assignment.setServiceId(serviceId);
+                assignment.setOwnerPartyId(owner);
+                assignment.setAssignedAt(OffsetDateTime.now());
+                assignments.save(assignment);
+                poolType = null; // do not also draw from the pool
+            }
             if (poolType != null)
             pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
                 ResourceAssignment assignment = new ResourceAssignment();
