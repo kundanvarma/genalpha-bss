@@ -47,7 +47,7 @@
 <header>
   <h1>genalpha-bss</h1>
   <p class="subtitle">A composable, multi-tenant Business Support System on TM Forum ODA</p>
-  <p class="meta sans">Product overview · 24 ODA components · 3 channels · 2 demo operators on one deployment ·
+  <p class="meta sans">Product overview · 26 ODA components · 4 channels · 2 demo operators on one deployment ·
   July 2026 · <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a></p>
 </header>
 
@@ -60,9 +60,9 @@ two demo operators, GenAlpha and Nova Telecom, run side by side on a single depl
 cryptographic identity isolation and database row-level security between them.</p>
 <p>Three properties distinguish it from reference implementations and demo-ware:</p>
 <ul>
-  <li><b>Everything is verified end-to-end in a real browser.</b> Six Playwright suites walk the
-  storefront, guest checkout, both consoles, tenant isolation and role administration on every
-  change. The five core components also pass the official TM Forum conformance kits (CTK) with
+  <li><b>Everything is verified end-to-end in a real browser.</b> Eight Playwright suites walk the
+  storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration
+  and campaign journeys on every change. The five core components also pass the official TM Forum conformance kits (CTK) with
   zero failures.</li>
   <li><b>Composability is real, not aspirational.</b> Every optional module can be left out of a
   deployment; dependencies are enforced by a composer tool; the channels quietly hide any
@@ -130,6 +130,8 @@ cryptographic identity isolation and database row-level security between them.</
 <tr><td>geographic-address</td><td class="api">TMF673</td><td>8101</td><td>Address validation and standardization at checkout</td></tr>
 <tr><td>recommendation</td><td class="api">TMF680</td><td>8102</td><td>Cross-sell: what this customer lacks, bundles first</td></tr>
 <tr><td>payment-method</td><td class="api">TMF670</td><td>8103</td><td>Tokenized card vault: save at checkout, pay bills one-click</td></tr>
+<tr><td>document</td><td class="api">TMF667</td><td>8106</td><td>Content store: tenant logos and offering artwork the channels wear</td></tr>
+<tr><td>campaign</td><td class="api">martech</td><td>8108</td><td>Event-triggered journeys: once-per-customer messages carrying promo codes</td></tr>
 </table>
 
 <h3>Production (OSS) — the layer below, thin but real</h3>
@@ -207,10 +209,12 @@ through conditional clients with no-op fallbacks, so absent modules cost nothing
   <li><b>~260 unit and integration tests</b>, including real-PostgreSQL migration tests per
   component and an RLS proof that connects as the restricted role and demonstrates
   zero-visibility without a tenant.</li>
-  <li><b>Six browser E2E suites</b> (Playwright) driving the real stack: the storefront journey
+  <li><b>Eight browser E2E suites</b> (Playwright) driving the real stack: the storefront journey
   (~40 assertions from registration to a settled, discounted bill), guest checkout with
-  registration mid-flow, both consoles, two-operator tenant isolation, and TMF672 role
-  administration. The suites run after every change.</li>
+  registration mid-flow, both consoles, the mobile app's sign-up-to-activated-plan journey,
+  two-operator tenant isolation, TMF672 role administration, and the martech loop (order →
+  welcome journey fires exactly once, carrying its promo code). The suites run after every
+  change.</li>
   <li><b>Official TM Forum CTKs</b>: TMF620, 622, 632, 637, 666 pass with zero failures.</li>
   <li><b>CI</b> builds and tests every component on every push.</li>
 </ul>
@@ -224,12 +228,13 @@ chart with one tenant configured — the pool and silo models are one codebase.<
 
 <h2>Roadmap</h2>
 <ul>
-  <li><b>Mobile app channel</b> (React Native) on the now-stable 24-component API surface.</li>
+
   <li><b>BankID step-up</b> at checkout for offerings requiring verified identity (brokered IdP,
   no service changes — the vendor-neutral JWT model already carries it).</li>
   <li><b>Real PSP adapter</b> (Stripe/Adyen) behind the existing payment seam.</li>
-  <li><b>Martech</b>: campaign engine consuming the same tenant-tagged event stream that already
-  powers notifications (cart-abandonment trigger is live today).</li>
+  <li><b>Martech surfaces</b>: the campaign engine is live (event-triggered, once-per-customer,
+  promo-carrying journeys); next come a console UI for marketers, richer segmentation and
+  gamification hooks in the app.</li>
   <li>Deeper production internals where a concrete integration demands them: pluggable
   activation adapters, alarm correlation, TMF648 Quote for B2B.</li>
 </ul>

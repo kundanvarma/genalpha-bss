@@ -25,6 +25,7 @@ CREATE DATABASE shopping_cart;
 CREATE DATABASE usage;
 CREATE DATABASE agreement;
 CREATE DATABASE promotion;
+CREATE DATABASE campaign;
 CREATE DATABASE geographic_address;
 CREATE DATABASE payment_method;
 CREATE DATABASE service_om;

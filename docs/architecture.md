@@ -58,6 +58,7 @@ TMF642/656"]
         TICKET["trouble-ticket TMF621"]
         INTER["party-interaction TMF683"]
         COMM["communication TMF681"]
+        CAMP["campaign (martech)\nevent-triggered journeys"]
     end
 
     KAFKA[("Kafka\nbss.*.events\ntransactional outbox")]
@@ -71,6 +72,7 @@ TMF642/656"]
     BILL -.-> INV & CAT & PAY & USAGE & PROMO
     PAY -.-> VAULT
     REC -.-> CAT & INV
+    CAMP -.->|"delivers via\nmachine identity"| COMM
     ROLES -.-> IDP
 
     Core & Revenue & Care -->|events| KAFKA
@@ -176,13 +178,18 @@ flowchart LR
     SVC["component tx:\nbusiness change + outbox row\n(same commit)"] --> RELAY["outbox relay\n(every 2s)"]
     RELAY --> K[("bss.&lt;component&gt;.events\n{eventId, eventTime, eventType,\ntenantId, event{...}}")]
     K --> COMM["communication TMF681\nidempotent per (tenant, eventId)\nacts as the envelope's tenant"]
-    K --> MARTECH["future consumers:\nmartech, analytics, SOM"]
+    K --> CAMP["campaign engine\nmatch trigger -> once per customer\nacts as the envelope's tenant"]
+    CAMP -->|"TMF681 send\n(acting tenant's machine identity)"| COMM
+    K --> FUT["future consumers:\nanalytics, churn scoring"]
     COMM --> INBOX["customer inbox\n(party- and tenant-scoped)"]
 ```
 
 Editorially mapped today: order received/completed, bill ready, ticket resolved, installer
-booked, cart abandoned ("still thinking it over?"). The abandonment event is the first martech
-trigger — the same stream is where a campaign engine would plug in.
+booked, cart abandoned ("still thinking it over?"). The campaign engine consumes the same
+stream: a campaign is a trigger (event type, optionally a state) plus a message template and
+an optional promotion code — matched campaigns reach each customer **exactly once** (a unique
+execution row per tenant/campaign/party is the guarantee), delivered as TMF681 messages under
+the acting tenant's machine identity.
 
 ## Boundary notes
 

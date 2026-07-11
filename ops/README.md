@@ -36,6 +36,8 @@ tenant's demo staff user through the gateway.
     node csr_test.js          # CSR channel: ticket workflow + org isolation
     node tenant_test.js       # two operators, one BSS: white-label hosts + isolation
     node app_test.js          # mobile app (web target): register, one-tap plan, SOM number, inbox
+    node roles_test.js        # TMF672: tenant admins manage staff over their own IdP
+    node martech_test.js      # campaign engine: journey fires once per customer, tenant-local
 
 The storefront suite pins Samsung stock availability to 10 at the start, so
 repeated runs stay deterministic. Keycloak access tokens live five minutes;
