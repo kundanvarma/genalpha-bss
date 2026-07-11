@@ -42,6 +42,7 @@ public class ProductOrderService {
     private final ProductOrderRepository repository;
     private final ProductOrderMapper mapper;
     private final CatalogClient catalogClient;
+    private final com.bss.ordering.security.VerifiedIdentity verifiedIdentity;
     private final AgreementClient agreementClient;
     private final PromotionClient promotionClient;
     private final PartyClient partyClient;
@@ -53,12 +54,13 @@ public class ProductOrderService {
     private final PaymentClient paymentClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
-            CatalogClient catalogClient, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
+            CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
             StockClient stockClient, PaymentClient paymentClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
+        this.verifiedIdentity = verifiedIdentity;
         this.agreementClient = agreementClient;
         this.promotionClient = promotionClient;
         this.partyClient = partyClient;
@@ -125,6 +127,7 @@ public class ProductOrderService {
         }
         partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
         validateReferences(dto);
+        requireVerifiedIdentityIfNeeded(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState("acknowledged");
         }
@@ -142,6 +145,22 @@ public class ProductOrderService {
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
         return created;
+    }
+
+    /**
+     * Regulated/postpaid offerings can demand a verified real-world identity.
+     * If any ordered offering requires it and the buyer has not stepped up
+     * (BankID/Vipps), the order is refused with a 403 the channel recognizes
+     * as a step-up prompt — not a generic denial.
+     */
+    private void requireVerifiedIdentityIfNeeded(ProductOrderDto dto) {
+        for (ItemRef item : flattenItems(dto.getProductOrderItem())) {
+            boolean needed = catalogClient.findOffering(item.offeringId())
+                    .map(CatalogClient.OfferingRef::requiresVerifiedIdentity).orElse(false);
+            if (needed && !verifiedIdentity.isVerified()) {
+                throw new com.bss.ordering.exception.VerifiedIdentityRequiredException(item.name());
+            }
+        }
     }
 
     /**

@@ -46,6 +46,15 @@ class StockOrchestrationTest {
     @MockBean
     private InventoryClient inventoryClient;
 
+    @MockBean
+    private com.bss.ordering.client.CatalogClient catalogClient;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubCatalog() {
+        given(catalogClient.findOffering(anyString())).willReturn(java.util.Optional.of(
+                new com.bss.ordering.client.CatalogClient.OfferingRef("po", "Offering", null, false)));
+    }
+
     private static RequestPostProcessor writeToken() {
         return jwt().authorities(
                 new SimpleGrantedAuthority("ordering:read"),

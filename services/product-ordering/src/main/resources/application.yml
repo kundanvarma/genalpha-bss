@@ -46,6 +46,12 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  ordering:
+    verified-identity:
+      # Authentication-context classes that count as a verified real-world
+      # identity (BankID/Vipps). A brokered IdP surfaces these; the dev realm
+      # simulates the result with a 'verified-identity' optional client scope.
+      accepted-acr: ${VERIFIED_IDENTITY_ACR:bankid,high,verified,urn:grn:authn:se:bankid}
   events:
     topic: bss.ordering.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

@@ -12,10 +12,11 @@ public interface CatalogClient {
 
     Optional<OfferingRef> findOffering(String id);
 
-    record OfferingRef(String id, String name, List<Map<String, Object>> productOfferingTerm) {
+    record OfferingRef(String id, String name, List<Map<String, Object>> productOfferingTerm,
+            boolean requiresVerifiedIdentity) {
 
         public OfferingRef(String id, String name) {
-            this(id, name, null);
+            this(id, name, null, false);
         }
 
         /** Months of commitment declared by the offering's terms, or 0. */

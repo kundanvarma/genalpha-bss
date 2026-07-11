@@ -51,6 +51,10 @@ public class ProductOffering {
     @Column(name = "is_bundle")
     private Boolean isBundle;
 
+    /** Requires BankID/Vipps-grade verified identity at checkout. */
+    @Column(name = "requires_verified_identity")
+    private Boolean requiresVerifiedIdentity;
+
     /** JSON array of child offering references, echoed verbatim. */
     @Column(name = "bundled_product_offering", length = 4000)
     private String bundledProductOfferingJson;
@@ -128,6 +132,14 @@ public class ProductOffering {
 
     public Boolean getIsBundle() {
         return isBundle;
+    }
+
+    public Boolean getRequiresVerifiedIdentity() {
+        return requiresVerifiedIdentity;
+    }
+
+    public void setRequiresVerifiedIdentity(Boolean requiresVerifiedIdentity) {
+        this.requiresVerifiedIdentity = requiresVerifiedIdentity;
     }
 
     public void setIsBundle(Boolean isBundle) {

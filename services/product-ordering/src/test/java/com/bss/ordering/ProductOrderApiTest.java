@@ -23,6 +23,7 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -79,6 +80,31 @@ class ProductOrderApiTest {
         mockMvc.perform(get(BASE).with(readToken()).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    void verifiedIdentityOffering_blockedWithoutStepUp_allowedWith() throws Exception {
+        given(catalogClient.findOffering("po-verified"))
+                .willReturn(java.util.Optional.of(new CatalogClient.OfferingRef(
+                        "po-verified", "Postpaid (ID verified)", null, true)));
+        String order = """
+                {"productOrderItem": [{"action": "add", "productOffering": {"id": "po-verified"}}],
+                 "relatedParty": [{"id": "vi-party", "role": "customer"}]}
+                """;
+
+        // No verified identity in the token -> 403 with the step-up signal.
+        mockMvc.perform(post(BASE).with(writeToken())
+                        .contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isForbidden())
+                .andExpect(header().string("X-Step-Up", "verified-identity"))
+                .andExpect(jsonPath("$.code").value("VERIFIED_IDENTITY_REQUIRED"));
+
+        // A stepped-up token (verified_identity claim) -> the order goes through.
+        mockMvc.perform(post(BASE)
+                        .with(jwt().jwt(j -> j.claim("verified_identity", true))
+                                .authorities(new SimpleGrantedAuthority("ordering:write")))
+                        .contentType(MediaType.APPLICATION_JSON).content(order))
+                .andExpect(status().isCreated());
     }
 
     private static RequestPostProcessor readToken() {
