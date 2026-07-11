@@ -11,6 +11,7 @@ storefront, guest checkout, both consoles, tenant isolation and role administrat
 full stack. The original five core components also pass the official TM Forum CTKs with zero
 failures.
 
+- 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
 - 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
 

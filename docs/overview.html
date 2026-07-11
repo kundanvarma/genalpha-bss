@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — Product Overview</title>
+<style>
+  :root { --teal: #0E7C7B; --ink: #1c2326; --dim: #5c6a70; --line: #d8dfe1; --card: #f5f8f8; --bg: #fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --teal: #45AFAC; --ink: #e8ecec; --dim: #9fb0b5; --line: #31393c; --card: #1d2427; --bg: #14181a; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: var(--ink); background: var(--bg);
+         margin: 0 auto; max-width: 860px; padding: 3rem 1.4rem 5rem; line-height: 1.55; }
+  h1, h2, h3, .sans { font-family: system-ui, -apple-system, sans-serif; }
+  h1 { font-size: 2.1rem; margin: 0.2rem 0 0.4rem; }
+  h2 { color: var(--teal); margin-top: 2.6rem; border-bottom: 2px solid var(--teal); padding-bottom: 0.25rem; }
+  h3 { margin-top: 1.6rem; }
+  .subtitle { color: var(--dim); font-size: 1.15rem; }
+  .meta { color: var(--dim); font-size: 0.85rem; margin-top: 0.8rem; }
+  .lede { font-size: 1.06rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0 1.2rem; font-family: system-ui, sans-serif; font-size: 0.86rem; }
+  th { text-align: left; color: var(--teal); border-bottom: 2px solid var(--teal); padding: 0.35rem 0.5rem; }
+  td { border-bottom: 1px solid var(--line); padding: 0.4rem 0.5rem; vertical-align: top; }
+  td:first-child { white-space: nowrap; font-weight: 600; }
+  .api { color: var(--teal); font-weight: 600; white-space: nowrap; }
+  .layer { border: 1.5px solid var(--teal); border-radius: 10px; padding: 0.55rem 0.9rem; margin: 0.45rem 0; background: var(--card); font-family: system-ui, sans-serif; font-size: 0.85rem; }
+  .layer b { color: var(--teal); display: block; margin-bottom: 0.15rem; }
+  .arrow { text-align: center; color: var(--dim); font-size: 1.0rem; margin: -0.1rem 0; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+  .callout { border-left: 4px solid var(--teal); background: var(--card); padding: 0.7rem 1rem; margin: 1.1rem 0; }
+  code { font-family: ui-monospace, monospace; font-size: 0.88em; background: var(--card); padding: 0.08rem 0.35rem; border-radius: 4px; }
+  ol li, ul li { margin: 0.35rem 0; }
+  .footer { margin-top: 3.5rem; color: var(--dim); font-size: 0.82rem; border-top: 1px solid var(--line); padding-top: 0.8rem; }
+  @media print {
+    body { max-width: none; padding: 0; color: #000; background: #fff; }
+    h2 { page-break-after: avoid; }
+    table, .layer, .callout { page-break-inside: avoid; }
+    .pagebreak { page-break-before: always; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>genalpha-bss</h1>
+  <p class="subtitle">A composable, multi-tenant Business Support System on TM Forum ODA</p>
+  <p class="meta sans">Product overview · 24 ODA components · 3 channels · 2 demo operators on one deployment ·
+  July 2026 · <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a></p>
+</header>
+
+<h2>Executive summary</h2>
+<p class="lede">genalpha-bss is a complete telecom BSS built the way TM Forum's Open Digital
+Architecture says systems should be built: as independent components, each exposing a standard
+TMF Open API, composed behind one gateway. It is <b>vendor-neutral</b> — any OIDC identity
+provider, any PostgreSQL, any Kafka-protocol broker — and <b>multi-tenant to the bone</b>:
+two demo operators, GenAlpha and Nova Telecom, run side by side on a single deployment with
+cryptographic identity isolation and database row-level security between them.</p>
+<p>Three properties distinguish it from reference implementations and demo-ware:</p>
+<ul>
+  <li><b>Everything is verified end-to-end in a real browser.</b> Six Playwright suites walk the
+  storefront, guest checkout, both consoles, tenant isolation and role administration on every
+  change. The five core components also pass the official TM Forum conformance kits (CTK) with
+  zero failures.</li>
+  <li><b>Composability is real, not aspirational.</b> Every optional module can be left out of a
+  deployment; dependencies are enforced by a composer tool; the channels quietly hide any
+  feature whose component is absent.</li>
+  <li><b>The business loops actually close.</b> Orders complete themselves through a thin
+  production layer, usage becomes overage on real bills, promo codes become bill discounts,
+  saved cards pay next month's invoice, and a network alarm becomes an outage banner an agent
+  can see — all demonstrable in minutes.</li>
+</ul>
+
+<h2>The five-minute story</h2>
+<ol>
+  <li>An anonymous visitor browses GenAlpha's storefront, configures a triple-play bundle
+  (phone model, color, storage — the price follows each choice), applies promo code
+  <code>WELCOME10</code>, and sees the discount before having any identity.</li>
+  <li>Checkout validates the address (TMF673 standardizes it), checks fiber serviceability
+  (TMF679), books an installer slot (TMF646), reserves the phone from stock (TMF687), and
+  authorizes payment (TMF676) — the visitor registers mid-flow and the interrupted checkout
+  resumes itself.</li>
+  <li>A purely digital order needs nobody: the thin SOM (TMF641/640) activates it in seconds,
+  draws a phone number from the tenant's pool (TMF685), and completes the order machine-side —
+  provisioning inventory (TMF637), capturing payment, minting a 12-month commitment agreement
+  (TMF651) and redeeming the promo (TMF671) on the way.</li>
+  <li>The network reports 12.3&nbsp;GB of roaming (TMF635); the customer's meter shows
+  <i>12.3 / 10&nbsp;GB — over allowance</i>. The monthly billing run (TMF678) puts the overage
+  and the promo discount on one bill, which the customer pays with the card vaulted at
+  checkout (TMF670) — one click, no retyping.</li>
+  <li>A critical alarm (TMF642) becomes a service problem (TMF656) and every agent's CSR console
+  shows the outage banner; resolution clears it. Each event along the whole journey became a
+  customer notification (TMF681).</li>
+  <li>Meanwhile Nova Telecom's customers do all of the same on <code>shop.nova.localhost</code>
+  against Nova's own identity realm, Nova's own catalog and Nova's own number range — and neither
+  operator can see one byte of the other's world.</li>
+</ol>
+
+<div class="pagebreak"></div>
+<h2>The module catalog</h2>
+
+<h3>Core commerce — always deployed</h3>
+<table>
+<tr><th>Component</th><th>TMF API</th><th>Port</th><th>Purpose</th></tr>
+<tr><td>product-catalog</td><td class="api">TMF620</td><td>8081</td><td>Offerings, prices, bundles, commitment terms</td></tr>
+<tr><td>product-ordering</td><td class="api">TMF622</td><td>8082</td><td>Order capture, validation, completion orchestration</td></tr>
+<tr><td>product-inventory</td><td class="api">TMF637</td><td>8083</td><td>What each customer has, provisioned per order item</td></tr>
+<tr><td>party-account</td><td class="api">TMF632 / 666 / 669</td><td>8084</td><td>Individuals, organizations, accounts, party roles</td></tr>
+<tr><td>gateway</td><td class="api">ODA exposure</td><td>8080</td><td>Single entry point; white-label host → tenant routing</td></tr>
+</table>
+
+<h3>Optional components — compose per deployment</h3>
+<table>
+<tr><th>Component</th><th>TMF API</th><th>Port</th><th>Purpose</th></tr>
+<tr><td>product-stock</td><td class="api">TMF687</td><td>8086</td><td>Device shelf: reserve at order, consume at completion</td></tr>
+<tr><td>payment</td><td class="api">TMF676</td><td>8087</td><td>Authorize/capture behind a PSP adapter (mock PSP in dev)</td></tr>
+<tr><td>billing</td><td class="api">TMF678</td><td>8088</td><td>Billing runs: recurring + usage + discounts on one bill</td></tr>
+<tr><td>qualification</td><td class="api">TMF679</td><td>8089</td><td>Serviceability: where fiber-class offerings can be delivered</td></tr>
+<tr><td>appointment</td><td class="api">TMF646</td><td>8091</td><td>Installer slots, booked at checkout</td></tr>
+<tr><td>trouble-ticket</td><td class="api">TMF621</td><td>8092</td><td>Support cases, org-scoped for partner agents</td></tr>
+<tr><td>party-interaction</td><td class="api">TMF683</td><td>8093</td><td>Every touchpoint on the customer timeline</td></tr>
+<tr><td>communication</td><td class="api">TMF681</td><td>8095</td><td>Event-driven notifications (the martech door)</td></tr>
+<tr><td>shopping-cart</td><td class="api">TMF663</td><td>8096</td><td>Server-side carts: guest secret-id, claim on login, abandonment events</td></tr>
+<tr><td>usage</td><td class="api">TMF635 / 677</td><td>8097</td><td>Mediation intake, rating, allowance meters, overage charges</td></tr>
+<tr><td>agreement</td><td class="api">TMF651</td><td>8098</td><td>Commitment periods minted automatically at order completion</td></tr>
+<tr><td>promotion</td><td class="api">TMF671</td><td>8099</td><td>Promo codes: anonymous validation → redemption → bill discount</td></tr>
+<tr><td>user-roles</td><td class="api">TMF672</td><td>8100</td><td>Tenant admins manage staff via TMF API over their own IdP</td></tr>
+<tr><td>geographic-address</td><td class="api">TMF673</td><td>8101</td><td>Address validation and standardization at checkout</td></tr>
+<tr><td>recommendation</td><td class="api">TMF680</td><td>8102</td><td>Cross-sell: what this customer lacks, bundles first</td></tr>
+<tr><td>payment-method</td><td class="api">TMF670</td><td>8103</td><td>Tokenized card vault: save at checkout, pay bills one-click</td></tr>
+</table>
+
+<h3>Production (OSS) — the layer below, thin but real</h3>
+<table>
+<tr><th>Component</th><th>TMF API</th><th>Port</th><th>Purpose</th></tr>
+<tr><td>service-orchestration</td><td class="api">TMF641 / 638 / 640 / 685</td><td>8104</td><td>Digital orders decompose, activate (drawing MSISDNs from per-tenant resource pools) and complete themselves; physical orders wait for fulfilment</td></tr>
+<tr><td>assurance</td><td class="api">TMF642 / 656</td><td>8105</td><td>Critical alarms become service problems; the CSR console shows live outages</td></tr>
+</table>
+<div class="callout sans">The production block is deliberately <b>thin</b>: the boundaries
+(APIs, events, machine identity, tenancy) are built at full fidelity, while internals — instant
+mock activation, one-rule alarm correlation, counter-based number pools — are placeholders
+behind seams. An operator's real OSS, or deeper adapters, slot in without touching anything
+around them; the same pattern as the mock PSP behind the payment adapter.</div>
+
+<h3>Channels — one build each, white-labeled per tenant by hostname</h3>
+<table>
+<tr><th>Channel</th><th>Path</th><th>Audience</th></tr>
+<tr><td>storefront</td><td><code>/shop</code></td><td>Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA)</td></tr>
+<tr><td>csr-console</td><td><code>/csr</code></td><td>Assisted service: customer 360, ticket queue, outage banner, org-scoped agents</td></tr>
+<tr><td>admin-console</td><td><code>/console</code></td><td>Back office: catalog and stock</td></tr>
+</table>
+
+<div class="pagebreak"></div>
+<h2>Architecture at a glance</h2>
+<div class="layer"><b>Engagement — channels</b>
+  storefront /shop · csr-console /csr · admin-console /console — one build each; the hostname decides the tenant, a gateway-served config script decides the IdP</div>
+<div class="arrow">▼</div>
+<div class="layer"><b>API Gateway (8080)</b>
+  Single entry point · routes TMF paths to components · maps hostname → tenant for anonymous traffic (X-Tenant-Id, inbound copies stripped)</div>
+<div class="arrow">▼</div>
+<div class="cols">
+  <div class="layer"><b>Party management</b> party-account (632/666/669) · user-roles (672, over each tenant's own IdP)</div>
+  <div class="layer"><b>Core commerce</b> catalog · ordering · inventory · cart · qualification · address · appointment · stock · agreement · promotion · recommendation</div>
+  <div class="layer"><b>Revenue</b> payment · payment-method vault · billing · usage</div>
+  <div class="layer"><b>Care &amp; Production</b> trouble-ticket · interaction · communication · service-orchestration · assurance</div>
+</div>
+<div class="arrow">▼</div>
+<div class="layer"><b>Backbone</b>
+  PostgreSQL (one DB per component, tenant_id + row-level security) ·
+  Kafka (transactional outbox, tenant-tagged TMF688-style envelopes) ·
+  OIDC IdPs (one issuer per tenant; Keycloak realms in dev, Cognito/Entra-ready)</div>
+<p class="sans" style="color:var(--dim); font-size:0.85rem">Machine-to-machine calls (ordering → catalog/stock/payment/agreement/promotion,
+billing → inventory/usage/promotion, SOM → ordering, payment → vault) always use the
+<i>acting tenant's</i> client credentials, so downstream tenancy holds even for background work.
+Interactive diagrams: <a href="architecture.md">docs/architecture.md</a>.</p>
+
+<h2>Multitenancy — the pool model with two locks</h2>
+<ul>
+  <li><b>Identity lock:</b> a tenant <i>is</i> a verified OIDC issuer. Users cannot claim a
+  tenant — their token's issuer, validated against per-tenant keys, decides it. Each tenant can
+  bring its own IdP (a Keycloak realm in dev; a Cognito pool or Entra tenant in production works
+  identically).</li>
+  <li><b>Data lock:</b> every domain row carries <code>tenant_id</code>, enforced in code on
+  every query <i>and</i> by PostgreSQL Row-Level Security — services connect as restricted
+  database roles that see <b>zero rows</b> without a session tenant, even for SQL with no
+  predicate at all. Cross-tenant access reads as 404 everywhere: foreign ids never leak
+  existence.</li>
+  <li><b>White-labeling:</b> anonymous traffic gets its tenant from the hostname at the gateway,
+  so each operator's shop window shows only its own catalog, prices, promos and numbers.
+  The same scoping stacks a level deeper: partner/business-unit agents are confined by an
+  <code>org</code> claim within their tenant.</li>
+</ul>
+
+<h2>Composability</h2>
+<p>The ODA promise made operational: every optional module has an <code>enabled</code> flag in
+the Helm chart, the <a href="composer.html">composer page</a> enforces the dependency matrix
+(billing needs payment; appointment needs qualification; the vault needs payment…) and emits a
+ready-to-use values override, and the channels degrade gracefully — a deployment without the
+stock component simply has nothing stock-managed, without qualification nothing is
+serviceability-gated, without the vault the card form still works. Cross-component calls go
+through conditional clients with no-op fallbacks, so absent modules cost nothing at runtime.</p>
+
+<h2>How it is verified</h2>
+<ul>
+  <li><b>~260 unit and integration tests</b>, including real-PostgreSQL migration tests per
+  component and an RLS proof that connects as the restricted role and demonstrates
+  zero-visibility without a tenant.</li>
+  <li><b>Six browser E2E suites</b> (Playwright) driving the real stack: the storefront journey
+  (~40 assertions from registration to a settled, discounted bill), guest checkout with
+  registration mid-flow, both consoles, two-operator tenant isolation, and TMF672 role
+  administration. The suites run after every change.</li>
+  <li><b>Official TM Forum CTKs</b>: TMF620, 622, 632, 637, 666 pass with zero failures.</li>
+  <li><b>CI</b> builds and tests every component on every push.</li>
+</ul>
+
+<h2>Deployment</h2>
+<p>Local: <code>mvn package</code> → <code>docker compose up</code> (~27 containers, seeded demo
+data, both operators live). Kubernetes: a Helm chart carrying both realms, per-service RLS
+roles and per-tenant issuers, composed via the module picker; Terraform stacks target EKS and
+AKS. Dedicated single-tenant deployments (the “silo” tier for regulated customers) use the same
+chart with one tenant configured — the pool and silo models are one codebase.</p>
+
+<h2>Roadmap</h2>
+<ul>
+  <li><b>Mobile app channel</b> (React Native) on the now-stable 24-component API surface.</li>
+  <li><b>BankID step-up</b> at checkout for offerings requiring verified identity (brokered IdP,
+  no service changes — the vendor-neutral JWT model already carries it).</li>
+  <li><b>Real PSP adapter</b> (Stripe/Adyen) behind the existing payment seam.</li>
+  <li><b>Martech</b>: campaign engine consuming the same tenant-tagged event stream that already
+  powers notifications (cart-abandonment trigger is live today).</li>
+  <li>Deeper production internals where a concrete integration demands them: pluggable
+  activation adapters, alarm correlation, TMF648 Quote for B2B.</li>
+</ul>
+
+<p class="footer sans">genalpha-bss · TM Forum ODA implementation · Java 17 / Spring Boot 3.2 ·
+React + Vite · PostgreSQL + RLS · Kafka · Keycloak (dev IdP) · Helm/Terraform ·
+This document prints cleanly — use your browser's Print → Save as PDF.</p>
+
+</body>
+</html>
