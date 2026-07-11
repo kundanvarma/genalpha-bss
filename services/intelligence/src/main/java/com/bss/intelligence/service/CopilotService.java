@@ -73,6 +73,56 @@ public class CopilotService {
         return result;
     }
 
+    /**
+     * The AI chat seam of the PoC: a B2B sales manager types what the customer
+     * wants in plain language; the model returns a structured TMF921 intent
+     * expression the OSS can run feasibility on. The sales manager confirms —
+     * no swivel-chairing into a form.
+     */
+    @Transactional
+    public Map<String, Object> draftIntent(Map<String, Object> request) {
+        if (request.get("ask") == null || String.valueOf(request.get("ask")).isBlank()) {
+            throw new BadRequestException("ask (the business need in plain language) is required");
+        }
+        String ask = redactor.redact(String.valueOf(request.get("ask")));
+        String system = "You turn a telecom B2B sales ask into a network intent. Infer sensible"
+                + " numbers from context (a stadium AI experience needs very low latency and high"
+                + " bandwidth). Respond with ONLY these labeled lines:\n"
+                + "NAME: <short intent name>\n"
+                + "PLACE: <slug of the location, lowercase-hyphenated>\n"
+                + "LATENCY_MS: <integer round-trip budget>\n"
+                + "BANDWIDTH_MBPS: <integer>\n"
+                + "AI_TOKENS_MILLIONS: <integer, or 0 if no AI workload>";
+        String raw = completeWithRetry(system, "Ask: " + ask, "intent-draft");
+        String place = lineAfter(raw, "PLACE:");
+        String latency = lineAfter(raw, "LATENCY_MS:");
+        if (place == null || latency == null) {
+            throw new BadRequestException("the model did not return a usable intent expression");
+        }
+        Map<String, Object> expression = new LinkedHashMap<>();
+        expression.put("place", place);
+        expression.put("latencyMs", digits(latency, 20));
+        expression.put("bandwidthMbps", digits(lineAfter(raw, "BANDWIDTH_MBPS:"), 1000));
+        long tokens = digits(lineAfter(raw, "AI_TOKENS_MILLIONS:"), 0);
+        if (tokens > 0) {
+            expression.put("aiTokensMillions", tokens);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("name", lineAfter(raw, "NAME:") == null ? "B2B network intent" : lineAfter(raw, "NAME:"));
+        result.put("expression", expression);
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
+    private static long digits(String value, long fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        String num = value.replaceAll("[^0-9]", "");
+        return num.isEmpty() ? fallback : Long.parseLong(num);
+    }
+
     @Transactional
     public Map<String, Object> draftQuoteNarrative(Map<String, Object> request) {
         if (request == null || request.isEmpty()) {
@@ -151,7 +201,8 @@ public class CopilotService {
             String t = line.trim().replaceFirst("^[*#>\\-\\s]+", "");
             if (t.regionMatches(true, 0, "SUMMARY:", 0, 8)
                     || t.regionMatches(true, 0, "REPLY:", 0, 6)
-                    || t.regionMatches(true, 0, "NARRATIVE:", 0, 10)) {
+                    || t.regionMatches(true, 0, "NARRATIVE:", 0, 10)
+                    || t.regionMatches(true, 0, "PLACE:", 0, 6)) {
                 return false;
             }
         }

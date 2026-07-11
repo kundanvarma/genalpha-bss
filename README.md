@@ -11,6 +11,7 @@ storefront, guest checkout, both consoles, the mobile app, tenant isolation, rol
 and campaign journeys against the full stack. The original five core components also pass the official TM Forum CTKs with zero
 failures.
 
+- 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](docs/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
 - 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
@@ -95,7 +96,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 # demo data (idempotent; order matters) — see ops/README.md
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
-         seed_promotions seed_resource_pools seed_nova seed_content; do python3 ops/seed/$s.py; done
+         seed_promotions seed_resource_pools seed_ai_slice seed_nova seed_content; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

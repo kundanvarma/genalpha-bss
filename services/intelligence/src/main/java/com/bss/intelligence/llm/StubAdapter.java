@@ -22,6 +22,19 @@ public class StubAdapter implements LlmAdapter {
                     + "NEXT: Review the open items in the 360 with the customer.\n"
                     + "NEXT: Check whether the current plan still fits their usage.";
         }
+        if (system.contains("PLACE:")) {
+            String ask = user.toLowerCase();
+            boolean stadium = ask.contains("stadium") || ask.contains("arena") || ask.contains("tournament");
+            String place = ask.contains("stadium-north") ? "stadium-north"
+                    : stadium ? "stadium-north" : "customer-site";
+            boolean ai = ask.contains("ai") || ask.contains("glass") || ask.contains("inference")
+                    || ask.contains("overlay");
+            return "NAME: " + (stadium ? "Stadium experience slice" : "B2B connectivity intent") + "\n"
+                    + "PLACE: " + place + "\n"
+                    + "LATENCY_MS: " + (stadium ? "8" : "40") + "\n"
+                    + "BANDWIDTH_MBPS: " + (stadium ? "2000" : "500") + "\n"
+                    + "AI_TOKENS_MILLIONS: " + (ai ? "80" : "0");
+        }
         if (system.contains("NARRATIVE:")) {
             return "NARRATIVE: This quote packages guaranteed venue connectivity with"
                     + " edge AI inference next to the crowd. AI usage is token-metered:"

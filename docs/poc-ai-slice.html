@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss · Autonomy Accelerated — the 5G AI Slice PoC</title>
+<style>
+  :root { --teal: #0E7C7B; --ink: #1c2326; --dim: #5c6a70; --line: #d8dfe1; --card: #f5f8f8; --bg: #fff; --edge: #6d3fb0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --teal: #45AFAC; --ink: #e8ecec; --dim: #9fb0b5; --line: #31393c; --card: #1d2427; --bg: #14181a; --edge: #b18ce0; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: var(--ink); background: var(--bg);
+    line-height: 1.6; margin: 0; }
+  .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  h1 { font-size: 2.2rem; line-height: 1.15; margin: 0 0 0.4rem; letter-spacing: -0.02em; }
+  h2 { font-size: 1.4rem; margin-top: 2.8rem; border-bottom: 2px solid var(--teal); padding-bottom: 0.25rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.8rem; }
+  .lede { font-size: 1.2rem; color: var(--dim); }
+  .meta { font-family: -apple-system, sans-serif; font-size: 0.85rem; color: var(--dim);
+    text-transform: uppercase; letter-spacing: 0.08em; }
+  a { color: var(--teal); }
+  code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em; }
+  .flow { list-style: none; counter-reset: step; padding: 0; margin: 1.5rem 0; }
+  .flow li { counter-increment: step; position: relative; padding: 0.9rem 0 0.9rem 3.2rem;
+    border-bottom: 1px solid var(--line); }
+  .flow li::before { content: counter(step); position: absolute; left: 0; top: 0.9rem;
+    width: 2.1rem; height: 2.1rem; border-radius: 50%; background: var(--teal); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-family: sans-serif;
+    font-weight: 700; font-size: 0.95rem; }
+  .flow li.edge::before { background: var(--edge); }
+  .flow b { font-family: -apple-system, sans-serif; }
+  .who { font-family: -apple-system, sans-serif; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--dim); display: inline-block; margin-left: 0.5rem;
+    border: 1px solid var(--line); border-radius: 999px; padding: 0.05rem 0.5rem; vertical-align: 1.5px; }
+  table { border-collapse: collapse; width: 100%; font-family: -apple-system, sans-serif;
+    font-size: 0.92rem; margin: 1rem 0; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem 0.55rem 0; border-bottom: 1px solid var(--line);
+    vertical-align: top; }
+  th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
+  .api { font-family: ui-monospace, monospace; font-size: 0.82rem; color: var(--teal); white-space: nowrap; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 1rem 1.2rem; overflow-x: auto; font-size: 0.84rem; line-height: 1.5; }
+  blockquote { margin: 1.5rem 0; padding: 0.5rem 0 0.5rem 1.2rem; border-left: 3px solid var(--edge);
+    color: var(--dim); font-style: italic; }
+  .callout { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1.1rem 1.3rem; margin: 1.5rem 0; font-family: -apple-system, sans-serif; font-size: 0.95rem; }
+  .tag { font-family: -apple-system, sans-serif; font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #fff; background: var(--edge); border-radius: 999px;
+    padding: 0.12rem 0.6rem; }
+</style>
+</head>
+<body>
+<main>
+  <p class="meta">genalpha-bss · Proof of Concept</p>
+  <h1>Autonomy Accelerated</h1>
+  <p class="lede">Selling the network edge as an AI platform — the full lead-to-assure loop,
+  AI at every step, running on a vendor-neutral BSS with a thin autonomous OSS.</p>
+
+  <p>This PoC re-creates, on <a href="https://github.com/kundanvarma/genalpha-bss">genalpha-bss</a>,
+  the pattern shown in the TM Forum "Autonomy Accelerated" Catalyst: a
+  <b>5G AI slice</b> sold and assured end to end. The premise is physics.
+  Light through fibre is fast, but not fast enough for a sub-10-millisecond round
+  trip; route that workload to a distant cloud and the latency budget is gone
+  before any code runs. The fix is GPU compute <em>at the edge</em>, paired with
+  an SLA-backed slice — so AI inference happens next to where the data is born.</p>
+
+  <p>The scenario: a football tournament. VIP fans in AI glasses, fed by edge GPUs —
+  real-time player overlays, AI commentary, highlight reels within minutes of the
+  final whistle. None of it reachable from a centralised cloud inside the latency
+  constraint.</p>
+
+  <h2>The loop, and who acts at each step</h2>
+  <p>The telling part isn't the use case — it's watching the whole lead-to-assure
+  loop run with AI at every step, and no swivel-chairing between systems.</p>
+
+  <ol class="flow">
+    <li><b>Prepare the approach.</b> A B2B sales agent (Claude, over MCP) drafts the
+      sales approach and turns a plain-language ask — "a 5G slice with AI glasses for
+      the stadium-north tournament" — into a structured network intent.
+      <span class="who">AI agent → BSS</span></li>
+    <li><b>Capture intent, no forms.</b> The intent lands in the BSS through an AI chat
+      seam; a TMF921 intent expression is created — place, latency budget, bandwidth,
+      AI token volume. <span class="who">BSS · TMF921</span></li>
+    <li><b>Autonomous feasibility.</b> The orchestration layer checks feasibility on its
+      own: a sub-20ms round trip cannot be served from regional cloud, so it is only
+      feasible where an edge GPU pool covers the venue. The network doesn't just say
+      yes — it <b>proposes edge AI inferencing as an upsell</b>, more than the customer
+      asked for. <span class="who">OSS · TMF921 + TMF685</span></li>
+    <li><b>AI-assisted quote, token pricing.</b> The BSS prices the proposal into a
+      TMF648 quote: the slice as a recurring charge, and the AI service metered in
+      <b>tokens</b> — an included allowance, then a fixed price per million. An LLM drafts
+      the executive narrative. <span class="who">BSS · TMF648 + TMF635</span></li>
+    <li><b>Sold → provisioned.</b> Accepting the quote places the product order; the
+      thin SOM provisions the slice live onto a fibre delivery path.
+      <span class="who">BSS → OSS · TMF622 + TMF641</span></li>
+    <li class="edge"><b>Mid-match: a fibre cut.</b> A critical alarm hits the delivery
+      path. Assurance streams the KPI and opens a service problem.
+      <span class="who">OSS · TMF642 / TMF656</span></li>
+    <li class="edge"><b>The system works out the fix on its own.</b> Every slice on the
+      failed path is re-homed from fibre to the edge site, the SLA is restored, an ITSM
+      ticket is auto-generated to document it, and the problem closes itself — no human
+      in the loop. <span class="who">OSS → ITSM · self-heal</span></li>
+  </ol>
+
+  <div class="callout">
+    <b>The real story isn't any single agent.</b> It's that an AI-driven sales flow in
+    the BSS, an autonomous OSS, and an ITSM ticketing step interoperate as one workflow —
+    the standardised agent-to-agent tissue (<span class="tag">MCP / A2A</span>) the
+    industry is converging on. Here the BSS is simply a set of tools an agent can hold,
+    authenticated as a tenant-scoped machine identity like every other caller.
+  </div>
+
+  <h2>What runs it</h2>
+  <table>
+    <tr><th>Step</th><th>Component</th><th>API</th></tr>
+    <tr><td>Intent from language</td><td>intelligence</td><td class="api">/ai/v1/intentDraft</td></tr>
+    <tr><td>Intent + feasibility + upsell</td><td>service-orchestration</td><td class="api">TMF921 · TMF685</td></tr>
+    <tr><td>Slice &amp; token-metered AI</td><td>product-catalog · usage</td><td class="api">TMF620 · TMF635</td></tr>
+    <tr><td>Priced quote + AI narrative</td><td>quote</td><td class="api">TMF648</td></tr>
+    <tr><td>Order &amp; provisioning</td><td>product-ordering · SOM</td><td class="api">TMF622 · TMF641/638/640</td></tr>
+    <tr><td>Alarm → problem → self-heal</td><td>assurance</td><td class="api">TMF642 · TMF656</td></tr>
+    <tr><td>Auto-ticket the incident</td><td>trouble-ticket</td><td class="api">TMF621</td></tr>
+    <tr><td>Agent-to-agent tissue</td><td>mcp-server</td><td class="api">MCP / A2A</td></tr>
+  </table>
+
+  <h2>Drive it yourself, as an AI agent</h2>
+  <p>The <code>integrations/mcp-server</code> exposes the loop as MCP tools. Point Claude
+  Desktop or Claude Code at it and ask, in plain language:</p>
+  <blockquote>"A stadium wants a 5G slice with AI glasses for their tournament — draft
+  the intent, check feasibility, quote it and place the order."</blockquote>
+  <p class="sans">Claude chains five tools — <code>draft_intent → submit_intent →
+  create_quote → accept_quote</code> — and closes the commercial loop. Everything below
+  is a real run through the gateway:</p>
+  <pre>1. draft_intent  -&gt; stadium-north  8ms  AI 80 Mtok
+2. submit_intent -&gt; feasibilityChecked | proposes 5g-slice + edge-ai-inferencing
+3. create_quote  -&gt; 5890 EUR/mo  (slice 4900 + edge-AI 990; 50M tokens incl, 4 EUR/M over)
+4. accept_quote  -&gt; accepted | product order placed → slice provisioned
+
+   [ fibre cut on fibre-route-stadium-north ]
+   -&gt; slice re-homed to edge:gpu-site-stadium-north — SLA restored
+   -&gt; service problem auto-resolved; ITSM ticket "SLA protected: … re-homed to edge" filed</pre>
+
+  <h2>Honest scope</h2>
+  <p class="sans">This is a PoC on a demo stack, and it says so. The edge GPU pool, the
+  slice activation and the "fibre cut" are modelled (the SOM is a thin stand-in for a real
+  network controller; TMF640 activation is mocked). What is real is the <em>shape</em>:
+  standardised TM Forum APIs as the connective tissue, an intent-driven autonomous
+  feasibility-and-upsell step, token-based pricing rated by the usage engine, a genuine
+  self-healing assurance loop, and an MCP surface any AI agent can drive — all
+  multi-tenant, all event-backed, all verified by an end-to-end browser test
+  (<code>ops/e2e/ai_slice_test.js</code>). Swap the mock activator and alarm source for a
+  real OSS and the commercial and assurance logic is unchanged.</p>
+
+  <p class="meta" style="margin-top:3rem">genalpha-bss · vendor-neutral BSS on TM Forum ODA ·
+  <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a></p>
+</main>
+</body>
+</html>
