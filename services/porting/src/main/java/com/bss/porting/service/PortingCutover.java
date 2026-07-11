@@ -66,6 +66,7 @@ public class PortingCutover {
                 Map<String, Object> resource = new LinkedHashMap<>();
                 resource.put("id", o.getId());
                 resource.put("status", o.getStatus());
+                resource.put("direction", o.getDirection());
                 resource.put("phoneNumber", o.getPhoneNumber());
                 if (o.getOwnerPartyId() != null) {
                     resource.put("relatedParty", List.of(Map.of("id", o.getOwnerPartyId(), "role", "customer")));

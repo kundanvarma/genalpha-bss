@@ -4,6 +4,7 @@ import com.bss.som.api.ApiConstants;
 import com.bss.som.client.OrderingClient;
 import com.bss.som.entity.ServiceInstance;
 import com.bss.som.entity.ResourceAssignment;
+import com.bss.som.exception.NotFoundException;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.entity.ServiceOrder;
 import com.bss.som.events.DomainEventPublisher;
@@ -19,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -193,4 +195,59 @@ public class OrchestrationService {
             }
         }
     }
+
+    /**
+     * Cease a service: deactivate it, release its number back to the pool, and
+     * announce the termination. Triggered by a port-out cutover (the customer
+     * takes their number elsewhere) or a direct cease. Releasing the number
+     * means a ported-out MSISDN is not re-issued from our pool — it's gone.
+     */
+    @Transactional
+    public java.util.List<Map<String, Object>> terminateForParty(String party, String reason) {
+        String tenant = com.bss.som.security.TenantContext.current();
+        if (tenant == null) {
+            tenant = tenantScope.currentTenantId();
+        }
+        java.util.List<Map<String, Object>> terminated = new ArrayList<>();
+        for (ServiceInstance instance : services.findByTenantIdAndOwnerPartyId(tenant, party)) {
+            if (ServiceInstance.TERMINATED.equals(instance.getState())) {
+                continue;
+            }
+            terminated.add(terminate(instance, reason));
+        }
+        return terminated;
+    }
+
+    @Transactional
+    public Map<String, Object> terminateService(String serviceId, String reason) {
+        ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Service", serviceId));
+        return terminate(instance, reason);
+    }
+
+    private Map<String, Object> terminate(ServiceInstance instance, String reason) {
+        instance.setState(ServiceInstance.TERMINATED);
+        instance.setLastUpdate(OffsetDateTime.now());
+        services.save(instance);
+        // Release the assigned number (a ported-out number leaves for good).
+        String releasedNumber = null;
+        for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(
+                instance.getTenantId(), instance.getId())) {
+            releasedNumber = a.getValue();
+            assignments.delete(a);
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("id", instance.getId());
+        event.put("name", instance.getName());
+        event.put("state", instance.getState());
+        event.put("reason", reason);
+        if (releasedNumber != null) event.put("releasedNumber", releasedNumber);
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceTerminatedEvent", "service", event);
+        log.info("terminated service {} for {} ({})", instance.getName(), instance.getOwnerPartyId(), reason);
+        return event;
+    }
+
 }

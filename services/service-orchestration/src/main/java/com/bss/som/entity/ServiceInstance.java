@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 public class ServiceInstance {
 
     public static final String ACTIVE = "active";
+    public static final String TERMINATED = "terminated";
 
     @jakarta.persistence.Column(name = "delivery_path", length = 128)
     private String deliveryPath;

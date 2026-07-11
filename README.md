@@ -89,7 +89,7 @@ mobile app recomposes around what the customer owns:
 | quote | TMF648 | 8110 | B2B quotes born from intents: the OSS proposal priced, token allowances on line items, acceptance places the order |
 | intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
 | flow | observability | 8111 | **Live Flow** — consumes every `bss.*.events` topic and streams the choreography to a browser (`/flow`); watch components react in real time |
-| porting | MNP | 8112 | Keep-your-number: port-in/out through a country clearinghouse seam (NRDB in Norway, pluggable per country); the orchestrator activates on the ported number instead of drawing from the pool |
+| porting | MNP | 8112 | Keep-your-number **and** leave-with-your-number: port-in/out through a country clearinghouse seam (NRDB in Norway, pluggable per country). Port-in activates on the ported number; port-out ceases the service, releases the number, and records a churn outcome |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 

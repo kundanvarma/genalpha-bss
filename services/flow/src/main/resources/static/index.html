@@ -209,6 +209,23 @@ const PROCESSES = [
     },
   },
   {
+    id: 'portout', name: 'Port-out → Leave', lane: 'a customer taking their number to another operator (churn)',
+    stages: [
+      { label: 'Port-out requested', who: 'CSR / clearinghouse', tech: 'PortingOrderCreateEvent',
+        detail: 'The customer wants to take their number to another operator. Validated through the clearinghouse (NRDB in Norway) and a cutover scheduled.' },
+      { label: 'Cutover — number leaves', who: 'clearinghouse (NRDB)', tech: 'PortingOrderStateChangeEvent',
+        detail: 'The number cuts over to the new operator; we no longer hold it.' },
+      { label: 'Service ceased', who: 'orchestrator', tech: 'ServiceTerminatedEvent', alert: true,
+        detail: 'The service is terminated and the number released back (a ported-out number is not re-issued). The cease flow the BSS needs for any disconnect.' },
+      { label: 'Recorded as churn', who: 'AI churn scorer', tech: 'churn outcome', ai: true,
+        detail: 'A completed port-out is the strongest churn signal — a customer who actually left. The intelligence component records it as a labeled outcome (churned = true), exactly the ground truth the churn model trains on.' },
+    ],
+    steps: { PortingOrderCreateEvent: 0, PortingOrderStateChangeEvent: 1, ServiceTerminatedEvent: 2 },
+    narrate: {
+      ServiceTerminatedEvent: (m) => `👋|A customer <span class="warn">ported their number out</span> — the service was <b>ceased</b> and the number released. Recorded as a churn outcome for the AI model.`,
+    },
+  },
+  {
     id: 'slice', name: 'Lead → Assure (5G AI slice)', lane: 'a B2B slice sold, provisioned, and self-healed',
     stages: [
       { label: 'Sales intent', who: 'AI + OSS feasibility', tech: 'IntentCreateEvent', ai: true,

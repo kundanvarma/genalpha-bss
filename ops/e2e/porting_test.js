@@ -109,6 +109,58 @@ async function staffToken(request) {
   await page.locator('[data-testid="my-number"]', { hasText: keepNum }).waitFor({ timeout: 15000 });
   console.log('OK a customer kept their number from the storefront — ported via NRDB, activated, shown in My services');
 
+  // 7. Port-OUT: a customer takes their number to another operator. The number
+  // must be one we hold — so port it in first, then out (the full lifecycle).
+  const outParty = `portout-${Date.now()}`;
+  const outNum = '+4790' + String(Date.now()).slice(-6);
+  const pin = await (await ctx.request.post(`${PORT}/numberPortingOrder`, {
+    headers: H, data: { direction: 'portIn', phoneNumber: outNum, country: 'NO',
+      otherOperator: 'OtherTelco', relatedParty: [{ id: outParty, role: 'customer' }] } })).json();
+  await ctx.request.post(`${PORT}/numberPortingOrder/${pin.id}/complete`, { headers: H });
+  const offers2 = await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`, { headers: H })).json();
+  const plan2 = offers2.find((o) => (o.name || '').includes('Unlimited'));
+  await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H, data: { productOrderItem: [{ action: 'add', productOffering: { id: plan2.id } }],
+      relatedParty: [{ id: outParty, role: 'customer' }] } });
+  let active = false;
+  for (let attempt = 0; attempt < 20 && !active; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const svcs = await (await ctx.request.get(
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${outParty}`, { headers: H })).json();
+    active = svcs.some((sv) => sv.state === 'active' && (sv.supportingResource || []).some((r) => r.value === outNum));
+  }
+  if (!active) fail('could not set up an active service on the number to port out');
+
+  const before = (await (await ctx.request.get(`${API}/ai/v1/churnModel`, { headers: H })).json()).labeledOutcomes;
+  const portOut = await (await ctx.request.post(`${PORT}/numberPortingOrder`, {
+    headers: H, data: { direction: 'portOut', phoneNumber: outNum, country: 'NO',
+      otherOperator: 'RivalTelco', relatedParty: [{ id: outParty, role: 'customer' }] } })).json();
+  if (portOut.status !== 'scheduled') fail('port-out not scheduled: ' + JSON.stringify(portOut));
+  console.log('OK port-out scheduled via', portOut.clearinghouse);
+
+  // The cutover ceases the service and releases the number.
+  let ceased = false;
+  for (let attempt = 0; attempt < 25 && !ceased; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const svcs = await (await ctx.request.get(
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${outParty}`, { headers: H })).json();
+    ceased = svcs.some((sv) => sv.state === 'terminated')
+      && !svcs.some((sv) => (sv.supportingResource || []).some((r) => r.value === outNum));
+  }
+  if (!ceased) fail('service was not ceased / number not released after port-out');
+  console.log('OK port-out cutover ceased the service and released the number');
+
+  // And the departure is recorded as a churn outcome for the model.
+  let recorded = false;
+  for (let attempt = 0; attempt < 10 && !recorded; attempt++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const after = (await (await ctx.request.get(`${API}/ai/v1/churnModel`, { headers: H })).json()).labeledOutcomes;
+    recorded = after > before;
+  }
+  if (!recorded) fail('port-out was not recorded as a churn outcome');
+  console.log('OK the port-out was recorded as a churn outcome — a real departure the model learns from');
+
   await browser.close();
   console.log('\nALL PORTING CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

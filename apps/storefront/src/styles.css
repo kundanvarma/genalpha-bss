@@ -263,3 +263,4 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 }
 .hero h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: #fff; }
 .hero p { margin: 0; font-size: 15px; opacity: 0.88; max-width: 46ch; }
+.keepnum-toggle { display: block; margin-top: 0.5rem; color: var(--dim); }

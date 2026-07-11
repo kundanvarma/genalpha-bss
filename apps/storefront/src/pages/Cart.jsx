@@ -316,7 +316,7 @@ export default function Cart() {
       {hasMobile && (
         <div className="keepnumber">
           <h2>Your number</h2>
-          <label className="savecard small">
+          <label className="keepnum-toggle small">
             <input type="checkbox" checked={keepNumber.on}
                    onChange={(e) => setKeepNumber({ ...keepNumber, on: e.target.checked })} />
             {' '}Keep my current number (port it in)

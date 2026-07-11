@@ -33,11 +33,13 @@ public class SomController {
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
     private final com.bss.som.events.DomainEventPublisher events;
+    private final com.bss.som.service.OrchestrationService orchestration;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             TenantScope tenantScope, PartyScope partyScope,
-            com.bss.som.events.DomainEventPublisher events) {
+            com.bss.som.events.DomainEventPublisher events,
+            com.bss.som.service.OrchestrationService orchestration) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -45,6 +47,7 @@ public class SomController {
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
         this.events = events;
+        this.orchestration = orchestration;
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")
@@ -99,6 +102,16 @@ public class SomController {
                 "relatedParty", instance.getOwnerPartyId() == null ? List.of()
                         : List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer"))));
         return ResponseEntity.ok(serviceMap(instance));
+    }
+
+    /** Cease a service (disconnect) — staff/machine; releases the number. */
+    @org.springframework.web.bind.annotation.PostMapping(
+            ApiConstants.INVENTORY_BASE + "/service/{id}/terminate")
+    public ResponseEntity<Map<String, Object>> terminate(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        String reason = body == null || body.get("reason") == null ? "cease" : String.valueOf(body.get("reason"));
+        return ResponseEntity.ok(orchestration.terminateService(id, reason));
     }
 
     private Map<String, Object> orderMap(ServiceOrder o) {
