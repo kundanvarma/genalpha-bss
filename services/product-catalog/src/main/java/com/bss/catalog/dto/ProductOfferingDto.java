@@ -39,6 +39,9 @@ public class ProductOfferingDto {
     @JsonProperty("isBundle")
     private Boolean isBundle;
 
+    @JsonProperty("requiresVerifiedIdentity")
+    private Boolean requiresVerifiedIdentity;
+
     @JsonProperty("bundledProductOffering")
     private List<Map<String, Object>> bundledProductOffering;
 
@@ -135,6 +138,14 @@ public class ProductOfferingDto {
 
     public void setIsBundle(Boolean isBundle) {
         this.isBundle = isBundle;
+    }
+
+    public Boolean getRequiresVerifiedIdentity() {
+        return requiresVerifiedIdentity;
+    }
+
+    public void setRequiresVerifiedIdentity(Boolean requiresVerifiedIdentity) {
+        this.requiresVerifiedIdentity = requiresVerifiedIdentity;
     }
 
     public List<Map<String, Object>> getBundledProductOffering() {

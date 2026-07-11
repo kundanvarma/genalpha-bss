@@ -36,6 +36,7 @@ public class ProductOfferingMapper {
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setProductSpecification(readJsonObject(entity.getProductSpecificationJson()));
         dto.setIsBundle(entity.getIsBundle());
+        dto.setRequiresVerifiedIdentity(entity.getRequiresVerifiedIdentity());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
         dto.setProductOfferingTerm(readJsonObjectList(entity.getProductOfferingTermJson()));
@@ -55,6 +56,7 @@ public class ProductOfferingMapper {
         entity.setLastUpdate(dto.getLastUpdate());
         entity.setProductSpecificationJson(writeJsonObject(dto.getProductSpecification()));
         entity.setIsBundle(dto.getIsBundle());
+        entity.setRequiresVerifiedIdentity(dto.getRequiresVerifiedIdentity());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
         entity.setProductOfferingTermJson(writeJsonObjectList(dto.getProductOfferingTerm()));
@@ -83,6 +85,9 @@ public class ProductOfferingMapper {
         }
         if (patch.getIsBundle() != null) {
             entity.setIsBundle(patch.getIsBundle());
+        }
+        if (patch.getRequiresVerifiedIdentity() != null) {
+            entity.setRequiresVerifiedIdentity(patch.getRequiresVerifiedIdentity());
         }
         if (patch.getBundledProductOffering() != null) {
             entity.setBundledProductOfferingJson(writeJsonObjectList(patch.getBundledProductOffering()));

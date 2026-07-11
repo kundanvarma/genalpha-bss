@@ -96,7 +96,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 # demo data (idempotent; order matters) — see ops/README.md
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
-         seed_promotions seed_resource_pools seed_ai_slice seed_nova seed_content; do python3 ops/seed/$s.py; done
+         seed_promotions seed_resource_pools seed_ai_slice seed_verified_identity seed_nova seed_content; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

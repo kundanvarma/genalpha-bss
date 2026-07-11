@@ -11,6 +11,17 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(VerifiedIdentityRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleVerifiedIdentity(VerifiedIdentityRequiredException ex) {
+        // 403 with a machine-readable code + the WWW-Authenticate-style hint,
+        // so the channel launches a BankID step-up rather than showing an error.
+        ErrorResponse body = new ErrorResponse(
+                "VERIFIED_IDENTITY_REQUIRED", "Forbidden", ex.getMessage(), "403");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .header("X-Step-Up", "verified-identity")
+                .body(body);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {
         ErrorResponse body = new ErrorResponse(
