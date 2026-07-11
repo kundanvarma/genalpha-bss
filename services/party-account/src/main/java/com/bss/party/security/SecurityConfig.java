@@ -44,13 +44,13 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.PARTY_BASE + "/**",
-                                ApiConstants.ACCOUNT_BASE + "/**").hasAuthority(READ)
+                                ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.PARTY_BASE + "/**",
-                                ApiConstants.ACCOUNT_BASE + "/**").hasAuthority(WRITE)
+                                ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.PARTY_BASE + "/**",
-                                ApiConstants.ACCOUNT_BASE + "/**").hasAuthority(WRITE)
+                                ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.PARTY_BASE + "/**",
-                                ApiConstants.ACCOUNT_BASE + "/**").hasAuthority(WRITE)
+                                ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));

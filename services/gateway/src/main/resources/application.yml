@@ -19,7 +19,7 @@ spring:
         - id: party-account
           uri: ${PARTY_URL:http://localhost:8084}
           predicates:
-            - Path=/tmf-api/party/**,/tmf-api/accountManagement/**
+            - Path=/tmf-api/party/**,/tmf-api/accountManagement/**,/tmf-api/partyRoleManagement/**
         - id: product-stock
           uri: ${STOCK_URL:http://localhost:8086}
           predicates:

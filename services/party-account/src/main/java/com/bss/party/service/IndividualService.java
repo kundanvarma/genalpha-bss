@@ -27,14 +27,16 @@ public class IndividualService {
 
     private final IndividualRepository repository;
     private final IndividualMapper mapper;
+    private final PartyRoleService partyRoles;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
 
     public IndividualService(IndividualRepository repository, IndividualMapper mapper,
-            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope) {
+            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope, PartyRoleService partyRoles) {
         this.repository = repository;
         this.mapper = mapper;
+        this.partyRoles = partyRoles;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -93,6 +95,11 @@ public class IndividualService {
         entity.setHref(ApiConstants.PARTY_BASE + "/individual/" + id);
         entity.setTenantId(tenantScope.currentTenantId());
         IndividualDto created = mapper.toDto(repository.save(entity));
+        // TMF669: self-registered parties are customers by definition; other
+        // roles (partner, supplier) are back-office grants.
+        if (partyScope.scopedPartyId().isPresent()) {
+            partyRoles.grant(id, "customer");
+        }
         events.publish("IndividualCreateEvent", "individual", created);
         return created;
     }
