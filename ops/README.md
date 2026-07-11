@@ -42,6 +42,7 @@ tenant's demo staff user through the gateway.
     node martech_test.js      # campaign engine + AI copy + churn scorer -> retention
     node ai_slice_test.js     # AI-slice PoC: intent -> quote -> order -> fibre-cut self-heal
     node bankid_test.js       # verified-identity step-up gate at checkout
+    node porting_test.js      # number porting (NRDB): keep-your-number end to end
 
 The storefront suite pins Samsung stock availability to 10 at the start, so
 repeated runs stay deterministic. Keycloak access tokens live five minutes;

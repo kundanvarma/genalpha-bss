@@ -192,6 +192,23 @@ const PROCESSES = [
     },
   },
   {
+    id: 'portin', name: 'Port-in → Keep your number', lane: 'a customer bringing their number from another operator',
+    stages: [
+      { label: 'Port requested', who: 'checkout / CSR', tech: 'PortingOrderCreateEvent',
+        detail: 'The customer asks to keep their existing number. The porting component validates it through the country clearinghouse (NRDB in Norway) against the losing operator and number rules, and — if accepted — schedules a cutover per the regulator\'s timeline.' },
+      { label: 'Cutover done', who: 'clearinghouse (NRDB)', tech: 'PortingOrderStateChangeEvent',
+        detail: 'At the agreed time the number cuts over from the donor operator to us. The port completes and the number is now the customer\'s.' },
+      { label: 'Activated on the number', who: 'orchestrator', tech: 'ServiceOrderStateChangeEvent',
+        detail: 'When the service is provisioned, the orchestrator sees the completed port-in and activates on the PORTED number instead of drawing a fresh one from the pool — the customer truly kept their number.' },
+    ],
+    steps: { PortingOrderCreateEvent: 0, PortingOrderStateChangeEvent: 1, ServiceOrderStateChangeEvent: 2 },
+    narrate: {
+      PortingOrderCreateEvent: (m) => `📱|A customer asked to <b>keep their number</b>. The porting component validated it through the clearinghouse and scheduled a cutover.`,
+      PortingOrderStateChangeEvent: (m) => `🔁|The number <b>cut over</b> from the old operator — it’s now the customer’s.`,
+      ServiceOrderStateChangeEvent: (m) => `⚙️|<b>The orchestrator</b> activated the service on the <b>ported number</b> — no pool draw. They kept their number.`,
+    },
+  },
+  {
     id: 'slice', name: 'Lead → Assure (5G AI slice)', lane: 'a B2B slice sold, provisioned, and self-healed',
     stages: [
       { label: 'Sales intent', who: 'AI + OSS feasibility', tech: 'IntentCreateEvent', ai: true,

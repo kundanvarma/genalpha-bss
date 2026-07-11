@@ -435,6 +435,33 @@ services:
       kafka:
         condition: service_started
 
+  porting:
+    build: ./services/porting
+    container_name: bss-porting
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/porting
+      DB_USERNAME: porting_app
+      DB_PASSWORD: porting_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      PORTING_GATEWAY: ${PORTING_GATEWAY:-mock}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    ports:
+      - "8112:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   flow:
     build: ./services/flow
     container_name: bss-flow
@@ -563,6 +590,7 @@ services:
     container_name: bss-som
     restart: unless-stopped
     environment:
+      PORTING_BASE_URL: http://porting:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: som_app
@@ -889,6 +917,7 @@ services:
       CAMPAIGN_URL: http://campaign:8080
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
+      PORTING_URL: http://porting:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
