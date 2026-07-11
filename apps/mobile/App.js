@@ -8,6 +8,7 @@ import { Image, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { loadTenantConfig, tenantConfig } from './src/config.js';
+import { tokenClaims } from './src/auth.js';
 import { beginLogin, completeLogin, ensurePartyOnce, isSignedIn } from './src/boot.js';
 import Home from './src/screens/Home.js';
 import Usage from './src/screens/Usage.js';
@@ -62,6 +63,17 @@ export default function App() {
         headerTitle: route.name === 'Home' ? brand.brandName : route.name,
         headerTintColor: brand.brandColor,
         headerTitleStyle: { fontWeight: '700' },
+        headerRight: () => {
+          const claims = tokenClaims();
+          const initials = ((claims.given_name?.[0] || claims.preferred_username?.[0] || '?')
+            + (claims.family_name?.[0] || '')).toUpperCase();
+          return (
+            <View testID="avatar" style={{ backgroundColor: brand.brandColor, width: 32, height: 32,
+              borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>{initials}</Text>
+            </View>
+          );
+        },
         tabBarActiveTintColor: brand.brandColor,
         tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 16 }}>{ICONS[route.name]}</Text>,
       })}>

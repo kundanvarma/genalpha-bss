@@ -97,6 +97,7 @@ export default function App() {
         <div className="who">
           {state === 'ready' ? (
             <>
+              <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
               <span className="user">{claims.name || claims.preferred_username || ''}</span>
               <button className="ghost" onClick={signOut}>Sign out</button>
             </>
