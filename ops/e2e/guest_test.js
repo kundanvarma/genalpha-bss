@@ -30,7 +30,7 @@ const run = Date.now();
   await page.locator('.shipping').waitFor({ timeout: 10000 });
   await page.fill('.shipping input[name="street1"]', 'Gästgatan 7');
   await page.fill('.shipping input[name="postCode"]', '22233');
-  await page.fill('.shipping input[name="city"]', 'Göteborg');
+  await page.fill('.shipping input[name="city"]', 'göteborg'); // TMF673 standardizes the casing
   await page.fill('.shipping input[name="country"]', 'SE');
   // Fiber install: serviceable in Göteborg, slot required — guests see both
   await page.locator('.serviceability.ok').waitFor({ timeout: 10000 });
@@ -81,6 +81,11 @@ const run = Date.now();
     return res.json();
   }, { token });
   if (orders[0].promotionCode !== 'WELCOME10') fail('order lost the promo code: ' + JSON.stringify(orders[0]).slice(0, 200));
+
+  // TMF673 standardized the typed 'göteborg' before it reached the order.
+  const orderJson = JSON.stringify(orders[0]);
+  if (!orderJson.includes('"Göteborg"')) fail('order shipping place not standardized: ' + orderJson.slice(0, 400));
+  console.log('OK TMF673 standardized the shipping address (göteborg -> Göteborg) on the order');
 
   const staffRes = await page.context().request.post(
     'http://localhost:8085/realms/bss/protocol/openid-connect/token',

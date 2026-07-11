@@ -327,6 +327,32 @@ services:
       keycloak:
         condition: service_started
 
+  geographic-address:
+    build: ./services/geographic-address
+    container_name: bss-geographic-address
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/geographic_address
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: address_app
+      DB_PASSWORD: address_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+    ports:
+      - "8101:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -546,6 +572,7 @@ services:
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
       USER_ROLES_URL: http://user-roles:8080
+      ADDRESS_URL: http://geographic-address:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -583,6 +610,8 @@ services:
       promotion:
         condition: service_started
       user-roles:
+        condition: service_started
+      geographic-address:
         condition: service_started
       csr-console:
         condition: service_started

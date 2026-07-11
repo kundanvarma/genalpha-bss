@@ -163,6 +163,14 @@
       {
         "name": "roles:admin",
         "description": "manage users and role grants via TMF672"
+      },
+      {
+        "name": "address:read",
+        "description": "address:read"
+      },
+      {
+        "name": "address:write",
+        "description": "address:write"
       }
     ]
   },
@@ -359,7 +367,9 @@
         "agreement:write",
         "promotion:read",
         "promotion:write",
-        "roles:admin"
+        "roles:admin",
+        "address:read",
+        "address:write"
       ]
     },
     {
