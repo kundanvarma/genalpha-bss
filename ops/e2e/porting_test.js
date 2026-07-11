@@ -73,6 +73,42 @@ async function staffToken(request) {
   if (!kept) fail('service did not activate on the ported number');
   console.log('OK the plan activated on the ported number', number, '— they kept their number, no pool draw');
 
+  // 6. The channel option: a customer keeps their number from the storefront.
+  const page = await ctx.newPage();
+  const run2 = Date.now();
+  const keepNum = '+4790' + String(run2).slice(-6);
+  await page.goto('http://localhost:8080/shop/');
+  await page.locator('text=Sign in').first().click();
+  await page.waitForSelector('a[href*="registration"], input[name="username"]', { timeout: 20000 });
+  await page.click('a[href*="registration"]');
+  await page.waitForSelector('input[name="email"]');
+  await page.fill('input[name="firstName"]', 'Keep'); await page.fill('input[name="lastName"]', 'Number');
+  await page.fill('input[name="email"]', `keepnum-${run2}@example.com`);
+  await page.fill('input[name="password"]', 'Passw0rd!'); await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('.hero', { timeout: 30000 });
+  await page.locator('.card:has(h2:text-is("GenAlpha Mobile Unlimited 5G"))').first().click();
+  await page.waitForSelector('.pricetable', { timeout: 15000 });
+  await page.click('button.primary.big');
+  await page.waitForURL('**/cart');
+  await page.getByText('Keep my current number (port it in)').click();
+  await page.fill('input[name="portNumber"]', keepNum);
+  await page.fill('input[name="portProvider"]', 'OtherTelco');
+  await page.click('button.primary.big');
+  await page.waitForURL('**/orders', { timeout: 30000 });
+  const custToken = await page.evaluate(() => sessionStorage.getItem('bss.shop.token'));
+  let keptUi = false;
+  for (let attempt = 0; attempt < 25 && !keptUi; attempt++) {
+    await new Promise((r) => setTimeout(r, 2500));
+    const services = await (await ctx.request.get(`${API}/tmf-api/serviceInventory/v4/service`,
+      { headers: { Authorization: 'Bearer ' + custToken } })).json();
+    keptUi = services.some((s) => (s.supportingResource || []).some((r) => r.value === keepNum));
+  }
+  if (!keptUi) fail('storefront keep-your-number did not activate on the ported number');
+  await page.goto('http://localhost:8080/shop/services');
+  await page.locator('[data-testid="my-number"]', { hasText: keepNum }).waitFor({ timeout: 15000 });
+  console.log('OK a customer kept their number from the storefront — ported via NRDB, activated, shown in My services');
+
   await browser.close();
   console.log('\nALL PORTING CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

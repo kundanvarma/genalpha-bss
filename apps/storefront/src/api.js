@@ -353,3 +353,43 @@ export async function markNotificationRead(id) {
     body: JSON.stringify({ status: 'read' }),
   }));
 }
+
+// Number porting (keep your number). Fail-soft: if the porting component
+// is not deployed, checkout proceeds and the customer gets a new number.
+const PORTING = '/tmf-api/numberPortingManagement/v1';
+
+function countryOf(number) {
+  const n = (number || '').replace(/\s/g, '');
+  if (n.startsWith('+47')) return 'NO';
+  if (n.startsWith('+46')) return 'SE';
+  if (n.startsWith('+44')) return 'GB';
+  if (n.startsWith('+1')) return 'US';
+  return 'NO';
+}
+
+export async function requestPortIn(partyId, number, currentProvider) {
+  const created = await json(await authFetch(`${PORTING}/numberPortingOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      direction: 'portIn', phoneNumber: number, country: countryOf(number),
+      otherOperator: currentProvider, relatedParty: [{ id: partyId, role: 'customer' }],
+    }),
+  }));
+  // Dev: the cutover is compressed to the checkout; production waits for the
+  // clearinghouse's agreed window and provisioning defers until then.
+  if (created.status === 'scheduled') {
+    await authFetch(`${PORTING}/numberPortingOrder/${created.id}/complete`, { method: 'POST' })
+      .catch(() => {});
+  }
+  return created;
+}
+
+// The running services from the orchestrator's inventory — carries the
+// active number (drawn from the pool, or the one the customer ported in).
+const SERVICE_INV = '/tmf-api/serviceInventory/v4';
+export async function myActiveServices() {
+  try {
+    return await json(await authFetch(`${SERVICE_INV}/service`));
+  } catch { return []; }
+}

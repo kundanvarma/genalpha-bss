@@ -6,7 +6,7 @@
  * install appointment when the cart contains serviceability-gated offerings.
  */
 import { availabilityFor, checkQualification, checkoutCart, createAppointment, createPayment,
-  getOffering, myParty, priceIndex, updateMyParty, validateAddress } from './api.js';
+  getOffering, myParty, priceIndex, updateMyParty, validateAddress, requestPortIn } from './api.js';
 import { addressOf, isComplete, loadDraft, shippingPlace, withPostalAddress } from './address.js';
 import { oneTimeTotal, pricesOf } from './money.js';
 
@@ -69,7 +69,7 @@ export function dueNow(lines, offerings, prices) {
   return total;
 }
 
-export async function performCheckout(lines, card = null, promotionCode = null) {
+export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -144,6 +144,12 @@ export async function performCheckout(lines, card = null, promotionCode = null) 
     paymentRefs = [{ id: payment.id, href: payment.href, '@referredType': 'Payment' }];
   }
 
+  // Keep-your-number: port the customer's existing number in before the order
+  // is placed, so provisioning activates on it instead of drawing from the pool.
+  if (keepNumber && keepNumber.number) {
+    const me = await myParty();
+    await requestPortIn(me.id, keepNumber.number, keepNumber.currentProvider).catch(() => {});
+  }
   const order = await checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs,
     promotionCode);
   if (needsInstall) {

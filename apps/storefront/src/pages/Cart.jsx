@@ -29,6 +29,7 @@ export default function Cart() {
   const [slot, setSlot] = useState(loadSlotDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '' });
 
   useEffect(() => {
     const refresh = () => { cartLines().then(setLines).catch((e) => setError(e.message)); };
@@ -111,6 +112,11 @@ export default function Cart() {
     return <p className="dim">Your cart is empty — <Link to="/">browse the offers</Link>.</p>;
   }
 
+  const hasMobile = lines.some((l) => {
+    const names = [l.name, ...(l.selections || []).map((x) => x.name)].join(' ').toLowerCase();
+    return names.includes('mobile') || names.includes('5g') || names.includes('subscription');
+  });
+
   const needsShipping = (lines || []).some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
@@ -183,7 +189,8 @@ export default function Cart() {
     }
     setBusy(true);
     try {
-      const order = await performCheckout(lines, due ? card : null, promo?.code || null);
+      const order = await performCheckout(lines, due ? card : null, promo?.code || null,
+        keepNumber.on ? keepNumber : null);
       localStorage.removeItem('bss.shop.promo');
       if (due && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
@@ -303,6 +310,29 @@ export default function Cart() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {hasMobile && (
+        <div className="keepnumber">
+          <h2>Your number</h2>
+          <label className="savecard small">
+            <input type="checkbox" checked={keepNumber.on}
+                   onChange={(e) => setKeepNumber({ ...keepNumber, on: e.target.checked })} />
+            {' '}Keep my current number (port it in)
+          </label>
+          {keepNumber.on && (
+            <div className="addressgrid" style={{ marginTop: '0.5rem' }}>
+              <label className="charfield"><span>Your number</span>
+                <input name="portNumber" value={keepNumber.number} placeholder="+47 901 12 233"
+                       onChange={(e) => setKeepNumber({ ...keepNumber, number: e.target.value })} /></label>
+              <label className="charfield"><span>Current provider</span>
+                <input name="portProvider" value={keepNumber.currentProvider} placeholder="e.g. OtherTelco"
+                       onChange={(e) => setKeepNumber({ ...keepNumber, currentProvider: e.target.value })} /></label>
+            </div>
+          )}
+          {keepNumber.on && <p className="dim small">We'll port it in through your country's number
+            registry (NRDB in Norway) and activate your plan on it.</p>}
         </div>
       )}
 

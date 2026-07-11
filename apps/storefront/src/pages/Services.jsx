@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { myProducts, myUsage } from '../api.js';
+import { myActiveServices, myProducts, myUsage } from '../api.js';
 
 function UsageMeter({ bucket }) {
   const used = Number(bucket.usedValue);
@@ -29,11 +29,13 @@ function UsageMeter({ bucket }) {
 
 export default function Services() {
   const [products, setProducts] = useState(null);
+  const [services, setServices] = useState([]);
   const [buckets, setBuckets] = useState([]);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     myProducts().then(setProducts).catch((e) => setError(e.message));
+    myActiveServices().then(setServices).catch(() => {});
     // Usage is additive: a service list without meters still renders.
     myUsage().then((report) => setBuckets(report.bucket || [])).catch(() => {});
   }, []);
@@ -47,6 +49,13 @@ export default function Services() {
   return (
     <>
       <h1>My services</h1>
+      {(() => {
+        const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
+        const number = numbered?.supportingResource?.find((r) => r.value)?.value;
+        return number ? (
+          <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
+        ) : null;
+      })()}
       <div className="rows">
         {products.map((p) => (
           <div className="row" key={p.id}>
