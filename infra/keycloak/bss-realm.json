@@ -105,7 +105,8 @@
             "communication:read",
             "communication:write",
             "usage:read",
-            "agreement:read"
+            "agreement:read",
+            "recommendation:read"
           ]
         }
       },
@@ -171,6 +172,10 @@
       {
         "name": "address:write",
         "description": "address:write"
+      },
+      {
+        "name": "recommendation:read",
+        "description": "recommendation:read"
       }
     ]
   },
@@ -287,6 +292,19 @@
       "directAccessGrantsEnabled": false,
       "id": "429affc9-574a-550e-8cde-e5835a977ee8",
       "description": "TMF672 user-roles component: manages this realm's users"
+    },
+    {
+      "clientId": "bss-recommendation",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "recommendation-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "5b82cbb3-29d4-5ec4-8a48-8b680e0d1ad6",
+      "description": "TMF680 recommender: reads catalog and inventory"
     }
   ],
   "users": [
@@ -369,7 +387,8 @@
         "promotion:write",
         "roles:admin",
         "address:read",
-        "address:write"
+        "address:write",
+        "recommendation:read"
       ]
     },
     {
@@ -432,6 +451,16 @@
           "view-realm"
         ]
       }
+    },
+    {
+      "username": "service-account-bss-recommendation",
+      "enabled": true,
+      "serviceAccountClientId": "bss-recommendation",
+      "realmRoles": [
+        "catalog:read",
+        "inventory:read"
+      ],
+      "id": "34bdb2d2-9986-5600-b57e-8cb4fedf2d51"
     }
   ]
 }

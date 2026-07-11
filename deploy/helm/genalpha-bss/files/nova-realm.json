@@ -105,7 +105,8 @@
             "communication:read",
             "communication:write",
             "usage:read",
-            "agreement:read"
+            "agreement:read",
+            "recommendation:read"
           ]
         }
       },
@@ -171,6 +172,10 @@
       {
         "name": "address:write",
         "description": "address:write"
+      },
+      {
+        "name": "recommendation:read",
+        "description": "recommendation:read"
       }
     ]
   },
@@ -293,6 +298,19 @@
       "directAccessGrantsEnabled": false,
       "id": "c728bec9-8ce2-556c-9358-8e66a74742cb",
       "description": "TMF672 user-roles component: manages this realm's users"
+    },
+    {
+      "clientId": "bss-recommendation",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "recommendation-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "ce9a0a9d-819d-5137-8600-9d4ecdba0e7d",
+      "description": "TMF680 recommender: reads catalog and inventory"
     }
   ],
   "users": [
@@ -375,7 +393,8 @@
         "promotion:write",
         "roles:admin",
         "address:read",
-        "address:write"
+        "address:write",
+        "recommendation:read"
       ]
     },
     {
@@ -438,6 +457,16 @@
           "view-realm"
         ]
       }
+    },
+    {
+      "username": "service-account-bss-recommendation",
+      "enabled": true,
+      "serviceAccountClientId": "bss-recommendation",
+      "realmRoles": [
+        "catalog:read",
+        "inventory:read"
+      ],
+      "id": "ce41a4b4-90a5-5c6e-852e-f8a0c8b0b1c8"
     }
   ],
   "displayName": "Nova Telecom"
