@@ -216,6 +216,14 @@
       {
         "name": "document:write",
         "description": "document:write"
+      },
+      {
+        "name": "campaign:read",
+        "description": "View campaigns and their executions"
+      },
+      {
+        "name": "campaign:write",
+        "description": "Create and manage campaigns"
       }
     ]
   },
@@ -391,6 +399,17 @@
       },
       "id": "0d3f62d6-6478-5d2e-a245-9d147b04fee2",
       "description": "mobile app channel (public, PKCE)"
+    },
+    {
+      "clientId": "bss-campaign",
+      "name": "campaign machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "campaign-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -482,7 +501,9 @@
         "assurance:read",
         "assurance:write",
         "document:read",
-        "document:write"
+        "document:write",
+        "campaign:read",
+        "campaign:write"
       ]
     },
     {
@@ -574,6 +595,15 @@
         "ordering:write"
       ],
       "id": "69af15c4-7f81-58ff-a9a0-6f1124c7a4fd"
+    },
+    {
+      "username": "service-account-bss-campaign",
+      "enabled": true,
+      "serviceAccountClientId": "bss-campaign",
+      "realmRoles": [
+        "communication:write",
+        "communication:read"
+      ]
     }
   ]
 }

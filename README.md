@@ -1,14 +1,14 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **25 TM Forum ODA components**
+A vendor-neutral telecom **Business Support System** built as **26 TM Forum ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **four channels** (three web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — seven Playwright suites drive the
-storefront, guest checkout, both consoles, tenant isolation and role administration against the
-full stack. The original five core components also pass the official TM Forum CTKs with zero
+**Every feature is verified end-to-end in a real browser** — eight Playwright suites drive the
+storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration
+and campaign journeys against the full stack. The original five core components also pass the official TM Forum CTKs with zero
 failures.
 
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
@@ -48,6 +48,7 @@ failures.
 | recommendation | TMF680 | 8102 | Cross-sell: what this customer lacks, bundles first |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
 | document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
+| campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
@@ -112,7 +113,8 @@ Serviceable fiber postcodes start with `111`, `222` or `333`.
 mvn -q clean test -Dapi.version=1.44        # ~250 tests incl. real-Postgres migrations + RLS proofs
 cd ops/e2e && npm i playwright && npx playwright install chromium
 node storefront_test.js && node guest_test.js && node console_test.js \
-  && node csr_test.js && node tenant_test.js && node roles_test.js && node app_test.js
+  && node csr_test.js && node tenant_test.js && node roles_test.js \
+  && node app_test.js && node martech_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,

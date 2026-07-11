@@ -61,6 +61,7 @@ const MODULES = [
   { id: 'shopping-cart',   api: 'TMF663', name: 'Shopping Cart',    deps: [], desc: 'Server-side carts: guest secret-id, claim on login, abandonment events.' },
   { id: 'agreement',       api: 'TMF651', name: 'Agreement',        deps: [], desc: 'Commitment periods minted at order completion.' },
   { id: 'promotion',       api: 'TMF671', name: 'Promotion',        deps: [], desc: 'Promo codes: anonymous validation, redemption, bill discounts.' },
+  { id: 'campaign',        api: 'martech', name: 'Campaign Engine',  deps: ['communication'], desc: 'Event-triggered journeys: once-per-customer messages carrying promo codes.' },
   { id: 'user-roles',      api: 'TMF672', name: 'User Roles & Permissions', deps: [], desc: 'Tenant admins manage staff via TMF API over their own IdP.' },
   { id: 'recommendation',  api: 'TMF680', name: 'Recommendation',   deps: [], desc: 'Cross-sell: what this customer lacks, bundles first.' },
   { id: 'document',        api: 'TMF667', name: 'Document / Content',  deps: [], desc: 'Brand assets and offering imagery — the channels\' content store.' },

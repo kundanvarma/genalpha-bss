@@ -329,6 +329,38 @@ services:
       kafka:
         condition: service_started
 
+  campaign:
+    build: ./services/campaign
+    container_name: bss-campaign
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/campaign
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: campaign_app
+      DB_PASSWORD: campaign_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      COMMUNICATION_BASE_URL: http://communication:8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    ports:
+      - "8108:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+      communication:
+        condition: service_started
+
   user-roles:
     build: ./services/user-roles
     container_name: bss-user-roles
@@ -747,6 +779,7 @@ services:
       USAGE_URL: http://usage:8080
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
+      CAMPAIGN_URL: http://campaign:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       DOCUMENT_URL: http://document:8080

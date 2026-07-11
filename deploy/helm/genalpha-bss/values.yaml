@@ -62,6 +62,7 @@ resources:
 #                         product-inventory, party-account
 #   billing        needs  payment, usage? (no — usage optional), catalog, inventory
 #   promotion      needs  product-ordering (+ billing for bill discounts)
+#   campaign       needs  communication (delivery) + promotion (reward codes)
 #   agreement      needs  product-ordering
 #   payment-method needs  payment
 #   appointment    needs  qualification (install slots exist for gated offers)
@@ -87,6 +88,7 @@ services:
       USAGE_URL: http://usage:8080
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
+      CAMPAIGN_URL: http://campaign:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       DOCUMENT_URL: http://document:8080
@@ -198,6 +200,14 @@ services:
     db: promotion
     dbRole: promotion_app
     extraEnv: {}
+  campaign:
+    db: campaign
+    dbRole: campaign_app
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-campaign
+      OIDC_CLIENT_SECRET: campaign-secret
+      COMMUNICATION_BASE_URL: http://communication:8080
   user-roles:
     db: ""
     machineIdentity: true

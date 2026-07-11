@@ -68,6 +68,10 @@ spring:
           uri: ${PROMOTION_URL:http://localhost:8099}
           predicates:
             - Path=/tmf-api/promotionManagement/**
+        - id: campaign
+          uri: ${CAMPAIGN_URL:http://localhost:8108}
+          predicates:
+            - Path=/tmf-api/campaignManagement/**
         - id: user-roles
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:

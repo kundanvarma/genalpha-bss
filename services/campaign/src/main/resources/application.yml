@@ -1,0 +1,75 @@
+spring:
+  application:
+    name: campaign
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/campaign}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      properties:
+        max.block.ms: 2000
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/migration-{vendor}
+    # Complete standalone connection: migrations run as the OWNING role
+    # (RLS does not bind owners), never through the tenant-aware wrapper.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/campaign}
+    user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:postgres}}
+    password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:postgres}}
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+bss:
+  events:
+    topic: bss.campaign.events
+  campaign:
+    # The business-event streams the engine listens to; its own topic is
+    # deliberately absent so executions never re-trigger campaigns.
+    topics: ${CAMPAIGN_TOPICS:bss.ordering.events,bss.ticket.events,bss.agreement.events}
+    consumer-enabled: ${CAMPAIGN_CONSUMER_ENABLED:true}
+  downstream:
+    communication-base-url: ${COMMUNICATION_BASE_URL:http://localhost:8095}
+  # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
+  # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
+  # leave it empty when the issuer is directly reachable for discovery.
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-campaign}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:campaign-secret}
+      - id: nova
+        issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-campaign}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:campaign-secret}

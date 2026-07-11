@@ -30,6 +30,7 @@
         <module>services/usage</module>
         <module>services/agreement</module>
         <module>services/promotion</module>
+        <module>services/campaign</module>
         <module>services/user-roles</module>
         <module>services/geographic-address</module>
         <module>services/document</module>
