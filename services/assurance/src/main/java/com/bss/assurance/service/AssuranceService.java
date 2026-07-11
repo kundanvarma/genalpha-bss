@@ -31,13 +31,16 @@ public class AssuranceService {
 
     private final AlarmRepository alarms;
     private final ServiceProblemRepository problems;
+    private final com.bss.assurance.service.SelfHealService selfHeal;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
     public AssuranceService(AlarmRepository alarms, ServiceProblemRepository problems,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.assurance.service.SelfHealService selfHeal) {
         this.alarms = alarms;
         this.problems = problems;
+        this.selfHeal = selfHeal;
         this.events = events;
         this.tenantScope = tenantScope;
     }
@@ -82,6 +85,21 @@ public class AssuranceService {
             problem.setLastUpdate(OffsetDateTime.now());
             problems.save(problem);
             events.publish("ServiceProblemCreateEvent", "serviceProblem", problemMap(problem));
+
+            // Autonomy: if the failed object is a delivery path we can
+            // re-home, fix it now and close the loop ourselves.
+            if (selfHeal.attemptHeal(alarm.getAlarmedObject()) > 0) {
+                problem.setStatus(ServiceProblem.RESOLVED);
+                problem.setResolvedAt(OffsetDateTime.now());
+                problem.setDescription(problem.getDescription()
+                        + " — self-healed: affected services re-homed to edge, SLA restored");
+                problem.setLastUpdate(OffsetDateTime.now());
+                problems.save(problem);
+                alarm.setState(Alarm.CLEARED);
+                alarm.setClearedAt(OffsetDateTime.now());
+                alarms.save(alarm);
+                events.publish("ServiceProblemStateChangeEvent", "serviceProblem", problemMap(problem));
+            }
         }
         return alarmMap(alarm);
     }

@@ -454,6 +454,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-assurance",
+      "name": "assurance machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "assurance-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -673,6 +684,17 @@
         "usage:read",
         "ordering:write",
         "ai:use"
+      ]
+    },
+    {
+      "username": "service-account-bss-assurance",
+      "enabled": true,
+      "serviceAccountClientId": "bss-assurance",
+      "realmRoles": [
+        "service:read",
+        "service:write",
+        "ticket:write",
+        "ticket:read"
       ]
     }
   ],

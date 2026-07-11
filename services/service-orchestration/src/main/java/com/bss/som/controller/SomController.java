@@ -32,16 +32,19 @@ public class SomController {
     private final ResourceAssignmentRepository assignments;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
+    private final com.bss.som.events.DomainEventPublisher events;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
-            TenantScope tenantScope, PartyScope partyScope) {
+            TenantScope tenantScope, PartyScope partyScope,
+            com.bss.som.events.DomainEventPublisher events) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
         this.assignments = assignments;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
+        this.events = events;
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")
@@ -57,15 +60,45 @@ public class SomController {
 
     @GetMapping(ApiConstants.INVENTORY_BASE + "/service")
     public ResponseEntity<List<Map<String, Object>>> services(
-            @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
+            @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
+            @RequestParam(name = "deliveryPath", required = false) String deliveryPath) {
         String tenant = tenantScope.currentTenantId();
         // Customers see their own running services; staff filter freely.
         String party = partyScope.scopedPartyId().orElse(relatedPartyId);
-        List<ServiceInstance> rows = party != null
-                ? services.findByTenantIdAndOwnerPartyId(tenant, party)
-                : services.findAll().stream()
-                        .filter(s -> tenant.equals(s.getTenantId())).toList();
+        List<ServiceInstance> rows = deliveryPath != null
+                ? services.findByTenantIdAndDeliveryPath(tenant, deliveryPath)
+                : party != null
+                        ? services.findByTenantIdAndOwnerPartyId(tenant, party)
+                        : services.findAll().stream()
+                                .filter(s -> tenant.equals(s.getTenantId())).toList();
         return ResponseEntity.ok(rows.stream().map(this::serviceMap).toList());
+    }
+
+    /**
+     * The self-healing hook: re-home a service to a new delivery point.
+     * Assurance calls this when the current path fails — fibre cut, edge
+     * takes over, SLA restored. Machine or staff only (service:write).
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            ApiConstants.INVENTORY_BASE + "/service/{id}/migrate")
+    public ResponseEntity<Map<String, Object>> migrate(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findById(id)
+                .filter(s -> tenant.equals(s.getTenantId()))
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+        String from = instance.getDeliveryPath();
+        instance.setDeliveryPath(String.valueOf(body.get("deliveryPoint")));
+        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        services.save(instance);
+        events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
+                "id", instance.getId(), "name", instance.getName(),
+                "deliveryPath", instance.getDeliveryPath(),
+                "previousDeliveryPath", from == null ? "" : from,
+                "relatedParty", instance.getOwnerPartyId() == null ? List.of()
+                        : List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer"))));
+        return ResponseEntity.ok(serviceMap(instance));
     }
 
     private Map<String, Object> orderMap(ServiceOrder o) {
@@ -130,6 +163,9 @@ public class SomController {
                 .findByTenantIdAndServiceId(s.getTenantId(), s.getId()).stream()
                 .map(a -> Map.<String, Object>of("value", a.getValue(), "@referredType", "Resource"))
                 .toList();
+        if (s.getDeliveryPath() != null) {
+            map.put("deliveryPath", s.getDeliveryPath());
+        }
         if (!supporting.isEmpty()) {
             map.put("supportingResource", supporting);
         }

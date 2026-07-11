@@ -14,6 +14,12 @@ public class ServiceInstance {
 
     public static final String ACTIVE = "active";
 
+    @jakarta.persistence.Column(name = "delivery_path", length = 128)
+    private String deliveryPath;
+
+    public String getDeliveryPath() { return deliveryPath; }
+    public void setDeliveryPath(String deliveryPath) { this.deliveryPath = deliveryPath; }
+
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;
 
