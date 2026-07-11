@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { appointmentsOf, billsOf, cartsOf, createTicket, getCustomer, interactionsOf, logInteraction,
-  ordersOf, patchOrder, productsOf, ticketsOf, workTicket } from '../api.js';
+  ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
+  activeServicesOf, agreementsOf, paymentMethodsOf, recommendationsOf, redemptionsOf,
+  revokePaymentMethod, usageOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 
 const dt = (v) => v ? new Date(v).toLocaleString(undefined,
@@ -17,6 +19,12 @@ export default function Customer360() {
   const [tickets, setTickets] = useState([]);
   const [carts, setCarts] = useState([]);
   const [interactions, setInteractions] = useState([]);
+  const [usage, setUsage] = useState([]);
+  const [agreements, setAgreements] = useState([]);
+  const [activeServices, setActiveServices] = useState([]);
+  const [redemptions, setRedemptions] = useState([]);
+  const [methods, setMethods] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [note, setNote] = useState('');
   const [ticketName, setTicketName] = useState('');
   const [error, setError] = useState(null);
@@ -30,6 +38,12 @@ export default function Customer360() {
     ticketsOf(id).then(setTickets).catch(() => {});
     cartsOf(id).then(setCarts).catch(() => {});
     interactionsOf(id).then(setInteractions).catch(() => {});
+    usageOf(id).then(setUsage);
+    agreementsOf(id).then(setAgreements);
+    activeServicesOf(id).then(setActiveServices);
+    redemptionsOf(id).then(setRedemptions);
+    paymentMethodsOf(id).then(setMethods);
+    recommendationsOf(id).then(setSuggestions);
   };
   useEffect(reload, [id]);
 
@@ -92,7 +106,42 @@ export default function Customer360() {
                 <span className={`state ${p.status}`}>{p.status}</span>
               </div>
             ))}
+            {activeServices.filter((sv) => (sv.supportingResource || []).length).map((sv) => (
+              <div className="row" key={sv.id} data-testid="service-number">
+                <span className="dim small">{sv.name}</span>
+                <span className="msisdn">{sv.supportingResource[0].value}</span>
+              </div>
+            ))}
             {!products.length && <p className="dim small">Nothing provisioned.</p>}
+          </div>
+
+          <h2>Usage this month</h2>
+          <div className="rows" data-testid="usage-card">
+            {usage.map((b, i) => (
+              <div className="row" key={i}>
+                <span>{b.name}</span>
+                <span className={b.allowedValue != null && Number(b.usedValue) > Number(b.allowedValue)
+                  ? 'error' : 'dim'}>
+                  {b.usedValue}{b.allowedValue != null ? ` / ${b.allowedValue}` : ''} {b.units}
+                </span>
+              </div>
+            ))}
+            {!usage.length && <p className="dim small">No usage recorded.</p>}
+          </div>
+
+          <h2>Agreements</h2>
+          <div className="rows" data-testid="agreements-card">
+            {agreements.map((g) => (
+              <div className="row" key={g.id}>
+                <span>{g.name}
+                  {g.agreementPeriod?.endDateTime && (
+                    <span className="dim small"> — until {g.agreementPeriod.endDateTime.slice(0, 10)}</span>
+                  )}
+                </span>
+                <span className={`state ${g.status}`}>{g.status}</span>
+              </div>
+            ))}
+            {!agreements.length && <p className="dim small">No agreements.</p>}
           </div>
 
           <h2>Bills</h2>
@@ -147,6 +196,37 @@ export default function Customer360() {
               <p className="dim small">The customer's cart, live — assisted checkout starts here.</p>
             </>
           )}
+
+          <h2>Promotions &amp; payment</h2>
+          <div className="rows" data-testid="promo-vault-card">
+            {redemptions.map((r) => (
+              <div className="row" key={r.id}>
+                <span>Promo <strong>{r.code}</strong> — {r.name}</span>
+                <span className="dim">−{r.percentage}%</span>
+              </div>
+            ))}
+            {methods.map((m) => (
+              <div className="row" key={m.id}>
+                <span>{m.details.brand} •••• {m.details.lastFourDigits}
+                  <span className="dim small"> exp {m.details.expiry}</span></span>
+                <button className="ghost danger"
+                        onClick={() => act(() => revokePaymentMethod(m.id))}>Revoke</button>
+              </div>
+            ))}
+            {!redemptions.length && !methods.length
+              && <p className="dim small">No promotions or saved cards.</p>}
+          </div>
+
+          <h2>Suggest next</h2>
+          <div className="rows" data-testid="suggest-card">
+            {suggestions.slice(0, 3).map((it) => (
+              <div className="row" key={it.offering.id}>
+                <span>{it.offering.name}</span>
+                <span className="dim small">#{it.priority}</span>
+              </div>
+            ))}
+            {!suggestions.length && <p className="dim small">Nothing to suggest.</p>}
+          </div>
 
           <h2>Tickets</h2>
           {tickets.map((t) => <TicketCard key={t.id} ticket={t} onChanged={reload} />)}

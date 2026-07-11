@@ -63,6 +63,13 @@ async function agentLogin(page, username) {
   await a.locator('h1', { hasText: 'Tina ' + FAMILY }).waitFor({ timeout: 15000 });
   console.log('OK customer 360 found via search');
 
+  // CSR 360 catch-up cards: all render; a fresh customer gets suggestions.
+  for (const card of ['usage-card', 'agreements-card', 'promo-vault-card', 'suggest-card']) {
+    await a.locator(`[data-testid="${card}"]`).waitFor({ timeout: 10000 });
+  }
+  await a.locator('[data-testid="suggest-card"] .row').first().waitFor({ timeout: 10000 });
+  console.log('OK 360 shows usage, agreements, promo/vault and suggestions cards');
+
   const ticket = a.locator('.ticket', { hasText: 'No internet at home' });
   await ticket.waitFor({ timeout: 15000 });
   await ticket.locator('input[name="ticketNote"]').fill('Line test shows outage in the area');

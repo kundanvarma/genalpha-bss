@@ -137,7 +137,10 @@
             "agreement:read",
             "promotion:read",
             "service:read",
-            "assurance:read"
+            "assurance:read",
+            "paymentmethod:read",
+            "paymentmethod:write",
+            "recommendation:read"
           ]
         }
       },
