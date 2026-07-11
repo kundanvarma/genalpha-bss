@@ -6,7 +6,7 @@
  * install appointment when the cart contains serviceability-gated offerings.
  */
 import { availabilityFor, checkQualification, checkoutCart, createAppointment, createPayment,
-  getOffering, myParty, priceIndex, updateMyParty } from './api.js';
+  getOffering, myParty, priceIndex, updateMyParty, validateAddress } from './api.js';
 import { addressOf, isComplete, loadDraft, shippingPlace, withPostalAddress } from './address.js';
 import { oneTimeTotal, pricesOf } from './money.js';
 
@@ -106,6 +106,17 @@ export async function performCheckout(lines, card = null, promotionCode = null) 
     } else {
       throw new Error('shipping address required');
     }
+  }
+
+  // TMF673: the address must be real before anything ships or installs.
+  // The standardized form (trimmed, cased, postcode compacted) is what the
+  // order, qualification and appointment all see.
+  if (needsShipping || needsInstall) {
+    const verdict = await validateAddress(address);
+    if (verdict.validationResult !== 'success') {
+      throw new Error(verdict.validationReason || 'address could not be validated');
+    }
+    address = { ...address, ...verdict.standardizedGeographicAddress };
   }
   if (needsShipping || needsInstall) {
     const party = await myParty();

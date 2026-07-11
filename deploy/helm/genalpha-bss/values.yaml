@@ -75,6 +75,7 @@ services:
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
       USER_ROLES_URL: http://user-roles:8080
+      ADDRESS_URL: http://geographic-address:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -176,3 +177,7 @@ services:
     extraEnv:
       OIDC_CLIENT_ID: bss-user-admin
       OIDC_CLIENT_SECRET: user-admin-secret
+  geographic-address:
+    db: geographic_address
+    dbRole: address_app
+    extraEnv: {}

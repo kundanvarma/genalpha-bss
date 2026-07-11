@@ -72,6 +72,10 @@ spring:
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:
             - Path=/tmf-api/rolesAndPermissionsManagement/**
+        - id: geographic-address
+          uri: ${ADDRESS_URL:http://localhost:8101}
+          predicates:
+            - Path=/tmf-api/geographicAddressManagement/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

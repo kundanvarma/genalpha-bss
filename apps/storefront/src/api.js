@@ -165,6 +165,16 @@ const CONSUMPTION = '/tmf-api/usageConsumption/v4';
 const AGREEMENT = '/tmf-api/agreementManagement/v4';
 
 const PROMOTION = '/tmf-api/promotionManagement/v4';
+const ADDRESS = '/tmf-api/geographicAddressManagement/v4';
+
+/** TMF673 anonymous validation: normalized address or the reason it fails. */
+export async function validateAddress(address) {
+  return json(await publicFetch(`${ADDRESS}/geographicAddressValidation`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ submittedGeographicAddress: address }),
+  }));
+}
 
 /** Anonymous promo-code check — the shop window prices the discount. */
 export async function checkPromotion(code) {

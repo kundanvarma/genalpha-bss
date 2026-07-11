@@ -25,3 +25,4 @@ CREATE DATABASE shopping_cart;
 CREATE DATABASE usage;
 CREATE DATABASE agreement;
 CREATE DATABASE promotion;
+CREATE DATABASE geographic_address;
