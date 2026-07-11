@@ -45,11 +45,11 @@ failures.
 | promotion | TMF671 | 8099 | Promo codes: anonymous validation → redemption → bill discount |
 | user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP |
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
-| recommendation | TMF680 | 8102 | Cross-sell: what this customer lacks, bundles first |
+| recommendation | TMF680 | 8102 | Cross-sell with a learning seam: rule-selected candidates, popularity-ranked (a trained model plugs into the same Ranker interface) |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
 | document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
-| intelligence | AI | 8109 | Any-LLM seam (stub / OpenAI-compatible / Anthropic): campaign copy assistant + CSR copilot + churn/next-best-offer scorer (rules, not a model) whose alerts trigger campaigns; PII redaction, per-tenant audit ledger |
+| intelligence | AI | 8109 | Any-LLM seam (stub / OpenAI-compatible / Anthropic, per-tenant overrides): copy assistant + CSR copilot + churn/NBO scorer; PII redaction, audit ledger with a console viewer |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 

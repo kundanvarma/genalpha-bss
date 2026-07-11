@@ -84,3 +84,8 @@ bss:
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-intelligence}
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
+        # Per-tenant AI stack (optional): unset falls back to bss.intelligence.*
+        ai-provider: ${AI_PROVIDER_NOVA:}
+        ai-base-url: ${AI_BASE_URL_NOVA:}
+        ai-api-key: ${AI_API_KEY_NOVA:}
+        ai-model: ${AI_MODEL_NOVA:}

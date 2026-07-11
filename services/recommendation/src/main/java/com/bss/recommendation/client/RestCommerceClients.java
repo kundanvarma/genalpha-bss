@@ -40,14 +40,29 @@ public class RestCommerceClients {
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
-        return partyId -> {
-            try {
-                return rest.get()
-                        .uri("/tmf-api/productInventory/v4/product?relatedPartyId={p}&limit=100", partyId)
-                        .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
-                        });
-            } catch (RestClientException e) {
-                throw new IllegalStateException("product-inventory is unreachable", e);
+        return new CommerceClients.InventoryClient() {
+            @Override
+            public List<Map<String, Object>> productsOf(String partyId) {
+                try {
+                    return rest.get()
+                            .uri("/tmf-api/productInventory/v4/product?relatedPartyId={p}&limit=100", partyId)
+                            .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                            });
+                } catch (RestClientException e) {
+                    throw new IllegalStateException("product-inventory is unreachable", e);
+                }
+            }
+
+            @Override
+            public List<Map<String, Object>> allProducts() {
+                try {
+                    return rest.get()
+                            .uri("/tmf-api/productInventory/v4/product?limit=500")
+                            .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                            });
+                } catch (RestClientException e) {
+                    throw new IllegalStateException("product-inventory is unreachable", e);
+                }
             }
         };
     }

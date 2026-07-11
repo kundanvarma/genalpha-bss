@@ -2,6 +2,7 @@ package com.bss.recommendation.service;
 
 import com.bss.recommendation.client.CommerceClients;
 import com.bss.recommendation.exception.BadRequestException;
+import com.bss.recommendation.rank.Ranker;
 import com.bss.recommendation.security.PartyScope;
 import org.springframework.stereotype.Service;
 
@@ -13,11 +14,11 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * TMF680: what should this customer see next? The v1 recommender is a
- * transparent rule engine — active, sellable offerings the party does not
- * already own, bundles first (they carry the household). The shape leaves
- * room for a learned ranker later without changing the API: channels just
- * render items in priority order.
+ * TMF680: what should this customer see next? Candidate selection is a
+ * transparent rule (active, sellable, not already owned); the ORDER comes
+ * from the Ranker seam — rules or the popularity baseline today, a trained
+ * model tomorrow — and the API never changes: channels just render items
+ * in priority order.
  */
 @Service
 public class RecommendationService {
@@ -25,12 +26,14 @@ public class RecommendationService {
     private final CommerceClients.CatalogClient catalog;
     private final CommerceClients.InventoryClient inventory;
     private final PartyScope partyScope;
+    private final Ranker ranker;
 
     public RecommendationService(CommerceClients.CatalogClient catalog,
-            CommerceClients.InventoryClient inventory, PartyScope partyScope) {
+            CommerceClients.InventoryClient inventory, PartyScope partyScope, Ranker ranker) {
         this.catalog = catalog;
         this.inventory = inventory;
         this.partyScope = partyScope;
+        this.ranker = ranker;
     }
 
     public Map<String, Object> recommendationFor(String requestedPartyId) {
@@ -44,14 +47,11 @@ public class RecommendationService {
                 owned.add(String.valueOf(ref.get("id")));
             }
         }
-        List<Map<String, Object>> candidates = catalog.activeOfferings().stream()
+        List<Map<String, Object>> candidates = ranker.rank(catalog.activeOfferings().stream()
                 .filter(o -> !owned.contains(String.valueOf(o.get("id"))))
                 .filter(o -> !Boolean.FALSE.equals(o.get("isSellable")))
-                .sorted((a, b) -> Boolean.compare(
-                        !Boolean.TRUE.equals(a.get("isBundle")),
-                        !Boolean.TRUE.equals(b.get("isBundle"))))
-                .limit(5)
-                .toList();
+                .toList())
+                .stream().limit(5).toList();
 
         List<Map<String, Object>> items = new java.util.ArrayList<>();
         for (int i = 0; i < candidates.size(); i++) {

@@ -60,6 +60,11 @@ public class TenantRegistry {
         private String issuer;
         /** Backchannel JWKS endpoint; empty means discover from the issuer. */
         private String jwksUri;
+        /** Optional per-tenant AI stack: unset means the service-wide default. */
+        private String aiProvider;
+        private String aiBaseUrl;
+        private String aiApiKey;
+        private String aiModel;
         /** Client-credentials endpoint + machine client for THIS tenant's IdP
          * (only services that call other services use these). */
         private String tokenUri;
@@ -88,6 +93,38 @@ public class TenantRegistry {
 
         public void setJwksUri(String jwksUri) {
             this.jwksUri = jwksUri;
+        }
+
+        public String getAiProvider() {
+            return aiProvider;
+        }
+
+        public void setAiProvider(String aiProvider) {
+            this.aiProvider = aiProvider;
+        }
+
+        public String getAiBaseUrl() {
+            return aiBaseUrl;
+        }
+
+        public void setAiBaseUrl(String aiBaseUrl) {
+            this.aiBaseUrl = aiBaseUrl;
+        }
+
+        public String getAiApiKey() {
+            return aiApiKey;
+        }
+
+        public void setAiApiKey(String aiApiKey) {
+            this.aiApiKey = aiApiKey;
+        }
+
+        public String getAiModel() {
+            return aiModel;
+        }
+
+        public void setAiModel(String aiModel) {
+            this.aiModel = aiModel;
         }
 
         public String getTokenUri() {

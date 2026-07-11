@@ -180,6 +180,14 @@ const RESOURCES = [
       },
     },
   },
+  {
+    path: 'audit',
+    base: '/ai/v1',
+    title: 'AI Audit',
+    readOnly: true,
+    fields: [],
+    columns: ['createdAt', 'useCase', 'provider', 'model', 'prompt', 'response'],
+  },
 ];
 
 const el = (id) => document.getElementById(id);

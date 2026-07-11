@@ -31,3 +31,6 @@ bss:
         issuer: https://idp.tenant-a.test/realms/bss
       - id: tenant-b
         issuer: https://idp.tenant-b.test/realms/bss
+        ai-provider: anthropic
+        ai-api-key: test-key
+        ai-model: claude-test-model
