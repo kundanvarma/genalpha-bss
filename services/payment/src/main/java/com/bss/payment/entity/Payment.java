@@ -42,6 +42,12 @@ public class Payment {
     @Column(name = "method_label", length = 64)
     private String methodLabel;
 
+    @Column(name = "settlement_ref", length = 64)
+    private String settlementRef;
+
+    @Column(name = "psp_provider", length = 32)
+    private String pspProvider;
+
     @Column(name = "authorization_code", length = 64)
     private String authorizationCode;
 
@@ -145,6 +151,11 @@ public class Payment {
     public void setAuthorizationCode(String authorizationCode) {
         this.authorizationCode = authorizationCode;
     }
+
+    public String getSettlementRef() { return settlementRef; }
+    public void setSettlementRef(String settlementRef) { this.settlementRef = settlementRef; }
+    public String getPspProvider() { return pspProvider; }
+    public void setPspProvider(String pspProvider) { this.pspProvider = pspProvider; }
 
     public String getCorrelatorId() {
         return correlatorId;

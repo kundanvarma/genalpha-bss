@@ -11,6 +11,17 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ScaRequiredException.class)
+    public ResponseEntity<ErrorResponse> handleSca(ScaRequiredException ex) {
+        // 402 Payment Required: the channel must complete the SCA challenge
+        // at actionUrl, then retry the authorization with the same correlator.
+        ErrorResponse body = new ErrorResponse(
+                "402", "Payment Required", ex.getMessage(), "402");
+        return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
+                .header("X-SCA-Action-Url", ex.getActionUrl() == null ? "" : ex.getActionUrl())
+                .body(body);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {
         ErrorResponse body = new ErrorResponse(

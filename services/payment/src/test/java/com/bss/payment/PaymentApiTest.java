@@ -18,6 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
@@ -115,5 +116,47 @@ class PaymentApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\": \"voided\"}"))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void sameCorrelatorNeverChargesTwice() throws Exception {
+        String withCorrelator = """
+                {"description": "checkout", "correlatorId": "idem-order-1",
+                 "amount": {"unit": "EUR", "value": 49.00},
+                 "paymentMethod": {"@type": "bankCard", "cardNumber": "4242424242424242", "expiry": "12/28", "cvc": "123"}}
+                """;
+        String first = mockMvc.perform(post(BASE).with(customer("cust-idem"))
+                        .contentType(MediaType.APPLICATION_JSON).content(withCorrelator))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String firstId = com.jayway.jsonpath.JsonPath.read(first, "$.id");
+
+        // The retry returns the SAME payment — no second authorization, no
+        // second charge (the guarantee that matters, whatever the status code).
+        mockMvc.perform(post(BASE).with(customer("cust-idem"))
+                        .contentType(MediaType.APPLICATION_JSON).content(withCorrelator))
+                .andExpect(jsonPath("$.id").value(firstId));
+
+        mockMvc.perform(get(BASE + "?correlatorId=idem-order-1&limit=100").with(machine()))
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
+    void scaCardChallenges_thenCaptureRecordsSettlement() throws Exception {
+        // A card that triggers strong customer authentication -> 402 + action URL.
+        mockMvc.perform(post(BASE).with(customer("cust-sca"))
+                        .contentType(MediaType.APPLICATION_JSON).content(body("4000000000003155")))
+                .andExpect(status().isPaymentRequired())
+                .andExpect(header().exists("X-SCA-Action-Url"));
+
+        // A clean authorization, then capture — settlement reference is recorded,
+        // proving the capture actually moved money (not just a status flip).
+        String paymentId = authorize(customer("cust-settle"));
+        mockMvc.perform(patch(BASE + "/" + paymentId).with(machine())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\": \"captured\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("captured"))
+                .andExpect(jsonPath("$.settlementRef").isNotEmpty());
     }
 }

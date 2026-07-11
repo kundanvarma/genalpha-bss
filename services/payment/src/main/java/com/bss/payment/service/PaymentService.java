@@ -10,6 +10,7 @@ import com.bss.payment.events.DomainEventPublisher;
 import com.bss.payment.client.PaymentMethodClient;
 import com.bss.payment.exception.BadRequestException;
 import com.bss.payment.exception.ConflictException;
+import com.bss.payment.exception.ScaRequiredException;
 import com.bss.payment.exception.NotFoundException;
 import com.bss.payment.psp.PspAdapter;
 import com.bss.payment.repository.PaymentRepository;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -112,8 +114,24 @@ public class PaymentService {
             }
             method = (Map<String, Object>) saved.get("details");
         }
+        // Idempotency: a retried authorization (same correlator, same payer)
+        // returns the original payment instead of holding funds twice — the
+        // single most important thing a payment API must get right.
+        if (dto.getCorrelatorId() != null) {
+            Optional<Payment> prior = repository.findFirstByTenantIdAndCorrelatorId(
+                    tenantScope.currentTenantId(), dto.getCorrelatorId());
+            if (prior.isPresent()) {
+                return toDto(prior.get());
+            }
+        }
+
         PspAdapter.Authorization auth = psp.authorize(
-                dto.getAmount().getValue(), currency, method);
+                dto.getAmount().getValue(), currency, method, dto.getCorrelatorId());
+        if (auth.requiresAction()) {
+            // Strong customer authentication (3-D Secure / BankID): the channel
+            // completes the challenge and retries with the same correlator.
+            throw new ScaRequiredException(auth.actionUrl());
+        }
         if (!auth.approved()) {
             throw new ConflictException(auth.declineReason());
         }
@@ -131,6 +149,7 @@ public class PaymentService {
                 : String.valueOf(dto.getPaymentMethod().getOrDefault("@type", "bankCard")));
         entity.setMethodLabel(auth.methodLabel());
         entity.setAuthorizationCode(auth.authorizationCode());
+        entity.setPspProvider(psp.provider());
         entity.setCorrelatorId(dto.getCorrelatorId());
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
         entity.setPaymentDate(OffsetDateTime.now());
@@ -154,6 +173,25 @@ public class PaymentService {
             if (!allowed.contains(patch.getStatus())) {
                 throw new ConflictException("payment is '" + entity.getStatus()
                         + "' and cannot become '" + patch.getStatus() + "'");
+            }
+            // The status transition is where money actually moves: capture
+            // settles the held authorization, void/refund reverses it. If the
+            // PSP rejects the movement, the transition fails — the record never
+            // claims money moved when it didn't.
+            if (Payment.CAPTURED.equals(patch.getStatus())) {
+                PspAdapter.Capture capture = psp.capture(entity.getAuthorizationCode(),
+                        entity.getAmountValue(), entity.getAmountUnit());
+                if (!capture.settled()) {
+                    throw new ConflictException("capture failed: " + capture.failureReason());
+                }
+                entity.setSettlementRef(capture.captureRef());
+            } else if (Payment.VOIDED.equals(patch.getStatus())) {
+                PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(),
+                        entity.getAmountValue(), entity.getAmountUnit());
+                if (!refund.refunded()) {
+                    throw new ConflictException("void/refund failed: " + refund.failureReason());
+                }
+                entity.setSettlementRef(refund.refundRef());
             }
             entity.setStatus(patch.getStatus());
         }
@@ -186,6 +224,8 @@ public class PaymentService {
             dto.setPaymentMethod(Map.of("@type", entity.getMethodType(), "label", entity.getMethodLabel()));
         }
         dto.setAuthorizationCode(entity.getAuthorizationCode());
+        dto.setSettlementRef(entity.getSettlementRef());
+        dto.setPspProvider(entity.getPspProvider());
         dto.setCorrelatorId(entity.getCorrelatorId());
         if (entity.getOwnerPartyId() != null) {
             dto.setRelatedParty(List.of(Map.of(

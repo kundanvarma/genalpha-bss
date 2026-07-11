@@ -46,6 +46,13 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  payment:
+    # The PSP seam: 'mock' (dev, no money moves) or 'stripe' (bring keys).
+    #   bss.payment.psp=stripe + STRIPE_SECRET_KEY, and card data tokenizes
+    #   client-side into a payment-method token — the vault seam already carries it.
+    psp: ${PAYMENT_PSP:mock}
+    stripe:
+      secret-key: ${STRIPE_SECRET_KEY:}
   downstream:
     payment-method-base-url: ${PAYMENT_METHOD_BASE_URL:http://localhost:8103}
   events:
