@@ -33,9 +33,13 @@ Three threads run through every chapter:
    never pretends a stand-in is the real thing — and argues that naming the seam honestly is what
    makes a demo credible instead of naive.
 
-And underneath all three, the meta-thread: **this was built with an AI as the executing partner.**
-Not autocomplete — a collaborator that wrote services, argued architecture, made mistakes, and got
-caught by the tests. The memoir is, quietly, a field report on a new way of building software.
+And underneath all three, the meta-thread: **this was built with an AI as the executing partner —
+Anthropic's Claude Fable 5.** Not autocomplete — a collaborator that wrote the services, argued the
+architecture, made real mistakes, and got caught by the tests. Fable 5 was the most capable
+generally-available Claude model at the time of the build (a Mythos-class model, the tier above
+Opus), and the memoir is, quietly, a field report on what building a system *this* size with a
+model *that* capable actually feels like — where it's astonishing, where it breaks, and what
+discipline the human still has to bring.
 
 **Who it's for:** telco architects and BSS/OSS people who want to see the whole thing built
 honestly; engineers curious about AI-assisted building at real scale; and anyone who has watched a
@@ -92,15 +96,22 @@ result, especially when an AI is writing the code.
 *Receipts:* the CTK-conformance commits; the E2E suite scaffolding; the first "ALL CHECKS PASSED".
 
 ### Chapter 3 — The pair
-*The scene:* introducing the working method — a human holding intent and judgment, an AI holding
-execution and breadth. What it felt like: describing a component and watching it appear; catching
-the AI's plausible-but-wrong answer with a test; the rhythm of build → verify → commit.
-*Covers:* how the collaboration actually worked; where the AI was strong (breadth, boilerplate,
-wiring) and where it needed the human (architecture calls, honesty about scope, taste); the
-guardrails (tests as the arbiter).
-*The lesson:* AI-assisted building is only as trustworthy as the verification around it. The
-discipline of Chapter 2 is what made the speed of this chapter safe.
-*Receipts:* the cadence of the commit history itself.
+*The scene:* introducing the working method, and the collaborator by name — **Claude Fable 5**, the
+AI that wrote most of the lines in this system. A human holding intent and judgment, Fable 5
+holding execution and breadth. What it actually felt like: describing a component and watching it
+appear, wired and tested; catching a plausible-but-wrong answer with a test that the model itself
+had written; the rhythm of build → verify → commit, sustained across an arc no solo human could
+hold in their head.
+*Covers:* how the collaboration worked in practice; where Fable 5 was extraordinary (breadth,
+boilerplate, cross-service wiring, remembering the whole system at once) and where it still needed
+the human (the architectural forks, honesty about scope, saying "this is enough," taste); the
+guardrails that made trusting it rational (the tests are the arbiter, not the model's confidence);
+the honest moments where the model was wrong (the Netty DNS bug it misdiagnosed twice, the compose
+edit that put an env var on the wrong service) and how the discipline caught it anyway.
+*The lesson:* AI-assisted building is only as trustworthy as the verification around it — and with
+a model as capable as Fable 5, the verification discipline isn't a brake, it's the thing that lets
+you *use* the capability at full speed without fooling yourself.
+*Receipts:* the cadence of the commit history itself, co-authored throughout by Claude Fable 5.
 
 ---
 
@@ -322,10 +333,13 @@ AI-assisted building at this scale actually felt like, where it broke, and why t
 discipline was the load-bearing wall — the AI could move fast precisely *because* the tests would
 catch it.
 *The lesson:* the future of software building isn't "AI writes the code." It's "a human holds
-intent and judgment, an AI holds execution and breadth, and a ruthless verification discipline
-makes the partnership trustworthy." This whole system is the existence proof.
-*Receipts:* the repository itself — every claim in this book has a commit, a test, or a screenshot
-behind it. That's the point.
+intent and judgment, a capable model — here, **Claude Fable 5** — holds execution and breadth, and
+a ruthless verification discipline makes the partnership trustworthy." A thirty-component,
+multi-tenant BSS with a Catalyst-grade PoC, built this way, is the existence proof. The book's
+final argument: give the best model the whole system to hold and a discipline that catches it when
+it's wrong, and one person can build what used to take a team — *if* they never stop verifying.
+*Receipts:* the repository itself — every commit co-authored by Claude Fable 5, and every claim in
+this book backed by a commit, a test, or a screenshot. That's the point.
 
 ### Appendix A — The gotchas, collected
 Every debugging war story, distilled to the symptom, the cause, and the permanent fix. The
