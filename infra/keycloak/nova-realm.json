@@ -159,6 +159,10 @@
       {
         "name": "promotion:write",
         "description": "promotion:write"
+      },
+      {
+        "name": "roles:admin",
+        "description": "manage users and role grants via TMF672"
       }
     ]
   },
@@ -268,6 +272,19 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "bss-user-admin",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "user-admin-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "c728bec9-8ce2-556c-9358-8e66a74742cb",
+      "description": "TMF672 user-roles component: manages this realm's users"
     }
   ],
   "users": [
@@ -347,7 +364,8 @@
         "agreement:read",
         "agreement:write",
         "promotion:read",
-        "promotion:write"
+        "promotion:write",
+        "roles:admin"
       ]
     },
     {
@@ -395,6 +413,21 @@
       "realmRoles": [
         "agent"
       ]
+    },
+    {
+      "username": "service-account-bss-user-admin",
+      "enabled": true,
+      "serviceAccountClientId": "bss-user-admin",
+      "realmRoles": [],
+      "id": "bc76bdf0-e384-5b60-9cb4-281f714be9e3",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
     }
   ],
   "displayName": "Nova Telecom"

@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: user-roles
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+bss:
+  # Issuer-per-tenant, with each tenant's IdP admin credentials: the
+  # bss-user-admin service account may manage exactly its own realm's users.
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-user-admin}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:user-admin-secret}
+      - id: nova
+        issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-user-admin}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:user-admin-secret}

@@ -311,6 +311,22 @@ services:
       kafka:
         condition: service_started
 
+  user-roles:
+    build: ./services/user-roles
+    container_name: bss-user-roles
+    restart: unless-stopped
+    environment:
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+    ports:
+      - "8100:8080"
+    depends_on:
+      keycloak:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -529,6 +545,7 @@ services:
       USAGE_URL: http://usage:8080
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
+      USER_ROLES_URL: http://user-roles:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -564,6 +581,8 @@ services:
       agreement:
         condition: service_started
       promotion:
+        condition: service_started
+      user-roles:
         condition: service_started
       csr-console:
         condition: service_started

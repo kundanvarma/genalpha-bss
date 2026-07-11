@@ -1,0 +1,10 @@
+bss:
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: https://idp.genalpha.test/realms/bss
+      - id: tenant-a
+        issuer: https://idp.tenant-a.test/realms/bss
+      - id: tenant-b
+        issuer: https://idp.tenant-b.test/realms/bss
