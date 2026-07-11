@@ -195,6 +195,11 @@ public class ProductOrderService {
         requireOwn(entity);
         requireCancelOnlyWhenScoped(patch);
         if (TERMINAL_STATES.contains(entity.getState())) {
+            // Same-state completion is a no-op, not an error: staff and the
+            // SOM may both drive completion and must never conflict.
+            if (patch.getState() != null && patch.getState().equals(entity.getState())) {
+                return mapper.toDto(entity);
+            }
             throw new OrderValidationException(
                     "order '" + id + "' is in terminal state '" + entity.getState() + "' and cannot be changed");
         }

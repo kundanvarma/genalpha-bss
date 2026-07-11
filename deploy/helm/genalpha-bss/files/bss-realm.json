@@ -135,7 +135,8 @@
             "usage:read",
             "usage:write",
             "agreement:read",
-            "promotion:read"
+            "promotion:read",
+            "service:read"
           ]
         }
       },
@@ -186,6 +187,14 @@
       {
         "name": "paymentmethod:write",
         "description": "paymentmethod:write"
+      },
+      {
+        "name": "service:read",
+        "description": "service:read"
+      },
+      {
+        "name": "service:write",
+        "description": "service:write"
       }
     ]
   },
@@ -328,6 +337,19 @@
       "directAccessGrantsEnabled": false,
       "id": "56dc0b19-9404-5d75-8199-c5fd2f01b75f",
       "description": "payment service: resolves saved methods in the vault"
+    },
+    {
+      "clientId": "bss-som",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "som-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "9920e6d1-746c-5742-be9f-caa79fa2f5e1",
+      "description": "thin SOM: completes product orders after activation"
     }
   ],
   "users": [
@@ -413,7 +435,9 @@
         "address:write",
         "recommendation:read",
         "paymentmethod:read",
-        "paymentmethod:write"
+        "paymentmethod:write",
+        "service:read",
+        "service:write"
       ]
     },
     {
@@ -495,6 +519,16 @@
         "paymentmethod:read"
       ],
       "id": "fa25b513-452f-52be-b0e2-2895de047131"
+    },
+    {
+      "username": "service-account-bss-som",
+      "enabled": true,
+      "serviceAccountClientId": "bss-som",
+      "realmRoles": [
+        "ordering:read",
+        "ordering:write"
+      ],
+      "id": "69af15c4-7f81-58ff-a9a0-6f1124c7a4fd"
     }
   ]
 }

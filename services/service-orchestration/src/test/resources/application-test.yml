@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration,classpath:db/migration-{vendor}
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    user: sa
+    password: ""
+
+
+bss:
+  events:
+    enabled: false
+  notify:
+    consumer-enabled: false
+    topics: none
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: https://idp.genalpha.test/realms/bss
+      - id: tenant-a
+        issuer: https://idp.tenant-a.test/realms/bss
+      - id: tenant-b
+        issuer: https://idp.tenant-b.test/realms/bss

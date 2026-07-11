@@ -91,6 +91,7 @@ services:
       ADDRESS_URL: http://geographic-address:8080
       RECOMMENDATION_URL: http://recommendation:8080
       PAYMENT_METHOD_URL: http://payment-method:8080
+      SOM_URL: http://service-orchestration:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -204,6 +205,14 @@ services:
     db: payment_method
     dbRole: paymentmethod_app
     extraEnv: {}
+  service-orchestration:
+    db: service_om
+    dbRole: som_app
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-som
+      OIDC_CLIENT_SECRET: som-secret
+      ORDERING_BASE_URL: http://product-ordering:8080
   recommendation:
     db: ""
     machineIdentity: true

@@ -84,6 +84,10 @@ spring:
           uri: ${PAYMENT_METHOD_URL:http://localhost:8103}
           predicates:
             - Path=/tmf-api/paymentMethods/**
+        - id: service-orchestration
+          uri: ${SOM_URL:http://localhost:8104}
+          predicates:
+            - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

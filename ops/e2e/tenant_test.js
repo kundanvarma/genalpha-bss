@@ -79,10 +79,37 @@ async function staffToken(request, realm) {
   console.log('OK Nova order visible to its owner:', novaOrderId.slice(0, 8),
     '| state', novaOrders[0].state);
 
+  // --- Thin SOM: a plan-only (digital) order completes ITSELF — no staff.
+  let somState = novaOrders[0].state;
+  for (let attempt = 0; attempt < 20 && somState !== 'completed'; attempt++) {
+    await page.waitForTimeout(2000);
+    const refreshed = await page.evaluate(async ({ token, id }) => {
+      const res = await fetch(`/tmf-api/productOrderingManagement/v4/productOrder/${id}`,
+        { headers: { Authorization: 'Bearer ' + token } });
+      return res.json();
+    }, { token: novaToken, id: novaOrderId });
+    somState = refreshed.state;
+  }
+  if (somState !== 'completed') fail('SOM never completed the digital order (state ' + somState + ')');
+  console.log('OK SOM auto-completed the digital order — no staff involved');
+
   // --- Operator isolation, staff level: each realm's staff sees only its tenant
   const setup = await browser.newContext();
   const genalphaStaff = await staffToken(setup.request, 'bss');
   const novaStaff = await staffToken(setup.request, 'nova');
+
+  // TMF641/638: the production layer's records exist, in Nova's tenant only.
+  const novaServiceOrders = await (await setup.request.get(
+    `${API}/tmf-api/serviceOrdering/v4/serviceOrder?productOrderId=${novaOrderId}`,
+    { headers: { Authorization: 'Bearer ' + novaStaff } })).json();
+  if (!novaServiceOrders.length || novaServiceOrders[0].state !== 'completed') {
+    fail('no completed service order behind the product order: ' + JSON.stringify(novaServiceOrders));
+  }
+  const genalphaServiceOrders = await (await setup.request.get(
+    `${API}/tmf-api/serviceOrdering/v4/serviceOrder?productOrderId=${novaOrderId}`,
+    { headers: { Authorization: 'Bearer ' + genalphaStaff } })).json();
+  if (genalphaServiceOrders.length) fail("GenAlpha staff can see Nova's service orders");
+  console.log('OK TMF641 service orders exist behind the order, tenant-partitioned');
 
   const genalphaView = await (await setup.request.get(
     `${API}/tmf-api/productOrderingManagement/v4/productOrder?limit=100`,
