@@ -2,6 +2,7 @@ package com.bss.ordering;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.CatalogClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,9 @@ class ProductOrderPaginationTest {
     // references against the catalog, which is not running here.
     @MockBean
     private CatalogClient catalogClient;
+
+    @MockBean
+    private AgreementClient agreementClient;
 
     @BeforeEach
     void stubCatalog() {

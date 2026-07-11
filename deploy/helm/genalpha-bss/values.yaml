@@ -72,6 +72,7 @@ services:
       COMMUNICATION_URL: http://communication:8080
       CART_URL: http://shopping-cart:8080
       USAGE_URL: http://usage:8080
+      AGREEMENT_URL: http://agreement:8080
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       CSR_URL: http://csr-console:8080
@@ -101,6 +102,7 @@ services:
       INVENTORY_BASE_URL: http://product-inventory:8080
       STOCK_BASE_URL: http://product-stock:8080
       PAYMENT_BASE_URL: http://payment:8080
+      AGREEMENT_BASE_URL: http://agreement:8080
   product-inventory:
     db: product_inventory
     dbRole: inventory_app
@@ -155,4 +157,8 @@ services:
   usage:
     db: usage
     dbRole: usage_app
+    extraEnv: {}
+  agreement:
+    db: agreement
+    dbRole: agreement_app
     extraEnv: {}

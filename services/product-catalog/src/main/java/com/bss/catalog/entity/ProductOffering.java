@@ -40,6 +40,10 @@ public class ProductOffering {
     @Column(name = "product_specification", length = 4000)
     private String productSpecificationJson;
 
+    /** JSON list of commitment terms, echoed verbatim. */
+    @Column(name = "product_offering_term", length = 4000)
+    private String productOfferingTermJson;
+
     @Column(name = "is_bundle")
     private Boolean isBundle;
 
@@ -140,6 +144,14 @@ public class ProductOffering {
 
     public void setProductOfferingPriceJson(String productOfferingPriceJson) {
         this.productOfferingPriceJson = productOfferingPriceJson;
+    }
+
+    public String getProductOfferingTermJson() {
+        return productOfferingTermJson;
+    }
+
+    public void setProductOfferingTermJson(String productOfferingTermJson) {
+        this.productOfferingTermJson = productOfferingTermJson;
     }
 
     public String getTenantId() {

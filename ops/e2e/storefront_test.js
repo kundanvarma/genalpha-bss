@@ -358,6 +358,20 @@ async function apiGet(page, path, token) {
   }
   tokenA = await shopToken(a);
 
+  // --- TMF651: completing the order minted a 12-month commitment agreement
+  // for the bundle (the offering carries a productOfferingTerm).
+  const agreements = JSON.parse((await apiGet(a,
+    '/tmf-api/agreementManagement/v4/agreement?limit=10', tokenA)).body);
+  const commitment = agreements.find((g) => g.status === 'active' && (g.name || '').includes('12-month'));
+  if (!commitment) fail('no active 12-month agreement after completion: ' + JSON.stringify(agreements).slice(0, 300));
+  if (!commitment.agreementPeriod?.endDateTime) fail('agreement has no commitment end date');
+  console.log('OK completion minted the commitment agreement:', commitment.name,
+    '| until', commitment.agreementPeriod.endDateTime.slice(0, 10));
+
+  await a.click('.nav >> text=Account');
+  await a.locator('[data-testid="agreement-row"]', { hasText: '12-month' }).first().waitFor({ timeout: 15000 });
+  console.log('OK Account page lists the agreement');
+
   // --- Usage: mediation posts roaming data for Alice; the meter shows it.
   // Fresh staff token: the setup one is near its 5-minute lifetime by now.
   const usageTokenRes = await setup.request.post(
