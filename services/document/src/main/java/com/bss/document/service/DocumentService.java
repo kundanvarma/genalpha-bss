@@ -6,6 +6,7 @@ import com.bss.document.exception.BadRequestException;
 import com.bss.document.exception.NotFoundException;
 import com.bss.document.repository.DocumentRepository;
 import com.bss.document.security.TenantScope;
+import com.bss.document.store.ContentStore;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,10 +34,13 @@ public class DocumentService {
 
     private final DocumentRepository repository;
     private final TenantScope tenantScope;
+    private final ContentStore contentStore;
 
-    public DocumentService(DocumentRepository repository, TenantScope tenantScope) {
+    public DocumentService(DocumentRepository repository, TenantScope tenantScope,
+            ContentStore contentStore) {
         this.repository = repository;
         this.tenantScope = tenantScope;
+        this.contentStore = contentStore;
     }
 
     @Transactional
@@ -66,6 +70,7 @@ public class DocumentService {
         entity.setCategory(dto.get("category") == null ? null : String.valueOf(dto.get("category")));
         entity.setContentType(mimeType);
         entity.setContent(bytes);
+        contentStore.put(entity.getTenantId(), id, mimeType, bytes);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(repository.save(entity));
