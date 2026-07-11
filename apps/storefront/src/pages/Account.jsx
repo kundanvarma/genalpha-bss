@@ -1,7 +1,33 @@
 import { useEffect, useState } from 'react';
-import { myParty, updateMyParty } from '../api.js';
+import { myAgreements, myParty, updateMyParty } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, withPostalAddress } from '../address.js';
+
+function AgreementRows() {
+  const [agreements, setAgreements] = useState(null);
+  useEffect(() => {
+    myAgreements().then(setAgreements).catch(() => setAgreements([]));
+  }, []);
+  if (!agreements || !agreements.length) return null;
+  return (
+    <>
+      <h2>My agreements</h2>
+      <div className="rows">
+        {agreements.map((a) => (
+          <div className="row" key={a.id} data-testid="agreement-row">
+            <span>
+              <strong>{a.name}</strong>
+              {a.agreementPeriod?.endDateTime && (
+                <span className="dim"> — until {a.agreementPeriod.endDateTime.slice(0, 10)}</span>
+              )}
+            </span>
+            <span className={`state ${a.status}`}>{a.status}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
 
 export default function Account() {
   const [party, setParty] = useState(null);
@@ -54,6 +80,7 @@ export default function Account() {
         {saved ? <span className="dim">Saved.</span> : <span />}
         <button className="primary" onClick={save} disabled={!isComplete(address)}>Save address</button>
       </div>
+      <AgreementRows />
     </>
   );
 }

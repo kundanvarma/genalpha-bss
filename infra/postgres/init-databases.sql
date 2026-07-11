@@ -23,3 +23,4 @@ CREATE DATABASE party_interaction;
 CREATE DATABASE communication;
 CREATE DATABASE shopping_cart;
 CREATE DATABASE usage;
+CREATE DATABASE agreement;

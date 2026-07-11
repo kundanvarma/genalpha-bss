@@ -161,6 +161,11 @@ export async function myProducts() {
 }
 
 const CONSUMPTION = '/tmf-api/usageConsumption/v4';
+const AGREEMENT = '/tmf-api/agreementManagement/v4';
+
+export async function myAgreements() {
+  return json(await authFetch(`${AGREEMENT}/agreement?limit=100`));
+}
 
 export async function myUsage() {
   return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption`));

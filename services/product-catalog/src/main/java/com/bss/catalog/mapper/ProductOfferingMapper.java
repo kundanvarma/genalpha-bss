@@ -38,6 +38,7 @@ public class ProductOfferingMapper {
         dto.setIsBundle(entity.getIsBundle());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
+        dto.setProductOfferingTerm(readJsonObjectList(entity.getProductOfferingTermJson()));
         dto.setType("ProductOffering");
         return dto;
     }
@@ -55,6 +56,7 @@ public class ProductOfferingMapper {
         entity.setIsBundle(dto.getIsBundle());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
+        entity.setProductOfferingTermJson(writeJsonObjectList(dto.getProductOfferingTerm()));
         return entity;
     }
 
@@ -85,6 +87,9 @@ public class ProductOfferingMapper {
         }
         if (patch.getProductOfferingPrice() != null) {
             entity.setProductOfferingPriceJson(writeJsonObjectList(patch.getProductOfferingPrice()));
+        }
+        if (patch.getProductOfferingTerm() != null) {
+            entity.setProductOfferingTermJson(writeJsonObjectList(patch.getProductOfferingTerm()));
         }
     }
 

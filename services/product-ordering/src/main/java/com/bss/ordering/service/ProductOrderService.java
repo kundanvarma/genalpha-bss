@@ -3,6 +3,7 @@ package com.bss.ordering.service;
 import com.bss.ordering.api.ApiConstants;
 import com.bss.ordering.api.OffsetPageRequest;
 import com.bss.ordering.api.PagedResult;
+import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
@@ -40,6 +41,7 @@ public class ProductOrderService {
     private final ProductOrderRepository repository;
     private final ProductOrderMapper mapper;
     private final CatalogClient catalogClient;
+    private final AgreementClient agreementClient;
     private final PartyClient partyClient;
     private final InventoryClient inventoryClient;
     private final DomainEventPublisher events;
@@ -49,12 +51,13 @@ public class ProductOrderService {
     private final PaymentClient paymentClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
-            CatalogClient catalogClient, PartyClient partyClient, InventoryClient inventoryClient,
+            CatalogClient catalogClient, AgreementClient agreementClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
             StockClient stockClient, PaymentClient paymentClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
+        this.agreementClient = agreementClient;
         this.partyClient = partyClient;
         this.inventoryClient = inventoryClient;
         this.events = events;
@@ -196,6 +199,7 @@ public class ProductOrderService {
             provision(entity);
             stockClient.consume(entity.getId());
             paymentRefIds(entity).forEach(paymentClient::capture);
+            mintCommitments(entity);
         }
         if (cancelling) {
             stockClient.release(entity.getId());
@@ -328,6 +332,28 @@ public class ProductOrderService {
      * order transaction: if inventory rejects, the state change rolls back.
      */
     @SuppressWarnings("unchecked")
+    /**
+     * TMF651 seam: offerings that declare a commitment term become an active
+     * agreement for the order's owner the moment the order completes.
+     */
+    private void mintCommitments(ProductOrder order) {
+        if (order.getOwnerPartyId() == null) {
+            return;
+        }
+        for (ItemRef item : flattenItems(mapper.toDto(order).getProductOrderItem())) {
+            int months = catalogClient.findOffering(item.offeringId())
+                    .map(CatalogClient.OfferingRef::commitmentMonths).orElse(0);
+            if (months > 0) {
+                agreementClient.activate(
+                        item.name() + " — " + months + "-month commitment",
+                        order.getOwnerPartyId(),
+                        List.of(Map.of("productOffering",
+                                Map.of("id", item.offeringId(), "name", item.name()))),
+                        months);
+            }
+        }
+    }
+
     private void provision(ProductOrder order) {
         ProductOrderDto dto = mapper.toDto(order);
         Map<String, Object> billingAccount = order.getBillingAccountId() != null

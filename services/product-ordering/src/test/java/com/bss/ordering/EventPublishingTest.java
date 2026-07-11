@@ -1,5 +1,6 @@
 package com.bss.ordering;
 
+import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
@@ -50,6 +51,9 @@ class EventPublishingTest {
 
     @MockBean
     private CatalogClient catalogClient;
+
+    @MockBean
+    private AgreementClient agreementClient;
 
     @MockBean
     private PartyClient partyClient;

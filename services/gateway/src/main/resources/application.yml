@@ -60,6 +60,10 @@ spring:
           uri: ${USAGE_URL:http://localhost:8097}
           predicates:
             - Path=/tmf-api/usageManagement/**,/tmf-api/usageConsumption/**
+        - id: agreement
+          uri: ${AGREEMENT_URL:http://localhost:8098}
+          predicates:
+            - Path=/tmf-api/agreementManagement/**
         - id: csr-console
           uri: ${CSR_URL:http://localhost:8094}
           predicates:

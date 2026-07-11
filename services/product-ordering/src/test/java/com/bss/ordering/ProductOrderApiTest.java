@@ -1,5 +1,6 @@
 package com.bss.ordering;
 
+import com.bss.ordering.client.AgreementClient;
 import com.bss.ordering.client.CatalogClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class ProductOrderApiTest {
     // references against the catalog, which is not running here.
     @MockBean
     private CatalogClient catalogClient;
+
+    @MockBean
+    private AgreementClient agreementClient;
 
     @BeforeEach
     void stubCatalog() {

@@ -58,7 +58,7 @@ class GatewayRoutingTest {
                 "product-catalog", "product-ordering", "product-inventory", "party-account",
                 "product-stock", "payment", "billing", "qualification", "appointment",
                 "trouble-ticket", "party-interaction", "communication", "shopping-cart",
-                "usage", "csr-console", "admin-console", "storefront");
+                "usage", "agreement", "csr-console", "admin-console", "storefront");
     }
 
     @Test

@@ -1,5 +1,7 @@
 package com.bss.ordering;
 
+import com.bss.ordering.client.AgreementClient;
+import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.PaymentClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.StockClient;
@@ -42,6 +44,12 @@ class PaymentOrchestrationTest {
 
     @MockBean
     private PaymentClient paymentClient;
+
+    @MockBean
+    private AgreementClient agreementClient;
+
+    @MockBean
+    private CatalogClient catalogClient;
 
     @MockBean
     private StockClient stockClient;
