@@ -47,7 +47,7 @@
 <header>
   <h1>genalpha-bss</h1>
   <p class="subtitle">A composable, multi-tenant Business Support System on TM Forum ODA</p>
-  <p class="meta sans">Product overview · 26 ODA components · 4 channels · 2 demo operators on one deployment ·
+  <p class="meta sans">Product overview · 27 ODA components · 4 channels · 2 demo operators on one deployment ·
   July 2026 · <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a></p>
 </header>
 
@@ -132,6 +132,7 @@ cryptographic identity isolation and database row-level security between them.</
 <tr><td>payment-method</td><td class="api">TMF670</td><td>8103</td><td>Tokenized card vault: save at checkout, pay bills one-click</td></tr>
 <tr><td>document</td><td class="api">TMF667</td><td>8106</td><td>Content store: tenant logos and offering artwork the channels wear</td></tr>
 <tr><td>campaign</td><td class="api">martech</td><td>8108</td><td>Event-triggered journeys: once-per-customer messages carrying promo codes — marketers run them from the console GUI</td></tr>
+<tr><td>intelligence</td><td class="api">AI</td><td>8109</td><td>Any-LLM seam (stub / OpenAI-compatible / Anthropic dialects): campaign copy assistant with always-on PII redaction and a per-tenant audit ledger</td></tr>
 </table>
 
 <h3>Production (OSS) — the layer below, thin but real</h3>
@@ -232,9 +233,9 @@ chart with one tenant configured — the pool and silo models are one codebase.<
   <li><b>BankID step-up</b> at checkout for offerings requiring verified identity (brokered IdP,
   no service changes — the vendor-neutral JWT model already carries it).</li>
   <li><b>Real PSP adapter</b> (Stripe/Adyen) behind the existing payment seam.</li>
-  <li><b>Martech surfaces</b>: the campaign engine is live (event-triggered, once-per-customer,
-  promo-carrying journeys); next come a console UI for marketers, richer segmentation and
-  gamification hooks in the app.</li>
+  <li><b>More intelligence</b>: the AI seam is live (campaign copy assistant; any model via
+  config — stub, Ollama, OpenAI-compatible or Anthropic). Next: the CSR copilot (360 summary +
+  reply drafts) and a churn/next-best-offer scorer that emits campaign triggers.</li>
   <li>Deeper production internals where a concrete integration demands them: pluggable
   activation adapters, alarm correlation, TMF648 Quote for B2B.</li>
 </ul>

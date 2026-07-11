@@ -63,6 +63,7 @@ resources:
 #   billing        needs  payment, usage? (no — usage optional), catalog, inventory
 #   promotion      needs  product-ordering (+ billing for bill discounts)
 #   campaign       needs  communication (delivery) + promotion (reward codes)
+#   intelligence   standalone (LLM seam; stub provider by default, any model via env)
 #   agreement      needs  product-ordering
 #   payment-method needs  payment
 #   appointment    needs  qualification (install slots exist for gated offers)
@@ -89,6 +90,7 @@ services:
       AGREEMENT_URL: http://agreement:8080
       PROMOTION_URL: http://promotion:8080
       CAMPAIGN_URL: http://campaign:8080
+      INTELLIGENCE_URL: http://intelligence:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
       DOCUMENT_URL: http://document:8080
@@ -208,6 +210,11 @@ services:
       OIDC_CLIENT_ID: bss-campaign
       OIDC_CLIENT_SECRET: campaign-secret
       COMMUNICATION_BASE_URL: http://communication:8080
+  intelligence:
+    db: intelligence
+    dbRole: intelligence_app
+    extraEnv:
+      AI_PROVIDER: stub
   user-roles:
     db: ""
     machineIdentity: true

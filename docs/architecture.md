@@ -59,6 +59,7 @@ TMF642/656"]
         INTER["party-interaction TMF683"]
         COMM["communication TMF681"]
         CAMP["campaign (martech)\nevent-triggered journeys"]
+        AI["intelligence (AI)\nany-LLM seam + audit"]
     end
 
     KAFKA[("Kafka\nbss.*.events\ntransactional outbox")]
@@ -73,6 +74,7 @@ TMF642/656"]
     PAY -.-> VAULT
     REC -.-> CAT & INV
     CAMP -.->|"delivers via\nmachine identity"| COMM
+    AI -.->|"drafts campaign copy\n(stub/Ollama/OpenAI/Anthropic)"| CAMP
     ROLES -.-> IDP
 
     Core & Revenue & Care -->|events| KAFKA

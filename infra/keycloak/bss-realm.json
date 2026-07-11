@@ -224,6 +224,10 @@
       {
         "name": "campaign:write",
         "description": "Create and manage campaigns"
+      },
+      {
+        "name": "ai:use",
+        "description": "Use AI assist features (staff tooling)"
       }
     ]
   },
@@ -503,7 +507,8 @@
         "document:read",
         "document:write",
         "campaign:read",
-        "campaign:write"
+        "campaign:write",
+        "ai:use"
       ]
     },
     {

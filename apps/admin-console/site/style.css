@@ -136,3 +136,5 @@ button.primary { transition: filter 120ms; }
 button.primary:hover { filter: brightness(1.08); }
 .field input, .field select, .field textarea { border-radius: var(--radius-s); }
 th { border-bottom-color: var(--line); }
+.field.aiassist { grid-column: 1 / -1; }
+.field.aiassist input { flex: 1; }
