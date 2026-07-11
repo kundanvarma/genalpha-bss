@@ -50,10 +50,23 @@ resources:
   limits:
     memory: 768Mi
 
-# All application services and channel UIs. `db` names the per-service
-# database (empty for stateless apps); `machineIdentity: true` injects the
-# client-credentials token endpoint (services that call other services);
-# `extraEnv` is appended verbatim.
+# All application services and channel UIs — the ODA module list. Each entry
+# may set `enabled: false` to leave that component out of the deployment
+# (default: deployed); docs/composer.html generates override files with the
+# dependency rules applied. `db` names the per-service database (empty for
+# stateless apps); `machineIdentity: true` injects the client-credentials
+# token endpoint; `extraEnv` is appended verbatim.
+#
+# Dependency matrix (enforced by the composer, honored by Noop fallbacks):
+#   core (always):        gateway, product-catalog, product-ordering,
+#                         product-inventory, party-account
+#   billing        needs  payment, usage? (no — usage optional), catalog, inventory
+#   promotion      needs  product-ordering (+ billing for bill discounts)
+#   agreement      needs  product-ordering
+#   payment-method needs  payment
+#   appointment    needs  qualification (install slots exist for gated offers)
+#   channels (storefront/csr-console/console) work against whatever is deployed;
+#   optional features hide when their component is absent.
 services:
   gateway:
     db: ""

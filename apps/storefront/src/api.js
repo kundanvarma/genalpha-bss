@@ -37,9 +37,15 @@ export async function getSpec(id) {
  * (services and subscriptions have no shelf).
  */
 export async function availabilityFor(offeringId) {
-  const rows = await json(await publicFetch(`${STOCK}/productStock?productOfferingId=${offeringId}`));
-  if (!rows.length) return null;
-  return rows.reduce((sum, r) => sum + (r.availableQuantity?.amount ?? 0), 0);
+  // Composable deployment: no stock component means nothing is
+  // stock-managed — same as an offering without a stock row.
+  try {
+    const rows = await json(await publicFetch(`${STOCK}/productStock?productOfferingId=${offeringId}`));
+    if (!rows.length) return null;
+    return rows.reduce((sum, r) => sum + (r.availableQuantity?.amount ?? 0), 0);
+  } catch {
+    return null;
+  }
 }
 
 /** All active prices indexed by id, so offering price refs resolve locally. */
@@ -253,6 +259,16 @@ const APPOINTMENT = '/tmf-api/appointment/v4';
  * items: [{offeringId, name}]; every item is checked against the place.
  */
 export async function checkQualification(items, place) {
+  // Composable deployment: no qualification component means nothing is
+  // serviceability-gated.
+  try {
+    return await checkQualificationStrict(items, place);
+  } catch {
+    return { productOfferingQualificationItem: [] };
+  }
+}
+
+async function checkQualificationStrict(items, place) {
   return json(await publicFetch(`${QUALIFICATION}/checkProductOfferingQualification`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -268,7 +284,11 @@ export async function checkQualification(items, place) {
 
 /** TMF646 free installer slots — also anonymous. */
 export async function searchTimeSlots() {
-  return json(await publicFetch(`${APPOINTMENT}/searchTimeSlot`, { method: 'POST' }));
+  try {
+    return await json(await publicFetch(`${APPOINTMENT}/searchTimeSlot`, { method: 'POST' }));
+  } catch {
+    return [];
+  }
 }
 
 export async function createAppointment(slot, orderId, place, description) {

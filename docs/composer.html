@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — ODA Composer</title>
+<style>
+  :root { --teal: #0E7C7B; --line: #ddd; --dim: #667; --bg: #fff; --card: #f7f9f9; }
+  @media (prefers-color-scheme: dark) {
+    :root { --teal: #45AFAC; --line: #333; --dim: #99a; --bg: #16181a; --card: #1e2124; }
+    body { color: #e6e6e6; }
+  }
+  body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 980px; padding: 2rem 1rem; background: var(--bg); }
+  h1 { color: var(--teal); } h2 { margin-top: 1.6rem; font-size: 1.05rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.6rem; }
+  label.mod { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 0.6rem 0.8rem; background: var(--card); cursor: pointer; }
+  label.mod.core { opacity: 0.75; cursor: not-allowed; }
+  label.mod strong { display: block; }
+  label.mod .api { color: var(--teal); font-size: 0.8rem; }
+  label.mod .desc { color: var(--dim); font-size: 0.85rem; }
+  label.mod .needs { color: var(--dim); font-size: 0.75rem; font-style: italic; }
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; overflow-x: auto; font-size: 0.85rem; }
+  .bar { display: flex; gap: 1rem; align-items: center; margin: 1rem 0; }
+  button { background: var(--teal); color: white; border: 0; border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; }
+  .count { color: var(--dim); }
+</style>
+</head>
+<body>
+<h1>genalpha-bss · ODA Composer</h1>
+<p>Pick the modules your deployment needs — the TM Forum ODA promise, made concrete.
+Core commerce is always on; everything else is optional, dependencies are enforced,
+and the channels hide any feature whose component is absent. The output is a Helm
+values override: <code>helm install genalpha-bss deploy/helm/genalpha-bss -f my-modules.yaml</code></p>
+
+<div id="modules"></div>
+
+<div class="bar">
+  <button onclick="copyYaml()">Copy values override</button>
+  <span class="count" id="count"></span>
+</div>
+<pre id="yaml"></pre>
+
+<script>
+const MODULES = [
+  { id: 'product-catalog',   api: 'TMF620', name: 'Product Catalog',      core: true, desc: 'Offerings, prices, terms — the shop window.' },
+  { id: 'product-ordering',  api: 'TMF622', name: 'Product Ordering',     core: true, desc: 'Order capture, validation, orchestration.' },
+  { id: 'product-inventory', api: 'TMF637', name: 'Product Inventory',    core: true, desc: 'What each customer has, provisioned per order.' },
+  { id: 'party-account',     api: 'TMF632/666/669', name: 'Party & Account', core: true, desc: 'Customers, organizations, accounts, party roles.' },
+  { id: 'gateway',           api: 'ODA exposure',  name: 'API Gateway',    core: true, desc: 'Single entry point; white-label host routing.' },
+
+  { id: 'product-stock',   api: 'TMF687', name: 'Product Stock',    deps: [], desc: 'Device shelf: reserve at order, consume at completion.' },
+  { id: 'payment',         api: 'TMF676', name: 'Payment',          deps: [], desc: 'Authorize/capture via PSP adapter (mock in dev).' },
+  { id: 'billing',         api: 'TMF678', name: 'Customer Billing', deps: ['payment'], desc: 'Billing runs: recurring + usage + discounts on one bill.' },
+  { id: 'usage',           api: 'TMF635/677', name: 'Usage & Consumption', deps: ['billing'], desc: 'Mediation intake, rating, allowance meters, overage.' },
+  { id: 'qualification',   api: 'TMF679', name: 'Serviceability',   deps: [], desc: 'Where fiber-class offerings can actually be delivered.' },
+  { id: 'appointment',     api: 'TMF646', name: 'Appointment',      deps: ['qualification'], desc: 'Installer slots booked at checkout.' },
+  { id: 'geographic-address', api: 'TMF673', name: 'Geographic Address', deps: [], desc: 'Address validation + standardization at checkout.' },
+  { id: 'trouble-ticket',  api: 'TMF621', name: 'Trouble Ticket',   deps: [], desc: 'Customer support cases, org-scoped for agents.' },
+  { id: 'party-interaction', api: 'TMF683', name: 'Party Interaction', deps: [], desc: 'Every touchpoint on the customer timeline.' },
+  { id: 'communication',   api: 'TMF681', name: 'Communication',    deps: [], desc: 'Event-driven customer notifications (the martech door).' },
+  { id: 'shopping-cart',   api: 'TMF663', name: 'Shopping Cart',    deps: [], desc: 'Server-side carts: guest secret-id, claim on login, abandonment events.' },
+  { id: 'agreement',       api: 'TMF651', name: 'Agreement',        deps: [], desc: 'Commitment periods minted at order completion.' },
+  { id: 'promotion',       api: 'TMF671', name: 'Promotion',        deps: [], desc: 'Promo codes: anonymous validation, redemption, bill discounts.' },
+  { id: 'user-roles',      api: 'TMF672', name: 'User Roles & Permissions', deps: [], desc: 'Tenant admins manage staff via TMF API over their own IdP.' },
+  { id: 'recommendation',  api: 'TMF680', name: 'Recommendation',   deps: [], desc: 'Cross-sell: what this customer lacks, bundles first.' },
+  { id: 'payment-method',  api: 'TMF670', name: 'Payment Methods',  deps: ['payment'], desc: 'Tokenized card vault: save at checkout, pay bills one-click.' },
+
+  { id: 'storefront',   api: 'channel', name: 'Self-service Storefront', deps: [], desc: '/shop — guest browse to checkout, bills, support.' },
+  { id: 'csr-console',  api: 'channel', name: 'CSR Console',             deps: ['trouble-ticket', 'party-interaction'], desc: '/csr — customer 360 for agents, org-scoped.' },
+  { id: 'console',      api: 'channel', name: 'Admin Console',           deps: [], desc: '/console — catalog and stock back office.' },
+];
+
+const state = Object.fromEntries(MODULES.map((m) => [m.id, true]));
+
+function dependentsOf(id) {
+  return MODULES.filter((m) => (m.deps || []).includes(id)).map((m) => m.id);
+}
+
+function toggle(id, on) {
+  state[id] = on;
+  if (on) {
+    // enabling pulls its dependencies in
+    (MODULES.find((m) => m.id === id).deps || []).forEach((d) => { if (!state[d]) toggle(d, true); });
+  } else {
+    // disabling switches its dependents off
+    dependentsOf(id).forEach((d) => { if (state[d]) toggle(d, false); });
+  }
+  render();
+}
+
+function render() {
+  const groups = [
+    ['Core commerce (always deployed)', MODULES.filter((m) => m.core)],
+    ['Optional components', MODULES.filter((m) => !m.core && m.api !== 'channel')],
+    ['Channels', MODULES.filter((m) => m.api === 'channel')],
+  ];
+  document.getElementById('modules').innerHTML = groups.map(([title, mods]) => `
+    <h2>${title}</h2><div class="grid">` + mods.map((m) => `
+      <label class="mod${m.core ? ' core' : ''}">
+        <input type="checkbox" ${m.core || state[m.id] ? 'checked' : ''} ${m.core ? 'disabled' : ''}
+               onchange="toggle('${m.id}', this.checked)">
+        <strong>${m.name} <span class="api">${m.api}</span></strong>
+        <span class="desc">${m.desc}</span>
+        ${(m.deps || []).length ? `<span class="needs">needs: ${m.deps.join(', ')}</span>` : ''}
+      </label>`).join('') + '</div>').join('');
+
+  const disabled = MODULES.filter((m) => !m.core && !state[m.id]);
+  const lines = ['# genalpha-bss module selection — generated by docs/composer.html', 'services:'];
+  disabled.forEach((m) => { lines.push(`  ${m.id}:`, '    enabled: false'); });
+  if (!disabled.length) lines.push('  # all modules enabled (the default)');
+  document.getElementById('yaml').textContent = lines.join('\n');
+  const on = MODULES.filter((m) => m.core || state[m.id]).length;
+  document.getElementById('count').textContent = `${on} of ${MODULES.length} modules deployed`;
+}
+
+function copyYaml() {
+  navigator.clipboard.writeText(document.getElementById('yaml').textContent);
+}
+
+render();
+</script>
+</body>
+</html>
