@@ -159,6 +159,10 @@
       {
         "name": "promotion:write",
         "description": "promotion:write"
+      },
+      {
+        "name": "roles:admin",
+        "description": "manage users and role grants via TMF672"
       }
     ]
   },
@@ -262,6 +266,19 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "bss-user-admin",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "user-admin-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "id": "429affc9-574a-550e-8cde-e5835a977ee8",
+      "description": "TMF672 user-roles component: manages this realm's users"
     }
   ],
   "users": [
@@ -341,7 +358,8 @@
         "agreement:read",
         "agreement:write",
         "promotion:read",
-        "promotion:write"
+        "promotion:write",
+        "roles:admin"
       ]
     },
     {
@@ -389,6 +407,21 @@
       "realmRoles": [
         "agent"
       ]
+    },
+    {
+      "username": "service-account-bss-user-admin",
+      "enabled": true,
+      "serviceAccountClientId": "bss-user-admin",
+      "realmRoles": [],
+      "id": "2529116a-ebc1-5723-af20-aaf3e57c87cb",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
     }
   ]
 }
