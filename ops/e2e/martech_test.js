@@ -115,6 +115,68 @@ async function staffToken(request, realm) {
   if (msgs2.some((m) => m.subject === subject)) fail('paused campaign still fired');
   console.log('OK paused campaign stays silent for new customers');
 
+  // --- Marketing self-serve: the same journey, defined in the console GUI
+  const page = await browser.newPage();
+  await page.goto('http://localhost:8080/console/');
+  await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
+  if (await page.locator('input[name="username"]').count()) {
+    await page.fill('input[name="username"]', 'demo');
+    await page.fill('input[name="password"]', 'demo');
+    await page.click('input[type="submit"], button[type="submit"]');
+  }
+  await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
+  await page.locator('.tab', { hasText: 'Campaigns' }).click();
+
+  const guiName = `Console journey ${run}`;
+  const guiSubject = `From the console ${run}`;
+  await page.fill('input[name="name"]', guiName);
+  await page.selectOption('select[name="triggerEventType"]', 'ProductOrderCreateEvent');
+  await page.waitForFunction(() =>
+    document.querySelectorAll('select[name="promotionCode"] option').length > 1);
+  await page.selectOption('select[name="promotionCode"]', 'WELCOME10');
+  await page.fill('input[name="messageSubject"]', guiSubject);
+  await page.fill('textarea[name="messageContent"]', 'Console says: use {code}.');
+  await page.click('#save');
+  const row = page.locator('#listing-body tr', { hasText: guiName });
+  await row.waitFor({ timeout: 10000 });
+  console.log('OK marketing created a campaign in the console, no curl in sight');
+
+  // --- The reached counter goes 0 -> 1 when a customer's order fires it
+  const partyGui = `martech-${run}-gui`;
+  await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: { ...as(genalpha), ...json },
+    data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: plan.id } }],
+      relatedParty: [{ id: partyGui, role: 'customer' }],
+    },
+  });
+  let reached = '';
+  for (let attempt = 0; attempt < 20 && !reached.startsWith('1 customer'); attempt++) {
+    await page.waitForTimeout(2000);
+    await page.locator('.tab', { hasText: 'Campaigns' }).click(); // re-render the list
+    await row.waitFor({ timeout: 10000 });
+    await page.waitForFunction((name) => {
+      const tr = [...document.querySelectorAll('#listing-body tr')]
+        .find((r) => r.textContent.includes(name));
+      return tr && !tr.textContent.includes('…');
+    }, guiName, { timeout: 10000 });
+    reached = (await row.locator('td').nth(4).textContent()).trim();
+  }
+  if (!reached.startsWith('1 customer')) fail('reached counter never hit 1: ' + reached);
+  const guiHits = (await (await ctx.request.get(
+    `${API}/tmf-api/communicationManagement/v4/communicationMessage?relatedPartyId=${partyGui}&limit=50`,
+    { headers: as(genalpha) })).json()).filter((m) => m.subject === guiSubject);
+  if (guiHits.length !== 1 || guiHits[0].content !== 'Console says: use WELCOME10.') {
+    fail('console-defined journey misdelivered: ' + JSON.stringify(guiHits));
+  }
+  console.log('OK console campaign fired once; reached counter shows', reached);
+
+  // --- Pause is one click
+  await row.locator('button', { hasText: 'Pause' }).click();
+  await page.locator('#listing-body tr', { hasText: guiName })
+    .locator('button', { hasText: 'Resume' }).waitFor({ timeout: 10000 });
+  console.log('OK paused from the GUI (button flipped to Resume)');
+
   await browser.close();
   console.log('\nALL MARTECH CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

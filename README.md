@@ -57,13 +57,14 @@ failures.
 | service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate (drawing MSISDNs from resource pools) and complete themselves |
 | assurance | TMF642 / TMF656 | 8105 | Critical alarms become service problems; the CSR console shows live outages |
 
-**Channels** — one build each, white-labeled per tenant by hostname
+**Channels** — one build each, white-labeled per tenant by hostname (logo, name **and brand
+color** theme every channel from the tenant manifest)
 
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
 | csr-console | `/csr` | Assisted service: customer 360, ticket queue, org-scoped agents |
-| admin-console | `/console` | Back office: catalog and stock |
+| admin-console | `/console` | Back office: catalog, stock and marketing campaigns |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
 ## Multitenancy (pool model, hardened)

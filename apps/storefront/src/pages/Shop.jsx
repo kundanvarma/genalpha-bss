@@ -29,8 +29,13 @@ export default function Shop() {
   const singles = offerings.filter((o) => !o.isBundle);
   const picks = recommended.map((id) => offerings.find((o) => o.id === id)).filter(Boolean);
 
+  const brand = window.BSS_STOREFRONT_CONFIG || {};
   return (
     <>
+      <section className="hero">
+        <h1>{brand.brandName || 'Welcome'}</h1>
+        <p>Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.</p>
+      </section>
       {picks.length > 0 && (
         <>
           <h1>Recommended for you</h1>

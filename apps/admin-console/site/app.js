@@ -1,21 +1,47 @@
 /*
- * Catalog console: list / create / edit / delete over the TMF620 API through
- * the gateway (same origin — no CORS). Resources are configuration, so
- * extending the console is a data change, not new code.
+ * Back-office console: list / create / edit / delete over the TMF APIs
+ * through the gateway (same origin — no CORS). Resources are configuration,
+ * so extending the console is a data change, not new code.
  *
  * Field kinds: text (default), number, checkbox, money ({unit, value}),
- * ref (single entity reference), reflist (array of entity references).
+ * ref (single entity reference), reflist (array of entity references),
+ * select (static options), longtext, codepick (picklist whose value is a
+ * plain attribute of the picked item, not a reference object).
  * Refs load their pick-lists from the API when the editor renders.
+ *
+ * Resource hooks: assemble(body) reshapes the flat editor output before it
+ * is sent; rowAction gives a per-row verb beyond edit/delete (e.g. pause);
+ * augmentRow(item, cell) fills a computed column after the row renders.
  */
 'use strict';
+
+// The host tenant's brand color themes the console, same as the customer channels.
+const BRAND = window.BSS_CONSOLE_CONFIG || {};
+if (BRAND.brandColor) {
+  document.documentElement.style.setProperty('--teal', BRAND.brandColor);
+  document.documentElement.style.setProperty('--teal-soft', BRAND.brandColor + '1F');
+}
+if (BRAND.brandName) document.title = `${BRAND.brandName} · back office`;
 
 const API_BASE = '/tmf-api/productCatalogManagement/v4';
 const STOCK_BASE = '/tmf-api/productStockManagement/v4';
 const BILLING_BASE = '/tmf-api/customerBillManagement/v4';
 const QUALIFICATION_BASE = '/tmf-api/productOfferingQualification/v4';
 const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
+const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
+const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
+
+// The business moments a campaign can react to (the event stream's editorial map).
+const TRIGGER_EVENTS = [
+  { value: 'ProductOrderCreateEvent', label: 'Order placed' },
+  { value: 'ProductOrderStateChangeEvent', label: 'Order state changed' },
+  { value: 'CustomerBillCreateEvent', label: 'Bill issued' },
+  { value: 'TroubleTicketStateChangeEvent', label: 'Ticket state changed' },
+  { value: 'ShoppingCartAbandonedEvent', label: 'Cart abandoned' },
+  { value: 'AgreementCreateEvent', label: 'Agreement started' },
+];
 
 const RESOURCES = [
   {
@@ -98,6 +124,40 @@ const RESOURCES = [
     readOnly: true,
     fields: [],
     columns: ['description', 'validFor', 'status', 'relatedParty', 'lastUpdate'],
+  },
+  {
+    path: 'campaign',
+    base: CAMPAIGN_BASE,
+    title: 'Campaigns',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'triggerEventType', label: 'Trigger', kind: 'select', required: true, options: TRIGGER_EVENTS },
+      { name: 'triggerState', label: 'State filter', placeholder: 'e.g. completed (optional)' },
+      { name: 'promotionCode', label: 'Promo code to include', kind: 'codepick',
+        base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
+      { name: 'messageSubject', label: 'Message subject', required: true },
+      { name: 'messageContent', label: 'Message — {code} inserts the promo code', kind: 'longtext', required: true },
+    ],
+    assemble: (body) => {
+      const { messageSubject, messageContent, ...rest } = body;
+      return { ...rest, message: { subject: messageSubject, content: messageContent } };
+    },
+    columns: ['name', 'status', 'triggerEventType', 'promotionCode', 'reached'],
+    rowAction: {
+      label: (item) => (item.status === 'active' ? 'Pause' : 'Resume'),
+      apply: (item) => authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: item.status === 'active' ? 'paused' : 'active' }),
+      }),
+    },
+    augmentRow: async (item, cell) => {
+      const res = await authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}/execution`);
+      const executions = await res.json();
+      cell.textContent = `${executions.length} customer${executions.length === 1 ? '' : 's'}`;
+    },
   },
 ];
 
@@ -196,6 +256,53 @@ function jsonTextControl(field) {
     },
   };
   return [input];
+}
+
+function selectControl(field) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  select.required = Boolean(field.required);
+  select.append(new Option('—', ''));
+  for (const opt of field.options) {
+    select.append(new Option(opt.label, opt.value));
+  }
+  controls[field.name] = {
+    get: () => select.value || undefined,
+    set: (item) => { select.value = item[field.name] ?? ''; },
+  };
+  return [select];
+}
+
+function longTextControl(field) {
+  const input = document.createElement('textarea');
+  input.name = field.name;
+  input.placeholder = field.placeholder || '';
+  input.required = Boolean(field.required);
+  input.rows = 3;
+  input.style.font = 'inherit';
+  controls[field.name] = {
+    get: () => input.value.trim() || undefined,
+    set: (item) => { input.value = item[field.name] ?? ''; },
+  };
+  return [input];
+}
+
+/** Picklist over an API resource whose chosen value is one plain attribute. */
+function codePickControl(field) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  select.append(new Option('—', ''));
+  loadPicklist(field).then((items) => {
+    for (const item of items) {
+      const code = item[field.attribute];
+      if (code) select.append(new Option(`${code} — ${item.name || ''}`.trim(), code));
+    }
+  });
+  controls[field.name] = {
+    get: () => select.value || undefined,
+    set: (item) => { select.value = item[field.name] ?? ''; },
+  };
+  return [select];
 }
 
 function moneyControl(field) {
@@ -318,6 +425,9 @@ function renderEditor() {
       f.kind === 'ref' ? refControl(f, false) :
       f.kind === 'reflist' ? refControl(f, true) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
+      f.kind === 'select' ? selectControl(f) :
+      f.kind === 'longtext' ? longTextControl(f) :
+      f.kind === 'codepick' ? codePickControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');
     wrap.append(caption, ...parts);
     return wrap;
@@ -370,7 +480,12 @@ async function loadList() {
     const tr = document.createElement('tr');
     for (const c of active.columns) {
       const td = document.createElement('td');
-      td.textContent = fmtCell(item[c]);
+      if (item[c] === undefined && active.augmentRow) {
+        td.textContent = '…';
+        active.augmentRow(item, td).catch(() => { td.textContent = '—'; });
+      } else {
+        td.textContent = fmtCell(item[c]);
+      }
       tr.append(td);
     }
     const td = document.createElement('td');
@@ -378,6 +493,16 @@ async function loadList() {
     if (active.readOnly) {
       tr.append(td);
       return tr;
+    }
+    if (active.rowAction) {
+      const act = document.createElement('button');
+      act.textContent = active.rowAction.label(item);
+      act.className = 'ghost';
+      act.addEventListener('click', async () => {
+        await active.rowAction.apply(item);
+        loadList();
+      });
+      td.append(act);
     }
     const edit = document.createElement('button');
     edit.textContent = 'Edit';
@@ -387,6 +512,7 @@ async function loadList() {
     const del = document.createElement('button');
     del.textContent = 'Delete';
     del.className = 'ghost danger';
+    del.hidden = Boolean(active.noDelete);
     del.addEventListener('click', async () => {
       if (!confirm(`Delete "${item.name || item.id}"?`)) return;
       await authFetch(`${active.base || API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
@@ -406,12 +532,13 @@ async function loadList() {
 
 async function save(event) {
   event.preventDefault();
-  const body = {};
+  let body = {};
   try {
     for (const f of active.fields) {
       const value = controls[f.name].get();
       if (value !== undefined) body[f.name] = value;
     }
+    if (active.assemble) body = active.assemble(body);
   } catch (e) {
     el('editor-error').textContent = e.message;
     el('editor-error').hidden = false;

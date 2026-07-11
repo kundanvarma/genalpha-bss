@@ -51,7 +51,7 @@ bss:
   campaign:
     # The business-event streams the engine listens to; its own topic is
     # deliberately absent so executions never re-trigger campaigns.
-    topics: ${CAMPAIGN_TOPICS:bss.ordering.events,bss.ticket.events,bss.agreement.events}
+    topics: ${CAMPAIGN_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.agreement.events,bss.cart.events}
     consumer-enabled: ${CAMPAIGN_CONSUMER_ENABLED:true}
   downstream:
     communication-base-url: ${COMMUNICATION_BASE_URL:http://localhost:8095}

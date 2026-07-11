@@ -30,7 +30,7 @@ body {
 }
 .top {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 14px 26px; border-bottom: 2px solid var(--ink);
+  padding: 14px 26px; border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: baseline; gap: 12px; }
 .mark { font-weight: 700; letter-spacing: -0.01em; }
@@ -106,3 +106,33 @@ td { border-bottom: 1px solid var(--line); padding: 9px 12px 9px 0; }
 #page-label { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--dim); }
 
 .gatepost { max-width: 460px; margin: 18vh auto; text-align: center; color: var(--dim); }
+
+/* --- design uplift: depth, radius, motion ------------------------------- */
+:root {
+  --radius: 14px;
+  --radius-s: 9px;
+  --shadow: 0 1px 2px rgba(16, 32, 36, 0.05), 0 10px 28px -14px rgba(16, 32, 36, 0.18);
+  --shadow-lift: 0 2px 4px rgba(16, 32, 36, 0.06), 0 18px 40px -16px rgba(16, 32, 36, 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 40px -16px rgba(0, 0, 0, 0.75);
+  }
+}
+.top {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.tab { border-radius: 999px; transition: color 120ms, background 120ms, border-color 120ms; }
+.panel { border-radius: var(--radius); box-shadow: var(--shadow); }
+.editor { border-radius: var(--radius-s); }
+button.primary, button.ghost { border-radius: var(--radius-s); }
+button.primary { transition: filter 120ms; }
+button.primary:hover { filter: brightness(1.08); }
+.field input, .field select, .field textarea { border-radius: var(--radius-s); }
+th { border-bottom-color: var(--line); }
