@@ -1,0 +1,55 @@
+# Core-commerce soak: prove the chart runs on real k8s within 16GB.
+# Everything outside core is disabled via the composability flag.
+services:
+  console:
+    enabled: false
+  storefront:
+    enabled: false
+  csr-console:
+    enabled: false
+  mobile-app:
+    enabled: false
+  product-stock:
+    enabled: false
+  payment:
+    enabled: false
+  billing:
+    enabled: false
+  qualification:
+    enabled: false
+  appointment:
+    enabled: false
+  trouble-ticket:
+    enabled: false
+  party-interaction:
+    enabled: false
+  communication:
+    enabled: false
+  shopping-cart:
+    enabled: false
+  usage:
+    enabled: false
+  agreement:
+    enabled: false
+  promotion:
+    enabled: false
+  campaign:
+    enabled: false
+  quote:
+    enabled: false
+  intelligence:
+    enabled: false
+  user-roles:
+    enabled: false
+  geographic-address:
+    enabled: false
+  document:
+    enabled: false
+  payment-method:
+    enabled: false
+  service-orchestration:
+    enabled: false
+  assurance:
+    enabled: false
+  recommendation:
+    enabled: false
