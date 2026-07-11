@@ -4,7 +4,7 @@
  * modules the Home composes. Web today (E2E-verified), native next.
  */
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { loadTenantConfig, tenantConfig } from './src/config.js';
@@ -40,7 +40,9 @@ export default function App() {
     const c = tenantConfig();
     return (
       <Center>
-        <Text style={{ fontSize: 26, fontWeight: '700', color: c.brandColor, marginBottom: 8 }}>
+        <Image source={{ uri: '/tmf-api/documentManagement/v4/document/brand-logo' }}
+               style={{ width: 220, height: 56, marginBottom: 10 }} resizeMode="contain" />
+        <Text testID="brand-name" style={{ fontSize: 26, fontWeight: '700', color: c.brandColor, marginBottom: 8 }}>
           {c.brandName}
         </Text>
         <Text style={{ color: '#5c6a70', marginBottom: 18 }}>Your services, one place.</Text>

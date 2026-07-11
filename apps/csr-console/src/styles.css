@@ -223,3 +223,5 @@ main.wide { max-width: 1100px; }
 .outagebanner { background: #8b2f2f; color: #fff; padding: 0.55rem 1.2rem; font-size: 0.9rem; }
 
 .msisdn { font-family: ui-monospace, monospace; color: var(--teal, #0E7C7B); }
+
+.brandlogo { height: 28px; display: block; }

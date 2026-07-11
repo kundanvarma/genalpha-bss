@@ -208,6 +208,14 @@
       {
         "name": "assurance:write",
         "description": "assurance:write"
+      },
+      {
+        "name": "document:read",
+        "description": "document:read"
+      },
+      {
+        "name": "document:write",
+        "description": "document:write"
       }
     ]
   },
@@ -472,7 +480,9 @@
         "service:read",
         "service:write",
         "assurance:read",
-        "assurance:write"
+        "assurance:write",
+        "document:read",
+        "document:write"
       ]
     },
     {

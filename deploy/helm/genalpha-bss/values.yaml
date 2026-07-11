@@ -89,6 +89,7 @@ services:
       PROMOTION_URL: http://promotion:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
+      DOCUMENT_URL: http://document:8080
       RECOMMENDATION_URL: http://recommendation:8080
       PAYMENT_METHOD_URL: http://payment-method:8080
       SOM_URL: http://service-orchestration:8080
@@ -206,6 +207,10 @@ services:
   geographic-address:
     db: geographic_address
     dbRole: address_app
+    extraEnv: {}
+  document:
+    db: document
+    dbRole: document_app
     extraEnv: {}
   payment-method:
     db: payment_method

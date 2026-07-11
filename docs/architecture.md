@@ -37,6 +37,7 @@ flowchart TB
         AGR["agreement TMF651"]
         PROMO["promotion TMF671"]
         REC["recommendation TMF680"]
+        DOC["document TMF667\n(brand + offering content)"]
     end
 
     subgraph Revenue["Revenue"]

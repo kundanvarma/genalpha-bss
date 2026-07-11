@@ -76,6 +76,10 @@ spring:
           uri: ${ADDRESS_URL:http://localhost:8101}
           predicates:
             - Path=/tmf-api/geographicAddressManagement/**
+        - id: document
+          uri: ${DOCUMENT_URL:http://localhost:8106}
+          predicates:
+            - Path=/tmf-api/documentManagement/**
         - id: recommendation
           uri: ${RECOMMENDATION_URL:http://localhost:8102}
           predicates:

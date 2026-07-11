@@ -484,6 +484,33 @@ services:
       kafka:
         condition: service_started
 
+  document:
+    build: ./services/document
+    container_name: bss-document
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/document
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: document_app
+      DB_PASSWORD: document_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    ports:
+      - "8106:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -722,6 +749,7 @@ services:
       PROMOTION_URL: http://promotion:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
+      DOCUMENT_URL: http://document:8080
       RECOMMENDATION_URL: http://recommendation:8080
       PAYMENT_METHOD_URL: http://payment-method:8080
       SOM_URL: http://service-orchestration:8080
@@ -765,6 +793,8 @@ services:
       user-roles:
         condition: service_started
       geographic-address:
+        condition: service_started
+      document:
         condition: service_started
       recommendation:
         condition: service_started

@@ -48,6 +48,9 @@ public class ProductOfferingDto {
     @JsonProperty("productOfferingTerm")
     private List<Map<String, Object>> productOfferingTerm;
 
+    @JsonProperty("attachment")
+    private List<Map<String, Object>> attachment;
+
     @JsonProperty("@type")
     private String type = "ProductOffering";
 
@@ -156,5 +159,13 @@ public class ProductOfferingDto {
 
     public void setProductOfferingTerm(List<Map<String, Object>> productOfferingTerm) {
         this.productOfferingTerm = productOfferingTerm;
+    }
+
+    public List<Map<String, Object>> getAttachment() {
+        return attachment;
+    }
+
+    public void setAttachment(List<Map<String, Object>> attachment) {
+        this.attachment = attachment;
     }
 }
