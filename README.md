@@ -51,7 +51,7 @@ failures.
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| service-orchestration | TMF641 / TMF638 / TMF640 | 8104 | Digital orders decompose, activate and complete themselves; physical ones wait for fulfilment |
+| service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate (drawing MSISDNs from resource pools) and complete themselves |
 | assurance | TMF642 / TMF656 | 8105 | Critical alarms become service problems; the CSR console shows live outages |
 
 **Channels** — one build each, white-labeled per tenant by hostname
@@ -88,7 +88,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 # demo data (idempotent; order matters) — see ops/README.md
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
-         seed_promotions seed_nova; do python3 ops/seed/$s.py; done
+         seed_promotions seed_resource_pools seed_nova; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

@@ -47,7 +47,7 @@ flowchart TB
 
     subgraph Production["Production (OSS, thin)"]
         SOM["service-orchestration
-TMF641/638/640"]
+TMF641/638/640/685"]
         ASSUR["assurance
 TMF642/656"]
     end

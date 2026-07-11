@@ -3,9 +3,13 @@ package com.bss.som.service;
 import com.bss.som.api.ApiConstants;
 import com.bss.som.client.OrderingClient;
 import com.bss.som.entity.ServiceInstance;
+import com.bss.som.entity.ResourceAssignment;
+import com.bss.som.entity.ResourcePool;
 import com.bss.som.entity.ServiceOrder;
 import com.bss.som.events.DomainEventPublisher;
 import com.bss.som.repository.ServiceInstanceRepository;
+import com.bss.som.repository.ResourceAssignmentRepository;
+import com.bss.som.repository.ResourcePoolRepository;
 import com.bss.som.repository.ServiceOrderRepository;
 import com.bss.som.security.TenantScope;
 import org.slf4j.Logger;
@@ -34,14 +38,19 @@ public class OrchestrationService {
 
     private final ServiceOrderRepository serviceOrders;
     private final ServiceInstanceRepository services;
+    private final ResourcePoolRepository pools;
+    private final ResourceAssignmentRepository assignments;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
+            ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
         this.serviceOrders = serviceOrders;
         this.services = services;
+        this.pools = pools;
+        this.assignments = assignments;
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -113,6 +122,23 @@ public class OrchestrationService {
             instance.setCreatedAt(OffsetDateTime.now());
             instance.setLastUpdate(OffsetDateTime.now());
             services.save(instance);
+
+            // TMF685: the activation draws the next number from the
+            // tenant's MSISDN pool — the locked read keeps draws unique.
+            pools.findFirstByTenantIdAndResourceType(tenant, ResourcePool.MSISDN).ifPresent(pool -> {
+                ResourceAssignment assignment = new ResourceAssignment();
+                assignment.setId(UUID.randomUUID().toString());
+                assignment.setTenantId(tenant);
+                assignment.setPoolId(pool.getId());
+                assignment.setValue(pool.getPrefix() + String.format("%06d", pool.getNextValue()));
+                assignment.setServiceId(serviceId);
+                assignment.setOwnerPartyId(instance.getOwnerPartyId());
+                assignment.setAssignedAt(OffsetDateTime.now());
+                assignments.save(assignment);
+                pool.setNextValue(pool.getNextValue() + 1);
+                pool.setLastUpdate(OffsetDateTime.now());
+                pools.save(pool);
+            });
 
             so.setState(ServiceOrder.COMPLETED);
             so.setCompletedAt(OffsetDateTime.now());

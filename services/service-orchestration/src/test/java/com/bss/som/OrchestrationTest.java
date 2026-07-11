@@ -37,6 +37,9 @@ class OrchestrationTest {
     @MockBean
     private OrderingClient ordering;
 
+    @Autowired
+    private com.bss.som.repository.ResourcePoolRepository pools;
+
     private Map<String, Object> order(String id, String state) {
         return Map.of(
                 "id", id, "state", state,
@@ -49,6 +52,16 @@ class OrchestrationTest {
     @Test
     void decomposesActivatesAndCallsBack_idempotently() throws Exception {
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
+            var pool = new com.bss.som.entity.ResourcePool();
+            pool.setId("pool-1");
+            pool.setTenantId("genalpha");
+            pool.setName("SE numbers");
+            pool.setResourceType("msisdn");
+            pool.setPrefix("+46701");
+            pool.setNextValue(1);
+            pool.setCreatedAt(java.time.OffsetDateTime.now());
+            pool.setLastUpdate(java.time.OffsetDateTime.now());
+            pools.save(pool);
             orchestration.orchestrate(order("po-1", "acknowledged"));
             orchestration.orchestrate(order("po-1", "acknowledged")); // duplicate delivery
             orchestration.orchestrate(order("po-2", "cancelled"));    // not for us
@@ -67,7 +80,10 @@ class OrchestrationTest {
                         .param("relatedPartyId", "cust-som")
                         .with(jwt().authorities(new SimpleGrantedAuthority("service:read"))))
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].state").value("active"));
+                .andExpect(jsonPath("$[0].state").value("active"))
+                // TMF685: each activation drew a unique number from the pool
+                .andExpect(jsonPath("$[0].supportingResource[0].value").value("+46701000001"))
+                .andExpect(jsonPath("$[1].supportingResource[0].value").value("+46701000002"));
 
         // reads require the authority
         mockMvc.perform(get("/tmf-api/serviceOrdering/v4/serviceOrder"))
