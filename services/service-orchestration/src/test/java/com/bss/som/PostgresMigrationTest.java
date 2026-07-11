@@ -37,7 +37,7 @@ class PostgresMigrationTest {
 
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(4);
+        assertThat(applied).isEqualTo(6);
 
         assertThat(repository.count()).isZero();
     }
@@ -47,8 +47,8 @@ class PostgresMigrationTest {
         Integer tables = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema = 'public'
-                  AND table_name IN ('service_order', 'service', 'resource_pool', 'resource_assignment', 'event_outbox')
+                  AND table_name IN ('service_order', 'service', 'resource_pool', 'resource_assignment', 'event_outbox', 'intent')
                 """, Integer.class);
-        assertThat(tables).isEqualTo(5);
+        assertThat(tables).isEqualTo(6);
     }
 }
