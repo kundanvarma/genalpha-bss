@@ -52,6 +52,8 @@ public class TenantHosts {
         private String issuer;
         private String brandName;
         private String brandColor;
+        /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
+        private String logoUrl;
         private List<String> hosts = new ArrayList<>();
 
         public String getId() {
@@ -84,6 +86,14 @@ public class TenantHosts {
 
         public void setBrandColor(String brandColor) {
             this.brandColor = brandColor;
+        }
+
+        public String getLogoUrl() {
+            return logoUrl;
+        }
+
+        public void setLogoUrl(String logoUrl) {
+            this.logoUrl = logoUrl;
         }
 
         public List<String> getHosts() {

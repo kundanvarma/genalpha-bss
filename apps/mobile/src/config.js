@@ -9,6 +9,7 @@ const DEFAULTS = {
   clientId: 'bss-app',
   brandName: 'MyGenAlpha',
   brandColor: '#0E7C7B',
+  logoUrl: '/tmf-api/documentManagement/v4/document/brand-logo',
 };
 
 let config = { ...DEFAULTS };

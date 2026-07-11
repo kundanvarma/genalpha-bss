@@ -42,7 +42,13 @@ public class StorefrontTenantConfigController {
         manifest.put("clientId", "bss-app");
         if (tenant.getBrandName() != null) manifest.put("brandName", tenant.getBrandName());
         if (tenant.getBrandColor() != null) manifest.put("brandColor", tenant.getBrandColor());
+        manifest.put("logoUrl", logoUrlOf(tenant));
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
+    }
+
+    private String logoUrlOf(TenantHosts.Entry tenant) {
+        return tenant != null && tenant.getLogoUrl() != null ? tenant.getLogoUrl()
+                : "/tmf-api/documentManagement/v4/document/brand-logo";
     }
 
     @GetMapping(value = "/{channel}/tenant-config.js", produces = "application/javascript")
@@ -56,9 +62,8 @@ public class StorefrontTenantConfigController {
             tenant = tenants.byId(tenants.getDefaultTenant());
         }
         String issuer = tenant != null && tenant.getIssuer() != null ? tenant.getIssuer() : "";
-        String body = issuer.isEmpty()
-                ? "// default tenant: the channel's built-in issuer applies\n"
-                : "window." + global + " = { issuer: '" + issuer + "' };\n";
+        String body = "window." + global + " = { issuer: '" + issuer
+                + "', logoUrl: '" + logoUrlOf(tenant) + "' };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")

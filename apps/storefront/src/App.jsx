@@ -77,7 +77,7 @@ export default function App() {
     <>
       <header className="top">
         <div className="brand">
-          <img className="brandlogo" src="/tmf-api/documentManagement/v4/document/brand-logo" alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img className="brandlogo" src={window.BSS_STOREFRONT_CONFIG?.logoUrl || '/tmf-api/documentManagement/v4/document/brand-logo'} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="area">shop</span>
         </div>
         <nav className="nav">

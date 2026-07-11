@@ -40,7 +40,7 @@ export default function App() {
     const c = tenantConfig();
     return (
       <Center>
-        <Image source={{ uri: '/tmf-api/documentManagement/v4/document/brand-logo' }}
+        <Image source={{ uri: c.logoUrl }}
                style={{ width: 220, height: 56, marginBottom: 10 }} resizeMode="contain" />
         <Text testID="brand-name" style={{ fontSize: 26, fontWeight: '700', color: c.brandColor, marginBottom: 8 }}>
           {c.brandName}
