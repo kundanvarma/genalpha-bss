@@ -136,7 +136,8 @@
             "usage:write",
             "agreement:read",
             "promotion:read",
-            "service:read"
+            "service:read",
+            "assurance:read"
           ]
         }
       },
@@ -195,6 +196,14 @@
       {
         "name": "service:write",
         "description": "service:write"
+      },
+      {
+        "name": "assurance:read",
+        "description": "assurance:read"
+      },
+      {
+        "name": "assurance:write",
+        "description": "assurance:write"
       }
     ]
   },
@@ -443,7 +452,9 @@
         "paymentmethod:read",
         "paymentmethod:write",
         "service:read",
-        "service:write"
+        "service:write",
+        "assurance:read",
+        "assurance:write"
       ]
     },
     {

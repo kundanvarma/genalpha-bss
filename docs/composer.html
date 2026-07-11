@@ -67,6 +67,8 @@ const MODULES = [
 
   { id: 'service-orchestration', api: 'TMF641/638/640', name: 'Service Orchestration (thin SOM)', group: 'production', deps: [], desc: 'Digital orders activate and complete themselves; physical ones wait for fulfilment.' },
 
+  { id: 'assurance', api: 'TMF642/656', name: 'Assurance (alarms & problems)', group: 'production', deps: [], desc: 'Critical alarms become service problems; the CSR console shows outages.' },
+
   { id: 'storefront',   api: 'channel', name: 'Self-service Storefront', deps: [], desc: '/shop — guest browse to checkout, bills, support.' },
   { id: 'csr-console',  api: 'channel', name: 'CSR Console',             deps: ['trouble-ticket', 'party-interaction'], desc: '/csr — customer 360 for agents, org-scoped.' },
   { id: 'console',      api: 'channel', name: 'Admin Console',           deps: [], desc: '/console — catalog and stock back office.' },

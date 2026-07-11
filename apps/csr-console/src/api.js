@@ -13,6 +13,16 @@ const STOCK = '/tmf-api/productStockManagement/v4';
 const BILLING = '/tmf-api/customerBillManagement/v4';
 const APPOINTMENT = '/tmf-api/appointment/v4';
 const TICKET = '/tmf-api/troubleTicket/v4';
+const PROBLEM = '/tmf-api/serviceProblemManagement/v4';
+
+/** TMF656 open outages — fail-soft when assurance is not deployed. */
+export async function openProblems() {
+  try {
+    return await json(await authFetch(`${PROBLEM}/serviceProblem?status=open`));
+  } catch {
+    return [];
+  }
+}
 const CART = '/tmf-api/shoppingCart/v4';
 const INTERACTION = '/tmf-api/partyInteraction/v4';
 

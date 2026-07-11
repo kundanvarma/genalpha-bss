@@ -48,6 +48,8 @@ flowchart TB
     subgraph Production["Production (OSS, thin)"]
         SOM["service-orchestration
 TMF641/638/640"]
+        ASSUR["assurance
+TMF642/656"]
     end
 
     subgraph Care["Customer care"]
@@ -185,7 +187,10 @@ trigger — the same stream is where a campaign engine would plug in.
 - **The Production seam is now real (thin).** service-orchestration consumes order events,
   decomposes digital orders into TMF641 service orders, mock-activates (TMF640's stand-in),
   records TMF638 services and completes the product order machine-side. Physical/install
-  orders still complete on fulfilment. Assurance (TMF642/656) remains future work.
+  orders still complete on fulfilment. Assurance is live in the same thin spirit: TMF642
+  alarm intake (a simulator in dev), critical alarms auto-minting one open TMF656 service
+  problem per affected object, resolution clearing the alarms — and agents see open outages
+  as a banner across the CSR console.
 - **Composability is real**: cross-component calls go through conditional clients with Noop
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).

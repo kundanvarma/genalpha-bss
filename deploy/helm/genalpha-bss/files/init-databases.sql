@@ -28,3 +28,4 @@ CREATE DATABASE promotion;
 CREATE DATABASE geographic_address;
 CREATE DATABASE payment_method;
 CREATE DATABASE service_om;
+CREATE DATABASE assurance;

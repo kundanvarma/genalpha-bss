@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
+import { openProblems } from './api.js';
 import { ensureSignedIn, signOut, tokenClaims } from './auth.js';
 import Customers from './pages/Customers.jsx';
 import Customer360 from './pages/Customer360.jsx';
@@ -9,12 +10,22 @@ import Stock from './pages/Stock.jsx';
 export default function App() {
   const [state, setState] = useState('signing-in');
   const [error, setError] = useState(null);
+  const [problems, setProblems] = useState([]);
 
   useEffect(() => {
     ensureSignedIn()
       .then((ready) => { if (ready) setState('ready'); })
       .catch((e) => { setError(e.message); setState('error'); });
   }, []);
+
+  // TMF656: agents see live outages the moment they exist.
+  useEffect(() => {
+    if (state !== 'ready') return undefined;
+    const poll = () => { openProblems().then(setProblems); };
+    poll();
+    const timer = setInterval(poll, 30000);
+    return () => clearInterval(timer);
+  }, [state]);
 
   if (state === 'signing-in') {
     return <div className="gatepost">Signing in with your identity provider…</div>;
@@ -42,6 +53,12 @@ export default function App() {
           <button className="ghost" onClick={signOut}>Sign out</button>
         </div>
       </header>
+      {problems.length > 0 && (
+        <div className="outagebanner" data-testid="outage-banner">
+          ⚠ {problems.map((p) => p.name).join(' · ')} — customers in the affected
+          area may report degraded service.
+        </div>
+      )}
       <main className="wide">
         <Routes>
           <Route path="/" element={<Customers />} />
