@@ -63,6 +63,8 @@ async function apiGet(page, path, token) {
   const a = await ctxA.newPage();
   await register(a, `alice-${run}@example.com`, 'Alice', 'Anders');
   console.log('OK customer A self-registered and signed in');
+  await a.locator('[data-testid="avatar"]').first().waitFor({ timeout: 10000 });
+  console.log('OK account avatar visible in the header');
 
   // .first(): a fresh customer gets the bundle in Recommended-for-you TOO
   const bundleCard = a.locator('.card.bundle', { hasText: 'GenAlpha One Home & Mobile' }).first();

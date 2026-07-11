@@ -65,7 +65,10 @@ export default function Customer360() {
 
   return (
     <>
-      <h1>{customer.givenName} {customer.familyName}</h1>
+      <h1>
+        <span className="avatar big">{(customer.givenName?.[0] || '?').toUpperCase()}{(customer.familyName?.[0] || '').toUpperCase()}</span>
+        {customer.givenName} {customer.familyName}
+      </h1>
       <p className="dim small">{customer.id}
         {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
       {error && <p className="error">{error}</p>}

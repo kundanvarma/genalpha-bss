@@ -225,3 +225,7 @@ main.wide { max-width: 1100px; }
 .msisdn { font-family: ui-monospace, monospace; color: var(--teal, #0E7C7B); }
 
 .brandlogo { height: 28px; display: block; }
+
+.avatar { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border-radius: 50%; background: var(--teal, #0E7C7B); color: #fff; font-weight: 700; font-size: 0.72rem; }
+.avatar.big { width: 44px; height: 44px; font-size: 1rem; margin-right: 0.6rem; vertical-align: middle; }
