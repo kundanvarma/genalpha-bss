@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — Mobile App Design</title>
+<style>
+  :root { --teal: #0E7C7B; --ink: #1c2326; --dim: #5c6a70; --line: #d8dfe1; --card: #f5f8f8; --bg: #fff;
+          --ok: #2E7D32; --warn: #b54708; --err: #b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --teal: #45AFAC; --ink: #e8ecec; --dim: #9fb0b5; --line: #31393c; --card: #1d2427; --bg: #14181a;
+            --ok: #7CC47F; --warn: #f2a54a; --err: #f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg);
+         margin: 0 auto; max-width: 1060px; padding: 2.5rem 1.2rem 5rem; line-height: 1.5; }
+  h1 { font-size: 1.9rem; margin-bottom: 0.2rem; }
+  h2 { color: var(--teal); margin-top: 2.4rem; border-bottom: 2px solid var(--teal); padding-bottom: 0.2rem; }
+  .subtitle { color: var(--dim); }
+  .phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.6rem; margin: 1.4rem 0; }
+  .phone { border: 2.5px solid var(--ink); border-radius: 26px; padding: 0.8rem 0.7rem 0.6rem; background: var(--bg);
+           max-width: 290px; margin: 0 auto; width: 100%; box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
+  .phone h3 { margin: 0 0 0.5rem; font-size: 0.8rem; text-align: center; color: var(--dim);
+              text-transform: uppercase; letter-spacing: 0.08em; }
+  .screen { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; font-size: 0.72rem; }
+  .appbar { background: var(--teal); color: #fff; padding: 0.5rem 0.7rem; font-weight: 600; display: flex; justify-content: space-between; }
+  .appbar .tenant { opacity: 0.85; font-weight: 400; }
+  .pad { padding: 0.55rem 0.65rem; }
+  .widget { border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.6rem; margin-bottom: 0.5rem; background: var(--card); }
+  .widget b { display: block; margin-bottom: 0.15rem; }
+  .meter { height: 7px; border-radius: 4px; background: var(--line); margin: 0.3rem 0 0.15rem; overflow: hidden; }
+  .meter i { display: block; height: 100%; background: var(--err); width: 100%; }
+  .meter.ok i { background: var(--teal); width: 46%; }
+  .btn { display: inline-block; background: var(--teal); color: #fff; border-radius: 7px; padding: 0.28rem 0.6rem; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--teal); border: 1px solid var(--teal); }
+  .rowline { display: flex; justify-content: space-between; padding: 0.28rem 0; border-bottom: 1px solid var(--line); }
+  .rowline:last-child { border-bottom: 0; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.5rem; font-size: 0.66rem; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .err { color: var(--err); } .dim { color: var(--dim); }
+  .tabs { display: flex; border-top: 1px solid var(--line); background: var(--card); }
+  .tabs span { flex: 1; text-align: center; padding: 0.4rem 0; font-size: 0.62rem; color: var(--dim); }
+  .tabs span.on { color: var(--teal); font-weight: 700; }
+  .banner { background: var(--err); color: #fff; padding: 0.3rem 0.6rem; font-size: 0.66rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.8rem 0; font-size: 0.88rem; }
+  th { text-align: left; color: var(--teal); border-bottom: 2px solid var(--teal); padding: 0.3rem 0.5rem; }
+  td { border-bottom: 1px solid var(--line); padding: 0.38rem 0.5rem; vertical-align: top; }
+  .callout { border-left: 4px solid var(--teal); background: var(--card); padding: 0.7rem 1rem; margin: 1.1rem 0; }
+  @media print { body { max-width: none; } .phone { box-shadow: none; } h2 { page-break-after: avoid; } .phones { page-break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<h1>The mobile app</h1>
+<p class="subtitle">Design proposal — “MyGenAlpha / MyNova”: one care-first app, white-labeled per tenant · React Native (Expo)</p>
+
+<h2>Design principles</h2>
+<ul>
+  <li><b>Care first, shop second.</b> Customers open a telco app to check usage, pay a bill or get
+  help — those are one tap from launch. Buying more is present but never in the way.</li>
+  <li><b>One binary, every operator.</b> The app resolves its tenant at first launch (same
+  gateway mechanism as the web channels) and pulls branding tokens — name, logo, colors. The demo:
+  switch operator in settings and the whole app rebrands and re-authenticates against the other
+  realm.</li>
+  <li><b>Nothing new on the backend.</b> Every screen below is powered by APIs that exist and are
+  E2E-tested today. The app is a fourth channel, not a new system.</li>
+  <li><b>Same auth model:</b> OIDC authorization-code + PKCE in the system browser, against the
+  tenant's issuer. Biometric unlock and push notifications are later additive steps.</li>
+</ul>
+
+<h2>The five tabs</h2>
+
+<div class="phones">
+  <div class="phone"><h3>1 · Home</h3>
+    <div class="screen">
+      <div class="appbar">MyGenAlpha <span class="tenant">Alice ▾</span></div>
+      <div class="banner">⚠ Outage: fiber in your area — we're on it</div>
+      <div class="pad">
+        <div class="widget"><b>EU roaming data</b>
+          <div class="meter"><i></i></div>
+          <span class="err">12.3 / 10 GB — over allowance</span>
+        </div>
+        <div class="widget"><b>Your bill · 243.98 EUR</b>
+          <span class="dim">due in 12 days</span><br>
+          <span class="btn">Pay with visa •••• 4242</span>
+        </div>
+        <div class="widget"><b>Your services</b>
+          <div class="rowline"><span>Mobile 5G</span><span class="chip">+46 701 000 001</span></div>
+          <div class="rowline"><span>Fiber 1000</span><span class="ok">active</span></div>
+        </div>
+        <div class="widget"><b>For you</b>
+          <div class="rowline"><span>GenAlpha TV Max</span><span class="btn ghost">View</span></div>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>2 · Usage</h3>
+    <div class="screen">
+      <div class="appbar">Usage <span class="tenant">July</span></div>
+      <div class="pad">
+        <div class="widget"><b>EU roaming data</b>
+          <div class="meter"><i></i></div>
+          <span class="err">12.3 / 10 GB</span> <span class="dim">· overage 5.75 EUR so far</span>
+        </div>
+        <div class="widget"><b>Domestic data</b>
+          <div class="meter ok"><i></i></div>
+          <span class="dim">23 / 50 GB</span>
+        </div>
+        <div class="widget"><b>How overage works</b>
+          <span class="dim">Beyond your included 10 GB, roaming is 2.50 EUR/GB, added to your
+          monthly bill.</span>
+        </div>
+      </div>
+      <div class="tabs"><span>Home</span><span class="on">Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>3 · Bills</h3>
+    <div class="screen">
+      <div class="appbar">Bills</div>
+      <div class="pad">
+        <div class="widget"><b>BILL-202607 · 243.98 EUR</b>
+          <div class="rowline"><span class="dim">Bundle ×2 + iPhone 17</span><span>238.23</span></div>
+          <div class="rowline"><span class="dim">Roaming overage</span><span>5.75</span></div>
+          <div class="rowline"><span class="dim">Promo WELCOME10</span><span class="ok">−0.00</span></div>
+          <span class="btn">Pay with visa •••• 4242</span>
+          <span class="btn ghost">Other card</span>
+        </div>
+        <div class="widget"><div class="rowline"><b>BILL-202606</b><span class="ok">settled</span></div></div>
+        <div class="widget"><b>Saved cards</b>
+          <div class="rowline"><span>visa •••• 4242 · exp 01/29</span><span class="dim">remove</span></div>
+        </div>
+      </div>
+      <div class="tabs"><span>Home</span><span>Usage</span><span class="on">Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>4 · Shop</h3>
+    <div class="screen">
+      <div class="appbar">Shop</div>
+      <div class="pad">
+        <div class="widget"><b>Recommended for you</b>
+          <div class="rowline"><span>GenAlpha TV Max</span><span class="dim">14.99/mo</span></div>
+        </div>
+        <div class="widget"><b>GenAlpha One Home &amp; Mobile</b>
+          <span class="dim">Mobile + fiber + TV, phone of your choice</span><br>
+          <span class="dim">from 102.47 EUR/month</span><br>
+          <span class="btn">Configure</span>
+        </div>
+        <div class="widget"><div class="rowline"><span>Promo code</span><span class="chip">WELCOME10 ✓</span></div></div>
+      </div>
+      <div class="tabs"><span>Home</span><span>Usage</span><span>Bills</span><span class="on">Shop</span><span>Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>5 · Help</h3>
+    <div class="screen">
+      <div class="appbar">Help</div>
+      <div class="banner">⚠ Known outage in your area — no need to report</div>
+      <div class="pad">
+        <div class="widget"><b>Notifications</b>
+          <div class="rowline"><span>Your bill is ready</span><span class="dim">2h</span></div>
+          <div class="rowline"><span>Order complete 🎉</span><span class="dim">1d</span></div>
+        </div>
+        <div class="widget"><b>Your tickets</b>
+          <div class="rowline"><span>Slow wifi evenings</span><span class="warn">inProgress</span></div>
+          <span class="btn ghost">New ticket</span>
+        </div>
+        <div class="widget"><b>Installer visit</b>
+          <span class="dim">🔧 Mon, Jul 13 · 15:00–17:00</span>
+        </div>
+      </div>
+      <div class="tabs"><span>Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span class="on">Help</span></div>
+    </div>
+  </div>
+
+  <div class="phone"><h3>White-label: same binary, Nova</h3>
+    <div class="screen">
+      <div class="appbar" style="background:#5B3FA8">MyNova <span class="tenant">Nia ▾</span></div>
+      <div class="pad">
+        <div class="widget"><b>Nova Unlimited 5G</b>
+          <div class="rowline"><span>Your number</span><span class="chip">+46 731 000 001</span></div>
+          <div class="rowline"><span>Status</span><span class="ok">active — no staff touched it</span></div>
+        </div>
+        <div class="widget"><b>Your bill · 29.99 EUR</b>
+          <span class="dim">first bill next month</span>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Home</span><span>Usage</span><span>Bills</span><span>Shop</span><span>Help</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>Screen → API mapping (all live today)</h2>
+<table>
+<tr><th>Screen element</th><th>Backing API</th></tr>
+<tr><td>Usage meters + overage math</td><td>TMF677 queryUsageConsumption, TMF678 bill rates</td></tr>
+<tr><td>Bill list, line items, one-tap pay</td><td>TMF678 customerBill + appliedRates, TMF670 vault, TMF676 payment</td></tr>
+<tr><td>Services with phone numbers</td><td>TMF637 products + TMF638/685 services with supportingResource</td></tr>
+<tr><td>Outage banners</td><td>TMF656 open service problems</td></tr>
+<tr><td>Recommendations strip</td><td>TMF680 recommendation</td></tr>
+<tr><td>Shop, configurator, promo, checkout</td><td>TMF620/663/673/679/646/676/622 — the storefront flow</td></tr>
+<tr><td>Notifications, tickets, appointments</td><td>TMF681, TMF621, TMF646</td></tr>
+<tr><td>Agreements, profile, addresses</td><td>TMF651, TMF632/673</td></tr>
+<tr><td>Tenant branding + issuer</td><td>Gateway tenant-config (as the web channels)</td></tr>
+</table>
+
+<h2>Build approach</h2>
+<div class="callout">
+<b>Expo (React Native).</b> One codebase targeting iOS, Android <i>and web</i>. The web target is
+the autonomous-verification trick: the whole app gets a Playwright E2E suite exactly like the
+five web-channel suites, runnable tonight without Xcode or Android SDKs. When native tooling is
+available on the Mac, the identical code runs on simulators/devices — nothing is rewritten.
+Phase 2 (native-only): push notifications from the TMF681 stream, biometric unlock.
+</div>
+
+<p class="dim">Open this file in a browser; print to PDF for sharing. React to anything —
+tab names, what belongs on Home, the white-label accent approach — before the build starts.</p>
+
+</body>
+</html>
