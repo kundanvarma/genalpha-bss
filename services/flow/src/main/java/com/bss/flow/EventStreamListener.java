@@ -51,6 +51,7 @@ public class EventStreamListener {
             move.put("tenant", tenant);
             move.put("reactors", Choreography.reactorsFor(eventType));
             move.put("ref", referenceOf(envelope));
+            move.put("keys", correlationKeys(eventType, envelope));
             broadcaster.broadcast(move);
         } catch (Exception e) {
             log.debug("skipping unparseable event on {}: {}", topic, e.getMessage());
@@ -94,5 +95,70 @@ public class EventStreamListener {
 
     private static String mask(String id) {
         return id.length() <= 8 ? id : id.substring(0, 8) + "…";
+    }
+
+    /**
+     * Correlation keys let the Process view thread events into the same
+     * running instance — a party, an order, an intent flowing through stages.
+     * The order↔party link comes from ProductOrderCreateEvent (it carries
+     * both); service-order events carry only the order id, notifications only
+     * the party — key intersection stitches them back together.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> correlationKeys(String eventType, Map<String, Object> envelope) {
+        Map<String, Object> keys = new LinkedHashMap<>();
+        if (!(envelope.get("event") instanceof Map<?, ?> event)) {
+            return keys;
+        }
+        Map<String, Object> resource = null;
+        for (Object value : ((Map<String, Object>) event).values()) {
+            if (value instanceof Map<?, ?> m) {
+                resource = (Map<String, Object>) m;
+                break;
+            }
+        }
+        if (resource == null) {
+            return keys;
+        }
+        // party — the through-line across most events
+        String party = partyOf(resource);
+        if (party == null && resource.get("partyId") != null) {
+            party = String.valueOf(resource.get("partyId"));
+        }
+        if (party != null) keys.put("party", party);
+        // order
+        if (eventType.startsWith("ProductOrder") && resource.get("id") != null) {
+            keys.put("order", String.valueOf(resource.get("id")));
+        } else if (resource.get("productOrderId") != null) {
+            keys.put("order", String.valueOf(resource.get("productOrderId")));
+        } else if (resource.get("productOrder") instanceof Map<?, ?> po && po.get("id") != null) {
+            keys.put("order", String.valueOf(po.get("id")));
+        }
+        // intent
+        if ("IntentCreateEvent".equals(eventType) && resource.get("id") != null) {
+            keys.put("intent", String.valueOf(resource.get("id")));
+        } else if (resource.get("intent") instanceof Map<?, ?> in && in.get("id") != null) {
+            keys.put("intent", String.valueOf(in.get("id")));
+        }
+        // quote
+        if (eventType.startsWith("Quote") && resource.get("id") != null) {
+            keys.put("quote", String.valueOf(resource.get("id")));
+        }
+        // network object (delivery path / affected object) for the assurance stages
+        if (resource.get("affectedObject") != null) {
+            keys.put("object", String.valueOf(resource.get("affectedObject")));
+        } else if (resource.get("from") != null) {
+            keys.put("object", String.valueOf(resource.get("from")));
+        }
+        return keys;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String partyOf(Map<String, Object> resource) {
+        if (resource.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
+                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
+            return String.valueOf(party.get("id"));
+        }
+        return null;
     }
 }
