@@ -6,15 +6,38 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — eight Playwright suites drive the
-storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration
-and campaign journeys against the full stack. The original five core components also pass the official TM Forum CTKs with zero
-failures.
+**Every feature is verified end-to-end in a real browser** — ten Playwright suites drive the
+storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
+campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
+The original five core components also pass the official TM Forum CTKs with zero failures.
 
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](docs/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
 - 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
+
+## A look at it
+
+One build of each channel serves every tenant; the host decides the brand. The same storefront,
+GenAlpha in teal and Nova Telecom in purple — logo, name **and** color from the tenant manifest:
+
+<p align="center">
+  <img src="docs/img/storefront-genalpha.png" width="49%" alt="GenAlpha storefront (teal)">
+  <img src="docs/img/storefront-nova.png" width="49%" alt="Nova Telecom white-label storefront (purple)">
+</p>
+
+Marketing runs campaigns from the back-office console — event triggers, promo codes, and an AI
+copy assistant — while CSR agents get an AI copilot summarizing the customer 360; and the modular
+mobile app recomposes around what the customer owns:
+
+<p align="center">
+  <img src="docs/img/console-campaigns.png" width="49%" alt="Campaigns tab with AI assist in the console">
+  <img src="docs/img/csr-copilot.png" width="49%" alt="CSR customer 360 with the AI copilot summary">
+</p>
+
+<p align="center">
+  <img src="docs/img/mobile-app.png" width="30%" alt="The modular LOB mobile app: adaptive home after activation">
+</p>
 
 ## The modules
 
