@@ -6,56 +6,83 @@
 <title>genalpha-bss · Live Flow</title>
 <style>
   :root {
-    --bg: #0c1418; --panel: #121e24; --line: #22333b; --ink: #dbe7e9; --dim: #7d949b;
-    --teal: #45afac; --gold: #e0b15a; --violet: #b18ce0; --rose: #e0796f;
-    --grid: #16242b;
+    --bg: #0c1418; --panel: #131f25; --panel2: #0f1a1f; --line: #23343c; --ink: #e2edee;
+    --dim: #85999f; --teal: #45afac; --gold: #e0b15a; --violet: #b18ce0; --rose: #e0796f;
+    --green: #63c088; --grid: #17252c;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
   body {
-    background: radial-gradient(1200px 700px at 70% -10%, #12242b 0%, var(--bg) 60%);
-    color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    display: grid; grid-template-rows: auto 1fr; height: 100vh; overflow: hidden;
+    background: radial-gradient(1200px 700px at 60% -10%, #12242b 0%, var(--bg) 60%);
+    color: var(--ink); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-rows: auto 1fr auto; height: 100vh; overflow: hidden;
   }
   header {
-    display: flex; align-items: center; gap: 14px; padding: 12px 22px;
+    display: flex; align-items: center; gap: 14px; padding: 12px 24px;
     border-bottom: 1px solid var(--line); background: rgba(10,18,22,0.6); backdrop-filter: blur(8px);
   }
-  header .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--teal);
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--teal);
     box-shadow: 0 0 12px var(--teal); animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
   header h1 { font-size: 15px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   header .sub { color: var(--dim); font-size: 12.5px; }
-  header .stats { margin-left: auto; display: flex; gap: 22px; font-variant-numeric: tabular-nums; }
+  header .sub a { color: var(--teal); text-decoration: none; }
+  header .stats { margin-left: auto; display: flex; gap: 24px; font-variant-numeric: tabular-nums; }
   header .stats b { color: var(--teal); font-size: 18px; }
-  header .stats span { display: block; color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
-  main { display: grid; grid-template-columns: 1fr 340px; min-height: 0; }
-  #stage { position: relative; overflow: hidden; }
-  svg { width: 100%; height: 100%; display: block; }
-  .zone-label { fill: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; }
-  .node rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 10; }
-  .node text { fill: var(--ink); font-size: 12.5px; font-weight: 600; }
-  .node .kind { fill: var(--dim); font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em; }
-  .node.ai rect { stroke: var(--violet); }
-  .node.ai .kind { fill: var(--violet); }
-  .bus rect { fill: #10201f; stroke: var(--teal); stroke-width: 1.5; }
-  .bus text { fill: var(--teal); font-weight: 700; letter-spacing: 0.05em; }
-  .edge { stroke: var(--line); stroke-width: 1.4; fill: none; opacity: 0.5; }
-  .feed { border-left: 1px solid var(--line); background: var(--panel); overflow-y: auto; padding: 6px 0; }
-  .feed h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim);
-    margin: 10px 16px; }
-  .ev { padding: 8px 16px; border-bottom: 1px solid var(--grid); animation: slidein 0.3s ease; }
-  @keyframes slidein { from { opacity: 0; transform: translateX(10px); } }
-  .ev .type { font-weight: 600; font-size: 12.5px; }
-  .ev .type.ai { color: var(--violet); }
-  .ev .meta { color: var(--dim); font-size: 11px; margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; }
-  .ev .chip { background: var(--grid); border-radius: 6px; padding: 0 6px; color: var(--teal); }
-  .ev .arrow { color: var(--dim); }
-  .empty { color: var(--dim); text-align: center; padding: 40px 20px; font-size: 13px; }
-  .legend { display: flex; gap: 16px; padding: 8px 22px; border-top: 1px solid var(--line);
-    color: var(--dim); font-size: 11px; grid-column: 1 / -1; }
-  .legend b { color: var(--ink); font-weight: 600; }
-  .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: 0; margin-right: 5px; }
+  header .stats span { display: block; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; }
+
+  main { overflow-y: auto; padding: 20px 24px 8px; }
+  .proc { margin-bottom: 26px; }
+  .proc .head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+  .proc .name { font-size: 15px; font-weight: 700; }
+  .proc .lane { color: var(--dim); font-size: 12px; }
+  .proc .counts { margin-left: auto; color: var(--dim); font-size: 12px; }
+  .proc .counts b { color: var(--green); }
+
+  .flow { display: flex; align-items: stretch; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+  .stage {
+    position: relative; min-width: 150px; flex: 1; border: 1.5px solid var(--line);
+    background: var(--panel); border-radius: 12px; padding: 12px 14px; transition: all .35s ease;
+  }
+  .stage + .stage { margin-left: 30px; }
+  .stage::before {
+    content: ''; position: absolute; left: -30px; top: 50%; width: 30px; height: 2px;
+    background: var(--line); transform: translateY(-50%);
+  }
+  .stage:first-child::before { display: none; }
+  .stage .label { font-size: 13.5px; font-weight: 600; }
+  .stage .who { font-size: 10.5px; color: var(--dim); margin-top: 3px; }
+  .stage .tech { font-family: ui-monospace, Menlo, monospace; font-size: 9.5px; color: var(--dim);
+    margin-top: 6px; opacity: 0.7; }
+  .stage.ai { border-color: #3a2f4d; }
+  .stage.ai .who { color: var(--violet); }
+  .stage.alert.hot { border-color: var(--rose); }
+  /* active pulse */
+  .stage.hot {
+    border-color: var(--gold); background: #1a2228;
+    box-shadow: 0 0 0 1px var(--gold), 0 6px 26px -10px var(--gold);
+    animation: hot .9s ease;
+  }
+  @keyframes hot { 0% { transform: scale(1.04); } 100% { transform: scale(1); } }
+  .stage.done { border-color: #2c4a3a; }
+  .stage.done .label::after { content: ' ✓'; color: var(--green); }
+  .stage .tokens { position: absolute; top: -9px; right: 10px; display: flex; gap: 4px; }
+  .tok { width: 9px; height: 9px; border-radius: 50%; background: var(--gold);
+    box-shadow: 0 0 8px var(--gold); }
+  .tok.ai { background: var(--violet); box-shadow: 0 0 8px var(--violet); }
+
+  footer { border-top: 1px solid var(--line); background: var(--panel2); padding: 10px 24px 12px; height: 200px; overflow-y: auto; }
+  footer h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); margin: 2px 0 8px; }
+  .story { display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--grid); animation: slidein .3s ease; }
+  @keyframes slidein { from { opacity: 0; transform: translateY(-6px); } }
+  .story .emoji { font-size: 17px; line-height: 1.3; }
+  .story .txt { font-size: 13.5px; }
+  .story .txt b { color: var(--teal); font-weight: 600; }
+  .story .txt .ai { color: var(--violet); font-weight: 600; }
+  .story .txt .hot { color: var(--gold); font-weight: 600; }
+  .story .txt .warn { color: var(--rose); font-weight: 600; }
+  .story .when { margin-left: auto; color: var(--dim); font-size: 11px; white-space: nowrap; }
+  .idle { color: var(--dim); font-size: 13px; padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -63,173 +90,205 @@
   <span class="dot"></span>
   <div>
     <h1>genalpha-bss · Live Flow</h1>
-    <div class="sub">the event choreography, as it happens — every <code>bss.*.events</code> topic, streamed live</div>
+    <div class="sub">watch a business process happen, step by step — <a href="choreography.html">see the architecture view →</a></div>
   </div>
   <div class="stats">
-    <div><b id="count">0</b><span>events</span></div>
-    <div><b id="rate">0</b><span>per min</span></div>
-    <div><b id="active">idle</b><span>bus</span></div>
+    <div><b id="running">0</b><span>running</span></div>
+    <div><b id="done">0</b><span>completed</span></div>
+    <div><b id="events">0</b><span>events</span></div>
   </div>
 </header>
-<main>
-  <div id="stage"><svg id="svg" viewBox="0 0 900 620" preserveAspectRatio="xMidYMid meet"></svg></div>
-  <div class="feed" id="feed"><h2>Event stream</h2><div class="empty" id="empty">Waiting for events… place an order in the storefront, or run an E2E suite.</div></div>
-  <div class="legend">
-    <span><span class="swatch" style="background:var(--teal)"></span>producer / consumer</span>
-    <span><span class="swatch" style="background:var(--violet)"></span><b>AI back-office agent</b></span>
-    <span><span class="swatch" style="background:var(--gold)"></span>event in flight</span>
-    <span>Read-only observability — event metadata only, no payloads.</span>
-  </div>
-</main>
+
+<main id="board"></main>
+
+<footer>
+  <h2>What's happening (plain English)</h2>
+  <div id="story"><div class="idle">Waiting… place an order in the storefront, or ask me to run a test. You'll see each step narrated here as it happens.</div></div>
+</footer>
+
 <script>
-const SVG = 'http://www.w3.org/2000/svg';
-const svg = document.getElementById('svg');
-const nodes = {};      // name -> {x,y,w,h,el}
-const AI = ['intelligence', 'campaign'];
-
-// Layout: producers (left) -> Kafka bus (center) -> reactors (right).
-const LAYOUT = {
-  producers: ['product-ordering', 'billing', 'trouble-ticket', 'shopping-cart',
-              'agreement', 'appointment', 'payment', 'quote', 'assurance', 'service-orchestration', 'intelligence'],
-  consumers: ['communication', 'campaign', 'service-orchestration'],
+// ---- Component display names ----
+const NAME = {
+  'product-ordering': 'the Ordering component', 'service-orchestration': 'the Orchestrator',
+  'communication': 'the Communications service', 'campaign': 'the Campaign Engine',
+  'intelligence': 'the AI churn scorer', 'billing': 'Billing', 'assurance': 'Assurance',
+  'quote': 'the Quote engine', 'shopping-cart': 'the Cart',
 };
-const LABEL = {
-  'product-ordering': 'Ordering', 'billing': 'Billing', 'trouble-ticket': 'Tickets',
-  'shopping-cart': 'Cart', 'agreement': 'Agreement', 'appointment': 'Appointment',
-  'payment': 'Payment', 'quote': 'Quote', 'assurance': 'Assurance',
-  'service-orchestration': 'Orchestration', 'intelligence': 'Intelligence',
-  'communication': 'Communication', 'campaign': 'Campaign Engine',
-};
-const KIND = {
-  'communication': 'TMF681 · notify', 'campaign': 'martech · AI', 'intelligence': 'AI agent',
-  'service-orchestration': 'OSS · provision', 'assurance': 'OSS · assure',
-};
+const nm = (c) => NAME[c] || c;
 
-function node(name, x, y, cls) {
-  const w = 150, h = 44;
-  const g = document.createElementNS(SVG, 'g');
-  g.setAttribute('class', 'node' + (cls || ''));
-  g.setAttribute('transform', `translate(${x},${y})`);
-  const r = document.createElementNS(SVG, 'rect');
-  r.setAttribute('width', w); r.setAttribute('height', h); r.setAttribute('rx', 10);
-  const t = document.createElementNS(SVG, 'text');
-  t.setAttribute('x', 12); t.setAttribute('y', 20); t.textContent = LABEL[name] || name;
-  const k = document.createElementNS(SVG, 'text');
-  k.setAttribute('class', 'kind'); k.setAttribute('x', 12); k.setAttribute('y', 34);
-  k.textContent = KIND[name] || 'component';
-  g.append(r, t, k); svg.append(g);
-  nodes[name] = { x, y, w, h, rect: r, cx: x + w / 2, cy: y + h / 2 };
-}
+// ---- Process definitions (plain-language stages) ----
+// steps: eventType -> {stage index}. narrate: eventType -> html story line.
+const PROCESSES = [
+  {
+    id: 'order', name: 'Order → Activate', lane: 'a retail customer buying a plan',
+    stages: [
+      { label: 'Customer orders', who: 'storefront / app', tech: 'ProductOrderCreateEvent' },
+      { label: 'Picked up', who: 'communications + orchestrator', tech: 'consumers react' },
+      { label: 'Provisioned', who: 'orchestrator (OSS)', tech: 'ServiceOrderStateChangeEvent' },
+      { label: 'Customer notified', who: 'communications', tech: 'CommunicationMessageCreateEvent' },
+    ],
+    steps: {
+      ProductOrderCreateEvent: 0,
+      ProductOrderStateChangeEvent: 1,
+      ServiceOrderStateChangeEvent: 2,
+      CommunicationMessageCreateEvent: 3,
+    },
+    narrate: {
+      ProductOrderCreateEvent: (m) => `🛒|A <b>customer</b> placed an order. <b>${nm(m.source)}</b> captured it and published an <b>“order created”</b> event onto the bus.`,
+      ProductOrderStateChangeEvent: (m) => `📡|The order event was picked up — <b>communications</b> queued a notification and <b>the orchestrator</b> began provisioning.`,
+      ServiceOrderStateChangeEvent: (m) => `⚙️|<b>The orchestrator</b> provisioned the service and drew a phone number from the pool — it’s <b>active</b>.`,
+      CommunicationMessageCreateEvent: (m) => `✅|<b>Communications</b> sent the customer their confirmation. Order complete.`,
+    },
+  },
+  {
+    id: 'slice', name: 'Lead → Assure (5G AI slice)', lane: 'a B2B slice sold, provisioned, and self-healed',
+    stages: [
+      { label: 'Sales intent', who: 'AI + OSS feasibility', tech: 'IntentCreateEvent', ai: true },
+      { label: 'Quoted', who: 'quote engine', tech: 'QuoteCreateEvent' },
+      { label: 'Ordered', who: 'ordering', tech: 'ProductOrderCreateEvent' },
+      { label: 'Provisioned', who: 'orchestrator', tech: 'ServiceOrderStateChangeEvent' },
+      { label: 'Fibre cut!', who: 'assurance alarm', tech: 'ServiceProblemCreateEvent', alert: true },
+      { label: 'Self-healed', who: 'assurance (autonomous)', tech: 'ServiceHealedEvent' },
+    ],
+    steps: {
+      IntentCreateEvent: 0, QuoteCreateEvent: 1, ProductOrderCreateEvent: 2,
+      ServiceOrderStateChangeEvent: 3, ServiceProblemCreateEvent: 4, ServiceHealedEvent: 5,
+    },
+    narrate: {
+      IntentCreateEvent: (m) => `🛰️|A sales manager captured a <span class="ai">business intent</span> — the OSS checked feasibility and proposed an <span class="ai">edge-AI upsell</span>.`,
+      QuoteCreateEvent: (m) => `💶|<b>The quote engine</b> priced the proposal — token-metered AI on the line items.`,
+      ProductOrderCreateEvent: (m) => `🧾|Quote accepted → <b>an order was placed</b> for the slice.`,
+      ServiceOrderStateChangeEvent: (m) => `⚙️|<b>The orchestrator</b> provisioned the slice on the fibre route.`,
+      ServiceProblemCreateEvent: (m) => `⚠️|<span class="warn">A fibre cut!</span> <b>Assurance</b> detected it and opened a problem.`,
+      ServiceHealedEvent: (m) => `🛟|The system <b>re-homed the slice to the edge on its own</b> — SLA restored, ticket filed. No human touched it.`,
+    },
+  },
+  {
+    id: 'retention', name: 'Churn → Retention', lane: 'the AI back-office winning a customer back',
+    stages: [
+      { label: 'Risk detected', who: 'AI churn scorer', tech: 'ChurnRiskDetectedEvent', ai: true },
+      { label: 'Journey fired', who: 'campaign engine', tech: 'CampaignExecutionCreateEvent', ai: true },
+      { label: 'Message sent', who: 'communications', tech: 'CommunicationMessageCreateEvent' },
+    ],
+    steps: {
+      ChurnRiskDetectedEvent: 0, CampaignExecutionCreateEvent: 1, CommunicationMessageCreateEvent: 2,
+    },
+    narrate: {
+      ChurnRiskDetectedEvent: (m) => `📉|<span class="ai">The AI churn scorer</span> flagged a customer whose commitment is ending — a retention risk.`,
+      CampaignExecutionCreateEvent: (m) => `🎯|<span class="ai">The campaign engine</span> reacted and fired a win-back journey — exactly once for this customer.`,
+      CommunicationMessageCreateEvent: (m) => `📨|A retention message with a promo code went out through <b>communications</b>.`,
+    },
+  },
+];
 
-function label(x, y, text) {
-  const t = document.createElementNS(SVG, 'text');
-  t.setAttribute('class', 'zone-label'); t.setAttribute('x', x); t.setAttribute('y', y);
-  t.textContent = text; svg.append(t);
-}
-
-// Build the scene.
-label(20, 24, 'Producers');
-LAYOUT.producers.forEach((n, i) => node(n, 20, 44 + i * 50, AI.includes(n) ? ' ai' : ''));
-
-// Kafka bus in the middle.
-const busX = 375, busY = 250, busW = 150, busH = 90;
-const bg = document.createElementNS(SVG, 'g');
-bg.setAttribute('class', 'node bus'); bg.setAttribute('transform', `translate(${busX},${busY})`);
-const br = document.createElementNS(SVG, 'rect');
-br.setAttribute('width', busW); br.setAttribute('height', busH); br.setAttribute('rx', 12);
-const bt = document.createElementNS(SVG, 'text');
-bt.setAttribute('x', busW/2); bt.setAttribute('y', 40); bt.setAttribute('text-anchor', 'middle');
-bt.setAttribute('font-size', '15'); bt.textContent = 'Kafka';
-const bs = document.createElementNS(SVG, 'text');
-bs.setAttribute('x', busW/2); bs.setAttribute('y', 60); bs.setAttribute('text-anchor', 'middle');
-bs.setAttribute('font-size', '10'); bs.setAttribute('fill', 'var(--dim)'); bs.textContent = 'bss.*.events';
-bg.append(br, bt, bs); svg.append(bg);
-nodes['__bus'] = { cx: busX + busW/2, cy: busY + busH/2, rect: br };
-
-label(700, 24, 'Reactors');
-LAYOUT.consumers.forEach((n, i) => {
-  if (!nodes[n]) node(n, 700, 60 + i * 70, AI.includes(n) ? ' ai' : '');
+// ---- Build the board ----
+const board = document.getElementById('board');
+PROCESSES.forEach((p) => {
+  p.el = document.createElement('div'); p.el.className = 'proc';
+  p.el.innerHTML = `<div class="head"><span class="name">${p.name}</span>
+    <span class="lane">— ${p.lane}</span>
+    <span class="counts"><b id="c-${p.id}">0</b> completed</span></div>`;
+  const flow = document.createElement('div'); flow.className = 'flow';
+  p.stageEls = p.stages.map((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'stage' + (s.ai ? ' ai' : '') + (s.alert ? ' alert' : '');
+    d.innerHTML = `<div class="tokens"></div><div class="label">${s.label}</div>
+      <div class="who">${s.who}</div><div class="tech">${s.tech}</div>`;
+    flow.append(d); return d;
+  });
+  p.el.append(flow); board.append(p.el);
+  p.instances = []; p.completed = 0;
 });
 
-// A curved edge helper.
-function flash(fromName, toName, color, delay) {
-  const a = nodes[fromName], b = nodes[toName];
-  if (!a || !b) return;
-  const ax = a.cx > 500 ? a.x : a.x + a.w, ay = a.cy;
-  const bx = b.x < 400 ? b.x + b.w : b.x, by = b.cy;
-  setTimeout(() => {
-    const p = document.createElementNS(SVG, 'path');
-    const mx = (ax + bx) / 2;
-    p.setAttribute('d', `M ${ax} ${ay} C ${mx} ${ay}, ${mx} ${by}, ${bx} ${by}`);
-    p.setAttribute('fill', 'none'); p.setAttribute('stroke', color);
-    p.setAttribute('stroke-width', '2.4'); p.setAttribute('opacity', '0.9');
-    svg.append(p);
-    const len = p.getTotalLength();
-    p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
-    p.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
-      { duration: 520, easing: 'ease-out' });
-    // a travelling dot
-    const dot = document.createElementNS(SVG, 'circle');
-    dot.setAttribute('r', '4'); dot.setAttribute('fill', color);
-    dot.setAttribute('filter', 'drop-shadow(0 0 5px ' + color + ')');
-    svg.append(dot);
-    const anim = dot.animate([{ offsetDistance: '0%' }, { offsetDistance: '100%' }],
-      { duration: 520, easing: 'ease-out' });
-    dot.style.offsetPath = `path('${p.getAttribute('d')}')`;
-    anim.onfinish = () => { dot.remove(); pop(toName, color); };
-    setTimeout(() => p.animate([{ opacity: 0.9 }, { opacity: 0 }], { duration: 700 })
-      .onfinish = () => p.remove(), 520);
-  }, delay || 0);
+// ---- Correlation: thread events into the same running instance ----
+function keySet(keys) {
+  return new Set(Object.values(keys || {}).filter(Boolean));
+}
+function intersects(a, b) {
+  for (const v of b) if (a.has(v)) return true;
+  return false;
 }
 
-function pop(name, color) {
-  const n = nodes[name]; if (!n) return;
-  n.rect.animate([
-    { stroke: color, filter: 'drop-shadow(0 0 10px ' + color + ')' },
-    { stroke: getComputedStyle(document.documentElement).getPropertyValue('--line'), filter: 'none' },
-  ], { duration: 900, easing: 'ease-out' });
-}
-
-// Stats + feed.
-let count = 0; const times = [];
-const feed = document.getElementById('feed');
-const empty = document.getElementById('empty');
+let events = 0, running = 0, done = 0;
 function stat() {
-  document.getElementById('count').textContent = count;
-  const now = Date.now();
-  while (times.length && now - times[0] > 60000) times.shift();
-  document.getElementById('rate').textContent = times.length;
+  document.getElementById('events').textContent = events;
+  document.getElementById('running').textContent = Math.max(0, running);
+  document.getElementById('done').textContent = done;
 }
-setInterval(stat, 2000);
 
-function render(m) {
-  count++; times.push(Date.now());
-  if (empty) empty.style.display = 'none';
-  document.getElementById('active').textContent = 'live';
-  const gold = getComputedStyle(document.documentElement).getPropertyValue('--gold');
-  const violet = getComputedStyle(document.documentElement).getPropertyValue('--violet');
-  // producer -> bus, then bus -> each reactor
-  flash(m.source, '__bus', gold, 0);
-  pop(m.source, AI.includes(m.source) ? violet : gold);
-  (m.reactors || []).forEach((r, i) => flash('__bus', r, AI.includes(r) ? violet : gold, 300 + i * 120));
+function hitStage(p, idx, isAi) {
+  const el = p.stageEls[idx];
+  el.classList.add('hot');
+  if (p.stages[idx].alert) el.classList.add('hot');
+  setTimeout(() => el.classList.remove('hot'), 950);
+  // mark stages up to idx as "done" visually on the flow
+  const tokens = el.querySelector('.tokens');
+  const t = document.createElement('span'); t.className = 'tok' + (isAi ? ' ai' : '');
+  tokens.append(t); setTimeout(() => t.remove(), 2200);
+}
 
-  const el = document.createElement('div');
-  el.className = 'ev';
-  const aiType = AI.includes(m.source) || (m.reactors || []).some(r => AI.includes(r));
-  const reactors = (m.reactors || []).map(r => `<span class="chip">${LABEL[r] || r}</span>`).join(' ');
-  el.innerHTML = `<div class="type${aiType ? ' ai' : ''}">${m.eventType}</div>
-    <div class="meta"><span>${LABEL[m.source] || m.source}</span>
-      ${reactors ? '<span class="arrow">→</span> ' + reactors : ''}
-      ${m.ref ? '<span>· ' + m.ref + '</span>' : ''}
-      <span>· ${m.tenant}</span></div>`;
-  feed.insertBefore(el, feed.children[1]);
-  while (feed.querySelectorAll('.ev').length > 60) feed.querySelector('.ev:last-child').remove();
+function advance(p, move, stage) {
+  const mk = keySet(move.keys);
+  const isAi = ['intelligence', 'campaign'].includes(move.source) || p.stages[stage].ai;
+  if (stage === 0) {
+    // start a fresh instance
+    const inst = { keys: mk, stage: 0, born: Date.now() };
+    p.instances.unshift(inst); running++;
+    while (p.instances.length > 12) p.instances.pop();
+    hitStage(p, 0, isAi);
+    return true;
+  }
+  // find a running instance this event belongs to
+  let inst = p.instances.find((x) => x.stage < p.stages.length - 0.5 && intersects(x.keys, mk));
+  // assurance events (fibre cut) may carry no party/order key — attach to the newest live slice
+  if (!inst && (mk.size === 0 || p.id === 'slice') && p.instances.length) {
+    inst = p.instances.find((x) => x.stage >= 2 && x.stage < stage);
+  }
+  if (!inst) return false;
+  mk.forEach((v) => inst.keys.add(v));
+  if (stage > inst.stage) inst.stage = stage;
+  hitStage(p, stage, isAi);
+  if (stage >= p.stages.length - 1) {
+    inst.done = true; running--; done++; p.completed++;
+    document.getElementById('c-' + p.id).textContent = p.completed;
+    p.stageEls[stage].classList.add('done');
+  }
+  return true;
+}
+
+// ---- Narration ----
+const story = document.getElementById('story');
+let idle = story.querySelector('.idle');
+function narrate(html, cls) {
+  if (idle) { idle.remove(); idle = null; }
+  const [emoji, ...rest] = html.split('|');
+  const el = document.createElement('div'); el.className = 'story';
+  const now = new Date();
+  el.innerHTML = `<span class="emoji">${emoji}</span><span class="txt">${rest.join('|')}</span>
+    <span class="when">${now.toLocaleTimeString()}</span>`;
+  story.insertBefore(el, story.firstChild);
+  while (story.querySelectorAll('.story').length > 40) story.querySelector('.story:last-child').remove();
+}
+
+// ---- Handle each event ----
+function onMove(m) {
+  events++; stat();
+  let told = false;
+  PROCESSES.forEach((p) => {
+    const stage = p.steps[m.eventType];
+    if (stage === undefined) return;
+    const ok = advance(p, m, stage);
+    if (ok && p.narrate[m.eventType] && !told) {
+      narrate(p.narrate[m.eventType](m));
+      told = true;
+    }
+  });
+  stat();
 }
 
 function connect() {
   const es = new EventSource('stream');
-  es.addEventListener('flow', (e) => { try { render(JSON.parse(e.data)); } catch {} });
-  es.onerror = () => { document.getElementById('active').textContent = 'reconnecting'; };
+  es.addEventListener('flow', (e) => { try { onMove(JSON.parse(e.data)); } catch {} });
 }
 connect();
 </script>

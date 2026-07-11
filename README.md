@@ -18,14 +18,17 @@ The original five core components also pass the official TM Forum CTKs with zero
 
 ## A look at it
 
-**Live Flow** — the event choreography as it happens. An event-driven BSS's whole value is loose
-coupling, which makes the magic invisible; this makes it visceral. Consuming every
-`bss.*.events` topic and streaming it to the browser, you watch a customer's order hit Kafka and
-fan out to communication, the campaign engine and the orchestrator in real time — the AI
-back-office agents outlined in violet:
+**Live Flow** — watch a business process happen, step by step. An event-driven BSS's value is
+loose coupling, which makes the magic invisible; this makes it legible to anyone. It reconstructs
+live process instances from the `bss.*.events` stream and narrates each step in plain English —
+a customer orders, the ordering component captures it and publishes an event, communications and
+the orchestrator pick it up, the service activates, the customer is notified. Three processes run
+live: retail **Order → Activate**, the B2B **Lead → Assure** slice (with a fibre cut that
+self-heals), and **Churn → Retention** driven by the AI back-office. A companion
+[architecture view](docs/img/live-flow.png) shows the same events as component choreography.
 
 <p align="center">
-  <img src="docs/img/live-flow.png" width="90%" alt="Live Flow — the event choreography streamed live">
+  <img src="docs/img/live-flow-process.png" width="90%" alt="Live Flow — business processes narrated step by step as they happen">
 </p>
 
 One build of each channel serves every tenant; the host decides the brand. The same storefront,
