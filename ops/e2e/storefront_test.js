@@ -358,6 +358,20 @@ async function apiGet(page, path, token) {
   }
   tokenA = await shopToken(a);
 
+  // --- TMF680: what Alice owns is never recommended back to her.
+  const recs = JSON.parse((await apiGet(a,
+    '/tmf-api/recommendationManagement/v4/recommendation', tokenA)).body);
+  const recNames = (recs[0].recommendationItem || []).map((i) => i.offering.name);
+  if (!recNames.length) fail('no recommendations for a provisioned customer');
+  if (recNames.includes('GenAlpha One Home & Mobile')) {
+    fail('recommender suggested the bundle Alice already owns: ' + recNames);
+  }
+  console.log('OK recommendations exclude owned offerings:', recNames.join(' | '));
+
+  await a.goto(SHOP);
+  await a.locator('[data-testid="recommended"] .card').first().waitFor({ timeout: 15000 });
+  console.log('OK storefront shows the Recommended for you strip');
+
   // --- TMF651: completing the order minted a 12-month commitment agreement
   // for the bundle (the offering carries a productOfferingTerm).
   const agreements = JSON.parse((await apiGet(a,

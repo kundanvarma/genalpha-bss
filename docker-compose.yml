@@ -353,6 +353,28 @@ services:
       kafka:
         condition: service_started
 
+  recommendation:
+    build: ./services/recommendation
+    container_name: bss-recommendation
+    restart: unless-stopped
+    environment:
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      CATALOG_BASE_URL: http://product-catalog:8080
+      INVENTORY_BASE_URL: http://product-inventory:8080
+    ports:
+      - "8102:8080"
+    depends_on:
+      keycloak:
+        condition: service_started
+      product-catalog:
+        condition: service_started
+      product-inventory:
+        condition: service_started
+
   communication:
     build: ./services/communication
     container_name: bss-communication
@@ -573,6 +595,7 @@ services:
       PROMOTION_URL: http://promotion:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
+      RECOMMENDATION_URL: http://recommendation:8080
       CSR_URL: http://csr-console:8080
     ports:
       - "8080:8080"
@@ -612,6 +635,8 @@ services:
       user-roles:
         condition: service_started
       geographic-address:
+        condition: service_started
+      recommendation:
         condition: service_started
       csr-console:
         condition: service_started

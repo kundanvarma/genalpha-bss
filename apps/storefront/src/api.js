@@ -185,6 +185,12 @@ export async function checkPromotion(code) {
   }));
 }
 
+const RECOMMENDATION = '/tmf-api/recommendationManagement/v4';
+
+export async function myRecommendations() {
+  return json(await authFetch(`${RECOMMENDATION}/recommendation`));
+}
+
 export async function myAgreements() {
   return json(await authFetch(`${AGREEMENT}/agreement?limit=100`));
 }
