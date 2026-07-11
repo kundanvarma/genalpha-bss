@@ -38,6 +38,12 @@ public class PaymentDto {
     @JsonProperty("authorizationCode")
     private String authorizationCode;
 
+    @JsonProperty("settlementRef")
+    private String settlementRef;
+
+    @JsonProperty("pspProvider")
+    private String pspProvider;
+
     @JsonProperty("correlatorId")
     private String correlatorId;
 
@@ -110,6 +116,22 @@ public class PaymentDto {
 
     public void setAuthorizationCode(String authorizationCode) {
         this.authorizationCode = authorizationCode;
+    }
+
+    public String getSettlementRef() {
+        return settlementRef;
+    }
+
+    public void setSettlementRef(String settlementRef) {
+        this.settlementRef = settlementRef;
+    }
+
+    public String getPspProvider() {
+        return pspProvider;
+    }
+
+    public void setPspProvider(String pspProvider) {
+        this.pspProvider = pspProvider;
     }
 
     public String getCorrelatorId() {

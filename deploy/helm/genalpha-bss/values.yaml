@@ -152,6 +152,7 @@ services:
     dbRole: payment_app
     machineIdentity: true
     extraEnv:
+      PAYMENT_PSP: mock
       OIDC_CLIENT_ID: bss-payment
       OIDC_CLIENT_SECRET: payment-secret
       PAYMENT_METHOD_BASE_URL: http://payment-method:8080

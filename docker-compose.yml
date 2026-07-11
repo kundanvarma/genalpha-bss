@@ -765,6 +765,8 @@ services:
     container_name: bss-payment
     restart: unless-stopped
     environment:
+      PAYMENT_PSP: ${PAYMENT_PSP:-mock}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       PAYMENT_METHOD_BASE_URL: http://payment-method:8080
