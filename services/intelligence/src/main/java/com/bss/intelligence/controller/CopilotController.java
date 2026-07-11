@@ -25,6 +25,11 @@ public class CopilotController {
         return ResponseEntity.ok(service.summarizeCustomer(request));
     }
 
+    @PostMapping("/quoteNarrative")
+    public ResponseEntity<Map<String, Object>> narrative(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(service.draftQuoteNarrative(request));
+    }
+
     @PostMapping("/ticketReply")
     public ResponseEntity<Map<String, Object>> reply(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(service.draftTicketReply(request));

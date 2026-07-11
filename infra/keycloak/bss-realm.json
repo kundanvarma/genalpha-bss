@@ -229,6 +229,14 @@
       {
         "name": "ai:use",
         "description": "Use AI assist features (staff tooling)"
+      },
+      {
+        "name": "quote:read",
+        "description": "View B2B quotes"
+      },
+      {
+        "name": "quote:write",
+        "description": "Create and manage B2B quotes"
       }
     ]
   },
@@ -426,6 +434,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-quote",
+      "name": "quote machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "quote-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -520,7 +539,9 @@
         "document:write",
         "campaign:read",
         "campaign:write",
-        "ai:use"
+        "ai:use",
+        "quote:read",
+        "quote:write"
       ]
     },
     {
@@ -631,6 +652,18 @@
         "usage:read",
         "ticket:read",
         "assurance:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-quote",
+      "enabled": true,
+      "serviceAccountClientId": "bss-quote",
+      "realmRoles": [
+        "service:read",
+        "catalog:read",
+        "usage:read",
+        "ordering:write",
+        "ai:use"
       ]
     }
   ]

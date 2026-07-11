@@ -74,6 +74,28 @@ public class CopilotService {
     }
 
     @Transactional
+    public Map<String, Object> draftQuoteNarrative(Map<String, Object> request) {
+        if (request == null || request.isEmpty()) {
+            throw new BadRequestException("a quote context payload is required");
+        }
+        String system = "You write a short executive summary for a telecom B2B quote."
+                + " Plain language, no hype, mention what is included and how AI usage"
+                + " is metered if token allowances appear. Respond with ONLY one labeled line:\n"
+                + "NARRATIVE: <max 500 characters>";
+        String user = "Quote (JSON):\n" + contextOf(request);
+        String raw = completeWithRetry(system, user, "quote-narrative");
+        String narrative = lineAfter(raw, "NARRATIVE:");
+        if (narrative == null) {
+            throw new BadRequestException("the model did not follow the NARRATIVE contract");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("narrative", narrative);
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
+    @Transactional
     public Map<String, Object> draftTicketReply(Map<String, Object> request) {
         if (!(request.get("ticket") instanceof Map<?, ?> ticket) || ticket.get("name") == null) {
             throw new BadRequestException("ticket {name, ...} is required");
@@ -128,7 +150,8 @@ public class CopilotService {
         for (String line : raw.split("\\R")) {
             String t = line.trim().replaceFirst("^[*#>\\-\\s]+", "");
             if (t.regionMatches(true, 0, "SUMMARY:", 0, 8)
-                    || t.regionMatches(true, 0, "REPLY:", 0, 6)) {
+                    || t.regionMatches(true, 0, "REPLY:", 0, 6)
+                    || t.regionMatches(true, 0, "NARRATIVE:", 0, 10)) {
                 return false;
             }
         }
