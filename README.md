@@ -1,314 +1,133 @@
-# BSS on TM Forum ODA — Java / Spring Boot (production track)
+# genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-Production-oriented Business Support System aligned to **TM Forum ODA**, implemented as Spring Boot microservices exposing **TMF Open APIs**. Inspired by **Discobole** (open, standards-based order-to-bill components) and **Totogi BSS Magic** (ontology-first, AI-generated BSS). Verified via **GitHub Actions CI** (build + test + Docker image).
+A vendor-neutral telecom **Business Support System** built as **22 TM Forum ODA components**
+(Spring Boot microservices exposing TMF Open APIs) plus **three web channels**, behind one API
+gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
+operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
+prove it.
 
-## Status — all four services scaffolded
-- ✅ **product-catalog (TMF620)** — catalog, category, productSpecification — port 8081
-- ✅ **product-ordering (TMF622)** — productOrder — port 8082
-- ✅ **product-inventory (TMF637)** — product — port 8083
-- ✅ **party-account (TMF632 + TMF666)** — individual, organization, billingAccount — port 8084
+**Every feature is verified end-to-end in a real browser** — six Playwright suites drive the
+storefront, guest checkout, both consoles, tenant isolation and role administration against the
+full stack. The original five core components also pass the official TM Forum CTKs with zero
+failures.
 
-All four share the same production template: Spring Boot 3.2, JPA/PostgreSQL (H2 for tests), DTO/mapper, validation, `@type` handling, `@RestControllerAdvice` errors, springdoc OpenAPI, a MockMvc test, and a multi-stage Dockerfile. `docker compose up --build` runs all four + Postgres + Keycloak. CI builds/tests/containers every service on each push.
+- 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
+- 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
+
+## The modules
+
+**Core commerce (always deployed)**
+
+| Component | TMF API | Port | What it does |
+|---|---|---|---|
+| product-catalog | TMF620 | 8081 | Offerings, prices, bundles, commitment terms |
+| product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
+| product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
+| party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
+| gateway | ODA exposure | 8080 | Single entry point; white-label host → tenant routing |
+
+**Optional components** (leave any out via the [composer](docs/composer.html) — channels adapt)
+
+| Component | TMF API | Port | What it does |
+|---|---|---|---|
+| product-stock | TMF687 | 8086 | Device shelf: reserve at order, consume at completion |
+| payment | TMF676 | 8087 | Authorize/capture behind a PSP adapter (mock PSP in dev) |
+| billing | TMF678 | 8088 | Billing runs: recurring + usage + discounts on one bill |
+| qualification | TMF679 | 8089 | Serviceability: where fiber-class offerings can be delivered |
+| appointment | TMF646 | 8091 | Installer slots, booked at checkout |
+| trouble-ticket | TMF621 | 8092 | Support cases, org-scoped for partner agents |
+| party-interaction | TMF683 | 8093 | Every touchpoint on the customer timeline |
+| communication | TMF681 | 8095 | Event-driven notifications (the martech door) |
+| shopping-cart | TMF663 | 8096 | Server-side carts: guest secret-id, claim on login, abandonment events |
+| usage | TMF635 / TMF677 | 8097 | Mediation intake, rating, allowance meters, overage charges |
+| agreement | TMF651 | 8098 | Commitment periods minted automatically at order completion |
+| promotion | TMF671 | 8099 | Promo codes: anonymous validation → redemption → bill discount |
+| user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP |
+| geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
+| recommendation | TMF680 | 8102 | Cross-sell: what this customer lacks, bundles first |
+| payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
+
+**Channels** — one build each, white-labeled per tenant by hostname
+
+| Channel | Path | For |
+|---|---|---|
+| storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
+| csr-console | `/csr` | Assisted service: customer 360, ticket queue, org-scoped agents |
+| admin-console | `/console` | Back office: catalog and stock |
+
+## Multitenancy (pool model, hardened)
+
+Two operators — **GenAlpha** (`localhost`) and **Nova Telecom** (`*.nova.localhost`) — share one
+deployment:
+
+- **Identity**: tenant = verified OIDC issuer. Each tenant is a Keycloak realm in dev; a Cognito
+  pool or Entra tenant works identically in production. Machine-to-machine calls use the *acting
+  tenant's* credentials.
+- **Data**: `tenant_id` on every domain row, enforced twice — in code on every query, and by
+  **PostgreSQL Row-Level Security**: services run as restricted roles that see zero rows without
+  a session tenant, even for SQL with no predicate at all.
+- **Anonymous traffic**: the gateway maps hostname → tenant, so each operator's storefront,
+  CSR console and admin console show only their world. Cross-tenant access reads as 404 everywhere.
+
+## Quickstart
+
+Prereqs: JDK 17, Maven, Docker (with compose), ~8GB free memory for the full stack.
+
+```bash
+mvn -q package -DskipTests            # images use the host-built jars
+docker compose build                  # seconds, not minutes
+docker compose up -d                  # ~25 containers; wait for healthy
+
+# demo data (idempotent; order matters) — see ops/README.md
+for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
+         seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
+         seed_promotions seed_nova; do python3 ops/seed/$s.py; done
+```
+
+Then browse:
+
+| URL | What |
+|---|---|
+| http://localhost:8080/shop/ | GenAlpha storefront (self-register, or browse as guest) |
+| http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` |
+| http://localhost:8080/console/ | Admin console — `demo` / `demo` |
+| http://shop.nova.localhost:8080/shop/ | Nova Telecom's white-label storefront (own realm, own catalog) |
+
+Demo cards: `4242 4242 4242 4242` pays, anything ending `0002` declines. Promo code: `WELCOME10`.
+Serviceable fiber postcodes start with `111`, `222` or `333`.
+
+## Verification
+
+```bash
+mvn -q clean test -Dapi.version=1.44        # ~250 tests incl. real-Postgres migrations + RLS proofs
+cd ops/e2e && npm i playwright && npx playwright install chromium
+node storefront_test.js && node guest_test.js && node console_test.js \
+  && node csr_test.js && node tenant_test.js && node roles_test.js
+```
+
+The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,
+color, storage) → cart ×2 → serviceability gate → installer slot → pay → order → stock
+consumption → payment capture → commitment agreement → usage meters → billing run with overage
+and promo discount → pay the bill with the vaulted card → notifications — all through the UI.
+
+## Deploying
+
+`deploy/helm/genalpha-bss` carries the whole stack (both realms, per-service RLS roles, the
+second tenant's issuers). Choose modules with the [composer](docs/composer.html):
+
+```bash
+helm install genalpha-bss deploy/helm/genalpha-bss -f my-modules.yaml
+```
+
+Terraform stacks for EKS and AKS live under `deploy/terraform`.
 
 ## Stack
-Java 17 · Spring Boot 3.2 · Spring Web · Spring Data JPA · PostgreSQL (H2 for tests) · springdoc-openapi · Maven · Docker · GitHub Actions.
 
-## Run product-catalog locally
-Requires JDK 17 + Maven, and a Postgres (or use Docker).
-```bash
-cd services/product-catalog
-# with a local Postgres on 5432 (db: product_catalog / user: postgres / pass: postgres)
-mvn spring-boot:run
-# API base: http://localhost:8080/tmf-api/productCatalogManagement/v4
-# OpenAPI UI: http://localhost:8080/swagger-ui.html
-# Health:     http://localhost:8080/actuator/health
-```
-Run tests (no DB needed — uses H2):
-```bash
-mvn -B verify
-```
-Build the container:
-```bash
-docker build -t bss/product-catalog .
-docker run -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:5432/product_catalog bss/product-catalog
-```
+Java 17 · Spring Boot 3.2 · Spring Security (multi-issuer resource server) · JPA/PostgreSQL
+(+ RLS) · Flyway · Kafka (transactional outbox) · Keycloak 26 (dev IdP) · React + Vite ·
+Playwright · Helm · Terraform · GitHub Actions.
 
 ## CI
-`.github/workflows/ci.yml` runs on every push/PR: sets up JDK 17, runs `mvn verify` (compile + tests), and builds the Docker image. Add a job per new service as they land. **CI is the source of truth for "it builds and passes"** — this is where the Java toolchain actually runs.
 
-## Try the API
-All endpoints require a JWT — see the **Security** section below for getting a token
-from the bundled Keycloak. Everything goes through the gateway on port 8080:
-```bash
-curl -X POST localhost:8080/tmf-api/productCatalogManagement/v4/productOffering \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"5G Unlimited","lifecycleStatus":"Active","version":"1.0"}'
-
-curl -H "Authorization: Bearer $TOKEN" \
-  "localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?offset=0&limit=10"
-```
-
-## Roadmap
-1. ✅ All four services scaffolded on the shared Spring Boot template.
-2. ✅ Cross-service order-to-cash orchestration (order → inventory → billing account).
-3. ✅ TMF688 domain events over Kafka.
-4. ✅ OAuth2/OIDC resource-server security (vendor-neutral; Keycloak bundled for dev) + API gateway.
-5. ✅ TM Forum Open API conformance — all five CTKs passing (TMF620/622/632/637/666).
-6. ✅ Observability (Micrometer/Prometheus/Grafana) + infrastructure-as-code (Helm chart, EKS/AKS Terraform).
-
-## Build status
-All four services compile and their tests pass under JDK 17 + Maven 3.9, locally and
-in CI (which also runs the Testcontainers Postgres and Kafka tests and builds every
-Docker image). The full `docker compose up` stack — all seven containers — has been
-exercised end to end manually (2026-07-09): Keycloak-issued user token, offering and
-billing account created, order validated via machine-to-machine calls, completion
-provisioning the product into inventory, and both TMF688 events consumed from Kafka.
-That flow is verified but not yet automated in CI.
-
-Local note: very new Docker daemons (29+) reject the API version Testcontainers'
-docker-java opens with; run tests with `-Dapi.version=1.44` if containers report
-"client version 1.32 is too old".
-
-## Schema management
-Each service owns a private database and applies its own **Flyway** migrations from
-`src/main/resources/db/migration` at startup. Hibernate runs with `ddl-auto: validate`,
-so a mismatch between the JPA entities and the migrated schema fails startup instead of
-silently altering tables. The test suite runs the same migrations against H2, which means
-entity/schema drift is caught by CI.
-
-Each service also has a `PostgresMigrationTest` that runs the migrations against a real
-PostgreSQL 16 via Testcontainers, loading the production config rather than the H2 test
-profile. It is skipped when Docker is unavailable and runs in CI, so the schema is
-verified on the engine it actually deploys against — not only on H2.
-
-To add a column: write a new `V2__*.sql` alongside the entity change. Never edit an
-applied migration — Flyway checksums them.
-
-If you ran an older revision that used the shared `bss` database, reset the volume
-before starting: `docker compose down -v`.
-
-## Pagination
-Every list endpoint takes TMF630-style `offset` (default 0) and `limit` (default 20,
-max 100) query params and returns the slice ordered by id, plus `X-Total-Count`
-(total rows) and `X-Result-Count` (rows in this response) headers. Invalid values
-produce a 400 with the TMF error body.
-```bash
-curl -i "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering?offset=20&limit=10"
-```
-
-## Building
-An aggregator POM at the repo root builds and tests everything in one command:
-```bash
-mvn -B verify
-```
-Each service also remains independently buildable from its own directory.
-
-## Container images
-Each Dockerfile is multi-stage: the Spring Boot jar is exploded into layers
-(dependencies / loader / snapshot-dependencies / application, least- to most-volatile)
-so a code-only change rebuilds a single layer. The runtime stage runs as a non-root
-user (uid 1001, compatible with Kubernetes `runAsNonRoot`), declares a `HEALTHCHECK`
-against `/actuator/health`, sizes the heap with `-XX:MaxRAMPercentage=75`, and execs
-the JVM as PID 1 so SIGTERM reaches it for graceful shutdown.
-
-## Security
-Every service is a pure **OAuth2 resource server**: it never performs login or issues
-tokens — it validates JWTs from whatever OIDC issuer `OIDC_ISSUER_URI` points at.
-Any spec-compliant provider works unchanged (Keycloak, IdentityServer/Duende,
-Ping Identity, Okta, Entra ID, Auth0, Cognito); the provider is deployment
-configuration, not a code dependency.
-
-Authorization is scope-based and coarse: reads require `<service>:read`
-(`catalog:read`, `ordering:read`, `inventory:read`, `party:read`), writes
-(POST/PATCH/DELETE) require the matching `<service>:write`. `/actuator/health` and
-the OpenAPI docs stay open for probes and discovery. Providers differ in which claim
-carries permissions (`scope`, `scp`, `realm_access.roles`, ...), so the claim paths are
-configurable via `bss.security.authority-claims` — switching identity providers is
-configuration, not code.
-
-`docker compose up` includes a **Keycloak** (port 8085) with a pre-provisioned `bss`
-realm and a `demo`/`demo` user holding all scopes — a working secured system out of
-the box, no cloud account needed. Try it:
-```bash
-TOKEN=$(curl -s -d grant_type=password -d client_id=bss-demo \
-  -d username=demo -d password=demo \
-  http://localhost:8085/realms/bss/protocol/openid-connect/token | jq -r .access_token)
-
-curl -H "Authorization: Bearer $TOKEN" \
-  "localhost:8081/tmf-api/productCatalogManagement/v4/productOffering"
-```
-Without a token the same request returns 401; with a token lacking `catalog:write`,
-POST returns 403. Tests fabricate JWTs via `spring-security-test`, so the full
-401/403/200 matrix runs in CI with no identity provider.
-
-## API gateway
-`services/gateway` (Spring Cloud Gateway) is the single entry point, on port **8080**
-in compose. It routes by TMF API path to the owning service — no path rewriting,
-since every service serves its full TMF path:
-
-| Path prefix | Service |
-|---|---|
-| `/tmf-api/productCatalogManagement/**` | product-catalog |
-| `/tmf-api/productOrderingManagement/**` | product-ordering |
-| `/tmf-api/productInventoryManagement/**` | product-inventory |
-| `/tmf-api/party/**`, `/tmf-api/accountManagement/**` | party-account |
-
-The gateway forwards `Authorization` headers untouched: the services stay the
-authorization enforcement point, so the gateway adds a front door without a second
-security implementation to keep in sync. Downstream locations come from
-`CATALOG_URL` / `ORDERING_URL` / `INVENTORY_URL` / `PARTY_URL`. Direct service
-ports (8081–8084) remain exposed in compose for debugging.
-
-## Order-to-cash orchestration
-`product-ordering` orchestrates the order lifecycle across the other services,
-synchronously over their TMF APIs:
-
-- **Creation** validates references: an order pointing at a `productOfferingId`
-  unknown to the catalog, or a `billingAccountId` unknown to party-account, is
-  rejected with 400. Orders without references are accepted untouched.
-- **Completion** (`PATCH {"state": "completed"}`) provisions the ordered product
-  into product-inventory (status `active`, carrying the offering and billing
-  account references). Provisioning runs inside the order transaction: if
-  inventory fails, the response is 502 and the order stays in its previous state.
-- `completed` and `cancelled` are terminal — further changes are rejected, so an
-  order can never provision twice.
-
-Service-to-service calls authenticate via **OAuth2 client credentials**: the
-ordering service has its own machine identity (`bss-ordering` in the dev realm)
-whose scopes are exactly what orchestration needs — `catalog:read`, `party:read`,
-`inventory:write` — so the API security model applies to machines the same way it
-applies to users. Downstream locations come from `CATALOG_BASE_URL`,
-`PARTY_BASE_URL`, and `INVENTORY_BASE_URL`; the token endpoint from
-`OIDC_TOKEN_URI` (deliberately not issuer discovery, so no IdP is needed at
-startup). The dev client secret in the bundled realm is for local use only —
-override `OIDC_CLIENT_SECRET` in any real deployment.
-
-## Domain events (TMF688)
-Every resource mutation publishes a TMF688-style event to Kafka — per-service
-topics `bss.{catalog,ordering,inventory,party}.events`, envelope
-`{eventId, eventTime, eventType, event: {<resource>: {...}}}`. Event types follow
-TMF naming: `<Resource>CreateEvent`, `<Resource>AttributeValueChangeEvent`,
-`<Resource>DeleteEvent`, and `ProductOrderStateChangeEvent` on order state
-transitions.
-
-Delivery is **at-least-once via a transactional outbox**: the event row is
-written in the same database transaction as the business change, so a rolled-back
-change never produces an event and a committed change never loses one. A relay
-drains the outbox to Kafka in order every 2s (`bss.events.relay-interval-ms`),
-deleting rows only after the broker acknowledges; a dead broker retains events
-for retry and never fails an API request. A crash between send and delete can
-produce a duplicate — consumers should deduplicate by `eventId` (the Kafka
-message key). Tests run against a no-op publisher for speed; outbox semantics
-(same-transaction commit, rollback, drain, broker-failure retention) are tested
-in product-ordering, and one Testcontainers test asserts a real envelope lands
-on a real broker through the outbox path.
-
-Watch the stream:
-```bash
-docker exec -it bss-kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 --topic bss.ordering.events --from-beginning
-```
-
-## Observability
-Every service (gateway included) exposes Prometheus metrics at
-`/actuator/prometheus`, tagged with `application=<service>` — JVM, HTTP server,
-datasource, and Kafka producer metrics out of the box, plus two business counters
-from the event pipeline:
-
-- `bss_events_published_total{event_type=...}` — TMF688 events acknowledged by Kafka
-- `bss_events_failed_total{event_type=...}` — failed delivery attempts (the event
-  stays in the outbox and retries; rising values mean the broker is unhealthy)
-
-Alert on `bss_events_failed_total` growth and on outbox backlog age if you add a
-gauge; with the transactional outbox, failures mean delayed delivery, not loss.
-
-`docker compose up` includes **Prometheus** (port 9090) scraping all five services
-every 10s, and **Grafana** (port 3000, admin/admin) with the Prometheus datasource
-pre-provisioned — import dashboard `4701` (JVM Micrometer) for an instant overview.
-The scrape endpoint is deliberately unauthenticated, like health; in production,
-keep the actuator port network-internal.
-
-## TM Forum conformance (CTK)
-The official TM Forum Conformance Test Kits are public at
-[github.com/tmforum-rand](https://github.com/tmforum-rand). **All five kits pass
-with zero failures** against this stack, run through the gateway with a real
-Keycloak token (191 requests, 2,062 assertions in total):
-
-| CTK | API | Requests | Assertions |
-|---|---|---|---|
-| TMF620 v4.0.0 | Product Catalog | 47 | 396 |
-| TMF622 v4.0.0 | Product Ordering | 9 | 63 |
-| TMF632 v4.0.0 | Party | 29 | 320 |
-| TMF637 v4.0.0 | Product Inventory | 8 | 85 |
-| TMF666 v4.0.0 | Account | 98 | 1,198 |
-
-What conformance required beyond the original scaffold: spec-mandatory
-sub-resources stored and echoed verbatim (`productOrderItem`, `relatedParty`,
-nested `productOffering`/`billingAccount` references, `productCharacteristic`,
-`productPrice`); server-set fields (`state`, `lastUpdate`, `lifecycleStatus`
-defaults); TMF630 attribute filtering and `?fields=` selection on every tested
-resource (unknown filter attributes are rejected with 400); new spec resources
-(`productOfferingPrice`, `billFormat`, `partyAccount`,
-`billingCycleSpecification`, `financialAccount`, `settlementAccount`,
-`billPresentationMedia`); the spec base path `/tmf-api/productInventory/v4`;
-and an Organization without a `name` (the spec requires only `tradingName`).
-The TMF637 kit creates nothing — it audits existing inventory, so seed at
-least two spec-shaped products before running it.
-
-To reproduce: clone the CTK, point `config.json` at
-`http://localhost:8080/tmf-api/productOrderingManagement/v4/`, add an
-`Authorization: Bearer <token>` header (see Security), start from a clean
-database (`docker compose down -v && docker compose up -d`), and run the kit
-with Node 16. Formal certification is a TM Forum program; the kit passing is
-the technical prerequisite.
-
-## Deploying (Helm + Terraform)
-`deploy/helm/genalpha-bss` is a Helm chart installing all five services with
-readiness/liveness probes on `/actuator/health`, non-root security contexts
-(uid 1001), and — for local/dev clusters — in-cluster PostgreSQL, Kafka, and
-Keycloak. The same chart runs unchanged on any conformant cluster:
-
-```bash
-helm install bss deploy/helm/genalpha-bss --namespace bss --create-namespace
-```
-
-On cloud, disable the in-cluster dependencies and point the values at managed
-services (`config.dbHost`, `config.kafkaBootstrapServers`,
-`config.oidcIssuerUri`, `image.prefix` for your registry). The vendor-neutral
-service design means every environment difference is a values entry, not a
-code change — Azure Event Hubs speaks the Kafka protocol, any OIDC issuer
-works, any PostgreSQL works.
-
-`deploy/terraform/aws` provisions EKS + RDS PostgreSQL; `deploy/terraform/azure`
-provisions AKS + Azure Database for PostgreSQL Flexible Server (per-service
-databases included). Both are Terraform-compatible HCL (validated with
-OpenTofu) and end by handing values to the same chart — see the header comment
-in each `main.tf` for the post-apply `helm install`.
-
-Verified on a local Kubernetes (k3s): `helm install` brings up all eight pods,
-and the full order-to-cash flow passes — token from in-cluster Keycloak,
-gateway routing, M2M reference validation, inventory provisioning, and both
-TMF688 events consumed from in-cluster Kafka.
-
-## Catalog console (first channel UI)
-`apps/admin-console` is a web interface for managing the catalog — product offerings,
-specifications, and prices: list, create, edit, delete. It is the seed of the channels
-layer (assisted/self-service UIs will grow alongside it).
-
-Open **http://localhost:8080/console/** and sign in as `demo`/`demo`. The console is a
-zero-build vanilla-JS SPA served by unprivileged nginx through the gateway (same origin,
-no CORS), authenticating with the standard OIDC authorization-code + PKCE flow — the
-`bss-console` public client in the dev realm; any OIDC provider works by overriding
-`window.BSS_CONSOLE_CONFIG`. It calls the same TMF APIs as every other client, so it
-inherits validation, scopes, pagination, and events for free.
-
-Note on the dev Keycloak: browsers need every interactive URL on `localhost:8085`, so
-that is the pinned frontend hostname (and token issuer), while in-network callers use
-`keycloak:8080` via `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` — services validate the frontend
-issuer but fetch JWKS over the backchannel (`SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI`).
-
-## License
-[Apache License 2.0](LICENSE) — aligned with TM Forum's own Open API assets and
-chosen for its explicit patent grant, which matters in a standards-heavy telecom
-domain.
+`.github/workflows/ci.yml` builds and tests every service on each push. CI is the source of
+truth for "it builds and passes".
