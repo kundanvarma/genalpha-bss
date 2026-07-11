@@ -33,7 +33,7 @@ body {
 
 .top {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  padding: 14px 26px; border-bottom: 2px solid var(--ink); flex-wrap: wrap;
+  padding: 14px 26px; border-bottom: 1px solid var(--line); flex-wrap: wrap;
 }
 .brand { display: flex; align-items: baseline; gap: 10px; }
 .mark { font-weight: 700; letter-spacing: -0.01em; font-size: 17px; }
@@ -216,3 +216,50 @@ button:disabled { opacity: 0.5; cursor: default; }
 
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
   border-radius: 50%; background: var(--teal); color: #fff; font-weight: 700; font-size: 0.72rem; }
+
+/* --- design uplift: depth, radius, motion ------------------------------- */
+:root {
+  --radius: 14px;
+  --radius-s: 9px;
+  --shadow: 0 1px 2px rgba(16, 32, 36, 0.05), 0 10px 28px -14px rgba(16, 32, 36, 0.18);
+  --shadow-lift: 0 2px 4px rgba(16, 32, 36, 0.06), 0 18px 40px -16px rgba(16, 32, 36, 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 18px 40px -16px rgba(0, 0, 0, 0.75);
+  }
+}
+.top {
+  position: sticky; top: 0; z-index: 20;
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: saturate(1.4) blur(10px);
+  -webkit-backdrop-filter: saturate(1.4) blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+
+.nav a { border-radius: 999px; transition: color 120ms, background 120ms; }
+.nav a:hover { color: var(--teal); }
+.card {
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms;
+  overflow: hidden;
+}
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+.offerart { margin: -16px -18px 10px; width: calc(100% + 36px); max-width: none; max-height: 140px; border-radius: 0; }
+.tag { border-radius: 999px; }
+button.primary { border-radius: var(--radius-s); transition: filter 120ms; }
+button.primary:hover { filter: brightness(1.08); }
+button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-color 120ms; }
+.option { border-radius: var(--radius-s); }
+.charfield input, .charfield select, .supportform input, .promobar input { border-radius: var(--radius-s); }
+.state { border-radius: 999px; }
+.hero {
+  margin: 4px 0 26px; padding: 34px 34px 30px; border-radius: var(--radius);
+  color: #fff; box-shadow: var(--shadow);
+  background:
+    radial-gradient(120% 200% at 100% 0%, color-mix(in srgb, var(--teal) 60%, #ffffff30) 0%, transparent 55%),
+    linear-gradient(135deg, var(--teal), color-mix(in srgb, var(--teal) 70%, #05221f));
+}
+.hero h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: #fff; }
+.hero p { margin: 0; font-size: 15px; opacity: 0.88; max-width: 46ch; }

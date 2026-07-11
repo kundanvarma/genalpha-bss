@@ -62,8 +62,12 @@ public class StorefrontTenantConfigController {
             tenant = tenants.byId(tenants.getDefaultTenant());
         }
         String issuer = tenant != null && tenant.getIssuer() != null ? tenant.getIssuer() : "";
+        String brandName = tenant != null && tenant.getBrandName() != null ? tenant.getBrandName() : "";
+        String brandColor = tenant != null && tenant.getBrandColor() != null ? tenant.getBrandColor() : "";
         String body = "window." + global + " = { issuer: '" + issuer
-                + "', logoUrl: '" + logoUrlOf(tenant) + "' };\n";
+                + "', logoUrl: '" + logoUrlOf(tenant)
+                + "', brandName: '" + brandName
+                + "', brandColor: '" + brandColor + "' };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")
