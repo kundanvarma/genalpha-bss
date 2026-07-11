@@ -168,3 +168,25 @@ export async function offeringNames() {
   const offerings = await json(await authFetch(`${CATALOG}/productOffering?limit=100`));
   return Object.fromEntries(offerings.map((o) => [o.id, o.name]));
 }
+
+// Intelligence copilot — fail-soft like every optional component: if the
+// module is not deployed, the copilot card simply does not render results.
+export async function aiCustomerSummary(payload) {
+  const res = await authFetch('/ai/v1/customerSummary', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function aiTicketReply(payload) {
+  const res = await authFetch('/ai/v1/ticketReply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}

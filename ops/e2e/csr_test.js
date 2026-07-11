@@ -70,8 +70,27 @@ async function agentLogin(page, username) {
   await a.locator('[data-testid="suggest-card"] .row').first().waitFor({ timeout: 10000 });
   console.log('OK 360 shows usage, agreements, promo/vault and suggestions cards');
 
+  // --- Copilot: the 360 summarized on demand, next actions included
+  await a.locator('[data-testid="copilot-summarize"]').click();
+  await a.locator('[data-testid="copilot-summary"]').waitFor({ timeout: 15000 });
+  const summaryText = (await a.locator('[data-testid="copilot-summary"]').textContent()).trim();
+  const actions = await a.locator('[data-testid="copilot-card"] li').count();
+  if (!summaryText || actions < 1) fail('copilot summary incomplete: ' + summaryText);
+  console.log('OK copilot summarized the 360 with', actions, 'suggested actions');
+
   const ticket = a.locator('.ticket', { hasText: 'No internet at home' });
   await ticket.waitFor({ timeout: 15000 });
+
+  // --- Copilot drafts the reply; the agent stays in charge and rewrites it
+  await ticket.locator('[data-testid="draft-reply"]').click();
+  let drafted = '';
+  for (let attempt = 0; attempt < 15 && !drafted; attempt++) {
+    await a.waitForTimeout(1000);
+    drafted = await ticket.locator('input[name="ticketNote"]').inputValue();
+  }
+  if (!drafted) fail('copilot never drafted a ticket reply');
+  console.log('OK copilot drafted a reply into the note box');
+
   await ticket.locator('input[name="ticketNote"]').fill('Line test shows outage in the area');
   await ticket.locator('button', { hasText: '→ inProgress' }).click();
   await a.locator('.ticket .state', { hasText: 'inProgress' }).waitFor({ timeout: 15000 });

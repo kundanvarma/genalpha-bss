@@ -49,7 +49,7 @@ failures.
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
 | document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
-| intelligence | AI | 8109 | Any-LLM seam (stub / OpenAI-compatible / Anthropic): campaign copy assistant with PII redaction and a per-tenant audit ledger |
+| intelligence | AI | 8109 | Any-LLM seam (stub / OpenAI-compatible / Anthropic): campaign copy assistant + CSR copilot (360 summary, ticket reply drafts), PII redaction, per-tenant audit ledger |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
@@ -64,7 +64,7 @@ color** theme every channel from the tenant manifest)
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
-| csr-console | `/csr` | Assisted service: customer 360, ticket queue, org-scoped agents |
+| csr-console | `/csr` | Assisted service: customer 360 with AI copilot, ticket queue, org-scoped agents |
 | admin-console | `/console` | Back office: catalog, stock and marketing campaigns |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 

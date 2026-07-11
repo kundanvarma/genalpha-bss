@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { workTicket } from '../api.js';
+import { aiTicketReply, workTicket } from '../api.js';
 
 const NEXT = {
   acknowledged: ['inProgress', 'resolved'],
@@ -10,6 +10,7 @@ const NEXT = {
 export default function TicketCard({ ticket, onChanged }) {
   const [note, setNote] = useState('');
   const [error, setError] = useState(null);
+  const [drafting, setDrafting] = useState(false);
 
   async function change(status) {
     try {
@@ -22,6 +23,27 @@ export default function TicketCard({ ticket, onChanged }) {
       onChanged();
     } catch (e) {
       setError(e.message);
+    }
+  }
+
+  // The copilot drafts into the note box; the agent edits and sends.
+  async function draftReply() {
+    setDrafting(true);
+    try {
+      setError(null);
+      const draft = await aiTicketReply({
+        ticket: {
+          name: ticket.name,
+          status: ticket.status,
+          severity: ticket.severity,
+          notes: (ticket.note || []).map((n) => n.text),
+        },
+      });
+      setNote(draft.reply);
+    } catch (e) {
+      setError('Copilot: ' + e.message);
+    } finally {
+      setDrafting(false);
     }
   }
 
@@ -42,6 +64,9 @@ export default function TicketCard({ ticket, onChanged }) {
         <div className="stack">
           <input name="ticketNote" placeholder="Add a note…" value={note}
                  onChange={(e) => setNote(e.target.value)} />
+          <button className="ghost" data-testid="draft-reply" onClick={draftReply} disabled={drafting}>
+            {drafting ? 'Drafting…' : '✨ Draft reply'}
+          </button>
           {note.trim() && <button className="ghost" onClick={() => change(null)}>Note only</button>}
           {NEXT[ticket.status].map((s) => (
             <button className="ghost" key={s} onClick={() => change(s)}>→ {s}</button>

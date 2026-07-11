@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { appointmentsOf, billsOf, cartsOf, createTicket, getCustomer, interactionsOf, logInteraction,
-  ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
+import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getCustomer,
+  interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
   activeServicesOf, agreementsOf, paymentMethodsOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
@@ -28,6 +28,31 @@ export default function Customer360() {
   const [note, setNote] = useState('');
   const [ticketName, setTicketName] = useState('');
   const [error, setError] = useState(null);
+  const [copilot, setCopilot] = useState(null); // null | 'loading' | {summary, nextActions}
+
+  async function summarize() {
+    setCopilot('loading');
+    try {
+      // The copilot sees exactly what the agent sees — this page's data, trimmed.
+      setCopilot(await aiCustomerSummary({
+        customerName: `${customer.givenName} ${customer.familyName}`,
+        context: {
+          orders: orders.map((o) => ({ state: o.state, at: o.orderDate })),
+          activeServices: activeServices.length,
+          bills: bills.map((b) => ({ state: b.state, amountDue: b.amountDue })),
+          openTickets: tickets.filter((t) => t.status !== 'closed')
+            .map((t) => ({ name: t.name, status: t.status, severity: t.severity })),
+          usage: usage.map((u) => ({ meter: u.name, used: u.used, included: u.included })),
+          agreements: agreements.map((a) => ({ name: a.name, endsAt: a.completionDate })),
+          openCart: carts.some((c) => c.status === 'active'),
+          lastInteractions: interactions.slice(0, 5).map((i) => i.description),
+        },
+      }));
+    } catch (e) {
+      setCopilot(null);
+      setError('Copilot: ' + e.message);
+    }
+  }
 
   const reload = () => {
     getCustomer(id).then(setCustomer).catch((e) => setError(e.message));
@@ -72,6 +97,24 @@ export default function Customer360() {
       <p className="dim small">{customer.id}
         {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
       {error && <p className="error">{error}</p>}
+
+      <section className="copilot" data-testid="copilot-card">
+        {!copilot && (
+          <button className="ghost" data-testid="copilot-summarize" onClick={summarize}>
+            ✨ Summarize this customer
+          </button>
+        )}
+        {copilot === 'loading' && <p className="dim small">Copilot is reading the 360…</p>}
+        {copilot && copilot !== 'loading' && (
+          <>
+            <p data-testid="copilot-summary">{copilot.summary}</p>
+            <ul className="small">
+              {copilot.nextActions.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+            <p className="dim small">Drafted by {copilot.provider} ({copilot.model}) — verify before acting.</p>
+          </>
+        )}
+      </section>
 
       <div className="col2">
         <section>

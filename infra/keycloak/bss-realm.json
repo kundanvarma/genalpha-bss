@@ -141,7 +141,8 @@
             "assurance:read",
             "paymentmethod:read",
             "paymentmethod:write",
-            "recommendation:read"
+            "recommendation:read",
+            "ai:use"
           ]
         }
       },
