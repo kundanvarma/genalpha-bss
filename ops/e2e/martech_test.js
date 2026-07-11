@@ -252,6 +252,40 @@ async function staffToken(request, realm) {
     `${API}/tmf-api/campaignManagement/v4/campaign/${(await churnCamp.json()).id}`,
     { headers: { ...as(genalpha), ...json }, data: { status: 'paused' } });
 
+  // --- The learning provision: snapshots accumulate live; history trains a model
+  const before = await (await ctx.request.get(`${API}/ai/v1/churnModel`,
+    { headers: as(genalpha) })).json();
+  if (!(before.snapshots > 0)) fail('sweeps are not accumulating feature snapshots');
+
+  const rows = [];
+  for (let i = 0; i < 60; i++) {
+    const churner = i % 2 === 0;
+    rows.push({
+      features: [churner ? 5 + (i % 30) : 120 + i * 3, 0.5, churner ? 3 : 0, churner ? 1 : 0],
+      churned: churner,
+    });
+  }
+  const trained = await (await ctx.request.post(`${API}/ai/v1/churnTraining/import`, {
+    headers: { ...as(genalpha), ...json }, data: { rows },
+  })).json();
+  if (!trained.trained || trained.sampleCount !== 60) {
+    fail('import training failed: ' + JSON.stringify(trained));
+  }
+  const after = await (await ctx.request.get(`${API}/ai/v1/churnModel`,
+    { headers: as(genalpha) })).json();
+  if (!after.trained || !after.trainedAt) fail('model status does not reflect training');
+  console.log('OK learning provision:', before.snapshots,
+    'live snapshots accumulating; historical import trained a model (acc',
+    trained.trainingAccuracy + ')');
+
+  // Labels flow in as outcomes — tomorrow's ground truth.
+  const labeled = await ctx.request.post(`${API}/ai/v1/churnOutcome`, {
+    headers: { ...as(genalpha), ...json },
+    data: { party: { id: churnParty }, churned: false },
+  });
+  if (labeled.status() !== 200) fail('outcome labeling failed');
+  console.log('OK churn outcome recorded — the retained customer becomes a training label');
+
   await browser.close();
   console.log('\nALL MARTECH CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

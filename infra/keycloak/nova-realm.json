@@ -637,7 +637,9 @@
       "serviceAccountClientId": "bss-intelligence",
       "realmRoles": [
         "agreement:read",
-        "usage:read"
+        "usage:read",
+        "ticket:read",
+        "assurance:read"
       ]
     }
   ],
