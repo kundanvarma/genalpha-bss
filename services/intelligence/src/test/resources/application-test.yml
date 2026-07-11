@@ -16,8 +16,12 @@ spring:
     password: ""
 
 bss:
+  events:
+    enabled: false
   intelligence:
     provider: stub
+    churn:
+      initial-delay-ms: 86400000
   tenants:
     default-tenant: genalpha
     registry:

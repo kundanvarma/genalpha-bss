@@ -41,6 +41,7 @@ const TRIGGER_EVENTS = [
   { value: 'TroubleTicketStateChangeEvent', label: 'Ticket state changed' },
   { value: 'ShoppingCartAbandonedEvent', label: 'Cart abandoned' },
   { value: 'AgreementCreateEvent', label: 'Agreement started' },
+  { value: 'ChurnRiskDetectedEvent', label: 'Churn risk detected (AI scorer)' },
 ];
 
 const RESOURCES = [
