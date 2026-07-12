@@ -12,6 +12,8 @@ const CATALOG = '/tmf-api/productCatalogManagement/v4';
 const ORDERING = '/tmf-api/productOrderingManagement/v4';
 const SERVICE_INV = '/tmf-api/serviceInventory/v4';
 const BILLING = '/tmf-api/customerBillManagement/v4';
+const ROLES = '/tmf-api/rolesAndPermissionsManagement/v4';
+const CONSUMPTION = '/tmf-api/usageConsumption/v4';
 
 const el = (id) => document.getElementById(id);
 let me = null;
@@ -73,15 +75,34 @@ async function addMember() {
   if (!given || !family) { status.className = 'err'; status.textContent = 'name required'; return; }
   status.className = ''; status.textContent = 'adding…';
   try {
+    // With an email we provision a real LOGIN first (TMF672 mints the IdP
+    // account, customer role only), then pin the party's id to the new token
+    // subject — so the person can sign in here and land on THEIR line.
+    let login = null;
+    if (email) {
+      login = await json(await authFetch(`${ROLES}/user`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, givenName: given, familyName: family }),
+      }));
+    }
     await json(await authFetch(`${PARTY}/individual`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        ...(login ? { id: login.id } : {}),
         givenName: given, familyName: family,
         ...(email ? { contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] } : {}),
       }),
     }));
-    status.className = 'ok'; status.textContent = '✓ added to your organization';
+    status.className = 'ok';
+    if (login) {
+      // Shown once, for hand-over. The IdP never returns it again.
+      status.innerHTML = `✓ added — they can sign in here with
+        <span data-testid="invite-credentials" style="font-family:ui-monospace,Menlo,monospace">${email} / ${login.temporaryPassword}</span>`;
+    } else {
+      status.textContent = '✓ added to your organization (no email — no sign-in)';
+    }
     el('new-given').value = ''; el('new-family').value = ''; el('new-email').value = '';
     loadMembers();
   } catch (e) { status.className = 'err'; status.textContent = e.message; }
@@ -149,6 +170,47 @@ async function loadBills() {
   if (!bills.length) box.innerHTML = '<span class="dimhint">No invoices yet — they appear after the operator\'s billing run.</span>';
 }
 
+/* ---------- the MEMBER's my-page: the line their company pays for ---------- */
+async function renderMemberView(orgName) {
+  el('member-org-name').textContent = orgName;
+  el('member-org-bill').textContent = orgName;
+  el('memberview').hidden = false;
+
+  const box = el('member-lines');
+  box.textContent = 'loading…';
+  try {
+    const svcs = await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${me.id}`));
+    box.replaceChildren();
+    for (const sv of (svcs || []).filter((s) => s.state === 'active' || s.state === 'inactive')) {
+      const row = document.createElement('div');
+      row.className = 'memberrow';
+      const name = document.createElement('span');
+      name.innerHTML = `<b>${sv.name || 'Service'}</b>`;
+      const num = document.createElement('span');
+      num.className = 'lines';
+      const msisdns = (sv.supportingResource || []).map((r) => r.value).filter(Boolean);
+      num.innerHTML = `${sv.state} ${msisdns.length ? `· <span class="msisdn">${msisdns.join(' · ')}</span>` : ''}`;
+      row.append(name, num);
+      box.append(row);
+    }
+    if (!box.children.length) box.textContent = 'No lines yet — your company admin can order one for you.';
+  } catch (e) { box.textContent = 'Could not load your services.'; }
+
+  // usage buckets, fail-soft
+  authFetch(`${CONSUMPTION}/queryUsageConsumption`)
+    .then(json)
+    .then((report) => {
+      const usage = el('member-usage');
+      usage.replaceChildren(...(report.bucket || []).map((b) => {
+        const d = document.createElement('div');
+        d.innerHTML = `${b.name} <span style="float:right">${b.usedValue}${b.allowedValue != null ? ` / ${b.allowedValue}` : ''} ${b.units || ''}</span>`;
+        return d;
+      }));
+      if (!usage.children.length) usage.textContent = 'No usage yet.';
+    })
+    .catch(() => { el('member-usage').textContent = 'No usage yet.'; });
+}
+
 /* ---------- boot ---------- */
 async function main() {
   const ready = await ensureSignedIn().catch(() => false);
@@ -164,7 +226,16 @@ async function main() {
   if (!orgId) { el('nogate').hidden = false; return; }
 
   const org = await json(await authFetch(`${PARTY}/organization/${orgId}`)).catch(() => null);
-  el('org-name').textContent = org?.name || orgId;
+  const orgName = org?.name || orgId;
+
+  // One channel, two faces: the org's admin runs the company; everyone
+  // else who belongs to the org sees their own work line.
+  if (!hasRole('business:admin')) {
+    renderMemberView(orgName);
+    return;
+  }
+
+  el('org-name').textContent = orgName;
   el('main').hidden = false;
 
   el('add-member').addEventListener('click', addMember);

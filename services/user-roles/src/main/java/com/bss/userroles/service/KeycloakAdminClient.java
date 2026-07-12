@@ -57,6 +57,34 @@ public class KeycloakAdminClient implements IdpAdminClient {
     }
 
     @Override
+    public String createUser(String tenantId, String email, String firstName, String lastName, String password) {
+        // Realms with registrationEmailAsUsername expect username == email.
+        Map<String, Object> user = Map.of(
+                "username", email,
+                "email", email,
+                "firstName", firstName,
+                "lastName", lastName,
+                "enabled", true,
+                "emailVerified", true,
+                "credentials", List.of(Map.of("type", "password", "value", password, "temporary", false)));
+        try {
+            var response = rest.post().uri(adminBase(tenantId) + "/users")
+                    .header("Authorization", "Bearer " + tokenFor(tenantId))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(user)
+                    .retrieve().toBodilessEntity();
+            // Keycloak answers 201 with Location: .../users/<id>
+            String location = response.getHeaders().getFirst("Location");
+            if (location == null || location.isBlank()) {
+                throw new IllegalStateException("IdP did not return the new user's location");
+            }
+            return location.substring(location.lastIndexOf('/') + 1);
+        } catch (HttpClientErrorException.Conflict e) {
+            throw new BadRequestException("a login for '" + email + "' already exists");
+        }
+    }
+
+    @Override
     public void grant(String tenantId, String userId, String roleName) {
         rest.post().uri(adminBase(tenantId) + "/users/" + userId + "/role-mappings/realm")
                 .header("Authorization", "Bearer " + tokenFor(tenantId))

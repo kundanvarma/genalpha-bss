@@ -95,6 +95,10 @@ function tokenClaims() {
   }
 }
 
+function hasRole(role) {
+  return ((tokenClaims().realm_access || {}).roles || []).includes(role);
+}
+
 function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(EXP_KEY);

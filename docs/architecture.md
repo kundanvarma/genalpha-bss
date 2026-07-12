@@ -13,6 +13,7 @@ events to Kafka. Every component owns its own database.
 flowchart TB
     subgraph Channels["Engagement — channels (white-labeled per tenant by hostname)"]
         SHOP["storefront /shop"]
+        BIZ["business-console /biz\n(org admin + member my-page)"]
         CSR["csr-console /csr"]
         ADMIN["admin-console /console"]
         APP["mobile-app /app\n(Expo RN: web + iOS/Android)"]
@@ -66,7 +67,7 @@ TMF642/656"]
     IDP[("OIDC IdPs\none issuer per tenant\n(Keycloak realms in dev)")]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
-    SHOP & CSR & ADMIN & APP --> GW
+    SHOP & BIZ & CSR & ADMIN & APP --> GW
     GW --> Party & Core & Revenue & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
