@@ -15,6 +15,7 @@ usage-consumption and TMF678 customer-bill. See the full, honest scorecard — i
 intentional hardened gaps (payment, communication) — in
 [docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with [ops/ctk](ops/ctk/README.md).
 
+- 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](docs/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
@@ -179,7 +180,7 @@ cd ops/e2e && npm i playwright && npx playwright install chromium
 node storefront_test.js && node guest_test.js && node console_test.js \
   && node csr_test.js && node tenant_test.js && node roles_test.js \
   && node app_test.js && node martech_test.js && node policy_test.js \
-  && node pricing_test.js && node bundle_test.js
+  && node pricing_test.js && node bundle_test.js && node demo_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,
