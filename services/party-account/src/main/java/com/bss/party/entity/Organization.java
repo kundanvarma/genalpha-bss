@@ -25,6 +25,9 @@ public class Organization {
     @Column(name = "trading_name")
     private String tradingName;
 
+    @Column(name = "parent_id", length = 36)
+    private String parentId;
+
     public Organization() {
     }
 
@@ -67,4 +70,7 @@ public class Organization {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
+    public String getParentId() { return parentId; }
+    public void setParentId(String parentId) { this.parentId = parentId; }
 }

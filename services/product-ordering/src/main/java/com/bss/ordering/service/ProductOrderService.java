@@ -129,6 +129,7 @@ public class ProductOrderService {
                     "promotion code '" + dto.getPromotionCode() + "' is not valid");
         }
         partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
+        requireSameOrgForBusinessAdmin(dto);
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
         validateBundleComposition(dto);
@@ -550,6 +551,32 @@ public class ProductOrderService {
             if (item.get("productOrderItem") instanceof List<?> children) {
                 collectItemMaps((List<Map<String, Object>>) children, into);
             }
+        }
+    }
+
+    /**
+     * B2B boundary: a business:admin token orders on behalf of people, but only
+     * people inside the admin's OWN organization — both looked up live from the
+     * party service, never trusted from the request.
+     */
+    private void requireSameOrgForBusinessAdmin(ProductOrderDto dto) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities().stream()
+                .noneMatch(a -> "business:admin".equals(a.getAuthority()))) {
+            return;
+        }
+        String adminOrg = partyClient.organizationOf(auth.getName())
+                .orElseThrow(() -> new OrderValidationException(
+                        "business admin has no organization membership"));
+        String customer = customerPartyIn(dto.getRelatedParty());
+        if (customer == null) {
+            throw new OrderValidationException("order needs a customer relatedParty");
+        }
+        String memberOrg = partyClient.organizationOf(customer).orElse(null);
+        if (!adminOrg.equals(memberOrg)) {
+            throw new OrderValidationException(
+                    "customer '" + customer + "' is not a member of your organization");
         }
     }
 }

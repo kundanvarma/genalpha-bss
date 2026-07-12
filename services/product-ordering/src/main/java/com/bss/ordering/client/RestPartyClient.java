@@ -31,4 +31,24 @@ public class RestPartyClient implements PartyClient {
             throw new DownstreamException("party-account is unreachable", e);
         }
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.Optional<String> organizationOf(String partyId) {
+        try {
+            java.util.Map<String, Object> person = restClient.get()
+                    .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                    .retrieve()
+                    .body(java.util.Map.class);
+            if (person != null && person.get("organization") instanceof java.util.Map<?, ?> org
+                    && org.get("id") != null) {
+                return java.util.Optional.of(String.valueOf(org.get("id")));
+            }
+            return java.util.Optional.empty();
+        } catch (HttpClientErrorException.NotFound e) {
+            return java.util.Optional.empty();
+        } catch (RestClientException e) {
+            throw new DownstreamException("party-account is unreachable", e);
+        }
+    }
 }

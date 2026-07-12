@@ -267,6 +267,10 @@
       {
         "name": "appointment:admin",
         "description": "back-office view of all appointments"
+      },
+      {
+        "name": "business:admin",
+        "description": "B2B customer admin: manages their own organization's people and lines"
       }
     ]
   },
@@ -524,6 +528,24 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "bss-biz",
+      "name": "Business console (customer-admin SPA, code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8080/biz/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     }
   ],
   "users": [
@@ -556,7 +578,8 @@
         "payment:write",
         "usage:read",
         "usage:write",
-        "promotion:read"
+        "promotion:read",
+        "party:read"
       ]
     },
     {
@@ -833,6 +856,25 @@
         "catalog:read",
         "promotion:read",
         "paymentmethod:read"
+      ]
+    },
+    {
+      "username": "bianca@acme.example",
+      "enabled": true,
+      "email": "bianca@acme.example",
+      "emailVerified": true,
+      "firstName": "Bianca",
+      "lastName": "Boss",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bianca",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "business:admin"
       ]
     }
   ]

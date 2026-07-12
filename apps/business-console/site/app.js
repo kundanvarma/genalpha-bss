@@ -1,0 +1,176 @@
+/*
+ * Business console: the CUSTOMER-side back office. A company's admin manages
+ * their own people and lines against the same TMF APIs every other channel
+ * uses — party (members), ordering (subscriptions), service inventory (live
+ * lines), billing (the consolidated company invoice). The org boundary is
+ * enforced server-side; this app never gets to choose whose data it sees.
+ */
+'use strict';
+
+const PARTY = '/tmf-api/party/v4';
+const CATALOG = '/tmf-api/productCatalogManagement/v4';
+const ORDERING = '/tmf-api/productOrderingManagement/v4';
+const SERVICE_INV = '/tmf-api/serviceInventory/v4';
+const BILLING = '/tmf-api/customerBillManagement/v4';
+
+const el = (id) => document.getElementById(id);
+let me = null;
+let orgId = null;
+
+async function json(res) {
+  if (!res.ok) {
+    const problem = await res.json().catch(() => ({}));
+    throw new Error(problem.message || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+const emailOf = (p) => (p.contactMedium || [])
+  .find((m) => m.mediumType === 'email')?.characteristic?.emailAddress || '';
+
+/* ---------- members + their live lines ---------- */
+async function loadMembers() {
+  const members = await json(await authFetch(`${PARTY}/individual?organizationId=${orgId}&limit=100`));
+  const box = el('members');
+  box.replaceChildren();
+  const picker = el('order-member');
+  picker.replaceChildren();
+  for (const m of members) {
+    const row = document.createElement('div');
+    row.className = 'memberrow';
+    row.dataset.member = m.id;
+    const name = document.createElement('span');
+    name.innerHTML = `<b>${m.givenName || ''} ${m.familyName || ''}</b>`;
+    const mail = document.createElement('span');
+    mail.className = 'mail';
+    mail.textContent = emailOf(m);
+    const lines = document.createElement('span');
+    lines.className = 'lines';
+    lines.textContent = '…';
+    row.append(name, mail, lines);
+    box.append(row);
+    picker.append(new Option(`${m.givenName || ''} ${m.familyName || ''}`.trim() || m.id, m.id));
+    // live lines, fail-soft
+    authFetch(`${SERVICE_INV}/service?relatedPartyId=${m.id}`)
+      .then(json)
+      .then((svcs) => {
+        const active = (svcs || []).filter((sv) => sv.state === 'active');
+        const nums = active.flatMap((sv) => (sv.supportingResource || []).map((r) => r.value)).filter(Boolean);
+        lines.innerHTML = active.length
+          ? `${active.length} line${active.length > 1 ? 's' : ''} · <span class="msisdn">${nums.join(' · ')}</span>`
+          : 'no lines yet';
+      })
+      .catch(() => { lines.textContent = ''; });
+  }
+  if (!members.length) box.textContent = 'Nobody yet — add your first person below.';
+}
+
+async function addMember() {
+  const given = el('new-given').value.trim();
+  const family = el('new-family').value.trim();
+  const email = el('new-email').value.trim();
+  const status = el('member-status');
+  if (!given || !family) { status.className = 'err'; status.textContent = 'name required'; return; }
+  status.className = ''; status.textContent = 'adding…';
+  try {
+    await json(await authFetch(`${PARTY}/individual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        givenName: given, familyName: family,
+        ...(email ? { contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] } : {}),
+      }),
+    }));
+    status.className = 'ok'; status.textContent = '✓ added to your organization';
+    el('new-given').value = ''; el('new-family').value = ''; el('new-email').value = '';
+    loadMembers();
+  } catch (e) { status.className = 'err'; status.textContent = e.message; }
+}
+
+/* ---------- ordering for a member ---------- */
+async function loadOfferings() {
+  const offers = await json(await authFetch(`${CATALOG}/productOffering?limit=100`));
+  const picker = el('order-offering');
+  picker.replaceChildren();
+  for (const o of offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity)) {
+    picker.append(new Option(o.name, o.id));
+  }
+}
+
+async function placeOrder() {
+  const member = el('order-member').value;
+  const offering = el('order-offering').value;
+  const status = el('order-status');
+  if (!member || !offering) return;
+  status.className = ''; status.textContent = 'ordering…';
+  try {
+    await json(await authFetch(`${ORDERING}/productOrder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productOrderItem: [{ action: 'add', productOffering: {
+          id: offering, name: el('order-offering').selectedOptions[0]?.text } }],
+        relatedParty: [{ id: member, role: 'customer' }],
+      }),
+    }));
+    status.className = 'ok'; status.textContent = '✓ ordered — the line activates in seconds';
+    setTimeout(loadMembers, 8000);
+    setTimeout(loadMembers, 20000);
+  } catch (e) { status.className = 'err'; status.textContent = e.message; }
+}
+
+/* ---------- the consolidated company invoice ---------- */
+async function loadBills() {
+  const bills = await json(await authFetch(`${BILLING}/customerBill?relatedPartyId=${orgId}&limit=50`));
+  const box = el('bills');
+  box.replaceChildren();
+  for (const b of bills) {
+    const row = document.createElement('div');
+    row.className = 'billrow';
+    row.innerHTML = `<b>${b.billNo}</b> · ${b.state}
+      <span class="amount">${b.amountDue.value.toFixed(2)} ${b.amountDue.unit}</span>`;
+    const lines = document.createElement('div');
+    lines.className = 'billlines';
+    lines.textContent = 'loading lines…';
+    row.append(lines);
+    box.append(row);
+    authFetch(`${BILLING}/customerBill/${b.id}/appliedCustomerBillingRate`)
+      .then(json)
+      .then((rates) => {
+        lines.replaceChildren(...rates.map((r) => {
+          const d = document.createElement('div');
+          const who = r.forParty?.id ? ` — <span data-for="${r.forParty.id}" class="linefor">${r.forParty.id.slice(0, 8)}…</span>` : '';
+          d.innerHTML = `${r.name}${who} <span style="float:right">${Number(r.taxExcludedAmount.value).toFixed(2)} ${r.taxExcludedAmount.unit}</span>`;
+          return d;
+        }));
+      })
+      .catch(() => { lines.textContent = ''; });
+  }
+  if (!bills.length) box.innerHTML = '<span class="dimhint">No invoices yet — they appear after the operator\'s billing run.</span>';
+}
+
+/* ---------- boot ---------- */
+async function main() {
+  const ready = await ensureSignedIn().catch(() => false);
+  if (!ready) { el('signin').hidden = false; return; }
+  el('username').textContent = tokenClaims().preferred_username || '';
+  el('logout').hidden = false;
+  el('logout').addEventListener('click', signOut);
+
+  try {
+    me = await json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}`));
+  } catch (e) { me = null; }
+  orgId = me?.organization?.id;
+  if (!orgId) { el('nogate').hidden = false; return; }
+
+  const org = await json(await authFetch(`${PARTY}/organization/${orgId}`)).catch(() => null);
+  el('org-name').textContent = org?.name || orgId;
+  el('main').hidden = false;
+
+  el('add-member').addEventListener('click', addMember);
+  el('place-order').addEventListener('click', placeOrder);
+  loadMembers();
+  loadOfferings();
+  loadBills();
+}
+main();

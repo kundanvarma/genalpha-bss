@@ -26,6 +26,9 @@ public class IndividualDto {
     @JsonProperty("contactMedium")
     private List<Map<String, Object>> contactMedium;
 
+    @JsonProperty("organization")
+    private Map<String, Object> organization;
+
     @JsonProperty("@type")
     private String type = "Individual";
 
@@ -79,4 +82,7 @@ public class IndividualDto {
     public void setContactMedium(List<Map<String, Object>> contactMedium) {
         this.contactMedium = contactMedium;
     }
+
+    public Map<String, Object> getOrganization() { return organization; }
+    public void setOrganization(Map<String, Object> organization) { this.organization = organization; }
 }

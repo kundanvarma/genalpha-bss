@@ -134,6 +134,12 @@ spring:
             - Path=/console/**
           filters:
             - StripPrefix=1
+        - id: business-console
+          uri: ${BIZ_URL:http://localhost:8094}
+          predicates:
+            - Path=/biz/**
+          filters:
+            - StripPrefix=1
         - id: storefront
           uri: ${STOREFRONT_URL:http://localhost:8091}
           predicates:

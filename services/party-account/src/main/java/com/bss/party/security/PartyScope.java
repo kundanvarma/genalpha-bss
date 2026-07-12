@@ -25,6 +25,10 @@ public class PartyScope {
         }
         boolean customer = auth.getAuthorities().stream()
                 .anyMatch(a -> CUSTOMER_ROLE.equals(a.getAuthority()));
-        return customer ? Optional.ofNullable(auth.getName()) : Optional.empty();
+        // A business admin manages their organization's people: not confined to
+        // self — the services enforce the org boundary instead.
+        boolean businessAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "business:admin".equals(a.getAuthority()));
+        return customer && !businessAdmin ? Optional.ofNullable(auth.getName()) : Optional.empty();
     }
 }

@@ -53,6 +53,7 @@ bss:
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
   events:
     topic: bss.billing.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

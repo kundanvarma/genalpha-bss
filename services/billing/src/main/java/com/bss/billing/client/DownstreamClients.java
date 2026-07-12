@@ -45,6 +45,14 @@ public final class DownstreamClients {
         List<Map<String, Object>> adjustments(Map<String, Object> context);
     }
 
+    public interface OrgClient {
+        /**
+         * The organization a party belongs to, or empty. Consolidated B2B
+         * billing keys on this; outages fall back to per-person bills.
+         */
+        java.util.Optional<String> organizationOf(String partyId);
+    }
+
     public interface PaymentClient {
         /** Empty message means valid; otherwise the reason the ref is unusable. */
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);

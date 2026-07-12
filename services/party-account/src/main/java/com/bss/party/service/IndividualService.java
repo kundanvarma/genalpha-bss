@@ -45,6 +45,8 @@ public class IndividualService {
     @Transactional(readOnly = true)
     public PagedResult<IndividualDto> findAll(int offset, int limit, Map<String, String> filters) {
         Individual probe = probeFor(filters);
+        // A business admin lists people, but only ever their own organization's.
+        businessAdminOrg().ifPresent(probe::setOrganizationId);
         // A customer sees exactly one individual: their own.
         partyScope.scopedPartyId().ifPresent(probe::setId);
         Page<Individual> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
@@ -64,6 +66,7 @@ public class IndividualService {
                 case "id" -> probe.setId(f.getValue());
                 case "familyName" -> probe.setFamilyName(f.getValue());
                 case "givenName" -> probe.setGivenName(f.getValue());
+                case "organizationId" -> probe.setOrganizationId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
@@ -85,7 +88,11 @@ public class IndividualService {
      */
     @Transactional
     public IndividualDto create(IndividualDto dto) {
-        String id = partyScope.scopedPartyId().orElseGet(() -> UUID.randomUUID().toString());
+        // Customers are keyed to their token subject. Unscoped callers (staff
+        // provisioning an org admin) may pin the id to the person's IdP subject.
+        String id = partyScope.scopedPartyId()
+                .orElseGet(() -> dto.getId() != null && !dto.getId().isBlank()
+                        ? dto.getId() : UUID.randomUUID().toString());
         Individual existing = repository.findByIdAndTenantId(id, tenantScope.currentTenantId()).orElse(null);
         if (existing != null) {
             return mapper.toDto(existing);
@@ -94,10 +101,13 @@ public class IndividualService {
         entity.setId(id);
         entity.setHref(ApiConstants.PARTY_BASE + "/individual/" + id);
         entity.setTenantId(tenantScope.currentTenantId());
+        // A business admin's new person always belongs to the admin's own org.
+        businessAdminOrg().ifPresent(entity::setOrganizationId);
         IndividualDto created = mapper.toDto(repository.save(entity));
         // TMF669: self-registered parties are customers by definition; other
-        // roles (partner, supplier) are back-office grants.
-        if (partyScope.scopedPartyId().isPresent()) {
+        // roles (partner, supplier) are back-office grants. A business admin's
+        // members are customers of the operator too.
+        if (partyScope.scopedPartyId().isPresent() || businessAdminOrg().isPresent()) {
             partyRoles.grant(id, "customer");
         }
         events.publish("IndividualCreateEvent", "individual", created);
@@ -107,6 +117,9 @@ public class IndividualService {
     @Transactional
     public IndividualDto patch(String id, IndividualDto patch) {
         requireOwn(id);
+        if (patch.getOrganization() != null && patch.getOrganization().get("id") != null) {
+            requireOwnOrg(String.valueOf(patch.getOrganization().get("id")));
+        }
         Individual entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         mapper.applyPatch(patch, entity);
@@ -133,6 +146,33 @@ public class IndividualService {
         partyScope.scopedPartyId().ifPresent(own -> {
             if (!own.equals(id)) {
                 throw NotFoundException.forResource(RESOURCE, id);
+            }
+        });
+    }
+
+    /* ---------------- B2B org boundary for business admins ---------------- */
+
+    /** The caller's organization id when they are a business:admin, else empty. */
+    private java.util.Optional<String> businessAdminOrg() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth == null || auth.getAuthorities().stream()
+                .noneMatch(a -> "business:admin".equals(a.getAuthority()))) {
+            return java.util.Optional.empty();
+        }
+        return repository.findByIdAndTenantId(auth.getName(), tenantScope.currentTenantId())
+                .map(Individual::getOrganizationId)
+                .filter(java.util.Objects::nonNull)
+                .map(java.util.Optional::of)
+                .orElseThrow(() -> new BadRequestException(
+                        "business admin has no organization membership"));
+    }
+
+    /** Business admins may only touch their own organization's people. */
+    private void requireOwnOrg(String organizationId) {
+        businessAdminOrg().ifPresent(own -> {
+            if (!own.equals(organizationId)) {
+                throw new BadRequestException("outside your organization");
             }
         });
     }

@@ -18,6 +18,9 @@ public class OrganizationDto {
     @JsonProperty("tradingName")
     private String tradingName;
 
+    @JsonProperty("parentOrganization")
+    private java.util.Map<String, Object> parentOrganization;
+
     @JsonProperty("@type")
     private String type = "Organization";
 
@@ -63,4 +66,7 @@ public class OrganizationDto {
     public void setType(String type) {
         this.type = type;
     }
+
+    public java.util.Map<String, Object> getParentOrganization() { return parentOrganization; }
+    public void setParentOrganization(java.util.Map<String, Object> parentOrganization) { this.parentOrganization = parentOrganization; }
 }

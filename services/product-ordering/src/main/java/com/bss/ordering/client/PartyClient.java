@@ -7,4 +7,7 @@ package com.bss.ordering.client;
 public interface PartyClient {
 
     boolean billingAccountExists(String id);
+
+    /** The organization a party belongs to, or empty (unknown party ⇒ empty). */
+    java.util.Optional<String> organizationOf(String partyId);
 }

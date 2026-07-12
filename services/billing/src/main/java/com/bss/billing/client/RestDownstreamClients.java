@@ -144,6 +144,29 @@ public class RestDownstreamClients {
     }
 
     @Bean
+    @SuppressWarnings("unchecked")
+    DownstreamClients.OrgClient orgClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.party-base-url}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return (partyId) -> {
+            try {
+                Map<String, Object> person = rest.get()
+                        .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                        .retrieve().body(Map.class);
+                if (person != null && person.get("organization") instanceof Map<?, ?> org
+                        && org.get("id") != null) {
+                    return java.util.Optional.of(String.valueOf(org.get("id")));
+                }
+                return java.util.Optional.empty();
+            } catch (RestClientException e) {
+                // fail open: an unreachable party service means per-person bills
+                return java.util.Optional.empty();
+            }
+        };
+    }
+
+    @Bean
     DownstreamClients.PaymentClient paymentClient(RestClient.Builder builder,
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.payment-base-url}") String baseUrl) {

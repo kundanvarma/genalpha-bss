@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Business console</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  /* on top of the shared console baseline */
+  header { display: flex; align-items: center; gap: 12px; }
+  .bizhead { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 18px; }
+  .bizhead h1 { margin: 0; font-size: 22px; }
+  .bizhead .orgname { color: var(--teal); font-weight: 700; }
+  section.card { background: var(--card, #fff); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 18px; }
+  section.card h2 { margin: 0 0 10px; font-size: 15px; }
+  .memberrow { display: flex; align-items: center; gap: 10px; padding: 9px 4px;
+    border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .memberrow .mail { color: var(--dim, #8a979c); font-size: 12px; }
+  .memberrow .lines { margin-left: auto; color: var(--dim, #8a979c); font-size: 12px; }
+  .memberrow .msisdn { font-family: ui-monospace, Menlo, monospace; color: var(--teal); font-size: 12.5px; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .addrow input, .addrow select { flex: 1; min-width: 140px; }
+  .billrow { padding: 9px 4px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .billrow .amount { float: right; font-family: ui-monospace, Menlo, monospace; color: var(--teal); }
+  .billlines { margin: 6px 0 2px 14px; font-size: 12.5px; color: var(--dim, #8a979c); }
+  .billlines div { padding: 2px 0; }
+  .ok { color: var(--teal); font-size: 12.5px; }
+  .err { color: #b64a3a; font-size: 12.5px; }
+  .gate { max-width: 520px; margin: 16vh auto; text-align: center; color: var(--dim, #8a979c); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <img class="brandlogo" style="height:26px;display:block" src="/tmf-api/documentManagement/v4/document/brand-logo" alt="" onerror="this.style.display='none'"><span class="mark" style="display:none">genalpha-bss</span>
+    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.14em;color:var(--teal);margin-left:10px">BUSINESS</span>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <span id="username" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></span>
+    <button id="logout" class="ghost" hidden>Sign out</button>
+  </div>
+</header>
+
+<main id="main" hidden>
+  <div class="bizhead">
+    <h1>Your organization:</h1><span class="orgname" id="org-name">…</span>
+  </div>
+
+  <section class="card">
+    <h2>People &amp; their lines</h2>
+    <div id="members"></div>
+    <div class="addrow">
+      <input id="new-given" placeholder="First name">
+      <input id="new-family" placeholder="Last name">
+      <input id="new-email" placeholder="Email">
+      <button class="primary" id="add-member">Add person</button>
+      <span id="member-status"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Order a subscription for someone</h2>
+    <div class="addrow">
+      <select id="order-member"></select>
+      <select id="order-offering"></select>
+      <button class="primary" id="place-order">Order</button>
+      <span id="order-status"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Company invoices</h2>
+    <div id="bills"></div>
+  </section>
+</main>
+
+<div id="signin" class="gate" hidden>
+  <p>Signing in with your identity provider&hellip;</p>
+</div>
+<div id="nogate" class="gate" hidden>
+  <p><b>No organization on this account.</b><br>
+  Business console access is provisioned by your operator — ask them to link
+  your account to your company.</p>
+</div>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
