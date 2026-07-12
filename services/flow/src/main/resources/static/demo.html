@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss · Guided demo</title>
+<style>
+  :root {
+    --bg: #0c1418; --panel: #131f25; --panel2: #0f1a1f; --line: #23343c; --ink: #e2edee;
+    --dim: #85999f; --teal: #45afac; --gold: #e0b15a; --violet: #b18ce0; --rose: #e0796f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: radial-gradient(1200px 700px at 60% -10%, #12242b 0%, var(--bg) 60%);
+    color: var(--ink); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-bottom: 1px solid var(--line); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+  h1 { font-size: 16px; margin: 0; font-weight: 650; }
+  .sub { color: var(--dim); font-size: 12px; }
+  .sub a { color: var(--teal); text-decoration: none; }
+  header .space { flex: 1; }
+  button.primary {
+    background: var(--teal); color: #06282a; border: none; border-radius: 8px;
+    padding: 8px 16px; font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  button.primary:disabled { opacity: 0.45; cursor: default; }
+  button.ghost {
+    background: none; color: var(--teal); border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer;
+  }
+  button.ghost:disabled { opacity: 0.4; cursor: default; }
+  main { flex: 1; display: flex; min-height: 0; }
+  .rail {
+    width: 460px; min-width: 380px; overflow-y: auto; padding: 16px;
+    border-right: 1px solid var(--line); background: var(--panel2);
+  }
+  .stage { flex: 1; display: flex; }
+  .stage iframe { flex: 1; border: none; }
+  .intro { color: var(--dim); font-size: 13px; margin: 2px 4px 14px; }
+  .intro b { color: var(--ink); }
+  .act {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; margin-bottom: 12px; transition: border-color 0.3s;
+  }
+  .act.running { border-color: var(--gold); }
+  .act.ok { border-color: var(--teal); }
+  .act.bad { border-color: var(--rose); }
+  .act h2 { margin: 0 0 4px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .act h2 .n {
+    background: var(--line); color: var(--dim); border-radius: 6px; font-size: 11px;
+    padding: 1px 7px; font-weight: 700;
+  }
+  .act.ok h2 .n { background: var(--teal); color: #06282a; }
+  .act p { margin: 4px 0 8px; color: var(--dim); font-size: 12.5px; }
+  .act p b { color: var(--ink); font-weight: 600; }
+  .act .watch { color: var(--violet); font-size: 11.5px; margin: 0 0 8px; }
+  .act .log {
+    font: 11.5px/1.6 ui-monospace, Menlo, Consolas, monospace; color: var(--dim);
+    white-space: pre-wrap; word-break: break-word; margin-top: 6px;
+  }
+  .act .log .good { color: var(--teal); }
+  .act .log .warn { color: var(--gold); }
+  .act .log .err { color: var(--rose); }
+  .fin { text-align: center; color: var(--dim); font-size: 12.5px; padding: 10px 6px 30px; display: none; }
+  .fin b { color: var(--teal); }
+  .fin a { color: var(--teal); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot"></span>
+  <div>
+    <h1>The guided demo — genalpha-bss tells its own story</h1>
+    <div class="sub">every step below is REAL: live API calls against the running BSS ·
+      watch the processes light up on the right · <a href="index.html">process view →</a></div>
+  </div>
+  <div class="space"></div>
+  <button class="ghost" id="signin">Sign in to drive</button>
+  <button class="primary" id="playall" disabled>▶ Play the whole story</button>
+</header>
+
+<main>
+  <aside class="rail">
+    <div class="intro">Five acts, one running system. Each act narrates what a telecom does,
+      then <b>does it for real</b> — orders, rules, prices, numbers — while Live Flow (right)
+      shows the components reacting. Nothing is mocked on this page: if the stack were down,
+      every act would fail.</div>
+
+    <div class="act" id="act1">
+      <h2><span class="n">Act 1</span> A customer orders — and the machine wakes up
+        <span style="flex:1"></span><button class="ghost" data-run="1">▶ Run</button></h2>
+      <p>A brand-new customer buys a mobile plan. The order decomposes into network work, a
+        phone number is drawn from the operator's pool, the service activates, and the customer
+        is notified — <b>no human touches anything</b>.</p>
+      <div class="watch">⬤ watch “Order → Activate” light up on the right</div>
+      <div class="log" id="log1"></div>
+    </div>
+
+    <div class="act" id="act2">
+      <h2><span class="n">Act 2</span> A business rule, born without a deployment
+        <span style="flex:1"></span><button class="ghost" data-run="2">▶ Run</button></h2>
+      <p>The operator decides: <b>max 2 of any item per order</b>. We author that rule as data —
+        a row, not code — and the very next order obeys it. Then we switch it off and the same
+        order sails through. The deployment never moved.</p>
+      <div class="log" id="log2"></div>
+    </div>
+
+    <div class="act" id="act3">
+      <h2><span class="n">Act 3</span> A price that reacts to who you are
+        <span style="flex:1"></span><button class="ghost" data-run="3">▶ Run</button></h2>
+      <p>Marketing wants a <b>15% launch discount</b>. Same engine, second trick: the rule
+        adjusts prices instead of blocking orders. The storefront cart previews it, the bill
+        applies it — we’ll ask the pricing engine directly and watch €100 become €85.</p>
+      <div class="log" id="log3"></div>
+    </div>
+
+    <div class="act" id="act4">
+      <h2><span class="n">Act 4</span> Keep your number
+        <span style="flex:1"></span><button class="ghost" data-run="4">▶ Run</button></h2>
+      <p>A customer joins from a rival and wants to keep their number. The port-in goes through
+        the national clearinghouse (NRDB in Norway), the cutover completes, and when their plan
+        activates it carries <b>their own number</b> — no pool draw.</p>
+      <div class="watch">⬤ watch “Port-in → Keep your number” light up on the right</div>
+      <div class="log" id="log4"></div>
+    </div>
+
+    <div class="act" id="act5">
+      <h2><span class="n">Act 5</span> Leave with it — and teach the machine
+        <span style="flex:1"></span><button class="ghost" data-run="5">▶ Run</button></h2>
+      <p>The truest test of an open platform: the same customer leaves. The port-out ceases the
+        service, releases the number — and the departure becomes a <b>labelled churn outcome</b>
+        the AI learns from. Losing a customer teaches the system to keep the next one.</p>
+      <div class="watch">⬤ watch “Port-out → Leave” light up on the right</div>
+      <div class="log" id="log5"></div>
+    </div>
+
+    <div class="fin" id="fin">
+      <b>That’s the story.</b> One deployment, thirty-one components, every step you just saw
+      verified by the same APIs the channels use.<br><br>
+      Explore it yourself: <a href="/shop/" target="_blank">storefront</a> ·
+      <a href="/console/" target="_blank">back office</a> ·
+      <a href="/csr/" target="_blank">CSR console</a> · or read the book this build wrote.
+    </div>
+  </aside>
+
+  <section class="stage">
+    <iframe src="index.html" title="Live Flow process view"></iframe>
+  </section>
+</main>
+
+<script>
+'use strict';
+/* ---------- auth: OIDC code+PKCE against the dev Keycloak (bss-console client) ---------- */
+const ISSUER = 'http://localhost:8085/realms/bss';
+const CLIENT = 'bss-console';
+const TK = 'bss.demo.token', TE = 'bss.demo.exp', TV = 'bss.demo.verifier', TS = 'bss.demo.state';
+const b64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const rnd = () => { const b = new Uint8Array(32); crypto.getRandomValues(b); return b64u(b); };
+const here = () => location.origin + location.pathname;
+
+async function beginLogin() {
+  const v = rnd(), s = rnd();
+  sessionStorage.setItem(TV, v); sessionStorage.setItem(TS, s);
+  const c = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)));
+  location.assign(ISSUER + '/protocol/openid-connect/auth?' + new URLSearchParams({
+    client_id: CLIENT, redirect_uri: here(), response_type: 'code', scope: 'openid',
+    state: s, code_challenge: c, code_challenge_method: 'S256' }));
+}
+async function completeLogin(code) {
+  const res = await fetch(ISSUER + '/protocol/openid-connect/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', client_id: CLIENT,
+      redirect_uri: here(), code, code_verifier: sessionStorage.getItem(TV) || '' }) });
+  const t = await res.json();
+  sessionStorage.setItem(TK, t.access_token);
+  sessionStorage.setItem(TE, String(Date.now() + (t.expires_in - 15) * 1000));
+  history.replaceState(null, '', here());
+}
+const token = () => Date.now() < Number(sessionStorage.getItem(TE) || 0) ? sessionStorage.getItem(TK) : null;
+
+/* ---------- tiny API driver (same origin, through the gateway) ---------- */
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token() },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await res.text();
+  let json = {}; try { json = text ? JSON.parse(text) : {}; } catch (e) { /* raw */ }
+  return { status: res.status, json };
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const run = String(Date.now()).slice(-7);
+
+/* ---------- narration helpers ---------- */
+function say(n, text, cls) {
+  const log = document.getElementById('log' + n);
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = text;
+  log.append(line);
+  log.scrollTop = log.scrollHeight;
+}
+function setState(n, state) { document.getElementById('act' + n).className = 'act ' + (state || ''); }
+
+/* ---------- the acts ---------- */
+let keepParty = null, keepNumber = null;   // act 4 hands these to act 5
+
+async function findPlan() {
+  const offers = (await api('GET', '/tmf-api/productCatalogManagement/v4/productOffering?limit=100')).json;
+  return offers.find((o) => (o.name || '').includes('Unlimited') && !o.isBundle && !o.requiresVerifiedIdentity)
+      || offers.find((o) => !o.isBundle && !o.requiresVerifiedIdentity);
+}
+async function waitForService(party, want) {
+  for (let i = 0; i < 25; i++) {
+    await sleep(2000);
+    const svcs = (await api('GET', '/tmf-api/serviceInventory/v4/service?relatedPartyId=' + party)).json;
+    const hit = (svcs || []).find?.((sv) => sv.state === want
+      && (want !== 'active' || (sv.supportingResource || []).length));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+async function act1() {
+  const plan = await findPlan();
+  const person = (await api('POST', '/tmf-api/party/v4/individual',
+    { givenName: 'Demo', familyName: 'Visitor' + run })).json;
+  say(1, '→ a new customer registers: Demo Visitor' + run);
+  const order = await api('POST', '/tmf-api/productOrderingManagement/v4/productOrder', {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name } }],
+    relatedParty: [{ id: person.id, role: 'customer' }] });
+  if (order.status !== 201) throw new Error('order refused: ' + (order.json.message || order.status));
+  say(1, '→ they order "' + plan.name + '" — the event is on the bus, components are reacting…');
+  const svc = await waitForService(person.id, 'active');
+  if (!svc) throw new Error('service did not activate');
+  say(1, '✓ activated, untouched by humans. Their new number: ' + svc.supportingResource[0].value, 'good');
+}
+
+async function act2() {
+  const plan = await findPlan();
+  const rule = (await api('POST', '/tmf-api/policyManagement/v4/policyRule', {
+    name: 'Demo max-2 ' + run, domain: 'order', effect: 'deny', priority: 5, enabled: true,
+    condition: JSON.stringify({ '>': [{ var: 'maxLineQuantity' }, 2] }),
+    message: 'You can order at most 2 of a single item.' })).json;
+  say(2, '→ rule authored as DATA: “max 2 of any item per order” — no code, no deploy');
+  const body = { productOrderItem: [{ action: 'add', quantity: 3, productOffering: { id: plan.id, name: plan.name } }],
+    relatedParty: [{ id: 'demo-rule-' + run, role: 'customer' }] };
+  const blocked = await api('POST', '/tmf-api/productOrderingManagement/v4/productOrder', body);
+  if (blocked.status !== 422) throw new Error('expected the rule to refuse qty 3, got ' + blocked.status);
+  say(2, '✕ an order for 3 is refused: “' + blocked.json.message + '”', 'warn');
+  await api('PATCH', '/tmf-api/policyManagement/v4/policyRule/' + rule.id, { enabled: false });
+  say(2, '→ the operator disables the rule — one row changes');
+  const allowed = await api('POST', '/tmf-api/productOrderingManagement/v4/productOrder', body);
+  if (allowed.status !== 201) throw new Error('order should pass with the rule off, got ' + allowed.status);
+  say(2, '✓ the same order now sails through. The law changed; the software never did.', 'good');
+  await api('DELETE', '/tmf-api/policyManagement/v4/policyRule/' + rule.id);
+}
+
+async function act3() {
+  const rule = (await api('POST', '/tmf-api/policyManagement/v4/policyRule', {
+    name: 'Demo launch 15% ' + run, domain: 'pricing', effect: 'adjust', priority: 5, enabled: true,
+    condition: JSON.stringify({ '==': [1, 1] }), adjustmentType: 'percent', adjustmentValue: -15,
+    message: 'Launch offer (15% off)' })).json;
+  say(3, '→ pricing rule authored: 15% off for everyone, effective immediately');
+  const price = (await api('POST', '/tmf-api/policyManagement/v4/price',
+    { context: { subtotal: 100 } })).json;
+  if (Math.abs(price.total - 85) > 0.01) throw new Error('expected 85, engine said ' + price.total);
+  say(3, '✓ the engine prices €100 → €' + Number(price.total).toFixed(2)
+    + '  (' + price.adjustments[0].label + ')', 'good');
+  say(3, '   the cart previews this line; the bill carries it — same rule, no redeploy');
+  await api('PATCH', '/tmf-api/policyManagement/v4/policyRule/' + rule.id, { enabled: false });
+  await api('DELETE', '/tmf-api/policyManagement/v4/policyRule/' + rule.id);
+  say(3, '→ rule retired the way it was born: with a row');
+}
+
+async function act4() {
+  keepParty = 'demo-keep-' + run;
+  keepNumber = '+4790' + String(Date.now()).slice(-6);
+  const plan = await findPlan();
+  const pin = (await api('POST', '/tmf-api/numberPortingManagement/v1/numberPortingOrder', {
+    direction: 'portIn', phoneNumber: keepNumber, country: 'NO', otherOperator: 'OtherTelco',
+    relatedParty: [{ id: keepParty, role: 'customer' }] })).json;
+  say(4, '→ port-in requested for ' + keepNumber + ' via ' + (pin.clearinghouse || 'clearinghouse')
+    + ' (regulator: ' + (pin.regulator || 'Nkom') + ')');
+  await api('POST', '/tmf-api/numberPortingManagement/v1/numberPortingOrder/' + pin.id + '/complete');
+  say(4, '→ cutover completed — the number is now ours to serve');
+  await api('POST', '/tmf-api/productOrderingManagement/v4/productOrder', {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name } }],
+    relatedParty: [{ id: keepParty, role: 'customer' }] });
+  say(4, '→ they order a plan; the orchestrator sees the pending port…');
+  const svc = await waitForService(keepParty, 'active');
+  if (!svc || svc.supportingResource[0].value !== keepNumber) {
+    throw new Error('service did not activate on the ported number');
+  }
+  say(4, '✓ activated on THEIR number ' + keepNumber + ' — no pool draw. They kept it.', 'good');
+}
+
+async function act5() {
+  if (!keepParty) throw new Error('run Act 4 first — Act 5 ports that customer out');
+  const before = (await api('GET', '/ai/v1/churnModel')).json.labeledOutcomes || 0;
+  const pout = (await api('POST', '/tmf-api/numberPortingManagement/v1/numberPortingOrder', {
+    direction: 'portOut', phoneNumber: keepNumber, country: 'NO', otherOperator: 'RivalTel',
+    relatedParty: [{ id: keepParty, role: 'customer' }] })).json;
+  say(5, '→ ' + keepNumber + ' is porting OUT to a rival — scheduled via ' + (pout.clearinghouse || 'clearinghouse'));
+  await api('POST', '/tmf-api/numberPortingManagement/v1/numberPortingOrder/' + pout.id + '/complete');
+  say(5, '→ cutover done. Watch: the service ceases, the number releases…');
+  const gone = await waitForService(keepParty, 'terminated');
+  if (!gone) throw new Error('service was not ceased after the port-out');
+  say(5, '✓ service terminated, number released — a clean exit', 'good');
+  for (let i = 0; i < 10; i++) {
+    await sleep(1500);
+    const after = (await api('GET', '/ai/v1/churnModel')).json.labeledOutcomes || 0;
+    if (after > before) {
+      say(5, '✓ and the AI recorded it: labelled churn outcomes ' + before + ' → ' + after
+        + '. The machine just learned from a goodbye.', 'good');
+      document.getElementById('fin').style.display = 'block';
+      return;
+    }
+  }
+  throw new Error('churn outcome was not recorded');
+}
+
+/* ---------- driver ---------- */
+const ACTS = { 1: act1, 2: act2, 3: act3, 4: act4, 5: act5 };
+let busy = false;
+async function runAct(n) {
+  if (busy || !token()) return;
+  busy = true;
+  setState(n, 'running');
+  document.getElementById('log' + n).replaceChildren();
+  try {
+    await ACTS[n]();
+    setState(n, 'ok');
+  } catch (e) {
+    say(n, '✗ ' + e.message, 'err');
+    setState(n, 'bad');
+  }
+  busy = false;
+}
+document.querySelectorAll('[data-run]').forEach((b) =>
+  b.addEventListener('click', () => runAct(Number(b.dataset.run))));
+document.getElementById('playall').addEventListener('click', async () => {
+  for (const n of [1, 2, 3, 4, 5]) {
+    await runAct(n);
+    if (document.getElementById('act' + n).className.includes('bad')) break;
+    await sleep(1200);
+  }
+});
+document.getElementById('signin').addEventListener('click', beginLogin);
+
+(async () => {
+  const code = new URLSearchParams(location.search).get('code');
+  if (code) await completeLogin(code);
+  if (token()) {
+    document.getElementById('signin').textContent = '● signed in';
+    document.getElementById('signin').disabled = true;
+    document.getElementById('playall').disabled = false;
+  }
+})();
+</script>
+</body>
+</html>
