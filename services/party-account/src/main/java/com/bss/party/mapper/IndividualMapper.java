@@ -29,6 +29,9 @@ public class IndividualMapper {
         dto.setGivenName(entity.getGivenName());
         dto.setFamilyName(entity.getFamilyName());
         dto.setContactMedium(readJsonObjectList(entity.getContactMediumJson()));
+        if (entity.getOrganizationId() != null) {
+            dto.setOrganization(java.util.Map.of("id", entity.getOrganizationId(), "@referredType", "Organization"));
+        }
         dto.setType("Individual");
         return dto;
     }
@@ -40,6 +43,9 @@ public class IndividualMapper {
         entity.setGivenName(dto.getGivenName());
         entity.setFamilyName(dto.getFamilyName());
         entity.setContactMediumJson(writeJsonObjectList(dto.getContactMedium()));
+        if (dto.getOrganization() != null && dto.getOrganization().get("id") != null) {
+            entity.setOrganizationId(String.valueOf(dto.getOrganization().get("id")));
+        }
         return entity;
     }
 
@@ -55,6 +61,9 @@ public class IndividualMapper {
         }
         if (patch.getContactMedium() != null) {
             entity.setContactMediumJson(writeJsonObjectList(patch.getContactMedium()));
+        }
+        if (patch.getOrganization() != null && patch.getOrganization().get("id") != null) {
+            entity.setOrganizationId(String.valueOf(patch.getOrganization().get("id")));
         }
     }
 

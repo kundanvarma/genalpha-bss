@@ -25,6 +25,11 @@ public class PartyScope {
         }
         boolean customer = auth.getAuthorities().stream()
                 .anyMatch(a -> CUSTOMER_ROLE.equals(a.getAuthority()));
+        // Business admins order on behalf of their organization's members;
+        // the order service verifies the org boundary explicitly.
+        if (auth.getAuthorities().stream().anyMatch(a -> "business:admin".equals(a.getAuthority()))) {
+            return Optional.empty();
+        }
         return customer ? Optional.ofNullable(auth.getName()) : Optional.empty();
     }
 }

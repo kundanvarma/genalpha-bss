@@ -42,6 +42,7 @@ public class BillingRunService {
     private final DownstreamClients.UsageClient usage;
     private final DownstreamClients.PromotionClient promotions;
     private final DownstreamClients.PricingClient pricing;
+    private final DownstreamClients.OrgClient orgs;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
@@ -49,7 +50,8 @@ public class BillingRunService {
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
             DownstreamClients.UsageClient usage, DownstreamClients.PromotionClient promotions,
-            DownstreamClients.PricingClient pricing, DomainEventPublisher events, PartyScope partyScope,
+            DownstreamClients.PricingClient pricing, DownstreamClients.OrgClient orgs,
+            DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope) {
         this.bills = bills;
         this.rates = rates;
@@ -58,6 +60,7 @@ public class BillingRunService {
         this.usage = usage;
         this.promotions = promotions;
         this.pricing = pricing;
+        this.orgs = orgs;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -87,11 +90,25 @@ public class BillingRunService {
             }
         }
 
+        // B2B consolidation: an organization's members bill together — one
+        // invoice per company, with per-person attribution on the lines. A
+        // person with no organization (or an unreachable party service) keeps
+        // their own bill, exactly as before.
+        Map<String, List<Map<String, Object>>> byAccount = new LinkedHashMap<>();
+        Map<String, List<String>> membersOf = new LinkedHashMap<>();
+        for (Map.Entry<String, List<Map<String, Object>>> e : byOwner.entrySet()) {
+            java.util.Optional<String> org = orgs == null ? java.util.Optional.empty()
+                    : orgs.organizationOf(e.getKey());
+            String account = (org == null ? java.util.Optional.<String>empty() : org).orElse(e.getKey());
+            byAccount.computeIfAbsent(account, k -> new ArrayList<>()).addAll(e.getValue());
+            membersOf.computeIfAbsent(account, k -> new ArrayList<>()).add(e.getKey());
+        }
+
         Map<String, BigDecimal> priceCache = new HashMap<>();
         Map<String, String> unitCache = new HashMap<>();
         int created = 0;
         int skipped = 0;
-        for (Map.Entry<String, List<Map<String, Object>>> owner : byOwner.entrySet()) {
+        for (Map.Entry<String, List<Map<String, Object>>> owner : byAccount.entrySet()) {
             if (bills.existsByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, owner.getKey(), periodStart)) {
                 skipped++;
                 continue;
@@ -119,7 +136,9 @@ public class BillingRunService {
                 rate.setAmountValue(monthly);
                 rate.setAmountUnit(unit);
                 rate.setProductJson("{\"id\":\"" + product.get("id") + "\"}");
-                rate.setOwnerPartyId(owner.getKey());
+                rate.setOwnerPartyId(((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
+                        .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
+                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey()));
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.add(monthly);
@@ -127,8 +146,9 @@ public class BillingRunService {
             }
             // Metered charges: rate this party's usage for the period and put
             // the overage on the same bill as the recurring charges.
+            for (String member : membersOf.get(owner.getKey()))
             for (Map<String, Object> usageCharge : usage.rateForParty(
-                    owner.getKey(), periodStart.toString(), periodEnd.toString())) {
+                    member, periodStart.toString(), periodEnd.toString())) {
                 Map<String, Object> amount = (Map<String, Object>) usageCharge.get("amount");
                 AppliedBillingRate rate = new AppliedBillingRate();
                 rate.setId(UUID.randomUUID().toString());
@@ -145,7 +165,8 @@ public class BillingRunService {
             // Earned discounts: each redemption takes its percentage off the
             // recurring charges of the offerings it applies to, while its
             // duration window is open.
-            for (Map<String, Object> redemption : promotions.redemptionsFor(owner.getKey())) {
+            for (String member : membersOf.get(owner.getKey()))
+            for (Map<String, Object> redemption : promotions.redemptionsFor(member)) {
                 BigDecimal discount = discountFor(redemption, monthlyByOffering, periodStart);
                 if (discount.signum() <= 0) {
                     continue;

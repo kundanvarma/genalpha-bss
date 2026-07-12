@@ -56,6 +56,7 @@ public class OrganizationService {
                 case "id" -> probe.setId(f.getValue());
                 case "name" -> probe.setName(f.getValue());
                 case "tradingName" -> probe.setTradingName(f.getValue());
+                case "parentId" -> probe.setParentId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }

@@ -23,6 +23,11 @@ public class PartyScope {
         if (auth == null) {
             return Optional.empty();
         }
+                // Business admins read their organization's members' data; the org
+        // boundary is enforced at the writing services and the party source.
+        if (auth.getAuthorities().stream().anyMatch(a -> "business:admin".equals(a.getAuthority()))) {
+            return Optional.empty();
+        }
         boolean customer = auth.getAuthorities().stream()
                 .anyMatch(a -> CUSTOMER_ROLE.equals(a.getAuthority()));
         return customer ? Optional.ofNullable(auth.getName()) : Optional.empty();

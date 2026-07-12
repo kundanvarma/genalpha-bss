@@ -61,6 +61,9 @@ class BillingTenancyTest {
     @MockBean
     private DownstreamClients.PricingClient pricingClient;
 
+    @MockBean
+    private DownstreamClients.OrgClient orgClient;
+
     private static RequestPostProcessor staffOf(String issuer) {
         return jwt().jwt(j -> j.issuer(issuer)).authorities(
                 new SimpleGrantedAuthority("billing:read"),

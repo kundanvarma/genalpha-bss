@@ -29,6 +29,9 @@ public class Individual {
     @Column(name = "contact_medium", length = 4000)
     private String contactMediumJson;
 
+    @Column(name = "organization_id", length = 36)
+    private String organizationId;
+
     public Individual() {
     }
 
@@ -79,4 +82,7 @@ public class Individual {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
+    public String getOrganizationId() { return organizationId; }
+    public void setOrganizationId(String organizationId) { this.organizationId = organizationId; }
 }

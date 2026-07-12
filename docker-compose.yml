@@ -813,6 +813,8 @@ services:
       PAYMENT_BASE_URL: http://payment:8080
       USAGE_BASE_URL: http://usage:8080
       PROMOTION_BASE_URL: http://promotion:8080
+      POLICY_BASE_URL: http://policy:8080
+      PARTY_BASE_URL: http://party-account:8080
     ports:
       - "8088:8080"
     depends_on:
@@ -928,6 +930,7 @@ services:
       INVENTORY_URL: http://product-inventory:8080
       PARTY_URL: http://party-account:8080
       CONSOLE_URL: http://console:8080
+      BIZ_URL: http://business-console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
       STOCK_URL: http://product-stock:8080
@@ -1017,6 +1020,11 @@ services:
   console:
     build: ./apps/admin-console
     container_name: bss-console
+    restart: unless-stopped
+
+  business-console:
+    build: ./apps/business-console
+    container_name: bss-business-console
     restart: unless-stopped
 
   mobile-app:

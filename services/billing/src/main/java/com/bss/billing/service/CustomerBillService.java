@@ -258,6 +258,10 @@ public class CustomerBillService {
                 "value", rate.getAmountValue()));
         // TMF678: a rate on a bill is billed; a standalone/unbilled rate is not.
         m.put("isBilled", rate.getBillId() != null);
+        // Consolidated org invoices: which member this line belongs to.
+        if (rate.getOwnerPartyId() != null) {
+            m.put("forParty", Map.of("id", rate.getOwnerPartyId()));
+        }
         if (rate.getBillId() != null) {
             m.put("bill", Map.of("id", rate.getBillId()));
         }
