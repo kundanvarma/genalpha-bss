@@ -31,6 +31,7 @@ const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
+const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -266,6 +267,41 @@ const RESOURCES = [
         body: JSON.stringify({ enabled: !item.enabled }),
       }),
     },
+    // Dry-run: test the ENABLED rules against a sample order/cart without
+    // placing anything — same engine, same endpoints the pipeline uses.
+    tester: true,
+  },
+  {
+    path: 'numberPortingOrder',
+    base: PORTING_BASE,
+    title: 'Porting',
+    // Back office view of MNP: every port-in/out in the tenant, with the
+    // cutover action for scheduled orders. Creating one here is the assisted
+    // path (e.g. a customer phoning in a port-out).
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'phoneNumber', label: 'Phone number (E.164, e.g. +4791234567)', required: true },
+      { name: 'direction', label: 'Direction', kind: 'select', required: true, options: [
+        { value: 'portIn', label: 'Port-in — customer joins us and keeps their number' },
+        { value: 'portOut', label: 'Port-out — customer leaves with their number' },
+      ] },
+      { name: 'country', label: 'Country (ISO alpha-2)', placeholder: 'NO', required: true },
+      { name: 'otherOperator', label: 'Other operator', placeholder: 'Telenor' },
+      { name: 'customerPartyId', label: 'Customer party id', required: true },
+    ],
+    assemble: (body) => ({
+      phoneNumber: body.phoneNumber,
+      direction: body.direction,
+      country: body.country,
+      otherOperator: body.otherOperator,
+      relatedParty: [{ id: body.customerPartyId, role: 'customer' }],
+    }),
+    columns: ['phoneNumber', 'direction', 'status', 'country', 'otherOperator', 'clearinghouse', 'scheduledCutover'],
+    rowAction: {
+      label: (item) => (item.status === 'scheduled' ? 'Complete cutover' : ''),
+      apply: (item) => authFetch(`${PORTING_BASE}/numberPortingOrder/${item.id}/complete`, { method: 'POST' }),
+    },
   },
   {
     path: 'audit',
@@ -474,8 +510,10 @@ function refControl(field, multiple) {
   const select = document.createElement('select');
   select.name = field.name;
   // Entries that are not plain refs (e.g. bundle choice groups, edited via the
-  // API) must survive an edit-save round trip untouched.
+  // API) must survive an edit-save round trip untouched — and plain refs that
+  // carry extra metadata (bundledProductOfferingOption cardinality) must keep it.
   let passthrough = [];
+  let originals = {};
   if (multiple) {
     select.multiple = true;
     select.size = 4;
@@ -499,12 +537,13 @@ function refControl(field, multiple) {
       const picked = [...select.selectedOptions].filter((o) => o.value);
       if (!picked.length && !passthrough.length) return undefined;
       return multiple
-        ? [...picked.map((o) => refObject(field, o)), ...passthrough]
+        ? [...picked.map((o) => originals[o.value] || refObject(field, o)), ...passthrough]
         : refObject(field, picked[0]);
     },
     set: (item) => {
       const refs = multiple ? (item[field.name] || []) : [item[field.name]].filter(Boolean);
       passthrough = multiple ? refs.filter((r) => !r.id || r.options) : [];
+      originals = Object.fromEntries(refs.filter((r) => r.id && !r.options).map((r) => [r.id, r]));
       const ids = refs.filter((r) => r.id && !r.options).map((r) => r.id);
       if (select.options.length > (multiple ? 0 : 1)) {
         applySelection(select, ids);
@@ -551,6 +590,106 @@ function renderEditor() {
   if (active.aiAssist) {
     el('fields').append(aiAssistRow(active.aiAssist));
   }
+  if (active.tester) {
+    el('fields').append(testerRow());
+  }
+}
+
+/**
+ * Rules dry-run: a sample order/cart in, the live engine's verdict out —
+ * exactly the /evaluate and /price calls the order pipeline and billing make,
+ * so what you see here is what a customer would get.
+ */
+function testerRow() {
+  const wrap = document.createElement('div');
+  wrap.className = 'field aiassist';
+  const caption = document.createElement('span');
+  caption.textContent = 'Dry run — test the enabled rules';
+  const row = document.createElement('div');
+  row.className = 'moneyrow';
+  const offering = document.createElement('input');
+  offering.placeholder = 'Offering id (optional)';
+  offering.id = 'test-offering';
+  const qty = document.createElement('input');
+  qty.type = 'number';
+  qty.placeholder = 'Qty';
+  qty.value = '1';
+  qty.id = 'test-qty';
+  qty.style.maxWidth = '70px';
+  const subtotal = document.createElement('input');
+  subtotal.type = 'number';
+  subtotal.placeholder = 'Subtotal €';
+  subtotal.value = '100';
+  subtotal.id = 'test-subtotal';
+  subtotal.style.maxWidth = '100px';
+  const verified = document.createElement('label');
+  verified.className = 'small';
+  const verifiedBox = document.createElement('input');
+  verifiedBox.type = 'checkbox';
+  verifiedBox.id = 'test-verified';
+  verified.append(verifiedBox, ' verified');
+  const orderBtn = document.createElement('button');
+  orderBtn.type = 'button';
+  orderBtn.className = 'ghost';
+  orderBtn.id = 'test-order';
+  orderBtn.textContent = 'Test order';
+  const priceBtn = document.createElement('button');
+  priceBtn.type = 'button';
+  priceBtn.className = 'ghost';
+  priceBtn.id = 'test-price';
+  priceBtn.textContent = 'Test price';
+  const result = document.createElement('div');
+  result.className = 'small';
+  result.id = 'test-result';
+
+  const context = () => {
+    const id = offering.value.trim();
+    const quantity = Number(qty.value) || 1;
+    return {
+      offeringIds: id ? [id] : [],
+      quantityByOffering: id ? { [id]: quantity } : {},
+      maxLineQuantity: quantity,
+      totalQuantity: quantity,
+      lineCount: id ? 1 : 0,
+      subtotal: Number(subtotal.value) || 0,
+      verifiedIdentity: verifiedBox.checked,
+    };
+  };
+  orderBtn.addEventListener('click', async () => {
+    result.textContent = '…';
+    try {
+      const res = await authFetch(`${POLICY_BASE}/evaluate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: 'order', context: context() }),
+      });
+      const v = await res.json();
+      result.textContent = v.decision === 'deny'
+        ? `✕ DENIED by "${v.ruleName}": ${v.message}`
+        : '✓ ALLOWED — no enabled order rule blocks this';
+    } catch (e) { result.textContent = 'dry run failed: ' + e.message; }
+  });
+  priceBtn.addEventListener('click', async () => {
+    result.textContent = '…';
+    try {
+      const res = await authFetch(`${POLICY_BASE}/price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: context() }),
+      });
+      const v = await res.json();
+      const adj = (v.adjustments || [])
+        .map((a) => `${a.label}: ${Number(a.amount) > 0 ? '+' : ''}${Number(a.amount).toFixed(2)}`)
+        .join(' · ');
+      result.textContent = adj
+        ? `base ${Number(v.basePrice).toFixed(2)} → ${adj} → total ${Number(v.total).toFixed(2)}`
+        : `no pricing rule matches — price stays ${Number(v.basePrice).toFixed(2)}`;
+    } catch (e) { result.textContent = 'dry run failed: ' + e.message; }
+  });
+
+  row.append(offering, qty, subtotal, verified, orderBtn, priceBtn);
+  wrap.append(caption, row, result);
+  return wrap;
 }
 
 /** A brief in, a draft out — into the message fields, still editable. */
@@ -649,14 +788,18 @@ async function loadList() {
       return tr;
     }
     if (active.rowAction) {
-      const act = document.createElement('button');
-      act.textContent = active.rowAction.label(item);
-      act.className = 'ghost';
-      act.addEventListener('click', async () => {
-        await active.rowAction.apply(item);
-        loadList();
-      });
-      td.append(act);
+      // A falsy label means the action doesn't apply to this row.
+      const label = active.rowAction.label(item);
+      if (label) {
+        const act = document.createElement('button');
+        act.textContent = label;
+        act.className = 'ghost';
+        act.addEventListener('click', async () => {
+          await active.rowAction.apply(item);
+          loadList();
+        });
+        td.append(act);
+      }
     }
     const edit = document.createElement('button');
     edit.textContent = 'Edit';

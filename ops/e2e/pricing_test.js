@@ -78,6 +78,39 @@ async function token(request) {
   if (!near(off.total, 100)) fail('after disabling, price should be 100, got ' + off.total);
   console.log('OK both rules disabled → price back to €100 — NO redeploy');
 
+  // 4. The customer SEES the rules: re-enable the launch discount, put an
+  //    offering in a fresh customer's cart, and the cart previews the adjusted
+  //    price — the same engine the bill will use, shown before checkout.
+  await ctx.request.patch(`${POLICY}/policyRule/${id1}`, { headers: H, data: { enabled: true } });
+  const offerings = await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
+  const plain = offerings.find((o) => !o.requiresVerifiedIdentity && !o.isBundle
+    && (o.productOfferingPrice || []).length);
+  if (!plain) fail('no plain priced offering for the cart preview');
+  const ctxC = await browser.newContext();
+  const page = await ctxC.newPage();
+  await page.goto('http://localhost:8080/shop/');
+  await page.click('.who >> text=Sign in');
+  await page.waitForSelector('a[href*="registration"], input[name="username"]', { timeout: 20000 });
+  await page.click('a[href*="registration"]');
+  await page.waitForSelector('input[name="email"]');
+  await page.fill('input[name="firstName"]', 'Pricia');
+  await page.fill('input[name="lastName"]', `Preview${run}`);
+  await page.fill('input[name="email"]', `pricia-${run}@example.com`);
+  await page.fill('input[name="password"]', 'Passw0rd!');
+  await page.fill('input[name="password-confirm"]', 'Passw0rd!');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('.nav', { timeout: 20000 });
+  await page.click(`text=${plain.name}`);
+  await page.click('button.primary.big');            // add to cart → navigates to /cart
+  const adjRow = page.locator('[data-testid="price-adjustment"]');
+  await adjRow.waitFor({ timeout: 15000 });
+  const adjText = await adjRow.textContent();
+  if (!adjText.includes('Launch offer')) fail('cart preview missing the rule label, got: ' + adjText);
+  const adjTotal = await page.locator('[data-testid="adjusted-total"]').textContent();
+  console.log('OK the cart previews the pricing rule before checkout:', adjText.trim(), '→', adjTotal.trim());
+  await ctx.request.patch(`${POLICY}/policyRule/${id1}`, { headers: H, data: { enabled: false } });
+
   await ctx.request.delete(`${POLICY}/policyRule/${id1}`, { headers: H });
   await ctx.request.delete(`${POLICY}/policyRule/${id2}`, { headers: H });
   await browser.close();

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getCustomer,
   interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
-  activeServicesOf, agreementsOf, paymentMethodsOf, recommendationsOf, redemptionsOf,
+  activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
+  portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 
@@ -28,6 +29,7 @@ export default function Customer360() {
   const [usage, setUsage] = useState([]);
   const [agreements, setAgreements] = useState([]);
   const [activeServices, setActiveServices] = useState([]);
+  const [portingOrders, setPortingOrders] = useState([]);
   const [redemptions, setRedemptions] = useState([]);
   const [methods, setMethods] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
@@ -72,6 +74,7 @@ export default function Customer360() {
     usageOf(id).then(setUsage);
     agreementsOf(id).then(setAgreements);
     activeServicesOf(id).then(setActiveServices);
+    portingOrdersOf(id).then(setPortingOrders);
     redemptionsOf(id).then(setRedemptions);
     paymentMethodsOf(id).then(setMethods);
     recommendationsOf(id).then(setSuggestions);
@@ -161,10 +164,45 @@ export default function Customer360() {
             {activeServices.filter((sv) => (sv.supportingResource || []).length).map((sv) => (
               <div className="row" key={sv.id} data-testid="service-number">
                 <span className="dim small">{sv.name}</span>
-                <span className="msisdn">{sv.supportingResource[0].value}</span>
+                <div className="rowend">
+                  <span className="msisdn">{sv.supportingResource[0].value}</span>
+                  <span className={`state ${sv.state}`}>{sv.state}</span>
+                  {sv.state === 'active' && (
+                    <button className="ghost danger" data-testid="cease-service"
+                            onClick={() => window.confirm(`Cease ${sv.name} and release ${sv.supportingResource[0].value}?`)
+                              && act(() => ceaseService(sv.id, 'ceased by agent'))}>
+                      Cease
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             {!products.length && <p className="dim small">Nothing provisioned.</p>}
+          </div>
+
+          <h2>Number porting</h2>
+          <div className="rows" data-testid="porting-card">
+            {portingOrders.map((po) => (
+              <div className="row" key={po.id}>
+                <div>
+                  <span className="msisdn">{po.phoneNumber}</span>
+                  <div className="dim small">
+                    {po.direction === 'portOut' ? 'Port-out to' : 'Port-in from'} {po.otherOperator || '—'}
+                    {' · '}{po.country}
+                  </div>
+                </div>
+                <div className="rowend">
+                  <span className={`state ${po.status}`}>{po.status}</span>
+                  {po.status === 'scheduled' && (
+                    <button className="ghost" data-testid="complete-cutover"
+                            onClick={() => act(() => completeCutover(po.id))}>
+                      Complete cutover
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!portingOrders.length && <p className="dim small">No porting orders.</p>}
           </div>
 
           <h2>Usage this month</h2>

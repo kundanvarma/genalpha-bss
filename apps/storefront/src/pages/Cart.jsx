@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, checkQualification, getOffering, myParty, priceIndex, searchTimeSlots } from '../api.js';
+import { availabilityFor, checkQualification, getOffering, myParty, previewPrice, priceIndex, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, markCartCheckedOut, removeLine, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
@@ -99,6 +99,33 @@ export default function Cart() {
       .then((result) => setSlots((result.availableTimeSlot || []).slice(0, 6)))
       .catch((e) => setError(e.message));
   }, [needsInstall]);
+
+  // Dynamic pricing preview: what the operator's enabled pricing rules do to
+  // this cart's monthly total — the same rules the bill will apply, shown
+  // before checkout instead of after. Fail-soft (guests/outage: no preview).
+  const [priceAdj, setPriceAdj] = useState(null);
+  useEffect(() => {
+    if (!lines || !lines.length || !isSignedIn() || !Object.keys(prices).length) {
+      setPriceAdj(null);
+      return;
+    }
+    let subtotal = 0;
+    const ids = new Set();
+    for (const line of lines) {
+      for (const id of [line.offeringId, ...(line.selections || []).map((s) => s.offeringId)]) {
+        const offering = offerings[id];
+        if (!offering) continue;
+        ids.add(id);
+        const m = monthlyTotal(pricesOf(offering, prices));
+        if (m) subtotal += m.value * line.quantity;
+      }
+    }
+    if (subtotal <= 0) {
+      setPriceAdj(null);
+      return;
+    }
+    previewPrice(Number(subtotal.toFixed(2)), [...ids]).then(setPriceAdj);
+  }, [lines, offerings, prices]);
 
   function pickSlot(next) {
     setSlot(next);
@@ -246,6 +273,20 @@ export default function Cart() {
           <div className="row promo" data-testid="promo-row">
             <span>Promo <strong>{promo.code}</strong> — {promo.name} (−{promo.percentage}%)</span>
             <span className="linetotal ok">{promoDiscount().value.toFixed(2)} {promoDiscount().unit}/mo</span>
+          </div>
+        )}
+        {priceAdj && priceAdj.adjustments.map((a) => (
+          <div className="row promo" data-testid="price-adjustment" key={a.ruleId}>
+            <span>{a.label}</span>
+            <span className={Number(a.amount) < 0 ? 'linetotal ok' : 'linetotal'}>
+              {Number(a.amount) > 0 ? '+' : ''}{Number(a.amount).toFixed(2)} {grand?.unit || 'EUR'}/mo
+            </span>
+          </div>
+        ))}
+        {priceAdj && (
+          <div className="row granded" data-testid="adjusted-total">
+            <strong>Your price per month</strong>
+            <strong className="linetotal ok">{Number(priceAdj.total).toFixed(2)} {grand?.unit || 'EUR'}</strong>
           </div>
         )}
         {due && (

@@ -34,7 +34,8 @@ const CONSOLE = 'http://localhost:8080/console/';
   await page.waitForFunction(() =>
     document.querySelectorAll('select[name="bundledProductOffering"] option').length >= 4);
   const selected = await page.locator('select[name="bundledProductOffering"] option:checked').allTextContents();
-  if (selected.length !== 3) fail(`expected 3 plain bundled offerings selected, got ${selected.length}`);
+  // 3 mandatory components + the optional Sports Pass add-on (choice groups are separate)
+  if (selected.length !== 4) fail(`expected 4 plain bundled offerings selected, got ${selected.length}`);
   const isBundleChecked = await page.locator('input[name="isBundle"]').isChecked();
   if (!isBundleChecked) fail('isBundle checkbox not checked when editing the bundle');
   const selfDisabled = await page.evaluate(() =>
@@ -93,6 +94,29 @@ const CONSOLE = 'http://localhost:8080/console/';
   if (!/\d+ unit/.test(stockCells[2])) fail(`stocked quantity cell wrong: "${stockCells[2]}"`);
   if (!/\d+ unit/.test(stockCells[4])) fail(`available quantity cell wrong: "${stockCells[4]}"`);
   console.log('OK stock tab:', stockCells.slice(0, 5).join(' | '));
+
+  // 7. Rules tab: the dry-run panel tests the live engine without placing anything
+  await page.locator('.tab', { hasText: 'Rules' }).click();
+  await page.waitForSelector('#test-order', { timeout: 10000 });
+  await page.fill('#test-subtotal', '200');
+  await page.click('#test-order');
+  await page.waitForFunction(() => /ALLOWED|DENIED/.test(
+    document.getElementById('test-result')?.textContent || ''), null, { timeout: 10000 });
+  const orderVerdict = await page.locator('#test-result').textContent();
+  console.log('OK rules dry-run (order):', orderVerdict.trim());
+  await page.click('#test-price');
+  await page.waitForFunction(() => /price|total/.test(
+    document.getElementById('test-result')?.textContent || ''), null, { timeout: 10000 });
+  const priceVerdict = await page.locator('#test-result').textContent();
+  if (!/200\.00/.test(priceVerdict)) fail(`dry-run price should mention 200.00, got "${priceVerdict}"`);
+  console.log('OK rules dry-run (price):', priceVerdict.trim());
+
+  // 8. Porting tab: back-office view of MNP orders with the cutover action
+  await page.locator('.tab', { hasText: 'Porting' }).click();
+  const portRow = page.locator('#listing-body tr', { hasText: '+47' });
+  await portRow.first().waitFor({ timeout: 10000 });
+  const portCells = await portRow.first().locator('td').allTextContents();
+  console.log('OK porting tab:', portCells.slice(0, 4).join(' | '));
 
   await browser.close();
   console.log('\nALL CHECKS PASSED');

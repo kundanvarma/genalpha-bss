@@ -136,6 +136,31 @@ export async function activeServicesOf(customerId) {
   } catch { return []; }
 }
 
+/* Number porting (MNP) — the customer's port-in/port-out orders, and the
+ * agent-side actions: completing a scheduled cutover, and ceasing a service
+ * (which releases its number — the port-out endgame). */
+const PORTING = '/tmf-api/numberPortingManagement/v1';
+
+export async function portingOrdersOf(customerId) {
+  try {
+    return await json(await authFetch(`${PORTING}/numberPortingOrder?relatedPartyId=${customerId}`));
+  } catch { return []; }
+}
+
+export async function completeCutover(portingOrderId) {
+  return json(await authFetch(`${PORTING}/numberPortingOrder/${portingOrderId}/complete`, {
+    method: 'POST',
+  }));
+}
+
+export async function ceaseService(serviceId, reason) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/terminate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: reason || 'ceased by agent' }),
+  }));
+}
+
 export async function redemptionsOf(customerId) {
   try {
     return await json(await authFetch(`${PROMO}/redemption?relatedPartyId=${customerId}`));
