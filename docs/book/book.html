@@ -108,7 +108,7 @@
     <div class="kicker">A Build Memoir</div>
     <h1>Verify<br>Everything</h1>
     <div class="sub">How one person and an AI built a complete telecom BSS — one proof at a time</div>
-    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty components, four channels, and a discipline</div>
+    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty-one components, four channels, and a discipline</div>
   </div>
 </section>
 
@@ -118,7 +118,7 @@
     <div class="num">Preface</div>
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
-    operator sells, bills, and serves customers through — from an empty repository to thirty
+    operator sells, bills, and serves customers through — from an empty repository to thirty-one
     composable components, four customer channels, and eleven end-to-end test suites that all pass in
     a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
@@ -229,10 +229,12 @@
     <p>So the answer became doctrine, and the doctrine was severe. First: the original components would
     pass TM Forum's official <b>Conformance Test Kits</b> — an independent, published suite that
     proves a component really implements a standard rather than merely resembling it. Not "we think
-    it's TMF620." An outside authority agrees it's TMF620. Second: every feature, without exception,
-    would be driven through a <em>real browser</em> — register, configure, add to cart, pay, watch the
-    order complete, watch the notification arrive. If a human couldn't do it in a browser, it wasn't
-    done.</p>
+    it's TMF620." An outside authority agrees it's TMF620. Five kits at first; the doctrine would
+    compound until, near the end of this story, <em>eleven</em> kits agreed — and the two that
+    deliberately didn't became one of the book's most useful lessons. Second: every feature, without
+    exception, would be driven through a <em>real browser</em> — register, configure, add to cart,
+    pay, watch the order complete, watch the notification arrive. If a human couldn't do it in a
+    browser, it wasn't done.</p>
 
     <p>There was a subtler third rule, learned the hard way. The tests ran against an in-memory
     database that imitated PostgreSQL. Close, but not identical — and "close but not identical" is
@@ -1110,6 +1112,62 @@
     watch.</div>
   </section>
 
+  <hr class="soft">
+
+  <!-- Ch 20 -->
+  <section class="chapter" id="ch20">
+    <div class="num">Chapter Twenty</div>
+    <h3>Rules without redeploys, and the audit</h3>
+    <div class="epi">In telecom, every new product brings new business rules. The question that decides
+    whether you have a product or a project is: does a new rule mean new code?
+    <span class="who">— from the build log</span></div>
+
+    <p class="drop">The question arrived plainly, the way the best ones do: <em>"New products have new
+    business rules. Is it new code every time, or is there a rules page?"</em> The honest answer, at
+    that moment, was both. Prices, bundles, allowances, promo codes — all data, changeable in the
+    console with no redeploy. But a genuinely new <em>kind</em> of rule — "max two SIMs per order,"
+    "these two products can't be bought together" — was a code change. There was no rules engine,
+    and pretending otherwise would have broken the book's one law.</p>
+
+    <p>So the thirty-first component was born: <b>policy</b>. Rules authored as pure data — JSON-logic
+    conditions an operator writes in the console — evaluated at order time by a small engine that can
+    never execute code, only answer true or false. The proof was the point: author a "max 2 per order"
+    rule through the API, watch an order for three get refused with the rule's own message, watch an
+    order for two pass, then <em>disable the rule with a row</em> and watch the same order for three
+    sail through. The rule appeared, enforced itself, and vanished — and the deployment never moved.
+    The same engine then learned to answer a second question: not just "may they?" but "at what
+    price?" — pricing rules that adjust a subtotal by segment, by cart, by verified identity, stacking
+    like a customer would expect, landing on the bill as labelled adjustment lines. And the bundle
+    model grew the formal cardinality the standard always offered: mandatory components, optional
+    add-ons a customer may include, and "pick exactly N of M" choice groups enforced at order time.</p>
+
+    <p class="pull">A rule you can add, enforce, and retire without a deployment is the difference
+    between selling a product and selling a promise of future engineering.</p>
+
+    <p>And then, because the machinery was all data and seams, came the reckoning the second chapter
+    had promised: <em>run the official conformance kits against everything else.</em> The kits were
+    museum pieces — Node-16-era runners that mangled URLs on modern machines — so the first day was
+    spent building a harness that made their numbers trustworthy at all. Then, component by component:
+    measure the real gap, reshape to the spec, redeploy, re-run, and re-run the <em>application's</em>
+    own tests so conformance never broke commerce. Shopping cart. Party roles. Stock. Usage. The
+    customer bill — nineteen thousand assertions on that kit alone. Consumption reports. Each driven
+    to zero failures, each committed with its number.</p>
+
+    <p>The most valuable finding was the two components that <em>refused</em>. Payment would not accept
+    the kit's empty, amount-less payment — because in this BSS, creating a payment <em>is</em> the
+    authorization, idempotent by correlator, and no conformance score was worth re-opening the door to
+    a double charge. Communication would not send a message with no recipient. Eleven kits green, two
+    gaps kept on purpose and written down in plain sight — because a conformance page that admits
+    "here we are stricter than the spec, and here is why" is worth more to a buyer than a wall of
+    unexamined green.</p>
+
+    <div class="lesson"><b>The lesson.</b> Configurability is a spectrum, and the honest move is to
+    say where you are on it — then move the expensive end (new rule types, new prices) into data.
+    And when an external standard disagrees with a guarantee you chose deliberately, the answer isn't
+    to surrender the guarantee; it's to document the disagreement and let the buyer judge. Eleven
+    zeros and two explained exceptions beat thirteen unexamined zeros.</div>
+  </section>
+
 </div>
 
 <!-- ============ CODA ============ -->
@@ -1123,14 +1181,16 @@
 
 <div class="page">
 
-  <!-- Ch 20 -->
-  <section class="chapter" id="ch20">
-    <div class="num">Chapter Twenty</div>
+  <!-- Ch 21 -->
+  <section class="chapter" id="ch21">
+    <div class="num">Chapter Twenty-One</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
-    <p class="drop">Thirty components. Four channels. Eleven end-to-end suites, all green in a real
-    browser. Official conformance kits passing with zero failures. Isolation proven against a real
+    <p class="drop">Thirty-one components. Four channels. Fourteen end-to-end suites, all green in a
+    real browser. Eleven official conformance kits passing with zero failures — and two components
+    that fail their kits on purpose, with the reasons written down. Business rules and prices that
+    change with a row, never a redeploy. Isolation proven against a real
     database. A B2B autonomy demo that used to be a slideshow, rebuilt as running software. A national
     number-portability flow, both directions. A network that heals itself and leaves a receipt. And a
     face on the whole invisible machine so anyone can watch it breathe.</p>
@@ -1145,7 +1205,7 @@
     <p>That wall is also the answer to the question this book is really about. It was built by one
     person and an AI — Claude Fable 5 — at a pace no solo human could sustain and no unverified pair
     could survive. The model's breadth was extraordinary; it held the whole system in view and wired
-    thirty components without losing the thread. But breadth without an arbiter is just confident
+    thirty-one components without losing the thread. But breadth without an arbiter is just confident
     wrongness at scale. The tests were the arbiter. Not the model's fluency, not my intuition —
     a browser, a real database, an official kit, agreeing or refusing.</p>
 
@@ -1156,7 +1216,7 @@
     <p>That is the memoir's whole argument, and the reason its title is an instruction rather than a
     boast. The future of building software isn't "the AI writes the code." It's a human holding intent
     and judgment, a capable model holding execution and breadth, and a ruthless verification discipline
-    making the partnership trustworthy. A thirty-component, multi-tenant, standards-conformant BSS,
+    making the partnership trustworthy. A thirty-one-component, multi-tenant, standards-conformant BSS,
     built this way, is the existence proof. Every claim in these pages has a commit, a test, or a
     screenshot behind it.</p>
 

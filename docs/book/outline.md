@@ -319,14 +319,33 @@ and showing the *process* is the difference between impressing an engineer and c
 *Receipts:* the flow component; `docs/img/live-flow-process.png`; the "watch a test run live"
 sessions.
 
+### Chapter 20 — Rules without redeploys, and the audit
+*The scene:* the plain question — "new products have new business rules; is it new code every
+time, or a rules page?" — and the honest answer that it was both, until the thirty-first component
+made rules (and then prices) pure data. Then the reckoning Chapter 2 promised: running the official
+conformance kits against everything else.
+*Covers:* the policy component — JSON-logic rules authored in the console, enforced at order time,
+added/retired with a row and no redeploy; pricing rules (percent/amount adjustments by segment,
+cart, verified identity) landing on bills as labelled lines; TMF620 soft-bundle cardinality
+("pick N of M", optional add-ons) enforced at order time; the CTK campaign — a harness for the
+Node-16-era kits, then cart, party-role, stock, usage, consumption, and the customer bill each
+driven to zero failures; and the two components that refused on purpose (payment's
+create-is-authorization + idempotency, communication's required recipient), kept hardened and
+documented.
+*The lesson:* move the expensive end of configurability into data; and when a standard disagrees
+with a guarantee you chose deliberately, document the disagreement rather than surrender the
+guarantee. Eleven zeros and two explained exceptions beat thirteen unexamined zeros.
+*Receipts:* `ops/e2e/policy_test.js`, `pricing_test.js`, `bundle_test.js`; `docs/ctk-conformance.md`;
+`ops/ctk/runctk.py`; the per-kit zero-failure commits.
+
 ---
 
 ## Coda — The Method and the Meta
 
-### Chapter 20 — What it means that it was built this way
-*The scene:* stepping back. Thirty components, four channels, eleven E2E suites, a Catalyst-grade
-PoC, an AI platform, a k8s-validated chart — built by one person and an AI, over a compressed arc,
-with every feature proven in a real browser.
+### Chapter 21 — What it means that it was built this way
+*The scene:* stepping back. Thirty-one components, four channels, fourteen E2E suites, eleven
+CTKs at zero failures, a Catalyst-grade PoC, an AI platform, a k8s-validated chart — built by one
+person and an AI, over a compressed arc, with every feature proven in a real browser.
 *Covers:* the three threads revisited — neutrality as conviction, verify-everything as the enabling
 discipline, honesty-about-mocks as the thing that keeps a demo credible. And the meta: what
 AI-assisted building at this scale actually felt like, where it broke, and why the verification
