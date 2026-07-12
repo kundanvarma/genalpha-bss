@@ -159,6 +159,9 @@ bundle_prices = [ref(prices["Mobile Unlimited 5G Monthly"], "ProductOfferingPric
                  ref(prices["Fiber 1000 Monthly"], "ProductOfferingPrice"),
                  ref(prices["TV Max Monthly"], "ProductOfferingPrice"),
                  ref(prices["GenAlpha One Bundle Discount"], "ProductOfferingPrice")]
+# The one-time fiber install fee rides the bundle so checkout's "due now" reflects it.
+if "Fiber Installation Fee" in prices:
+    bundle_prices.append(ref(prices["Fiber Installation Fee"], "ProductOfferingPrice"))
 req("PATCH", f"productOffering/{bundle['id']}", {
     "bundledProductOffering": fixed + [choice, optional(sports)],
     "productOfferingPrice": bundle_prices,

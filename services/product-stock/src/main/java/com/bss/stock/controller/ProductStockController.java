@@ -49,7 +49,7 @@ public class ProductStockController {
         filters.remove("offset");
         filters.remove("limit");
         filters.remove("fields");
-        PagedResult<ProductStockDto> result = service.findAll(offset, limit, filters);
+        PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
         List<?> body = fields == null ? result.items() : fieldSelector.select(result.items(), fields);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
@@ -58,21 +58,21 @@ public class ProductStockController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ProductStockDto> getById(@PathVariable("id") String id) {
+    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PostMapping
-    public ResponseEntity<ProductStockDto> create(@Valid @RequestBody ProductStockDto dto) {
-        ProductStockDto created = service.create(dto);
+    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+        Map<String, Object> created = service.create(dto);
         return ResponseEntity
-                .created(URI.create(created.getHref()))
+                .created(URI.create(String.valueOf(created.get("href"))))
                 .body(created);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<ProductStockDto> patch(@PathVariable("id") String id,
-                                                 @RequestBody ProductStockDto patch) {
+    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
+                                                 @RequestBody Map<String, Object> patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 

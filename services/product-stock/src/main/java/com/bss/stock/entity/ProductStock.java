@@ -18,7 +18,7 @@ public class ProductStock {
     @Column(name = "href")
     private String href;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name")
     private String name;
 
     /** JSON object referencing the stocked product offering, echoed verbatim. */
@@ -37,6 +37,9 @@ public class ProductStock {
 
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
+
+    @Column(name = "payload_json", length = 8000)
+    private String payloadJson;
 
     /** The tenant this row belongs to; never exposed in API responses. */
     @Column(name = "tenant_id", nullable = false, length = 64)
@@ -116,4 +119,7 @@ public class ProductStock {
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    public String getPayloadJson() { return payloadJson; }
+    public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
 }
