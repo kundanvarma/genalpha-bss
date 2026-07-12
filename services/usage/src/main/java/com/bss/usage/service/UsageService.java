@@ -181,6 +181,8 @@ public class UsageService {
             String key = r.getProductOfferingId() + "|" + r.getUsageSpecName();
             Map<String, Object> bucket = buckets.computeIfAbsent(key, k -> {
                 Map<String, Object> b = new LinkedHashMap<>();
+                // TMF677: buckets are addressable — a stable id per (party, offering, spec).
+                b.put("id", "bkt-" + Integer.toHexString((party + "|" + k).hashCode()));
                 b.put("name", r.getUsageSpecName());
                 b.put("usedValue", BigDecimal.ZERO);
                 b.put("units", r.getUnits());
@@ -194,12 +196,59 @@ public class UsageService {
             });
             bucket.put("usedValue", ((BigDecimal) bucket.get("usedValue")).add(r.getValue()));
         }
-        return Map.of(
-                "id", UUID.randomUUID().toString(),
-                "@type", "UsageConsumptionReport",
-                "relatedParty", List.of(Map.of("id", party, "role", "customer")),
-                "period", Map.of("startDateTime", periodStart.toString()),
-                "bucket", List.copyOf(buckets.values()));
+        // A deterministic report per party: the same customer always gets the
+        // same report id, so the report is addressable as a resource (TMF677).
+        String reportId = "ucr-" + party;
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("id", reportId);
+        report.put("href", ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport/" + reportId);
+        report.put("name", "usageConsumptionReport-" + party);
+        report.put("effectiveDate", OffsetDateTime.now().toString());
+        report.put("@type", "UsageConsumptionReport");
+        report.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
+        report.put("period", Map.of("startDateTime", periodStart.toString()));
+        report.put("bucket", List.copyOf(buckets.values()));
+        return report;
+    }
+
+    // ---- TMF677 usageConsumptionReport as a resource ----
+
+    /** One report per party with usage this month, so the collection is listable. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findReports(Map<String, String> filters) {
+        String tenantId = tenantScope.currentTenantId();
+        // A customer only ever sees their own report; staff see the tenant's.
+        List<String> parties = partyScope.scopedPartyId().map(List::of)
+                .orElseGet(() -> records.findByTenantId(tenantId).stream()
+                        .map(UsageRecord::getOwnerPartyId)
+                        .filter(java.util.Objects::nonNull)
+                        .distinct().toList());
+        return parties.stream().map(this::consumptionReport)
+                .filter(r -> !((List<?>) r.get("bucket")).isEmpty())
+                .filter(r -> filters.get("id") == null || filters.get("id").equals(r.get("id")))
+                .filter(r -> filters.get("name") == null || filters.get("name").equals(r.get("name")))
+                .filter(r -> filters.get("bucket.id") == null || ((List<?>) r.get("bucket")).stream()
+                        .anyMatch(b -> b instanceof Map<?, ?> bm
+                                && filters.get("bucket.id").equals(bm.get("id"))))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findReportById(String id) {
+        if (!id.startsWith("ucr-")) {
+            throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
+        }
+        String party = id.substring("ucr-".length());
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(party)) {
+                throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
+            }
+        });
+        Map<String, Object> report = consumptionReport(party);
+        if (((List<?>) report.get("bucket")).isEmpty()) {
+            throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
+        }
+        return report;
     }
 
     @SuppressWarnings("unchecked")
