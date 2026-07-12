@@ -168,11 +168,15 @@ bss:
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         brand-name: MyGenAlpha
         brand-color: "#0E7C7B"
+        locale: en
+        currency: EUR
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         brand-name: MyNova
         brand-color: "#5B3FA8"
+        locale: "no"
+        currency: NOK
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost]
 
 management:

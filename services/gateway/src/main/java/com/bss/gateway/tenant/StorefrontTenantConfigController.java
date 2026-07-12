@@ -42,6 +42,8 @@ public class StorefrontTenantConfigController {
         manifest.put("clientId", "bss-app");
         if (tenant.getBrandName() != null) manifest.put("brandName", tenant.getBrandName());
         if (tenant.getBrandColor() != null) manifest.put("brandColor", tenant.getBrandColor());
+        manifest.put("locale", tenant.getLocale() == null ? "en" : tenant.getLocale());
+        manifest.put("currency", tenant.getCurrency() == null ? "EUR" : tenant.getCurrency());
         manifest.put("logoUrl", logoUrlOf(tenant));
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
     }
@@ -64,10 +66,14 @@ public class StorefrontTenantConfigController {
         String issuer = tenant != null && tenant.getIssuer() != null ? tenant.getIssuer() : "";
         String brandName = tenant != null && tenant.getBrandName() != null ? tenant.getBrandName() : "";
         String brandColor = tenant != null && tenant.getBrandColor() != null ? tenant.getBrandColor() : "";
+        String locale = tenant != null && tenant.getLocale() != null ? tenant.getLocale() : "en";
+        String currency = tenant != null && tenant.getCurrency() != null ? tenant.getCurrency() : "EUR";
         String body = "window." + global + " = { issuer: '" + issuer
                 + "', logoUrl: '" + logoUrlOf(tenant)
                 + "', brandName: '" + brandName
-                + "', brandColor: '" + brandColor + "' };\n";
+                + "', brandColor: '" + brandColor
+                + "', locale: '" + locale
+                + "', currency: '" + currency + "' };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")

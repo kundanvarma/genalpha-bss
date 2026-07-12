@@ -10,6 +10,8 @@ import com.bss.billing.repository.AppliedBillingRateRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,8 @@ import java.util.UUID;
  */
 @Service
 public class BillingRunService {
+
+    private static final Logger log = LoggerFactory.getLogger(BillingRunService.class);
 
     private final CustomerBillRepository bills;
     private final AppliedBillingRateRepository rates;
@@ -225,6 +229,14 @@ public class BillingRunService {
             }
             if (billRates.isEmpty()) {
                 continue;
+            }
+            java.util.Set<String> units = billRates.stream()
+                    .map(AppliedBillingRate::getAmountUnit).collect(java.util.stream.Collectors.toSet());
+            if (units.size() > 1) {
+                // one operator, one currency: mixed units mean a mis-seeded
+                // catalog — bill anyway (fail open) but say so loudly.
+                log.warn("bill for account {} mixes currencies {} — check the catalog's price units",
+                        owner.getKey(), units);
             }
             CustomerBill bill = new CustomerBill();
             String id = UUID.randomUUID().toString();

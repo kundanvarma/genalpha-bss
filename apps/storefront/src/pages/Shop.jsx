@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getOffering, listOfferings, myRecommendations, priceIndex } from '../api.js';
 import { isSignedIn } from '../auth.js';
-import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { t } from '../i18n.js';
 
 export default function Shop() {
   const [offerings, setOfferings] = useState(null);
@@ -93,9 +94,9 @@ function OfferingCard({ offering, prices }) {
       )}
       <div className="pricing">
         {choices.length && fromMonthly
-          ? <strong>from {fromMonthly.value.toFixed(2)} {fromMonthly.unit}/month</strong>
+          ? <strong>{t('from')} {fmtMonthly(fromMonthly)}</strong>
           : monthly
-            ? <strong>{monthly.value.toFixed(2)} {monthly.unit}/month</strong>
+            ? <strong>{fmtMonthly(monthly)}</strong>
             : own.length > 0 && <strong>{fmtPrice(own[0])}</strong>}
       </div>
     </Link>

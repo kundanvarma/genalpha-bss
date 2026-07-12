@@ -31,7 +31,7 @@ async function staffToken(request, realm) {
   console.log('OK Nova storefront shows the Nova catalog and none of GenAlpha\'s');
 
   // --- Sign-in on the Nova host goes to the NOVA realm
-  await page.click('.who >> text=Sign in');
+  await page.click('.who button'); // "Logg inn" on the Norwegian tenant
   await page.waitForSelector('a[href*="registration"], input[name="username"]', { timeout: 20000 });
   if (!page.url().includes('/realms/nova/')) {
     fail('Nova storefront login left the nova realm: ' + page.url());
@@ -51,14 +51,14 @@ async function staffToken(request, realm) {
   console.log('OK Nova customer self-registered through the nova realm');
 
   await page.locator('.card', { hasText: 'Nova Unlimited 5G' }).first().click();
-  await page.locator('button', { hasText: 'Add to cart' }).first().waitFor({ timeout: 15000 });
-  await page.locator('button', { hasText: 'Add to cart' }).first().click();
-  await page.click('.nav >> text=Cart');
+  await page.locator('button', { hasText: 'Legg i handlekurven' }).first().waitFor({ timeout: 15000 });
+  await page.locator('button', { hasText: 'Legg i handlekurven' }).first().click();
+  await page.click('.nav >> text=Handlekurv'); // the Norwegian tenant, in Norwegian
   await page.locator('.row', { hasText: 'Nova Unlimited 5G' }).first().waitFor({ timeout: 15000 });
   // Plan-only line: no shipping, no install, nothing due now — plain Checkout.
   const checkoutButton = page.locator('button.primary.big');
   const label = (await checkoutButton.textContent()).trim();
-  if (label !== 'Checkout') fail(`expected plain Checkout for a plan-only cart, button says "${label}"`);
+  if (label !== 'Til kassen') fail(`expected Norwegian checkout button, got "${label}"`);
   await checkoutButton.click();
   // Success navigates to My orders; surface the storefront's own error if not.
   const orderRow = page.locator('.row', { hasText: 'Nova Unlimited 5G' }).first();

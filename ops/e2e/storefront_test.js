@@ -58,6 +58,20 @@ async function apiGet(page, path, token) {
     { headers: staffHeaders, data: { stockedQuantity: { amount: reservedNow + 10, units: 'unit' } } });
   console.log('OK stock pinned: Samsung availability = 10');
 
+  // preflight: repeated runs fill the installer calendar (7 business days x
+  // 3 per slot) — cancel leftover test bookings so checkout always has slots
+  const stale = await (await setup.request.get(
+    `${API}/tmf-api/appointment/v4/appointment?limit=100`, { headers: staffHeaders })).json();
+  let freed = 0;
+  for (const appt of (Array.isArray(stale) ? stale : [])) {
+    if (appt.status === 'confirmed') {
+      await setup.request.patch(`${API}/tmf-api/appointment/v4/appointment/${appt.id}`,
+        { headers: staffHeaders, data: { status: 'cancelled' } });
+      freed++;
+    }
+  }
+  if (freed) console.log(`OK preflight: freed ${freed} stale installer bookings`);
+
   // --- Customer A registers and orders the bundle
   const ctxA = await browser.newContext();
   const a = await ctxA.newPage();

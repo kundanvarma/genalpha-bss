@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { availabilityFor, getOffering, getSpec, priceIndex } from '../api.js';
 import { addToCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { t } from '../i18n.js';
 
 const isChoice = (entry) => Array.isArray(entry.options);
 
@@ -245,7 +246,7 @@ export default function Offering() {
         </p>
       )}
       <button className="primary big" onClick={add} disabled={outOfStock}>
-        {outOfStock ? 'Out of stock' : 'Add to cart'}
+        {outOfStock ? t('Out of stock') : t('Add to cart')}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { t } from './i18n.js';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
 import { ensureParty, myNotifications } from './api.js';
 import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from './cart.js';
@@ -81,32 +82,32 @@ export default function App() {
           <span className="area">shop</span>
         </div>
         <nav className="nav">
-          <NavLink to="/" end>Offers</NavLink>
+          <NavLink to="/" end>{t('Offers')}</NavLink>
           <NavLink to="/cart" className="cartlink">
-            Cart{count > 0 && <span className="badge">{count}</span>}
+            {t('Cart')}{count > 0 && <span className="badge">{count}</span>}
           </NavLink>
           {state === 'ready' && (
             <>
-              <NavLink to="/orders">My orders</NavLink>
-              <NavLink to="/bills">My bills</NavLink>
-              <NavLink to="/services">My page</NavLink>
+              <NavLink to="/orders">{t('My orders')}</NavLink>
+              <NavLink to="/bills">{t('My bills')}</NavLink>
+              <NavLink to="/services">{t('My page')}</NavLink>
               <NavLink to="/notifications" className="cartlink">
-                Inbox{unread > 0 && <span className="badge">{unread}</span>}
+                {t('Inbox')}{unread > 0 && <span className="badge">{unread}</span>}
               </NavLink>
             </>
           )}
-          <NavLink to="/support">Support</NavLink>
-          {state === 'ready' && <NavLink to="/account">Account</NavLink>}
+          <NavLink to="/support">{t('Support')}</NavLink>
+          {state === 'ready' && <NavLink to="/account">{t('Account')}</NavLink>}
         </nav>
         <div className="who">
           {state === 'ready' ? (
             <>
               <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
               <span className="user">{claims.name || claims.preferred_username || ''}</span>
-              <button className="ghost" onClick={signOut}>Sign out</button>
+              <button className="ghost" onClick={signOut}>{t('Sign out')}</button>
             </>
           ) : (
-            <button className="primary" onClick={beginLogin}>Sign in</button>
+            <button className="primary" onClick={beginLogin}>{t('Sign in')}</button>
           )}
         </div>
       </header>

@@ -895,5 +895,11 @@
         "business:admin"
       ]
     }
-  ]
+  ],
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "en",
+    "no"
+  ],
+  "defaultLocale": "en"
 }
