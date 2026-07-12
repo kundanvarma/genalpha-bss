@@ -29,9 +29,11 @@ import java.util.Map;
 public class UsageController {
 
     private final UsageService service;
+    private final com.bss.usage.api.FieldSelector fieldSelector;
 
-    public UsageController(UsageService service) {
+    public UsageController(UsageService service, com.bss.usage.api.FieldSelector fieldSelector) {
         this.service = service;
+        this.fieldSelector = fieldSelector;
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/usage")
@@ -109,5 +111,20 @@ public class UsageController {
     public ResponseEntity<Map<String, Object>> consumption(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(service.consumptionReport(relatedPartyId));
+    }
+
+    // ---- TMF677 usageConsumptionReport resource ----
+
+    @GetMapping(ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport")
+    public ResponseEntity<List<?>> listReports(
+            @RequestParam(name = "fields", required = false) String fields,
+            @RequestParam Map<String, String> allParams) {
+        List<Map<String, Object>> items = service.findReports(cleanFilters(allParams));
+        return ResponseEntity.ok(fields == null ? items : fieldSelector.select(items, fields));
+    }
+
+    @GetMapping(ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport/{id}")
+    public ResponseEntity<Map<String, Object>> getReport(@PathVariable("id") String id) {
+        return ResponseEntity.ok(service.findReportById(id));
     }
 }
