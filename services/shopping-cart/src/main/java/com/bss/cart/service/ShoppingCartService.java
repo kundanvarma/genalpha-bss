@@ -101,8 +101,11 @@ public class ShoppingCartService {
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
+                case "href" -> probe.setHref(f.getValue());
                 case "status" -> probe.setStatus(f.getValue());
                 case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
+                // TMF630 field-selection / sorting are not filters — ignore, don't reject.
+                case "fields", "sort" -> { }
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
