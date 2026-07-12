@@ -100,7 +100,12 @@ th {
   color: var(--dim); border-bottom: 1.5px solid var(--ink); padding: 8px 12px 8px 0;
 }
 td { border-bottom: 1px solid var(--line); padding: 9px 12px 9px 0; }
-.rowactions { display: flex; gap: 6px; justify-content: flex-end; }
+/* The first (name) column keeps room to breathe; action buttons never wrap or clip. */
+td:first-child { min-width: 180px; }
+/* Data cells stay on one line (the wrapper scrolls); only the name column wraps. */
+td:not(:first-child) { white-space: nowrap; }
+.rowactions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; flex-wrap: nowrap; }
+.rowactions button { flex-shrink: 0; }
 
 .pager { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 #page-label { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--dim); }

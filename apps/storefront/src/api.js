@@ -60,12 +60,18 @@ export async function priceIndex() {
  */
 export async function ensureParty() {
   const claims = tokenClaims();
+  const email = claims.email || claims.preferred_username;
   return json(await authFetch(`${PARTY}/individual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       givenName: claims.given_name || claims.preferred_username || 'Customer',
       familyName: claims.family_name || '—',
+      // The email rides along so assisted channels can identify the customer
+      // by something a human recognizes, not a UUID.
+      ...(email && email.includes('@') ? {
+        contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }],
+      } : {}),
     }),
   }));
 }

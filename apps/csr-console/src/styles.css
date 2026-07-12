@@ -53,6 +53,9 @@ body {
 main { max-width: 900px; margin: 0 auto; padding: 26px 20px 60px; }
 h1 { font-size: 22px; margin: 22px 0 14px; }
 h2 { font-size: 16px; margin: 18px 0 8px; }
+/* Empty sections collapse to a quiet single line instead of a hollow block. */
+.secnone { color: var(--dim, #8a979c); font-weight: 400; font-size: 12.5px; }
+h2:has(.secnone) { opacity: 0.65; margin: 14px 0 2px; }
 .dim { color: var(--dim); }
 .small { font-size: 12.5px; }
 .error { color: var(--danger); }

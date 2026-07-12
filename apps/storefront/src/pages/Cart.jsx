@@ -380,8 +380,8 @@ export default function Cart() {
       {due && (signedIn ? (
         <div className="payment">
           <h2>Payment</h2>
-          <p className="dim small">Card is charged for the one-time amount due now. Dev PSP: any card
-            works, a number ending 0002 declines.</p>
+          <p className="dim small">Your card is charged the one-time amount due now.
+            Monthly charges arrive on your bill.</p>
           <div className="addressgrid">
             <label className="charfield"><span>Card number</span>
               <input name="cardNumber" value={card.cardNumber} inputMode="numeric"
