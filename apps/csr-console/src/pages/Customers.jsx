@@ -14,7 +14,7 @@ export default function Customers() {
     <>
       <h1>Customers</h1>
       <form className="searchbar" onSubmit={(e) => { e.preventDefault(); search(query.trim()); }}>
-        <input name="q" placeholder="Family name…" value={query}
+        <input name="q" placeholder="Exact family name (blank = all)…" value={query}
                onChange={(e) => setQuery(e.target.value)} />
         <button className="primary" type="submit">Search</button>
       </form>
@@ -24,7 +24,10 @@ export default function Customers() {
           {results.map((c) => (
             <Link className="row rowlink" key={c.id} to={`/customer/${c.id}`}>
               <strong>{c.givenName} {c.familyName}</strong>
-              <span className="dim small">{c.id}</span>
+              <span className="dim small">
+                {(c.contactMedium || []).find((m) => m.mediumType === 'email')?.characteristic?.emailAddress
+                  || <span title={c.id}>{c.id.slice(0, 8)}…</span>}
+              </span>
             </Link>
           ))}
         </div>

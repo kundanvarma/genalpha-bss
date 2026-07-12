@@ -7,6 +7,8 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   revokePaymentMethod, usageOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 
+const None = () => <span className="secnone"> — none</span>;
+
 const dt = (v) => v ? new Date(v).toLocaleString(undefined,
   { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
@@ -86,6 +88,8 @@ export default function Customer360() {
 
   const address = (customer.contactMedium || [])
     .find((m) => m.mediumType === 'postalAddress')?.characteristic;
+  const email = (customer.contactMedium || [])
+    .find((m) => m.mediumType === 'email')?.characteristic?.emailAddress;
 
   async function act(fn) {
     try {
@@ -103,7 +107,8 @@ export default function Customer360() {
         <span className="avatar big">{(customer.givenName?.[0] || '?').toUpperCase()}{(customer.familyName?.[0] || '').toUpperCase()}</span>
         {customer.givenName} {customer.familyName}
       </h1>
-      <p className="dim small">{customer.id}
+      <p className="dim small">
+        {email || <span title={customer.id}>{customer.id.slice(0, 8)}…</span>}
         {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
       {error && <p className="error">{error}</p>}
 
@@ -127,7 +132,7 @@ export default function Customer360() {
 
       <div className="col2">
         <section>
-          <h2>Orders</h2>
+          <h2>Orders{!orders.length && <None />}</h2>
           <div className="rows">
             {orders.map((o) => (
               <div className="row" key={o.id}>
@@ -150,10 +155,9 @@ export default function Customer360() {
                 </div>
               </div>
             ))}
-            {!orders.length && <p className="dim small">No orders.</p>}
-          </div>
+                      </div>
 
-          <h2>Services</h2>
+          <h2>Services{!products.length && !activeServices.length && <None />}</h2>
           <div className="rows">
             {products.map((p) => (
               <div className="row" key={p.id}>
@@ -177,10 +181,9 @@ export default function Customer360() {
                 </div>
               </div>
             ))}
-            {!products.length && <p className="dim small">Nothing provisioned.</p>}
-          </div>
+                      </div>
 
-          <h2>Number porting</h2>
+          <h2>Number porting{!portingOrders.length && <None />}</h2>
           <div className="rows" data-testid="porting-card">
             {portingOrders.map((po) => (
               <div className="row" key={po.id}>
@@ -202,10 +205,9 @@ export default function Customer360() {
                 </div>
               </div>
             ))}
-            {!portingOrders.length && <p className="dim small">No porting orders.</p>}
-          </div>
+                      </div>
 
-          <h2>Usage this month</h2>
+          <h2>Usage this month{!usage.length && <None />}</h2>
           <div className="rows" data-testid="usage-card">
             {usage.map((b, i) => (
               <div className="row" key={i}>
@@ -216,10 +218,9 @@ export default function Customer360() {
                 </span>
               </div>
             ))}
-            {!usage.length && <p className="dim small">No usage recorded.</p>}
-          </div>
+                      </div>
 
-          <h2>Agreements</h2>
+          <h2>Agreements{!agreements.length && <None />}</h2>
           <div className="rows" data-testid="agreements-card">
             {agreements.map((g) => (
               <div className="row" key={g.id}>
@@ -231,10 +232,9 @@ export default function Customer360() {
                 <span className={`state ${g.status}`}>{g.status}</span>
               </div>
             ))}
-            {!agreements.length && <p className="dim small">No agreements.</p>}
-          </div>
+                      </div>
 
-          <h2>Bills</h2>
+          <h2>Bills{!bills.length && <None />}</h2>
           <div className="rows">
             {bills.map((b) => (
               <div className="row" key={b.id}>
@@ -245,10 +245,9 @@ export default function Customer360() {
                 </span>
               </div>
             ))}
-            {!bills.length && <p className="dim small">No bills.</p>}
-          </div>
+                      </div>
 
-          <h2>Appointments</h2>
+          <h2>Appointments{!appointments.length && <None />}</h2>
           <div className="rows">
             {appointments.map((ap) => (
               <div className="row" key={ap.id}>
@@ -259,8 +258,7 @@ export default function Customer360() {
                 </span>
               </div>
             ))}
-            {!appointments.length && <p className="dim small">No appointments.</p>}
-          </div>
+                      </div>
         </section>
 
         <section>
@@ -287,7 +285,7 @@ export default function Customer360() {
             </>
           )}
 
-          <h2>Promotions &amp; payment</h2>
+          <h2>Promotions &amp; payment{!redemptions.length && !methods.length && <None />}</h2>
           <div className="rows" data-testid="promo-vault-card">
             {redemptions.map((r) => (
               <div className="row" key={r.id}>

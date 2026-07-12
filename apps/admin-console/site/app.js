@@ -201,16 +201,21 @@ const RESOURCES = [
         { value: 'price-always', label: 'Price: discount / surcharge for everyone' },
         { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
       ] },
-      { name: 'offeringA', label: 'Item (primary / "when cart has")', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
-      { name: 'maxQuantity', label: 'Max quantity (for a limit rule; blank = any single item)', kind: 'number' },
-      { name: 'offeringB', label: 'Second item (for an incompatibility rule)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
-      { name: 'adjustmentType', label: 'Price adjustment type (for a Price rule)', kind: 'select', options: [
+      { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
+        showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
+      { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
+        showWhen: { field: 'ruleKind', in: ['quantity-cap'] } },
+      { name: 'offeringB', label: 'Second item (cannot be bought with the first)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
+        showWhen: { field: 'ruleKind', in: ['incompatibility'] } },
+      { name: 'adjustmentType', label: 'Adjustment type', kind: 'select', options: [
         { value: '', label: '—' },
         { value: 'percent', label: 'Percent of subtotal' },
         { value: 'amount', label: 'Fixed amount' },
-      ] },
-      { name: 'adjustmentValue', label: 'Price adjustment value — negative = discount, positive = surcharge', kind: 'number' },
-      { name: 'condition', label: 'Advanced: JSON-logic condition (overrides the choices above)', kind: 'longtext' },
+      ], showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-advanced'] } },
+      { name: 'adjustmentValue', label: 'Adjustment value — negative = discount, positive = surcharge', kind: 'number',
+        showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-advanced'] } },
+      { name: 'condition', label: 'JSON-logic condition', kind: 'longtext',
+        showWhen: { field: 'ruleKind', in: ['advanced', 'price-advanced'] } },
       { name: 'message', label: 'Message / label shown to the customer', required: true },
       { name: 'priority', label: 'Priority (lower runs first)', kind: 'number', placeholder: '100' },
       { name: 'enabled', label: 'Enabled', kind: 'checkbox' },
@@ -312,6 +317,20 @@ const RESOURCES = [
     columns: ['createdAt', 'useCase', 'provider', 'model', 'prompt', 'response'],
   },
 ];
+
+// Presentation names for raw TMF field keys (fallback: the key itself).
+const COLUMN_LABELS = {
+  lifecycleStatus: 'Status', isBundle: 'Bundle', lastUpdate: 'Updated',
+  productOffering: 'Offering', stockedQuantity: 'Stocked', reservedQuantity: 'Reserved',
+  availableQuantity: 'Available', billNo: 'Bill no', relatedParty: 'Customer',
+  billingPeriod: 'Period', amountDue: 'Amount due', postcodePrefix: 'Postcode prefix',
+  validFor: 'Window', triggerEventType: 'Trigger', promotionCode: 'Promo code',
+  adjustmentValue: 'Adjustment', priceType: 'Price type',
+  recurringChargePeriodType: 'Charge period', phoneNumber: 'Phone number',
+  otherOperator: 'Other operator', clearinghouse: 'Clearinghouse',
+  scheduledCutover: 'Cutover', createdAt: 'When', useCase: 'Use case',
+};
+const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.label]));
 
 const el = (id) => document.getElementById(id);
 let active = RESOURCES[0];
@@ -585,14 +604,43 @@ function renderEditor() {
       f.kind === 'codepick' ? codePickControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');
     wrap.append(caption, ...parts);
+    wrap.dataset.field = f.name;
     return wrap;
   }));
+  wireVisibility();
   if (active.aiAssist) {
     el('fields').append(aiAssistRow(active.aiAssist));
   }
   if (active.tester) {
     el('fields').append(testerRow());
   }
+}
+
+/**
+ * Progressive disclosure: a field with showWhen {field, in: [...]} only renders
+ * while the controlling select holds one of those values. An empty controlling
+ * value (e.g. editing an existing row) shows everything — never hide data.
+ */
+function wireVisibility() {
+  const dependents = active.fields.filter((f) => f.showWhen);
+  if (!dependents.length) return;
+  const sources = [...new Set(dependents.map((f) => f.showWhen.field))];
+  const apply = () => {
+    for (const f of dependents) {
+      const src = el('fields').querySelector(`[name="${f.showWhen.field}"]`);
+      const v = src ? src.value : '';
+      const wrap = el('fields').querySelector(`[data-field="${f.name}"]`);
+      // No kind chosen yet: creating → keep the form minimal; editing an
+      // existing row → show everything, never hide data.
+      const show = v ? f.showWhen.in.includes(v) : Boolean(editingId);
+      if (wrap) wrap.style.display = show ? '' : 'none';
+    }
+  };
+  for (const name of sources) {
+    const src = el('fields').querySelector(`[name="${name}"]`);
+    if (src) src.addEventListener('change', apply);
+  }
+  apply();
 }
 
 /**
@@ -607,18 +655,27 @@ function testerRow() {
   caption.textContent = 'Dry run — test the enabled rules';
   const row = document.createElement('div');
   row.className = 'moneyrow';
+  // Each dry-run input carries a visible mini-label — placeholders vanish
+  // the moment a value is typed, labels don't.
+  const labelled = (labelText, input) => {
+    const box = document.createElement('span');
+    box.style.cssText = 'display:inline-flex;flex-direction:column;gap:2px;';
+    const cap = document.createElement('span');
+    cap.textContent = labelText;
+    cap.style.cssText = 'font-size:10px;color:var(--dim,#8a979c);letter-spacing:0.04em;text-transform:uppercase;';
+    box.append(cap, input);
+    return box;
+  };
   const offering = document.createElement('input');
-  offering.placeholder = 'Offering id (optional)';
+  offering.placeholder = 'any offering';
   offering.id = 'test-offering';
   const qty = document.createElement('input');
   qty.type = 'number';
-  qty.placeholder = 'Qty';
   qty.value = '1';
   qty.id = 'test-qty';
   qty.style.maxWidth = '70px';
   const subtotal = document.createElement('input');
   subtotal.type = 'number';
-  subtotal.placeholder = 'Subtotal €';
   subtotal.value = '100';
   subtotal.id = 'test-subtotal';
   subtotal.style.maxWidth = '100px';
@@ -627,7 +684,7 @@ function testerRow() {
   const verifiedBox = document.createElement('input');
   verifiedBox.type = 'checkbox';
   verifiedBox.id = 'test-verified';
-  verified.append(verifiedBox, ' verified');
+  verified.append(verifiedBox, ' verified customer');
   const orderBtn = document.createElement('button');
   orderBtn.type = 'button';
   orderBtn.className = 'ghost';
@@ -687,7 +744,7 @@ function testerRow() {
     } catch (e) { result.textContent = 'dry run failed: ' + e.message; }
   });
 
-  row.append(offering, qty, subtotal, verified, orderBtn, priceBtn);
+  row.append(labelled('Offering id', offering), labelled('Qty', qty), labelled('Subtotal €', subtotal), verified, orderBtn, priceBtn);
   wrap.append(caption, row, result);
   return wrap;
 }
@@ -762,7 +819,7 @@ async function loadList() {
     const tr = document.createElement('tr');
     for (const c of active.columns) {
       const th = document.createElement('th');
-      th.textContent = c;
+      th.textContent = COLUMN_LABELS[c] || c;
       tr.append(th);
     }
     tr.append(document.createElement('th'));
@@ -777,7 +834,12 @@ async function loadList() {
         td.textContent = '…';
         active.augmentRow(item, td).catch(() => { td.textContent = '—'; });
       } else {
-        td.textContent = fmtCell(item[c]);
+        const raw = c === 'triggerEventType' ? (EVENT_LABELS[item[c]] || item[c]) : item[c];
+        const text = fmtCell(raw);
+        // Long machine values (JSON-logic conditions) get truncated with the
+        // full value on hover, so the table never explodes.
+        td.textContent = text.length > 64 ? text.slice(0, 61) + '…' : text;
+        if (text.length > 64) td.title = text;
       }
       tr.append(td);
     }

@@ -85,14 +85,18 @@ export default function App() {
           <NavLink to="/cart" className="cartlink">
             Cart{count > 0 && <span className="badge">{count}</span>}
           </NavLink>
-          <NavLink to="/orders">My orders</NavLink>
-          <NavLink to="/bills">My bills</NavLink>
-          <NavLink to="/services">My services</NavLink>
-          <NavLink to="/notifications" className="cartlink">
-            Inbox{unread > 0 && <span className="badge">{unread}</span>}
-          </NavLink>
+          {state === 'ready' && (
+            <>
+              <NavLink to="/orders">My orders</NavLink>
+              <NavLink to="/bills">My bills</NavLink>
+              <NavLink to="/services">My services</NavLink>
+              <NavLink to="/notifications" className="cartlink">
+                Inbox{unread > 0 && <span className="badge">{unread}</span>}
+              </NavLink>
+            </>
+          )}
           <NavLink to="/support">Support</NavLink>
-          <NavLink to="/account">Account</NavLink>
+          {state === 'ready' && <NavLink to="/account">Account</NavLink>}
         </nav>
         <div className="who">
           {state === 'ready' ? (

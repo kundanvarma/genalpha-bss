@@ -46,7 +46,10 @@ export default function App() {
         <Text testID="brand-name" style={{ fontSize: 26, fontWeight: '700', color: c.brandColor, marginBottom: 8 }}>
           {c.brandName}
         </Text>
-        <Text style={{ color: '#5c6a70', marginBottom: 18 }}>Your services, one place.</Text>
+        <Text style={{ color: '#5c6a70', marginBottom: 6 }}>Your services, one place.</Text>
+        <Text style={{ color: '#85999f', fontSize: 13, marginBottom: 18, textAlign: 'center' }}>
+          Plan &amp; usage · Bills &amp; payments · Support{'\n'}Everything your account can do, in your pocket.
+        </Text>
         <Text testID="signin" onPress={() => beginLogin()}
           style={{ backgroundColor: c.brandColor, color: '#fff', paddingVertical: 10,
                    paddingHorizontal: 26, borderRadius: 10, fontWeight: '600', overflow: 'hidden' }}>
