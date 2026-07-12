@@ -13,10 +13,16 @@ public interface CatalogClient {
     Optional<OfferingRef> findOffering(String id);
 
     record OfferingRef(String id, String name, List<Map<String, Object>> productOfferingTerm,
-            boolean requiresVerifiedIdentity) {
+            boolean requiresVerifiedIdentity, Boolean isBundle,
+            List<Map<String, Object>> bundledProductOffering) {
 
         public OfferingRef(String id, String name) {
-            this(id, name, null, false);
+            this(id, name, null, false, false, null);
+        }
+
+        public OfferingRef(String id, String name, List<Map<String, Object>> productOfferingTerm,
+                boolean requiresVerifiedIdentity) {
+            this(id, name, productOfferingTerm, requiresVerifiedIdentity, false, null);
         }
 
         /** Months of commitment declared by the offering's terms, or 0. */
@@ -32,6 +38,28 @@ public interface CatalogClient {
                 }
             }
             return 0;
+        }
+
+        public boolean bundle() {
+            return Boolean.TRUE.equals(isBundle);
+        }
+
+        /**
+         * Choice groups in this bundle (TMF620): bundle members carrying an
+         * {@code options} array, from which the customer picks between the
+         * group's lower and upper limits ("pick 2 of 4").
+         */
+        public List<Map<String, Object>> choiceGroups() {
+            if (bundledProductOffering == null) {
+                return List.of();
+            }
+            List<Map<String, Object>> groups = new java.util.ArrayList<>();
+            for (Map<String, Object> member : bundledProductOffering) {
+                if (member.get("options") instanceof List) {
+                    groups.add(member);
+                }
+            }
+            return groups;
         }
     }
 }

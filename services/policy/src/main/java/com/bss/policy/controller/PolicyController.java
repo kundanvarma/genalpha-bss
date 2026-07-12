@@ -72,4 +72,17 @@ public class PolicyController {
         Map<String, Object> context = ctx instanceof Map ? (Map<String, Object>) ctx : Map.of();
         return service.evaluate(domain, context).toMap();
     }
+
+    /**
+     * Dynamic pricing: given a base subtotal and a pricing context, apply the
+     * enabled pricing rules and return the adjustments plus the adjusted total.
+     * Called at cart/quote/bill time — the price reflects rules authored as data.
+     */
+    @PostMapping("/price")
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> price(@RequestBody Map<String, Object> body) {
+        Object ctx = body.get("context");
+        Map<String, Object> context = ctx instanceof Map ? (Map<String, Object>) ctx : Map.of();
+        return service.price(context).toMap();
+    }
 }

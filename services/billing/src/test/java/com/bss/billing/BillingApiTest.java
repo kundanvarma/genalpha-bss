@@ -54,6 +54,9 @@ class BillingApiTest {
     @MockBean
     private DownstreamClients.PromotionClient promotionClient;
 
+    @MockBean
+    private DownstreamClients.PricingClient pricingClient;
+
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(
                 new SimpleGrantedAuthority("customer"),

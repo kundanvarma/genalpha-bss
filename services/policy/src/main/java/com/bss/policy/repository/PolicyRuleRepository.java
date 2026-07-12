@@ -11,5 +11,10 @@ public interface PolicyRuleRepository extends JpaRepository<PolicyRule, String> 
     /** Enabled rules for a decision point, lowest priority first (first match wins). */
     List<PolicyRule> findByDomainAndEnabledTrueOrderByPriorityAsc(String domain);
 
+    /** Enabled pricing rules, lowest priority first (all matches accumulate). */
+    default List<PolicyRule> enabledPricingRules() {
+        return findByDomainAndEnabledTrueOrderByPriorityAsc("pricing");
+    }
+
     List<PolicyRule> findAllByOrderByPriorityAsc(Pageable pageable);
 }

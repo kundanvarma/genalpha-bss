@@ -34,6 +34,13 @@ public class PolicyRule {
     private String condition;
     private String message;
 
+    // Pricing rules only (domain='pricing', effect='adjust'): 'percent' | 'amount'.
+    @Column(name = "adjustment_type")
+    private String adjustmentType;
+    // Signed: negative = discount, positive = surcharge.
+    @Column(name = "adjustment_value")
+    private java.math.BigDecimal adjustmentValue;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
     @Column(name = "last_update")
@@ -125,6 +132,22 @@ public class PolicyRule {
 
     public void setMessage(String message) {
         this.message = message;
+    }
+
+    public String getAdjustmentType() {
+        return adjustmentType;
+    }
+
+    public void setAdjustmentType(String adjustmentType) {
+        this.adjustmentType = adjustmentType;
+    }
+
+    public java.math.BigDecimal getAdjustmentValue() {
+        return adjustmentValue;
+    }
+
+    public void setAdjustmentValue(java.math.BigDecimal adjustmentValue) {
+        this.adjustmentValue = adjustmentValue;
     }
 
     public OffsetDateTime getCreatedAt() {

@@ -44,6 +44,9 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/evaluate").hasAuthority("policy:evaluate")
+                        // Price preview is computed from rules the customer will pay under anyway:
+                        // any authenticated caller (customer channel, billing machine) may ask.
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/price").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("policy:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("policy:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("policy:write")
