@@ -34,12 +34,16 @@ public class SomController {
     private final PartyScope partyScope;
     private final com.bss.som.events.DomainEventPublisher events;
     private final com.bss.som.service.OrchestrationService orchestration;
+    private final com.bss.som.repository.SimCardRepository sims;
+    private final com.bss.som.client.SimPlatformClient simPlatform;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             TenantScope tenantScope, PartyScope partyScope,
             com.bss.som.events.DomainEventPublisher events,
-            com.bss.som.service.OrchestrationService orchestration) {
+            com.bss.som.service.OrchestrationService orchestration,
+            com.bss.som.repository.SimCardRepository sims,
+            com.bss.som.client.SimPlatformClient simPlatform) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -48,6 +52,63 @@ public class SomController {
         this.partyScope = partyScope;
         this.events = events;
         this.orchestration = orchestration;
+        this.sims = sims;
+        this.simPlatform = simPlatform;
+    }
+
+    /**
+     * The SIM behind a numbered service: masked ICCID by default; the PUK
+     * only with ?reveal=true. Owner-checked — a customer token addresses only
+     * their own service, and a foreign id is a 404, never a 403.
+     */
+    @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim")
+    public ResponseEntity<Map<String, Object>> sim(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestParam(name = "reveal", defaultValue = "false") boolean reveal) {
+        com.bss.som.entity.SimCard sim = requireOwnSim(id);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("serviceId", id);
+        body.put("iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5));
+        if (reveal) {
+            body.put("puk", sim.getPuk());
+        }
+        body.put("@type", "SimCard");
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * OTA PIN change through the SIM-platform seam. The PIN goes to the card,
+     * never stored or logged in the BSS.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim/resetPin")
+    public ResponseEntity<Map<String, Object>> resetPin(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        com.bss.som.entity.SimCard sim = requireOwnSim(id);
+        String pin = String.valueOf(body.getOrDefault("newPin", ""));
+        if (!pin.matches("\\d{4,8}")) {
+            throw new com.bss.som.exception.BadRequestException("newPin must be 4-8 digits");
+        }
+        if (!simPlatform.resetPin(sim.getIccid(), pin)) {
+            throw new com.bss.som.exception.BadRequestException("the SIM platform refused the PIN change");
+        }
+        events.publish("SimPinResetEvent", "sim", Map.of(
+                "serviceId", id,
+                "iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5)));
+        return ResponseEntity.ok(Map.of("status", "done", "@type", "SimPinReset"));
+    }
+
+    private com.bss.som.entity.SimCard requireOwnSim(String serviceId) {
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenant)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", serviceId));
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(instance.getOwnerPartyId())) {
+                throw com.bss.som.exception.NotFoundException.forResource("Service", serviceId);
+            }
+        });
+        return sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("SIM for service", serviceId));
     }
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")

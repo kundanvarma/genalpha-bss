@@ -184,6 +184,10 @@ async function token(request, client, user, pass) {
   }
   const billingNote = await erikPage.locator('#member-billing-note').textContent();
   if (!billingNote.includes('Acme')) fail('billing note does not name the paying org');
+  // his SIM rides along: masked ICCID with PUK-on-request and PIN reset
+  await erikPage.locator('[data-sim-for]').first().waitFor({ timeout: 15000 });
+  const simRow = await erikPage.locator('[data-sim-for]').first().textContent();
+  if (!simRow.includes('••••')) fail('member my-page SIM row missing: ' + simRow);
   console.log('OK Erik signed in to /biz — HIS my-page: line', memberLine.match(/\+\d+/)[0],
     'active, billed to', memberOrg.trim());
 

@@ -43,18 +43,21 @@ public class OrchestrationService {
     private final com.bss.som.client.PortingClient porting;
     private final ResourcePoolRepository pools;
     private final ResourceAssignmentRepository assignments;
+    private final com.bss.som.repository.SimCardRepository sims;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
+            com.bss.som.repository.SimCardRepository sims,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
         this.pools = pools;
         this.assignments = assignments;
+        this.sims = sims;
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -153,6 +156,7 @@ public class OrchestrationService {
             // it and skip the pool draw entirely.
             String portedNumber = poolType != null && ResourcePool.MSISDN.equals(poolType)
                     ? porting.portedNumberFor(owner) : null;
+            boolean numbered = false;
             if (portedNumber != null) {
                 ResourceAssignment assignment = new ResourceAssignment();
                 assignment.setId(UUID.randomUUID().toString());
@@ -163,7 +167,11 @@ public class OrchestrationService {
                 assignment.setOwnerPartyId(owner);
                 assignment.setAssignedAt(OffsetDateTime.now());
                 assignments.save(assignment);
+                numbered = true;
                 poolType = null; // do not also draw from the pool
+            }
+            if (poolType != null && ResourcePool.MSISDN.equals(poolType)) {
+                numbered = true;
             }
             if (poolType != null)
             pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
@@ -180,6 +188,11 @@ public class OrchestrationService {
                 pool.setLastUpdate(OffsetDateTime.now());
                 pools.save(pool);
             });
+            // Every numbered line rides a SIM: minted operator-side with its
+            // PUK. The PIN lives on the card — set via the SIM-platform seam.
+            if (numbered) {
+                mintSim(tenant, serviceId);
+            }
 
             so.setState(ServiceOrder.COMPLETED);
             so.setCompletedAt(OffsetDateTime.now());
@@ -195,6 +208,23 @@ public class OrchestrationService {
         }
         log.info("product order {} {} by SOM ({} service orders)", productOrderId,
                 fulfilled ? "activated post-fulfilment" : "completed", items.size());
+    }
+
+    /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
+    private void mintSim(String tenant, String serviceId) {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder iccid = new StringBuilder("8946");
+        for (int i = 0; i < 15; i++) {
+            iccid.append(random.nextInt(10));
+        }
+        com.bss.som.entity.SimCard sim = new com.bss.som.entity.SimCard();
+        sim.setIccid(iccid.toString());
+        sim.setTenantId(tenant);
+        sim.setServiceId(serviceId);
+        sim.setPuk(String.format("%08d", random.nextInt(100_000_000)));
+        sim.setCreatedAt(OffsetDateTime.now());
+        sim.setLastUpdate(OffsetDateTime.now());
+        sims.save(sim);
     }
 
     /**

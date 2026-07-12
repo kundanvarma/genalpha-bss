@@ -173,6 +173,22 @@ export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
 
+/** The SIM behind a line; null when none is on file (pre-SIM activations). */
+export async function mySim(serviceId, reveal = false) {
+  const res = await authFetch(`${SERVICE_INV}/service/${serviceId}/sim${reveal ? '?reveal=true' : ''}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/** OTA PIN change — pushed to the card via the operator's SIM platform. */
+export async function resetSimPin(serviceId, newPin) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/sim/resetPin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPin }),
+  }));
+}
+
 /**
  * Plan change (TMF622 action=modify): same service, same number — only the
  * plan swaps. The realizing service rides along so the SOM renames the right

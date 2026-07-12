@@ -47,6 +47,10 @@ public class SecurityConfig {
                                 ApiConstants.INVENTORY_BASE + "/**",
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**").hasAuthority(READ)
+                        // SIM PIN reset is customer self-care: any authenticated owner
+                        // may push a PIN to THEIR OWN card (owner check in the handler).
+                        .requestMatchers(HttpMethod.POST,
+                                ApiConstants.INVENTORY_BASE + "/service/*/sim/resetPin").authenticated()
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**",
