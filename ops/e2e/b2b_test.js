@@ -64,14 +64,18 @@ async function token(request, client, user, pass) {
   if (!orgName.includes('Acme')) fail('org name missing: ' + orgName);
   console.log('OK Bianca signed in to /biz — her organization:', orgName);
 
-  // add an employee
+  // add an employee — WITH an email, so /biz provisions a real login for him
+  const erikEmail = `erik-${run}@acme.example`;
   await page.fill('#new-given', 'Erik');
   await page.fill('#new-family', `Employee${run}`);
-  await page.fill('#new-email', `erik-${run}@acme.example`);
+  await page.fill('#new-email', erikEmail);
   await page.click('#add-member');
   await page.locator('#member-status.ok').waitFor({ timeout: 15000 });
+  const creds = await page.locator('[data-testid=invite-credentials]').textContent();
+  const erikPassword = creds.split('/').pop().trim();
+  if (!creds.includes(erikEmail) || erikPassword.length < 8) fail('no invite credentials shown: ' + creds);
   await page.locator('.memberrow', { hasText: 'Erik' }).waitFor({ timeout: 15000 });
-  console.log('OK Bianca added Erik to Acme (lands in Acme automatically, server-side)');
+  console.log('OK Bianca added Erik to Acme — with a real sign-in, credentials shown once');
 
   // order a plan for Erik
   await page.locator('#order-member option', { hasText: 'Erik' }).waitFor({ state: 'attached', timeout: 10000 });
@@ -115,6 +119,27 @@ async function token(request, client, user, pass) {
   await page.locator('.billrow', { hasText: 'BILL-' }).first().waitFor({ timeout: 15000 });
   console.log('OK the consolidated invoice renders in the business console');
 
+  // --- Erik's my-page: he signs in to /biz with the invited credentials and
+  // sees HIS work line (party pinned to his token subject), billed to Acme.
+  const erikPage = await (await browser.newContext()).newPage();
+  await erikPage.goto(`${API}/biz/`);
+  await erikPage.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await erikPage.fill('input[name="username"]', erikEmail);
+  await erikPage.fill('input[name="password"]', erikPassword);
+  await erikPage.click('input[type="submit"], button[type="submit"]');
+  await erikPage.waitForSelector('#memberview:not([hidden])', { timeout: 20000 });
+  const memberOrg = await erikPage.locator('#member-org-name').textContent();
+  if (!memberOrg.includes('Acme')) fail('member view org missing: ' + memberOrg);
+  const memberLine = await erikPage.locator('#member-lines').textContent();
+  if (!/active/.test(memberLine) || !/\+\d/.test(memberLine)) {
+    fail("Erik's line/number missing from his my-page: " + memberLine);
+  }
+  const billingNote = await erikPage.locator('#member-billing-note').textContent();
+  if (!billingNote.includes('Acme')) fail('billing note does not name the paying org');
+  console.log('OK Erik signed in to /biz — HIS my-page: line', memberLine.match(/\+\d+/)[0],
+    'active, billed to', memberOrg.trim());
+
   await browser.close();
-  console.log('\nALL B2B CHECKS PASSED — org, membership, boundary, order-for-member, consolidated invoice.');
+  console.log('\nALL B2B CHECKS PASSED — org, membership, boundary, order-for-member, '
+    + 'consolidated invoice, invited member self-care.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

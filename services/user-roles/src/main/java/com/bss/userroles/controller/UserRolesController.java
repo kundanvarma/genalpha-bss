@@ -37,6 +37,11 @@ public class UserRolesController {
         return ResponseEntity.ok(service.users(username));
     }
 
+    @PostMapping("/user")
+    public ResponseEntity<Map<String, Object>> createUser(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createUser(dto));
+    }
+
     @GetMapping("/permission")
     public ResponseEntity<List<Map<String, Object>>> permissions(@RequestParam String userId) {
         return ResponseEntity.ok(service.permissionsOf(userId));

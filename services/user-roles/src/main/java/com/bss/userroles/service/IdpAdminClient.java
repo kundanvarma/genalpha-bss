@@ -14,6 +14,13 @@ public interface IdpAdminClient {
 
     List<Map<String, Object>> users(String tenantId, String username);
 
+    /**
+     * Create a login in the tenant's realm and return its IdP-assigned id
+     * (the future token subject). The password is set non-temporary so the
+     * person can sign in straight away through any channel.
+     */
+    String createUser(String tenantId, String email, String firstName, String lastName, String password);
+
     List<Map<String, Object>> userRoles(String tenantId, String userId);
 
     void grant(String tenantId, String userId, String roleName);

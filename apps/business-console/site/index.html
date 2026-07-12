@@ -75,6 +75,40 @@
   </section>
 </main>
 
+<!-- Org MEMBERS (no business:admin) get their own "my page": the work line
+     their company pays for. Deliberately not /shop — nothing to buy, no
+     personal bills, just what the employer provisioned. -->
+<main id="memberview" hidden>
+  <div class="bizhead">
+    <h1>My work line at</h1><span class="orgname" id="member-org-name">…</span>
+  </div>
+
+  <section class="card">
+    <h2>My services</h2>
+    <div id="member-lines"></div>
+  </section>
+
+  <section class="card">
+    <h2>My usage</h2>
+    <div id="member-usage" class="billlines" style="margin-left:0"></div>
+  </section>
+
+  <section class="card">
+    <h2>Billing</h2>
+    <p class="dimhint" id="member-billing-note" style="font-size:13px;margin:4px 0">
+      Your subscription is paid by your company — charges appear on
+      <b id="member-org-bill">your organization</b>'s consolidated invoice.
+      Nothing is billed to you personally.</p>
+  </section>
+
+  <section class="card">
+    <h2>Need help?</h2>
+    <p class="dimhint" style="font-size:13px;margin:4px 0">
+      Contact your company admin for plan changes, or the operator's
+      customer care for service issues.</p>
+  </section>
+</main>
+
 <div id="signin" class="gate" hidden>
   <p>Signing in with your identity provider&hellip;</p>
 </div>

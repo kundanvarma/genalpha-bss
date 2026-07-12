@@ -54,6 +54,51 @@ public class UserRolesService {
                 }).toList();
     }
 
+    /**
+     * Provision a login for a person. Open to business admins (a company
+     * inviting its own people) as well as operator staff — which is why the
+     * new user gets ONLY the customer role, hardcoded: whoever calls this
+     * can never mint privileged accounts through it. The generated password
+     * is returned exactly once, for hand-over.
+     */
+    public Map<String, Object> createUser(Map<String, Object> dto) {
+        String email = str(dto.get("email"));
+        String givenName = str(dto.get("givenName"));
+        String familyName = str(dto.get("familyName"));
+        if (email == null || !email.contains("@")) {
+            throw new BadRequestException("a valid email is required");
+        }
+        if (givenName == null || familyName == null) {
+            throw new BadRequestException("givenName and familyName are required");
+        }
+        String password = generatePassword();
+        String tenantId = tenantScope.currentTenantId();
+        String userId = idp.createUser(tenantId, email, givenName, familyName, password);
+        idp.grant(tenantId, userId, "customer");
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", userId);
+        map.put("username", email);
+        map.put("email", email);
+        map.put("givenName", givenName);
+        map.put("familyName", familyName);
+        map.put("temporaryPassword", password);
+        map.put("@type", "User");
+        return map;
+    }
+
+    private static String generatePassword() {
+        // Readable enough to hand over, random enough to be a secret.
+        byte[] bytes = new byte[9];
+        new java.security.SecureRandom().nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    private static String str(Object value) {
+        if (value == null) return null;
+        String s = String.valueOf(value).trim();
+        return s.isEmpty() ? null : s;
+    }
+
     public List<Map<String, Object>> permissionsOf(String userId) {
         if (userId == null || userId.isBlank()) {
             throw new BadRequestException("userId is required");

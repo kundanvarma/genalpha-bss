@@ -109,7 +109,7 @@ mobile app recomposes around what the customer owns:
 | usage | TMF635 / TMF677 | 8097 | Mediation intake, rating, allowance meters, overage charges |
 | agreement | TMF651 | 8098 | Commitment periods minted automatically at order completion |
 | promotion | TMF671 | 8099 | Promo codes: anonymous validation → redemption → bill discount |
-| user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP — surfaced as the console's **Staff tab** (search an operator, tick the areas they manage) |
+| user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP — surfaced as the console's **Staff tab** (search an operator, tick the areas they manage). Also the **invitation seam**: a business admin can provision a login for their own people, hardcoded to the customer role — no escalation path |
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
 | recommendation | TMF680 | 8102 | Cross-sell with a learning seam: rule-selected candidates, popularity-ranked (a trained model plugs into the same Ranker interface) |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
@@ -134,7 +134,7 @@ color** theme every channel from the tenant manifest)
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
-| business-console | `/biz` | **B2B self-care**: a company admin manages their own organization — add people (they land in the org server-side), order subscriptions for them (own-org boundary enforced), see every member's live lines, and read the **consolidated company invoice** with per-person line attribution |
+| business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them (own-org boundary enforced), see every member's live lines, and read the **consolidated company invoice** with per-person line attribution. An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, and "billed to your company" — deliberately not `/shop`: nothing to buy, no personal bills |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
 | admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
@@ -173,7 +173,7 @@ Then browse:
 | URL | What |
 |---|---|
 | http://localhost:8080/shop/ | GenAlpha storefront (self-register, or browse as guest) |
-| http://localhost:8080/biz/ | Business console (B2B customer admin) — `bianca@acme.example` / `bianca` |
+| http://localhost:8080/biz/ | Business console (B2B customer admin) — `bianca@acme.example` / `bianca`. Members she invites sign in here too, with the credentials shown at invite time, and get their my-page |
 | http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` (full agent) |
 | http://localhost:8080/csr/ | CSR console, junior persona — `jo@bss.local` / `jo` (read + tickets only) |
 | http://localhost:8080/console/ | Admin console — `demo` / `demo` (all areas) |
