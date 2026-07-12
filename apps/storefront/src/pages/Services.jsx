@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { changePlan, listOfferings, myActiveServices, myProducts, mySim, myUsage, priceIndex, resetSimPin } from '../api.js';
+import { Link } from 'react-router-dom';
+import { changePlan, listOfferings, myActiveServices, myProducts, mySim, myUsage, priceIndex, quickOrder, resetSimPin } from '../api.js';
 import { fmtPrice, pricesOf } from '../money.js';
 
 /**
@@ -205,9 +206,10 @@ export default function Services() {
     return <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>;
   }
 
-  // The commercial view: bundles carry their components; standalone plans
-  // stand alone; devices/add-ons/top-ups are extras, never "plans".
+  // The MyJio idea: the page RECOMPOSES around what this customer holds —
+  // one dashboard card per line of business, discovery for what they lack.
   const onChanged = (name) => { setChanged(name); refresh(); };
+  const catOfProduct = (p) => categoryOf(offerings[p.productOffering?.id]);
   const bundles = products.filter((p) => offerings[p.productOffering?.id]?.isBundle);
   const claimed = new Set(bundles.map((p) => p.id));
   const componentsOf = (bundleProduct) => {
@@ -217,8 +219,32 @@ export default function Services() {
   };
   const bundleGroups = bundles.map((b) => ({ bundle: b, components: componentsOf(b) }));
   const standalone = products.filter((p) => !claimed.has(p.id));
-  const plans = standalone.filter((p) => PLAN_CATEGORIES.includes(categoryOf(offerings[p.productOffering?.id])));
-  const extras = standalone.filter((p) => !plans.includes(p));
+  const byCat = (cat) => standalone.filter((p) => catOfProduct(p) === cat);
+  const mobilePlans = byCat('Mobile plans');
+  const broadband = byCat('Broadband');
+  const entertainment = byCat('TV & Add-ons');
+  const devices = byCat('Devices');
+  const other = standalone.filter((p) => ![...mobilePlans, ...broadband, ...entertainment, ...devices].includes(p)
+    && catOfProduct(p) !== 'Top-ups');
+
+  const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
+  const number = numbered?.supportingResource?.find((r) => r.value)?.value;
+  const dataBuckets = buckets.filter((b) => b.name === 'Mobile data');
+  const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data');
+  const topUps = Object.values(offerings).filter((o) => categoryOf(o) === 'Top-ups');
+  const ownsMobile = mobilePlans.length > 0 || bundleGroups.length > 0 || Boolean(number);
+
+  const rowsOf = (list) => list.map((p) => (
+    <ProductRow key={p.id} product={p} services={services}
+      offerings={offerings} prices={prices} onChanged={onChanged} />
+  ));
+
+  // discovery: the lines of business this customer does NOT have yet
+  const missing = [
+    !ownsMobile && { label: 'Add a mobile plan', cat: 'Mobile plans' },
+    !broadband.length && !bundleGroups.length && { label: 'Add broadband', cat: 'Broadband' },
+    !entertainment.length && !bundleGroups.length && { label: 'Add TV & streaming', cat: 'TV & Add-ons' },
+  ].filter(Boolean);
 
   return (
     <>
@@ -229,61 +255,106 @@ export default function Services() {
         </p>
       )}
 
-      <h2>My plan</h2>
-      <div className="rows" data-testid="my-plan">
-        {bundleGroups.map(({ bundle, components }) => (
-          <div key={bundle.id} data-testid={`bundle-${bundle.id}`}>
-            <ProductRow product={bundle} services={services}
-              offerings={offerings} prices={prices} onChanged={onChanged} />
-            {components.map((c) => (
-              <ProductRow key={c.id} product={c} services={services} nested
-                offerings={offerings} prices={prices} onChanged={onChanged} />
-            ))}
-          </div>
-        ))}
-        {plans.map((p) => (
-          <ProductRow key={p.id} product={p} services={services}
+      {bundleGroups.map(({ bundle, components }) => (
+        <section className="card" key={bundle.id} data-testid={`bundle-${bundle.id}`}
+          style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>My bundle</h2>
+          <ProductRow product={bundle} services={services}
             offerings={offerings} prices={prices} onChanged={onChanged} />
-        ))}
-        {!bundleGroups.length && !plans.length && (
-          <p className="dim">No plan yet — pick one in the shop.</p>
-        )}
-      </div>
+          {components.map((c) => (
+            <ProductRow key={c.id} product={c} services={services} nested
+              offerings={offerings} prices={prices} onChanged={onChanged} />
+          ))}
+        </section>
+      ))}
 
-      {extras.length > 0 && (
-        <>
-          <h2>Add-ons &amp; devices</h2>
-          <div className="rows" data-testid="my-extras">
-            {extras.map((p) => (
-              <ProductRow key={p.id} product={p} services={services}
-                offerings={offerings} prices={prices} onChanged={onChanged} />
-            ))}
-          </div>
-        </>
+      {ownsMobile && (
+        <section className="card" data-testid="mobile-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>Mobile</h2>
+          {rowsOf(mobilePlans)}
+          {number ? (
+            <>
+              <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
+              <SimCard serviceId={numbered.id} />
+            </>
+          ) : <p className="dim">Your line appears here once the plan activates.</p>}
+          {dataBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}
+          {topUps.map((t) => {
+            const oneTime = pricesOf(t, prices).find((p) => p.priceType === 'oneTime');
+            return <TopUp key={t.id} offering={t} price={oneTime} onBought={refresh} />;
+          })}
+        </section>
       )}
 
-      <h2>My lines</h2>
-      {(() => {
-        const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
-        const number = numbered?.supportingResource?.find((r) => r.value)?.value;
-        return number ? (
-          <>
-            <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
-            <SimCard serviceId={numbered.id} />
-          </>
-        ) : <p className="dim">No line yet — it appears when your plan activates.</p>;
-      })()}
+      {broadband.length > 0 && (
+        <section className="card" data-testid="broadband-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>Broadband</h2>
+          {rowsOf(broadband)}
+        </section>
+      )}
 
-      {buckets.length > 0 && (
-        <>
-          <h2>This month's usage</h2>
-          <div className="rows">
-            {buckets.map((b, i) => (
-              <UsageMeter bucket={b} key={i} />
-            ))}
-          </div>
-        </>
+      {entertainment.length > 0 && (
+        <section className="card" data-testid="entertainment-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>TV &amp; entertainment</h2>
+          {rowsOf(entertainment)}
+        </section>
+      )}
+
+      {devices.length > 0 && (
+        <section className="card" data-testid="devices-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>My devices</h2>
+          {rowsOf(devices)}
+        </section>
+      )}
+
+      {other.length > 0 && (
+        <section className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>Also active</h2>
+          {rowsOf(other)}
+        </section>
+      )}
+
+      {otherBuckets.length > 0 && (
+        <section className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>This month's usage</h2>
+          {otherBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}
+        </section>
+      )}
+
+      {missing.length > 0 && (
+        <section className="card" data-testid="discover" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>{products.length ? 'Complete your setup' : 'Get started'}</h2>
+          {missing.map((m) => (
+            <p key={m.cat} style={{ margin: '6px 0' }}>
+              <Link to="/">{m.label} →</Link>
+            </p>
+          ))}
+        </section>
       )}
     </>
+  );
+}
+
+/** One tap, more data now: buys the top-up and the meter grows this month. */
+function TopUp({ offering, price, onBought }) {
+  const [state, setState] = useState(null); // null | 'busy' | 'done' | error
+  async function buy() {
+    setState('busy');
+    try {
+      await quickOrder(offering);
+      setState('done');
+      // the boost lands via the event stream; give it a beat then refresh
+      setTimeout(onBought, 2500);
+      setTimeout(onBought, 6000);
+    } catch (e) { setState(e.message); }
+  }
+  return (
+    <p style={{ margin: '8px 0 0' }}>
+      <button className="ghost" data-testid={`topup-${offering.id}`} disabled={state === 'busy'} onClick={buy}>
+        {state === 'busy' ? 'Buying…' : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
+      </button>
+      {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ added to this month's allowance</span>}
+      {state && state !== 'done' && state !== 'busy' && <span className="error"> {state}</span>}
+    </p>
   );
 }

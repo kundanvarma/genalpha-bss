@@ -189,6 +189,17 @@ export async function resetSimPin(serviceId, newPin) {
   }));
 }
 
+/** One-tap purchase for simple digital items (data top-ups): a bare add order. */
+export async function quickOrder(offering) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productOrderItem: [{ action: 'add', productOffering: { id: offering.id, name: offering.name } }],
+    }),
+  }));
+}
+
 /**
  * Plan change (TMF622 action=modify): same service, same number — only the
  * plan swaps. The realizing service rides along so the SOM renames the right
