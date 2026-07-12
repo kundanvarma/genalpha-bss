@@ -26,8 +26,11 @@ public class PartyRole {
     @Column(name = "name", nullable = false, length = 64)
     private String name;
 
-    @Column(name = "party_id", nullable = false, length = 64)
+    @Column(name = "party_id", length = 64)
     private String partyId;
+
+    @Column(name = "role_type", length = 2000)
+    private String roleType;
 
     @Column(name = "status", nullable = false, length = 32)
     private String status;
@@ -48,6 +51,8 @@ public class PartyRole {
     public void setName(String name) { this.name = name; }
     public String getPartyId() { return partyId; }
     public void setPartyId(String partyId) { this.partyId = partyId; }
+    public String getRoleType() { return roleType; }
+    public void setRoleType(String roleType) { this.roleType = roleType; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }

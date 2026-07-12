@@ -12,5 +12,7 @@ public interface PartyRoleRepository extends JpaRepository<PartyRole, String> {
 
     List<PartyRole> findByTenantIdAndPartyId(String tenantId, String partyId);
 
+    List<PartyRole> findByTenantId(String tenantId);
+
     boolean existsByTenantIdAndPartyIdAndName(String tenantId, String partyId, String name);
 }
