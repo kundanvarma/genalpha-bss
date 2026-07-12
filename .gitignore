@@ -29,3 +29,4 @@ dist/
 
 # Claude Code local settings (per-developer permissions)
 .claude/
+ops/e2e/recordings/
