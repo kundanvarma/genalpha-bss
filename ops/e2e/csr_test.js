@@ -163,6 +163,35 @@ async function agentLogin(page, username) {
     .waitFor({ state: 'detached', timeout: 20000 });
   console.log('OK resolving the problem cleared the banner (and its alarms)');
 
+  
+  // --- Role-scoped console: junior agent Jo (read + tickets, no staff powers)
+  const ctxJ = await browser.newContext();
+  const j = await ctxJ.newPage();
+  await j.goto(CSR);
+  await j.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await j.fill('input[name="username"]', 'jo@bss.local');
+  await j.fill('input[name="password"]', 'jo');
+  await j.click('input[type="submit"], button[type="submit"]');
+  await j.waitForSelector('.searchbar', { timeout: 20000 });
+  if (await j.locator('.nav >> text=Stock').count()) fail('junior agent must not see the Stock tab');
+  await j.fill('.searchbar input', FAMILY);
+  await j.click('.searchbar button');
+  const jHit = j.locator('.rowlink', { hasText: FAMILY });
+  await jHit.waitFor({ timeout: 15000 });
+  await jHit.click();
+  await j.locator('h1', { hasText: 'Tina' }).waitFor({ timeout: 15000 });
+  if (await j.locator('[data-testid="copilot-summarize"]').count()) {
+    fail('junior agent must not see the AI copilot');
+  }
+  if (await j.locator('[data-testid="cease-service"]').count()) {
+    fail('junior agent must not see Cease');
+  }
+  if (await j.locator('[data-testid="draft-reply"]').count()) {
+    fail('junior agent must not see AI draft-reply');
+  }
+  console.log('OK role-scoped CSR: junior Jo gets the 360 without Stock, copilot, cease or AI drafting');
+
   await browser.close();
+
   console.log('\nALL CSR CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

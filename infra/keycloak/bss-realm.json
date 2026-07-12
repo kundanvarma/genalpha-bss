@@ -795,6 +795,45 @@
         "policy:write",
         "policy:evaluate"
       ]
+    },
+    {
+      "username": "jo@bss.local",
+      "enabled": true,
+      "email": "jo@bss.local",
+      "emailVerified": true,
+      "firstName": "Jo",
+      "lastName": "Junior",
+      "requiredActions": [],
+      "attributes": {
+        "org": [
+          "genalpha-retail"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "jo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "party:read",
+        "ticket:read",
+        "ticket:write",
+        "interaction:read",
+        "interaction:write",
+        "ordering:read",
+        "inventory:read",
+        "service:read",
+        "billing:read",
+        "usage:read",
+        "agreement:read",
+        "appointment:read",
+        "recommendation:read",
+        "catalog:read",
+        "promotion:read",
+        "paymentmethod:read"
+      ]
     }
   ]
 }
