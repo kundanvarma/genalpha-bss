@@ -794,6 +794,23 @@
       ]
     },
     {
+      "username": "kai@bss.local",
+      "email": "kai@bss.local",
+      "firstName": "Kai",
+      "lastName": "Kunde",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "kai"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
+    },
+    {
       "username": "pat@bss.local",
       "enabled": true,
       "email": "pat@bss.local",

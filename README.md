@@ -173,6 +173,7 @@ Then browse:
 | URL | What |
 |---|---|
 | http://localhost:8080/shop/ | GenAlpha storefront (self-register, or browse as guest) |
+| http://localhost:8080/shop/ | B2C self-service persona — `kai@bss.local` / `kai` (live line, change plan, SIM PUK/PIN) |
 | http://localhost:8080/biz/ | Business console (B2B customer admin) — `bianca@acme.example` / `bianca`. Members she invites sign in here too, with the credentials shown at invite time, and get their my-page |
 | http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` (full agent) |
 | http://localhost:8080/csr/ | CSR console, junior persona — `jo@bss.local` / `jo` (read + tickets only) |
