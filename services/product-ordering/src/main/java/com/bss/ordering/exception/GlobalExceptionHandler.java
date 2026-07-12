@@ -22,6 +22,15 @@ public class GlobalExceptionHandler {
                 .body(body);
     }
 
+    @ExceptionHandler(PolicyDeniedException.class)
+    public ResponseEntity<ErrorResponse> handlePolicyDenied(PolicyDeniedException ex) {
+        // 422: the order is well-formed but a data-authored rule forbids it.
+        // The message is the rule's customer-facing text.
+        ErrorResponse body = new ErrorResponse(
+                "POLICY_DENIED", "Unprocessable Entity", ex.getMessage(), "422");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
+
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NotFoundException ex) {
         ErrorResponse body = new ErrorResponse(

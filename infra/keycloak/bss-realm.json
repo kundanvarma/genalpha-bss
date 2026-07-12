@@ -173,6 +173,18 @@
         "description": "promotion:write"
       },
       {
+        "name": "policy:read",
+        "description": "policy:read"
+      },
+      {
+        "name": "policy:write",
+        "description": "policy:write"
+      },
+      {
+        "name": "policy:evaluate",
+        "description": "policy:evaluate — machine scope for the order pipeline"
+      },
+      {
         "name": "roles:admin",
         "description": "manage users and role grants via TMF672"
       },
@@ -520,7 +532,8 @@
         "agreement:read",
         "agreement:write",
         "promotion:write",
-        "promotion:read"
+        "promotion:read",
+        "policy:evaluate"
       ]
     },
     {
@@ -597,6 +610,8 @@
         "document:write",
         "campaign:read",
         "campaign:write",
+        "policy:read",
+        "policy:write",
         "ai:use",
         "quote:read",
         "quote:write",

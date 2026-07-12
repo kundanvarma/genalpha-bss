@@ -23,6 +23,8 @@ bss:
     enabled: false
   payment:
     enabled: false
+  policy:
+    enabled: false
   tenants:
     default-tenant: genalpha
     registry:

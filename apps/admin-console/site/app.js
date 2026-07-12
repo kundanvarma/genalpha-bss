@@ -30,6 +30,7 @@ const QUALIFICATION_BASE = '/tmf-api/productOfferingQualification/v4';
 const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
+const POLICY_BASE = '/tmf-api/policyManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -178,6 +179,69 @@ const RESOURCES = [
         controls.messageSubject.set({ messageSubject: copy.subject });
         controls.messageContent.set({ messageContent: copy.content });
       },
+    },
+  },
+  {
+    path: 'policyRule',
+    base: POLICY_BASE,
+    title: 'Rules',
+    // Business rules authored as DATA: create/enable one here and the next
+    // order is checked against it — no redeploy. The builder turns plain
+    // choices into a JSON-logic condition; "Advanced" lets you write one.
+    fields: [
+      { name: 'name', label: 'Rule name', required: true },
+      { name: 'ruleKind', label: 'What kind of rule', kind: 'select', required: true, options: [
+        { value: 'quantity-cap', label: 'Limit how many of an item can be ordered' },
+        { value: 'incompatibility', label: 'Two items cannot be bought together' },
+        { value: 'requires-verified-id', label: 'Item requires a verified identity (BankID)' },
+        { value: 'advanced', label: 'Advanced — write raw JSON-logic' },
+      ] },
+      { name: 'offeringA', label: 'Item (primary)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'maxQuantity', label: 'Max quantity (for a limit rule; blank = any single item)', kind: 'number' },
+      { name: 'offeringB', label: 'Second item (for an incompatibility rule)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'condition', label: 'Advanced: JSON-logic condition (overrides the choices above)', kind: 'longtext' },
+      { name: 'message', label: 'Message shown to the customer when blocked', required: true },
+      { name: 'priority', label: 'Priority (lower runs first)', kind: 'number', placeholder: '100' },
+      { name: 'enabled', label: 'Enabled', kind: 'checkbox' },
+    ],
+    assemble: (body) => {
+      const idOf = (r) => (r && typeof r === 'object' ? r.id : r);
+      const a = idOf(body.offeringA);
+      const b = idOf(body.offeringB);
+      const max = Number(body.maxQuantity);
+      let condition = body.condition;
+      switch (body.ruleKind) {
+        case 'quantity-cap':
+          condition = JSON.stringify({ '>': [{ var: a ? `quantityByOffering.${a}` : 'maxLineQuantity' }, Number.isFinite(max) && max > 0 ? max : 1] });
+          break;
+        case 'incompatibility':
+          condition = JSON.stringify({ and: [{ in: [a, { var: 'offeringIds' }] }, { in: [b, { var: 'offeringIds' }] }] });
+          break;
+        case 'requires-verified-id':
+          condition = JSON.stringify({ and: [{ in: [a, { var: 'offeringIds' }] }, { '!': { var: 'verifiedIdentity' } }] });
+          break;
+        default:
+          break;
+      }
+      return {
+        name: body.name,
+        description: body.description,
+        domain: 'order',
+        effect: 'deny',
+        priority: body.priority,
+        enabled: body.enabled,
+        condition,
+        message: body.message,
+      };
+    },
+    columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'condition', 'lastUpdate'],
+    rowAction: {
+      label: (item) => (item.enabled ? 'Disable' : 'Enable'),
+      apply: (item) => authFetch(`${POLICY_BASE}/policyRule/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !item.enabled }),
+      }),
     },
   },
   {

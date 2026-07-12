@@ -113,6 +113,7 @@ services:
       PAYMENT_BASE_URL: http://payment:8080
       AGREEMENT_BASE_URL: http://agreement:8080
       PROMOTION_BASE_URL: http://promotion:8080
+      POLICY_BASE_URL: http://policy:8080
     ports:
       - "8082:8080"
     depends_on:
@@ -455,6 +456,32 @@ services:
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
     ports:
       - "8112:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  policy:
+    build: ./services/policy
+    container_name: bss-policy
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/policy
+      DB_USERNAME: policy_app
+      DB_PASSWORD: policy_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    ports:
+      - "8113:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -919,6 +946,7 @@ services:
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
       PORTING_URL: http://porting:8080
+      POLICY_URL: http://policy:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
