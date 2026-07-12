@@ -195,6 +195,9 @@ tenant for anonymous traffic, and is the one place the outside world touches.
 
 When the memoir says a component "is TMF622," it means three things at once: it exposes the TMF622
 REST API (so any TM Forum-aware tool can drive it), it models the domain the way the standard says
-(orders, order items, states), and — for the original five — an independent conformance kit agrees.
-That's the payoff of building on the standards instead of inventing: the vocabulary is shared, the
-integrations are pre-agreed, and "vendor-neutral" has teeth.
+(orders, order items, states), and — for eleven of them (TMF620, 622, 632, 635, 637, 663, 666, 669,
+677, 678, 687) — an independent conformance kit agrees with zero failures. Two components fail
+their kits **on purpose**: payment (creating a payment *is* an idempotent authorization — stricter
+than the spec) and communication (a message must have a recipient); the gaps are documented, not
+hidden. That's the payoff of building on the standards instead of inventing: the vocabulary is
+shared, the integrations are pre-agreed, and "vendor-neutral" has teeth.
