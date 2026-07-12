@@ -44,6 +44,7 @@ public class UsageService {
     private final UsageRecordRepository records;
     private final UsageAllowanceRepository allowances;
     private final RatedChargeRepository ratedCharges;
+    private final com.bss.usage.repository.AllowanceBoostRepository boosts;
     private final com.bss.usage.repository.UsageSpecificationRepository specs;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
@@ -52,12 +53,15 @@ public class UsageService {
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
-            RatedChargeRepository ratedCharges, DomainEventPublisher events, PartyScope partyScope,
+            RatedChargeRepository ratedCharges,
+            com.bss.usage.repository.AllowanceBoostRepository boosts,
+            DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper) {
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
         this.ratedCharges = ratedCharges;
+        this.boosts = boosts;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -122,6 +126,8 @@ public class UsageService {
         List<UsageRecord> unrated = records.findByTenantIdAndOwnerPartyIdAndStatusAndUsageDateBetween(
                 tenantId, ownerPartyId, RECEIVED, from, to);
 
+        // Purchased top-ups raise the allowance before overage is charged.
+        Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, ownerPartyId, periodStart);
         // (offeringId, spec) -> summed usage
         Map<String, List<UsageRecord>> groups = new LinkedHashMap<>();
         for (UsageRecord r : unrated) {
@@ -138,14 +144,16 @@ public class UsageService {
                             tenantId, first.getProductOfferingId(), first.getUsageSpecName());
             if (!rules.isEmpty()) {
                 UsageAllowance rule = rules.get(0);
-                BigDecimal over = total.subtract(rule.getAllowanceValue());
+                BigDecimal included = rule.getAllowanceValue()
+                        .add(boostBySpec.getOrDefault(first.getUsageSpecName(), BigDecimal.ZERO));
+                BigDecimal over = total.subtract(included);
                 if (over.signum() > 0) {
                     RatedCharge charge = new RatedCharge();
                     charge.setId(UUID.randomUUID().toString());
                     charge.setTenantId(tenantId);
                     charge.setOwnerPartyId(ownerPartyId);
                     charge.setName(first.getUsageSpecName() + " overage: " + over.stripTrailingZeros().toPlainString()
-                            + " " + rule.getUnits() + " over " + rule.getAllowanceValue().stripTrailingZeros().toPlainString()
+                            + " " + rule.getUnits() + " over " + included.stripTrailingZeros().toPlainString()
                             + " " + rule.getUnits() + " included");
                     charge.setAmountValue(over.multiply(rule.getOveragePriceValue())
                             .setScale(2, RoundingMode.HALF_UP));
@@ -176,6 +184,8 @@ public class UsageService {
         List<UsageRecord> monthly = records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
                 tenantId, party, from, OffsetDateTime.now());
 
+        // Purchased top-ups extend this period's allowance per usage spec.
+        Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, party, periodStart);
         Map<String, Map<String, Object>> buckets = new LinkedHashMap<>();
         for (UsageRecord r : monthly) {
             String key = r.getProductOfferingId() + "|" + r.getUsageSpecName();
@@ -189,8 +199,10 @@ public class UsageService {
                 List<UsageAllowance> rules = r.getProductOfferingId() == null ? List.of()
                         : allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
                                 tenantId, r.getProductOfferingId(), r.getUsageSpecName());
-                if (!rules.isEmpty()) {
-                    b.put("allowedValue", rules.get(0).getAllowanceValue());
+                BigDecimal extra = boostBySpec.get(r.getUsageSpecName());
+                if (!rules.isEmpty() || extra != null) {
+                    BigDecimal base = rules.isEmpty() ? BigDecimal.ZERO : rules.get(0).getAllowanceValue();
+                    b.put("allowedValue", extra == null ? base : base.add(extra));
                 }
                 return b;
             });
@@ -387,6 +399,91 @@ public class UsageService {
                 "amount", Map.of("unit", c.getAmountUnit(), "value", c.getAmountValue()));
     }
 
+    /**
+     * A completed order carrying a boost-flagged offering (a data top-up) adds
+     * allowance to the buyer's CURRENT period. Idempotent per (order, spec) —
+     * event delivery is at-least-once. Non-top-up orders fall through untouched.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public void recordTopUps(Map<String, Object> productOrder) {
+        if (!"completed".equals(String.valueOf(productOrder.get("state")))) {
+            return;
+        }
+        String tenantId = tenantScope.currentTenantId();
+        String orderId = String.valueOf(productOrder.get("id"));
+        String owner = productOrder.get("relatedParty") instanceof List<?> parties ? parties.stream()
+                .filter(p -> p instanceof Map<?, ?> m && "customer".equalsIgnoreCase(String.valueOf(m.get("role"))))
+                .map(p -> String.valueOf(((Map<String, Object>) p).get("id")))
+                .findFirst().orElse(null) : null;
+        if (owner == null) {
+            return;
+        }
+        Map<String, com.bss.usage.entity.AllowanceBoost> bySpec = new LinkedHashMap<>();
+        collectTopUpItems((List<Map<String, Object>>) productOrder.get("productOrderItem"),
+                tenantId, owner, orderId, bySpec);
+        for (com.bss.usage.entity.AllowanceBoost boost : bySpec.values()) {
+            if (boosts.existsByTenantIdAndProductOrderIdAndUsageSpecName(
+                    tenantId, orderId, boost.getUsageSpecName())) {
+                continue;
+            }
+            boosts.save(boost);
+            events.publish("BucketBalanceChangeEvent", "bucket", Map.of(
+                    "relatedParty", List.of(Map.of("id", owner, "role", "customer")),
+                    "name", boost.getUsageSpecName(),
+                    "boost", boost.getBoostValue(),
+                    "units", boost.getUnits() == null ? "unit" : boost.getUnits()));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectTopUpItems(List<Map<String, Object>> items, String tenantId,
+            String owner, String orderId, Map<String, com.bss.usage.entity.AllowanceBoost> bySpec) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            if (item.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null
+                    && !"modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
+                int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
+                for (UsageAllowance rule : allowances.findByTenantIdAndProductOfferingId(
+                        tenantId, String.valueOf(off.get("id")))) {
+                    if (!rule.isBoost()) {
+                        continue;
+                    }
+                    com.bss.usage.entity.AllowanceBoost boost = bySpec.computeIfAbsent(
+                            rule.getUsageSpecName(), spec -> {
+                                com.bss.usage.entity.AllowanceBoost b = new com.bss.usage.entity.AllowanceBoost();
+                                b.setId(UUID.randomUUID().toString());
+                                b.setTenantId(tenantId);
+                                b.setOwnerPartyId(owner);
+                                b.setUsageSpecName(spec);
+                                b.setBoostValue(BigDecimal.ZERO);
+                                b.setUnits(rule.getUnits());
+                                b.setPeriodStart(LocalDate.now().withDayOfMonth(1));
+                                b.setProductOrderId(orderId);
+                                b.setCreatedAt(OffsetDateTime.now());
+                                return b;
+                            });
+                    boost.setBoostValue(boost.getBoostValue()
+                            .add(rule.getAllowanceValue().multiply(BigDecimal.valueOf(quantity))));
+                }
+            }
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                collectTopUpItems((List<Map<String, Object>>) children, tenantId, owner, orderId, bySpec);
+            }
+        }
+    }
+
+    private Map<String, BigDecimal> boostTotals(String tenantId, String party, LocalDate periodStart) {
+        Map<String, BigDecimal> bySpec = new LinkedHashMap<>();
+        for (com.bss.usage.entity.AllowanceBoost boost
+                : boosts.findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, party, periodStart)) {
+            bySpec.merge(boost.getUsageSpecName(), boost.getBoostValue(), BigDecimal::add);
+        }
+        return bySpec;
+    }
+
     /** Admin data: which offerings include how much of what, and the price beyond. */
     @Transactional
     public Map<String, Object> createAllowance(Map<String, Object> dto) {
@@ -410,6 +507,7 @@ public class UsageService {
         entity.setUnits(String.valueOf(allowance.getOrDefault("units", "unit")));
         entity.setOveragePriceValue(new BigDecimal(String.valueOf(price.get("value"))));
         entity.setOveragePriceUnit(String.valueOf(price.get("unit") == null ? "EUR" : price.get("unit")));
+        entity.setBoost(Boolean.parseBoolean(String.valueOf(dto.getOrDefault("boost", "false"))));
         entity.setLastUpdate(OffsetDateTime.now());
         allowances.save(entity);
         return allowanceMap(entity);
@@ -429,6 +527,9 @@ public class UsageService {
         map.put("productOffering", readJson(entity.getProductOfferingJson()));
         map.put("allowance", Map.of("value", entity.getAllowanceValue(), "units", entity.getUnits()));
         map.put("overagePrice", Map.of("unit", entity.getOveragePriceUnit(), "value", entity.getOveragePriceValue()));
+        if (entity.isBoost()) {
+            map.put("boost", true);
+        }
         map.put("@type", "UsageAllowance");
         return map;
     }

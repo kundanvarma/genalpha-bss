@@ -47,7 +47,19 @@ public class UsageAllowance {
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
+    /** true = a one-time top-up: buying it boosts the buyer's current period. */
+    @Column(name = "boost")
+    private boolean boost;
+
     public UsageAllowance() {
+    }
+
+    public boolean isBoost() {
+        return boost;
+    }
+
+    public void setBoost(boolean boost) {
+        this.boost = boost;
     }
 
     public String getId() {

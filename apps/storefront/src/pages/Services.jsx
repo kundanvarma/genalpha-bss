@@ -86,31 +86,30 @@ function UsageMeter({ bucket }) {
   );
 }
 
+const categoryOf = (offering) => offering?.category?.[0]?.name || '';
+const PLAN_CATEGORIES = ['Mobile plans', 'Broadband'];
+
 /**
  * Same number, new plan: a TMF622 modify order that completes instantly.
- * The dropdown offers every other non-bundle plan with a monthly price.
+ * Like-for-like only — the dropdown offers plans from the SAME category as
+ * the current one (a mobile plan changes to a mobile plan, broadband to
+ * broadband), never devices or add-ons.
  */
-function ChangePlan({ product, services, onChanged }) {
+function ChangePlan({ product, services, offerings, prices, onChanged }) {
   const [open, setOpen] = useState(false);
-  const [options, setOptions] = useState(null);
   const [choice, setChoice] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  async function loadOptions() {
-    setOpen(true);
-    if (options) return;
-    try {
-      const [offers, prices] = await Promise.all([listOfferings(), priceIndex()]);
-      setOptions(offers
-        .filter((o) => !o.isBundle && !o.requiresVerifiedIdentity && o.id !== product.productOffering?.id)
-        .map((o) => {
-          const monthly = pricesOf(o, prices).find((p) => p.priceType === 'recurring');
-          return monthly ? { id: o.id, name: o.name, label: `${o.name} — ${fmtPrice(monthly)}` } : null;
-        })
-        .filter(Boolean));
-    } catch (e) { setError(e.message); }
-  }
+  const current = offerings[product.productOffering?.id];
+  const options = !open ? [] : Object.values(offerings)
+    .filter((o) => !o.isBundle && !o.requiresVerifiedIdentity && o.id !== current?.id
+      && categoryOf(o) === categoryOf(current))
+    .map((o) => {
+      const monthly = pricesOf(o, prices).find((p) => p.priceType === 'recurring');
+      return monthly ? { id: o.id, name: o.name, label: `${o.name} — ${fmtPrice(monthly)}` } : null;
+    })
+    .filter(Boolean);
 
   async function confirm() {
     const target = options.find((o) => o.id === choice);
@@ -129,7 +128,7 @@ function ChangePlan({ product, services, onChanged }) {
 
   if (!open) {
     return (
-      <button className="ghost" data-testid={`change-plan-${product.id}`} onClick={loadOptions}>
+      <button className="ghost" data-testid={`change-plan-${product.id}`} onClick={() => setOpen(true)}>
         Change plan
       </button>
     );
@@ -149,10 +148,41 @@ function ChangePlan({ product, services, onChanged }) {
   );
 }
 
+/** Every offering id a bundle can decompose into (fixed children + choice options). */
+function bundleChildIds(offering) {
+  const ids = new Set();
+  for (const b of offering?.bundledProductOffering || []) {
+    if (b.id) ids.add(b.id);
+    for (const option of b.options || []) {
+      if (option.id) ids.add(option.id);
+    }
+  }
+  return ids;
+}
+
+function ProductRow({ product, services, offerings, prices, onChanged, nested }) {
+  const offering = offerings[product.productOffering?.id];
+  const monthly = offering ? pricesOf(offering, prices).find((p) => p.priceType === 'recurring') : null;
+  const changeable = product.status === 'active' && PLAN_CATEGORIES.includes(categoryOf(offering));
+  return (
+    <div className="row" style={nested ? { marginLeft: '1.6em' } : undefined}>
+      <strong>{product.name}</strong>
+      {monthly && <span className="dim">{fmtPrice(monthly)}</span>}
+      <span className={`state ${product.status}`}>{product.status}</span>
+      {changeable && (
+        <ChangePlan product={product} services={services}
+          offerings={offerings} prices={prices} onChanged={onChanged} />
+      )}
+    </div>
+  );
+}
+
 export default function Services() {
   const [products, setProducts] = useState(null);
   const [services, setServices] = useState([]);
   const [buckets, setBuckets] = useState([]);
+  const [offerings, setOfferings] = useState({});
+  const [prices, setPrices] = useState({});
   const [changed, setChanged] = useState(null);
   const [error, setError] = useState(null);
 
@@ -162,17 +192,77 @@ export default function Services() {
     // Usage is additive: a service list without meters still renders.
     myUsage().then((report) => setBuckets(report.bucket || [])).catch(() => {});
   }
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    listOfferings().then((all) =>
+      setOfferings(Object.fromEntries(all.map((o) => [o.id, o])))).catch(() => {});
+    priceIndex().then(setPrices).catch(() => {});
+  }, []);
 
   if (error) return <p className="error">{error}</p>;
-  if (!products) return <p className="dim">Loading your services…</p>;
+  if (!products) return <p className="dim">Loading your page…</p>;
   if (!products.length) {
-    return <p className="dim">Nothing active yet — services appear here once an order completes.</p>;
+    return <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>;
   }
+
+  // The commercial view: bundles carry their components; standalone plans
+  // stand alone; devices/add-ons/top-ups are extras, never "plans".
+  const onChanged = (name) => { setChanged(name); refresh(); };
+  const bundles = products.filter((p) => offerings[p.productOffering?.id]?.isBundle);
+  const claimed = new Set(bundles.map((p) => p.id));
+  const componentsOf = (bundleProduct) => {
+    const childIds = bundleChildIds(offerings[bundleProduct.productOffering?.id]);
+    return products.filter((p) => !claimed.has(p.id) && childIds.has(p.productOffering?.id)
+      && (claimed.add(p.id), true));
+  };
+  const bundleGroups = bundles.map((b) => ({ bundle: b, components: componentsOf(b) }));
+  const standalone = products.filter((p) => !claimed.has(p.id));
+  const plans = standalone.filter((p) => PLAN_CATEGORIES.includes(categoryOf(offerings[p.productOffering?.id])));
+  const extras = standalone.filter((p) => !plans.includes(p));
 
   return (
     <>
-      <h1>My services</h1>
+      <h1>My page</h1>
+      {changed && (
+        <p className="dim" data-testid="plan-changed">
+          ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.
+        </p>
+      )}
+
+      <h2>My plan</h2>
+      <div className="rows" data-testid="my-plan">
+        {bundleGroups.map(({ bundle, components }) => (
+          <div key={bundle.id} data-testid={`bundle-${bundle.id}`}>
+            <ProductRow product={bundle} services={services}
+              offerings={offerings} prices={prices} onChanged={onChanged} />
+            {components.map((c) => (
+              <ProductRow key={c.id} product={c} services={services} nested
+                offerings={offerings} prices={prices} onChanged={onChanged} />
+            ))}
+          </div>
+        ))}
+        {plans.map((p) => (
+          <ProductRow key={p.id} product={p} services={services}
+            offerings={offerings} prices={prices} onChanged={onChanged} />
+        ))}
+        {!bundleGroups.length && !plans.length && (
+          <p className="dim">No plan yet — pick one in the shop.</p>
+        )}
+      </div>
+
+      {extras.length > 0 && (
+        <>
+          <h2>Add-ons &amp; devices</h2>
+          <div className="rows" data-testid="my-extras">
+            {extras.map((p) => (
+              <ProductRow key={p.id} product={p} services={services}
+                offerings={offerings} prices={prices} onChanged={onChanged} />
+            ))}
+          </div>
+        </>
+      )}
+
+      <h2>My lines</h2>
       {(() => {
         const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
         const number = numbered?.supportingResource?.find((r) => r.value)?.value;
@@ -181,28 +271,9 @@ export default function Services() {
             <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
             <SimCard serviceId={numbered.id} />
           </>
-        ) : null;
+        ) : <p className="dim">No line yet — it appears when your plan activates.</p>;
       })()}
-      {changed && (
-        <p className="dim" data-testid="plan-changed">
-          ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.
-        </p>
-      )}
-      <div className="rows">
-        {products.map((p) => (
-          <div className="row" key={p.id}>
-            <strong>{p.name}</strong>
-            <span className={`state ${p.status}`}>{p.status}</span>
-            {p.status === 'active' && (
-              <ChangePlan
-                product={p}
-                services={services}
-                onChanged={(name) => { setChanged(name); refresh(); }}
-              />
-            )}
-          </div>
-        ))}
-      </div>
+
       {buckets.length > 0 && (
         <>
           <h2>This month's usage</h2>

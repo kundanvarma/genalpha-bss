@@ -59,7 +59,7 @@ async function apiCall(page, method, path, token, body) {
     && !(o.productOfferingTerm || []).length
     && (o.productOfferingPrice || []).some((r) => priceById[r.id]?.priceType === 'recurring'));
   const planA = plans.find((o) => o.name.includes('Unlimited 5G'));
-  const planB = plans.find((o) => o.name.includes('TV Max'));
+  const planB = plans.find((o) => o.name.includes('Mobile 10 GB'));
   if (!planA || !planB) fail('need the two seed plans in the catalog');
   console.log('OK plans picked from live catalog:', planA.name, '->', planB.name);
 
@@ -90,6 +90,12 @@ async function apiCall(page, method, path, token, body) {
   await page.waitForSelector('[data-testid=my-number]', { timeout: 15000 });
   await page.click(`[data-testid=change-plan-${product.id}]`);
   await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
+  // like-for-like only: the dropdown must offer plans, never devices/add-ons
+  const dropdown = await page.locator('[data-testid=change-plan-form] select').textContent();
+  if (/Samsung|iPhone|Sports Pass|TV Max/.test(dropdown)) {
+    fail('change-plan dropdown offers non-plans: ' + dropdown);
+  }
+  console.log('OK change-plan dropdown is plans-only (no devices, no add-ons)');
   await page.selectOption('[data-testid=change-plan-form] select', planB.id);
   await page.click('[data-testid=change-plan-form] button.primary');
   await page.waitForSelector('[data-testid=plan-changed]', { timeout: 20000 });
@@ -175,9 +181,13 @@ async function apiCall(page, method, path, token, body) {
     `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice`, { headers: H, data: {
       name: 'Fiber 500 Monthly', priceType: 'recurring', recurringChargePeriodType: 'month',
       price: { unit: 'EUR', value: 29.99 } } })).json();
+  const broadbandCat = (await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/category?limit=100`, { headers: H })).json())
+    .find((c) => c.name === 'Broadband');
   const fiber500 = await (await ctx.request.post(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering`, { headers: H, data: {
       name: `E2E Fiber 500 ${run}`, lifecycleStatus: 'Active', isBundle: false,
+      category: [{ id: broadbandCat.id, name: 'Broadband', '@referredType': 'Category' }],
       productOfferingPrice: [{ id: f5Price.id, name: f5Price.name }] } })).json();
 
   const bundleOrder = await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', carl, {
@@ -204,6 +214,12 @@ async function apiCall(page, method, path, token, body) {
 
   await page.reload();
   await page.waitForSelector('[data-testid=my-number]', { timeout: 15000 });
+  // the bundle renders as a GROUP under "My plan": parent with components nested
+  const allProducts = await apiCall(page, 'GET', '/tmf-api/productInventory/v4/product?status=active', carl);
+  const bundleProduct = (allProducts.body || []).find?.((p) => p.productOffering?.id === bundle.id);
+  const group = await page.locator(`[data-testid=bundle-${bundleProduct.id}]`).textContent();
+  if (!group.includes(fiberProduct.name)) fail('bundle does not show its components: ' + group);
+  console.log('OK My page shows what is inside the bundle:', bundle.name, '⊃', fiberProduct.name);
   await page.click(`[data-testid=change-plan-${fiberProduct.id}]`);
   await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
   await page.selectOption('[data-testid=change-plan-form] select', fiber500.id);
@@ -216,6 +232,33 @@ async function apiCall(page, method, path, token, body) {
   }
   console.log('OK bundle broadband upgraded in place:', fiber.name, '->', fiber500.name,
     '(bundle commitment untouched)');
+
+  // --- the data ladder: Carl is on Mobile 10 GB now. He burns 8 GB, buys a
+  // one-time 5 GB top-up, and the meter's allowance grows to 15 THIS month.
+  await ctx.request.post(`${API}/tmf-api/usageManagement/v4/usage`, { headers: H, data: {
+    usageType: 'Mobile data', usageDate: new Date().toISOString(),
+    usageCharacteristic: { value: 8, units: 'GB' },
+    relatedParty: [{ id: carlSub, role: 'customer' }],
+    productOffering: { id: planB.id, name: planB.name } } });
+  const before = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl);
+  const baseBucket = (before.body.bucket || []).find?.((b) => b.name === 'Mobile data');
+  if (!baseBucket || Number(baseBucket.allowedValue) !== 10) {
+    fail('plan allowance should be 10 GB: ' + JSON.stringify(baseBucket));
+  }
+  const topup = offers.find((o) => o.name === 'Data Top-Up 5 GB');
+  await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', carl, {
+    productOrderItem: [{ action: 'add', productOffering: { id: topup.id, name: topup.name } }],
+  });
+  let boosted = null;
+  for (let i = 0; i < 20 && !boosted; i++) {
+    await page.waitForTimeout(2000);
+    const rep = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl);
+    const b = (rep.body.bucket || []).find?.((x) => x.name === 'Mobile data');
+    if (b && Number(b.allowedValue) === 15) boosted = b;
+  }
+  if (!boosted) fail('the top-up purchase did not extend the meter');
+  console.log(`OK one-time top-up: ${boosted.usedValue}/${boosted.allowedValue} GB — `
+    + 'buying 5 GB extra extended this month\'s allowance');
 
   // --- B2B: Bianca swaps a member's plan from /biz
   const biancaTok = await (await ctx.request.post(KC, { form: {

@@ -115,16 +115,22 @@ async function addMember() {
 }
 
 /* ---------- ordering for a member ---------- */
+const categoryOf = (o) => ((o.category || [])[0] || {}).name || '';
+const PLAN_CATS = ['Mobile plans', 'Broadband'];
+
 async function loadOfferings() {
   const offers = await json(await authFetch(`${CATALOG}/productOffering?limit=100`));
   const picker = el('order-offering');
   picker.replaceChildren();
   const orderable = offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity);
+  // plan changes are like-for-like: plans only, never devices or add-ons
   const swapPicker = el('swap-offering');
   swapPicker.replaceChildren(new Option('New plan…', ''));
   for (const o of orderable) {
     picker.append(new Option(o.name, o.id));
-    swapPicker.append(new Option(o.name, o.id));
+    if (PLAN_CATS.includes(categoryOf(o))) {
+      swapPicker.append(new Option(o.name, o.id));
+    }
   }
   return orderable;
 }
@@ -140,7 +146,8 @@ async function loadPlans(orderable, memberCount) {
     .catch(() => []);
   const priceById = Object.fromEntries(prices.map((p) => [p.id, p]));
   box.replaceChildren();
-  for (const o of orderable) {
+  // the price view is about SUBSCRIPTIONS — plans and add-ons, not hardware
+  for (const o of orderable.filter((x) => categoryOf(x) !== 'Devices')) {
     const monthly = (o.productOfferingPrice || [])
       .map((ref) => priceById[ref.id])
       .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null)

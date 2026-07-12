@@ -59,6 +59,9 @@ public class ProductOffering {
     @Column(name = "bundled_product_offering", length = 4000)
     private String bundledProductOfferingJson;
 
+    @Column(name = "category", length = 4000)
+    private String categoryJson;
+
     /** JSON array of price references, echoed verbatim. */
     @Column(name = "product_offering_price", length = 4000)
     private String productOfferingPriceJson;
@@ -152,6 +155,14 @@ public class ProductOffering {
 
     public void setBundledProductOfferingJson(String bundledProductOfferingJson) {
         this.bundledProductOfferingJson = bundledProductOfferingJson;
+    }
+
+    public String getCategoryJson() {
+        return categoryJson;
+    }
+
+    public void setCategoryJson(String categoryJson) {
+        this.categoryJson = categoryJson;
     }
 
     public String getProductOfferingPriceJson() {
