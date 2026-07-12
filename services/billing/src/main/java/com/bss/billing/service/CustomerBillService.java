@@ -1,5 +1,6 @@
 package com.bss.billing.service;
 
+import com.bss.billing.api.ApiConstants;
 import com.bss.billing.api.OffsetPageRequest;
 import com.bss.billing.api.PagedResult;
 import com.bss.billing.client.DownstreamClients;
@@ -42,16 +43,78 @@ public class CustomerBillService {
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
+    private final com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository;
+
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
+            com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository,
             DownstreamClients.PaymentClient paymentClient, DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper) {
         this.repository = repository;
         this.rateRepository = rateRepository;
+        this.onDemandRepository = onDemandRepository;
         this.paymentClient = paymentClient;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+    }
+
+    // ---- TMF678 CustomerBillOnDemand resource ----
+
+    @Transactional
+    public Map<String, Object> createOnDemand(Map<String, Object> body) {
+        com.bss.billing.entity.CustomerBillOnDemand e = new com.bss.billing.entity.CustomerBillOnDemand();
+        String id = java.util.UUID.randomUUID().toString();
+        e.setId(id);
+        e.setHref(ApiConstants.BASE_PATH + "/customerBillOnDemand/" + id);
+        e.setTenantId(tenantScope.currentTenantId());
+        e.setState(body.get("state") == null ? "done" : String.valueOf(body.get("state")));
+        e.setPayloadJson(writeJsonValue(body));
+        e.setCreatedAt(OffsetDateTime.now());
+        e.setLastUpdate(OffsetDateTime.now());
+        return onDemandToMap(onDemandRepository.save(e));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findOnDemand(Map<String, String> filters) {
+        return onDemandRepository.findByTenantId(tenantScope.currentTenantId()).stream()
+                .filter(o -> filters.get("id") == null || filters.get("id").equals(o.getId()))
+                .filter(o -> filters.get("href") == null || filters.get("href").equals(o.getHref()))
+                .map(this::onDemandToMap).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findOnDemandById(String id) {
+        return onDemandToMap(onDemandRepository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("CustomerBillOnDemand", id)));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> onDemandToMap(com.bss.billing.entity.CustomerBillOnDemand e) {
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        try {
+            Object stored = e.getPayloadJson() == null ? null
+                    : objectMapper.readValue(e.getPayloadJson(), Object.class);
+            if (stored instanceof Map<?, ?> m) {
+                map.putAll((Map<String, Object>) m);
+            }
+        } catch (Exception ignored) {
+            // fall through with server fields only
+        }
+        map.put("id", e.getId());
+        map.put("href", e.getHref());
+        map.put("state", e.getState());
+        map.putIfAbsent("billDocument", java.util.List.of());
+        map.put("@type", "CustomerBillOnDemand");
+        return map;
+    }
+
+    private String writeJsonValue(Object o) {
+        try {
+            return objectMapper.writeValueAsString(o);
+        } catch (JsonProcessingException e) {
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -69,9 +132,11 @@ public class CustomerBillService {
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
+                case "href" -> probe.setHref(f.getValue());
                 case "state" -> probe.setState(f.getValue());
                 case "billNo" -> probe.setBillNo(f.getValue());
                 case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
+                case "fields", "sort" -> { }
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
@@ -104,8 +169,17 @@ public class CustomerBillService {
         CustomerBill entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         requireOwn(entity);
+        // Settling ('settled') keeps its guarantee: an authorized payment covering
+        // the amount, captured atomically. Any other attribute change (state,
+        // notes) is a plain TMF PATCH and just applies.
         if (!CustomerBill.SETTLED.equals(patch.getState())) {
-            throw new BadRequestException("the only supported change is state: 'settled' with a payment");
+            if (patch.getState() != null) {
+                entity.setState(patch.getState());
+            }
+            entity.setLastUpdate(OffsetDateTime.now());
+            CustomerBillDto updated = toDto(repository.save(entity));
+            events.publish("CustomerBillAttributeValueChangeEvent", "customerBill", updated);
+            return updated;
         }
         if (!CustomerBill.NEW.equals(entity.getState())) {
             throw new ConflictException("bill is '" + entity.getState() + "' and cannot be settled again");
@@ -154,7 +228,19 @@ public class CustomerBillService {
                 "endDateTime", entity.getPeriodEnd().toString()));
         dto.setRelatedParty(List.of(Map.of(
                 "id", entity.getOwnerPartyId(), "role", "customer", "@referredType", "Individual")));
+        // TMF678 requires a billingAccount (or financialAccount) reference.
+        dto.setBillingAccount(Map.of(
+                "id", entity.getOwnerPartyId() + "-account",
+                "@referredType", "BillingAccount",
+                "@type", "BillingAccountRef"));
         dto.setPayment(readJsonArray(entity.getPaymentJson()));
+        // The bill's rendered document (TMF678 billDocument): one attachment
+        // per bill, addressable so the customer can fetch the PDF.
+        dto.setBillDocument(List.of(Map.of(
+                "id", entity.getId() + "-document",
+                "name", "Bill " + entity.getBillNo(),
+                "@type", "AttachmentRefOrValue",
+                "href", entity.getHref() + "/document")));
         dto.setBillDate(entity.getBillDate());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setType("CustomerBill");
@@ -162,14 +248,39 @@ public class CustomerBillService {
     }
 
     private Map<String, Object> rateToMap(AppliedBillingRate rate) {
-        return Map.of(
-                "id", rate.getId(),
-                "name", rate.getName(),
-                "@type", "AppliedCustomerBillingRate",
-                "type", rate.getRateType(),
-                "taxExcludedAmount", Map.of("unit", rate.getAmountUnit(), "value", rate.getAmountValue()),
-                "bill", Map.of("id", rate.getBillId()),
-                "date", String.valueOf(rate.getRateDate()));
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("id", rate.getId());
+        m.put("href", ApiConstants.BASE_PATH + "/appliedCustomerBillingRate/" + rate.getId());
+        m.put("name", rate.getName());
+        m.put("@type", "AppliedCustomerBillingRate");
+        m.put("type", rate.getRateType());
+        m.put("taxExcludedAmount", Map.of("unit", String.valueOf(rate.getAmountUnit()),
+                "value", rate.getAmountValue()));
+        // TMF678: a rate on a bill is billed; a standalone/unbilled rate is not.
+        m.put("isBilled", rate.getBillId() != null);
+        if (rate.getBillId() != null) {
+            m.put("bill", Map.of("id", rate.getBillId()));
+        }
+        m.put("date", String.valueOf(rate.getRateDate()));
+        return m;
+    }
+
+    /** Top-level TMF678 appliedCustomerBillingRate list, with an isBilled filter. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findAllRates(Map<String, String> filters) {
+        String tenantId = tenantScope.currentTenantId();
+        return rateRepository.findByTenantId(tenantId).stream()
+                .filter(r -> filters.get("id") == null || filters.get("id").equals(r.getId()))
+                .filter(r -> filters.get("isBilled") == null
+                        || Boolean.parseBoolean(filters.get("isBilled")) == (r.getBillId() != null))
+                .map(this::rateToMap).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findRateById(String id) {
+        AppliedBillingRate rate = rateRepository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("AppliedCustomerBillingRate", id));
+        return rateToMap(rate);
     }
 
     private String writeJsonArray(List<Map<String, Object>> value) {
