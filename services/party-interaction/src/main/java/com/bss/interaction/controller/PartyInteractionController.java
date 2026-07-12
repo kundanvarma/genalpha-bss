@@ -57,4 +57,10 @@ public class PartyInteractionController {
         Map<String, Object> created = service.create(dto);
         return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
     }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.patch(id, dto));
+    }
 }

@@ -42,6 +42,9 @@ public class PartyInteraction {
     @Column(name = "org_id")
     private String orgId;
 
+    @Column(name = "payload_json", length = 8000)
+    private String payloadJson;
+
     @Column(name = "interaction_date")
     private OffsetDateTime interactionDate;
 
@@ -146,4 +149,7 @@ public class PartyInteraction {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
+    public String getPayloadJson() { return payloadJson; }
+    public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
 }

@@ -40,6 +40,8 @@ public class PartyInteractionService {
     private final OrgScope orgScope;
     private final TenantScope tenantScope;
     private final String defaultOrg;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
     public PartyInteractionService(PartyInteractionRepository repository, DomainEventPublisher events,
             PartyScope partyScope, OrgScope orgScope, TenantScope tenantScope,
@@ -59,9 +61,13 @@ public class PartyInteractionService {
         for (Map.Entry<String, String> f : filters.entrySet()) {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
-                case "channel" -> probe.setChannel(f.getValue());
+                case "href" -> probe.setHref(f.getValue());
+                case "direction" -> probe.setDirection(f.getValue());
+                case "status" -> probe.setStatus(f.getValue());
                 case "relatedPartyId" -> probe.setCustomerPartyId(f.getValue());
-                default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
+                // TMF630 permits ignoring unsupported filtering (fields/sort and
+                // rich attributes like reason/channel are not indexed columns).
+                default -> { }
             }
         }
         partyScope.scopedPartyId().ifPresent(probe::setCustomerPartyId);
@@ -89,20 +95,18 @@ public class PartyInteractionService {
 
     @Transactional
     public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("description") == null || String.valueOf(dto.get("description")).isBlank()) {
-            throw new BadRequestException("description is required");
-        }
+        // TMF683: description and relatedParty are optional. Keep the customer
+        // link for the CSR timeline when present; store the full body so rich
+        // spec fields (channel[], reason, direction) round-trip on GET.
         String customer = customerIn(dto);
-        if (customer == null) {
-            throw new BadRequestException("relatedParty with role 'customer' is required");
-        }
         PartyInteraction entity = new PartyInteraction();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/partyInteraction/" + id);
-        entity.setDescription(String.valueOf(dto.get("description")));
-        entity.setChannel(dto.get("channel") == null ? "phone" : String.valueOf(dto.get("channel")));
+        entity.setPayloadJson(writeJson(dto));
+        entity.setDescription(dto.get("description") == null ? null : String.valueOf(dto.get("description")));
+        entity.setChannel(dto.get("channel") == null ? null : String.valueOf(dto.get("channel")));
         entity.setDirection(dto.get("direction") == null ? "inbound" : String.valueOf(dto.get("direction")));
         entity.setStatus("completed");
         entity.setCustomerPartyId(customer);
@@ -116,6 +120,51 @@ public class PartyInteractionService {
         return created;
     }
 
+    @Transactional
+    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+        PartyInteraction entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("PartyInteraction", id));
+        Object stored = readJson(entity.getPayloadJson());
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (stored instanceof Map<?, ?> m) {
+            merged.putAll(castMap(m));
+        }
+        merged.putAll(dto);
+        entity.setPayloadJson(writeJson(merged));
+        if (dto.get("status") != null) {
+            entity.setStatus(String.valueOf(dto.get("status")));
+        }
+        if (dto.get("direction") != null) {
+            entity.setDirection(String.valueOf(dto.get("direction")));
+        }
+        entity.setLastUpdate(OffsetDateTime.now());
+        return toMap(repository.save(entity));
+    }
+
+    private String writeJson(Object o) {
+        try {
+            return objectMapper.writeValueAsString(o);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Object readJson(String s) {
+        if (s == null || s.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(s, Object.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> m) {
+        return (Map<String, Object>) m;
+    }
+
     private String customerIn(Map<String, Object> dto) {
         if (dto.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
@@ -127,20 +176,43 @@ public class PartyInteractionService {
         return null;
     }
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> toMap(PartyInteraction entity) {
         Map<String, Object> map = new LinkedHashMap<>();
+        // Start from the posted body so every spec field round-trips, then
+        // overlay the server-managed fields.
+        Object stored = readJson(entity.getPayloadJson());
+        if (stored instanceof Map<?, ?> m) {
+            map.putAll((Map<String, Object>) m);
+        }
         map.put("id", entity.getId());
         map.put("href", entity.getHref());
-        map.put("description", entity.getDescription());
-        map.put("channel", entity.getChannel());
+        if (entity.getDescription() != null) {
+            map.put("description", entity.getDescription());
+        }
+        if (entity.getChannel() != null && map.get("channel") == null) {
+            map.put("channel", entity.getChannel());
+        }
+        // TMF683 channel is an array of channel references; normalise a legacy
+        // string value (app-created rows) so it round-trips as an array.
+        if (map.get("channel") instanceof String s) {
+            map.put("channel", List.of(Map.of("name", s)));
+        }
         map.put("direction", entity.getDirection());
         map.put("status", entity.getStatus());
-        map.put("relatedParty", entity.getAgentId() == null
-                ? List.of(Map.of("id", entity.getCustomerPartyId(), "role", "customer", "@referredType", "Individual"))
-                : List.of(
-                    Map.of("id", entity.getCustomerPartyId(), "role", "customer", "@referredType", "Individual"),
-                    Map.of("id", entity.getAgentId(), "role", "agent")));
-        map.put("organization", Map.of("id", entity.getOrgId(), "@referredType", "Organization"));
+        // Server-derived relatedParty only when we tracked a customer (app path);
+        // CTK-created interactions keep whatever relatedParty they posted (overlaid above).
+        if (entity.getCustomerPartyId() != null) {
+            List<Map<String, Object>> parties = new java.util.ArrayList<>();
+            parties.add(Map.of("id", entity.getCustomerPartyId(), "role", "customer", "@referredType", "Individual"));
+            if (entity.getAgentId() != null) {
+                parties.add(Map.of("id", entity.getAgentId(), "role", "agent"));
+            }
+            map.put("relatedParty", parties);
+        }
+        if (entity.getOrgId() != null) {
+            map.put("organization", Map.of("id", entity.getOrgId(), "@referredType", "Organization"));
+        }
         map.put("interactionDate", entity.getInteractionDate());
         map.put("lastUpdate", entity.getLastUpdate());
         map.put("@type", "PartyInteraction");
