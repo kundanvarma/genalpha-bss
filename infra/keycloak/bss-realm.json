@@ -259,6 +259,14 @@
       {
         "name": "porting:write",
         "description": "Create/manage number porting"
+      },
+      {
+        "name": "billing:admin",
+        "description": "back-office view of all customer bills"
+      },
+      {
+        "name": "appointment:admin",
+        "description": "back-office view of all appointments"
       }
     ]
   },
@@ -618,7 +626,9 @@
         "quote:write",
         "porting:read",
         "porting:write",
-        "policy:evaluate"
+        "policy:evaluate",
+        "billing:admin",
+        "appointment:admin"
       ]
     },
     {
@@ -757,6 +767,33 @@
         "service:write",
         "ticket:write",
         "ticket:read"
+      ]
+    },
+    {
+      "username": "pat@bss.local",
+      "enabled": true,
+      "email": "pat@bss.local",
+      "emailVerified": true,
+      "firstName": "Pat",
+      "lastName": "Product",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pat",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "stock:read",
+        "stock:write",
+        "qualification:read",
+        "qualification:write",
+        "policy:read",
+        "policy:write",
+        "policy:evaluate"
       ]
     }
   ]

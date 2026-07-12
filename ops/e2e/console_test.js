@@ -118,6 +118,26 @@ const CONSOLE = 'http://localhost:8080/console/';
   const portCells = await portRow.first().locator('td').allTextContents();
   console.log('OK porting tab:', portCells.slice(0, 4).join(' | '));
 
+  // 9. Role-scoped tabs: a product manager sees the product area — and ONLY it.
+  const patCtx = await browser.newContext();
+  const pat = await patCtx.newPage();
+  await pat.goto('http://localhost:8080/console/');
+  await pat.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await pat.fill('input[name="username"]', 'pat@bss.local');
+  await pat.fill('input[name="password"]', 'pat');
+  await pat.click('input[type="submit"], button[type="submit"]');
+  await pat.waitForSelector('.tab', { timeout: 20000 });
+  const patTabs = (await pat.locator('.tab').allTextContents()).map((t) => t.trim());
+  const expectPat = ['Product Offerings', 'Product Specifications', 'Product Offering Prices',
+    'Product Stock', 'Serviceable Areas', 'Rules'];
+  for (const t of expectPat) {
+    if (!patTabs.includes(t)) fail(`product persona missing tab "${t}" — got ${patTabs.join(', ')}`);
+  }
+  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'AI Audit']) {
+    if (patTabs.includes(t)) fail(`product persona must NOT see "${t}" — got ${patTabs.join(', ')}`);
+  }
+  console.log('OK role-scoped console: product-pat sees only', patTabs.join(' | '));
+
   await browser.close();
   console.log('\nALL CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

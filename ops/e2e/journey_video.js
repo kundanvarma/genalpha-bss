@@ -96,7 +96,7 @@ async function confirmLogout(page) {
 (async () => {
   const dir = path.join(__dirname, 'recordings');
   fs.mkdirSync(dir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless: !process.env.HEADED, slowMo: process.env.HEADED ? 30 : 0 });
   const ctx = await browser.newContext({
     viewport: { width: 1600, height: 900 },
     recordVideo: { dir, size: { width: 1600, height: 900 } },

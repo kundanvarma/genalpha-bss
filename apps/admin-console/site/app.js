@@ -333,6 +333,32 @@ const COLUMN_LABELS = {
 const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.label]));
 
 const el = (id) => document.getElementById(id);
+
+// Role-scoped tabs: the console only shows the areas this operator's token can
+// actually use (the APIs enforce the same roles server-side — hiding a tab is
+// ergonomics, the 403 underneath is the security).
+// Gates use STAFF-grade roles: the default 'customer' composite carries baseline
+// read/write (customers pay bills, book slots), so back-office visibility keys
+// on roles customers never hold.
+const TAB_ROLE = {
+  productOffering: 'catalog:write',
+  productSpecification: 'catalog:write',
+  productOfferingPrice: 'catalog:write',
+  productStock: 'stock:read',
+  customerBill: 'billing:admin',
+  serviceableArea: 'qualification:write',
+  appointment: 'appointment:admin',
+  campaign: 'campaign:read',
+  policyRule: 'policy:read',
+  numberPortingOrder: 'porting:write',
+  audit: 'ai:use',
+};
+let visible = RESOURCES;
+function computeVisible() {
+  const roles = (tokenClaims().realm_access || {}).roles || [];
+  visible = RESOURCES.filter((r) => !TAB_ROLE[r.path] || roles.includes(TAB_ROLE[r.path]));
+}
+
 let active = RESOURCES[0];
 let offset = 0;
 let editingId = null;
@@ -369,7 +395,7 @@ async function loadPicklist(field) {
 }
 
 function renderTabs() {
-  el('tabs').replaceChildren(...RESOURCES.map((r) => {
+  el('tabs').replaceChildren(...visible.map((r) => {
     const b = document.createElement('button');
     b.textContent = r.title;
     b.className = r === active ? 'tab on' : 'tab';
@@ -932,6 +958,12 @@ async function main() {
     return;
   }
   el('main').hidden = false;
+  computeVisible();
+  if (!visible.length) {
+    el('tabs').textContent = 'Your account has no back-office areas — ask an admin for a role.';
+    return;
+  }
+  active = visible[0];
   el('username').textContent = tokenClaims().preferred_username || '';
   el('logout').hidden = false;
   el('logout').addEventListener('click', signOut);
