@@ -74,4 +74,20 @@ class JsonLogicTest {
         // A rule the engine doesn't understand must be falsy, never throw.
         assertFalse(JsonLogic.test(Map.of("frobnicate", List.of(1, 2)), Map.of()));
     }
+
+    @Test
+    void pricingCondition_appliesOnlyWhenContextMatches() {
+        // "discount when the cart contains a specific offering"
+        Object cond = Map.of("in", List.of("fiber-1000", Map.of("var", "offeringIds")));
+        assertTrue(JsonLogic.test(cond, Map.of("offeringIds", List.of("fiber-1000", "tv"), "subtotal", 80)));
+        assertFalse(JsonLogic.test(cond, Map.of("offeringIds", List.of("tv"), "subtotal", 80)));
+    }
+
+    @Test
+    void pricingCondition_segmentByCharacteristic() {
+        // "discount for business segment customers"
+        Object cond = Map.of("==", List.of(Map.of("var", "segment"), "business"));
+        assertTrue(JsonLogic.test(cond, Map.of("segment", "business")));
+        assertFalse(JsonLogic.test(cond, Map.of("segment", "consumer")));
+    }
 }

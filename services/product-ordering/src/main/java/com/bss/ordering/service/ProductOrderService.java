@@ -131,6 +131,7 @@ public class ProductOrderService {
         partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
+        validateBundleComposition(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState("acknowledged");
         }
@@ -164,6 +165,66 @@ public class ProductOrderService {
             if (needed && !verifiedIdentity.isVerified()) {
                 throw new com.bss.ordering.exception.VerifiedIdentityRequiredException(item.name());
             }
+        }
+    }
+
+    /**
+     * Enforce a bundle's configuration cardinality (TMF620 soft bundle): each
+     * choice group in the bundle must have between its lower and upper limit of
+     * options selected — "pick 2 of 4". The customer's picks arrive as the
+     * bundle item's nested productOrderItem children. Mandatory fixed components
+     * are implicit (provisioned when the bundle decomposes) and not counted here.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateBundleComposition(ProductOrderDto dto) {
+        if (dto.getProductOrderItem() == null) {
+            return;
+        }
+        for (Map<String, Object> item : dto.getProductOrderItem()) {
+            if (!(item.get("productOffering") instanceof Map<?, ?> off) || off.get("id") == null) {
+                continue;
+            }
+            CatalogClient.OfferingRef bundle = catalogClient.findOffering(String.valueOf(off.get("id"))).orElse(null);
+            if (bundle == null || !bundle.bundle() || bundle.choiceGroups().isEmpty()) {
+                continue;
+            }
+            Set<String> selected = new java.util.HashSet<>();
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                for (Object child : children) {
+                    if (child instanceof Map<?, ?> cm && cm.get("productOffering") instanceof Map<?, ?> po
+                            && po.get("id") != null) {
+                        selected.add(String.valueOf(po.get("id")));
+                    }
+                }
+            }
+            for (Map<String, Object> group : bundle.choiceGroups()) {
+                int lower = intOf(group.get("numberRelOfferLowerLimit"), 1);
+                int upper = intOf(group.get("numberRelOfferUpperLimit"), 1);
+                int chosen = 0;
+                for (Object option : (List<Object>) group.get("options")) {
+                    if (option instanceof Map<?, ?> om && om.get("id") != null
+                            && selected.contains(String.valueOf(om.get("id")))) {
+                        chosen++;
+                    }
+                }
+                if (chosen < lower || chosen > upper) {
+                    String groupName = String.valueOf(group.getOrDefault("name", "choice"));
+                    String need = lower == upper ? "exactly " + lower : "between " + lower + " and " + upper;
+                    throw new OrderValidationException("bundle '" + bundle.name() + "': '" + groupName
+                            + "' requires " + need + " selection(s), but " + chosen + " were made");
+                }
+            }
+        }
+    }
+
+    private static int intOf(Object o, int def) {
+        if (o instanceof Number n) {
+            return n.intValue();
+        }
+        try {
+            return o == null ? def : Integer.parseInt(String.valueOf(o).trim());
+        } catch (NumberFormatException e) {
+            return def;
         }
     }
 

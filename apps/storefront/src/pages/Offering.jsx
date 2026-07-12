@@ -16,20 +16,28 @@ export default function Offering() {
   const [specs, setSpecs] = useState({});                     // spec id -> spec
   const [chars, setChars] = useState({});                     // characteristic name -> value
   const [avail, setAvail] = useState({});                     // offering id -> units | null (unmanaged)
+  const [extras, setExtras] = useState({});                   // optional component id -> added?
   const [error, setError] = useState(null);
 
+  // TMF620 cardinality: a bundled component with lower limit 0 is optional
+  // (an add-on the customer may include); otherwise it is a fixed inclusion.
+  const lowerLimit = (e) => e.bundledProductOfferingOption?.numberRelOfferLowerLimit;
   const bundled = offering?.bundledProductOffering || [];
-  const fixed = bundled.filter((e) => !isChoice(e));
   const choices = bundled.filter(isChoice);
+  const optionalComponents = bundled.filter((e) => !isChoice(e) && lowerLimit(e) === 0);
+  const fixed = bundled.filter((e) => !isChoice(e) && lowerLimit(e) !== 0);
 
   useEffect(() => {
     Promise.all([getOffering(id), priceIndex()])
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
-        // Resolve every choice option to its full offering (price + spec refs).
+        // Resolve every choice option AND optional add-on to its full offering.
         const optionRefs = (o.bundledProductOffering || []).filter(isChoice).flatMap((c) => c.options);
-        const full = await Promise.all(optionRefs.map((r) => getOffering(r.id)));
+        const optionalRefs = (o.bundledProductOffering || [])
+          .filter((e) => !isChoice(e) && e.bundledProductOfferingOption?.numberRelOfferLowerLimit === 0);
+        const toResolve = [...optionRefs, ...optionalRefs];
+        const full = await Promise.all(toResolve.map((r) => getOffering(r.id)));
         setOptionOfferings(Object.fromEntries(full.map((f) => [f.id, f])));
         const defaults = {};
         for (const c of (o.bundledProductOffering || []).filter(isChoice)) {
@@ -39,7 +47,7 @@ export default function Offering() {
         // already made must never be clobbered by the defaults.
         setChosen((prev) => ({ ...defaults, ...prev }));
         // Shelf check for everything orderable on this page.
-        const stockIds = [o.id, ...optionRefs.map((r) => r.id)];
+        const stockIds = [o.id, ...toResolve.map((r) => r.id)];
         const availability = await Promise.all(stockIds.map(availabilityFor));
         setAvail(Object.fromEntries(stockIds.map((sid, i) => [sid, availability[i]])));
       })
@@ -88,19 +96,25 @@ export default function Offering() {
   if (error) return <p className="error">{error}</p>;
   if (!offering) return <p className="dim">Loading…</p>;
 
+  const addedExtras = optionalComponents
+    .map((e) => (extras[e.id] ? optionOfferings[e.id] : null)).filter(Boolean);
   const own = pricesOf(offering, prices);
   const optionPrices = selectedOptions.flatMap((o) => pricesOf(o, prices));
-  const allPrices = [...own, ...optionPrices];
+  const extraPrices = addedExtras.flatMap((o) => pricesOf(o, prices));
+  const allPrices = [...own, ...optionPrices, ...extraPrices];
   const monthly = monthlyTotal(allPrices);
 
-  const selections = selectedOptions.map((option) => ({
-    offeringId: option.id,
-    name: option.name,
-    characteristics: Object.fromEntries(
-      activeCharacteristics
-        .filter((ac) => ac.option.id === option.id && chars[ac.characteristic.name] != null)
-        .map((ac) => [ac.characteristic.name, chars[ac.characteristic.name]])),
-  }));
+  const selections = [
+    ...selectedOptions.map((option) => ({
+      offeringId: option.id,
+      name: option.name,
+      characteristics: Object.fromEntries(
+        activeCharacteristics
+          .filter((ac) => ac.option.id === option.id && chars[ac.characteristic.name] != null)
+          .map((ac) => [ac.characteristic.name, chars[ac.characteristic.name]])),
+    })),
+    ...addedExtras.map((o) => ({ offeringId: o.id, name: o.name, characteristics: {} })),
+  ];
 
   // The page is orderable unless a stock-managed part of it is gone.
   const relevantIds = [offering.id, ...Object.values(chosen)].filter(Boolean);
@@ -160,6 +174,30 @@ export default function Offering() {
           </div>
         </div>
       ))}
+
+      {optionalComponents.length > 0 && (
+        <div className="choice">
+          <h2>Optional add-ons</h2>
+          <div className="options">
+            {optionalComponents.map((c) => {
+              const full = optionOfferings[c.id];
+              const optMonthly = full ? monthlyTotal(pricesOf(full, prices)) : null;
+              return (
+                <label key={c.id} className={extras[c.id] ? 'option on' : 'option'}>
+                  <input
+                    type="checkbox"
+                    data-testid={`extra-${c.id}`}
+                    checked={Boolean(extras[c.id])}
+                    onChange={() => setExtras((x) => ({ ...x, [c.id]: !x[c.id] }))}
+                  />
+                  <span className="optname">{c.name}</span>
+                  {optMonthly && <span className="optprice">+{optMonthly.value.toFixed(2)} {optMonthly.unit}/mo</span>}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {activeCharacteristics.length > 0 && (
         <div className="chars">

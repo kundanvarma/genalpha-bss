@@ -85,6 +85,70 @@ public class PolicyService {
         }
     }
 
+    // ---- pricing (dynamic price adjustments) ----
+
+    /**
+     * Apply the enabled pricing rules to a base subtotal in context, in priority
+     * order. Every matching rule contributes an adjustment (percent of the
+     * running subtotal, or a fixed amount); the running subtotal compounds so
+     * two 10%-off rules stack multiplicatively, as a customer would expect.
+     */
+    @Transactional(readOnly = true)
+    public PriceResult price(Map<String, Object> context) {
+        java.math.BigDecimal base = money(context.get("subtotal"));
+        java.math.BigDecimal running = base;
+        List<Map<String, Object>> adjustments = new ArrayList<>();
+        for (PolicyRule rule : repository.enabledPricingRules()) {
+            if (!engine.matches(rule.getCondition(), context) || rule.getAdjustmentType() == null
+                    || rule.getAdjustmentValue() == null) {
+                continue;
+            }
+            java.math.BigDecimal delta;
+            if ("percent".equalsIgnoreCase(rule.getAdjustmentType())) {
+                delta = running.multiply(rule.getAdjustmentValue())
+                        .divide(java.math.BigDecimal.valueOf(100), 2, java.math.RoundingMode.HALF_UP);
+            } else {
+                delta = rule.getAdjustmentValue().setScale(2, java.math.RoundingMode.HALF_UP);
+            }
+            running = running.add(delta);
+            Map<String, Object> a = new LinkedHashMap<>();
+            a.put("ruleId", rule.getId());
+            a.put("ruleName", rule.getName());
+            a.put("label", rule.getMessage() == null || rule.getMessage().isBlank() ? rule.getName() : rule.getMessage());
+            a.put("type", rule.getAdjustmentType());
+            a.put("value", rule.getAdjustmentValue());
+            a.put("amount", delta);
+            adjustments.add(a);
+            log.info("pricing rule '{}' applied: {} {}", rule.getName(), rule.getAdjustmentType(), delta);
+        }
+        if (running.signum() < 0) {
+            running = java.math.BigDecimal.ZERO;
+        }
+        return new PriceResult(base, adjustments, running.setScale(2, java.math.RoundingMode.HALF_UP));
+    }
+
+    public record PriceResult(java.math.BigDecimal basePrice, List<Map<String, Object>> adjustments,
+            java.math.BigDecimal total) {
+        public Map<String, Object> toMap() {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("basePrice", basePrice);
+            m.put("adjustments", adjustments);
+            m.put("total", total);
+            return m;
+        }
+    }
+
+    private static java.math.BigDecimal money(Object o) {
+        if (o instanceof Number n) {
+            return java.math.BigDecimal.valueOf(n.doubleValue());
+        }
+        try {
+            return o == null ? java.math.BigDecimal.ZERO : new java.math.BigDecimal(String.valueOf(o).trim());
+        } catch (NumberFormatException e) {
+            return java.math.BigDecimal.ZERO;
+        }
+    }
+
     // ---- CRUD ----
 
     @Transactional(readOnly = true)
@@ -126,6 +190,8 @@ public class PolicyService {
         rule.setEnabled(body.get("enabled") == null || asBool(body.get("enabled")));
         rule.setCondition(condition);
         rule.setMessage(str(body.get("message")));
+        rule.setAdjustmentType(str(body.get("adjustmentType")));
+        rule.setAdjustmentValue(decimal(body.get("adjustmentValue")));
         OffsetDateTime now = OffsetDateTime.now();
         rule.setCreatedAt(now);
         rule.setLastUpdate(now);
@@ -166,6 +232,12 @@ public class PolicyService {
         if (body.containsKey("message")) {
             rule.setMessage(str(body.get("message")));
         }
+        if (body.containsKey("adjustmentType")) {
+            rule.setAdjustmentType(str(body.get("adjustmentType")));
+        }
+        if (body.containsKey("adjustmentValue")) {
+            rule.setAdjustmentValue(decimal(body.get("adjustmentValue")));
+        }
         rule.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> dto = toDto(repository.save(rule));
         events.publish("PolicyRuleAttributeValueChangeEvent", "policyRule", dto);
@@ -200,6 +272,8 @@ public class PolicyService {
         m.put("enabled", rule.isEnabled());
         m.put("condition", rule.getCondition());
         m.put("message", rule.getMessage());
+        m.put("adjustmentType", rule.getAdjustmentType());
+        m.put("adjustmentValue", rule.getAdjustmentValue());
         m.put("lastUpdate", rule.getLastUpdate());
         m.put("@type", "PolicyRule");
         return m;
@@ -229,5 +303,19 @@ public class PolicyService {
             return b;
         }
         return "true".equalsIgnoreCase(String.valueOf(o));
+    }
+
+    private static java.math.BigDecimal decimal(Object o) {
+        if (o == null || String.valueOf(o).isBlank()) {
+            return null;
+        }
+        if (o instanceof Number n) {
+            return java.math.BigDecimal.valueOf(n.doubleValue());
+        }
+        try {
+            return new java.math.BigDecimal(String.valueOf(o).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

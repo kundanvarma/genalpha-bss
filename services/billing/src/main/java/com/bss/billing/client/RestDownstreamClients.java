@@ -121,6 +121,29 @@ public class RestDownstreamClients {
     }
 
     @Bean
+    @SuppressWarnings("unchecked")
+    DownstreamClients.PricingClient pricingClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.policy-base-url}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return context -> {
+            try {
+                Map<String, Object> result = rest.post()
+                        .uri("/tmf-api/policyManagement/v4/price")
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("context", context))
+                        .retrieve()
+                        .body(Map.class);
+                Object adj = result == null ? null : result.get("adjustments");
+                return adj instanceof List ? (List<Map<String, Object>>) adj : List.of();
+            } catch (RestClientException e) {
+                // Fail open: a policy outage must not stop a billing run.
+                return List.of();
+            }
+        };
+    }
+
+    @Bean
     DownstreamClients.PaymentClient paymentClient(RestClient.Builder builder,
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.payment-base-url}") String baseUrl) {

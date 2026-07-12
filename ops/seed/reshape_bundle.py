@@ -119,16 +119,40 @@ po_sam = ensure_phone_offering("Samsung Galaxy S26",
                                "Samsung's flagship with Galaxy AI, on 24-month installments.",
                                spec_sam, price_sam)
 
-# 3. The bundle: fixed components + a phone choice group; phone installments
-#    move off the bundle's own price list (the chosen option carries its price).
+# 3b. An optional, standalone-purchasable add-on: TMF620 soft-bundle
+#     cardinality lower=0 means the customer MAY include it (0..1).
+price_sports = ensure_price("Sports Pass Monthly", 12.99)
+sports = ensure_phone_offering(
+    "GenAlpha Sports Pass",
+    "Every match, live — an optional add-on you can drop onto the bundle or buy on its own.",
+    spec_std, price_sports)
+
+
+def mandatory(entity):
+    """A fixed inclusion: TMF620 bundledProductOfferingOption lower=upper=1."""
+    return {**ref(entity, "ProductOffering"),
+            "bundledProductOfferingOption": {"numberRelOfferLowerLimit": 1, "numberRelOfferUpperLimit": 1}}
+
+
+def optional(entity):
+    """A standalone-purchasable add-on: lower=0 (may include), upper=1."""
+    return {**ref(entity, "ProductOffering"),
+            "bundledProductOfferingOption": {"numberRelOfferLowerLimit": 0, "numberRelOfferUpperLimit": 1}}
+
+
+# 3. The bundle: fixed (mandatory) components + a phone choice group (pick
+#    exactly 1) + an optional add-on. Phone installments move off the bundle's
+#    own price list (the chosen option carries its price).
 bundle = offerings["GenAlpha One Home & Mobile"]
-fixed = [ref(offerings["GenAlpha Mobile Unlimited 5G"], "ProductOffering"),
-         ref(offerings["GenAlpha Fiber 1000"], "ProductOffering"),
-         ref(offerings["GenAlpha TV Max"], "ProductOffering")]
+fixed = [mandatory(offerings["GenAlpha Mobile Unlimited 5G"]),
+         mandatory(offerings["GenAlpha Fiber 1000"]),
+         mandatory(offerings["GenAlpha TV Max"])]
 choice = {
     "@type": "BundledProductOfferingChoice",
     "name": "Choose your phone",
     "default": po_pro["id"],
+    "numberRelOfferLowerLimit": 1,
+    "numberRelOfferUpperLimit": 1,
     "options": [ref(po_pro, "ProductOffering"), ref(po_std, "ProductOffering"), ref(po_sam, "ProductOffering")],
 }
 bundle_prices = [ref(prices["Mobile Unlimited 5G Monthly"], "ProductOfferingPrice"),
@@ -136,9 +160,10 @@ bundle_prices = [ref(prices["Mobile Unlimited 5G Monthly"], "ProductOfferingPric
                  ref(prices["TV Max Monthly"], "ProductOfferingPrice"),
                  ref(prices["GenAlpha One Bundle Discount"], "ProductOfferingPrice")]
 req("PATCH", f"productOffering/{bundle['id']}", {
-    "bundledProductOffering": fixed + [choice],
+    "bundledProductOffering": fixed + [choice, optional(sports)],
     "productOfferingPrice": bundle_prices,
     "description": "Triple-play bundle: unlimited 5G mobile with the phone of your choice, "
-                   "1 Gbps fiber broadband and TV Max — one bill, bundle discount included.",
+                   "1 Gbps fiber broadband and TV Max — one bill, bundle discount included. "
+                   "Add Sports Pass if you want it.",
 })
-print("bundle reshaped: 3 fixed components + phone choice (3 options)")
+print("bundle reshaped: 3 mandatory components + phone choice (pick 1 of 3) + optional Sports Pass")

@@ -41,6 +41,7 @@ public class BillingRunService {
     private final DownstreamClients.CatalogClient catalog;
     private final DownstreamClients.UsageClient usage;
     private final DownstreamClients.PromotionClient promotions;
+    private final DownstreamClients.PricingClient pricing;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
@@ -48,7 +49,7 @@ public class BillingRunService {
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
             DownstreamClients.UsageClient usage, DownstreamClients.PromotionClient promotions,
-            DomainEventPublisher events, PartyScope partyScope,
+            DownstreamClients.PricingClient pricing, DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope) {
         this.bills = bills;
         this.rates = rates;
@@ -56,6 +57,7 @@ public class BillingRunService {
         this.catalog = catalog;
         this.usage = usage;
         this.promotions = promotions;
+        this.pricing = pricing;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -160,6 +162,35 @@ public class BillingRunService {
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.subtract(discount);
+            }
+            // Data-authored pricing rules: segment/eligibility-driven adjustments
+            // applied to the recurring base, authored in the console with no
+            // redeploy. Fails open — an empty result leaves the base price.
+            BigDecimal recurringBase = monthlyByOffering.values().stream()
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            if (recurringBase.signum() > 0) {
+                Map<String, Object> pricingContext = new HashMap<>();
+                pricingContext.put("subtotal", recurringBase);
+                pricingContext.put("party", owner.getKey());
+                pricingContext.put("offeringIds", new ArrayList<>(monthlyByOffering.keySet()));
+                List<Map<String, Object>> priceAdjustments = pricing.adjustments(pricingContext);
+                for (Map<String, Object> adjustment : priceAdjustments == null ? List.<Map<String, Object>>of() : priceAdjustments) {
+                    BigDecimal amount = new BigDecimal(String.valueOf(adjustment.getOrDefault("amount", "0")));
+                    if (amount.signum() == 0) {
+                        continue;
+                    }
+                    AppliedBillingRate rate = new AppliedBillingRate();
+                    rate.setId(UUID.randomUUID().toString());
+                    rate.setTenantId(tenantId);
+                    rate.setName(String.valueOf(adjustment.getOrDefault("label", "Price adjustment")));
+                    rate.setRateType("priceAdjustment");
+                    rate.setAmountValue(amount);
+                    rate.setAmountUnit(unit);
+                    rate.setOwnerPartyId(owner.getKey());
+                    rate.setRateDate(OffsetDateTime.now());
+                    billRates.add(rate);
+                    total = total.add(amount);
+                }
             }
             if (billRates.isEmpty()) {
                 continue;

@@ -191,16 +191,26 @@ const RESOURCES = [
     fields: [
       { name: 'name', label: 'Rule name', required: true },
       { name: 'ruleKind', label: 'What kind of rule', kind: 'select', required: true, options: [
-        { value: 'quantity-cap', label: 'Limit how many of an item can be ordered' },
-        { value: 'incompatibility', label: 'Two items cannot be bought together' },
-        { value: 'requires-verified-id', label: 'Item requires a verified identity (BankID)' },
-        { value: 'advanced', label: 'Advanced — write raw JSON-logic' },
+        { value: 'quantity-cap', label: 'Block: limit how many of an item can be ordered' },
+        { value: 'incompatibility', label: 'Block: two items cannot be bought together' },
+        { value: 'requires-verified-id', label: 'Block: item requires a verified identity (BankID)' },
+        { value: 'advanced', label: 'Block: advanced — write raw JSON-logic' },
+        { value: 'price-verified', label: 'Price: discount / surcharge for verified customers' },
+        { value: 'price-when-item', label: 'Price: discount / surcharge when the cart has an item' },
+        { value: 'price-always', label: 'Price: discount / surcharge for everyone' },
+        { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
       ] },
-      { name: 'offeringA', label: 'Item (primary)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'offeringA', label: 'Item (primary / "when cart has")', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'maxQuantity', label: 'Max quantity (for a limit rule; blank = any single item)', kind: 'number' },
       { name: 'offeringB', label: 'Second item (for an incompatibility rule)', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'adjustmentType', label: 'Price adjustment type (for a Price rule)', kind: 'select', options: [
+        { value: '', label: '—' },
+        { value: 'percent', label: 'Percent of subtotal' },
+        { value: 'amount', label: 'Fixed amount' },
+      ] },
+      { name: 'adjustmentValue', label: 'Price adjustment value — negative = discount, positive = surcharge', kind: 'number' },
       { name: 'condition', label: 'Advanced: JSON-logic condition (overrides the choices above)', kind: 'longtext' },
-      { name: 'message', label: 'Message shown to the customer when blocked', required: true },
+      { name: 'message', label: 'Message / label shown to the customer', required: true },
       { name: 'priority', label: 'Priority (lower runs first)', kind: 'number', placeholder: '100' },
       { name: 'enabled', label: 'Enabled', kind: 'checkbox' },
     ],
@@ -209,8 +219,10 @@ const RESOURCES = [
       const a = idOf(body.offeringA);
       const b = idOf(body.offeringB);
       const max = Number(body.maxQuantity);
+      const kind = body.ruleKind || '';
+      const isPricing = kind.startsWith('price-');
       let condition = body.condition;
-      switch (body.ruleKind) {
+      switch (kind) {
         case 'quantity-cap':
           condition = JSON.stringify({ '>': [{ var: a ? `quantityByOffering.${a}` : 'maxLineQuantity' }, Number.isFinite(max) && max > 0 ? max : 1] });
           break;
@@ -220,21 +232,32 @@ const RESOURCES = [
         case 'requires-verified-id':
           condition = JSON.stringify({ and: [{ in: [a, { var: 'offeringIds' }] }, { '!': { var: 'verifiedIdentity' } }] });
           break;
+        case 'price-verified':
+          condition = JSON.stringify({ var: 'verifiedIdentity' });
+          break;
+        case 'price-when-item':
+          condition = JSON.stringify({ in: [a, { var: 'offeringIds' }] });
+          break;
+        case 'price-always':
+          condition = JSON.stringify({ '==': [1, 1] });
+          break;
         default:
           break;
       }
       return {
         name: body.name,
         description: body.description,
-        domain: 'order',
-        effect: 'deny',
+        domain: isPricing ? 'pricing' : 'order',
+        effect: isPricing ? 'adjust' : 'deny',
         priority: body.priority,
         enabled: body.enabled,
         condition,
         message: body.message,
+        adjustmentType: isPricing ? (body.adjustmentType || 'percent') : undefined,
+        adjustmentValue: isPricing ? body.adjustmentValue : undefined,
       };
     },
-    columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'condition', 'lastUpdate'],
+    columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'adjustmentValue', 'condition', 'lastUpdate'],
     rowAction: {
       label: (item) => (item.enabled ? 'Disable' : 'Enable'),
       apply: (item) => authFetch(`${POLICY_BASE}/policyRule/${item.id}`, {

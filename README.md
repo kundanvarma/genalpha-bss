@@ -58,7 +58,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| product-catalog | TMF620 | 8081 | Offerings, prices, bundles, commitment terms |
+| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time) |
 | product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
 | product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
 | party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
@@ -90,7 +90,7 @@ mobile app recomposes around what the customer owns:
 | intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
 | flow | observability | 8111 | **Live Flow** — consumes every `bss.*.events` topic and streams the choreography to a browser (`/flow`); watch components react in real time |
 | porting | MNP | 8112 | Keep-your-number **and** leave-with-your-number: port-in/out through a country clearinghouse seam (NRDB in Norway, pluggable per country). Port-in activates on the ported number; port-out ceases the service, releases the number, and records a churn outcome |
-| policy | rules | 8113 | **Business rules as data, not code**: eligibility / quantity-cap / incompatibility / verified-identity rules authored in the console as JSON-logic and evaluated at order time — add or disable a rule with a row, **no redeploy**. Pluggable engine seam (JSON-logic today, Drools/CEL swappable); tenant-isolated by RLS; the order pipeline fails open if it's unreachable |
+| policy | rules | 8113 | **Business rules AND dynamic pricing as data, not code**: eligibility / quantity-cap / incompatibility / verified-identity rules enforced at order time, plus **pricing rules** (percent or amount adjustments, conditioned on segment / cart / verified identity) applied at cart and bill time — author or disable any of them in the console as JSON-logic with **no redeploy**. Pluggable engine seam (JSON-logic today, Drools/CEL swappable); tenant-isolated by RLS; fails open if unreachable |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
@@ -174,7 +174,8 @@ mvn -q clean test -Dapi.version=1.44        # ~250 tests incl. real-Postgres mig
 cd ops/e2e && npm i playwright && npx playwright install chromium
 node storefront_test.js && node guest_test.js && node console_test.js \
   && node csr_test.js && node tenant_test.js && node roles_test.js \
-  && node app_test.js && node martech_test.js && node policy_test.js
+  && node app_test.js && node martech_test.js && node policy_test.js \
+  && node pricing_test.js && node bundle_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,

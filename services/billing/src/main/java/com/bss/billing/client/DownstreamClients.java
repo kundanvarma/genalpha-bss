@@ -36,6 +36,15 @@ public final class DownstreamClients {
         List<Map<String, Object>> redemptionsFor(String ownerPartyId);
     }
 
+    public interface PricingClient {
+        /**
+         * Data-authored pricing rules applied to a recurring subtotal in context.
+         * Each entry is {label, type, value, amount(signed)}. Empty on outage —
+         * pricing rules never block a bill, the base price simply stands.
+         */
+        List<Map<String, Object>> adjustments(Map<String, Object> context);
+    }
+
     public interface PaymentClient {
         /** Empty message means valid; otherwise the reason the ref is unusable. */
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);
