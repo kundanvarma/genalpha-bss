@@ -82,4 +82,9 @@ public class UsageSpecification {
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    @jakarta.persistence.Column(name = "payload_json", length = 8000)
+    private String payloadJson;
+    public String getPayloadJson() { return payloadJson; }
+    public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
 }

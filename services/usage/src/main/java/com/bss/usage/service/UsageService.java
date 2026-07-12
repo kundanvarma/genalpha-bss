@@ -4,6 +4,7 @@ import com.bss.usage.api.ApiConstants;
 import com.bss.usage.entity.RatedCharge;
 import com.bss.usage.entity.UsageAllowance;
 import com.bss.usage.entity.UsageRecord;
+import com.bss.usage.entity.UsageSpecification;
 import com.bss.usage.events.DomainEventPublisher;
 import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.repository.RatedChargeRepository;
@@ -43,16 +44,19 @@ public class UsageService {
     private final UsageRecordRepository records;
     private final UsageAllowanceRepository allowances;
     private final RatedChargeRepository ratedCharges;
+    private final com.bss.usage.repository.UsageSpecificationRepository specs;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
+            com.bss.usage.repository.UsageSpecificationRepository specs,
             RatedChargeRepository ratedCharges, DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper) {
         this.records = records;
         this.allowances = allowances;
+        this.specs = specs;
         this.ratedCharges = ratedCharges;
         this.events = events;
         this.partyScope = partyScope;
@@ -72,24 +76,29 @@ public class UsageService {
                 }
             }
         }
+        // TMF635: only usageSpecification is meaningful on intake; usageType,
+        // usageCharacteristic and relatedParty are optional per the spec. Store
+        // the posted body so it round-trips; derive the app fields when present.
         Map<String, Object> characteristic = dto.get("usageCharacteristic") instanceof Map<?, ?> m
-                ? (Map<String, Object>) m : null;
-        if (owner == null || dto.get("usageType") == null || characteristic == null
-                || characteristic.get("value") == null) {
-            throw new BadRequestException(
-                    "usageType, usageCharacteristic.value and relatedParty (role customer) are required");
-        }
+                ? (Map<String, Object>) m
+                : (dto.get("usageCharacteristic") instanceof List<?> cl && !cl.isEmpty()
+                        && cl.get(0) instanceof Map<?, ?> cm ? (Map<String, Object>) cm : null);
         UsageRecord entity = new UsageRecord();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/usage/" + id);
-        entity.setUsageSpecName(String.valueOf(dto.get("usageType")));
+        entity.setPayloadJson(writeJson(dto));
+        entity.setUsageSpecName(dto.get("usageType") == null ? null : String.valueOf(dto.get("usageType")));
         entity.setUsageDate(dto.get("usageDate") == null ? OffsetDateTime.now()
                 : OffsetDateTime.parse(String.valueOf(dto.get("usageDate"))));
-        entity.setValue(new BigDecimal(String.valueOf(characteristic.get("value"))));
-        entity.setUnits(characteristic.get("units") == null ? "unit"
-                : String.valueOf(characteristic.get("units")));
+        if (characteristic != null && characteristic.get("value") != null) {
+            entity.setValue(new BigDecimal(String.valueOf(characteristic.get("value"))));
+            entity.setUnits(characteristic.get("units") == null ? "unit" : String.valueOf(characteristic.get("units")));
+        } else {
+            entity.setValue(BigDecimal.ZERO);
+            entity.setUnits("unit");
+        }
         entity.setOwnerPartyId(owner);
         if (dto.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null) {
             entity.setProductOfferingId(String.valueOf(off.get("id")));
@@ -193,17 +202,133 @@ public class UsageService {
                 "bucket", List.copyOf(buckets.values()));
     }
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> toRecordMap(UsageRecord r) {
         Map<String, Object> map = new LinkedHashMap<>();
+        Object stored = readJsonValue(r.getPayloadJson());
+        if (stored instanceof Map<?, ?> m) {
+            map.putAll((Map<String, Object>) m);
+        }
         map.put("id", r.getId());
         map.put("href", r.getHref());
-        map.put("usageType", r.getUsageSpecName());
+        if (r.getUsageSpecName() != null) {
+            map.put("usageType", r.getUsageSpecName());
+        }
         map.put("usageDate", r.getUsageDate());
-        map.put("usageCharacteristic", Map.of("value", r.getValue(), "units", r.getUnits()));
-        map.put("relatedParty", List.of(Map.of("id", r.getOwnerPartyId(), "role", "customer")));
+        if (map.get("usageCharacteristic") == null) {
+            map.put("usageCharacteristic", Map.of("value", r.getValue(), "units", r.getUnits()));
+        }
+        if (r.getOwnerPartyId() != null) {
+            map.put("relatedParty", List.of(Map.of("id", r.getOwnerPartyId(), "role", "customer")));
+        }
         map.put("status", r.getStatus());
+        // TMF635 mandatory attribute — always present.
+        map.putIfAbsent("usageSpecification", Map.of());
         map.put("@type", "Usage");
         return map;
+    }
+
+    // ---- Usage as a retrievable resource ----
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findUsage(Map<String, String> filters) {
+        return records.findByTenantId(tenantScope.currentTenantId()).stream()
+                .filter(r -> filters.get("id") == null || filters.get("id").equals(r.getId()))
+                .filter(r -> filters.get("href") == null || filters.get("href").equals(r.getHref()))
+                .map(this::toRecordMap).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findUsageById(String id) {
+        return toRecordMap(records.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("Usage '" + id + "' not found")));
+    }
+
+    // ---- UsageSpecification resource (TMF635) ----
+
+    @Transactional
+    public Map<String, Object> createSpec(Map<String, Object> dto) {
+        UsageSpecification e = new UsageSpecification();
+        String id = UUID.randomUUID().toString();
+        e.setId(id);
+        e.setTenantId(tenantScope.currentTenantId());
+        e.setHref(ApiConstants.BASE_PATH + "/usageSpecification/" + id);
+        e.setName(dto.get("name") == null ? null : String.valueOf(dto.get("name")));
+        e.setUnits(dto.get("units") == null ? "unit" : String.valueOf(dto.get("units")));
+        e.setPayloadJson(writeJson(dto));
+        e.setLastUpdate(OffsetDateTime.now());
+        return toSpecMap(specs.save(e));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> findSpecs(Map<String, String> filters) {
+        return specs.findByTenantId(tenantScope.currentTenantId()).stream()
+                .filter(s -> filters.get("id") == null || filters.get("id").equals(s.getId()))
+                .filter(s -> filters.get("href") == null || filters.get("href").equals(s.getHref()))
+                .filter(s -> filters.get("name") == null || filters.get("name").equals(s.getName()))
+                .map(this::toSpecMap).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> findSpecById(String id) {
+        return toSpecMap(specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found")));
+    }
+
+    @Transactional
+    public Map<String, Object> patchSpec(String id, Map<String, Object> dto) {
+        UsageSpecification e = specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found"));
+        if (dto.containsKey("name")) {
+            e.setName(String.valueOf(dto.get("name")));
+        }
+        Object stored = readJsonValue(e.getPayloadJson());
+        Map<String, Object> merged = new LinkedHashMap<>();
+        if (stored instanceof Map<?, ?> m) {
+            merged.putAll(castMap(m));
+        }
+        merged.putAll(dto);
+        e.setPayloadJson(writeJson(merged));
+        e.setLastUpdate(OffsetDateTime.now());
+        return toSpecMap(specs.save(e));
+    }
+
+    @Transactional
+    public void deleteSpec(String id) {
+        UsageSpecification e = specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found"));
+        specs.delete(e);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> toSpecMap(UsageSpecification s) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        Object stored = readJsonValue(s.getPayloadJson());
+        if (stored instanceof Map<?, ?> m) {
+            map.putAll((Map<String, Object>) m);
+        }
+        map.put("id", s.getId());
+        map.put("href", s.getHref());
+        map.put("name", s.getName());
+        map.put("lastUpdate", s.getLastUpdate());
+        map.put("@type", "UsageSpecification");
+        return map;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> m) {
+        return (Map<String, Object>) m;
+    }
+
+    private Object readJsonValue(String s) {
+        if (s == null || s.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(s, Object.class);
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     private Map<String, Object> chargeMap(RatedCharge c) {
