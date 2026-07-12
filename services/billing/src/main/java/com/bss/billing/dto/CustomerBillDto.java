@@ -22,6 +22,12 @@ public class CustomerBillDto {
     @JsonProperty("state")
     private String state;
 
+    @JsonProperty("billingAccount")
+    private java.util.Map<String, Object> billingAccount;
+
+    @JsonProperty("billDocument")
+    private java.util.List<Object> billDocument = new java.util.ArrayList<>();
+
     @JsonProperty("amountDue")
     private MoneyDto amountDue;
 
@@ -133,4 +139,10 @@ public class CustomerBillDto {
     public void setType(String type) {
         this.type = type;
     }
+
+    public java.util.List<Object> getBillDocument() { return billDocument; }
+    public void setBillDocument(java.util.List<Object> billDocument) { this.billDocument = billDocument; }
+
+    public java.util.Map<String, Object> getBillingAccount() { return billingAccount; }
+    public void setBillingAccount(java.util.Map<String, Object> billingAccount) { this.billingAccount = billingAccount; }
 }
