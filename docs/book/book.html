@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verify Everything — A Build Memoir</title>
+<style>
+  :root {
+    --ink: #1c2326; --dim: #5c6a70; --faint: #8a979c; --line: #dde4e4; --bg: #fbfaf7;
+    --paper: #ffffff; --teal: #0e7c7b; --edge: #6d3fb0; --rose: #b64a3a; --gold: #b7861f;
+    --rule: #e6e2d8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink: #e4ebeb; --dim: #a6b4b8; --faint: #7b898e; --line: #2a343800; --bg: #12181a;
+      --paper: #161d1f; --teal: #4bb6b3; --edge: #b18ce0; --rose: #e0796f; --gold: #d8b25a;
+      --rule: #263033; }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 19px/1.72 Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 720px; margin: 0 auto; padding: 0 26px; }
+  .sans { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+  /* title page */
+  .cover { min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+    text-align: center; border-bottom: 1px solid var(--rule); }
+  .cover .kicker { font-family: -apple-system, sans-serif; text-transform: uppercase;
+    letter-spacing: 0.22em; font-size: 12px; color: var(--teal); margin-bottom: 1.4rem; }
+  .cover h1 { font-size: clamp(3rem, 9vw, 5.2rem); line-height: 0.98; margin: 0; letter-spacing: -0.02em; font-weight: 700; }
+  .cover .sub { font-size: 1.25rem; color: var(--dim); font-style: italic; margin-top: 1.4rem; max-width: 30ch; margin-left: auto; margin-right: auto; }
+  .cover .by { margin-top: 3rem; font-family: -apple-system, sans-serif; font-size: 14px; color: var(--faint); letter-spacing: 0.03em; }
+  .cover .by b { color: var(--ink); font-weight: 600; }
+
+  /* act divider */
+  .act { min-height: 62vh; display: flex; flex-direction: column; justify-content: center;
+    text-align: center; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 4rem 0 0; }
+  .act .n { font-family: -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.24em;
+    font-size: 12px; color: var(--edge); }
+  .act h2 { font-size: clamp(2rem, 6vw, 3rem); margin: 0.8rem 0 0; letter-spacing: -0.02em; }
+  .act p { color: var(--dim); font-style: italic; max-width: 38ch; margin: 1.2rem auto 0; }
+
+  /* chapter */
+  .chapter { padding-top: 3.4rem; }
+  .chapter .num { font-family: -apple-system, sans-serif; text-transform: uppercase; letter-spacing: 0.18em;
+    font-size: 12px; color: var(--teal); }
+  .chapter h3 { font-size: clamp(1.9rem, 5vw, 2.5rem); line-height: 1.08; margin: 0.5rem 0 0; letter-spacing: -0.015em; }
+  .epi { margin: 1.8rem 0 2.2rem; padding-left: 1.3rem; border-left: 3px solid var(--rule); color: var(--dim); font-style: italic; }
+  .epi .who { display: block; font-style: normal; font-family: -apple-system, sans-serif; font-size: 13px;
+    color: var(--faint); margin-top: 0.5rem; letter-spacing: 0.02em; }
+  .chapter p { margin: 0 0 1.15rem; }
+  .chapter p.drop::first-letter { initial-letter: 2.6; -webkit-initial-letter: 2.6; color: var(--teal);
+    font-weight: 700; margin-right: 0.7rem; }
+  .chapter h4 { font-family: -apple-system, sans-serif; font-size: 0.86rem; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--faint); margin: 2.2rem 0 0.6rem; }
+
+  .pull { font-size: 1.5rem; line-height: 1.35; color: var(--ink); font-style: italic;
+    margin: 2rem 0; padding: 0.4rem 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  .pull.edge { color: var(--edge); }
+
+  figure { margin: 2.2rem 0; }
+  figure img { width: 100%; border: 1px solid var(--line); border-radius: 10px; display: block; }
+  figure svg { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); }
+  figcaption { font-family: -apple-system, sans-serif; font-size: 13.5px; color: var(--faint); margin-top: 0.7rem; text-align: center; }
+  .wide { max-width: 900px; margin-left: auto; margin-right: auto; }
+
+  code { font-family: 'SF Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 0.86em;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 0.05em 0.35em; }
+  .lesson { background: var(--paper); border: 1px solid var(--line); border-left: 3px solid var(--teal);
+    border-radius: 8px; padding: 1rem 1.3rem; margin: 2rem 0; font-family: -apple-system, sans-serif; font-size: 0.98rem; }
+  .lesson b { color: var(--teal); }
+  a { color: var(--teal); }
+  hr.soft { border: none; border-top: 1px solid var(--rule); margin: 2.5rem 0; }
+
+  /* diagram helpers */
+  .node-t { fill: var(--ink); font-family: -apple-system, system-ui, sans-serif; }
+  .node-s { fill: var(--faint); font-family: -apple-system, system-ui, sans-serif; }
+
+  /* ---- print / PDF ---- */
+  @media print {
+    :root { --ink:#1c2326; --dim:#4a565b; --faint:#6b777c; --line:#d3dada; --bg:#fff;
+      --paper:#fff; --rule:#d8d2c6; }
+    body { font-size: 11.2pt; line-height: 1.6; background:#fff; }
+    .page { max-width: none; padding: 0 8mm; }
+    .cover { min-height: 88vh; page-break-after: always; }
+    .act { min-height: 0; padding: 32vh 0 8vh; page-break-before: always;
+      border: none; margin: 0; }
+    .chapter { page-break-before: always; padding-top: 0.4in; }
+    #preface, #appendix { page-break-before: always; }
+    .chapter h3 { page-break-after: avoid; }
+    .epi, figure, .pull, .lesson, svg, figcaption { page-break-inside: avoid; }
+    figure img { max-height: 8.4in; width: auto; max-width: 100%; margin: 0 auto; }
+    hr.soft { display: none; }
+    .wide { max-width: none; }
+    a { color: var(--ink); text-decoration: none; }
+  }
+  @page { margin: 16mm 0; }
+</style>
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div class="page">
+    <div class="kicker">A Build Memoir</div>
+    <h1>Verify<br>Everything</h1>
+    <div class="sub">How one person and an AI built a complete telecom BSS — one proof at a time</div>
+    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty components, four channels, and a discipline</div>
+  </div>
+</section>
+
+<!-- ============ FRONT MATTER ============ -->
+<div class="page">
+  <section class="chapter" id="preface">
+    <div class="num">Preface</div>
+    <h3>What this book is</h3>
+    <p class="drop">This is the story of building a telecom Business Support System — the software an
+    operator sells, bills, and serves customers through — from an empty repository to thirty
+    composable components, four customer channels, and eleven end-to-end test suites that all pass in
+    a real browser. It was built by one person working with an AI pair, over a compressed and
+    relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
+    to end, against the real thing.</em></p>
+
+    <p>It is a <em>memoir</em>, not a manual. There is a reference book to be written about how the
+    pieces fit; this is not it. This is about the decisions, the dead ends, the two-in-the-morning
+    debugging, and the method — and about what it means that a system this size was built the way it
+    was.</p>
+
+    <p>Three convictions run through every chapter. The first is <b>vendor-neutrality</b>: any
+    identity provider, any database, any message broker, any AI model, any payment processor, any
+    number-porting authority. Nothing operator-specific is hardcoded, ever. The second is
+    <b>verification</b>: official conformance kits, real-database migration tests, isolation proofs,
+    and every feature driven through a real browser. The third is <b>honesty about what's a
+    stand-in</b>: a thin network layer, a mock payment processor, a shaped-but-unconnected clearing
+    house — each named plainly, so a demo stays credible instead of turning naive.</p>
+
+    <p>And beneath all three, the thread that makes this book unusual: it was built with an AI as the
+    executing partner — Anthropic's <b>Claude Fable 5</b>, the most capable generally-available model
+    of its moment. Not autocomplete. A collaborator that wrote the services, argued the architecture,
+    made real mistakes, and got caught by the tests. The book is, quietly, a field report on what
+    building at this scale with a model this capable actually feels like.</p>
+
+    <div class="lesson"><b>On the jargon.</b> This is a book about a TM Forum ODA BSS, so it can't
+    avoid the vocabulary. The rule is that it never assumes you already know a term: each chapter
+    explains the one or two standards it needs as the story reaches them, and the appendix collects
+    the full "what every TMF component means" reference. You should be able to read this having never
+    heard of TM Forum and come out fluent.</div>
+
+    <p class="sans" style="color:var(--faint);font-size:0.95rem">Every claim in these pages has a
+    commit, a test, or a screenshot behind it. That is not a stylistic choice. It is the whole
+    argument.</p>
+  </section>
+</div>
+
+<!-- ============ ACT I ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act One</div>
+    <h2>The First Cut</h2>
+    <p>Why build a Business Support System at all — and the discipline that would define everything
+    that came after.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 1 -->
+  <section class="chapter" id="ch1">
+    <div class="num">Chapter One</div>
+    <h3>The lock-in that started it</h3>
+    <div class="epi">"The most dangerous phrase in the language is: we've always done it this way."
+      <span class="who">— Grace Hopper</span></div>
+
+    <p class="drop">Every telecom operator on earth runs software to answer three questions: what can
+    a customer buy, what do they owe, and how do we serve them when something breaks. That software is
+    called the BSS — the Business Support System — and it is, almost universally, the place operators
+    are most trapped. The catalog, the ordering, the billing, the care: bought as one enormous suite
+    from one enormous vendor, welded together over a decade, impossible to leave. The industry has a
+    word for the escape hatch it wishes it had — <em>composable</em> — and a standards body, TM Forum,
+    that publishes the blueprint for it. What almost nobody has is the thing built end to end, out in
+    the open, where you can watch it work.</p>
+
+    <p>So that was the bet. Build the composable BSS the industry keeps promising, as a real product,
+    and make it <em>vendor-neutral</em> from the first line of code. The operator I know best runs one
+    particular identity stack; the product must never depend on it. It must run against any OpenID
+    Connect provider, any PostgreSQL, any Kafka-protocol broker. Neutrality wasn't a feature to add
+    later. It was the shape of the thing.</p>
+
+    <p>The first five components were the spine of any BSS. A <b>product catalog</b> (the shelf: what
+    exists to sell, at what price, in what bundles). <b>Product ordering</b> (the checkout and its
+    aftermath). <b>Product inventory</b> (what each customer actually has). A <b>party</b> component
+    (the people and companies you do business with, kept deliberately separate from their login). And
+    a <b>gateway</b> — one front door, so the outside world touches exactly one thing. Each spoke a
+    published TM Forum Open API, which meant that from day one the system talked in a language other
+    vendors' software already understood.</p>
+
+    <p class="pull">Constraints chosen early are cheap on day one and priceless on day one hundred.</p>
+
+    <p>That is the whole thesis of the first act, and it would be tested again and again. Every time
+    the temptation appeared to hardcode something — the IdP, the number format, the country — the
+    neutrality constraint said no, build a seam. Seams cost a little now. But a system made of seams is
+    a system you can take apart, swap pieces of, and sell to an operator who already owns half of it.
+    A monolith is a system you can only sell whole, to someone who owns none of it. There are not many
+    of those customers left.</p>
+
+    <div class="lesson"><b>The lesson.</b> The expensive decisions in software are the early,
+    invisible ones. Choosing "any IdP, any database, any broker" on the first day looks like
+    over-engineering. It is the opposite: it is the only cheap moment to make that choice.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 2 -->
+  <section class="chapter" id="ch2">
+    <div class="num">Chapter Two</div>
+    <h3>Proof, or it didn't happen</h3>
+    <div class="epi">"Simplicity is prerequisite for reliability."
+      <span class="who">— Edsger W. Dijkstra</span></div>
+
+    <p class="drop">The second decision mattered more than the first, though it looked like a chore.
+    How do you <em>know</em> a thing works? The easy answer — write a unit test, watch it go green — is
+    a comfortable lie. A unit test proves that the code does what the code's author thought it should.
+    It says nothing about whether the author understood the problem, whether the pieces fit, or whether
+    a real customer clicking a real button gets a real result.</p>
+
+    <p>So the answer became doctrine, and the doctrine was severe. First: the original components would
+    pass TM Forum's official <b>Conformance Test Kits</b> — an independent, published suite that
+    proves a component really implements a standard rather than merely resembling it. Not "we think
+    it's TMF620." An outside authority agrees it's TMF620. Second: every feature, without exception,
+    would be driven through a <em>real browser</em> — register, configure, add to cart, pay, watch the
+    order complete, watch the notification arrive. If a human couldn't do it in a browser, it wasn't
+    done.</p>
+
+    <p>There was a subtler third rule, learned the hard way. The tests ran against an in-memory
+    database that imitated PostgreSQL. Close, but not identical — and "close but not identical" is
+    precisely where the migrations break. So the migrations grew their own test that spun up a
+    <em>real</em> PostgreSQL and ran every schema change against it. The in-memory database is for
+    speed. The real one is for truth.</p>
+
+    <p class="pull">Verification isn't overhead. It is the thing that lets you move fast and still
+    trust the result.</p>
+
+    <p>This is the discipline that would, later, make it rational to build alongside an AI at a speed
+    no solo human could sustain. When the model wrote a service, the tests didn't care that it was
+    confident. They cared whether an order actually placed, whether a row was actually isolated,
+    whether a real browser actually saw the result. The first "ALL CHECKS PASSED" scroll past the
+    terminal was not a milestone. It was the establishment of a court of law that would preside over
+    everything that followed.</p>
+
+    <div class="lesson"><b>The lesson.</b> Choose your arbiter before you need it. A test that drives
+    the real system through the real interface is a fact. Everything else — the author's confidence,
+    the model's fluency, the green unit test — is an opinion.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 3 -->
+  <section class="chapter" id="ch3">
+    <div class="num">Chapter Three</div>
+    <h3>The pair</h3>
+    <div class="epi">"Programs must be written for people to read, and only incidentally for machines
+    to execute." <span class="who">— Harold Abelson &amp; Gerald Jay Sussman</span></div>
+
+    <p class="drop">The collaborator has a name: <b>Claude Fable 5</b>. It wrote most of the lines in
+    this system. Describing the working method is the honest heart of the book, because the method is
+    the thing that's actually new. A human held intent and judgment — what to build, whether it was
+    enough, which architectural fork to take. Fable 5 held execution and breadth — the services, the
+    boilerplate, the cross-component wiring, and the ability to keep an entire thirty-component system
+    in view at once, which no human can.</p>
+
+    <p>What it felt like, most of the time, was uncanny. You describe a component — "a promotion
+    service, anonymous code validation, redemption tied to an order, a discount line on the bill" — and
+    a few minutes later it exists, wired into the gateway, event-publishing, tenant-isolated, with a
+    test that drives it through the browser. The model doesn't just write the service; it remembers the
+    seventeen other services it has to speak to, and the tenant rules, and the event envelope, and it
+    wires them without being told.</p>
+
+    <p>But a memoir that only showed the magic would be the same lie as a passing unit test. Fable 5
+    was wrong, sometimes, and wrong in the specific way capable models are wrong: fluently. It
+    misdiagnosed a gnarly network bug twice before the evidence forced the truth. It once added a
+    configuration value to the wrong service because a text-replacement matched the first occurrence
+    instead of the intended one — a mistake no human would make and no human would catch by reading,
+    but the test caught it in seconds, because the number never activated on the ported line.</p>
+
+    <p class="pull edge">The verification discipline isn't a brake on a capable model. It is the thing
+    that lets you use the capability at full speed without fooling yourself.</p>
+
+    <p>That is the shape of the partnership, and it will recur in every chapter that follows: the model
+    proposes at a breadth and speed that is genuinely startling; the human decides and, crucially, the
+    <em>tests decide too</em> — not the model's confidence, and not the human's. Every commit in the
+    repository is co-authored by Claude Fable 5. The credit is on the record, not just in the prose.</p>
+
+    <div class="lesson"><b>The lesson.</b> AI-assisted building is only as trustworthy as the
+    verification around it. Give the best model the whole system to hold, and a discipline that catches
+    it when it's wrong, and the pair can build what used to take a team — provided nobody ever mistakes
+    fluency for correctness.</div>
+  </section>
+
+</div>
+
+<!-- ============ ACT II ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act Two</div>
+    <h2>Scale &amp; the Multitenant Reckoning</h2>
+    <p>Five components became thirty. One deployment learned to hold two operators who must never see
+    each other. And the whole invisible machine learned to show its face.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 4 -->
+  <section class="chapter" id="ch4">
+    <div class="num">Chapter Four</div>
+    <h3>One by one</h3>
+    <div class="epi">"A distributed system is one in which the failure of a computer you didn't know
+    existed can render your own computer unusable." <span class="who">— Leslie Lamport</span></div>
+
+    <p class="drop">After the first five, the components came like tide. Stock, so the shop could tell
+    the truth about the last handset. Payment, so money could move. Billing, so a customer could be
+    charged for what they used. Qualification, so an address could be asked whether fibre even reached
+    it. Appointments, tickets, interactions, communications, carts, usage, agreements, promotions,
+    roles, addresses, recommendations, the card vault, documents. Each one a small, self-contained
+    business, each one speaking a published standard, each one wired into the same nervous system.</p>
+
+    <p>That nervous system was the thing that made thirty components a system instead of thirty
+    programs. The rule was simple and never broken: a component never reaches into another's database,
+    and never calls another and waits. It writes what happened to its own tables, in the same
+    transaction as its own work, and a background process ships that record onto a shared log. Other
+    components listen. When an order completes, the ordering component doesn't <em>tell</em> billing,
+    inventory, and communications to act. It simply records, in its own words, that an order completed
+    — and the others, listening, do their part.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 300" role="img" aria-label="Event backbone diagram">
+        <rect x="24" y="120" width="150" height="60" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="99" y="146" text-anchor="middle" font-size="14" class="node-t" font-weight="600">Ordering</text>
+        <text x="99" y="166" text-anchor="middle" font-size="11" class="node-s">writes to its own</text>
+        <text x="99" y="180" text-anchor="middle" font-size="11" class="node-s">outbox, in-txn</text>
+        <line x1="174" y1="150" x2="244" y2="150" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <rect x="246" y="120" width="150" height="60" rx="8" fill="none" stroke="var(--edge)" stroke-width="1.5"/>
+        <text x="321" y="146" text-anchor="middle" font-size="14" class="node-t" font-weight="600">Event log</text>
+        <text x="321" y="166" text-anchor="middle" font-size="11" class="node-s">bss.ordering.events</text>
+        <text x="321" y="180" text-anchor="middle" font-size="11" class="node-s">{ eventType, tenantId }</text>
+        <line x1="396" y1="150" x2="466" y2="90" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <line x1="396" y1="150" x2="466" y2="150" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <line x1="396" y1="150" x2="466" y2="210" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar)"/>
+        <rect x="468" y="62" width="150" height="52" rx="8" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="543" y="92" text-anchor="middle" font-size="13" class="node-t">Billing</text>
+        <rect x="468" y="124" width="150" height="52" rx="8" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="543" y="154" text-anchor="middle" font-size="13" class="node-t">Inventory</text>
+        <rect x="468" y="186" width="150" height="52" rx="8" fill="none" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="543" y="216" text-anchor="middle" font-size="13" class="node-t">Communications</text>
+        <text x="360" y="34" text-anchor="middle" font-size="13" class="node-s" font-style="italic">No component tells another what to do. It records what happened; the others listen.</text>
+        <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)"/></marker></defs>
+      </svg>
+      <figcaption>The transactional outbox: write-what-happened, ship-it-to-the-log, let listeners react. Loose coupling as a physical property of the code, not a diagram.</figcaption>
+    </figure>
+
+    <p>Why go to this much trouble? Because the alternative — component A calls component B and waits —
+    is the thing Lamport warns about. Chain enough synchronous calls together and a hiccup in a
+    component you'd forgotten existed freezes a checkout. Record-and-react has the opposite failure
+    mode: if billing is briefly down, the events wait patiently on the log, and billing catches up when
+    it wakes. The customer's order completed the moment the order completed. Everything else is
+    downstream, and downstream can be a little late without anyone noticing.</p>
+
+    <p class="pull">Thirty programs become a system when they stop calling each other and start telling
+    the truth about what just happened.</p>
+
+    <div class="lesson"><b>The lesson.</b> The coupling in a system is not in its diagram; it's in its
+    call graph. Components that record facts and react to facts are loosely coupled in the only way
+    that matters — the way that survives one of them falling over at 3 a.m.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 5 -->
+  <section class="chapter" id="ch5">
+    <div class="num">Chapter Five</div>
+    <h3>Two operators, one deployment</h3>
+    <div class="epi">Data isolation is not a feature you add. It is a property you can lose — silently,
+    on any query, forever. <span class="who">— from the build log</span></div>
+
+    <p class="drop">Here is the reckoning the second act is named for. A product you can sell to many
+    operators is a product that runs many operators <em>at once</em>, on one deployment, sharing the
+    same tables — and it must be impossible, not merely unlikely, for one operator to see another's
+    customers. Get this wrong and there is no apology that suffices. This is the chapter where the
+    whole architecture had to earn its trust.</p>
+
+    <p>The first question was: what <em>is</em> a tenant? The tempting answer is "a row in a tenants
+    table," but that just moves the problem. The answer chosen was harder and truer: a tenant is a
+    <em>verified identity provider</em>. If you can prove you were authenticated by the issuer that
+    operator A registered, you are operator A's user — no separate account system, no shadow directory,
+    no operator-specific code. Bring your own OpenID Connect issuer and you bring your own tenancy.
+    That's neutrality and multitenancy solved by the same stroke.</p>
+
+    <p>But identity at the door is not isolation at the database. The load-bearing wall is
+    <em>Postgres row-level security</em>. Every tenant-owned table carries a <code>tenant_id</code>,
+    and the database itself — not the application, which can have bugs — refuses to return a row whose
+    tenant doesn't match the one stamped on the current connection. The application runs as a
+    restricted role that <em>cannot</em> see across tenants even if a query forgets its
+    <code>WHERE</code> clause. There is a narrow, audited escape hatch for genuine system work, and
+    migrations run as the owner. Everything else lives inside the wall.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 260" role="img" aria-label="Multitenancy isolation layers">
+        <rect x="20" y="30" width="210" height="200" rx="10" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="125" y="20" text-anchor="middle" font-size="12" class="node-s">1 · At the door</text>
+        <text x="125" y="70" text-anchor="middle" font-size="14" class="node-t" font-weight="600">Verified issuer</text>
+        <text x="125" y="95" text-anchor="middle" font-size="12" class="node-s">"which OIDC issuer</text>
+        <text x="125" y="111" text-anchor="middle" font-size="12" class="node-s">signed this token?"</text>
+        <text x="125" y="150" text-anchor="middle" font-size="12" class="node-s">→ resolves to</text>
+        <text x="125" y="180" text-anchor="middle" font-size="20" class="node-t" font-weight="700" fill="var(--teal)">tenant_id</text>
+        <line x1="230" y1="130" x2="270" y2="130" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar2)"/>
+        <rect x="272" y="30" width="210" height="200" rx="10" fill="none" stroke="var(--edge)" stroke-width="1.5"/>
+        <text x="377" y="20" text-anchor="middle" font-size="12" class="node-s">2 · On the connection</text>
+        <text x="377" y="70" text-anchor="middle" font-size="14" class="node-t" font-weight="600">Restricted role</text>
+        <text x="377" y="95" text-anchor="middle" font-size="12" class="node-s">SET tenant on session;</text>
+        <text x="377" y="120" text-anchor="middle" font-size="12" class="node-s">role cannot bypass</text>
+        <text x="377" y="136" text-anchor="middle" font-size="12" class="node-s">row-level security</text>
+        <text x="377" y="180" text-anchor="middle" font-size="12" class="node-s" font-style="italic">app bugs can't cross it</text>
+        <line x1="482" y1="130" x2="522" y2="130" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar2)"/>
+        <rect x="524" y="30" width="176" height="200" rx="10" fill="none" stroke="var(--rose)" stroke-width="1.5"/>
+        <text x="612" y="20" text-anchor="middle" font-size="12" class="node-s">3 · In the database</text>
+        <text x="612" y="80" text-anchor="middle" font-size="14" class="node-t" font-weight="600">RLS policy</text>
+        <text x="612" y="108" text-anchor="middle" font-size="12" class="node-s">Postgres itself drops</text>
+        <text x="612" y="124" text-anchor="middle" font-size="12" class="node-s">every row whose</text>
+        <text x="612" y="140" text-anchor="middle" font-size="12" class="node-s">tenant ≠ session</text>
+        <text x="612" y="182" text-anchor="middle" font-size="13" class="node-t" font-weight="600" fill="var(--rose)">the wall</text>
+        <defs><marker id="ar2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)"/></marker></defs>
+      </svg>
+      <figcaption>Three layers, and only the last one is trusted. Identity resolves the tenant; the connection carries it; the database enforces it. A forgotten WHERE clause is caught by the wall, not by hope.</figcaption>
+    </figure>
+
+    <p>And then — because this is a book about proof — the isolation got its own test. Not a comment
+    swearing it was safe. A test that logs in as operator A, creates a customer, logs in as operator B,
+    and demands that B cannot see it — against a real PostgreSQL with the real policies. The gateway
+    got its own trick too: an anonymous visitor typing a shop's hostname is routed to the right tenant
+    by the hostname alone, so a customer who hasn't logged in yet still lands in the right operator's
+    world.</p>
+
+    <p class="pull edge">A promise of isolation is worth exactly the test that tries to break it and
+    fails.</p>
+
+    <div class="lesson"><b>The lesson.</b> Put the guarantee at the lowest layer that can enforce it.
+    Application code that "always filters by tenant" is one forgotten clause from a breach. A database
+    that physically cannot return the wrong row is a different kind of promise — the kind you can
+    sell.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 6 -->
+  <section class="chapter" id="ch6">
+    <div class="num">Chapter Six</div>
+    <h3>War stories of scale</h3>
+    <div class="epi">"Plan to throw one away; you will, anyhow." <span class="who">— Frederick P.
+    Brooks Jr.</span></div>
+
+    <p class="drop">Thirty services do not fit on a laptop by wishing. This is the chapter of the
+    unglamorous fights — the ones that never appear in an architecture diagram and consume whole
+    evenings. The container base image that had no build for the laptop's chip, so every image had to
+    be pinned to one that did. The memory: thirty Java processes, each wanting a comfortable heap,
+    summing to more RAM than the machine had, until every service was told firmly how little it was
+    allowed. The builds parallelised until the fan roared, then throttled to four at a time so the
+    machine stayed usable.</p>
+
+    <p>The test harness had its own private hell. It spun up real databases in throwaway containers —
+    the right instinct, the one that catches migration bugs — but it talked to the container engine
+    over a socket that, on this particular setup, lived somewhere non-standard, and it guessed an API
+    version the engine didn't speak. Two environment variables, discovered over an hour that felt like
+    three, and it worked. The kind of fix that is one line in the end and a small saga in the
+    getting-there.</p>
+
+    <p>None of this is architecture. All of it is the tax you pay to run the architecture, and a memoir
+    that skipped it would be selling the same fantasy as a demo that only ever runs on the presenter's
+    machine. The reason to write these down is not nostalgia. It's that the next person — or the next
+    model — hits the same walls, and a paragraph here saves them the evening.</p>
+
+    <p class="pull">The distance between "it works" and "it works on a machine that isn't yours" is
+    where most software quietly dies.</p>
+
+    <div class="lesson"><b>The lesson.</b> The environment is part of the system. A build that only
+    succeeds on one laptop, with one chip, one socket path, one memory profile, is not done — it's
+    performing. Write the walls down; they are load-bearing knowledge.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 7 -->
+  <section class="chapter" id="ch7">
+    <div class="num">Chapter Seven</div>
+    <h3>Making it visible</h3>
+    <div class="epi">"Perfection is achieved, not when there is nothing more to add, but when there is
+    nothing left to take away." <span class="who">— Antoine de Saint-Exupéry</span></div>
+
+    <p class="drop">A customer never sees a component. They see a shop. For twenty-odd components, the
+    system had been real but faceless — provably correct, and invisible. This is the chapter where it
+    grew four faces: a <b>storefront</b> where a customer browses and buys; a <b>CSR console</b> where
+    an agent serves them; an <b>admin console</b> — the back office — where an operator runs their
+    catalog, campaigns, and staff; and a <b>mobile app</b> in the customer's pocket.</p>
+
+    <p>The subtle demand was that the faces be the operator's, not mine. A tenant is a brand, and a
+    brand has a colour. So the channels learned to wear the tenant: the same storefront, rendered in
+    one operator's identity and then another's, from nothing but their configured brand and logo. The
+    two shops below are the <em>same code</em>, the same components, the same database — wearing two
+    different operators.</p>
+
+    <figure class="wide">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><img src="../img/storefront-genalpha.png" alt="genalpha storefront"></div>
+        <div><img src="../img/storefront-nova.png" alt="nova storefront"></div>
+      </div>
+      <figcaption>One storefront, two operators. Same components, same deployment, different brand — white-labeling as a runtime property of the tenant, not a fork of the code.</figcaption>
+    </figure>
+
+    <p>The mobile app closed the loop: the same BSS, the same tenant rules, in the customer's hand.</p>
+
+    <figure>
+      <img src="../img/mobile-app.png" alt="mobile app" style="max-width:320px;margin:0 auto">
+      <figcaption>The fourth channel — the account in your pocket, served by the same thirty components.</figcaption>
+    </figure>
+
+    <p>Making the system visible changed what it <em>was</em>. A correct-but-invisible platform is a
+    thing you have to be an engineer to believe in. A shop you can click through, in an operator's own
+    colours, is a thing you can show a buyer. The act closes with the machine no longer merely proven,
+    but legible.</p>
+
+    <div class="lesson"><b>The lesson.</b> The channel is where correctness meets belief. All the
+    conformance in the world persuades no one who can't see it; a shop that wears the customer's brand
+    and just works is the argument the tests were always making, finally visible.</div>
+  </section>
+
+</div>
+
+<!-- ============ ACT III ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act Three</div>
+    <h2>The Intelligence Turn</h2>
+    <p>Adding AI to a BSS without surrendering to a single vendor, without leaking a customer's
+    secrets, and without pretending a rule is a brain.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 8 -->
+  <section class="chapter" id="ch8">
+    <div class="num">Chapter Eight</div>
+    <h3>AI on our terms</h3>
+    <div class="epi">"All models are wrong, but some are useful." <span class="who">— George E. P.
+    Box</span></div>
+
+    <p class="drop">The moment you add AI to a product, a gravity well opens: one vendor's model, one
+    vendor's API, one vendor's prices, one vendor's outage becoming yours. For a platform whose entire
+    conviction is neutrality, capitulating there would have been a betrayal of the first chapter. So the
+    AI arrived the same way everything else had — behind a seam. An <em>intelligence</em> component
+    with one job: to be the only place in the system that talks to a language model, and to talk to
+    <em>any</em> of them.</p>
+
+    <p>A stub model for tests that need no cloud. An OpenAI-compatible adapter for the dozens of
+    providers that speak that dialect. An Anthropic adapter for Claude. Each selected by a flag, per
+    tenant, so operator A can run one model and operator B another, on the same deployment. The model
+    is a setting, not an architecture.</p>
+
+    <p>Two rules were welded on before the first feature shipped, because they are the two ways AI
+    quietly poisons a BSS. The first: <b>always-on redaction</b>. Before any customer text reaches any
+    model, emails and phone numbers are stripped to <code>[email]</code> and <code>[phone]</code>. Not
+    optionally. Not configurably. Always. The second: <b>an audit ledger</b>. Every prompt and every
+    completion is written to a per-tenant, isolated table, so an operator can answer the question every
+    regulator will eventually ask — <em>what did the AI see, and what did it say?</em></p>
+
+    <p class="pull edge">A model you can swap is a model that can't own you. A prompt you can audit is
+    a model you can defend.</p>
+
+    <p>This chapter is where the first act's conviction met the decade's most seductive lock-in and did
+    not blink. Everything intelligent that follows — the copy assistant, the copilot, the churn engine
+    — lives behind this seam, redacted and logged, portable across models by a single flag.</p>
+
+    <div class="lesson"><b>The lesson.</b> Adopt the capability, refuse the capture. An AI seam with
+    redaction and audit welded in is how you get the upside of a language model without betting your
+    product, your customers' privacy, or your compliance story on one vendor's roadmap.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 9 -->
+  <section class="chapter" id="ch9">
+    <div class="num">Chapter Nine</div>
+    <h3>Where AI belongs</h3>
+    <div class="epi">The right question is never "can AI do this?" It is "should a human be reading a
+    draft, or reading a decision?" <span class="who">— from the build log</span></div>
+
+    <p class="drop">A seam is a capability, not a use. The harder question was where in a BSS an AI
+    actually earns its place — and the answer that held up was consistent: <em>AI drafts; humans
+    decide.</em> It writes the first version; a person ships it. Every feature was chosen to sit on the
+    draft side of that line.</p>
+
+    <p>The first was a campaign copy assistant. A marketer building a customer journey types a rough
+    intent and gets back a subject line and a body, on-brand, with the promo code guaranteed to appear
+    — but never inventing the discount amount, a bug caught early when a model cheerfully promised "20%
+    off" for a code worth ten. The marketer edits and sends. The AI saved the blank page, not the
+    judgment.</p>
+
+    <figure class="wide">
+      <img src="../img/console-campaigns.png" alt="campaigns console with AI copy">
+      <figcaption>The admin console's campaign builder. The AI drafts the subject and body; the marketer owns what actually goes out.</figcaption>
+    </figure>
+
+    <p>The second went to the support desk: a CSR copilot. When an agent opens a customer, the copilot
+    reads the 360 — the products, the tickets, the timeline — and offers a two-line summary and a
+    suggested reply. Crucially, it holds no credentials of its own; it sees exactly what the agent is
+    allowed to see, through the same tenant wall, and not one row more. The agent reads a draft, not a
+    verdict.</p>
+
+    <figure class="wide">
+      <img src="../img/csr-copilot.png" alt="CSR copilot drafting a summary and reply">
+      <figcaption>The CSR copilot: a customer summary and a suggested reply, drawn only from what this agent may already see. It drafts; the agent decides.</figcaption>
+    </figure>
+
+    <p>The discipline is quiet but total. Nowhere does the AI place an order, issue a refund, or close a
+    ticket on its own. It compresses, it suggests, it drafts. The moment of consequence stays human —
+    which is exactly why an operator can turn it on without fear.</p>
+
+    <div class="lesson"><b>The lesson.</b> The safe and valuable place for AI in a system of record is
+    the draft, not the decision. Put it where a human reads its output before anything irreversible
+    happens, and you get the speed without the liability.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 10 -->
+  <section class="chapter" id="ch10">
+    <div class="num">Chapter Ten</div>
+    <h3>The engine that learns</h3>
+    <div class="epi">A rule you can read is honest about being a guess. A model that learns is honest
+    about being wrong until it isn't. <span class="who">— from the build log</span></div>
+
+    <p class="drop">Churn — a customer about to leave — is the prediction every operator wants and few
+    trust, because most churn scores are black boxes that can't say <em>why</em>. So the churn engine
+    was built to be honest twice over. It began as rules a human can read and argue with: a commitment
+    ending within the month, an allowance running consistently against its ceiling, a cluster of support
+    tickets, a service degraded during an outage. Four plain signals, each defensible, each
+    explainable to the customer it flags.</p>
+
+    <p>But rules are a floor, not a ceiling, and the operator's real ask was pointed: <em>"I want it to
+    learn once it's live, and become production-quality in a few months — or be trained on old
+    data."</em> So underneath the rules sits a real, if modest, learner. Every day it snapshots each
+    customer's features; when customers actually leave — or actually port their number out, the
+    strongest signal of all — it labels the outcome. From those snapshots and outcomes it fits a
+    per-tenant model that sharpens over time. Cold-start on rules; warm up on reality; import history if
+    you have it.</p>
+
+    <p class="pull">Start with a rule you can defend. Earn the right to a model you can trust.</p>
+
+    <p>And because it lives behind the same event backbone as everything else, a churn signal isn't a
+    number on a dashboard nobody reads. When the engine flags a customer, it emits an event — and the
+    campaign component, listening, can reach out before the customer reaches for the exit. The
+    prediction becomes an action without a human relaying it. That closed loop — detect, decide, act —
+    is the whole point, and it is built from the same record-and-react nervous system as an order
+    completing.</p>
+
+    <div class="lesson"><b>The lesson.</b> Don't ship a black box into a domain that demands
+    explanations. Ship the readable rules first, let them earn trust, and grow the learned model
+    underneath where the stakes reward it — with the outcomes reality hands you as the labels.</div>
+  </section>
+
+</div>
+
+<!-- ============ ACT IV ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act Four</div>
+    <h2>Autonomy Accelerated</h2>
+    <p>A stadium, a 5G slice, edge GPUs sold by the token, and a network that heals itself while a
+    B2B deal closes itself. The Catalyst, rebuilt on our own BSS.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 11 -->
+  <section class="chapter" id="ch11">
+    <div class="num">Chapter Eleven</div>
+    <h3>The Catalyst</h3>
+    <div class="epi">"The best way to predict the future is to invent it." <span class="who">— Alan
+    Kay</span></div>
+
+    <p class="drop">There was a proof-of-concept I'd seen at an industry event and helped write up:
+    selling the network edge as an AI platform. A football stadium wants a private 5G slice with
+    ultra-low latency and on-site AI capacity for real-time video. A business salesperson uses an AI
+    assistant to shape the lead; the operator's systems autonomously judge whether the network can even
+    do it, propose an edge-AI upsell, price it, provision it — and then, when a fibre is cut mid-event,
+    heal around the damage and keep the promise. It was a vision demo, stitched from many vendors'
+    parts.</p>
+
+    <p>The dare I set myself was to rebuild it — not as a slideshow, but running, on the very BSS this
+    book has been building. Every glossy moment of that vision would have to become a real request
+    against a real component that really did the thing. If the BSS was what I claimed, it should be able
+    to <em>host</em> the future, not just narrate it.</p>
+
+    <p class="pull edge">A vision demo shows you the destination. The dare was to lay the track.</p>
+
+    <p>This act is that rebuild, moment by moment: intent, feasibility, the upsell, token pricing,
+    self-healing, and — the strangest and most modern part — one company's AI agent negotiating with
+    another's, machine to machine. Each one grounded in a component you've already met, extended just
+    far enough to carry the weight.</p>
+
+    <div class="lesson"><b>The lesson.</b> The test of a platform is whether someone else's flagship
+    demo can be rebuilt on top of it as working software. A BSS that can host the industry's most
+    ambitious vision, honestly, is a BSS that was built right.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 12 -->
+  <section class="chapter" id="ch12">
+    <div class="num">Chapter Twelve</div>
+    <h3>Intent, feasibility, and the honest "no"</h3>
+    <div class="epi">Tell the network what you want, not how to build it — and let it tell you the
+    truth about physics. <span class="who">— from the build log</span></div>
+
+    <p class="drop">The old way to sell a network service is a form with forty fields. The new way,
+    the one the standards call <em>intent</em>, is a sentence: "a sub-20-millisecond slice at the
+    stadium, with AI inference capacity." The customer states the <em>what</em>. The system works out
+    the <em>how</em> — or works out that there is no how.</p>
+
+    <p>That last part is where most autonomy demos cheat, and where this one refused to. The
+    orchestrator runs a feasibility check against a hard, physical rule: a sub-20ms guarantee requires
+    an edge-GPU pool actually covering the place in question. If one exists, the intent is feasible and
+    the system proposes the slice. If none does, the answer is <b>INFEASIBLE</b> — and the message says,
+    in as many words, that this is <em>physics, not policy</em>. It will not promise latency that light
+    itself can't deliver.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 250" role="img" aria-label="Intent to feasibility to proposal flow">
+        <rect x="20" y="95" width="150" height="60" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="95" y="120" text-anchor="middle" font-size="13" class="node-t" font-weight="600">Intent</text>
+        <text x="95" y="140" text-anchor="middle" font-size="11" class="node-s">"&lt;20ms + AI @ stadium"</text>
+        <line x1="170" y1="125" x2="215" y2="125" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar4)"/>
+        <path d="M290 90 L360 125 L290 160 L220 125 Z" fill="none" stroke="var(--edge)" stroke-width="1.5"/>
+        <text x="290" y="120" text-anchor="middle" font-size="12" class="node-t" font-weight="600">edge-GPU</text>
+        <text x="290" y="136" text-anchor="middle" font-size="12" class="node-t" font-weight="600">covers place?</text>
+        <line x1="360" y1="125" x2="420" y2="90" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar4)"/>
+        <text x="392" y="80" font-size="11" fill="var(--teal)">yes</text>
+        <line x1="360" y1="125" x2="420" y2="175" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar4)"/>
+        <text x="392" y="185" font-size="11" fill="var(--rose)">no</text>
+        <rect x="422" y="58" width="278" height="62" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="561" y="82" text-anchor="middle" font-size="13" class="node-t" font-weight="600">FEASIBLE → propose slice</text>
+        <text x="561" y="102" text-anchor="middle" font-size="11" class="node-s">+ upsell edge-AI inferencing</text>
+        <rect x="422" y="150" width="278" height="62" rx="8" fill="none" stroke="var(--rose)" stroke-width="1.5"/>
+        <text x="561" y="174" text-anchor="middle" font-size="13" class="node-t" font-weight="600" fill="var(--rose)">INFEASIBLE</text>
+        <text x="561" y="194" text-anchor="middle" font-size="11" class="node-s">"physics, not policy"</text>
+        <defs><marker id="ar4" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)"/></marker></defs>
+      </svg>
+      <figcaption>Autonomous feasibility with a spine. When the physics allows it, the system proposes — and upsells edge-AI. When it doesn't, it says so plainly, and doesn't sell a lie.</figcaption>
+    </figure>
+
+    <p>When it <em>is</em> feasible, the same autonomy that could have said no instead says "yes, and":
+    a stadium buying low latency for video is a stadium that wants AI inference at the edge, so the
+    system proposes it unprompted. The upsell isn't a hardcoded banner; it's a consequence the
+    orchestrator reasons its way to. Autonomy that can refuse is autonomy you can believe when it
+    recommends.</p>
+
+    <div class="lesson"><b>The lesson.</b> An autonomous system that can only say yes is a liar with a
+    schedule. The credibility of every "yes, and here's the upsell" rests entirely on its willingness to
+    say "no, and here's why" when the physics demands it.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 13 -->
+  <section class="chapter" id="ch13">
+    <div class="num">Chapter Thirteen</div>
+    <h3>Priced by the token</h3>
+    <div class="epi">The unit of billing tells you what business you're really in. <span class="who">—
+    from the build log</span></div>
+
+    <p class="drop">Here the BSS earned its keep in a way no slideshow can. An edge-AI service isn't
+    sold by the month; it's sold by the inference — by the <em>token</em>, the same unit the AI
+    industry itself runs on. So the catalog gained an Edge AI Inferencing offering with real token
+    metering: fifty million inferences included, then a per-million overage price, defined the standard
+    way and rated the standard way.</p>
+
+    <p>This is where the earlier, unglamorous components suddenly paid off. Usage metering — built
+    chapters ago for gigabytes and minutes — didn't care that the unit was now AI tokens. Billing
+    didn't care. The commitment, the overage, the line on the invoice: all of it already existed,
+    because it had been built as a general capability rather than a special case. Selling AI by the
+    token required almost no new billing code, because the billing had been built right the first
+    time.</p>
+
+    <p class="pull">The best feature is the one you already built for another reason and discover you
+    can charge for.</p>
+
+    <p>And the commercial motion around it was the intent loop made concrete: the intent produced a
+    priced <b>quote</b> — born from the conversation, itemising the slice and the token bundle, wrapped
+    in an AI-written narrative explaining what the customer was buying and why. Accept the quote and it
+    became an order. Lead to intent to quote to order, most of it autonomous, all of it against real
+    components.</p>
+
+    <div class="lesson"><b>The lesson.</b> Build capabilities, not features. A usage-and-billing engine
+    built generically will one day meter a unit you hadn't imagined — AI tokens — and charge for it
+    without a rewrite. That optionality is the compounding return on doing it properly.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 14 -->
+  <section class="chapter" id="ch14">
+    <div class="num">Chapter Fourteen</div>
+    <h3>The network that heals itself</h3>
+    <div class="epi">Resilience is not the absence of failure. It is the presence of a plan that runs
+    without you. <span class="who">— from the build log</span></div>
+
+    <p class="drop">The dramatic beat of the original vision was a fibre cut, mid-event, and a network
+    that healed around it before anyone in the stadium noticed. It's the moment that separates a
+    brochure from a system, because healing is easy to <em>say</em> and unforgiving to <em>do</em>. So
+    it got built as an actual loop, wired to the assurance component that had been watching the network
+    all along.</p>
+
+    <p>A critical alarm arrives on the fibre route. Assurance, which turns alarms into tracked service
+    problems, raises one. The self-heal service sees it and acts: it re-homes the affected service off
+    the cut fibre and onto an edge GPU site that can still carry it, records the migration, opens a
+    ticket so a human has an audit trail, and — once the service is stable on its new path — resolves
+    the problem automatically. The SLA holds. The stadium keeps its slice. And every step left a record,
+    because a self-healing system that heals invisibly is indistinguishable from one that's lying.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 210" role="img" aria-label="Self-heal loop">
+        <rect x="16" y="80" width="128" height="54" rx="8" fill="none" stroke="var(--rose)" stroke-width="1.5"/>
+        <text x="80" y="103" text-anchor="middle" font-size="12" class="node-t" font-weight="600">Fibre cut</text>
+        <text x="80" y="121" text-anchor="middle" font-size="11" class="node-s">critical alarm</text>
+        <line x1="144" y1="107" x2="182" y2="107" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar5)"/>
+        <rect x="184" y="80" width="128" height="54" rx="8" fill="none" stroke="var(--edge)" stroke-width="1.5"/>
+        <text x="248" y="103" text-anchor="middle" font-size="12" class="node-t" font-weight="600">Service problem</text>
+        <text x="248" y="121" text-anchor="middle" font-size="11" class="node-s">assurance raises it</text>
+        <line x1="312" y1="107" x2="350" y2="107" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar5)"/>
+        <rect x="352" y="80" width="128" height="54" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="416" y="100" text-anchor="middle" font-size="12" class="node-t" font-weight="600">Re-home</text>
+        <text x="416" y="117" text-anchor="middle" font-size="11" class="node-s">fibre → edge GPU</text>
+        <text x="416" y="130" text-anchor="middle" font-size="11" class="node-s">site</text>
+        <line x1="480" y1="107" x2="518" y2="107" stroke="var(--faint)" stroke-width="1.5" marker-end="url(#ar5)"/>
+        <rect x="520" y="80" width="184" height="54" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.5"/>
+        <text x="612" y="100" text-anchor="middle" font-size="12" class="node-t" font-weight="600">SLA restored</text>
+        <text x="612" y="117" text-anchor="middle" font-size="11" class="node-s">auto-ticket, auto-resolve</text>
+        <text x="360" y="175" text-anchor="middle" font-size="12" class="node-s" font-style="italic">Every step recorded. A heal you can't audit is a claim, not a system.</text>
+        <defs><marker id="ar5" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)"/></marker></defs>
+      </svg>
+      <figcaption>The self-heal loop: alarm to problem to re-home to restored SLA, autonomous end to end, with a ticket left behind so a human can trace exactly what the machine did.</figcaption>
+    </figure>
+
+    <p class="pull edge">Autonomy you can trust is autonomy that shows its work.</p>
+
+    <div class="lesson"><b>The lesson.</b> A self-healing system must be an <em>auditable</em>
+    self-healing system. The re-home is the clever part; the ticket it opens on the way is the part that
+    makes an operator willing to let it run unattended.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 15 -->
+  <section class="chapter" id="ch15">
+    <div class="num">Chapter Fifteen</div>
+    <h3>Agents talking to agents</h3>
+    <div class="epi">The next integration boundary isn't an API. It's a conversation between two
+    machines that each brought a model. <span class="who">— from the build log</span></div>
+
+    <p class="drop">The strangest and most forward-looking beat came last. In the original vision, the
+    buyer's side and the seller's side each had their own AI, and the deal moved between them
+    machine-to-machine. That sounds like science fiction until you build it, and then it's just a
+    protocol.</p>
+
+    <p>So the BSS grew a small server speaking the emerging standard for exactly this — a way for an
+    <em>external</em> AI agent to drive the lead-to-order motion through a handful of well-defined
+    tools: draft an intent, submit it, create a quote, accept a quote, list quotes. A salesperson's
+    Claude, sitting entirely outside the BSS, could now shape a stadium deal by calling these tools —
+    and on the other side, the operator's autonomous orchestrator answered with feasibility, an upsell,
+    and a price. Two AIs, two companies, one deal, no human typing into a form.</p>
+
+    <p>What made this more than a party trick was that the tools weren't a special AI-only backdoor.
+    They were thin wrappers over the exact same components a human channel used — the same intent, the
+    same quote, the same order, the same tenant wall. The agent got no special powers and no special
+    access. It simply drove the front door with its hands instead of a mouse.</p>
+
+    <p class="pull">When the integration layer becomes a conversation, the thing you must get right
+    isn't the AI. It's that the AI touches nothing a human couldn't.</p>
+
+    <div class="lesson"><b>The lesson.</b> Machine-to-machine autonomy is coming through the tool
+    interface, and the discipline that makes it safe is the oldest one in this book: the agent acts
+    through the same guarded front door as everyone else, with the same tenancy, the same limits, the
+    same audit. No backdoors for robots.</div>
+  </section>
+
+</div>
+
+<!-- ============ ACT V ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act Five</div>
+    <h2>Making It Real, Making It Legible</h2>
+    <p>Hardening the money and the identity, keeping and leaving a phone number, running the whole
+    thing on a real cluster, and finally making the invisible machine tell its own story.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 16 -->
+  <section class="chapter" id="ch16">
+    <div class="num">Chapter Sixteen</div>
+    <h3>The money and the identity</h3>
+    <div class="epi">Two things a telecom must never get wrong: charging a customer twice, and
+    believing someone is who they aren't. <span class="who">— from the build log</span></div>
+
+    <p class="drop">"Let's harden the BSS first" was the instruction, and it was the right one. A demo
+    can be forgiven a hand-wave at payment. A product cannot. So the payment path was rebuilt to the
+    standard a real processor demands. <b>Idempotency</b> first: every payment carries a correlator, so
+    a customer who double-clicks, or a network that retries, gets the <em>same</em> payment — never a
+    second charge. Then the full life of money: authorize a hold, capture it, void or refund it, each a
+    real movement recorded with the processor's own reference.</p>
+
+    <p>And because real payments sometimes demand more — a bank insisting on a second factor — the path
+    learned to pause. When the processor requires strong customer authentication, the API doesn't fail;
+    it returns a "we need more" with the URL to complete it, and resumes when the customer has. The mock
+    processor even carries test cards that decline or demand that step-up, so the hard paths get
+    exercised on every run, not just the happy one. A real Stripe adapter sits behind the same seam, one
+    flag away — because of course it does.</p>
+
+    <p>Identity got the same seriousness. Some purchases — a high-value plan, a regulated product —
+    should require a <em>verified</em> identity, the kind a national eID like BankID provides. So the
+    catalog can mark an offering as requiring verified identity, and ordering enforces it: no verified
+    identity claim in your token, no order — a clear refusal with a header telling the channel to send
+    you to step up. The verification itself is the identity provider's job, which is exactly where a
+    neutral platform wants it.</p>
+
+    <p class="pull edge">Hardening is where a demo becomes a product: the same flow, now unable to
+    charge you twice or take your word for who you are.</p>
+
+    <div class="lesson"><b>The lesson.</b> The unglamorous guarantees — idempotent payments, real
+    authorize/capture/refund, verified identity where the stakes demand it — are the line between
+    something that demos and something you can put real customers and real money through. Harden before
+    you scale.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 17 -->
+  <section class="chapter" id="ch17">
+    <div class="num">Chapter Seventeen</div>
+    <h3>Keep your number, or leave with it</h3>
+    <div class="epi">The truest test of an open platform is whether a customer can walk away — and take
+    their number with them. <span class="who">— from the build log</span></div>
+
+    <p class="drop">Number portability is the quiet backbone of telecom competition. A customer will
+    only switch operators if they can keep their number, and regulators mandate it precisely because it
+    keeps operators honest. Building it meant confronting a truth the first chapter predicted:
+    portability is <em>country-specific</em>. In Norway, a national clearing house called NRDB, under
+    the regulator Nkom, brokers every port. Elsewhere it's a different authority with different rules,
+    different formats, different cutover windows.</p>
+
+    <p>So porting got the same treatment as everything else: a seam. A porting gateway with a
+    country-aware implementation — NRDB for Norway, shaped exactly as the real thing but not wired to
+    it, and honestly labelled so — and per-country rules for number format, cutover timing, and
+    regulator. "Vendor-neutral" had quietly become "regulator-neutral." The same code ports a number in
+    Norway, Sweden, Britain, or the United States by consulting the rules for the country, not by
+    branching on a hardcoded assumption.</p>
+
+    <figure>
+      <svg viewBox="0 0 720 220" role="img" aria-label="Porting lifecycle">
+        <text x="360" y="26" text-anchor="middle" font-size="12" class="node-s" font-weight="600" fill="var(--teal)">PORT-IN · keep your number</text>
+        <g>
+          <rect x="20" y="42" width="118" height="44" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+          <text x="79" y="69" text-anchor="middle" font-size="12" class="node-t">requested</text>
+          <line x1="138" y1="64" x2="168" y2="64" stroke="var(--faint)" stroke-width="1.4" marker-end="url(#ar6)"/>
+          <rect x="170" y="42" width="118" height="44" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+          <text x="229" y="69" text-anchor="middle" font-size="12" class="node-t">validated</text>
+          <line x1="288" y1="64" x2="318" y2="64" stroke="var(--faint)" stroke-width="1.4" marker-end="url(#ar6)"/>
+          <rect x="320" y="42" width="118" height="44" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+          <text x="379" y="69" text-anchor="middle" font-size="12" class="node-t">scheduled</text>
+          <line x1="438" y1="64" x2="468" y2="64" stroke="var(--faint)" stroke-width="1.4" marker-end="url(#ar6)"/>
+          <rect x="470" y="42" width="118" height="44" rx="8" fill="none" stroke="var(--teal)" stroke-width="1.4"/>
+          <text x="529" y="63" text-anchor="middle" font-size="12" class="node-t">cutover</text>
+          <text x="529" y="78" text-anchor="middle" font-size="10" class="node-s">number kept</text>
+        </g>
+        <text x="360" y="128" text-anchor="middle" font-size="12" class="node-s" font-weight="600" fill="var(--rose)">PORT-OUT · leave with your number</text>
+        <g>
+          <rect x="80" y="144" width="140" height="44" rx="8" fill="none" stroke="var(--rose)" stroke-width="1.4"/>
+          <text x="150" y="171" text-anchor="middle" font-size="12" class="node-t">port-out completes</text>
+          <line x1="220" y1="166" x2="250" y2="166" stroke="var(--faint)" stroke-width="1.4" marker-end="url(#ar6)"/>
+          <rect x="252" y="144" width="140" height="44" rx="8" fill="none" stroke="var(--rose)" stroke-width="1.4"/>
+          <text x="322" y="166" text-anchor="middle" font-size="12" class="node-t">service ceased</text>
+          <text x="322" y="181" text-anchor="middle" font-size="10" class="node-s">number released</text>
+          <line x1="392" y1="166" x2="422" y2="166" stroke="var(--faint)" stroke-width="1.4" marker-end="url(#ar6)"/>
+          <rect x="424" y="144" width="216" height="44" rx="8" fill="none" stroke="var(--edge)" stroke-width="1.4"/>
+          <text x="532" y="166" text-anchor="middle" font-size="12" class="node-t">churn outcome recorded</text>
+          <text x="532" y="181" text-anchor="middle" font-size="10" class="node-s">the strongest signal there is</text>
+        </g>
+        <defs><marker id="ar6" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+          <path d="M0,0 L8,4 L0,8 Z" fill="var(--faint)"/></marker></defs>
+      </svg>
+      <figcaption>Both directions of the door. Port-in draws the customer's real number instead of a pool number and holds the line until cutover. Port-out ceases the service, releases the number — and feeds the churn engine the truest label it will ever get.</figcaption>
+    </figure>
+
+    <p>Keeping your number when you arrive meant the orchestrator had to wait: instead of grabbing a
+    fresh number from the pool, it holds for the port-in's cutover and then carries the customer's own
+    number. Leaving with it meant building something the BSS didn't yet have — a service <em>cease</em>
+    flow — because a port-out is also a termination. And a termination, the churn engine noticed, is the
+    single most honest churn label in existence: not a prediction of leaving, but the fact of it, fed
+    straight back into the model that tries to see the next one coming.</p>
+
+    <div class="lesson"><b>The lesson.</b> The features that let a customer leave are the features that
+    prove a platform is open. Build the exit as carefully as the entrance — country-aware, honest about
+    stand-ins — and the same event that loses a customer teaches the system to keep the next one.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 18 -->
+  <section class="chapter" id="ch18">
+    <div class="num">Chapter Eighteen</div>
+    <h3>Running it for real</h3>
+    <div class="epi">"In theory there is no difference between theory and practice. In practice there
+    is." <span class="who">— attributed to Benjamin Brewster</span></div>
+
+    <p class="drop">Everything so far had run on a laptop, in a chain of containers. That proves the
+    software works; it doesn't prove the software <em>deploys</em>. Between the two lies a canyon full
+    of the things that never show up until you cross it — resource requests that were fine on a laptop
+    and starve a scheduler, config that was an environment variable and now must be a mounted secret,
+    a component that came up instantly and now waits on ten others.</p>
+
+    <p>So the whole system was packaged the way it would actually ship — a Helm chart for Kubernetes,
+    with infrastructure defined as code for real clouds — and then <em>soaked</em>: brought up on a
+    real cluster and left to run, watched, prodded, and made to prove it could stand on its own for more
+    than the length of a demo. A soak isn't a test that passes or fails in a second. It's the long,
+    boring, essential question — does it stay up? — asked of the parts that only misbehave over time.</p>
+
+    <p class="pull">"It runs on my machine" and "it runs" are separated by a canyon, and the canyon is
+    where products are made.</p>
+
+    <p>The soak had its own runbook and its own honesty: which components are core and which can be
+    scaled back to fit a modest cluster, what to watch, what "healthy" means over hours rather than
+    seconds. It is the least cinematic chapter in the book and one of the most important, because it is
+    the difference between something that impressed a room and something an operator could actually
+    run.</p>
+
+    <div class="lesson"><b>The lesson.</b> Deployment is a feature, and soak is its test. A system that
+    has never run unattended on a real cluster for hours has not been proven to run at all — it has been
+    proven to <em>demo</em>, which is a different and smaller claim.</div>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Ch 19 -->
+  <section class="chapter" id="ch19">
+    <div class="num">Chapter Nineteen</div>
+    <h3>The invisible, made visible</h3>
+    <div class="epi">If a business process runs and no one can watch it, you have built a machine of
+    faith. <span class="who">— from the build log</span></div>
+
+    <p class="drop">All those events, flowing between all those components, were the true life of the
+    system — and completely invisible. You had to be an engineer reading logs to believe any of it was
+    happening. The last component set out to fix that: <b>Live Flow</b>, a face for the nervous system
+    itself.</p>
+
+    <p>The first attempt was an honest engineer's instinct — a graph of components with lines lighting
+    up as messages passed between them. It was correct and it was useless to anyone who wasn't me. The
+    feedback was exact and it reframed everything: <em>show it like a business-process engine shows a
+    process. Like a layman can understand — a customer ordering, the order component activating, an
+    order-created event, captured by something.</em> Not a wiring diagram. A story.</p>
+
+    <p>So Live Flow was rebuilt as a set of business processes told in plain English — Order to
+    Activation, Lead to Assurance, Churn to Retention, Port-in to Keep-Your-Number, Port-out to Leave —
+    each a row of labelled stages that <em>light up in order</em> as the real events arrive, teal for a
+    normal step, violet when AI touched it, rose when something went wrong, fading as they cool.</p>
+
+    <figure class="wide">
+      <img src="../img/live-flow-process.png" alt="Live Flow process view">
+      <figcaption>Live Flow's process view: the real event stream, narrated as business processes a non-engineer can read. The stages light in sequence as it actually happens.</figcaption>
+    </figure>
+
+    <p>Then the last ask: <em>can I click a box and see the detail? Can the colour change the moment an
+    event happens?</em> Yes and yes. Each stage became clickable, opening the specific events behind it;
+    each customer's journey could be followed as an individual thread through the process. The
+    choreography lit as a customer really moved through it — the invisible machine, at last, telling its
+    own story to anyone in the room.</p>
+
+    <figure class="wide">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><img src="../img/live-flow-lit.png" alt="Live Flow lit stages"></div>
+        <div><img src="../img/live-flow-instance.png" alt="Live Flow instance journey"></div>
+      </div>
+      <figcaption>Left: stages lit and cooling as events land. Right: a single customer's journey traced through the process. Click any stage to see the events beneath it.</figcaption>
+    </figure>
+
+    <p class="pull edge">A system that can narrate itself to a stranger is a system that finally
+    understands what it's for.</p>
+
+    <div class="lesson"><b>The lesson.</b> Observability for engineers is logs; observability for the
+    business is a story. The same event stream, told as processes a layperson can follow, turns an
+    invisible distributed system into something a customer, a buyer, or a regulator can simply
+    watch.</div>
+  </section>
+
+</div>
+
+<!-- ============ CODA ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Coda</div>
+    <h2>What it means</h2>
+    <p>One person, one AI, one discipline — and a system that used to take a team.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 20 -->
+  <section class="chapter" id="ch20">
+    <div class="num">Chapter Twenty</div>
+    <h3>The load-bearing wall</h3>
+    <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
+
+    <p class="drop">Thirty components. Four channels. Eleven end-to-end suites, all green in a real
+    browser. Official conformance kits passing with zero failures. Isolation proven against a real
+    database. A B2B autonomy demo that used to be a slideshow, rebuilt as running software. A national
+    number-portability flow, both directions. A network that heals itself and leaves a receipt. And a
+    face on the whole invisible machine so anyone can watch it breathe.</p>
+
+    <p>Look back and the three convictions turn out to have been one conviction wearing three coats.
+    <b>Vendor-neutrality</b> — any IdP, any database, any broker, any model, any processor, any porting
+    authority — was possible only because every dependency was a seam, and every seam was verified with
+    a real implementation behind it. <b>Honesty about mocks</b> was survivable only because the mocks
+    were named and the seams were real, so the day a real Stripe or a real NRDB plugs in, nothing above
+    it changes. And <b>verification</b> was the wall that held both up.</p>
+
+    <p>That wall is also the answer to the question this book is really about. It was built by one
+    person and an AI — Claude Fable 5 — at a pace no solo human could sustain and no unverified pair
+    could survive. The model's breadth was extraordinary; it held the whole system in view and wired
+    thirty components without losing the thread. But breadth without an arbiter is just confident
+    wrongness at scale. The tests were the arbiter. Not the model's fluency, not my intuition —
+    a browser, a real database, an official kit, agreeing or refusing.</p>
+
+    <p class="pull edge">Give the best model the whole system to hold, and a discipline that catches it
+    when it's wrong, and one person can build what used to take a team — if they never stop
+    verifying.</p>
+
+    <p>That is the memoir's whole argument, and the reason its title is an instruction rather than a
+    boast. The future of building software isn't "the AI writes the code." It's a human holding intent
+    and judgment, a capable model holding execution and breadth, and a ruthless verification discipline
+    making the partnership trustworthy. A thirty-component, multi-tenant, standards-conformant BSS,
+    built this way, is the existence proof. Every claim in these pages has a commit, a test, or a
+    screenshot behind it.</p>
+
+    <p style="text-align:center;color:var(--faint);font-family:-apple-system,sans-serif;font-size:0.9rem;margin-top:2.5rem">Verify everything.</p>
+  </section>
+
+  <hr class="soft">
+
+  <!-- Appendix -->
+  <section class="chapter" id="appendix">
+    <div class="num">Appendix C</div>
+    <h3>The TM Forum vocabulary, plain-English</h3>
+    <p>Every component in this book implements a TM Forum Open API — a published REST standard for one
+    slice of an operator's business. The full plain-English glossary of what each one <em>means</em> —
+    what the standard is, what it's for, and how genalpha-bss uses it — lives alongside this book as a
+    companion reference, grouped to mirror the acts you've just read.</p>
+    <p style="font-family:-apple-system,sans-serif;font-size:0.95rem"><a href="tmf-reference.md">→
+    Read the TM Forum reference (tmf-reference.md)</a></p>
+    <p class="sans" style="color:var(--faint);font-size:0.92rem">Three words to carry out of it:
+    <b>TM Forum</b>, the industry's standards body, which publishes the Open APIs; <b>ODA</b>, its
+    blueprint for building a BSS as composable components rather than a monolith; and <b>CTK</b>, the
+    conformance kit that proves a component is the real standard and not a lookalike. This whole book is
+    what those three words look like when someone actually builds them.</p>
+  </section>
+
+  <div style="height:6rem"></div>
+</div>
+</body>
+</html>
