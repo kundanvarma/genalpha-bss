@@ -146,11 +146,124 @@ public class ProductOrderService {
             entity.setOrderDate(OffsetDateTime.now());
         }
         enforcePolicy(dto, entity.getOwnerPartyId());
+        boolean modifyOnly = validateModifyItems(dto, entity.getOwnerPartyId());
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
+        if (modifyOnly) {
+            // A plan change touches no network: same service, same number. It
+            // completes in this transaction so the channel sees it instantly.
+            return completeNow(entity);
+        }
         return created;
+    }
+
+    /**
+     * Plan change (TMF622 action=modify): the item names the installed product
+     * it changes and the offering to move it to. Hard validation up front —
+     * the product must exist, be active and belong to the ordering customer;
+     * the target must be a real non-bundle offering different from the current
+     * one; and an unexpired commitment on the current plan blocks the change.
+     * Returns true when the order is modify-only.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean validateModifyItems(ProductOrderDto dto, String ownerPartyId) {
+        List<Map<String, Object>> items = flattenItemMaps(dto.getProductOrderItem());
+        List<Map<String, Object>> modifies = items.stream()
+                .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
+        if (modifies.isEmpty()) {
+            return false;
+        }
+        for (Map<String, Object> item : modifies) {
+            String productId = item.get("product") instanceof Map<?, ?> p && p.get("id") != null
+                    ? String.valueOf(p.get("id")) : null;
+            if (productId == null) {
+                throw new OrderValidationException(
+                        "a modify item must reference the product it changes (product.id)");
+            }
+            Map<String, Object> product = inventoryClient.getProduct(productId)
+                    .orElseThrow(() -> new OrderValidationException(
+                            "product '" + productId + "' not found"));
+            if (!"active".equalsIgnoreCase(String.valueOf(product.get("status")))) {
+                throw new OrderValidationException("product '" + productId + "' is not active");
+            }
+            String productOwner = customerPartyIn(
+                    (List<Map<String, Object>>) product.get("relatedParty"));
+            if (ownerPartyId == null || !ownerPartyId.equals(productOwner)) {
+                throw new OrderValidationException(
+                        "product '" + productId + "' does not belong to the ordering customer");
+            }
+            String newOfferingId = item.get("productOffering") instanceof Map<?, ?> o && o.get("id") != null
+                    ? String.valueOf(o.get("id")) : null;
+            if (newOfferingId == null) {
+                throw new OrderValidationException("a modify item must name the new productOffering");
+            }
+            CatalogClient.OfferingRef target = catalogClient.findOffering(newOfferingId)
+                    .orElseThrow(() -> new OrderValidationException(
+                            "productOffering '" + newOfferingId + "' not found in catalog"));
+            if (target.bundle()) {
+                throw new OrderValidationException(
+                        "changing a plan to a bundle is not supported — order the bundle separately");
+            }
+            String currentOfferingId = product.get("productOffering") instanceof Map<?, ?> cur
+                    && cur.get("id") != null ? String.valueOf(cur.get("id")) : null;
+            if (newOfferingId.equals(currentOfferingId)) {
+                throw new OrderValidationException(
+                        "'" + product.get("name") + "' is already on that plan");
+            }
+            requireNoActiveCommitment(ownerPartyId, currentOfferingId,
+                    String.valueOf(product.get("name")));
+        }
+        return modifies.size() == items.size();
+    }
+
+    /**
+     * TMF651 guard: while the current plan's commitment window is open, the
+     * plan cannot be changed. The agreement client fails open — an unreachable
+     * agreement component must not strand customers on their plan.
+     */
+    private void requireNoActiveCommitment(String ownerPartyId, String offeringId, String productName) {
+        if (offeringId == null) {
+            return;
+        }
+        for (Map<String, Object> agreement : agreementClient.activeAgreements(ownerPartyId)) {
+            // TMF651 wire shape: agreementPeriod {startDateTime, endDateTime}
+            Object endRaw = agreement.get("agreementPeriod") instanceof Map<?, ?> period
+                    ? period.get("endDateTime") : agreement.get("periodEnd");
+            OffsetDateTime end;
+            try {
+                end = endRaw == null ? null : OffsetDateTime.parse(String.valueOf(endRaw));
+            } catch (DateTimeParseException e) {
+                continue;
+            }
+            if (end == null || end.isBefore(OffsetDateTime.now())
+                    || !(agreement.get("agreementItem") instanceof List<?> items)) {
+                continue;
+            }
+            for (Object it : items) {
+                if (it instanceof Map<?, ?> m && m.get("productOffering") instanceof Map<?, ?> off
+                        && offeringId.equals(String.valueOf(off.get("id")))) {
+                    throw new OrderValidationException("'" + productName
+                            + "' is under a commitment until " + end.toLocalDate()
+                            + " and cannot be changed yet");
+                }
+            }
+        }
+    }
+
+    /**
+     * Modify-only orders complete inline: provisioning swaps the installed
+     * product's offering (billing rates the new plan from the next run) and a
+     * commitment on the new plan is minted like any other completion.
+     */
+    private ProductOrderDto completeNow(ProductOrder entity) {
+        entity.setState(STATE_COMPLETED);
+        provision(entity);
+        mintCommitments(entity);
+        ProductOrderDto updated = mapper.toDto(repository.save(entity));
+        events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
+        return updated;
     }
 
     /**
@@ -508,6 +621,18 @@ public class ProductOrderService {
         boolean provisioned = false;
         for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
             if (!(item.get("productOffering") instanceof Map<?, ?> offering) || offering.get("id") == null) {
+                continue;
+            }
+            if ("modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
+                // Plan change: the existing product swaps its offering in
+                // place — billing rates the new plan from the next run.
+                String productId = String.valueOf(((Map<String, Object>) item.get("product")).get("id"));
+                String newName = String.valueOf(offering.get("name") != null
+                        ? offering.get("name") : offering.get("id"));
+                inventoryClient.updateProduct(productId, Map.of(
+                        "name", newName,
+                        "productOffering", offering));
+                provisioned = true;
                 continue;
             }
             int quantity = item.get("quantity") instanceof Number n ? n.intValue() : 1;

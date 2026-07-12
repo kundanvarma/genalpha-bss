@@ -10,4 +10,11 @@ import java.util.Map;
 public interface AgreementClient {
 
     void activate(String name, String ownerPartyId, List<Map<String, Object>> items, int commitmentMonths);
+
+    /**
+     * The party's ACTIVE agreements, for the commitment guard on plan changes.
+     * Fails open (empty) when the component is absent or unreachable — an
+     * unreachable agreement service must not strand customers on their plan.
+     */
+    List<Map<String, Object>> activeAgreements(String ownerPartyId);
 }

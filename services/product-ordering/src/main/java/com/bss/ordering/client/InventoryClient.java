@@ -11,6 +11,12 @@ public interface InventoryClient {
 
     void createProduct(NewProduct product);
 
+    /** The installed product a modify order changes; empty when unreachable/unknown. */
+    java.util.Optional<Map<String, Object>> getProduct(String id);
+
+    /** Plan change: repoint an installed product at a new offering. */
+    void updateProduct(String id, Map<String, Object> patch);
+
     /** Field names match the inventory service's ProductDto JSON contract. */
     record NewProduct(
             String name,

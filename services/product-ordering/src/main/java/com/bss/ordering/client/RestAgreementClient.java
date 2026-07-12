@@ -39,4 +39,19 @@ public class RestAgreementClient implements AgreementClient {
             throw new DownstreamException("agreement service rejected the commitment", e);
         }
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> activeAgreements(String ownerPartyId) {
+        try {
+            List<Map<String, Object>> agreements = restClient.get()
+                    .uri("/tmf-api/agreementManagement/v4/agreement?relatedPartyId={p}&status=active&limit=100",
+                            ownerPartyId)
+                    .retrieve()
+                    .body(List.class);
+            return agreements == null ? List.of() : agreements;
+        } catch (RestClientException e) {
+            return List.of();
+        }
+    }
 }

@@ -16,4 +16,9 @@ public class NoopAgreementClient implements AgreementClient {
             int commitmentMonths) {
         // intentionally empty
     }
+
+    @Override
+    public List<Map<String, Object>> activeAgreements(String ownerPartyId) {
+        return List.of();
+    }
 }

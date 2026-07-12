@@ -173,6 +173,25 @@ export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
 
+/**
+ * Plan change (TMF622 action=modify): same service, same number — only the
+ * plan swaps. The realizing service rides along so the SOM renames the right
+ * line. Completes instantly: no fulfilment, no new MSISDN.
+ */
+export async function changePlan(productId, serviceId, newOffering) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productOrderItem: [{
+        action: 'modify',
+        product: { id: productId, ...(serviceId ? { realizingService: [{ id: serviceId }] } : {}) },
+        productOffering: { id: newOffering.id, name: newOffering.name },
+      }],
+    }),
+  }));
+}
+
 const CONSUMPTION = '/tmf-api/usageConsumption/v4';
 const AGREEMENT = '/tmf-api/agreementManagement/v4';
 
