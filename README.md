@@ -23,6 +23,17 @@ intentional hardened gaps (payment, communication) — in
 
 ## A look at it
 
+**The guided demo, driving itself** — five narrated acts against the live system: a customer
+orders and the machine activates them untouched; a business rule is born, enforced, and retired
+without a deployment; a pricing rule turns €100 into €85; a customer keeps their number joining
+us (NRDB port-in), then leaves with it — and the AI records the goodbye as a churn outcome it
+learns from. Everything you see is a real API call; Live Flow lights up as the events land.
+Run it yourself at `/flow/demo.html` ([full-speed MP4](docs/media/guided-demo.mp4)):
+
+<p align="center">
+  <img src="docs/media/guided-demo.gif" width="92%" alt="The guided demo: five narrated acts driving the live BSS while Live Flow lights up">
+</p>
+
 **Live Flow** — watch a business process happen, step by step. An event-driven BSS's value is
 loose coupling, which makes the magic invisible; this makes it legible to anyone. It reconstructs
 live process instances from the `bss.*.events` stream and narrates each step in plain English —
