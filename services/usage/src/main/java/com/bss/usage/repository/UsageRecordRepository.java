@@ -2,6 +2,8 @@ package com.bss.usage.repository;
 
 import com.bss.usage.entity.UsageRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+import java.util.Optional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -13,4 +15,7 @@ public interface UsageRecordRepository extends JpaRepository<UsageRecord, String
 
     List<UsageRecord> findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
             String tenantId, String ownerPartyId, OffsetDateTime from, OffsetDateTime to);
+
+    Optional<UsageRecord> findByIdAndTenantId(String id, String tenantId);
+    List<UsageRecord> findByTenantId(String tenantId);
 }

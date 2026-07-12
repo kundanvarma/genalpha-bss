@@ -137,4 +137,9 @@ public class UsageRecord {
     public void setCreatedAt(OffsetDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+    @jakarta.persistence.Column(name = "payload_json", length = 8000)
+    private String payloadJson;
+    public String getPayloadJson() { return payloadJson; }
+    public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
 }
