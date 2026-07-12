@@ -9,6 +9,12 @@ import TicketCard from './TicketCard.jsx';
 const dt = (v) => v ? new Date(v).toLocaleString(undefined,
   { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+// TMF683 channel is an array of channel references; render it safely whether
+// the backend returns the TMF array shape or a plain string.
+const chan = (c) => Array.isArray(c)
+  ? c.map((x) => (x && typeof x === 'object' ? (x.name || x.id || '') : x)).filter(Boolean).join(', ')
+  : (c && typeof c === 'object' ? (c.name || c.id || '') : (c || ''));
+
 export default function Customer360() {
   const { id } = useParams();
   const [customer, setCustomer] = useState(null);
@@ -297,8 +303,8 @@ export default function Customer360() {
             {interactions.map((ix) => (
               <div className="row" key={ix.id}>
                 <div>
-                  <span>{ix.description}</span>
-                  <div className="dim small">{ix.channel} · {ix.direction} · {dt(ix.interactionDate)}</div>
+                  <span>{ix.description || ix.reason}</span>
+                  <div className="dim small">{chan(ix.channel)} · {ix.direction} · {dt(ix.interactionDate)}</div>
                 </div>
               </div>
             ))}
