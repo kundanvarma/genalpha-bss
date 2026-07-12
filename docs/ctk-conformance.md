@@ -16,6 +16,8 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | party-account (account) | TMF666 | 0 failures |
 | **shopping-cart** | **TMF663** | **132/132, 0 failures** |
 | **party-account (party-role)** | **TMF669** | **1405/1405, 0 failures** |
+| **product-stock** | **TMF687** | **124/124, 0 failures** |
+| **usage** | **TMF635** | **223/223, 0 failures** |
 
 ## Measured, not yet zero
 
@@ -46,10 +48,10 @@ CTK exercises. Reaching zero means **building additive resources/endpoints**
 
 | Component | CTK | Baseline | What's missing |
 |---|---|---|---|
-| product-stock | TMF687 | 36/90 | `ProductStock` uses a typed `stockedQuantity`; the CTK uses `productStockLevel`. And `reserveProductStock` is a task operation here — reservations are persisted (`StockReservation`) but not exposed as a queryable CRUD resource. Needs: DTO field mapping + GET on reserveProductStock. |
-| usage | TMF635 | 26/82 | `usage` intake is not exposed as a retrievable resource (no `GET /usage`), and there is **no `usageSpecification` resource** at all (the CTK tests full CRUD on it). Needs: usage GET + a new usageSpecification resource. |
 | usage (consumption) | TMF677 | — | Query-oriented; the kit's structure needs harness handling before a clean run. |
 | billing | TMF678 | 30/136 | Bills are **computed by billing runs**, not POST-able; the CTK posts `CustomerBillOnDemand`. Needs: an on-demand bill endpoint. |
+
+*(product-stock TMF687 and usage TMF635 were in this list and are now certified above — stock gained a queryable ReserveProductStock resource + spec-field mapping; usage gained GET + a UsageSpecification resource.)*
 
 ## The harness
 
