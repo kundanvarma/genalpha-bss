@@ -235,24 +235,36 @@ async function apiCall(page, method, path, token, body) {
 
   // --- the data ladder: Carl is on Mobile 10 GB now. He burns 8 GB, buys a
   // one-time 5 GB top-up, and the meter's allowance grows to 15 THIS month.
-  await ctx.request.post(`${API}/tmf-api/usageManagement/v4/usage`, { headers: H, data: {
-    usageType: 'Mobile data', usageDate: new Date().toISOString(),
+  // (fresh staff token — the one from test start may have hit KC's 5-min TTL)
+  const staff2 = (await (await ctx.request.post(KC, {
+    form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token;
+  const H2 = { Authorization: 'Bearer ' + staff2, 'Content-Type': 'application/json' };
+  // Carl's browser token is also past KC's 5-min TTL by now — mint a fresh one
+  const carl2 = (await (await ctx.request.post(KC, { form: {
+    grant_type: 'password', client_id: 'bss-biz',
+    username: `carl-${run}@example.com`, password: 'Passw0rd!' } })).json()).access_token;
+  const ingest = await ctx.request.post(`${API}/tmf-api/usageManagement/v4/usage`, { headers: H2, data: {
+    // a minute in the past: host/container clock skew must never push the
+    // record beyond the report's now() window
+    usageType: 'Mobile data', usageDate: new Date(Date.now() - 60000).toISOString(),
     usageCharacteristic: { value: 8, units: 'GB' },
     relatedParty: [{ id: carlSub, role: 'customer' }],
     productOffering: { id: planB.id, name: planB.name } } });
-  const before = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl);
+  if (ingest.status() !== 201) fail('usage ingest failed: ' + ingest.status());
+  const before = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl2);
   const baseBucket = (before.body.bucket || []).find?.((b) => b.name === 'Mobile data');
   if (!baseBucket || Number(baseBucket.allowedValue) !== 10) {
-    fail('plan allowance should be 10 GB: ' + JSON.stringify(baseBucket));
+    fail('plan allowance should be 10 GB: ' + JSON.stringify(baseBucket)
+      + ' | report status=' + before.status + ' body=' + JSON.stringify(before.body).slice(0, 400));
   }
   const topup = offers.find((o) => o.name === 'Data Top-Up 5 GB');
-  await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', carl, {
+  await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', carl2, {
     productOrderItem: [{ action: 'add', productOffering: { id: topup.id, name: topup.name } }],
   });
   let boosted = null;
   for (let i = 0; i < 20 && !boosted; i++) {
     await page.waitForTimeout(2000);
-    const rep = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl);
+    const rep = await apiCall(page, 'GET', '/tmf-api/usageConsumption/v4/queryUsageConsumption', carl2);
     const b = (rep.body.bucket || []).find?.((x) => x.name === 'Mobile data');
     if (b && Number(b.allowedValue) === 15) boosted = b;
   }
@@ -265,12 +277,12 @@ async function apiCall(page, method, path, token, body) {
     grant_type: 'password', client_id: 'bss-biz', username: 'bianca@acme.example', password: 'bianca' } })).json();
   const biancaSub = JSON.parse(Buffer.from(biancaTok.access_token.split('.')[1], 'base64').toString()).sub;
   const org = await (await ctx.request.post(`${API}/tmf-api/party/v4/organization`, {
-    headers: H, data: { name: `PlanCo AS ${run}` } })).json();
-  await ctx.request.post(`${API}/tmf-api/party/v4/individual`, { headers: H,
+    headers: H2, data: { name: `PlanCo AS ${run}` } })).json();
+  await ctx.request.post(`${API}/tmf-api/party/v4/individual`, { headers: H2,
     data: { id: biancaSub, givenName: 'Bianca', familyName: 'Boss', organization: { id: org.id } } });
-  await ctx.request.patch(`${API}/tmf-api/party/v4/individual/${biancaSub}`, { headers: H,
+  await ctx.request.patch(`${API}/tmf-api/party/v4/individual/${biancaSub}`, { headers: H2,
     data: { organization: { id: org.id } } });
-  const mia = await (await ctx.request.post(`${API}/tmf-api/party/v4/individual`, { headers: H,
+  const mia = await (await ctx.request.post(`${API}/tmf-api/party/v4/individual`, { headers: H2,
     data: { givenName: 'Mia', familyName: `Member${run}`, organization: { id: org.id } } })).json();
   const BH = { Authorization: 'Bearer ' + biancaTok.access_token, 'Content-Type': 'application/json' };
   await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, { headers: BH,
@@ -280,7 +292,7 @@ async function apiCall(page, method, path, token, body) {
   for (let i = 0; i < 30 && !miaSvc; i++) {
     await new Promise((r) => setTimeout(r, 2000));
     const svcs = await (await ctx.request.get(
-      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${mia.id}`, { headers: H })).json();
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${mia.id}`, { headers: H2 })).json();
     miaSvc = (svcs || []).find((s) => s.state === 'active' && (s.supportingResource || []).some((r) => r.value)) || null;
   }
   if (!miaSvc) fail("Mia's line never activated");
@@ -306,7 +318,7 @@ async function apiCall(page, method, path, token, body) {
   for (let i = 0; i < 10 && !miaAfter; i++) {
     await new Promise((r) => setTimeout(r, 1500));
     const svcs = await (await ctx.request.get(
-      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${mia.id}`, { headers: H })).json();
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${mia.id}`, { headers: H2 })).json();
     const same = (svcs || []).find((s) => s.id === miaSvc.id);
     if (same && same.name === planB.name) miaAfter = same;
   }
@@ -318,7 +330,7 @@ async function apiCall(page, method, path, token, body) {
   for (const path of [`productOffering/${committed.id}`, `productOffering/${fiber500.id}`,
     `productOfferingPrice/${f5Price.id}`]) {
     await ctx.request.delete(`${API}/tmf-api/productCatalogManagement/v4/${path}`,
-      { headers: H }).catch(() => {});
+      { headers: H2 }).catch(() => {});
   }
 
   await browser.close();
