@@ -572,7 +572,8 @@
         "agreement:write",
         "promotion:write",
         "promotion:read",
-        "policy:evaluate"
+        "policy:evaluate",
+        "inventory:read"
       ]
     },
     {

@@ -85,6 +85,13 @@ public class OrchestrationService {
         }
         List<Map<String, Object>> items = new ArrayList<>();
         collectItems((List<Map<String, Object>>) productOrder.get("productOrderItem"), items);
+        // Plan changes (action=modify) never create a service or draw a
+        // number — the existing service keeps running; only its plan name
+        // follows the new offering. Idempotent: renaming twice is a no-op.
+        List<Map<String, Object>> modifies = items.stream()
+                .filter(i -> "modify".equalsIgnoreCase(String.valueOf(i.get("action")))).toList();
+        renameModifiedServices(tenant, modifies, owner);
+        items.removeAll(modifies);
         if (items.isEmpty()) {
             return;
         }
@@ -188,6 +195,43 @@ public class OrchestrationService {
         }
         log.info("product order {} {} by SOM ({} service orders)", productOrderId,
                 fulfilled ? "activated post-fulfilment" : "completed", items.size());
+    }
+
+    /**
+     * A modify item carries the service it realizes (product.realizingService)
+     * so the swap lands on the right line even when a customer has several.
+     * Owner is checked against the order's party — a mismatching id is skipped,
+     * never renamed.
+     */
+    private void renameModifiedServices(String tenant, List<Map<String, Object>> modifies, String owner) {
+        for (Map<String, Object> item : modifies) {
+            String newName = item.get("productOffering") instanceof Map<?, ?> o && o.get("name") != null
+                    ? String.valueOf(o.get("name")) : null;
+            String serviceId = null;
+            if (item.get("product") instanceof Map<?, ?> p && p.get("realizingService") instanceof List<?> rs
+                    && !rs.isEmpty() && rs.get(0) instanceof Map<?, ?> ref && ref.get("id") != null) {
+                serviceId = String.valueOf(ref.get("id"));
+            }
+            if (newName == null || serviceId == null) {
+                continue;
+            }
+            final String rename = newName;
+            services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
+                if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
+                    log.warn("modify order names service {} owned by another party — rename skipped",
+                            instance.getId());
+                    return;
+                }
+                if (!rename.equals(instance.getName())) {
+                    instance.setName(rename);
+                    instance.setLastUpdate(OffsetDateTime.now());
+                    services.save(instance);
+                    events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
+                            "id", instance.getId(), "name", rename, "state", instance.getState()));
+                    log.info("plan change: service {} renamed to '{}'", instance.getId(), rename);
+                }
+            });
+        }
     }
 
     @SuppressWarnings("unchecked")

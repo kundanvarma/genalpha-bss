@@ -177,6 +177,7 @@ async function token(request, client, user, pass) {
   await erikPage.waitForSelector('#memberview:not([hidden])', { timeout: 20000 });
   const memberOrg = await erikPage.locator('#member-org-name').textContent();
   if (!memberOrg.includes('Acme')) fail('member view org missing: ' + memberOrg);
+  await erikPage.locator('#member-lines .memberrow').first().waitFor({ timeout: 15000 });
   const memberLine = await erikPage.locator('#member-lines').textContent();
   if (!/active/.test(memberLine) || !/\+\d/.test(memberLine)) {
     fail("Erik's line/number missing from his my-page: " + memberLine);

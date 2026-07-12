@@ -14,6 +14,7 @@ const SERVICE_INV = '/tmf-api/serviceInventory/v4';
 const BILLING = '/tmf-api/customerBillManagement/v4';
 const ROLES = '/tmf-api/rolesAndPermissionsManagement/v4';
 const CONSUMPTION = '/tmf-api/usageConsumption/v4';
+const INVENTORY = '/tmf-api/productInventory/v4';
 
 const el = (id) => document.getElementById(id);
 let me = null;
@@ -37,6 +38,8 @@ async function loadMembers() {
   box.replaceChildren();
   const picker = el('order-member');
   picker.replaceChildren();
+  const swapPicker = el('swap-member');
+  swapPicker.replaceChildren(new Option('Who…', ''));
   for (const m of members) {
     const row = document.createElement('div');
     row.className = 'memberrow';
@@ -51,7 +54,9 @@ async function loadMembers() {
     lines.textContent = '…';
     row.append(name, mail, lines);
     box.append(row);
-    picker.append(new Option(`${m.givenName || ''} ${m.familyName || ''}`.trim() || m.id, m.id));
+    const label = `${m.givenName || ''} ${m.familyName || ''}`.trim() || m.id;
+    picker.append(new Option(label, m.id));
+    swapPicker.append(new Option(label, m.id));
     // live lines, fail-soft
     authFetch(`${SERVICE_INV}/service?relatedPartyId=${m.id}`)
       .then(json)
@@ -115,8 +120,11 @@ async function loadOfferings() {
   const picker = el('order-offering');
   picker.replaceChildren();
   const orderable = offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity);
+  const swapPicker = el('swap-offering');
+  swapPicker.replaceChildren(new Option('New plan…', ''));
   for (const o of orderable) {
     picker.append(new Option(o.name, o.id));
+    swapPicker.append(new Option(o.name, o.id));
   }
   return orderable;
 }
@@ -185,6 +193,56 @@ async function placeOrder() {
     status.className = 'ok'; status.textContent = '✓ ordered — the line activates in seconds';
     setTimeout(loadMembers, 8000);
     setTimeout(loadMembers, 20000);
+  } catch (e) { status.className = 'err'; status.textContent = e.message; }
+}
+
+/* ---------- plan change for a member: same line, same number ---------- */
+async function loadSwapLines() {
+  const member = el('swap-member').value;
+  const lines = el('swap-line');
+  lines.replaceChildren(new Option('Their line…', ''));
+  if (!member) return;
+  const svcs = await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${member}`))
+    .catch(() => []);
+  for (const sv of (svcs || []).filter((s) => s.state === 'active')) {
+    const num = (sv.supportingResource || []).map((r) => r.value).filter(Boolean).join(' ');
+    const opt = new Option(`${sv.name}${num ? ' · ' + num : ''}`, sv.id);
+    opt.dataset.planName = sv.name;
+    lines.append(opt);
+  }
+}
+
+async function swapPlan() {
+  const member = el('swap-member').value;
+  const line = el('swap-line');
+  const serviceId = line.value;
+  const currentPlan = line.selectedOptions[0]?.dataset.planName;
+  const offering = el('swap-offering').value;
+  const status = el('swap-status');
+  if (!member || !serviceId || !offering) return;
+  status.className = ''; status.textContent = 'changing…';
+  try {
+    // the member's installed product behind that line (matched by plan name)
+    const products = await json(await authFetch(
+      `${INVENTORY}/product?relatedPartyId=${member}&status=active&limit=100`));
+    const product = (products || []).find((p) => p.name === currentPlan);
+    if (!product) throw new Error('no active product found for that line');
+    await json(await authFetch(`${ORDERING}/productOrder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        productOrderItem: [{
+          action: 'modify',
+          product: { id: product.id, realizingService: [{ id: serviceId }] },
+          productOffering: { id: offering, name: el('swap-offering').selectedOptions[0]?.text },
+        }],
+        relatedParty: [{ id: member, role: 'customer' }],
+      }),
+    }));
+    status.className = 'ok'; status.textContent = '✓ plan changed — same number, new plan';
+    loadMembers();
+    loadSwapLines();
+    loadBills();
   } catch (e) { status.className = 'err'; status.textContent = e.message; }
 }
 
@@ -288,6 +346,8 @@ async function main() {
 
   el('add-member').addEventListener('click', addMember);
   el('place-order').addEventListener('click', placeOrder);
+  el('swap-member').addEventListener('change', loadSwapLines);
+  el('swap-plan').addEventListener('click', swapPlan);
   loadBills();
   const [members, orderable] = await Promise.all([loadMembers(), loadOfferings()]);
   loadPlans(orderable, (members || []).length);
