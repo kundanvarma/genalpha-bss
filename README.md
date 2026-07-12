@@ -9,11 +9,11 @@ prove it.
 **Every feature is verified end-to-end in a real browser** — ten Playwright suites drive the
 storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
 campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
-Nine components pass the official TM Forum CTKs with zero failures (the five core —
-TMF620/622/632/637/666 — plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock and
-TMF635 usage). See the full, honest scorecard — including intentional hardened gaps and pending
-additive work — in [docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with
-[ops/ctk](ops/ctk/README.md).
+**Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
+plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
+usage-consumption and TMF678 customer-bill. See the full, honest scorecard — including the two
+intentional hardened gaps (payment, communication) — in
+[docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with [ops/ctk](ops/ctk/README.md).
 
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](docs/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)

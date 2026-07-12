@@ -18,6 +18,8 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **party-account (party-role)** | **TMF669** | **1405/1405, 0 failures** |
 | **product-stock** | **TMF687** | **124/124, 0 failures** |
 | **usage** | **TMF635** | **223/223, 0 failures** |
+| **usage (consumption)** | **TMF677** | **60/60, 0 failures** |
+| **billing** | **TMF678** | **19230/19230, 0 failures** |
 
 ## Measured, not yet zero
 
@@ -40,18 +42,14 @@ To flip either to CTK-green, decouple "create the resource" from "run the
 business action" (authorize / deliver) and relax the required fields — a
 product decision, not a bug.
 
-## Additive work pending — safe, but real (not just relaxing)
+## Additive work — completed
 
-These are *not* business conflicts; they simply expose less of each API than the
-CTK exercises. Reaching zero means **building additive resources/endpoints**
-(no guarantees weakened), which is a focused reshape per component:
-
-| Component | CTK | Baseline | What's missing |
-|---|---|---|---|
-| usage (consumption) | TMF677 | — | Query-oriented; the kit's structure needs harness handling before a clean run. |
-| billing | TMF678 | 30/136 | Bills are **computed by billing runs**, not POST-able; the CTK posts `CustomerBillOnDemand`. Needs: an on-demand bill endpoint. |
-
-*(product-stock TMF687 and usage TMF635 were in this list and are now certified above — stock gained a queryable ReserveProductStock resource + spec-field mapping; usage gained GET + a UsageSpecification resource.)*
+*All previously-pending additive work is done: stock gained a queryable
+ReserveProductStock resource + spec-field mapping; usage gained GET + a
+UsageSpecification resource; billing gained CustomerBillOnDemand, a top-level
+appliedCustomerBillingRate, billDocument/billingAccount on every bill, and a
+plain-PATCH path alongside the guarded settle; usage-consumption gained an
+addressable usageConsumptionReport resource. Each is certified above.*
 
 ## The harness
 
