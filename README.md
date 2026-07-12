@@ -23,6 +23,18 @@ intentional hardened gaps (payment, communication) — in
 
 ## A look at it
 
+**🎬 The journey film — a human using the real product, filmed across every screen.**
+One take, no mocks: Mia configures the bundle (phone, color, add-on), joins mid-checkout, pays;
+marketing ships a 15% pricing rule from the back office — as data; an agent fulfils her order in
+the CSR console; her number and inbox light up in the shop; her next cart is already 15% cheaper;
+and Live Flow narrates every event underneath.
+**[▶ Watch the 1:43 journey (MP4)](docs/media/journey.mp4)** · re-record any time with
+`node ops/e2e/journey_video.js`
+
+<p align="center">
+  <a href="docs/media/journey.mp4"><img src="docs/media/journey-poster.png" width="88%" alt="The journey film: a customer configures the bundle in the real storefront — click to watch"></a>
+</p>
+
 **The guided demo, driving itself** — five narrated acts against the live system: a customer
 orders and the machine activates them untouched; a business rule is born, enforced, and retired
 without a deployment; a pricing rule turns €100 into €85; a customer keeps their number joining
