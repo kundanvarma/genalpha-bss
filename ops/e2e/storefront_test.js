@@ -345,7 +345,7 @@ async function apiGet(page, path, token) {
     { headers: { Authorization: 'Bearer ' + staffToken }, data: { state: 'completed' } });
   if (done.status() !== 200) fail(`staff completing order expected 200, got ${done.status()}`);
 
-  await a.click('.nav >> text=My services');
+  await a.click('.nav >> text=My page');
   // A Samsung row exists only on the services page (order description has no
   // Samsung) — route transitions render async, so anchor on that.
   await a.locator('.row', { hasText: 'Samsung Galaxy S26' }).first().waitFor({ timeout: 15000 });
@@ -429,7 +429,7 @@ async function apiGet(page, path, token) {
   if (usageRes.status() !== 201) fail(`usage ingest failed: ${usageRes.status()} ${await usageRes.text()}`);
   console.log('OK mediation posted 12.3 GB EU roaming data for Alice');
 
-  await a.click('.nav >> text=My services');
+  await a.click('.nav >> text=My page');
   const meter = a.locator('[data-testid="usage-meter"]', { hasText: 'EU roaming data' });
   await meter.waitFor({ timeout: 15000 });
   const meterText = await meter.textContent();
@@ -522,7 +522,7 @@ async function apiGet(page, path, token) {
   if (bBills.length !== 0) fail('customer B sees bills: ' + JSON.stringify(bBills).slice(0, 200));
   console.log('OK billing rerun idempotent; customer B has no bills');
 
-  await b.click('.nav >> text=My services');
+  await b.click('.nav >> text=My page');
   await b.locator('main .dim', { hasText: 'Nothing active yet' }).waitFor({ timeout: 10000 })
     .catch(async () => fail('customer B service list not empty: ' + await b.locator('main').textContent()));
   console.log('OK customer B sees no foreign services');
