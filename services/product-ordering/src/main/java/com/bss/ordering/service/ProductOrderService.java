@@ -8,6 +8,7 @@ import com.bss.ordering.client.CatalogClient;
 import com.bss.ordering.client.InventoryClient;
 import com.bss.ordering.client.PartyClient;
 import com.bss.ordering.client.PaymentClient;
+import com.bss.ordering.client.PolicyClient;
 import com.bss.ordering.client.PromotionClient;
 import com.bss.ordering.client.StockClient;
 import com.bss.ordering.dto.ProductOrderDto;
@@ -52,11 +53,12 @@ public class ProductOrderService {
     private final TenantScope tenantScope;
     private final StockClient stockClient;
     private final PaymentClient paymentClient;
+    private final PolicyClient policyClient;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
-            StockClient stockClient, PaymentClient paymentClient) {
+            StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -70,6 +72,7 @@ public class ProductOrderService {
         this.tenantScope = tenantScope;
         this.stockClient = stockClient;
         this.paymentClient = paymentClient;
+        this.policyClient = policyClient;
     }
 
     @Transactional(readOnly = true)
@@ -140,6 +143,7 @@ public class ProductOrderService {
         if (entity.getOrderDate() == null) {
             entity.setOrderDate(OffsetDateTime.now());
         }
+        enforcePolicy(dto, entity.getOwnerPartyId());
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
@@ -161,6 +165,50 @@ public class ProductOrderService {
                 throw new com.bss.ordering.exception.VerifiedIdentityRequiredException(item.name());
             }
         }
+    }
+
+    /**
+     * Ask the policy component whether a data-authored business rule forbids
+     * this order (quantity caps, incompatibilities, eligibility). Rules are
+     * configuration, not code — this is how an operator adds "max 2 SIMs per
+     * order" without a redeploy. A definitive DENY becomes a 422; an
+     * unreachable policy service fails open (see RestPolicyClient).
+     */
+    private void enforcePolicy(ProductOrderDto dto, String ownerPartyId) {
+        PolicyClient.Decision decision = policyClient.evaluateOrder(buildPolicyContext(dto, ownerPartyId));
+        if (!decision.allowed()) {
+            throw new com.bss.ordering.exception.PolicyDeniedException(decision.message());
+        }
+    }
+
+    /**
+     * The request context a rule evaluates against — everything derivable from
+     * the order itself (no extra calls), so evaluation is fast and deterministic:
+     * the offerings ordered, quantity per offering, the largest single-offering
+     * quantity, total units, and whether the buyer has a verified identity.
+     */
+    private Map<String, Object> buildPolicyContext(ProductOrderDto dto, String ownerPartyId) {
+        List<ItemRef> items = flattenItems(dto.getProductOrderItem());
+        Map<String, Integer> quantityByOffering = new java.util.LinkedHashMap<>();
+        List<Map<String, Object>> itemList = new ArrayList<>();
+        int total = 0;
+        for (ItemRef item : items) {
+            quantityByOffering.merge(item.offeringId(), item.quantity(), Integer::sum);
+            total += item.quantity();
+            itemList.add(Map.of("offeringId", item.offeringId(), "name", item.name(),
+                    "quantity", item.quantity()));
+        }
+        int maxLineQuantity = quantityByOffering.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        context.put("party", ownerPartyId);
+        context.put("verifiedIdentity", verifiedIdentity.isVerified());
+        context.put("items", itemList);
+        context.put("offeringIds", new ArrayList<>(quantityByOffering.keySet()));
+        context.put("quantityByOffering", quantityByOffering);
+        context.put("maxLineQuantity", maxLineQuantity);
+        context.put("totalQuantity", total);
+        context.put("lineCount", items.size());
+        return context;
     }
 
     /**

@@ -84,6 +84,10 @@ spring:
           uri: ${PORTING_URL:http://localhost:8112}
           predicates:
             - Path=/tmf-api/numberPortingManagement/**
+        - id: policy
+          uri: ${POLICY_URL:http://localhost:8113}
+          predicates:
+            - Path=/tmf-api/policyManagement/**
         - id: flow
           uri: ${FLOW_URL:http://localhost:8111}
           predicates:

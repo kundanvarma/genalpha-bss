@@ -93,6 +93,7 @@ services:
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
       PORTING_URL: http://porting:8080
+      POLICY_URL: http://policy:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
@@ -137,6 +138,7 @@ services:
       PAYMENT_BASE_URL: http://payment:8080
       AGREEMENT_BASE_URL: http://agreement:8080
       PROMOTION_BASE_URL: http://promotion:8080
+      POLICY_BASE_URL: http://policy:8080
   product-inventory:
     db: product_inventory
     dbRole: inventory_app
@@ -223,6 +225,10 @@ services:
     dbRole: porting_app
     extraEnv:
       PORTING_GATEWAY: mock
+  policy:
+    db: policy
+    dbRole: policy_app
+    extraEnv: {}
   quote:
     db: quote
     dbRole: quote_app

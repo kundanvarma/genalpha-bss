@@ -76,6 +76,8 @@ bss:
     enabled: ${STOCK_ENABLED:true}
   payment:
     enabled: ${PAYMENT_ENABLED:true}
+  policy:
+    enabled: ${POLICY_ENABLED:true}
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
@@ -84,3 +86,4 @@ bss:
     payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
+    policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
