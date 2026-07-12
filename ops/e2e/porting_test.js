@@ -161,6 +161,66 @@ async function staffToken(request) {
   if (!recorded) fail('port-out was not recorded as a churn outcome');
   console.log('OK the port-out was recorded as a churn outcome — a real departure the model learns from');
 
+  // 9. The agent side: the CSR console shows the customer's porting orders and
+  // can cease a service (releasing its number) — the assisted-channel half of
+  // "keep your number / leave with it".
+  const csrFamily = `Ceaseworth${run}`;
+  const person = await (await ctx.request.post(`${API}/tmf-api/party/v4/individual`, {
+    headers: H, data: { givenName: 'Cora', familyName: csrFamily } })).json();
+  const csrNum = '+4791' + String(Date.now()).slice(-6);
+  const csrPin = await (await ctx.request.post(`${PORT}/numberPortingOrder`, {
+    headers: H, data: { direction: 'portIn', phoneNumber: csrNum, country: 'NO',
+      otherOperator: 'OtherTelco', relatedParty: [{ id: person.id, role: 'customer' }] } })).json();
+  await ctx.request.post(`${PORT}/numberPortingOrder/${csrPin.id}/complete`, { headers: H });
+  await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H, data: { productOrderItem: [{ action: 'add', productOffering: { id: plan2.id } }],
+      relatedParty: [{ id: person.id, role: 'customer' }] } });
+  let csrActive = false;
+  for (let attempt = 0; attempt < 20 && !csrActive; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const svcs = await (await ctx.request.get(
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${person.id}`, { headers: H })).json();
+    csrActive = svcs.some((sv) => sv.state === 'active');
+  }
+  if (!csrActive) fail('no active service for the CSR cease check');
+
+  const csrCtx = await browser.newContext();
+  const agent = await csrCtx.newPage();
+  agent.on('dialog', (d) => d.accept());       // the Cease confirm
+  await agent.goto('http://localhost:8080/csr/');
+  await agent.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await agent.fill('input[name="username"]', 'agent-anna');
+  await agent.fill('input[name="password"]', 'agent');
+  await agent.click('input[type="submit"], button[type="submit"]');
+  await agent.waitForSelector('.searchbar', { timeout: 20000 });
+  await agent.fill('.searchbar input', csrFamily);
+  await agent.click('.searchbar button');
+  const hit = agent.locator('.rowlink', { hasText: csrFamily });
+  await hit.waitFor({ timeout: 15000 });
+  await hit.click();
+  await agent.locator('h1', { hasText: 'Cora ' + csrFamily }).waitFor({ timeout: 15000 });
+
+  const portRow = agent.locator('[data-testid="porting-card"] .row', { hasText: csrNum });
+  await portRow.waitFor({ timeout: 15000 });
+  console.log('OK CSR 360 shows the porting order:', (await portRow.textContent()).trim().slice(0, 60));
+
+  const ceaseBtn = agent.locator('[data-testid="cease-service"]').first();
+  await ceaseBtn.waitFor({ timeout: 15000 });
+  await ceaseBtn.click();
+  // Ceasing releases the number, so the service row (keyed on its number)
+  // leaves the card entirely — and the API confirms the terminated state.
+  await agent.locator('[data-testid="cease-service"]').first()
+    .waitFor({ state: 'detached', timeout: 20000 });
+  let ceasedByAgent = false;
+  for (let attempt = 0; attempt < 10 && !ceasedByAgent; attempt++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const svcs = await (await ctx.request.get(
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${person.id}`, { headers: H })).json();
+    ceasedByAgent = svcs.some((sv) => sv.state === 'terminated');
+  }
+  if (!ceasedByAgent) fail('agent cease did not terminate the service');
+  console.log('OK agent ceased the service from the CSR console — number released, state terminated');
+
   await browser.close();
   console.log('\nALL PORTING CHECKS PASSED');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

@@ -109,8 +109,8 @@ color** theme every channel from the tenant manifest)
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
-| csr-console | `/csr` | Assisted service: customer 360 with AI copilot, ticket queue, org-scoped agents |
-| admin-console | `/console` | Back office: catalog, stock and marketing campaigns |
+| csr-console | `/csr` | Assisted service: customer 360 with AI copilot, ticket queue, number-porting panel, service cease, org-scoped agents |
+| admin-console | `/console` | Back office: catalog, stock, campaigns, business Rules (with dry-run), porting orders, AI audit |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
 ## Multitenancy (pool model, hardened)

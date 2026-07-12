@@ -393,3 +393,21 @@ export async function myActiveServices() {
     return await json(await authFetch(`${SERVICE_INV}/service`));
   } catch { return []; }
 }
+
+/**
+ * Dynamic pricing preview: ask the policy component what the enabled pricing
+ * rules do to this subtotal. Fail-soft — an outage or a guest session simply
+ * means no preview, and the bill remains the source of truth.
+ */
+export async function previewPrice(subtotal, offeringIds) {
+  try {
+    const res = await authFetch('/tmf-api/policyManagement/v4/price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: { subtotal, offeringIds } }),
+    });
+    if (!res.ok) return null;
+    const result = await res.json();
+    return (result.adjustments || []).length ? result : null;
+  } catch { return null; }
+}
