@@ -37,7 +37,10 @@ public class OrderEventListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"ProductOrderCreateEvent".equals(envelope.get("eventType"))) {
+            String type = String.valueOf(envelope.get("eventType"));
+            // Create: digital orders activate instantly. StateChange(completed):
+            // a physically-fulfilled order is done shipping — provision it now.
+            if (!"ProductOrderCreateEvent".equals(type) && !"ProductOrderStateChangeEvent".equals(type)) {
                 return;
             }
             String tenantId = envelope.get("tenantId") == null ? "genalpha"

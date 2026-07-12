@@ -69,7 +69,12 @@ public class OrchestrationService {
     public void orchestrate(Map<String, Object> productOrder) {
         String tenant = tenantScope.currentTenantId();
         String productOrderId = String.valueOf(productOrder.get("id"));
-        if (!"acknowledged".equals(productOrder.get("state"))
+        String state = String.valueOf(productOrder.get("state"));
+        // acknowledged = fresh digital order; completed = physical fulfilment
+        // just finished, so its digital services provision NOW. Either way,
+        // never twice (at-least-once delivery upstream).
+        boolean fulfilled = "completed".equals(state);
+        if ((!"acknowledged".equals(state) && !fulfilled)
                 || serviceOrders.existsByTenantIdAndProductOrderId(tenant, productOrderId)) {
             return;
         }
@@ -88,8 +93,8 @@ public class OrchestrationService {
         // digital services activate instantly.
         boolean needsFulfilment = items.stream().anyMatch(item ->
                 item.get("product") instanceof Map<?, ?> product && product.get("place") != null);
-        if (needsFulfilment) {
-            log.info("product order {} needs physical fulfilment; SOM leaves completion to fulfilment",
+        if (needsFulfilment && !fulfilled) {
+            log.info("product order {} needs physical fulfilment; SOM waits for it before activating",
                     productOrderId);
             return;
         }
@@ -176,9 +181,13 @@ public class OrchestrationService {
             events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
                     "id", id, "state", so.getState(), "productOrderId", productOrderId));
         }
-        // Everything active: the BSS order completes itself.
-        ordering.complete(productOrderId);
-        log.info("product order {} completed by SOM ({} service orders)", productOrderId, items.size());
+        // Everything active: a digital order completes itself; a fulfilled
+        // order is already completed — activation was the missing half.
+        if (!fulfilled) {
+            ordering.complete(productOrderId);
+        }
+        log.info("product order {} {} by SOM ({} service orders)", productOrderId,
+                fulfilled ? "activated post-fulfilment" : "completed", items.size());
     }
 
     @SuppressWarnings("unchecked")
