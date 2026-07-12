@@ -87,7 +87,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time) |
+| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time) |
 | product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
 | product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
 | party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
@@ -106,7 +106,7 @@ mobile app recomposes around what the customer owns:
 | party-interaction | TMF683 | 8093 | Every touchpoint on the customer timeline |
 | communication | TMF681 | 8095 | Event-driven notifications (the martech door) |
 | shopping-cart | TMF663 | 8096 | Server-side carts: guest secret-id, claim on login, abandonment events |
-| usage | TMF635 / TMF677 | 8097 | Mediation intake, rating, allowance meters, overage charges |
+| usage | TMF635 / TMF677 | 8097 | Mediation intake, rating, allowance meters, overage charges — and **one-time data top-ups**: a completed order carrying a boost-flagged offering extends the buyer's current-month allowance (meter and overage threshold both grow) |
 | agreement | TMF651 | 8098 | Commitment periods minted automatically at order completion |
 | promotion | TMF671 | 8099 | Promo codes: anonymous validation → redemption → bill discount |
 | user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP — surfaced as the console's **Staff tab** (search an operator, tick the areas they manage). Also the **invitation seam**: a business admin can provision a login for their own people, hardcoded to the customer role — no escalation path |
@@ -133,7 +133,7 @@ color** theme every channel from the tenant manifest)
 
 | Channel | Path | For |
 |---|---|---|
-| storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). **Change plan** from My services: a TMF622 `modify` order swaps the plan on the same line — same number — including a bundle's broadband tier; commitments block the change until their window ends. **SIM self-care**: masked ICCID, PUK revealed on request, OTA PIN reset through a pluggable SIM-platform seam |
+| storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). **My page** leads with the commercial view — the plan (bundles show their components nested), then add-ons & devices, then the line + SIM, then usage meters. **Change plan** is like-for-like (mobile→mobile, broadband→broadband — never a device): a TMF622 `modify` order swaps the plan on the same line, same number, including a bundle's broadband tier; commitments block the change until their window ends. **Data top-ups** bought one-time extend this month's meter. **SIM self-care**: masked ICCID, PUK revealed on request, OTA PIN reset through a pluggable SIM-platform seam |
 | business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them **and change a member's plan in place** (same line, same number), see every member's live lines, browse **Plans & your company pricing** (list price vs the org's **negotiated price** — a pricing rule conditioned on `organizationId`/`memberCount`, authored as data, applied on the consolidated invoice too), and read the **consolidated company invoice** with per-person line attribution. An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, SIM self-care (PUK, PIN reset), and "billed to your company" — deliberately not `/shop`: nothing to buy, no personal bills |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
 | admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |

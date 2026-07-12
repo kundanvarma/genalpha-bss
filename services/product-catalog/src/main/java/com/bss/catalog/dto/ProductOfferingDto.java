@@ -45,6 +45,9 @@ public class ProductOfferingDto {
     @JsonProperty("bundledProductOffering")
     private List<Map<String, Object>> bundledProductOffering;
 
+    @JsonProperty("category")
+    private List<Map<String, Object>> category;
+
     @JsonProperty("productOfferingPrice")
     private List<Map<String, Object>> productOfferingPrice;
 
@@ -154,6 +157,14 @@ public class ProductOfferingDto {
 
     public void setBundledProductOffering(List<Map<String, Object>> bundledProductOffering) {
         this.bundledProductOffering = bundledProductOffering;
+    }
+
+    public List<Map<String, Object>> getCategory() {
+        return category;
+    }
+
+    public void setCategory(List<Map<String, Object>> category) {
+        this.category = category;
     }
 
     public List<Map<String, Object>> getProductOfferingPrice() {

@@ -10,5 +10,7 @@ public interface UsageAllowanceRepository extends JpaRepository<UsageAllowance, 
     List<UsageAllowance> findByTenantIdAndProductOfferingIdAndUsageSpecName(
             String tenantId, String offeringId, String specName);
 
+    List<UsageAllowance> findByTenantIdAndProductOfferingId(String tenantId, String offeringId);
+
     List<UsageAllowance> findByTenantId(String tenantId);
 }
