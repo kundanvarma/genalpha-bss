@@ -1,6 +1,64 @@
 import { useEffect, useState } from 'react';
-import { changePlan, listOfferings, myActiveServices, myProducts, myUsage, priceIndex } from '../api.js';
+import { changePlan, listOfferings, myActiveServices, myProducts, mySim, myUsage, priceIndex, resetSimPin } from '../api.js';
 import { fmtPrice, pricesOf } from '../money.js';
+
+/**
+ * SIM self-care for a numbered line: masked ICCID always; PUK on request;
+ * PIN pushed to the card over the air. The PUK never renders until asked for.
+ */
+function SimCard({ serviceId }) {
+  const [sim, setSim] = useState(null);
+  const [puk, setPuk] = useState(null);
+  const [pin, setPin] = useState('');
+  const [pinState, setPinState] = useState(null); // null | 'busy' | 'done' | error text
+
+  useEffect(() => { mySim(serviceId).then(setSim).catch(() => {}); }, [serviceId]);
+  if (!sim) return null;
+
+  async function showPuk() {
+    try { setPuk((await mySim(serviceId, true))?.puk || null); } catch { /* stays hidden */ }
+  }
+  async function submitPin() {
+    setPinState('busy');
+    try {
+      await resetSimPin(serviceId, pin);
+      setPinState('done'); setPin('');
+    } catch (e) { setPinState(e.message); }
+  }
+
+  return (
+    <div className="row" data-testid="sim-card">
+      <strong>My SIM</strong>
+      <span className="dim" data-testid="sim-iccid">{sim.iccid}</span>
+      {puk ? (
+        <span className="dim">PUK: <strong style={{ color: 'var(--teal)' }} data-testid="sim-puk">{puk}</strong></span>
+      ) : (
+        <button className="ghost" data-testid="show-puk" onClick={showPuk}>Show PUK</button>
+      )}
+      <span>
+        <input
+          data-testid="pin-input"
+          style={{ width: '6.5em' }}
+          placeholder="New PIN"
+          inputMode="numeric"
+          maxLength={8}
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+        />
+        <button
+          className="ghost"
+          data-testid="reset-pin"
+          disabled={pin.length < 4 || pinState === 'busy'}
+          onClick={submitPin}
+        >
+          Reset PIN
+        </button>
+        {pinState === 'done' && <span className="dim" data-testid="pin-done"> ✓ sent to your SIM</span>}
+        {pinState && pinState !== 'done' && pinState !== 'busy' && <span className="error"> {pinState}</span>}
+      </span>
+    </div>
+  );
+}
 
 function UsageMeter({ bucket }) {
   const used = Number(bucket.usedValue);
@@ -119,7 +177,10 @@ export default function Services() {
         const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
         const number = numbered?.supportingResource?.find((r) => r.value)?.value;
         return number ? (
-          <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
+          <>
+            <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
+            <SimCard serviceId={numbered.id} />
+          </>
         ) : null;
       })()}
       {changed && (

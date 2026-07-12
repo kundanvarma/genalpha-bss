@@ -290,6 +290,7 @@ async function renderMemberView(orgName) {
     for (const sv of (svcs || []).filter((s) => s.state === 'active' || s.state === 'inactive')) {
       const row = document.createElement('div');
       row.className = 'memberrow';
+      row.dataset.service = sv.id;
       const name = document.createElement('span');
       name.innerHTML = `<b>${sv.name || 'Service'}</b>`;
       const num = document.createElement('span');
@@ -300,6 +301,36 @@ async function renderMemberView(orgName) {
       box.append(row);
     }
     if (!box.children.length) box.textContent = 'No lines yet — your company admin can order one for you.';
+    // SIM self-care per line: masked ICCID, PUK on request, OTA PIN reset.
+    for (const row of box.querySelectorAll('.memberrow[data-service]')) {
+      const sid = row.dataset.service;
+      authFetch(`${SERVICE_INV}/service/${sid}/sim`).then(json).then((sim) => {
+        const simRow = document.createElement('div');
+        simRow.className = 'billlines';
+        simRow.style.margin = '2px 0 8px 14px';
+        simRow.dataset.simFor = sid;
+        simRow.innerHTML = `SIM <span class="msisdn">${sim.iccid}</span>
+          <button class="ghost" data-puk style="margin-left:8px">Show PUK</button>
+          <input data-pin placeholder="New PIN" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
+          <button class="ghost" data-reset>Reset PIN</button> <span data-sim-status></span>`;
+        row.after(simRow);
+        simRow.querySelector('[data-puk]').addEventListener('click', async () => {
+          const full = await json(await authFetch(`${SERVICE_INV}/service/${sid}/sim?reveal=true`));
+          simRow.querySelector('[data-puk]').replaceWith(Object.assign(document.createElement('b'),
+            { textContent: `PUK ${full.puk}`, className: 'msisdn' }));
+        });
+        simRow.querySelector('[data-reset]').addEventListener('click', async () => {
+          const status = simRow.querySelector('[data-sim-status]');
+          try {
+            await json(await authFetch(`${SERVICE_INV}/service/${sid}/sim/resetPin`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ newPin: simRow.querySelector('[data-pin]').value }),
+            }));
+            status.className = 'ok'; status.textContent = '✓ sent to your SIM';
+          } catch (e) { status.className = 'err'; status.textContent = e.message; }
+        });
+      }).catch(() => {});
+    }
   } catch (e) { box.textContent = 'Could not load your services.'; }
 
   // usage buckets, fail-soft
