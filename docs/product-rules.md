@@ -40,6 +40,8 @@ Always set the **Message** — it is exactly what the customer sees when the ord
 | **Discount / surcharge for verified customers** | Adjustment type + value | Applies when `verifiedIdentity` is true |
 | **Discount / surcharge when the cart has an item** | Item + adjustment | Applies when that offering is in the cart/bill |
 | **Discount / surcharge for everyone** | Adjustment | Always applies |
+| **Negotiated deal for one company (B2B)** | Company (dropdown) + adjustment | Applies only when that organization pays the bill — never touches consumers. Shows in `/biz` as "your company pricing" and lands on the consolidated invoice |
+| **Volume deal (B2B)** | Minimum people + adjustment | Applies to any company with at least that many people billing together |
 | **Advanced** | Raw condition + adjustment | Anything the context can express |
 
 Adjustment type is **percent of subtotal** or **fixed amount**; the value is signed —
@@ -143,9 +145,10 @@ satisfies a comparison — a missing quantity is never "over the cap".
 { ">": [ { "var": "subtotal" }, 100 ] }
 
 // pricing: NEGOTIATED B2B DEAL — this company pays 20% under list (adjustment -20
-// percent). organizationId only exists for company accounts, so consumers are
-// untouched; the deal shows in /biz ("Plans & your company pricing") and lands
-// on the consolidated invoice as its own line.
+// percent). You never need to write this one by hand: the console's "Negotiated
+// deal for one company" kind builds it from a company dropdown. Shown here for
+// the API path. organizationId only exists for company accounts, so consumers
+// are untouched; the deal shows in /biz and lands on the consolidated invoice.
 { "==": [ { "var": "organizationId" }, "<acme-org-id>" ] }
 
 // pricing: volume tier — any company with 10+ people billing together gets 15% off
