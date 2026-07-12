@@ -109,7 +109,7 @@ mobile app recomposes around what the customer owns:
 | usage | TMF635 / TMF677 | 8097 | Mediation intake, rating, allowance meters, overage charges |
 | agreement | TMF651 | 8098 | Commitment periods minted automatically at order completion |
 | promotion | TMF671 | 8099 | Promo codes: anonymous validation → redemption → bill discount |
-| user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP |
+| user-roles | TMF672 | 8100 | Tenant admins manage staff via TMF API over their own IdP — surfaced as the console's **Staff tab** (search an operator, tick the areas they manage) |
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
 | recommendation | TMF680 | 8102 | Cross-sell with a learning seam: rule-selected candidates, popularity-ranked (a trained model plugs into the same Ranker interface) |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
@@ -135,7 +135,7 @@ color** theme every channel from the tenant manifest)
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
-| admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit — each area appears only for operators holding its staff role (a product manager sees the product area, not bills or appointments) |
+| admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
 ## Multitenancy (pool model, hardened)

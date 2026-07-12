@@ -143,3 +143,17 @@ button.primary:hover { filter: brightness(1.08); }
 th { border-bottom-color: var(--line); }
 .field.aiassist { grid-column: 1 / -1; }
 .field.aiassist input { flex: 1; }
+
+/* --- Staff tab ---------------------------------------------------------- */
+.staffbar { display: flex; gap: 10px; margin: 6px 0 16px; }
+.staffbar input { flex: 1; }
+#staff-results { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.staffrow { text-align: left; background: none; border: 1px solid var(--line); border-radius: 8px;
+  padding: 9px 12px; cursor: pointer; font-size: 13.5px; color: inherit; }
+.staffrow:hover { border-color: var(--teal); }
+.staffname { margin: 10px 0 8px; font-size: 15px; }
+.staffstatus { font-size: 12px; color: var(--teal); font-weight: 400; margin-left: 10px; }
+.staffarea { display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+  border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13.5px; }
+.staffarea input { accent-color: var(--teal); width: 16px; height: 16px; }
+.dimhint { color: var(--dim, #8a979c); font-size: 12px; margin-left: 6px; }

@@ -118,7 +118,38 @@ const CONSOLE = 'http://localhost:8080/console/';
   const portCells = await portRow.first().locator('td').allTextContents();
   console.log('OK porting tab:', portCells.slice(0, 4).join(' | '));
 
-  // 9. Role-scoped tabs: a product manager sees the product area — and ONLY it.
+  // 9. Staff tab: grant Jo the AI tools area via TMF672, verify, revoke.
+  await page.locator('.tab', { hasText: 'Staff' }).click();
+  await page.waitForSelector('#staff-q', { timeout: 10000 });
+  await page.fill('#staff-q', 'jo@bss.local');
+  await page.click('#staff-search');
+  await page.locator('.staffrow', { hasText: 'jo@bss.local' }).click();
+  const aiBox = page.locator('.staffarea:has-text("AI tools") input');
+  await aiBox.waitFor({ timeout: 10000 });
+  if (await aiBox.isChecked()) fail('Jo should not start with AI tools');
+  await aiBox.check();
+  await page.locator('.staffstatus', { hasText: 'saved' }).waitFor({ timeout: 15000 });
+  const withAi = await page.evaluate(async () => {
+    const users = await (await authFetch(
+      '/tmf-api/rolesAndPermissionsManagement/v4/user?username=jo@bss.local')).json();
+    const perms = await (await authFetch(
+      '/tmf-api/rolesAndPermissionsManagement/v4/permission?userId=' + users[0].id)).json();
+    return perms.some((p) => p.userRole.name === 'ai:use');
+  });
+  if (!withAi) fail('grant did not land in the IdP');
+  await aiBox.uncheck();
+  await page.locator('.staffstatus', { hasText: 'saved' }).waitFor({ timeout: 15000 });
+  const stillAi = await page.evaluate(async () => {
+    const users = await (await authFetch(
+      '/tmf-api/rolesAndPermissionsManagement/v4/user?username=jo@bss.local')).json();
+    const perms = await (await authFetch(
+      '/tmf-api/rolesAndPermissionsManagement/v4/permission?userId=' + users[0].id)).json();
+    return perms.some((p) => p.userRole.name === 'ai:use');
+  });
+  if (stillAi) fail('revoke did not land in the IdP');
+  console.log('OK Staff tab: granted + revoked "AI tools" for Jo through TMF672, verified in the IdP');
+
+  // 10. Role-scoped tabs: a product manager sees the product area — and ONLY it.
   const patCtx = await browser.newContext();
   const pat = await patCtx.newPage();
   await pat.goto('http://localhost:8080/console/');
@@ -133,7 +164,7 @@ const CONSOLE = 'http://localhost:8080/console/';
   for (const t of expectPat) {
     if (!patTabs.includes(t)) fail(`product persona missing tab "${t}" — got ${patTabs.join(', ')}`);
   }
-  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'AI Audit']) {
+  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'AI Audit', 'Staff']) {
     if (patTabs.includes(t)) fail(`product persona must NOT see "${t}" — got ${patTabs.join(', ')}`);
   }
   console.log('OK role-scoped console: product-pat sees only', patTabs.join(' | '));
