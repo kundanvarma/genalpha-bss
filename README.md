@@ -135,7 +135,7 @@ color** theme every channel from the tenant manifest)
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
 | csr-console | `/csr` | Assisted service: customer 360 with AI copilot, ticket queue, number-porting panel, service cease, org-scoped agents |
-| admin-console | `/console` | Back office: catalog, stock, campaigns, business Rules (with dry-run), porting orders, AI audit |
+| admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit — each area appears only for operators holding its staff role (a product manager sees the product area, not bills or appointments) |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
 ## Multitenancy (pool model, hardened)
@@ -173,7 +173,8 @@ Then browse:
 |---|---|
 | http://localhost:8080/shop/ | GenAlpha storefront (self-register, or browse as guest) |
 | http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` |
-| http://localhost:8080/console/ | Admin console — `demo` / `demo` |
+| http://localhost:8080/console/ | Admin console — `demo` / `demo` (all areas) |
+| http://localhost:8080/console/ | Admin console, product persona — `pat@bss.local` / `pat` (product tabs only) |
 | http://shop.nova.localhost:8080/shop/ | Nova Telecom's white-label storefront (own realm, own catalog) |
 
 Demo cards: `4242 4242 4242 4242` pays, anything ending `0002` declines. Promo code: `WELCOME10`.
