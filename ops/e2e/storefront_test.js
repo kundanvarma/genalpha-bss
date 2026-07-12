@@ -93,7 +93,7 @@ async function apiGet(page, path, token) {
   await a.waitForSelector('.pricetable');
   const includes = await a.locator('.includes.big li').allTextContents();
   if (includes.length !== 3) fail(`expected 3 fixed bundle children, got ${includes.length}`);
-  const options = a.locator('label.option');
+  const options = a.locator('.choice', { hasText: 'Choose your phone' }).locator('label.option');
   if (await options.count() !== 3) fail(`expected 3 phone options, got ${await options.count()}`);
   await a.locator('.optprice').first().waitFor({ timeout: 10000 }); // options fully resolved
   const totalBefore = (await a.locator('.pricetable .total .num').textContent()).trim();

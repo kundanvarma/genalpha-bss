@@ -27,6 +27,7 @@ public class FieldSelector {
     public List<Map<String, Object>> select(List<?> items, String fields) {
         Set<String> keep = new LinkedHashSet<>(Arrays.asList(fields.split(",")));
         keep.add("id");
+        keep.add("href");
         return items.stream()
                 .map(item -> objectMapper.convertValue(item, new TypeReference<LinkedHashMap<String, Object>>() {
                 }))
