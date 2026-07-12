@@ -887,5 +887,11 @@
       ]
     }
   ],
-  "displayName": "Nova Telecom"
+  "displayName": "Nova Telecom",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "en",
+    "no"
+  ],
+  "defaultLocale": "no"
 }

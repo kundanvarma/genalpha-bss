@@ -60,8 +60,12 @@ self-heals), and **Churn → Retention** driven by the AI back-office. A compani
   <img src="docs/img/live-flow-process.png" width="90%" alt="Live Flow — business processes narrated step by step as they happen">
 </p>
 
-One build of each channel serves every tenant; the host decides the brand. The same storefront,
-GenAlpha in teal and Nova Telecom in purple — logo, name **and** color from the tenant manifest:
+One build of each channel serves every tenant; the host decides the brand — **and the language
+and currency**. The tenant manifest carries `locale` + `currency` alongside logo, name and color:
+GenAlpha sells in English and EUR; Nova Telecom is a Norwegian operator — same build, Norwegian
+chrome (Tilbud, Handlekurv, Til kassen), NOK prices formatted the Norwegian way (`299,00 kr/md.`),
+and a Norwegian Keycloak sign-in. Prices carry their own currency unit end to end (catalog → cart
+→ bill), so multi-currency needs no FX machinery — one currency per operator, the telco norm:
 
 <p align="center">
   <img src="docs/img/storefront-genalpha.png" width="49%" alt="GenAlpha storefront (teal)">

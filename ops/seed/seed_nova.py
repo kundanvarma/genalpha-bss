@@ -39,6 +39,13 @@ def ref(resource, referred_type):
 
 existing = {o["name"] for o in req("GET", "productOffering?limit=100")}
 if "Nova Unlimited 5G" in existing:
+    # self-heal: Nova is a NORWEGIAN operator — its price is NOK. Older seeds
+    # wrote EUR; repatch so the white-label demo shows real multi-currency.
+    for p in req("GET", "productOfferingPrice?limit=100"):
+        if p["name"] == "Nova Unlimited 5G Monthly" and p.get("price", {}).get("unit") != "NOK":
+            req("PATCH", f"productOfferingPrice/{p['id']}",
+                {"price": {"unit": "NOK", "value": 299.00}})
+            print("repriced: Nova Unlimited 5G -> 299.00 NOK/month")
     print("exists: Nova catalog already seeded")
     raise SystemExit(0)
 
@@ -51,8 +58,8 @@ offering = req("POST", "productOffering", {
 price = req("POST", "productOfferingPrice", {
     "name": "Nova Unlimited 5G Monthly", "priceType": "recurring",
     "recurringChargePeriodType": "month", "lifecycleStatus": "Active",
-    "price": {"unit": "EUR", "value": 29.99}})
+    "price": {"unit": "NOK", "value": 299.00}})
 req("PATCH", f"productOffering/{offering['id']}", {
     "productOfferingPrice": [{"id": price["id"], "href": price.get("href"),
                               "name": price["name"], "@referredType": "ProductOfferingPrice"}]})
-print(f"seeded: Nova Unlimited 5G ({offering['id']}) at 29.99 EUR/month")
+print(f"seeded: Nova Unlimited 5G ({offering['id']}) at 299.00 NOK/month")

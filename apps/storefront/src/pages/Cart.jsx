@@ -8,6 +8,7 @@ import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDra
 import { checkPromotion, savePaymentMethod } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
+import { t } from '../i18n.js';
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -414,7 +415,7 @@ export default function Cart() {
             : !slotReady ? 'Pick an installation slot'
             : !cardReady ? 'Enter card details'
             : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
-            : 'Checkout'}
+            : t('Checkout')}
         </button>
       </div>
     </>

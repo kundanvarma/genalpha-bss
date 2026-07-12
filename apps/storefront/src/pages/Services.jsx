@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { changePlan, listOfferings, myActiveServices, myProducts, mySim, myUsage, priceIndex, quickOrder, resetSimPin } from '../api.js';
 import { fmtPrice, pricesOf } from '../money.js';
+import { t } from '../i18n.js';
 
 /**
  * SIM self-care for a numbered line: masked ICCID always; PUK on request;
@@ -29,18 +30,18 @@ function SimCard({ serviceId }) {
 
   return (
     <div className="row" data-testid="sim-card">
-      <strong>My SIM</strong>
+      <strong>{t('My SIM')}</strong>
       <span className="dim" data-testid="sim-iccid">{sim.iccid}</span>
       {puk ? (
         <span className="dim">PUK: <strong style={{ color: 'var(--teal)' }} data-testid="sim-puk">{puk}</strong></span>
       ) : (
-        <button className="ghost" data-testid="show-puk" onClick={showPuk}>Show PUK</button>
+        <button className="ghost" data-testid="show-puk" onClick={showPuk}>{t('Show PUK')}</button>
       )}
       <span>
         <input
           data-testid="pin-input"
           style={{ width: '6.5em' }}
-          placeholder="New PIN"
+          placeholder={t('New PIN')}
           inputMode="numeric"
           maxLength={8}
           value={pin}
@@ -52,7 +53,7 @@ function SimCard({ serviceId }) {
           disabled={pin.length < 4 || pinState === 'busy'}
           onClick={submitPin}
         >
-          Reset PIN
+          {t('Reset PIN')}
         </button>
         {pinState === 'done' && <span className="dim" data-testid="pin-done"> ✓ sent to your SIM</span>}
         {pinState && pinState !== 'done' && pinState !== 'busy' && <span className="error"> {pinState}</span>}
@@ -130,20 +131,20 @@ function ChangePlan({ product, services, offerings, prices, onChanged }) {
   if (!open) {
     return (
       <button className="ghost" data-testid={`change-plan-${product.id}`} onClick={() => setOpen(true)}>
-        Change plan
+        {t('Change plan')}
       </button>
     );
   }
   return (
     <span className="change-plan" data-testid="change-plan-form">
       <select value={choice} onChange={(e) => setChoice(e.target.value)} disabled={busy}>
-        <option value="">New plan…</option>
+        <option value="">{t('New plan…')}</option>
         {(options || []).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
       </select>
       <button className="primary" disabled={!choice || busy} onClick={confirm}>
-        {busy ? 'Changing…' : 'Confirm'}
+        {busy ? t('Changing…') : t('Confirm')}
       </button>
-      <button className="ghost" disabled={busy} onClick={() => setOpen(false)}>Cancel</button>
+      <button className="ghost" disabled={busy} onClick={() => setOpen(false)}>{t('Cancel')}</button>
       {error && <span className="error"> {error}</span>}
     </span>
   );
@@ -201,7 +202,7 @@ export default function Services() {
   }, []);
 
   if (error) return <p className="error">{error}</p>;
-  if (!products) return <p className="dim">Loading your page…</p>;
+  if (!products) return <p className="dim">{t('Loading your page…')}</p>;
   if (!products.length) {
     return <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>;
   }
@@ -241,14 +242,14 @@ export default function Services() {
 
   // discovery: the lines of business this customer does NOT have yet
   const missing = [
-    !ownsMobile && { label: 'Add a mobile plan', cat: 'Mobile plans' },
-    !broadband.length && !bundleGroups.length && { label: 'Add broadband', cat: 'Broadband' },
-    !entertainment.length && !bundleGroups.length && { label: 'Add TV & streaming', cat: 'TV & Add-ons' },
+    !ownsMobile && { label: t('Add a mobile plan'), cat: 'Mobile plans' },
+    !broadband.length && !bundleGroups.length && { label: t('Add broadband'), cat: 'Broadband' },
+    !entertainment.length && !bundleGroups.length && { label: t('Add TV & streaming'), cat: 'TV & Add-ons' },
   ].filter(Boolean);
 
   return (
     <>
-      <h1>My page</h1>
+      <h1>{t('My page')}</h1>
       {changed && (
         <p className="dim" data-testid="plan-changed">
           ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.
@@ -258,7 +259,7 @@ export default function Services() {
       {bundleGroups.map(({ bundle, components }) => (
         <section className="card" key={bundle.id} data-testid={`bundle-${bundle.id}`}
           style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>My bundle</h2>
+          <h2 style={{ marginTop: 0 }}>{t('My bundle')}</h2>
           <ProductRow product={bundle} services={services}
             offerings={offerings} prices={prices} onChanged={onChanged} />
           {components.map((c) => (
@@ -270,14 +271,14 @@ export default function Services() {
 
       {ownsMobile && (
         <section className="card" data-testid="mobile-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>Mobile</h2>
+          <h2 style={{ marginTop: 0 }}>{t('Mobile')}</h2>
           {rowsOf(mobilePlans)}
           {number ? (
             <>
-              <p className="dim" data-testid="my-number">Your number: <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
+              <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
               <SimCard serviceId={numbered.id} />
             </>
-          ) : <p className="dim">Your line appears here once the plan activates.</p>}
+          ) : <p className="dim">{t('Your line appears here once the plan activates.')}</p>}
           {dataBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}
           {topUps.map((t) => {
             const oneTime = pricesOf(t, prices).find((p) => p.priceType === 'oneTime');
@@ -288,42 +289,42 @@ export default function Services() {
 
       {broadband.length > 0 && (
         <section className="card" data-testid="broadband-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>Broadband</h2>
+          <h2 style={{ marginTop: 0 }}>{t('Broadband')}</h2>
           {rowsOf(broadband)}
         </section>
       )}
 
       {entertainment.length > 0 && (
         <section className="card" data-testid="entertainment-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>TV &amp; entertainment</h2>
+          <h2 style={{ marginTop: 0 }}>{t('TV & entertainment')}</h2>
           {rowsOf(entertainment)}
         </section>
       )}
 
       {devices.length > 0 && (
         <section className="card" data-testid="devices-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>My devices</h2>
+          <h2 style={{ marginTop: 0 }}>{t('My devices')}</h2>
           {rowsOf(devices)}
         </section>
       )}
 
       {other.length > 0 && (
         <section className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>Also active</h2>
+          <h2 style={{ marginTop: 0 }}>{t('Also active')}</h2>
           {rowsOf(other)}
         </section>
       )}
 
       {otherBuckets.length > 0 && (
         <section className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>This month's usage</h2>
+          <h2 style={{ marginTop: 0 }}>{t("This month's usage")}</h2>
           {otherBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}
         </section>
       )}
 
       {missing.length > 0 && (
         <section className="card" data-testid="discover" style={{ padding: '14px 18px', marginBottom: 14 }}>
-          <h2 style={{ marginTop: 0 }}>{products.length ? 'Complete your setup' : 'Get started'}</h2>
+          <h2 style={{ marginTop: 0 }}>{products.length ? t('Complete your setup') : t('Get started')}</h2>
           {missing.map((m) => (
             <p key={m.cat} style={{ margin: '6px 0' }}>
               <Link to="/">{m.label} →</Link>
@@ -351,7 +352,7 @@ function TopUp({ offering, price, onBought }) {
   return (
     <p style={{ margin: '8px 0 0' }}>
       <button className="ghost" data-testid={`topup-${offering.id}`} disabled={state === 'busy'} onClick={buy}>
-        {state === 'busy' ? 'Buying…' : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
+        {state === 'busy' ? t('Buying…') : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
       </button>
       {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ added to this month's allowance</span>}
       {state && state !== 'done' && state !== 'busy' && <span className="error"> {state}</span>}
