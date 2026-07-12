@@ -65,6 +65,7 @@ async function loadMembers() {
       .catch(() => { lines.textContent = ''; });
   }
   if (!members.length) box.textContent = 'Nobody yet — add your first person below.';
+  return members;
 }
 
 async function addMember() {
@@ -113,9 +114,56 @@ async function loadOfferings() {
   const offers = await json(await authFetch(`${CATALOG}/productOffering?limit=100`));
   const picker = el('order-offering');
   picker.replaceChildren();
-  for (const o of offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity)) {
+  const orderable = offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity);
+  for (const o of orderable) {
     picker.append(new Option(o.name, o.id));
   }
+  return orderable;
+}
+
+/* ---------- the B2B price view: list price vs THIS company's price ----------
+ * Same catalog as every channel, but priced through the policy component with
+ * the org in the context — a negotiated deal or volume tier authored as a
+ * pricing rule shows up here, without touching the consumer storefront. */
+async function loadPlans(orderable, memberCount) {
+  const box = el('plans');
+  box.textContent = 'loading…';
+  const prices = await json(await authFetch(`${CATALOG}/productOfferingPrice?limit=100`))
+    .catch(() => []);
+  const priceById = Object.fromEntries(prices.map((p) => [p.id, p]));
+  box.replaceChildren();
+  for (const o of orderable) {
+    const monthly = (o.productOfferingPrice || [])
+      .map((ref) => priceById[ref.id])
+      .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null)
+      .reduce((sum, p) => sum + p.price.value, 0);
+    if (!monthly) continue;
+    const unit = 'EUR';
+    const row = document.createElement('div');
+    row.dataset.plan = o.id;
+    row.innerHTML = `${o.name} <span style="float:right" data-price>${monthly.toFixed(2)} ${unit}/month</span>`;
+    box.append(row);
+    // negotiated price, fail-soft to list
+    authFetch('/tmf-api/policyManagement/v4/price', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ context: {
+        subtotal: monthly, offeringIds: [o.id],
+        organizationId: orgId, party: me.id, memberCount,
+      } }),
+    })
+      .then(json)
+      .then((r) => {
+        if (!(r.adjustments || []).length) return;
+        const label = r.adjustments.map((a) => a.label).join(', ');
+        row.querySelector('[data-price]').innerHTML =
+          `<s style="opacity:.55">${monthly.toFixed(2)}</s>
+           <b class="msisdn" data-testid="your-price">${Number(r.total).toFixed(2)} ${unit}/month</b>
+           <span style="opacity:.7">· ${label}</span>`;
+      })
+      .catch(() => {});
+  }
+  if (!box.children.length) box.textContent = 'No priced plans in the catalog.';
 }
 
 async function placeOrder() {
@@ -240,8 +288,8 @@ async function main() {
 
   el('add-member').addEventListener('click', addMember);
   el('place-order').addEventListener('click', placeOrder);
-  loadMembers();
-  loadOfferings();
   loadBills();
+  const [members, orderable] = await Promise.all([loadMembers(), loadOfferings()]);
+  loadPlans(orderable, (members || []).length);
 }
 main();

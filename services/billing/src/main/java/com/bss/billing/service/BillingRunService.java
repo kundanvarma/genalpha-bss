@@ -96,10 +96,14 @@ public class BillingRunService {
         // their own bill, exactly as before.
         Map<String, List<Map<String, Object>>> byAccount = new LinkedHashMap<>();
         Map<String, List<String>> membersOf = new LinkedHashMap<>();
+        java.util.Set<String> orgAccounts = new java.util.HashSet<>();
         for (Map.Entry<String, List<Map<String, Object>>> e : byOwner.entrySet()) {
             java.util.Optional<String> org = orgs == null ? java.util.Optional.empty()
                     : orgs.organizationOf(e.getKey());
             String account = (org == null ? java.util.Optional.<String>empty() : org).orElse(e.getKey());
+            if (org != null && org.isPresent()) {
+                orgAccounts.add(account);
+            }
             byAccount.computeIfAbsent(account, k -> new ArrayList<>()).addAll(e.getValue());
             membersOf.computeIfAbsent(account, k -> new ArrayList<>()).add(e.getKey());
         }
@@ -194,6 +198,12 @@ public class BillingRunService {
                 pricingContext.put("subtotal", recurringBase);
                 pricingContext.put("party", owner.getKey());
                 pricingContext.put("offeringIds", new ArrayList<>(monthlyByOffering.keySet()));
+                // B2B: negotiated per-org deals and volume tiers are pricing
+                // rules conditioned on these — authored as data, no redeploy.
+                if (orgAccounts.contains(owner.getKey())) {
+                    pricingContext.put("organizationId", owner.getKey());
+                }
+                pricingContext.put("memberCount", membersOf.get(owner.getKey()).size());
                 List<Map<String, Object>> priceAdjustments = pricing.adjustments(pricingContext);
                 for (Map<String, Object> adjustment : priceAdjustments == null ? List.<Map<String, Object>>of() : priceAdjustments) {
                     BigDecimal amount = new BigDecimal(String.valueOf(adjustment.getOrDefault("amount", "0")));
