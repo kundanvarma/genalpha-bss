@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { openProblems } from './api.js';
-import { ensureSignedIn, signOut, tokenClaims } from './auth.js';
+import { ensureSignedIn, signOut, tokenClaims, hasRole } from './auth.js';
 import Customers from './pages/Customers.jsx';
 import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
@@ -46,7 +46,7 @@ export default function App() {
         <nav className="nav">
           <NavLink to="/" end>Customers</NavLink>
           <NavLink to="/tickets">Tickets</NavLink>
-          <NavLink to="/stock">Stock</NavLink>
+          {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
         </nav>
         <div className="who">
           <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>

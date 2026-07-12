@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { aiTicketReply, workTicket } from '../api.js';
+import { hasRole } from '../auth.js';
 
 const NEXT = {
   acknowledged: ['inProgress', 'resolved'],
@@ -64,9 +65,11 @@ export default function TicketCard({ ticket, onChanged }) {
         <div className="stack">
           <input name="ticketNote" placeholder="Add a note…" value={note}
                  onChange={(e) => setNote(e.target.value)} />
-          <button className="ghost" data-testid="draft-reply" onClick={draftReply} disabled={drafting}>
-            {drafting ? 'Drafting…' : '✨ Draft reply'}
-          </button>
+          {hasRole('ai:use') && (
+            <button className="ghost" data-testid="draft-reply" onClick={draftReply} disabled={drafting}>
+              {drafting ? 'Drafting…' : '✨ Draft reply'}
+            </button>
+          )}
           {note.trim() && <button className="ghost" onClick={() => change(null)}>Note only</button>}
           {NEXT[ticket.status].map((s) => (
             <button className="ghost" key={s} onClick={() => change(s)}>→ {s}</button>

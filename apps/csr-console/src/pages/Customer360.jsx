@@ -6,6 +6,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
+import { hasRole } from '../auth.js';
 
 const None = () => <span className="secnone"> — none</span>;
 
@@ -113,7 +114,7 @@ export default function Customer360() {
       {error && <p className="error">{error}</p>}
 
       <section className="copilot" data-testid="copilot-card">
-        {!copilot && (
+        {!copilot && hasRole('ai:use') && (
           <button className="ghost" data-testid="copilot-summarize" onClick={summarize}>
             ✨ Summarize this customer
           </button>
@@ -142,7 +143,7 @@ export default function Customer360() {
                 </div>
                 <div className="rowend">
                   <span className={`state ${o.state}`}>{o.state}</span>
-                  {o.state === 'acknowledged' && (
+                  {o.state === 'acknowledged' && hasRole('ordering:write') && (
                     <>
                       <button className="ghost" onClick={() => act(() => patchOrder(o.id, { state: 'completed' }))}>
                         Complete
@@ -171,7 +172,7 @@ export default function Customer360() {
                 <div className="rowend">
                   <span className="msisdn">{sv.supportingResource[0].value}</span>
                   <span className={`state ${sv.state}`}>{sv.state}</span>
-                  {sv.state === 'active' && (
+                  {sv.state === 'active' && hasRole('service:write') && (
                     <button className="ghost danger" data-testid="cease-service"
                             onClick={() => window.confirm(`Cease ${sv.name} and release ${sv.supportingResource[0].value}?`)
                               && act(() => ceaseService(sv.id, 'ceased by agent'))}>
@@ -196,7 +197,7 @@ export default function Customer360() {
                 </div>
                 <div className="rowend">
                   <span className={`state ${po.status}`}>{po.status}</span>
-                  {po.status === 'scheduled' && (
+                  {po.status === 'scheduled' && hasRole('porting:write') && (
                     <button className="ghost" data-testid="complete-cutover"
                             onClick={() => act(() => completeCutover(po.id))}>
                       Complete cutover

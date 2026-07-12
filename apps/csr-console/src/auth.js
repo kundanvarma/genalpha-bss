@@ -166,3 +166,8 @@ export async function ensureSignedIn() {
   await beginLogin();
   return false;
 }
+
+/** Staff-role check from the token — the APIs enforce the same roles server-side. */
+export function hasRole(role) {
+  return ((tokenClaims().realm_access || {}).roles || []).includes(role);
+}

@@ -134,7 +134,7 @@ color** theme every channel from the tenant manifest)
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA) |
-| csr-console | `/csr` | Assisted service: customer 360 with AI copilot, ticket queue, number-porting panel, service cease, org-scoped agents |
+| csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
 | admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit — each area appears only for operators holding its staff role (a product manager sees the product area, not bills or appointments) |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay; web today, iOS/Android from the same code |
 
@@ -172,7 +172,8 @@ Then browse:
 | URL | What |
 |---|---|
 | http://localhost:8080/shop/ | GenAlpha storefront (self-register, or browse as guest) |
-| http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` |
+| http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` (full agent) |
+| http://localhost:8080/csr/ | CSR console, junior persona — `jo@bss.local` / `jo` (read + tickets only) |
 | http://localhost:8080/console/ | Admin console — `demo` / `demo` (all areas) |
 | http://localhost:8080/console/ | Admin console, product persona — `pat@bss.local` / `pat` (product tabs only) |
 | http://shop.nova.localhost:8080/shop/ | Nova Telecom's white-label storefront (own realm, own catalog) |
