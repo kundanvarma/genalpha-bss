@@ -52,6 +52,34 @@ async function token(request, client, user, pass) {
   console.log('OK boundary holds: ordering for a non-member is refused ('
     + (await crossOrg.json()).message + ')');
 
+  // --- negotiated org pricing: a DATA-authored rule gives Acme 20% off.
+  // No redeploy, no code — the same rules engine that does launch promos.
+  const POLICY = `${API}/tmf-api/policyManagement/v4`;
+  const priceIndex = Object.fromEntries((await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100`,
+    { headers: H })).json()).map((p) => [p.id, p]));
+  const planMonthly = (plan.productOfferingPrice || []).map((r) => priceIndex[r.id])
+    .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null)
+    .reduce((s, p) => s + p.price.value, 0);
+  const ruleRes = await ctx.request.post(`${POLICY}/policyRule`, { headers: H, data: {
+    name: `Acme corporate deal ${run}`, domain: 'pricing', effect: 'adjust',
+    priority: 10, enabled: true,
+    condition: JSON.stringify({ '==': [{ var: 'organizationId' }, org.id] }),
+    adjustmentType: 'percent', adjustmentValue: -20,
+    message: 'Acme corporate deal (20% off)',
+  } });
+  if (ruleRes.status() !== 201) fail('org pricing rule create failed: ' + ruleRes.status());
+  const ruleId = (await ruleRes.json()).id;
+  // expected org price straight from the engine (folds in any other live rules)
+  const orgQuote = await (await ctx.request.post(`${POLICY}/price`, { headers: H,
+    data: { context: { subtotal: planMonthly, offeringIds: [plan.id], organizationId: org.id } } })).json();
+  if (!orgQuote.adjustments.some((a) => a.label.includes('Acme corporate deal'))) {
+    fail('org pricing rule did not fire in the engine');
+  }
+  const expectedOrgPrice = Number(orgQuote.total);
+  console.log(`OK negotiated pricing rule authored as data: ${plan.name} `
+    + `${planMonthly.toFixed(2)} -> ${expectedOrgPrice.toFixed(2)} EUR for Acme only`);
+
   // --- the business console, in a real browser
   const page = await (await browser.newContext()).newPage();
   await page.goto(`${API}/biz/`);
@@ -63,6 +91,15 @@ async function token(request, client, user, pass) {
   const orgName = await page.locator('#org-name').textContent();
   if (!orgName.includes('Acme')) fail('org name missing: ' + orgName);
   console.log('OK Bianca signed in to /biz — her organization:', orgName);
+
+  // the B2B price view shows HER company's negotiated price, not list
+  const planRow = page.locator(`[data-plan="${plan.id}"]`);
+  await planRow.locator('[data-testid=your-price]').waitFor({ timeout: 15000 });
+  const yourPrice = await planRow.locator('[data-testid=your-price]').textContent();
+  if (!yourPrice.includes(expectedOrgPrice.toFixed(2))) {
+    fail(`/biz shows wrong org price: "${yourPrice}", expected ${expectedOrgPrice.toFixed(2)}`);
+  }
+  console.log('OK /biz price view: list', planMonthly.toFixed(2), 'struck through, Acme pays', yourPrice.trim());
 
   // add an employee — WITH an email, so /biz provisions a real login for him
   const erikEmail = `erik-${run}@acme.example`;
@@ -110,8 +147,18 @@ async function token(request, client, user, pass) {
         { headers: H })).json()).find((p) => p.givenName === 'Erik').id}`,
     { headers: H })).json();
   if (erikBills.length) fail('Erik got a personal bill — should be consolidated under Acme');
+  // the negotiated deal must land on the INVOICE, not just the preview
+  if (Math.abs(orgBills[0].amountDue.value - expectedOrgPrice) > 0.01) {
+    fail(`consolidated bill should carry the Acme deal: expected ${expectedOrgPrice.toFixed(2)}, got ${orgBills[0].amountDue.value}`);
+  }
+  const billLines = await (await ctx.request.get(
+    `${API}/tmf-api/customerBillManagement/v4/customerBill/${orgBills[0].id}/appliedCustomerBillingRate`,
+    { headers: H })).json();
+  if (!billLines.some((r) => String(r.name).includes('Acme corporate deal'))) {
+    fail('the deal adjustment line is missing from the consolidated bill');
+  }
   console.log('OK ONE consolidated invoice for Acme,', orgBills[0].amountDue.value,
-    orgBills[0].amountDue.unit, '— and no personal bill for Erik');
+    orgBills[0].amountDue.unit, '— WITH the negotiated-deal line, and no personal bill for Erik');
 
   // and Bianca sees it in /biz
   await page.reload();
@@ -139,7 +186,10 @@ async function token(request, client, user, pass) {
   console.log('OK Erik signed in to /biz — HIS my-page: line', memberLine.match(/\+\d+/)[0],
     'active, billed to', memberOrg.trim());
 
+  // the run's deal rule is org-scoped (inert for anyone else) but tidy up anyway
+  await ctx.request.patch(`${POLICY}/policyRule/${ruleId}`, { headers: H, data: { enabled: false } });
+
   await browser.close();
   console.log('\nALL B2B CHECKS PASSED — org, membership, boundary, order-for-member, '
-    + 'consolidated invoice, invited member self-care.');
+    + 'negotiated org pricing (view + invoice), consolidated invoice, invited member self-care.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

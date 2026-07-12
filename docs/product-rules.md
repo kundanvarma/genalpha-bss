@@ -108,13 +108,16 @@ Advanced rules are JSON-logic over these fields.
 | `items` | list | `{offeringId, name, quantity}` per item |
 
 **Pricing context** (cart preview sends `subtotal` + `offeringIds`; billing sends
-`subtotal` + `offeringIds` + `party`):
+`subtotal` + `offeringIds` + `party` and, for consolidated B2B accounts, the org
+fields; the `/biz` price view sends the org fields too):
 
 | Field | Type | Meaning |
 |---|---|---|
 | `subtotal` | number | The recurring base being priced |
 | `offeringIds` | string[] | Offerings in the cart / on the bill |
 | `party` | string | Customer party id (billing only) |
+| `organizationId` | string | The paying organization — only present when the account **is** a company, so a rule on it can never hit a consumer |
+| `memberCount` | number | People billing under the account (1 for consumers) |
 | `verifiedIdentity` | boolean | When the caller supplies it (dry run does) |
 
 **Supported JSON-logic operators**: `var`, `missing`, `==`, `===`, `!=`, `!==`, `>`, `>=`, `<`,
@@ -138,6 +141,15 @@ satisfies a comparison — a missing quantity is never "over the cap".
 
 // pricing: 10% off carts over €100 (advanced pricing kind, adjustment -10 percent)
 { ">": [ { "var": "subtotal" }, 100 ] }
+
+// pricing: NEGOTIATED B2B DEAL — this company pays 20% under list (adjustment -20
+// percent). organizationId only exists for company accounts, so consumers are
+// untouched; the deal shows in /biz ("Plans & your company pricing") and lands
+// on the consolidated invoice as its own line.
+{ "==": [ { "var": "organizationId" }, "<acme-org-id>" ] }
+
+// pricing: volume tier — any company with 10+ people billing together gets 15% off
+{ ">=": [ { "var": "memberCount" }, 10 ] }
 ```
 
 ---
