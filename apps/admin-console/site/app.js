@@ -199,8 +199,15 @@ const RESOURCES = [
         { value: 'price-verified', label: 'Price: discount / surcharge for verified customers' },
         { value: 'price-when-item', label: 'Price: discount / surcharge when the cart has an item' },
         { value: 'price-always', label: 'Price: discount / surcharge for everyone' },
+        { value: 'price-company', label: 'Price: negotiated deal for one company (B2B)' },
+        { value: 'price-volume', label: 'Price: volume deal — any company with enough people (B2B)' },
         { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
       ] },
+      { name: 'organization', label: 'Company (the deal applies to this organization only)', kind: 'ref',
+        base: '/tmf-api/party/v4', resource: 'organization', referredType: 'Organization',
+        showWhen: { field: 'ruleKind', in: ['price-company'] } },
+      { name: 'minMembers', label: 'Minimum people billing together', kind: 'number', placeholder: '10',
+        showWhen: { field: 'ruleKind', in: ['price-volume'] } },
       { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
         showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
       { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
@@ -211,9 +218,9 @@ const RESOURCES = [
         { value: '', label: '—' },
         { value: 'percent', label: 'Percent of subtotal' },
         { value: 'amount', label: 'Fixed amount' },
-      ], showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-advanced'] } },
+      ], showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-company', 'price-volume', 'price-advanced'] } },
       { name: 'adjustmentValue', label: 'Adjustment value — negative = discount, positive = surcharge', kind: 'number',
-        showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-advanced'] } },
+        showWhen: { field: 'ruleKind', in: ['price-verified', 'price-when-item', 'price-always', 'price-company', 'price-volume', 'price-advanced'] } },
       { name: 'condition', label: 'JSON-logic condition', kind: 'longtext',
         showWhen: { field: 'ruleKind', in: ['advanced', 'price-advanced'] } },
       { name: 'message', label: 'Message / label shown to the customer', required: true },
@@ -246,6 +253,15 @@ const RESOURCES = [
           break;
         case 'price-always':
           condition = JSON.stringify({ '==': [1, 1] });
+          break;
+        case 'price-company':
+          // organizationId only exists in the context when the payer IS a
+          // company, so this can never touch a consumer.
+          condition = JSON.stringify({ '==': [{ var: 'organizationId' }, idOf(body.organization)] });
+          break;
+        case 'price-volume':
+          condition = JSON.stringify({ '>=': [{ var: 'memberCount' },
+            Number.isFinite(Number(body.minMembers)) && Number(body.minMembers) > 0 ? Number(body.minMembers) : 2] });
           break;
         default:
           break;
