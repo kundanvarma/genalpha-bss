@@ -89,7 +89,7 @@ export default function App() {
             <>
               <NavLink to="/orders">My orders</NavLink>
               <NavLink to="/bills">My bills</NavLink>
-              <NavLink to="/services">My services</NavLink>
+              <NavLink to="/services">My page</NavLink>
               <NavLink to="/notifications" className="cartlink">
                 Inbox{unread > 0 && <span className="badge">{unread}</span>}
               </NavLink>

@@ -69,7 +69,7 @@ async function apiCall(page, method, path, token, body) {
   console.log('OK activation minted a SIM:', sim.body.iccid, '(PUK not in the default response)');
 
   // --- /shop My services: SIM card, PUK reveal, OTA PIN reset
-  await page.click('.nav >> text=My services');
+  await page.click('.nav >> text=My page');
   await page.waitForSelector('[data-testid=sim-card]', { timeout: 15000 });
   const shownIccid = await page.locator('[data-testid=sim-iccid]').textContent();
   if (!shownIccid.includes(sim.body.iccid.slice(-5))) fail('UI shows wrong ICCID: ' + shownIccid);

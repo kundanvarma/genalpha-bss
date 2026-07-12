@@ -86,7 +86,7 @@ async function apiCall(page, method, path, token, body) {
   console.log('OK Carl live on', planA.name, 'number', number);
 
   // --- change the plan from /shop My services
-  await page.click('.nav >> text=My services');
+  await page.click('.nav >> text=My page');
   await page.waitForSelector('[data-testid=my-number]', { timeout: 15000 });
   await page.click(`[data-testid=change-plan-${product.id}]`);
   await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
