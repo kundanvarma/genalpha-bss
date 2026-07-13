@@ -39,7 +39,7 @@ async function loadMembers() {
   const picker = el('order-member');
   picker.replaceChildren();
   const swapPicker = el('swap-member');
-  swapPicker.replaceChildren(new Option('Who…', ''));
+  swapPicker.replaceChildren(new Option(t('Who…'), ''));
   for (const m of members) {
     const row = document.createElement('div');
     row.className = 'memberrow';
@@ -64,12 +64,12 @@ async function loadMembers() {
         const active = (svcs || []).filter((sv) => sv.state === 'active');
         const nums = active.flatMap((sv) => (sv.supportingResource || []).map((r) => r.value)).filter(Boolean);
         lines.innerHTML = active.length
-          ? `${active.length} line${active.length > 1 ? 's' : ''} · <span class="msisdn">${nums.join(' · ')}</span>`
-          : 'no lines yet';
+          ? `${active.length} ${t(active.length > 1 ? 'lines' : 'line')} · <span class="msisdn">${nums.join(' · ')}</span>`
+          : t('no lines yet');
       })
       .catch(() => { lines.textContent = ''; });
   }
-  if (!members.length) box.textContent = 'Nobody yet — add your first person below.';
+  if (!members.length) box.textContent = t('Nobody yet — add your first person below.');
   return members;
 }
 
@@ -79,7 +79,7 @@ async function addMember() {
   const email = el('new-email').value.trim();
   const status = el('member-status');
   if (!given || !family) { status.className = 'err'; status.textContent = 'name required'; return; }
-  status.className = ''; status.textContent = 'adding…';
+  status.className = ''; status.textContent = t('adding…');
   try {
     // With an email we provision a real LOGIN first (TMF672 mints the IdP
     // account, customer role only), then pin the party's id to the new token
@@ -125,7 +125,7 @@ async function loadOfferings() {
   const orderable = offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity);
   // plan changes are like-for-like: plans only, never devices or add-ons
   const swapPicker = el('swap-offering');
-  swapPicker.replaceChildren(new Option('New plan…', ''));
+  swapPicker.replaceChildren(new Option(t('New plan…'), ''));
   for (const o of orderable) {
     picker.append(new Option(o.name, o.id));
     if (PLAN_CATS.includes(categoryOf(o))) {
@@ -153,10 +153,12 @@ async function loadPlans(orderable, memberCount) {
       .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null)
       .reduce((sum, p) => sum + p.price.value, 0);
     if (!monthly) continue;
-    const unit = 'EUR';
+    // the price's own unit — a Norwegian tenant prices in NOK, not EUR
+    const unit = (o.productOfferingPrice || []).map((ref) => priceById[ref.id])
+      .find((p) => p && p.price?.unit)?.price?.unit;
     const row = document.createElement('div');
     row.dataset.plan = o.id;
-    row.innerHTML = `${o.name} <span style="float:right" data-price>${monthly.toFixed(2)} ${unit}/month</span>`;
+    row.innerHTML = `${o.name} <span style="float:right" data-price>${fmtMoney(monthly, unit)}/${t('month')}</span>`;
     box.append(row);
     // negotiated price, fail-soft to list
     authFetch('/tmf-api/policyManagement/v4/price', {
@@ -172,13 +174,13 @@ async function loadPlans(orderable, memberCount) {
         if (!(r.adjustments || []).length) return;
         const label = r.adjustments.map((a) => a.label).join(', ');
         row.querySelector('[data-price]').innerHTML =
-          `<s style="opacity:.55">${monthly.toFixed(2)}</s>
-           <b class="msisdn" data-testid="your-price">${Number(r.total).toFixed(2)} ${unit}/month</b>
+          `<s style="opacity:.55">${fmtMoney(monthly, unit)}</s>
+           <b class="msisdn" data-testid="your-price">${fmtMoney(r.total, unit)}/${t('month')}</b>
            <span style="opacity:.7">· ${label}</span>`;
       })
       .catch(() => {});
   }
-  if (!box.children.length) box.textContent = 'No priced plans in the catalog.';
+  if (!box.children.length) box.textContent = t('No priced plans in the catalog.');
 }
 
 async function placeOrder() {
@@ -186,7 +188,7 @@ async function placeOrder() {
   const offering = el('order-offering').value;
   const status = el('order-status');
   if (!member || !offering) return;
-  status.className = ''; status.textContent = 'ordering…';
+  status.className = ''; status.textContent = t('ordering…');
   try {
     await json(await authFetch(`${ORDERING}/productOrder`, {
       method: 'POST',
@@ -197,7 +199,7 @@ async function placeOrder() {
         relatedParty: [{ id: member, role: 'customer' }],
       }),
     }));
-    status.className = 'ok'; status.textContent = '✓ ordered — the line activates in seconds';
+    status.className = 'ok'; status.textContent = t('✓ ordered — the line activates in seconds');
     setTimeout(loadMembers, 8000);
     setTimeout(loadMembers, 20000);
   } catch (e) { status.className = 'err'; status.textContent = e.message; }
@@ -207,7 +209,7 @@ async function placeOrder() {
 async function loadSwapLines() {
   const member = el('swap-member').value;
   const lines = el('swap-line');
-  lines.replaceChildren(new Option('Their line…', ''));
+  lines.replaceChildren(new Option(t('Their line…'), ''));
   if (!member) return;
   const svcs = await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${member}`))
     .catch(() => []);
@@ -227,7 +229,7 @@ async function swapPlan() {
   const offering = el('swap-offering').value;
   const status = el('swap-status');
   if (!member || !serviceId || !offering) return;
-  status.className = ''; status.textContent = 'changing…';
+  status.className = ''; status.textContent = t('changing…');
   try {
     // the member's installed product behind that line (matched by plan name)
     const products = await json(await authFetch(
@@ -246,7 +248,7 @@ async function swapPlan() {
         relatedParty: [{ id: member, role: 'customer' }],
       }),
     }));
-    status.className = 'ok'; status.textContent = '✓ plan changed — same number, new plan';
+    status.className = 'ok'; status.textContent = t('✓ plan changed — same number, new plan');
     loadMembers();
     loadSwapLines();
     loadBills();
@@ -262,7 +264,7 @@ async function loadBills() {
     const row = document.createElement('div');
     row.className = 'billrow';
     row.innerHTML = `<b>${b.billNo}</b> · ${b.state}
-      <span class="amount">${b.amountDue.value.toFixed(2)} ${b.amountDue.unit}</span>`;
+      <span class="amount">${fmtMoney(b.amountDue.value, b.amountDue.unit)}</span>`;
     const lines = document.createElement('div');
     lines.className = 'billlines';
     lines.textContent = 'loading lines…';
@@ -274,19 +276,23 @@ async function loadBills() {
         lines.replaceChildren(...rates.map((r) => {
           const d = document.createElement('div');
           const who = r.forParty?.id ? ` — <span data-for="${r.forParty.id}" class="linefor">${r.forParty.id.slice(0, 8)}…</span>` : '';
-          d.innerHTML = `${r.name}${who} <span style="float:right">${Number(r.taxExcludedAmount.value).toFixed(2)} ${r.taxExcludedAmount.unit}</span>`;
+          d.innerHTML = `${r.name}${who} <span style="float:right">${fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit)}</span>`;
           return d;
         }));
       })
       .catch(() => { lines.textContent = ''; });
   }
-  if (!bills.length) box.innerHTML = '<span class="dimhint">No invoices yet — they appear after the operator\'s billing run.</span>';
+  if (!bills.length) box.innerHTML = `<span class="dimhint">${t('No invoices yet — they appear after the operator\'s billing run.')}</span>`;
 }
 
 /* ---------- the MEMBER's my-page: the line their company pays for ---------- */
 async function renderMemberView(orgName) {
   el('member-org-name').textContent = orgName;
-  el('member-org-bill').textContent = orgName;
+  const note = el('member-billing-note');
+  note.replaceChildren(
+    document.createTextNode(t('Your subscription is paid by your company — charges appear on') + ' '),
+    Object.assign(document.createElement('b'), { textContent: orgName }),
+    document.createTextNode(' — ' + t("your organization's consolidated invoice. Nothing is billed to you personally.")));
   el('memberview').hidden = false;
 
   const box = el('member-lines');
@@ -307,7 +313,7 @@ async function renderMemberView(orgName) {
       row.append(name, num);
       box.append(row);
     }
-    if (!box.children.length) box.textContent = 'No lines yet — your company admin can order one for you.';
+    if (!box.children.length) box.textContent = t('No lines yet — your company admin can order one for you.');
     // SIM self-care per line: masked ICCID, PUK on request, OTA PIN reset.
     for (const row of box.querySelectorAll('.memberrow[data-service]')) {
       const sid = row.dataset.service;
@@ -317,9 +323,9 @@ async function renderMemberView(orgName) {
         simRow.style.margin = '2px 0 8px 14px';
         simRow.dataset.simFor = sid;
         simRow.innerHTML = `SIM <span class="msisdn">${sim.iccid}</span>
-          <button class="ghost" data-puk style="margin-left:8px">Show PUK</button>
-          <input data-pin placeholder="New PIN" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
-          <button class="ghost" data-reset>Reset PIN</button> <span data-sim-status></span>`;
+          <button class="ghost" data-puk style="margin-left:8px">${t('Show PUK')}</button>
+          <input data-pin placeholder="${t('New PIN')}" inputmode="numeric" maxlength="8" style="width:6em;margin-left:8px">
+          <button class="ghost" data-reset>${t('Reset PIN')}</button> <span data-sim-status></span>`;
         row.after(simRow);
         simRow.querySelector('[data-puk]').addEventListener('click', async () => {
           const full = await json(await authFetch(`${SERVICE_INV}/service/${sid}/sim?reveal=true`));
@@ -333,7 +339,7 @@ async function renderMemberView(orgName) {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ newPin: simRow.querySelector('[data-pin]').value }),
             }));
-            status.className = 'ok'; status.textContent = '✓ sent to your SIM';
+            status.className = 'ok'; status.textContent = t('✓ sent to your SIM');
           } catch (e) { status.className = 'err'; status.textContent = e.message; }
         });
       }).catch(() => {});
@@ -350,7 +356,7 @@ async function renderMemberView(orgName) {
         d.innerHTML = `${b.name} <span style="float:right">${b.usedValue}${b.allowedValue != null ? ` / ${b.allowedValue}` : ''} ${b.units || ''}</span>`;
         return d;
       }));
-      if (!usage.children.length) usage.textContent = 'No usage yet.';
+      if (!usage.children.length) usage.textContent = t('No usage yet.');
     })
     .catch(() => { el('member-usage').textContent = 'No usage yet.'; });
 }

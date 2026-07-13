@@ -902,6 +902,24 @@
       "realmRoles": [
         "customer"
       ]
+    },
+    {
+      "username": "birgit@fjellheim.no",
+      "email": "birgit@fjellheim.no",
+      "firstName": "Birgit",
+      "lastName": "Berg",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "birgit"
+        }
+      ],
+      "realmRoles": [
+        "customer",
+        "business:admin"
+      ]
     }
   ],
   "displayName": "Nova Telecom",

@@ -55,6 +55,24 @@ const GENALPHA_SHOP = 'http://localhost:8080/shop/';
   }
   console.log('OK the mobile app manifest carries locale/currency too:', manifest.locale, manifest.currency);
 
+  // --- B2B parity: the business console speaks Norwegian and bills in NOK
+  const biz = await (await browser.newContext()).newPage();
+  await biz.goto('http://biz.nova.localhost:8080/biz/');
+  await biz.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await biz.fill('input[name="username"]', 'birgit@fjellheim.no');
+  await biz.fill('input[name="password"]', 'birgit');
+  await biz.click('input[type="submit"], button[type="submit"]');
+  await biz.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+  const bizBody = await biz.locator('body').textContent();
+  for (const label of ['BEDRIFT', 'Din organisasjon:', 'Firmafakturaer', 'Bytt abonnement']) {
+    if (!bizBody.includes(label)) fail(`Norwegian /biz missing "${label}"`);
+  }
+  if (!bizBody.includes('Fjellheim')) fail('Fjellheim org missing from /biz');
+  await biz.locator('.billrow', { hasText: 'BILL-' }).first().waitFor({ timeout: 15000 });
+  const bill = await biz.locator('.billrow').first().textContent();
+  if (!/kr/.test(bill) || /EUR/.test(bill)) fail('consolidated invoice not in NOK: ' + bill);
+  console.log('OK Norwegian B2B: Birgit\'s bedriftskonsoll in Norwegian, consolidated invoice in NOK');
+
   await browser.close();
-  console.log('\nALL I18N CHECKS PASSED — one build, per-tenant language and currency.');
+  console.log('\nALL I18N CHECKS PASSED — one build, per-tenant language and currency, B2C and B2B.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });
