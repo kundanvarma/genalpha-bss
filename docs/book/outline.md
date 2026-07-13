@@ -377,6 +377,30 @@ industry standard **is**, what it's **for**, and how genalpha-bss uses it — pl
 definitions of TM Forum, ODA, CTK, and BSS-vs-OSS. Written so a reader who has never touched TM
 Forum can follow the whole book; grouped to mirror the acts. **Drafted.**
 
+## Act Six — The Operator's Week (added in the second edition of the HTML book)
+
+- **Ch 21 — Everyone gets a door.** B2B from an honest "no": organizations and membership, the
+  business-admin boundary enforced by live party lookups, consolidated invoicing (fail-open),
+  the /biz channel, invitations that mint logins pinned to the token subject, the member my-page
+  ("separate, not /shop"), and negotiated org pricing as rules — with console dropdown presets so
+  account managers never write JSON. Receipts: b2b_test.js; the machine-token cache lesson.
+- **Ch 22 — The shop becomes a home.** Catalog categories as first-class meaning; the MyJio-style
+  My page (cards recompose around holdings, bill on the card, TMF680 discovery); plan change as
+  TMF622 modify (same number, commitment guard, like-for-like); SIM self-care (PUK/PIN via a
+  SIM-platform seam); top-ups that grow the meter through the event stream; Family Max and the
+  pick-N-of-M configurator; the console bundle composer; the VAS trichotomy (partner entitlement /
+  security feature / billing-only) decided by category. Receipts: plan_change, sim, family_max,
+  vas suites; the phantom-line and per-realm-grant bugs the film caught.
+- **Ch 23 — Kroner and tongues.** locale+currency on the tenant manifest; English-strings-as-keys
+  i18n; Intl money from each price's own unit; Keycloak realm locales; Nova as a real Norwegian
+  operator (Nils/Min side, Birgit/Min bedrift, Fjellheim AS); the hardcoded-issuer find in /biz;
+  zero backend changes for cross-tenant B2B. Receipts: i18n_test.js; tenant_test walking a
+  purchase in Norwegian.
+- **Ch 24 — The load-bearing wall** (previously Ch 21), recap updated to the new inventory:
+  six surfaces, twenty-one suites, the film as a bug-catching instrument.
+
+---
+
 *Editorial note:* the TMF vocabulary is introduced twice, on purpose. Each chapter explains the one
 or two standards it needs *in the flow of the story* (Chapter 1 explains TMF620/622 as it builds
 them; Chapter 14 explains TMF642/656 as the network alarms fire). Appendix C is the collected

@@ -108,7 +108,7 @@
     <div class="kicker">A Build Memoir</div>
     <h1>Verify<br>Everything</h1>
     <div class="sub">How one person and an AI built a complete telecom BSS — one proof at a time</div>
-    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty-one components, four channels, and a discipline</div>
+    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty-one components, six channels, and a discipline</div>
   </div>
 </section>
 
@@ -119,8 +119,8 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, four customer channels, and eleven end-to-end test suites that all pass in
-    a real browser. It was built by one person working with an AI pair, over a compressed and
+    composable components, six customer surfaces, and twenty-one end-to-end test suites that all pass
+    in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
 
@@ -1170,6 +1170,152 @@
 
 </div>
 
+
+<!-- ============ ACT VI ============ -->
+<section class="act">
+  <div class="page">
+    <div class="n">Act Six</div>
+    <h2>The Operator's Week</h2>
+    <p>Companies get a door of their own, the shop becomes a home, products learn what they are —
+    and the whole machine starts speaking Norwegian.</p>
+  </div>
+</section>
+
+<div class="page">
+
+  <!-- Ch 21 -->
+  <section class="chapter" id="ch21">
+    <div class="num">Chapter Twenty-One</div>
+    <h3>Everyone gets a door</h3>
+    <div class="epi">"Do we have full B2B support in our BSS?" The honest answer was no — and honest
+    answers are where features come from. <span class="who">— from the build log</span></div>
+
+    <p class="drop">Every chapter so far had served one kind of customer: a person. But operators sell
+    to companies, and a company is not a big person. It has members whose lines it pays for, an
+    administrator who is not the operator's staff, and an accountant who wants <em>one</em> invoice,
+    not forty. The audit took an afternoon and returned a familiar shape: the party model could hold
+    organizations, nothing connected people to them, and nobody but the operator could manage anything.</p>
+
+    <p>The foundation went in the way foundations had gone in all along. Organizations gained a parent;
+    individuals gained a membership; a new customer-side role — the business administrator — could act
+    only inside their own organization, a boundary enforced by live lookups in the party service, never
+    trusted from the request. Billing learned consolidation: members' charges regroup under the company,
+    each line still attributed to the person who used it, and if the party service is unreachable the
+    run fails open to per-person bills rather than billing nobody. A sixth surface appeared at
+    <code>/biz</code> — the business console — where Bianca of Acme adds people, orders lines for them,
+    and reads the company invoice.</p>
+
+    <p>Two truths surfaced in the proving. The first was operational: the consolidated bill came out
+    empty because billing's machine account lacked one read permission — and the fix did nothing until
+    the service restarted, because machine tokens are cached. That lesson ("grant, then restart, then
+    believe") would pay for itself twice more before the week ended. The second was structural: Bianca's
+    people existed as party records but could not sign in, because every channel keys a customer to
+    their identity-provider subject. So invitation became a first-class feature: adding a person with an
+    email mints a real login through the TMF672 seam — hardcoded to the customer role, so the power
+    grants no escalation — and pins the party's id to the new token subject. Erik signs in and lands on
+    <em>his</em> line.</p>
+
+    <p>Where should Erik land? The storefront was the obvious answer and the wrong one. "I think B2B
+    my-page should be separate," came the verdict, and the channel split in two by role: the
+    administrator sees the org console; a plain member sees a work line, usage, SIM care, and a note
+    that the company pays — nothing to buy, no personal bills. One channel, two faces, the same pattern
+    the role-scoped consoles had established.</p>
+
+    <p>Then money. A company that brings forty lines does not pay list price, and the machinery for
+    that already existed: the pricing-rules engine. The billing run began passing the paying
+    organization into the rules context — a field that simply does not exist for consumers, so a
+    corporate deal can never leak to retail — and "Acme pays 20% under list" became a row of data:
+    25 becoming 20 in the company's price view and on the consolidated invoice, to the cent. When the
+    raw JSON condition drew the fair complaint that account managers should not write JSON, the console
+    grew two plain-English rule kinds: pick the company from a dropdown, type the percent. The engine
+    speaks JSON; the humans never have to.</p>
+  </section>
+
+  <!-- Ch 22 -->
+  <section class="chapter" id="ch22">
+    <div class="num">Chapter Twenty-Two</div>
+    <h3>The shop becomes a home</h3>
+    <div class="epi">A customer doesn't own a list of rows. They own a plan, some lines, a SIM in a
+    phone, and a bill they'd rather not think about. <span class="who">— design note, My page</span></div>
+
+    <p class="drop">The critique arrived as five observations in one message: the page mixed the
+    commercial with the technical, the plan-change menu offered a Samsung as if it were a tariff,
+    bundles hid their contents, and where were the ten- and fifty-gigabyte plans, the one-time data
+    top-ups? Behind all five sat one missing idea: the catalog had no notion of what an offering
+    <em>is</em>. So it learned. Categories — mobile plans, broadband, devices, TV, top-ups — became
+    persisted, first-class facts, and everything else followed from them.</p>
+
+    <p>The page rebuilt itself around the MyJio idea: it recomposes around what the customer holds.
+    A card per line of business — the bundle with its components nested, every numbered line with its
+    own SIM, the latest bill with a pay link, a discovery card fed by the recommendation engine.
+    Plan change became a real TMF622 <code>modify</code> order: same service, same number, validated
+    hard (your own product, an existing plan, like-for-like by category) and blocked while a
+    commitment window is open. A bundle's broadband tier upgrades in place because bundles decompose
+    into per-component products, while the commitment binds the bundle itself. The SIM became real —
+    ICCID and PUK minted at activation, PUK revealed on request, PIN pushed over the air through a
+    pluggable SIM-platform seam — and a five-gigabyte top-up became a purchase that genuinely grows
+    this month's meter, delivered through the event stream and idempotent per order.</p>
+
+    <p>Complicated products got their showpiece: Family Max. Two fixed components, "family lines —
+    pick one or two" of three plans, a configurable phone whose colour and storage ride the order, up
+    to two streaming extras, a twelve-month term, a base price plus a one-time fee while every chosen
+    option prices itself. The storefront configurator learned pick-N-of-M — checkboxes that cap
+    themselves live, an add-to-cart that gates below the minimum — and the order API enforces the same
+    limits, because the UI is convenience and the order is law. And when the fair question came —
+    "does a product owner need to use JSON?" — the console grew a bundle composer: components marked
+    included or optional, choice groups with their pick-ranges and defaults, terms and categories as
+    plain fields, and a promise that anything it doesn't understand survives a save untouched.</p>
+
+    <p>Then the products that aren't lines at all. Netflix on the operator's bill is sold like any
+    offering but fulfilled with the <em>partner</em>: the orchestrator now reads the catalog category
+    to decide fulfilment — partner services mint an entitlement code through a partner seam, security
+    products activate as resource-less features, insurance provisions nothing and simply bills. The
+    proof was cinematic in the most literal way: reviewing stills of the demo film caught the top-up
+    minting a phantom phone line with its own SIM, and the film's Norwegian take caught the partner
+    machinery failing for the second tenant — one missing per-realm grant. Both fixed, both re-proven,
+    both on camera in the next cut.</p>
+  </section>
+
+  <!-- Ch 23 -->
+  <section class="chapter" id="ch23">
+    <div class="num">Chapter Twenty-Three</div>
+    <h3>Kroner and tongues</h3>
+    <div class="epi">"In Norway it will require Norwegian, and NOK as currency." <span class="who">—
+    the requirement, in full</span></div>
+
+    <p class="drop">The audit was two sentences long. Currency: eighty percent there, because every
+    amount in the TMF models had carried its unit from the first chapter — EUR appeared in code only
+    as a fallback. Language: zero percent there. And so the fix followed the house's oldest rule: the
+    tenant manifest, which already told every channel its brand name and colour, learned two more
+    words — <code>locale</code> and <code>currency</code>.</p>
+
+    <p>The channels grew a translation layer with one deliberate trick: English strings <em>are</em>
+    the keys, so an untranslated string falls through as itself and the English tenant risks nothing.
+    Money formats through the platform's own internationalisation from each price's own unit — "299,00
+    kr/md." in Norway, the historical English format untouched because a dozen test suites assert it.
+    Keycloak's built-in Norwegian switched on per realm. And Nova Telecom, the white-label tenant that
+    had existed to prove isolation, became a real Norwegian operator: NOK prices, a tariff ladder, a
+    top-up called Datapåfyll, and personas to walk it — Nils on Min side changing plans in Norwegian,
+    keeping his number at 199 kroner.</p>
+
+    <p>B2B demanded the same parity and delivered the best find of the week: the business console had
+    its identity provider hardcoded to the first tenant's realm. It could never have served a second
+    operator — not mistranslated, but structurally monolingual. Wired into the manifest like every
+    other channel, it mounted at Nova's own hostname; Birgit Berg of Fjellheim AS runs her people and
+    lines in Norwegian and reads one consolidated invoice at 299 kroner. When the header still read
+    "BEDRIFT," the correction came from the person who knows: Norwegian operators call it <em>Min
+    bedrift</em>. Renamed. The whole B2B machine — boundaries, consolidation, invitations — worked for
+    the second tenant with zero backend changes, which is the sentence the first chapter was always
+    trying to earn.</p>
+
+    <p>The tenant-isolation suite now walks an entire purchase in Norwegian — Legg i handlekurven,
+    Til kassen — and the demo film ends its Norwegian act with a plan change and a company invoice,
+    in kroner, before Live Flow rolls the credits. One build. Every language. Every currency. The
+    manifest did it, not a fork.</p>
+  </section>
+
+</div>
+
 <!-- ============ CODA ============ -->
 <section class="act">
   <div class="page">
@@ -1181,19 +1327,24 @@
 
 <div class="page">
 
-  <!-- Ch 21 -->
-  <section class="chapter" id="ch21">
-    <div class="num">Chapter Twenty-One</div>
+  <!-- Ch 24 -->
+  <section class="chapter" id="ch24">
+    <div class="num">Chapter Twenty-Four</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
-    <p class="drop">Thirty-one components. Four channels. Fourteen end-to-end suites, all green in a
-    real browser. Eleven official conformance kits passing with zero failures — and two components
-    that fail their kits on purpose, with the reasons written down. Business rules and prices that
-    change with a row, never a redeploy. Isolation proven against a real
-    database. A B2B autonomy demo that used to be a slideshow, rebuilt as running software. A national
+    <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
+    role. Twenty-one end-to-end suites, all green in a real browser. Eleven official conformance kits
+    passing with zero failures — and two components that fail their kits on purpose, with the reasons
+    written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
+    Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
+    B2B, from one build. Plans that change without losing the number; SIMs with a PUK you can ask for;
+    top-ups that genuinely grow the meter; Netflix fulfilled as a partner entitlement because the
+    catalog category decides what a product <em>is</em>. A bundle composer so product owners never
+    touch JSON, and an order API that enforces what the composer promised. A national
     number-portability flow, both directions. A network that heals itself and leaves a receipt. And a
-    face on the whole invisible machine so anyone can watch it breathe.</p>
+    film — re-shot after every feature — that keeps catching real bugs, because everything on camera
+    is real.</p>
 
     <p>Look back and the three convictions turn out to have been one conviction wearing three coats.
     <b>Vendor-neutrality</b> — any IdP, any database, any broker, any model, any processor, any porting
