@@ -124,8 +124,10 @@ public class OrchestrationService {
             // else — or an unreachable catalog — is a network line, as always.
             String category = catalog.categoryOf(offering == null || offering.get("id") == null
                     ? null : String.valueOf(offering.get("id"))).orElse("");
-            if ("Insurance".equals(category)) {
-                log.info("'{}' is billing-only (Insurance) — no service to provision", name);
+            if ("Insurance".equals(category) || "Top-ups".equals(category)) {
+                // insurance covers, top-ups boost an allowance — neither is a
+                // service; they bill, and that's the whole story
+                log.info("'{}' is billing-only ({}) — no service to provision", name, category);
                 continue;
             }
             boolean partnerService = "Partner services".equals(category);
