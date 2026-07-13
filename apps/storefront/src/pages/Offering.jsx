@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { availabilityFor, getOffering, getSpec, priceIndex } from '../api.js';
-import { addToCart } from '../cart.js';
+import { addToCart, ensureInCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 
@@ -19,6 +19,7 @@ export default function Offering() {
   const [avail, setAvail] = useState({});                     // offering id -> units | null (unmanaged)
   const [extras, setExtras] = useState({});                   // optional component id -> added?
   const [shot, setShot] = useState(0);                        // gallery index
+  const [teasers, setTeasers] = useState([]);                 // deals that mention this offering
   const [error, setError] = useState(null);
 
   // TMF620 cardinality: a bundled component with lower limit 0 is optional
@@ -34,6 +35,11 @@ export default function Offering() {
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
+        // deals that mention this offering are its shop window — fail-soft
+        fetch(`/tmf-api/policyManagement/v4/price/teaser?offeringId=${o.id}`)
+          .then((r) => (r.ok ? r.json() : []))
+          .then(setTeasers)
+          .catch(() => {});
         // the offering's OWN spec carries a standalone device's colours and facts
         if (o.productSpecification?.id) {
           getSpec(o.productSpecification.id)
@@ -197,6 +203,43 @@ export default function Offering() {
       {offering.isBundle && <span className="tag">Bundle</span>}
       <h1>{offering.name}</h1>
       <p>{offering.description}</p>
+
+      {teasers.length > 0 && (
+        <div className="promos" data-testid="offer-promos">
+          {teasers.map((promo, i) => (
+            <p key={i} className="promo">💡 {promo.message}
+              {promo.audience === 'consumer' && (
+                <span className="dim"> — {t('private customers only; company purchases don\'t qualify')}</span>
+              )}
+              {promo.audience === 'business' && (
+                <span className="dim"> — {t('for business customers')}</span>
+              )}
+              {(promo.relatedOfferingIds || []).slice(0, 1).map((rid) => (
+                <span key={rid}>
+                  {!unmetChoice && <a className="promolink" href={`#/offering/${rid}`} data-testid="promo-add-deal"
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      try {
+                        // one gesture: THIS offering + the partner, straight to
+                        // the cart where the deal prices itself
+                        const partner = await getOffering(rid);
+                        await ensureInCart(offering, promo.message);
+                        await ensureInCart(partner, promo.message);
+                        navigate('/cart');
+                      } catch { navigate(`/offering/${rid}`); }
+                    }}>
+                    {t('add the deal to cart')} →
+                  </a>}
+                  <a className="promolink" href={`#/offering/${rid}`}
+                    onClick={(e) => { e.preventDefault(); navigate(`/offering/${rid}`); }}>
+                    {t('view the partner product')}
+                  </a>
+                </span>
+              ))}
+            </p>
+          ))}
+        </div>
+      )}
 
       {heroUrl && (
         <div className="gallery" data-testid="offer-gallery">

@@ -34,7 +34,8 @@ async function token(request, client, user, pass) {
 
   // preflight: remove leftovers from earlier runs so the validator's
   // "already exists" guard doesn't block this one
-  const NAMES = ['StreamPlus', 'Kids Watch', 'Kids Plan 2 GB', 'GPS Tracking', 'Kids Watch Starter'];
+  const NAMES = ['StreamPlus', 'Kids Watch', 'Kids Plan 2 GB', 'GPS Tracking', 'Kids Watch Starter',
+    '5G Mobile Plan 50 GB'];
   const sweep = async () => {
     const offers = await (await ctx.request.get(`${CATALOG}/productOffering?limit=100`, { headers: H })).json();
     for (const o of offers.filter((x) => NAMES.includes(x.name))) {
@@ -45,8 +46,13 @@ async function token(request, client, user, pass) {
       await ctx.request.delete(`${CATALOG}/productSpecification/${s.id}`, { headers: H });
     }
     const prices = await (await ctx.request.get(`${CATALOG}/productOfferingPrice?limit=100`, { headers: H })).json();
-    for (const p of prices.filter((x) => /^(StreamPlus|Kids Watch Installment|Kids Plan|GPS Tracking) /.test(x.name || ''))) {
+    for (const p of prices.filter((x) => /^(StreamPlus|Kids Watch Installment|Kids Plan|GPS Tracking|5G 50 GB) /.test(x.name || ''))) {
       await ctx.request.delete(`${CATALOG}/productOfferingPrice/${p.id}`, { headers: H });
+    }
+    const rules = await (await ctx.request.get(
+      `${API}/tmf-api/policyManagement/v4/policyRule?limit=100`, { headers: H })).json();
+    for (const r of rules.filter((x) => (x.name || '') === 'Samsung with plan discount')) {
+      await ctx.request.delete(`${API}/tmf-api/policyManagement/v4/policyRule/${r.id}`, { headers: H });
     }
   };
   await sweep();
@@ -140,9 +146,53 @@ async function token(request, client, user, pass) {
   console.log('OK four-part proposal applied in dependency order: device + plan + security '
     + 'add-on + 12-month bundle with GPS optional');
 
+  /* ---------- scenario 3: a plan + a cross-product discount RULE ---------- */
+  await say('I want to create a 5G mobile plan with 50 GB data and if customer buys a Samsung phone then 10% discount');
+  await page.locator('[data-testid=copilot-proposal]').nth(2).waitFor({ timeout: 20000 });
+  const ruleCard = await page.locator('[data-testid=copilot-proposal]').nth(2).textContent();
+  if (!ruleCard.includes('pricing rule') || !ruleCard.includes('Samsung')) {
+    fail('proposal card missing the pricing-rule row: ' + ruleCard.slice(0, 200));
+  }
+  await page.locator('[data-testid=copilot-create]').nth(2).click();
+  await page.locator('[data-testid=copilot-created]').nth(2).waitFor({ timeout: 25000 });
+  const plan50 = (await (await ctx.request.get(
+    `${CATALOG}/productOffering?name=${encodeURIComponent('5G Mobile Plan 50 GB')}`, { headers: H })).json())[0];
+  if (!plan50) fail('the 50 GB plan was not created');
+  const madeRules = (await (await ctx.request.get(
+    `${API}/tmf-api/policyManagement/v4/policyRule?limit=100`, { headers: H })).json())
+    .filter((r) => r.name === 'Samsung with plan discount');
+  if (madeRules.length !== 1) fail(`expected 1 discount rule, got ${madeRules.length}`);
+  const cond = madeRules[0].condition || '';
+  if (!cond.includes(plan50.id)) fail('rule condition does not reference the NEW plan id: ' + cond);
+  const samsungId = (await (await ctx.request.get(
+    `${CATALOG}/productOffering?name=${encodeURIComponent('Samsung Galaxy S26')}`, { headers: H })).json())[0].id;
+  if (!cond.includes(samsungId)) fail('rule condition does not reference the existing Samsung id');
+  if (madeRules[0].adjustmentValue !== -10 || madeRules[0].domain !== 'pricing') {
+    fail('rule shape wrong: ' + JSON.stringify(madeRules[0]));
+  }
+  if (!cond.includes('"!"')) fail('consumer-scoped rule missing the no-organization clause: ' + cond);
+  console.log('OK cross-product discount: the plan became an offering and the "10% off with a'
+    + ' Samsung" became a PRICING RULE referencing both — consumer-scoped, ids resolved');
+
+  // the rule is also the shop window: anonymous teaser + banner on the plan page
+  const teasers = await (await ctx.request.get(
+    `${API}/tmf-api/policyManagement/v4/price/teaser?offeringId=${plan50.id}`)).json();
+  if (!teasers.length || teasers[0].audience !== 'consumer') {
+    fail('anonymous teaser missing or unscoped: ' + JSON.stringify(teasers));
+  }
+  const shopPage = await (await browser.newContext()).newPage();
+  await shopPage.goto(`${API}/shop/offering/${plan50.id}`);
+  await shopPage.locator('[data-testid=offer-promos]').waitFor({ timeout: 15000 });
+  const promoText = await shopPage.locator('[data-testid=offer-promos]').textContent();
+  if (!promoText.includes('Samsung') || !promoText.includes('private customers only')) {
+    fail('offering page does not advertise the deal honestly: ' + promoText.slice(0, 160));
+  }
+  await shopPage.close();
+  console.log('OK the plan page ADVERTISES the deal — with the honest consumer-only note');
+
   // tidy: this was a demo conversation, not tenant catalog
   await sweep();
   await browser.close();
   console.log('\nALL COPILOT CHECKS PASSED — chat, clarify, propose, human confirm, deterministic '
-    + 'apply under the owner\'s token, and the created product sells and fulfils for real.');
+    + 'apply under the owner\'s token, and the created product sells and fulfils for real; cross-product discounts land as pricing rules.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

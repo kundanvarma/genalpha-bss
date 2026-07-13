@@ -67,18 +67,47 @@ export async function cartCount() {
 }
 
 /** selections: [{offeringId, name, characteristics}] for configured bundles;
- * characteristics: the line's OWN picks (a standalone device's colour). */
-export async function addToCart(offering, selections = [], quantity = 1, characteristics = null) {
+ * characteristics: the line's OWN picks (a standalone device's colour);
+ * deal: a label grouping lines added together as one advertised deal. */
+export async function addToCart(offering, selections = [], quantity = 1, characteristics = null, deal = null) {
   const cart = await fetchCart();
   const lines = cart.cartItem || [];
   const key = lineKey(offering.id, selections, characteristics);
   const existing = lines.find((l) => l.key === key);
   if (existing) {
     existing.quantity += quantity;
+    if (deal && !existing.deal) existing.deal = deal;
   } else {
     lines.push({ id: key, key, offeringId: offering.id, name: offering.name, quantity, selections,
-      ...(characteristics && Object.keys(characteristics).length ? { characteristics } : {}) });
+      ...(characteristics && Object.keys(characteristics).length ? { characteristics } : {}),
+      ...(deal ? { deal } : {}) });
   }
+  await saveItems(cart.id, lines);
+}
+
+/** Deal adds are idempotent: two deals sharing the plan must not double it —
+ * an existing line is only TAGGED, never incremented. */
+export async function ensureInCart(offering, deal = null) {
+  const cart = await fetchCart();
+  const lines = cart.cartItem || [];
+  const key = lineKey(offering.id, [], null);
+  const existing = lines.find((l) => l.key === key);
+  if (existing) {
+    if (deal && !existing.deal) existing.deal = deal;
+  } else {
+    lines.push({ id: key, key, offeringId: offering.id, name: offering.name,
+      quantity: 1, selections: [], ...(deal ? { deal } : {}) });
+  }
+  await saveItems(cart.id, lines);
+}
+
+/** Configure a line where it stands — the deal-added Samsung still needs
+ * its colour. Conditioned prices reprice from the same picks. */
+export async function setLineCharacteristics(key, characteristics) {
+  const cart = await fetchCart();
+  const lines = (cart.cartItem || []).map((l) => l.key === key
+    ? { ...l, characteristics: { ...(l.characteristics || {}), ...characteristics } }
+    : l);
   await saveItems(cart.id, lines);
 }
 

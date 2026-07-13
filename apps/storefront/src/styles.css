@@ -76,6 +76,17 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .pricing strong { color: var(--teal); font-size: 15.5px; }
 
 .detail { max-width: 620px; }
+.promos { margin: 4px 0 12px; }
+.promo { background: var(--teal-soft, #e7f4f4); border: 1px solid var(--teal);
+  border-radius: 10px; padding: 9px 14px; font-size: 13.5px; margin: 6px 0; }
+.lineconfig { display: flex; gap: 8px; margin-top: 6px; }
+.lineconfig select { font-size: 12px; padding: 3px 8px; border: 1px solid var(--line);
+  background: var(--paper); color: var(--ink); border-radius: 6px; }
+.row.dealhead { border-bottom: none; padding-bottom: 2px; font-size: 13px; color: var(--teal);
+  font-weight: 600; }
+.row.dealline { border-left: 3px solid var(--teal); padding-left: 12px; }
+.promolink { display: inline-block; margin-left: 10px; color: var(--teal); font-weight: 600;
+  text-decoration: none; }
 .gallery { margin: 6px 0 16px; }
 .gallery .hero { display: block; width: 100%; max-width: 300px; border-radius: 12px;
   border: 1px solid var(--line); background: #fff; }

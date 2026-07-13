@@ -93,12 +93,88 @@ public class PolicyService {
      * running subtotal, or a fixed amount); the running subtotal compounds so
      * two 10%-off rules stack multiplicatively, as a customer would expect.
      */
+    /**
+     * A pricing rule is also MARKETING: the shop advertises "buy these
+     * together and save" on the product page. Teasers are the enabled
+     * pricing rules that mention the offering, reduced to their public face
+     * (message + audience) — safe for anonymous eyes, no conditions leaked.
+     * Audience derives from the condition: a rule that requires the absence
+     * of organizationId is consumer-only; one that requires it is business.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> teasers(String offeringId) {
+        List<Map<String, Object>> teasers = new ArrayList<>();
+        if (offeringId == null || offeringId.isBlank()) {
+            return teasers;
+        }
+        for (PolicyRule rule : repository.enabledPricingRules()) {
+            String condition = rule.getCondition();
+            if (condition == null || !condition.contains(offeringId)) {
+                continue;
+            }
+            String audience = "all";
+            if (condition.contains("{\"!\":{\"var\":\"organizationId\"}}")) {
+                audience = "consumer";
+            } else if (condition.contains("\"organizationId\"")) {
+                audience = "business";
+            }
+            Map<String, Object> teaser = new java.util.LinkedHashMap<>();
+            teaser.put("name", rule.getName());
+            teaser.put("message", rule.getMessage() == null ? rule.getName() : rule.getMessage());
+            teaser.put("audience", audience);
+            teaser.put("adjustmentType", rule.getAdjustmentType());
+            teaser.put("adjustmentValue", rule.getAdjustmentValue());
+            // the OTHER offerings in the condition — the shop links "add it"
+            java.util.List<String> related = new ArrayList<>();
+            java.util.regex.Matcher ids = java.util.regex.Pattern
+                    .compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+                    .matcher(condition);
+            while (ids.find()) {
+                String id = ids.group();
+                if (!id.equals(offeringId) && !related.contains(id)) {
+                    related.add(id);
+                }
+            }
+            teaser.put("relatedOfferingIds", related);
+            teasers.add(teaser);
+        }
+        return teasers;
+    }
+
     @Transactional(readOnly = true)
     public PriceResult price(Map<String, Object> context) {
+        return price(context, false);
+    }
+
+    /**
+     * The GUEST's price preview. The context is SANITIZED, not the rules:
+     * identity claims are stripped from whatever the anonymous caller sent,
+     * so a negotiated company deal can never fire (or leak its label) no
+     * matter what a guest posts — while consumer-scoped rules, which merely
+     * require the ABSENCE of a company, preview correctly. Sign-in reprices
+     * with the genuine identity context.
+     */
+    @Transactional(readOnly = true)
+    public PriceResult indicative(Map<String, Object> context) {
+        Map<String, Object> anonymous = new java.util.LinkedHashMap<>(context);
+        for (String var : IDENTITY_VARS) {
+            anonymous.remove(var);
+        }
+        return price(anonymous, false);
+    }
+
+    private static final List<String> IDENTITY_VARS =
+            List.of("organizationId", "memberCount", "verifiedIdentity", "party");
+
+    private PriceResult price(Map<String, Object> context, boolean identityFreeOnly) {
         java.math.BigDecimal base = money(context.get("subtotal"));
         java.math.BigDecimal running = base;
         List<Map<String, Object>> adjustments = new ArrayList<>();
         for (PolicyRule rule : repository.enabledPricingRules()) {
+            if (identityFreeOnly && rule.getCondition() != null
+                    && IDENTITY_VARS.stream().anyMatch(v -> rule.getCondition().contains("\"" + v + "\""))) {
+                continue;
+            }
             if (!engine.matches(rule.getCondition(), context) || rule.getAdjustmentType() == null
                     || rule.getAdjustmentValue() == null) {
                 continue;

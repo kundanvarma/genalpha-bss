@@ -514,6 +514,10 @@ services:
     container_name: bss-ollama
     restart: unless-stopped
     profiles: ["ai"]
+    environment:
+      # the default 4096 truncates copilot proposals mid-JSON once the chat
+      # history grows - the prompt fills the window and generation is cut off
+      OLLAMA_CONTEXT_LENGTH: "8192"
     volumes:
       - ollama-models:/root/.ollama
     ports:

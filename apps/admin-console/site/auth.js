@@ -12,6 +12,7 @@ const AUTH_CONFIG = Object.assign({
 }, window.BSS_CONSOLE_CONFIG || {});
 
 const TOKEN_KEY = 'bss.console.token';
+const REFRESH_KEY = 'bss.console.refresh';
 const EXP_KEY = 'bss.console.tokenExp';
 const VERIFIER_KEY = 'bss.console.verifier';
 const STATE_KEY = 'bss.console.state';
@@ -70,11 +71,48 @@ async function completeLogin(code) {
     throw new Error('token exchange failed: HTTP ' + res.status);
   }
   const tokens = await res.json();
-  sessionStorage.setItem(TOKEN_KEY, tokens.access_token);
-  sessionStorage.setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
+  storeTokens(tokens);
   sessionStorage.removeItem(VERIFIER_KEY);
   sessionStorage.removeItem(STATE_KEY);
   history.replaceState(null, '', redirectUri());
+}
+
+function storeTokens(tokens) {
+  sessionStorage.setItem(TOKEN_KEY, tokens.access_token);
+  sessionStorage.setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
+  if (tokens.refresh_token) {
+    sessionStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+  }
+}
+
+/**
+ * Silent renewal: access tokens are short-lived (minutes) but the SSO
+ * session is not — a long copilot chat must never bounce through a login
+ * redirect mid-conversation and lose the page. Returns true when a fresh
+ * access token is in place.
+ */
+async function tryRefresh() {
+  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return false;
+  try {
+    const res = await fetch(AUTH_CONFIG.issuer + '/protocol/openid-connect/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        client_id: AUTH_CONFIG.clientId,
+        refresh_token: refreshToken,
+      }),
+    });
+    if (!res.ok) {
+      sessionStorage.removeItem(REFRESH_KEY);
+      return false;
+    }
+    storeTokens(await res.json());
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function currentToken() {
@@ -98,23 +136,36 @@ function tokenClaims() {
 function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
   sessionStorage.removeItem(EXP_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
   location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({
     client_id: AUTH_CONFIG.clientId,
     post_logout_redirect_uri: redirectUri(),
   }));
 }
 
-/** Fetch with the bearer token; a 401 restarts login (token expired/revoked). */
+/** Fetch with the bearer token; expiry refreshes SILENTLY — the login
+ * redirect is the last resort, never the first response to a 401. */
 async function authFetch(url, options) {
-  const token = currentToken();
+  let token = currentToken();
   if (!token) {
-    await beginLogin();
-    return new Promise(() => {}); // navigation takes over
+    if (await tryRefresh()) {
+      token = sessionStorage.getItem(TOKEN_KEY);
+    } else {
+      await beginLogin();
+      return new Promise(() => {}); // navigation takes over
+    }
   }
-  const opts = Object.assign({}, options);
-  opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + token });
-  const res = await fetch(url, opts);
+  const call = (bearer) => {
+    const opts = Object.assign({}, options);
+    opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + bearer });
+    return fetch(url, opts);
+  };
+  let res = await call(token);
   if (res.status === 401) {
+    if (await tryRefresh()) {
+      res = await call(sessionStorage.getItem(TOKEN_KEY));
+      if (res.status !== 401) return res;
+    }
     sessionStorage.removeItem(TOKEN_KEY);
     await beginLogin();
     return new Promise(() => {});
