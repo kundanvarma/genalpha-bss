@@ -56,8 +56,10 @@ const RESOURCES = [
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
       { name: 'version', label: 'Version' },
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification' },
+      { name: 'category', label: 'Categories (drive placement & fulfilment)', kind: 'reflist', resource: 'category', referredType: 'Category' },
+      { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
-      { name: 'bundledProductOffering', label: 'Bundled offerings', kind: 'reflist', resource: 'productOffering', referredType: 'ProductOffering' },
+      { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice' },
     ],
     columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
@@ -576,6 +578,199 @@ function quantityControl(field) {
   return [row];
 }
 
+/** Commitment terms without JSON: none / 12 / 24 months. */
+function commitmentControl(field) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  for (const [label, months] of [['No commitment', 0], ['12-month commitment', 12], ['24-month commitment', 24]]) {
+    select.append(new Option(label, String(months)));
+  }
+  controls[field.name] = {
+    get: () => {
+      const months = Number(select.value);
+      return months > 0 ? [{ name: `${months}-month commitment`,
+        duration: { amount: months, units: 'month' } }] : undefined;
+    },
+    set: (item) => {
+      const term = (item[field.name] || [])[0];
+      select.value = String(term?.duration?.amount || 0);
+    },
+  };
+  return [select];
+}
+
+/**
+ * The bundle composer: a product owner assembles what used to take raw
+ * TMF620 JSON — mandatory/optional components and pick-N-of-M choice groups
+ * with defaults. Unknown entry shapes survive a round trip untouched.
+ */
+function bundleComposerControl(field) {
+  const box = document.createElement('div');
+  box.className = 'composer';
+  box.style.cssText = 'display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px';
+  let entries = [];       // {kind:'component',refId,role,original} | {kind:'choice',name,lower,upper,def,optionIds}
+  let passthrough = [];   // shapes the composer does not understand
+  let picklist = [];      // [{id,name}]
+
+  const offeringRef = (id) => {
+    const item = picklist.find((p) => p.id === id);
+    return { id, href: `${API_BASE}/${field.resource}/${id}`,
+      name: item ? (item.name || id) : id, '@referredType': field.referredType };
+  };
+
+  function offeringSelect(value, onChange) {
+    const sel = document.createElement('select');
+    sel.append(new Option('— offering —', ''));
+    for (const item of picklist) {
+      const option = new Option(item.name || item.id, item.id);
+      option.disabled = item.id === editingId;
+      sel.append(option);
+    }
+    sel.value = value || '';
+    sel.addEventListener('change', () => onChange(sel.value));
+    return sel;
+  }
+
+  function removeButton(entry) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'ghost'; b.textContent = '✕';
+    b.addEventListener('click', () => { entries = entries.filter((e) => e !== entry); render(); });
+    return b;
+  }
+
+  function render() {
+    box.replaceChildren();
+    for (const entry of entries) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap';
+      if (entry.kind === 'component') {
+        row.dataset.composerRow = 'component';
+        const role = document.createElement('select');
+        role.append(new Option('Included (mandatory)', 'mandatory'),
+          new Option('Optional add-on', 'optional'));
+        role.value = entry.role;
+        role.addEventListener('change', () => { entry.role = role.value; });
+        row.append(offeringSelect(entry.refId, (v) => { entry.refId = v; }), role, removeButton(entry));
+      } else {
+        row.dataset.composerRow = 'choice';
+        row.style.cssText += ';border-left:3px solid var(--teal);padding-left:8px';
+        const name = document.createElement('input');
+        name.placeholder = 'Choice group name (e.g. Choose your phone)';
+        name.value = entry.name; name.style.minWidth = '220px';
+        name.addEventListener('input', () => { entry.name = name.value; });
+        const lower = document.createElement('input');
+        lower.type = 'number'; lower.min = '0'; lower.value = entry.lower;
+        lower.style.width = '4.5em'; lower.title = 'minimum picks';
+        lower.addEventListener('input', () => { entry.lower = Number(lower.value); });
+        const upper = document.createElement('input');
+        upper.type = 'number'; upper.min = '1'; upper.value = entry.upper;
+        upper.style.width = '4.5em'; upper.title = 'maximum picks';
+        upper.addEventListener('input', () => { entry.upper = Number(upper.value); });
+        const opts = document.createElement('select');
+        opts.multiple = true; opts.size = 4; opts.style.minWidth = '220px';
+        for (const item of picklist) {
+          const option = new Option(item.name || item.id, item.id);
+          option.selected = entry.optionIds.includes(item.id);
+          option.disabled = item.id === editingId;
+          opts.append(option);
+        }
+        const def = document.createElement('select');
+        const syncDefault = () => {
+          entry.optionIds = [...opts.selectedOptions].map((o) => o.value);
+          def.replaceChildren(new Option('no default', ''));
+          for (const id of entry.optionIds) {
+            def.append(new Option('default: ' + (picklist.find((p) => p.id === id)?.name || id), id));
+          }
+          def.value = entry.optionIds.includes(entry.def) ? entry.def : '';
+          entry.def = def.value;
+        };
+        opts.addEventListener('change', syncDefault);
+        def.addEventListener('change', () => { entry.def = def.value; });
+        const pickLabel = document.createElement('span');
+        pickLabel.className = 'dimhint';
+        pickLabel.textContent = 'pick';
+        const dash = document.createElement('span');
+        dash.className = 'dimhint';
+        dash.textContent = '–';
+        row.append(name, pickLabel, lower, dash, upper, opts, def, removeButton(entry));
+        syncDefault();
+      }
+      box.append(row);
+    }
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px';
+    const addComponent = document.createElement('button');
+    addComponent.type = 'button'; addComponent.className = 'ghost';
+    addComponent.textContent = '+ Component';
+    addComponent.dataset.composerAdd = 'component';
+    addComponent.addEventListener('click', () => {
+      entries.push({ kind: 'component', refId: '', role: 'mandatory' }); render();
+    });
+    const addChoice = document.createElement('button');
+    addChoice.type = 'button'; addChoice.className = 'ghost';
+    addChoice.textContent = '+ Choice group';
+    addChoice.dataset.composerAdd = 'choice';
+    addChoice.addEventListener('click', () => {
+      entries.push({ kind: 'choice', name: '', lower: 1, upper: 1, def: '', optionIds: [] }); render();
+    });
+    actions.append(addComponent, addChoice);
+    if (passthrough.length) {
+      const note = document.createElement('span');
+      note.className = 'dimhint';
+      note.textContent = `${passthrough.length} advanced entr${passthrough.length > 1 ? 'ies' : 'y'} kept as-is`;
+      actions.append(note);
+    }
+    box.append(actions);
+  }
+
+  loadPicklist(field).then((items) => { picklist = items; render(); });
+
+  controls[field.name] = {
+    get: () => {
+      const out = [];
+      for (const entry of entries) {
+        if (entry.kind === 'component' && entry.refId) {
+          const base = entry.original && entry.original.id === entry.refId
+            ? { ...entry.original } : offeringRef(entry.refId);
+          base.bundledProductOfferingOption = {
+            numberRelOfferLowerLimit: entry.role === 'optional' ? 0 : 1,
+            numberRelOfferUpperLimit: 1,
+          };
+          out.push(base);
+        } else if (entry.kind === 'choice' && entry.name && entry.optionIds.length) {
+          out.push({
+            '@type': 'BundledProductOfferingChoice',
+            name: entry.name,
+            ...(entry.def ? { default: entry.def } : {}),
+            numberRelOfferLowerLimit: entry.lower,
+            numberRelOfferUpperLimit: entry.upper,
+            options: entry.optionIds.map(offeringRef),
+          });
+        }
+      }
+      out.push(...passthrough);
+      return out.length ? out : undefined;
+    },
+    set: (item) => {
+      entries = []; passthrough = [];
+      for (const e of (item[field.name] || [])) {
+        if (Array.isArray(e.options)) {
+          entries.push({ kind: 'choice', name: e.name || '',
+            lower: e.numberRelOfferLowerLimit ?? 1, upper: e.numberRelOfferUpperLimit ?? 1,
+            def: e.default || '', optionIds: e.options.map((o) => o.id).filter(Boolean) });
+        } else if (e.id) {
+          entries.push({ kind: 'component', refId: e.id, original: e,
+            role: e.bundledProductOfferingOption?.numberRelOfferLowerLimit === 0 ? 'optional' : 'mandatory' });
+        } else {
+          passthrough.push(e);
+        }
+      }
+      render();
+    },
+  };
+  return [box];
+}
+
 function refControl(field, multiple) {
   const select = document.createElement('select');
   select.name = field.name;
@@ -649,6 +844,8 @@ function renderEditor() {
       f.kind === 'quantity' ? quantityControl(f) :
       f.kind === 'ref' ? refControl(f, false) :
       f.kind === 'reflist' ? refControl(f, true) :
+      f.kind === 'commitment' ? commitmentControl(f) :
+      f.kind === 'bundlecomposer' ? bundleComposerControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'select' ? selectControl(f) :
       f.kind === 'longtext' ? longTextControl(f) :

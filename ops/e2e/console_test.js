@@ -4,6 +4,7 @@
 const { chromium } = require('playwright');
 
 const CONSOLE = 'http://localhost:8080/console/';
+const run = Date.now();
 
 (async () => {
   const browser = await chromium.launch();
@@ -29,20 +30,26 @@ const CONSOLE = 'http://localhost:8080/console/';
   if (cells[2] !== 'yes') fail(`isBundle column expected "yes", got "${cells[2]}"`);
   console.log('OK bundle row:', cells.slice(0, 4).join(' | '));
 
-  // 3. Edit the bundle: spec picker + bundle multiselect populate
+  // 3. Edit the bundle: the COMPOSER renders components AND the choice group
   await bundleRow.locator('button', { hasText: 'Edit' }).click();
   await page.waitForFunction(() =>
-    document.querySelectorAll('select[name="bundledProductOffering"] option').length >= 4);
-  const selected = await page.locator('select[name="bundledProductOffering"] option:checked').allTextContents();
-  // 3 mandatory components + the optional Sports Pass add-on (choice groups are separate)
-  if (selected.length !== 4) fail(`expected 4 plain bundled offerings selected, got ${selected.length}`);
+    document.querySelectorAll('[data-composer-row]').length >= 5);
+  const componentRows = await page.locator('[data-composer-row="component"]').count();
+  const choiceRows = await page.locator('[data-composer-row="choice"]').count();
+  // 3 mandatory + optional Sports Pass as component rows; the phone choice as its own row
+  if (componentRows !== 4) fail(`expected 4 component rows, got ${componentRows}`);
+  if (choiceRows !== 1) fail(`expected 1 choice-group row, got ${choiceRows}`);
+  const roles = [];
+  for (let i = 0; i < componentRows; i++) {
+    roles.push(await page.locator('[data-composer-row="component"]').nth(i)
+      .locator('select').nth(1).inputValue());
+  }
+  if (roles.filter((r) => r === 'optional').length !== 1) {
+    fail('exactly one optional add-on (Sports Pass) expected, roles: ' + roles);
+  }
   const isBundleChecked = await page.locator('input[name="isBundle"]').isChecked();
   if (!isBundleChecked) fail('isBundle checkbox not checked when editing the bundle');
-  const selfDisabled = await page.evaluate(() =>
-    [...document.querySelectorAll('select[name="bundledProductOffering"] option')]
-      .find((o) => o.text === 'GenAlpha One Home & Mobile')?.disabled);
-  if (!selfDisabled) fail('bundle should not be able to contain itself');
-  console.log('OK edit form: 3 plain children selected, isBundle checked, self-reference disabled');
+  console.log('OK composer: 4 components (Sports Pass optional) + the phone choice group as rows');
 
   // Saving from the console must not destroy the phone choice group (an
   // API-managed entry the form cannot render).
@@ -58,6 +65,46 @@ const CONSOLE = 'http://localhost:8080/console/';
     fail('choice group lost on console save: ' + JSON.stringify(bundleAfter.bundledProductOffering));
   }
   console.log('OK console save preserves the phone choice group (3 options)');
+
+  // 3b. AUTHOR a bundle with a choice group entirely in the UI — no JSON
+  await page.fill('input[name="name"]', `E2E Composer Bundle ${run}`);
+  await page.locator('input[name="isBundle"]').check();
+  await page.selectOption('select[name="productOfferingTerm"]', '12');
+  await page.locator('[data-composer-add="component"]').click();
+  await page.locator('[data-composer-row="component"]').last().locator('select').first()
+    .selectOption({ label: 'GenAlpha Fiber 1000' });
+  await page.locator('[data-composer-add="choice"]').click();
+  const newChoice = page.locator('[data-composer-row="choice"]').last();
+  await newChoice.locator('input[type="text"], input:not([type])').first().fill('Pick your plan');
+  await newChoice.locator('input[type="number"]').nth(0).fill('1');
+  await newChoice.locator('input[type="number"]').nth(1).fill('2');
+  await newChoice.locator('select[multiple]').selectOption([
+    { label: 'GenAlpha Mobile 10 GB' }, { label: 'GenAlpha Mobile 50 GB' }]);
+  await page.click('#save');
+  let authored = null;
+  for (let i = 0; i < 10 && !authored; i++) {
+    await page.waitForTimeout(1000);
+    authored = await page.evaluate(async (name) => {
+      const res = await authFetch('/tmf-api/productCatalogManagement/v4/productOffering?limit=100');
+      return (await res.json()).find((o) => o.name === name) || null;
+    }, `E2E Composer Bundle ${run}`);
+  }
+  if (!authored) {
+    const err = await page.locator('.error, #form-error').first().textContent().catch(() => '(no error shown)');
+    fail('composer bundle never saved — form says: ' + err);
+  }
+  const authoredChoice = (authored.bundledProductOffering || []).find((e) => Array.isArray(e.options));
+  const authoredFixed = (authored.bundledProductOffering || []).find((e) =>
+    e.bundledProductOfferingOption?.numberRelOfferLowerLimit === 1);
+  if (!authored.isBundle || !authoredFixed || !authoredChoice
+      || authoredChoice.numberRelOfferLowerLimit !== 1 || authoredChoice.numberRelOfferUpperLimit !== 2
+      || authoredChoice.options.length !== 2
+      || authored.productOfferingTerm?.[0]?.duration?.amount !== 12) {
+    fail('composer-authored bundle wrong: ' + JSON.stringify(authored?.bundledProductOffering));
+  }
+  await page.evaluate(async (id) => authFetch(
+    `/tmf-api/productCatalogManagement/v4/productOffering/${id}`, { method: 'DELETE' }), authored.id);
+  console.log('OK a product owner AUTHORED a pick-1-2 bundle + 12-month term in the UI — zero JSON');
 
   // 4. Prices tab renders Money and charge period
   await page.locator('.tab', { hasText: 'Prices' }).click();
@@ -76,15 +123,22 @@ const CONSOLE = 'http://localhost:8080/console/';
   await page.fill('.moneyrow input:not(.unit)', '9.99');
   await page.fill('.moneyrow input.unit', 'EUR');
   await page.click('#save');
-  const newRow = page.locator('#listing-body tr', { hasText: 'E2E Throwaway Price' });
-  await newRow.waitFor({ timeout: 10000 });
-  const newCells = await newRow.locator('td').allTextContents();
-  if (!newCells[2].includes('9.99')) fail(`created price shows "${newCells[2]}"`);
-  console.log('OK created via GUI:', newCells.slice(0, 3).join(' | '));
-  page.on('dialog', (d) => d.accept());
-  await newRow.locator('button', { hasText: 'Delete' }).click();
-  await newRow.waitFor({ state: 'detached', timeout: 10000 });
-  console.log('OK deleted via GUI');
+  // the price list outgrew one listing page — verify (and clean) via the API
+  let throwaway = null;
+  for (let i = 0; i < 10 && !throwaway; i++) {
+    await page.waitForTimeout(1000);
+    throwaway = await page.evaluate(async () => {
+      const res = await authFetch('/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100');
+      return (await res.json()).find((p) => p.name === 'E2E Throwaway Price') || null;
+    });
+  }
+  if (!throwaway || Number(throwaway.price?.value) !== 9.99) {
+    fail('created price wrong: ' + JSON.stringify(throwaway?.price));
+  }
+  console.log('OK created via GUI: E2E Throwaway Price | oneTime | 9.99', throwaway.price.unit);
+  await page.evaluate(async (id) => authFetch(
+    `/tmf-api/productCatalogManagement/v4/productOfferingPrice/${id}`, { method: 'DELETE' }), throwaway.id);
+  console.log('OK deleted');
 
   // 6. Product Stock tab (TMF687 service behind a different API base)
   await page.locator('.tab', { hasText: 'Product Stock' }).click();

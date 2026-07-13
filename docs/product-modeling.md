@@ -90,9 +90,12 @@ with a disabled checkbox. `ops/e2e/family_max_test.js` proves both layers.
 
 ## Where to author it
 
-- **Console** (`/console`): offerings, prices, specs and bundle composition are
-  editable in the back office — the reference-list editor preserves each
-  component's cardinality on save. Business rules about the bundle (quantity
+- **Console** (`/console` → Product Offerings): the **bundle composer** builds
+  everything above by clicking — add components and mark them Included or
+  Optional, add choice groups with a name, "pick min–max" numbers, an options
+  picker and a default, choose categories and a commitment term. No JSON.
+  Anything the composer doesn't understand survives a save untouched
+  ("advanced entries kept as-is"). Business rules about the bundle (quantity
   caps, incompatibilities, dynamic pricing) live in the **Rules** tab —
   see [product-rules.md](product-rules.md).
 - **API / seed scripts**: everything above is plain TMF620 REST —
