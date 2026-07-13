@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.5</version>
+        <version>3.5.7</version>
         <relativePath/>
     </parent>
 
@@ -19,7 +19,8 @@
 
     <properties>
         <java.version>17</java.version>
-        <spring-cloud.version>2023.0.1</spring-cloud.version>
+        <!-- 2025.0.x is the release train matched to Boot 3.5 -->
+        <spring-cloud.version>2025.0.1</spring-cloud.version>
     </properties>
 
     <dependencyManagement>
@@ -56,6 +57,8 @@
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>mockwebserver</artifactId>
+            <!-- Boot 3.5 no longer manages okhttp in its BOM -->
+            <version>4.12.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

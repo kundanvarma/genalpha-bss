@@ -2,13 +2,13 @@
 # before `docker compose build`. In-container Maven builds made a full-stack
 # rebuild take ~30 min and thrash the VM; extracting the prebuilt jar takes
 # seconds and keeps the same runtime layering.
-FROM eclipse-temurin:17-jre AS build
+FROM eclipse-temurin:25-jre AS build
 WORKDIR /build
 COPY target/*.jar app.jar
 RUN java -Djarmode=layertools -jar app.jar extract --destination target/extracted
 
 # Runtime stage
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:25-jre
 # curl is only for the HEALTHCHECK; the temurin JRE image ships neither curl nor wget.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
