@@ -15,6 +15,9 @@ public class StubAdapter implements LlmAdapter {
 
     @Override
     public String complete(String system, String user) {
+        if (system.contains("product copilot")) {
+            return productCopilot(user);
+        }
         if (system.contains("SUMMARY:")) {
             return "SUMMARY: The provided customer data is summarized deterministically (stub"
                     + " provider — configure a real model for genuine insight). Nothing here"
@@ -54,6 +57,91 @@ public class StubAdapter implements LlmAdapter {
                 ? "Hi! " + subject + " — use code {code} on your next order. It is our way of saying thanks."
                 : "Hi! " + subject + " — thanks for being with us.";
         return "SUBJECT: " + subject + "\nBODY: " + body;
+    }
+
+    /**
+     * Deterministic product-copilot scenarios: enough conversation shape to
+     * prove the chat -> proposal -> confirm -> created loop end to end with
+     * no model anywhere. A real provider handles the open-ended asks.
+     */
+    private String productCopilot(String user) {
+        String convo = user.toLowerCase();
+        // the LAST thing the owner said decides the scenario — earlier turns
+        // about another product must not hijack a new ask
+        String lastOwner = convo;
+        int idx = convo.lastIndexOf("owner:");
+        if (idx >= 0) {
+            int end = convo.indexOf("copilot:", idx);
+            lastOwner = end > idx ? convo.substring(idx, end) : convo.substring(idx);
+        }
+        boolean asksWatch = lastOwner.contains("smartwatch") || lastOwner.contains("kids watch");
+        boolean asksStreaming = !asksWatch
+                && (lastOwner.contains("streaming") || convo.contains("streaming"));
+        boolean saidMonthly = lastOwner.contains("/month") || lastOwner.contains("per month")
+                || lastOwner.contains("monthly") || lastOwner.matches("(?s).*\\d+[.,]\\d{2}.*");
+        if (asksStreaming && !saidMonthly) {
+            return "{\"kind\":\"question\",\"message\":\"A streaming service fits the"
+                    + " 'Partner services' category — the orchestrator will mint a partner"
+                    + " entitlement code at activation, and billing carries the charge."
+                    + " What should it cost per month?\",\"proposal\":null}";
+        }
+        if (asksStreaming && !asksWatch) {
+            String price = convo.replaceAll("(?s).*?(\\d+[.,]\\d{2}).*", "$1").replace(',', '.');
+            if (price.length() > 8) {
+                price = "9.99";
+            }
+            return "{\"kind\":\"proposal\",\"message\":\"Here is the plan: one spec, one"
+                    + " monthly price, one offering in Partner services — activation mints"
+                    + " the partner code, nothing else to provision. Say the word and I"
+                    + " will create it.\",\"proposal\":{"
+                    + "\"specs\":[{\"ref\":\"s1\",\"name\":\"StreamPlus Service\","
+                    + "\"productSpecCharacteristic\":[]}],"
+                    + "\"prices\":[{\"ref\":\"p1\",\"name\":\"StreamPlus Monthly\","
+                    + "\"priceType\":\"recurring\",\"recurringChargePeriodType\":\"month\","
+                    + "\"price\":{\"unit\":\"EUR\",\"value\":" + price + "}}],"
+                    + "\"offerings\":[{\"ref\":\"o1\",\"name\":\"StreamPlus\","
+                    + "\"description\":\"All-you-can-watch streaming on your operator bill.\","
+                    + "\"category\":[{\"name\":\"Partner services\"}],"
+                    + "\"specRef\":\"s1\",\"priceRefs\":[\"p1\"]}]}}";
+        }
+        if (asksWatch) {
+            return "{\"kind\":\"proposal\",\"message\":\"A kids smartwatch sells best as a"
+                    + " small bundle: the watch on installments (Devices — it ships), a"
+                    + " child-sized plan (Mobile plans — it gets a number and SIM), and the"
+                    + " tracking add-on as optional. Shall I create all four?\",\"proposal\":{"
+                    + "\"specs\":[{\"ref\":\"s1\",\"name\":\"Kids Watch\","
+                    + "\"productSpecCharacteristic\":[{\"name\":\"color\",\"valueType\":\"string\","
+                    + "\"productSpecCharacteristicValue\":[{\"value\":\"Rose\"},{\"value\":\"Navy\"}]}]}],"
+                    + "\"prices\":[{\"ref\":\"p1\",\"name\":\"Kids Watch Installment\","
+                    + "\"priceType\":\"recurring\",\"recurringChargePeriodType\":\"month\","
+                    + "\"price\":{\"unit\":\"EUR\",\"value\":6.99}},"
+                    + "{\"ref\":\"p2\",\"name\":\"Kids Plan Monthly\",\"priceType\":\"recurring\","
+                    + "\"recurringChargePeriodType\":\"month\",\"price\":{\"unit\":\"EUR\",\"value\":4.99}},"
+                    + "{\"ref\":\"p3\",\"name\":\"GPS Tracking Monthly\",\"priceType\":\"recurring\","
+                    + "\"recurringChargePeriodType\":\"month\",\"price\":{\"unit\":\"EUR\",\"value\":1.99}}],"
+                    + "\"offerings\":["
+                    + "{\"ref\":\"o1\",\"name\":\"Kids Watch\",\"description\":\"A rugged smartwatch"
+                    + " for kids, on 24-month installments.\",\"category\":[{\"name\":\"Devices\"}],"
+                    + "\"specRef\":\"s1\",\"priceRefs\":[\"p1\"]},"
+                    + "{\"ref\":\"o2\",\"name\":\"Kids Plan 2 GB\",\"description\":\"A small plan"
+                    + " sized for a child's watch.\",\"category\":[{\"name\":\"Mobile plans\"}],"
+                    + "\"priceRefs\":[\"p2\"]},"
+                    + "{\"ref\":\"o3\",\"name\":\"GPS Tracking\",\"description\":\"Live location"
+                    + " and safe-zone alerts.\",\"category\":[{\"name\":\"Security\"}],"
+                    + "\"priceRefs\":[\"p3\"]},"
+                    + "{\"ref\":\"o4\",\"name\":\"Kids Watch Starter\",\"description\":\"Watch,"
+                    + " plan and optional tracking — one monthly price.\","
+                    + "\"category\":[{\"name\":\"Bundles\"}],\"isBundle\":true,"
+                    + "\"productOfferingTerm\":[{\"name\":\"12-month commitment\","
+                    + "\"duration\":{\"amount\":12,\"units\":\"month\"}}],"
+                    + "\"bundledChildren\":[{\"offeringRef\":\"o1\",\"optional\":false},"
+                    + "{\"offeringRef\":\"o2\",\"optional\":false},"
+                    + "{\"offeringRef\":\"o3\",\"optional\":true}]}]}}";
+        }
+        return "{\"kind\":\"question\",\"message\":\"Tell me about the product: is it a plan,"
+                + " a device, a partner service (like streaming), or a bundle of several?"
+                + " (Stub provider — configure a real model for open-ended modeling.)\","
+                + "\"proposal\":null}";
     }
 
     @Override
