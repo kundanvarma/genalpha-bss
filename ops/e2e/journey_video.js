@@ -138,6 +138,20 @@ async function confirmLogout(page) {
   console.log('· SCENE1-shop');
   await caption(page, '🛍  A customer lands on the shop — no account, just browsing.');
   await captionOff(page);
+  // devices sell like devices: gallery, facts, and the photo follows the colour
+  await glideClick(page, page.locator('.card', { hasText: 'Samsung Galaxy S26' }).first());
+  await page.waitForSelector('[data-testid=offer-gallery]', { timeout: 15000 });
+  await page.waitForTimeout(600);
+  await caption(page, '📸  Devices sell like devices: gallery, facts, colour shots — no PIM needed, this is the catalog and document store.', 3400);
+  const shopColorSel = page.locator('.charfield', { hasText: 'color' }).locator('select');
+  await glideClick(page, shopColorSel);
+  await shopColorSel.selectOption('Icy Blue');
+  await page.waitForTimeout(900);
+  await caption(page, '🎨  Pick Icy Blue — the photo follows. (An operator with its OWN PIM plugs it in per tenant; more on that in Norway.)', 3400);
+  await captionOff(page);
+  console.log('· SCENE1-device-gallery');
+  await page.goBack();
+  await page.waitForSelector('.card', { timeout: 15000 });
   await glideClick(page, page.locator('text=GenAlpha One Home & Mobile').first());
   await page.waitForSelector('.choice', { timeout: 20000 });
   await page.locator('.optprice').first().waitFor({ timeout: 15000 });
@@ -410,6 +424,15 @@ async function confirmLogout(page) {
   console.log('· SCENE5-nova');
   await caption(page, '🇳🇴  One more thing. Same build, different operator: Nova Telecom of Norway.', 3000);
   await captionOff(page);
+  // bring-your-own-PIM: Nova's device imagery arrives from ITS system
+  await glideClick(page, page.locator('.card', { hasText: 'Nordic Phone X' }).first());
+  await page.waitForSelector('[data-testid=offer-gallery]', { timeout: 15000 });
+  await page.waitForTimeout(700);
+  await caption(page, '🖼  Nova already owns a PIM — so it plugs it in. This gallery is resolved LIVE from Nova\'s own system, keyed by product name. Nothing authored in the BSS, same storefront build.', 4400);
+  await captionOff(page);
+  console.log('· SCENE5-nova-pim');
+  await page.goBack();
+  await page.waitForSelector('.card', { timeout: 15000 });
   await glideClick(page, page.locator('.who >> text=Logg inn'));
   await page.waitForSelector('input[name="username"]', { timeout: 20000 });
   await lens(page);

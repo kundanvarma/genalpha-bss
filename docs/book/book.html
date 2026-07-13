@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, six customer surfaces, and twenty-two end-to-end test suites that all pass
+    composable components, six customer surfaces, and twenty-three end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1310,6 +1310,35 @@
     minting a phantom phone line with its own SIM, and the film's Norwegian take caught the partner
     machinery failing for the second tenant — one missing per-realm grant. Both fixed, both re-proven,
     both on camera in the next cut.</p>
+
+    <h4>The shop gets eyes</h4>
+    <p>A phone sold as a row of text is a spec sheet, not a phone. The question behind the fix was
+    architectural before it was visual: where should product imagery <em>live</em>? Retail has a whole
+    product category for this — the PIM, product information management — and the tempting answers
+    were both wrong. Building a full PIM into the catalog would weld a content factory onto the
+    commerce spine; requiring one would make a heavyweight system a prerequisite for showing a
+    picture of a Samsung.</p>
+
+    <p>The answer was the same shape as the PSP, BankID and the porting clearinghouse: a seam. The
+    catalog stays the only face a channel ever sees — imagery is the standard TMF620 attachment list,
+    facts are spec characteristics — and where the content <em>comes from</em> is per-tenant
+    configuration. By default it's the document component the stack already had: the product owner
+    uploads gallery shots and colour variants on the offering form, no JSON, no extra system, and
+    that is genuinely enough for a telco's device range. The names carry the semantics: a
+    <code>gallery-*</code> attachment builds the product page's photo strip and puts phone
+    <em>pictures</em> in the bundle configurator; a <code>variant-Icy Blue</code> attachment makes
+    the hero photo follow the colour picker; a characteristic marked non-configurable renders as an
+    "About this device" table — display, camera, battery — instead of a dropdown.</p>
+
+    <p>And when an operator already owns a PIM — years of curated content, a merchandising team that
+    lives in it — they keep it. One registry entry points the tenant's catalog at their system, and
+    offering reads resolve imagery live, keyed by product <em>name</em>, because their PIM has never
+    heard of our UUIDs. Cached for a minute, failing open to whatever the catalog stores: content
+    must never block commerce. Nova became the living proof — a "Nordic Phone X" created in its
+    catalog with zero artwork arrives in the shop with a full gallery served from Nova's own system,
+    through the same gateway, on the same storefront build. The twenty-third suite walks both paths
+    and can't tell them apart from the browser, which is precisely the claim: no PIM required, any
+    PIM welcome.</p>
   </section>
 
   <!-- Ch 23 -->
@@ -1427,7 +1456,7 @@
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
     <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
-    role. Twenty-two end-to-end suites, all green in a real browser. Eleven official conformance kits
+    role. Twenty-three end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
