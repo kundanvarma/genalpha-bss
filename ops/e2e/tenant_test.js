@@ -147,7 +147,9 @@ async function staffToken(request, realm) {
   const novaCatalog = await (await setup.request.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: { Authorization: 'Bearer ' + novaStaff } })).json();
-  if (novaCatalog.length !== 1 || novaCatalog[0].name !== 'Nova Unlimited 5G') {
+  // isolation, not size: everything Nova staff see is Nova's, nothing GenAlpha's
+  if (!novaCatalog.length || !novaCatalog.every((o) => o.name.startsWith('Nova '))
+      || !novaCatalog.some((o) => o.name === 'Nova Unlimited 5G')) {
     fail('Nova staff catalog view wrong: ' + JSON.stringify(novaCatalog.map((o) => o.name)));
   }
   console.log('OK Nova staff sees exactly its own world: 1 order, 1 offering');

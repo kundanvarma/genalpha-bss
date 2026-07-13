@@ -246,7 +246,8 @@ export default function Services() {
     String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];
   const ownedOfferingIds = new Set(products.map((p) => p.productOffering?.id));
   const recOffers = recIds.map((id) => offerings[id])
-    .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity)
+    .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity
+      && categoryOf(o) !== 'Top-ups') // the top-up has its own button on the Mobile card
     .slice(0, 3);
   const dataBuckets = buckets.filter((b) => b.name === 'Mobile data');
   const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data');
