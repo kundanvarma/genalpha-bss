@@ -48,6 +48,21 @@ export const myTickets = () => soft(call('/tmf-api/troubleTicket/v4/troubleTicke
 export const myRecommendations = () => soft(call('/tmf-api/recommendationManagement/v4/recommendation')
   .then((r) => r[0]?.recommendationItem || []), []);
 export const openProblems = () => soft(call('/tmf-api/serviceProblemManagement/v4/serviceProblem?status=open'), []);
+export const listOfferings = () => soft(call('/tmf-api/productCatalogManagement/v4/productOffering?limit=100'), []);
+export const priceIndex = () => soft(call('/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100')
+  .then((ps) => Object.fromEntries(ps.map((p) => [p.id, p]))), {});
+export const mySim = (serviceId, reveal = false) =>
+  soft(call(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim${reveal ? '?reveal=true' : ''}`), null);
+export const resetSimPin = (serviceId, newPin) =>
+  call(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim/resetPin`, {
+    method: 'POST', body: JSON.stringify({ newPin }) });
+/** One-tap purchase for simple digital items (data top-ups). */
+export const quickOrder = (offering) =>
+  call('/tmf-api/productOrderingManagement/v4/productOrder', {
+    method: 'POST',
+    body: JSON.stringify({ productOrderItem: [{ action: 'add',
+      productOffering: { id: offering.id, name: offering.name } }] }),
+  });
 
 export async function offerings() {
   const res = await fetch('/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active');

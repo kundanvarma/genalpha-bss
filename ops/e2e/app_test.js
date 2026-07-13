@@ -57,6 +57,15 @@ const run = Date.now();
   }
   console.log('OK SOM activated the plan; Home shows the LOB card with', msisdn);
 
+  // 5b. MyJio parity on mobile: SIM self-care + one-tap top-up on the card
+  await page.locator('[data-testid="sim-row"]').first().waitFor({ timeout: 10000 });
+  await page.locator('[data-testid="app-show-puk"]').first().click();
+  const appPuk = await page.locator('[data-testid="app-puk"]').first().textContent({ timeout: 10000 });
+  if (!/PUK \d{8}/.test(appPuk)) fail('app PUK reveal wrong: ' + appPuk);
+  console.log('OK app SIM care:', appPuk, '— revealed in one tap');
+  await page.locator('[data-testid="app-topup"]').first().waitFor({ timeout: 10000 });
+  console.log('OK one-tap top-up offered on the usage card');
+
   // 6. Help: the order event became a notification
   await page.locator('text=Help').last().click();
   await page.locator('[data-testid="inbox-card"]').waitFor({ timeout: 10000 });

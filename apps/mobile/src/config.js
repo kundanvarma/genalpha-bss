@@ -27,3 +27,15 @@ export async function loadTenantConfig() {
 export function tenantConfig() {
   return config;
 }
+
+/** "299,00 kr" for a Norwegian tenant, "12.99 EUR" style kept for English. */
+export function money(value, unit) {
+  const { locale = 'en', currency = 'EUR' } = config;
+  if (locale === 'en') return `${Number(value).toFixed(2)} ${unit || currency}`;
+  try {
+    return new Intl.NumberFormat({ no: 'nb-NO' }[locale] || locale,
+      { style: 'currency', currency: unit || currency }).format(value);
+  } catch {
+    return `${Number(value).toFixed(2)} ${unit || currency}`;
+  }
+}
