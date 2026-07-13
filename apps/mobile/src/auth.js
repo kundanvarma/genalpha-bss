@@ -1,11 +1,14 @@
 /*
- * OIDC authorization-code + PKCE. Web target: hand-rolled against the
- * tenant's issuer (same proven flow as the storefront). Native target:
- * phase 2 swaps this module for expo-auth-session — the rest of the app
- * only ever calls getToken()/isSignedIn()/beginLogin().
+ * OIDC authorization-code + PKCE, both targets. Web: hand-rolled against
+ * the tenant's issuer (same proven flow as the storefront). Native: the
+ * promised phase two — expo-auth-session drives the system browser via the
+ * genalphabss:// deep link, and the token lives in memory for the session.
+ * The rest of the app only ever calls getToken()/isSignedIn()/beginLogin().
  */
 import { Platform } from 'react-native';
 import { tenantConfig } from './config.js';
+
+let nativeToken = null; // native only: in-session token
 
 const TOKEN_KEY = 'bss.app.token';
 const VERIFIER_KEY = 'bss.app.verifier';
@@ -31,7 +34,7 @@ function redirectUri() {
 }
 
 export function getToken() {
-  return Platform.OS === 'web' ? sessionStorage.getItem(TOKEN_KEY) : null;
+  return Platform.OS === 'web' ? sessionStorage.getItem(TOKEN_KEY) : nativeToken;
 }
 
 export function isSignedIn() {
@@ -48,8 +51,35 @@ export function tokenClaims() {
   }
 }
 
+/** Native: full round trip through the system browser; resolves signed-in. */
+async function beginLoginNative() {
+  const { issuer, clientId } = tenantConfig();
+  const AuthSession = require('expo-auth-session');
+  const discovery = {
+    authorizationEndpoint: issuer + '/protocol/openid-connect/auth',
+    tokenEndpoint: issuer + '/protocol/openid-connect/token',
+  };
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'genalphabss' });
+  const request = new AuthSession.AuthRequest({
+    clientId,
+    scopes: ['openid', 'profile', 'email'],
+    redirectUri,
+    usePKCE: true,
+  });
+  const result = await request.promptAsync(discovery);
+  if (result.type !== 'success') return false;
+  const tokens = await AuthSession.exchangeCodeAsync({
+    clientId,
+    code: result.params.code,
+    redirectUri,
+    extraParams: { code_verifier: request.codeVerifier },
+  }, discovery);
+  nativeToken = tokens.accessToken;
+  return true;
+}
+
 export async function beginLogin() {
-  if (Platform.OS !== 'web') throw new Error('native sign-in arrives with the native phase');
+  if (Platform.OS !== 'web') return beginLoginNative();
   const { issuer, clientId } = tenantConfig();
   const verifier = randomString();
   const state = randomString();
@@ -95,6 +125,10 @@ export async function completeLogin() {
 }
 
 export function signOut() {
+  if (Platform.OS !== 'web') {
+    nativeToken = null;
+    return;
+  }
   sessionStorage.removeItem(TOKEN_KEY);
   const { issuer, clientId } = tenantConfig();
   window.location.assign(issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({

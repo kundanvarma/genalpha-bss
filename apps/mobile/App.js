@@ -50,7 +50,10 @@ export default function App() {
         <Text style={{ color: '#85999f', fontSize: 13, marginBottom: 18, textAlign: 'center' }}>
           Plan &amp; usage · Bills &amp; payments · Support{'\n'}Everything your account can do, in your pocket.
         </Text>
-        <Text testID="signin" onPress={() => beginLogin()}
+        <Text testID="signin" onPress={() => beginLogin().then(async (ok) => {
+            // native resolves the whole flow here; web navigates away instead
+            if (ok) { await ensurePartyOnce(); setState('ready'); }
+          }).catch(() => {})}
           style={{ backgroundColor: c.brandColor, color: '#fff', paddingVertical: 10,
                    paddingHorizontal: 26, borderRadius: 10, fontWeight: '600', overflow: 'hidden' }}>
           Sign in / register

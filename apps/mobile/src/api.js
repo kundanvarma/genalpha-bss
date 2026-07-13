@@ -4,9 +4,10 @@
  * composes to whatever the operator deployed.
  */
 import { getToken, tokenClaims } from './auth.js';
+import { API_BASE } from './config.js';
 
 async function call(path, options = {}) {
-  const res = await fetch(path, {
+  const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -79,7 +80,7 @@ export const quickOrder = (offering) =>
   });
 
 export async function offerings() {
-  const res = await fetch('/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active');
+  const res = await fetch(API_BASE + '/tmf-api/productCatalogManagement/v4/productOffering?limit=100&lifecycleStatus=Active');
   return res.ok ? res.json() : [];
 }
 

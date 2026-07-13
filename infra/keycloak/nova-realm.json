@@ -444,7 +444,8 @@
       "redirectUris": [
         "http://app.nova.localhost:8080/*",
         "http://localhost:8080/app/*",
-        "http://shop.nova.localhost:8080/app/*"
+        "http://shop.nova.localhost:8080/app/*",
+        "genalphabss://*"
       ],
       "webOrigins": [
         "http://localhost:8080",
