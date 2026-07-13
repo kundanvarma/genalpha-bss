@@ -36,6 +36,7 @@ public class SomController {
     private final com.bss.som.service.OrchestrationService orchestration;
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.SimPlatformClient simPlatform;
+    private final com.bss.som.crypto.PukVault pukVault;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -43,7 +44,8 @@ public class SomController {
             com.bss.som.events.DomainEventPublisher events,
             com.bss.som.service.OrchestrationService orchestration,
             com.bss.som.repository.SimCardRepository sims,
-            com.bss.som.client.SimPlatformClient simPlatform) {
+            com.bss.som.client.SimPlatformClient simPlatform,
+            com.bss.som.crypto.PukVault pukVault) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -54,6 +56,7 @@ public class SomController {
         this.orchestration = orchestration;
         this.sims = sims;
         this.simPlatform = simPlatform;
+        this.pukVault = pukVault;
     }
 
     /**
@@ -70,7 +73,13 @@ public class SomController {
         body.put("serviceId", id);
         body.put("iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5));
         if (reveal) {
-            body.put("puk", sim.getPuk());
+            body.put("puk", pukVault.reveal(sim.getPuk(), sim.getIccid()));
+            // legacy plaintext row? upgrade it now that we've touched it
+            if (!pukVault.isEncrypted(sim.getPuk())) {
+                sim.setPuk(pukVault.encrypt(sim.getPuk(), sim.getIccid()));
+                sim.setLastUpdate(java.time.OffsetDateTime.now());
+                sims.save(sim);
+            }
         }
         body.put("@type", "SimCard");
         return ResponseEntity.ok(body);

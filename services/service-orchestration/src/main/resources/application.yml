@@ -46,6 +46,10 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  sim:
+    # 32 bytes base64; production sources this from a KMS/secret store —
+    # empty falls back to a fixed dev key (loudly not for production)
+    puk-key: ${BSS_SIM_PUK_KEY:}
   downstream:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}

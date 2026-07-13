@@ -45,6 +45,7 @@ public class OrchestrationService {
     private final ResourceAssignmentRepository assignments;
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.CatalogClient catalog;
+    private final com.bss.som.crypto.PukVault pukVault;
     private final com.bss.som.client.PartnerEntitlementClient partners;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
@@ -54,6 +55,7 @@ public class OrchestrationService {
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             com.bss.som.repository.SimCardRepository sims,
             com.bss.som.client.CatalogClient catalog,
+            com.bss.som.crypto.PukVault pukVault,
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
         this.serviceOrders = serviceOrders;
@@ -63,6 +65,7 @@ public class OrchestrationService {
         this.assignments = assignments;
         this.sims = sims;
         this.catalog = catalog;
+        this.pukVault = pukVault;
         this.partners = partners;
         this.ordering = ordering;
         this.events = events;
@@ -254,7 +257,8 @@ public class OrchestrationService {
         sim.setIccid(iccid.toString());
         sim.setTenantId(tenant);
         sim.setServiceId(serviceId);
-        sim.setPuk(String.format("%08d", random.nextInt(100_000_000)));
+        sim.setPuk(pukVault.encrypt(
+                String.format("%08d", random.nextInt(100_000_000)), sim.getIccid()));
         sim.setCreatedAt(OffsetDateTime.now());
         sim.setLastUpdate(OffsetDateTime.now());
         sims.save(sim);

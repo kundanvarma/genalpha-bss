@@ -52,6 +52,10 @@ spec:
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: "5"
             {{- end }}
+            {{- if and (eq $name "service-orchestration") $.Values.pukKey }}
+            - name: BSS_SIM_PUK_KEY
+              value: {{ $.Values.pukKey | quote }}
+            {{- end }}
             {{- if $.Values.config.novaIssuerUri }}
             - name: OIDC_ISSUER_URI_NOVA
               value: {{ $.Values.config.novaIssuerUri | quote }}
