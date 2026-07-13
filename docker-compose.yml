@@ -253,6 +253,7 @@ services:
     container_name: bss-usage
     restart: unless-stopped
     environment:
+      OCS_BASE_URL: http://mock-ocs:8080
       DB_URL: jdbc:postgresql://postgres:5432/usage
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: usage_app
@@ -638,6 +639,8 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       ORDERING_BASE_URL: http://product-ordering:8080
       CATALOG_BASE_URL: http://product-catalog:8080
+      # the charging master: blank = no online charging in this deployment
+      OCS_BASE_URL: http://mock-ocs:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
@@ -1031,6 +1034,17 @@ services:
     build: ./integrations/mock-pim
     container_name: bss-mock-pim
     restart: unless-stopped
+
+  # Stands in for the operator's Online Charging System: rate plans,
+  # subscriber buckets, rollover. The SOM provisions here at activation;
+  # TMF654 projects balances from here. Port 8115 for the E2E's simulated
+  # network usage.
+  mock-ocs:
+    build: ./integrations/mock-ocs
+    container_name: bss-mock-ocs
+    restart: unless-stopped
+    ports:
+      - "8115:8080"
 
   console:
     build: ./apps/admin-console

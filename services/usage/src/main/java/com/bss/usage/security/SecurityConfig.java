@@ -43,6 +43,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // TMF654: balances read like usage, top-ups write like usage
+                        .requestMatchers(HttpMethod.GET, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:read")
+                        .requestMatchers(HttpMethod.POST, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.GET, ApiConstants.CONSUMPTION_BASE_PATH + "/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:write")

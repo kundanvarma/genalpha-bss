@@ -59,7 +59,7 @@ spring:
         - id: usage
           uri: ${USAGE_URL:http://localhost:8097}
           predicates:
-            - Path=/tmf-api/usageManagement/**,/tmf-api/usageConsumption/**
+            - Path=/tmf-api/usageManagement/**,/tmf-api/usageConsumption/**,/tmf-api/prepayBalanceManagement/**
         - id: agreement
           uri: ${AGREEMENT_URL:http://localhost:8098}
           predicates:

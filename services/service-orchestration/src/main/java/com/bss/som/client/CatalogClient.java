@@ -12,4 +12,12 @@ import java.util.Optional;
 public interface CatalogClient {
 
     Optional<String> categoryOf(String offeringId);
+
+    /**
+     * The offering's charging reference (spec characteristic chargingSpecId):
+     * the rate-plan/counter template that lives in the OPERATOR'S OCS. Empty
+     * means the product has no online-charging footprint — nothing to
+     * provision there.
+     */
+    Optional<String> chargingSpecOf(String offeringId);
 }
