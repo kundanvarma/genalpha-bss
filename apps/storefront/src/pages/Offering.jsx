@@ -149,8 +149,10 @@ export default function Offering() {
 
   const addedExtras = optionalComponents
     .map((e) => (extras[e.id] ? optionOfferings[e.id] : null)).filter(Boolean);
-  const own = pricesOf(offering, prices);
-  const optionPrices = selectedOptions.flatMap((o) => pricesOf(o, prices));
+  // the price follows the pick: characteristic-conditioned components
+  // (a Titanium Edition premium) join in only when the picks match
+  const own = pricesOf(offering, prices, chars);
+  const optionPrices = selectedOptions.flatMap((o) => pricesOf(o, prices, chars));
   const extraPrices = addedExtras.flatMap((o) => pricesOf(o, prices));
   const allPrices = [...own, ...optionPrices, ...extraPrices];
   const monthly = monthlyTotal(allPrices);

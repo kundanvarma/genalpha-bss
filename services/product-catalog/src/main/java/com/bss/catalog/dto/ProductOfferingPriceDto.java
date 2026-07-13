@@ -29,6 +29,9 @@ public class ProductOfferingPriceDto {
     @JsonProperty("price")
     private Map<String, Object> price;
 
+    @JsonProperty("prodSpecCharValueUse")
+    private java.util.List<Map<String, Object>> prodSpecCharValueUse;
+
     @JsonProperty("recurringChargePeriodType")
     private String recurringChargePeriodType;
 
@@ -96,6 +99,14 @@ public class ProductOfferingPriceDto {
 
     public void setPrice(Map<String, Object> price) {
         this.price = price;
+    }
+
+    public java.util.List<Map<String, Object>> getProdSpecCharValueUse() {
+        return prodSpecCharValueUse;
+    }
+
+    public void setProdSpecCharValueUse(java.util.List<Map<String, Object>> prodSpecCharValueUse) {
+        this.prodSpecCharValueUse = prodSpecCharValueUse;
     }
 
     public String getRecurringChargePeriodType() {

@@ -191,8 +191,9 @@ async function token(request, client, user, pass) {
   console.log('OK Erik signed in to /biz — HIS my-page: line', memberLine.match(/\+\d+/)[0],
     'active, billed to', memberOrg.trim());
 
-  // the run's deal rule is org-scoped (inert for anyone else) but tidy up anyway
-  await ctx.request.patch(`${POLICY}/policyRule/${ruleId}`, { headers: H, data: { enabled: false } });
+  // the run's deal rule is org-scoped (inert for anyone else) but delete it —
+  // disabled leftovers still crowd the console's paged Rules listing
+  await ctx.request.delete(`${POLICY}/policyRule/${ruleId}`, { headers: H });
 
   await browser.close();
   console.log('\nALL B2B CHECKS PASSED — org, membership, boundary, order-for-member, '

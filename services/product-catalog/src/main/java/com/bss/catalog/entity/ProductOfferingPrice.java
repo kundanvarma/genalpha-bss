@@ -34,6 +34,12 @@ public class ProductOfferingPrice {
     @Column(name = "price", length = 1000)
     private String priceJson;
 
+    /** TMF620 prodSpecCharValueUse (JSON list): when set, this price applies
+     * only to configurations whose characteristics match — colour-priced
+     * phones without an SKU per colour. */
+    @Column(name = "prod_spec_char_value_use", length = 2000)
+    private String prodSpecCharValueUseJson;
+
     @Column(name = "recurring_charge_period_type")
     private String recurringChargePeriodType;
 
@@ -98,6 +104,14 @@ public class ProductOfferingPrice {
 
     public void setPriceJson(String priceJson) {
         this.priceJson = priceJson;
+    }
+
+    public String getProdSpecCharValueUseJson() {
+        return prodSpecCharValueUseJson;
+    }
+
+    public void setProdSpecCharValueUseJson(String prodSpecCharValueUseJson) {
+        this.prodSpecCharValueUseJson = prodSpecCharValueUseJson;
     }
 
     public String getRecurringChargePeriodType() {

@@ -203,6 +203,7 @@ const RESOURCES = [
         { value: 'price-when-item', label: 'Price: discount / surcharge when the cart has an item' },
         { value: 'price-always', label: 'Price: discount / surcharge for everyone' },
         { value: 'price-company', label: 'Price: negotiated deal for one company (B2B)' },
+        { value: 'price-characteristic', label: 'Price: campaign on a configured choice (e.g. a colour)' },
         { value: 'price-volume', label: 'Price: volume deal — any company with enough people (B2B)' },
         { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
       ] },
@@ -211,6 +212,10 @@ const RESOURCES = [
         showWhen: { field: 'ruleKind', in: ['price-company'] } },
       { name: 'minMembers', label: 'Minimum people billing together', kind: 'number', placeholder: '10',
         showWhen: { field: 'ruleKind', in: ['price-volume'] } },
+      { name: 'characteristicName', label: 'Characteristic (as on the spec, e.g. color)', placeholder: 'color',
+        showWhen: { field: 'ruleKind', in: ['price-characteristic'] } },
+      { name: 'characteristicValue', label: 'Value the campaign applies to (e.g. Icy Blue)',
+        showWhen: { field: 'ruleKind', in: ['price-characteristic'] } },
       { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
         showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
       { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
@@ -256,6 +261,13 @@ const RESOURCES = [
           break;
         case 'price-always':
           condition = JSON.stringify({ '==': [1, 1] });
+          break;
+        case 'price-characteristic':
+          // the cart preview and the billing run both put the configured
+          // picks into the context as "name:value" strings
+          condition = JSON.stringify({ in: [
+            `${(body.characteristicName || 'color').trim()}:${(body.characteristicValue || '').trim()}`,
+            { var: 'characteristicValues' }] });
           break;
         case 'price-company':
           // organizationId only exists in the context when the payer IS a

@@ -14,6 +14,8 @@ public class ProductOfferingPriceMapper {
 
     private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
     };
+    private static final TypeReference<java.util.List<Map<String, Object>>> JSON_LIST = new TypeReference<>() {
+    };
 
     private final ObjectMapper objectMapper;
 
@@ -29,6 +31,7 @@ public class ProductOfferingPriceMapper {
         dto.setPriceType(entity.getPriceType());
         dto.setIsBundle(entity.getIsBundle());
         dto.setPrice(readJsonObject(entity.getPriceJson()));
+        dto.setProdSpecCharValueUse(readJsonList(entity.getProdSpecCharValueUseJson()));
         dto.setRecurringChargePeriodType(entity.getRecurringChargePeriodType());
         dto.setRecurringChargePeriodLength(entity.getRecurringChargePeriodLength());
         dto.setLifecycleStatus(entity.getLifecycleStatus());
@@ -46,6 +49,7 @@ public class ProductOfferingPriceMapper {
         entity.setPriceType(dto.getPriceType());
         entity.setIsBundle(dto.getIsBundle());
         entity.setPriceJson(writeJsonObject(dto.getPrice()));
+        entity.setProdSpecCharValueUseJson(writeJsonList(dto.getProdSpecCharValueUse()));
         entity.setRecurringChargePeriodType(dto.getRecurringChargePeriodType());
         entity.setRecurringChargePeriodLength(dto.getRecurringChargePeriodLength());
         entity.setLifecycleStatus(dto.getLifecycleStatus());
@@ -70,6 +74,9 @@ public class ProductOfferingPriceMapper {
         if (patch.getPrice() != null) {
             entity.setPriceJson(writeJsonObject(patch.getPrice()));
         }
+        if (patch.getProdSpecCharValueUse() != null) {
+            entity.setProdSpecCharValueUseJson(writeJsonList(patch.getProdSpecCharValueUse()));
+        }
         if (patch.getRecurringChargePeriodType() != null) {
             entity.setRecurringChargePeriodType(patch.getRecurringChargePeriodType());
         }
@@ -81,6 +88,28 @@ public class ProductOfferingPriceMapper {
         }
         if (patch.getVersion() != null) {
             entity.setVersion(patch.getVersion());
+        }
+    }
+
+    private String writeJsonList(java.util.List<Map<String, Object>> value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("unserializable JSON list", e);
+        }
+    }
+
+    private java.util.List<Map<String, Object>> readJsonList(String json) {
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, JSON_LIST);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("stored JSON list is unreadable", e);
         }
     }
 

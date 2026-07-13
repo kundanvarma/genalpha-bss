@@ -120,11 +120,14 @@ async function confirmLogout(page) {
         'http://localhost:8080/tmf-api/productStockManagement/v4/productStock/' + st.id,
         { headers: H, data: { stockedQuantity: { amount: 40, units: 'unit' } } });
     }
-    // retire any pricing rules left behind by interrupted takes
+    // retire rule debris from interrupted takes AND finished test runs —
+    // the console listing pages at 10 rows, so accumulation buries the
+    // film's own rule on page 2 and the row-wait times out
     const oldRules = await (await apiCtx.request.get(
       'http://localhost:8080/tmf-api/policyManagement/v4/policyRule?limit=100',
       { headers: H })).json();
-    for (const r of oldRules.filter((x) => (x.name || '').startsWith('Launch 15% off'))) {
+    for (const r of oldRules.filter((x) =>
+      /^(Launch 15% off|Acme corporate deal|Titanium launch|Probe)/.test(x.name || ''))) {
       await apiCtx.request.delete(
         'http://localhost:8080/tmf-api/policyManagement/v4/policyRule/' + r.id, { headers: H });
     }
@@ -148,6 +151,14 @@ async function confirmLogout(page) {
   await shopColorSel.selectOption('Icy Blue');
   await page.waitForTimeout(900);
   await caption(page, '🎨  Pick Icy Blue — the photo follows. (An operator with its OWN PIM plugs it in per tenant; more on that in Norway.)', 3400);
+  await captionOff(page);
+  // and the PRICE follows the pick: a conditioned price component, no colour SKUs
+  await glideClick(page, shopColorSel);
+  await shopColorSel.selectOption('Titanium Edition');
+  await page.waitForTimeout(700);
+  await page.locator('.pricetable:not([data-testid="device-facts"])').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
+  await caption(page, '💎  Titanium Edition costs a little more — the PRICE follows the pick too. One offering, one conditioned price component (TMF620), no SKU per colour — and marketing can run a campaign on just this colour, as a rule.', 4600);
   await captionOff(page);
   console.log('· SCENE1-device-gallery');
   await page.goBack();
@@ -257,7 +268,7 @@ async function confirmLogout(page) {
   await caption(page, '📜  A business rule, written as data. No release train, no deployment.', 2400);
   await captionOff(page);
   await glideClick(page, page.locator('#save'));
-  await page.locator('#listing-body tr', { hasText: 'Launch 15% off' }).first().waitFor({ timeout: 10000 });
+  await page.locator('#listing-body tr', { hasText: 'Launch 15% off' }).first().waitFor({ timeout: 25000 });
   await caption(page, '✅  Live. Every cart in the shop reprices from this second.', 2400);
   await captionOff(page);
   await glideClick(page, page.locator('#logout'));

@@ -112,20 +112,28 @@ export default function Cart() {
     }
     let subtotal = 0;
     const ids = new Set();
+    const charValues = new Set();
     for (const line of lines) {
-      for (const id of [line.offeringId, ...(line.selections || []).map((s) => s.offeringId)]) {
-        const offering = offerings[id];
+      const parts = [
+        { id: line.offeringId, characteristics: line.characteristics },
+        ...(line.selections || []).map((s) => ({ id: s.offeringId, characteristics: s.characteristics })),
+      ];
+      for (const part of parts) {
+        const offering = offerings[part.id];
         if (!offering) continue;
-        ids.add(id);
-        const m = monthlyTotal(pricesOf(offering, prices));
+        ids.add(part.id);
+        const m = monthlyTotal(pricesOf(offering, prices, part.characteristics || null));
         if (m) subtotal += m.value * line.quantity;
+        for (const [name, value] of Object.entries(part.characteristics || {})) {
+          charValues.add(`${name}:${value}`);
+        }
       }
     }
     if (subtotal <= 0) {
       setPriceAdj(null);
       return;
     }
-    previewPrice(Number(subtotal.toFixed(2)), [...ids]).then(setPriceAdj);
+    previewPrice(Number(subtotal.toFixed(2)), [...ids], [...charValues]).then(setPriceAdj);
   }, [lines, offerings, prices]);
 
   function pickSlot(next) {
@@ -162,9 +170,11 @@ export default function Cart() {
   }
 
   function lineMonthly(line) {
-    const own = offerings[line.offeringId] ? monthlyTotal(pricesOf(offerings[line.offeringId], prices)) : null;
+    const own = offerings[line.offeringId]
+      ? monthlyTotal(pricesOf(offerings[line.offeringId], prices, line.characteristics || null)) : null;
     const opts = (line.selections || [])
-      .map((s) => offerings[s.offeringId] ? monthlyTotal(pricesOf(offerings[s.offeringId], prices)) : null)
+      .map((s) => offerings[s.offeringId]
+        ? monthlyTotal(pricesOf(offerings[s.offeringId], prices, s.characteristics || null)) : null)
       .filter(Boolean);
     if (!own && !opts.length) return null;
     return {

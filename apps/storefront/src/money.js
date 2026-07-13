@@ -28,11 +28,30 @@ export function fmtMonthly(total) {
   return `${money}/${t('month')}`;
 }
 
-/** Resolve an offering's price refs against the price index. */
-export function pricesOf(offering, index) {
+/**
+ * TMF620 prodSpecCharValueUse: a price conditioned on characteristic values
+ * ("+2.00/month when color = Titanium Edition") applies only when every
+ * condition matches the current picks. Unconditioned prices always apply;
+ * conditioned ones never apply when no picks are known (list views show the
+ * base price).
+ */
+export function priceApplies(price, characteristics) {
+  const conditions = price.prodSpecCharValueUse;
+  if (!conditions || !conditions.length) return true;
+  if (!characteristics) return false;
+  return conditions.every((c) => {
+    const allowed = (c.productSpecCharacteristicValue || []).map((v) => v.value);
+    return characteristics[c.name] != null && allowed.includes(characteristics[c.name]);
+  });
+}
+
+/** Resolve an offering's price refs against the price index — the price
+ * follows the pick when characteristics are given. */
+export function pricesOf(offering, index, characteristics = null) {
   return (offering.productOfferingPrice || [])
     .map((ref) => index[ref.id])
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((p) => priceApplies(p, characteristics));
 }
 
 /** Total monthly recurring charge across resolved prices (bundle headline). */

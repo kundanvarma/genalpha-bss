@@ -146,7 +146,9 @@ public class BillingRunService {
                 if (!categoriesOf(offeringId, categoryCache).contains("devices")) {
                     continue;
                 }
-                BigDecimal monthly = priceCache.computeIfAbsent(offeringId, id -> monthlyFor(id, unitCache));
+                java.util.TreeMap<String, String> deviceChars = charsOf(product);
+                BigDecimal monthly = priceCache.computeIfAbsent(offeringId + "|" + deviceChars,
+                        k -> monthlyFor(offeringId, deviceChars, unitCache));
                 if (monthly.compareTo(cap) <= 0) {
                     continue;
                 }
@@ -194,7 +196,9 @@ public class BillingRunService {
                     continue;
                 }
                 String offeringId = String.valueOf(ref.get("id"));
-                BigDecimal monthly = priceCache.computeIfAbsent(offeringId, id -> monthlyFor(id, unitCache));
+                java.util.TreeMap<String, String> productChars = charsOf(product);
+                BigDecimal monthly = priceCache.computeIfAbsent(offeringId + "|" + productChars,
+                        k -> monthlyFor(offeringId, productChars, unitCache));
                 if (monthly.signum() <= 0) {
                     continue;
                 }
@@ -290,6 +294,15 @@ public class BillingRunService {
                 pricingContext.put("subtotal", recurringBase);
                 pricingContext.put("party", owner.getKey());
                 pricingContext.put("offeringIds", new ArrayList<>(monthlyByOffering.keySet()));
+                // colour campaigns: the account's configured picks, as
+                // "name:value" strings — a rule conditioned on
+                // "color:Icy Blue" fires on the bill exactly as it did in
+                // the cart preview
+                java.util.Set<String> characteristicValues = new java.util.TreeSet<>();
+                for (Map<String, Object> product : owner.getValue()) {
+                    charsOf(product).forEach((n, v) -> characteristicValues.add(n + ":" + v));
+                }
+                pricingContext.put("characteristicValues", new ArrayList<>(characteristicValues));
                 // B2B: negotiated per-org deals and volume tiers are pricing
                 // rules conditioned on these — authored as data, no redeploy.
                 if (orgAccounts.contains(owner.getKey())) {
@@ -401,9 +414,16 @@ public class BillingRunService {
         });
     }
 
-    /** Monthly recurring total of an offering's linked prices, per catalog right now. */
+    /**
+     * Monthly recurring total of an offering's linked prices, per catalog
+     * right now. Characteristic-conditioned components (TMF620
+     * prodSpecCharValueUse — a Titanium Edition premium) count only when the
+     * product's own characteristics match, so one offering prices every
+     * colour without an SKU per variant.
+     */
     @SuppressWarnings("unchecked")
-    private BigDecimal monthlyFor(String offeringId, Map<String, String> unitCache) {
+    private BigDecimal monthlyFor(String offeringId, Map<String, String> characteristics,
+            Map<String, String> unitCache) {
         Map<String, Object> offering = catalog.offering(offeringId);
         if (offering == null) {
             return BigDecimal.ZERO;
@@ -416,11 +436,48 @@ public class BillingRunService {
                     || !(price.get("price") instanceof Map<?, ?> money) || money.get("value") == null) {
                 continue;
             }
+            if (!priceApplies(price, characteristics)) {
+                continue;
+            }
             total = total.add(new BigDecimal(String.valueOf(money.get("value"))));
             if (money.get("unit") != null) {
                 unitCache.put(offeringId, String.valueOf(money.get("unit")));
             }
         }
         return total;
+    }
+
+    /** An unconditioned price always applies; a conditioned one needs every
+     * named characteristic to hold one of its listed values. */
+    @SuppressWarnings("unchecked")
+    private boolean priceApplies(Map<String, Object> price, Map<String, String> characteristics) {
+        if (!(price.get("prodSpecCharValueUse") instanceof List<?> conditions) || conditions.isEmpty()) {
+            return true;
+        }
+        for (Map<String, Object> condition : (List<Map<String, Object>>) conditions) {
+            String pick = characteristics == null ? null
+                    : characteristics.get(String.valueOf(condition.get("name")));
+            List<Map<String, Object>> allowed = condition.get("productSpecCharacteristicValue") instanceof List<?> l
+                    ? (List<Map<String, Object>>) l : List.of();
+            if (pick == null || allowed.stream().noneMatch(v -> pick.equals(String.valueOf(v.get("value"))))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The product's configured characteristics ({color=Titanium Edition}),
+     * sorted so they can key a cache. */
+    @SuppressWarnings("unchecked")
+    private java.util.TreeMap<String, String> charsOf(Map<String, Object> product) {
+        java.util.TreeMap<String, String> chars = new java.util.TreeMap<>();
+        if (product.get("productCharacteristic") instanceof List<?> list) {
+            for (Map<String, Object> c : (List<Map<String, Object>>) list) {
+                if (c.get("name") != null && c.get("value") != null) {
+                    chars.put(String.valueOf(c.get("name")), String.valueOf(c.get("value")));
+                }
+            }
+        }
+        return chars;
     }
 }

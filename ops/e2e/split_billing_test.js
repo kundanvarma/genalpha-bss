@@ -50,7 +50,10 @@ async function token(request, client, user, pass) {
     `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100`,
     { headers: H })).json()).map((p) => [p.id, p]));
   const monthlyOf = (o) => (o.productOfferingPrice || []).map((r) => prices[r.id])
-    .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null)
+    // base price only: characteristic-conditioned components (a colour
+    // premium) apply per configuration, and this order configures none
+    .filter((p) => p && p.priceType === 'recurring' && p.price?.value != null
+      && !(p.prodSpecCharValueUse || []).length)
     .reduce((s, p) => s + p.price.value, 0);
   const plan = offers.find((o) => catOf(o) === 'Mobile plans' && !o.isBundle && monthlyOf(o) > 0);
   const device = offers.find((o) => catOf(o) === 'Devices' && !o.isBundle && monthlyOf(o) > 1);

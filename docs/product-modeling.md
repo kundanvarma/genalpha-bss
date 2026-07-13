@@ -144,3 +144,28 @@ failing open to whatever the catalog stores. The demo deployment ships
 catalog and its gallery arrives from the external PIM with nothing authored
 in the BSS. GenAlpha, one env var away, keeps the internal store. The
 channels cannot tell the difference — that is the point.
+
+## Prices that follow the pick — no SKU per colour
+
+When a colour costs more (a Titanium Edition premium), do NOT mint an
+offering per variant. Add a **conditioned price component** to the same
+offering — TMF620 `prodSpecCharValueUse`:
+
+```json
+{ "name": "Titanium Edition premium", "priceType": "recurring",
+  "price": { "unit": "EUR", "value": 2.00 },
+  "prodSpecCharValueUse": [ { "name": "color",
+    "productSpecCharacteristicValue": [ { "value": "Titanium Edition" } ] } ] }
+```
+
+The storefront includes the component only while the picks match (the price
+follows the pick exactly as the variant photo does), the cart and checkout
+carry it, and the billing run rates each customer's product against its
+*configured* characteristics — two buyers of the same offering can be billed
+differently, to the cent, with one catalog row. `seed_color_pricing.py` is
+the worked example; `color_pricing_test.js` proves the chain.
+
+**Campaign on a colour**: the configured picks ride the pricing context as
+`characteristicValues` ("color:Titanium Edition"), so a pricing rule — the
+console's "campaign on a configured choice" preset — can discount exactly
+one colour, in the cart preview and on the invoice, as data.
