@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, listOfferings, myActiveServices, myProducts, mySim, myUsage, priceIndex, quickOrder, resetSimPin } from '../api.js';
+import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin } from '../api.js';
 import { fmtPrice, pricesOf } from '../money.js';
-import { t } from '../i18n.js';
+import { locale, money as intlMoney, t } from '../i18n.js';
 
 /**
  * SIM self-care for a numbered line: masked ICCID always; PUK on request;
@@ -186,19 +186,26 @@ export default function Services() {
   const [offerings, setOfferings] = useState({});
   const [prices, setPrices] = useState({});
   const [changed, setChanged] = useState(null);
+  const [bills, setBills] = useState([]);
+  const [recIds, setRecIds] = useState([]);
   const [error, setError] = useState(null);
 
   function refresh() {
     myProducts().then(setProducts).catch((e) => setError(e.message));
     myActiveServices().then(setServices).catch(() => {});
-    // Usage is additive: a service list without meters still renders.
+    // Usage and bills are additive: the page renders without them.
     myUsage().then((report) => setBuckets(report.bucket || [])).catch(() => {});
+    myBills().then(setBills).catch(() => {});
   }
   useEffect(() => {
     refresh();
     listOfferings().then((all) =>
       setOfferings(Object.fromEntries(all.map((o) => [o.id, o])))).catch(() => {});
     priceIndex().then(setPrices).catch(() => {});
+    // TMF680 drives discovery; the category-gap links are the fallback
+    myRecommendations()
+      .then((recs) => setRecIds(recs[0]?.recommendationItem?.map((i) => i.offering.id) || []))
+      .catch(() => {});
   }, []);
 
   if (error) return <p className="error">{error}</p>;
@@ -228,8 +235,19 @@ export default function Services() {
   const other = standalone.filter((p) => ![...mobilePlans, ...broadband, ...entertainment, ...devices].includes(p)
     && catOfProduct(p) !== 'Top-ups');
 
-  const numbered = services.find((sv) => (sv.supportingResource || []).some((r) => r.value));
-  const number = numbered?.supportingResource?.find((r) => r.value)?.value;
+  // EVERY numbered line gets its own row + SIM — families have several
+  const lines = services.filter((sv) => sv.state === 'active'
+    && (sv.supportingResource || []).some((r) => r.value));
+  const numberOf = (sv) => sv.supportingResource.find((r) => r.value).value;
+  const number = lines.length > 0;
+  const fmtAmount = (a) => (locale === 'en'
+    ? `${a.value.toFixed(2)} ${a.unit}` : intlMoney(a.value, a.unit));
+  const latestBill = [...bills].sort((a, b) =>
+    String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];
+  const ownedOfferingIds = new Set(products.map((p) => p.productOffering?.id));
+  const recOffers = recIds.map((id) => offerings[id])
+    .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity)
+    .slice(0, 3);
   const dataBuckets = buckets.filter((b) => b.name === 'Mobile data');
   const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data');
   const topUps = Object.values(offerings).filter((o) => categoryOf(o) === 'Top-ups');
@@ -273,12 +291,12 @@ export default function Services() {
         <section className="card" data-testid="mobile-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Mobile')}</h2>
           {rowsOf(mobilePlans)}
-          {number ? (
-            <>
-              <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{number}</strong></p>
-              <SimCard serviceId={numbered.id} />
-            </>
-          ) : <p className="dim">{t('Your line appears here once the plan activates.')}</p>}
+          {number ? lines.map((sv) => (
+            <div key={sv.id} data-testid="line-row">
+              <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{numberOf(sv)}</strong></p>
+              <SimCard serviceId={sv.id} />
+            </div>
+          )) : <p className="dim">{t('Your line appears here once the plan activates.')}</p>}
           {dataBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}
           {topUps.map((t) => {
             const oneTime = pricesOf(t, prices).find((p) => p.priceType === 'oneTime');
@@ -322,9 +340,31 @@ export default function Services() {
         </section>
       )}
 
-      {missing.length > 0 && (
+      {latestBill && (
+        <section className="card" data-testid="bill-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>{t('Latest bill')}</h2>
+          <div className="row">
+            <strong>{latestBill.billNo}</strong>
+            <span className="dim">{fmtAmount(latestBill.amountDue)}</span>
+            <span className={`state ${latestBill.state}`}>{latestBill.state}</span>
+            <Link to="/bills" data-testid="pay-bill">
+              {latestBill.state === 'settled' ? t('My bills') : t('Pay')} →
+            </Link>
+          </div>
+        </section>
+      )}
+
+      {(recOffers.length > 0 || missing.length > 0) && (
         <section className="card" data-testid="discover" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{products.length ? t('Complete your setup') : t('Get started')}</h2>
+          {recOffers.map((o) => {
+            const monthly = pricesOf(o, prices).find((p) => p.priceType === 'recurring');
+            return (
+              <p key={o.id} style={{ margin: '6px 0' }} data-testid="rec-offer">
+                <Link to={`/offering/${o.id}`}>{o.name}{monthly ? ` — ${fmtPrice(monthly)}` : ''} →</Link>
+              </p>
+            );
+          })}
           {missing.map((m) => (
             <p key={m.cat} style={{ margin: '6px 0' }}>
               <Link to="/">{m.label} →</Link>

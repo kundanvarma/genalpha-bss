@@ -63,6 +63,7 @@ const NO = {
   'Pay': 'Betal',
   'from': 'fra',
   'Out of stock': 'Utsolgt',
+  'Latest bill': 'Siste faktura',
 };
 
 const BUNDLES = { no: NO };
