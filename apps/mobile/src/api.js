@@ -56,6 +56,20 @@ export const mySim = (serviceId, reveal = false) =>
 export const resetSimPin = (serviceId, newPin) =>
   call(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim/resetPin`, {
     method: 'POST', body: JSON.stringify({ newPin }) });
+/** Plan change (TMF622 modify): same line, same number — only the plan swaps. */
+export const changePlan = (productId, serviceId, offering) =>
+  call('/tmf-api/productOrderingManagement/v4/productOrder', {
+    method: 'POST',
+    body: JSON.stringify({ productOrderItem: [{ action: 'modify',
+      product: { id: productId, ...(serviceId ? { realizingService: [{ id: serviceId }] } : {}) },
+      productOffering: { id: offering.id, name: offering.name } }] }),
+  });
+
+/** The signed-in customer's party — carries the organization for B2B members. */
+export const myParty = () => soft(call('/tmf-api/party/v4/individual/' + tokenClaims().sub), null);
+export const orgName = (id) => soft(call('/tmf-api/party/v4/organization/' + id)
+  .then((o) => o.name), null);
+
 /** One-tap purchase for simple digital items (data top-ups). */
 export const quickOrder = (offering) =>
   call('/tmf-api/productOrderingManagement/v4/productOrder', {

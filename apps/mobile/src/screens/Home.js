@@ -7,8 +7,8 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { TextInput } from 'react-native';
-import { listOfferings, myBills, myProducts, myRecommendations, myServices, mySim, myUsage,
-  openProblems, priceIndex, quickOrder, resetSimPin } from '../api.js';
+import { changePlan, listOfferings, myBills, myParty, myProducts, myRecommendations,
+  myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin } from '../api.js';
 import { money } from '../config.js';
 import { Button, Card, Dim, Meter, Row, palette } from '../ui.js';
 
@@ -39,6 +39,46 @@ function SimRow({ serviceId }) {
   );
 }
 
+const PLAN_CATS = ['Mobile plans', 'Broadband'];
+const catOf = (o) => ((o?.category || [])[0] || {}).name || '';
+
+/** Like-for-like plan change: tap Change, tap the new plan — same number. */
+function PlanChange({ product, service, offerings, prices, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const c = palette();
+  const current = offerings.find((o) => o.id === product.productOffering?.id);
+  if (!current || !PLAN_CATS.includes(catOf(current)) || product.status !== 'active') return null;
+  const options = offerings.filter((o) => !o.isBundle && !o.requiresVerifiedIdentity
+    && o.id !== current.id && catOf(o) === catOf(current))
+    .map((o) => {
+      const pr = (o.productOfferingPrice || []).map((r) => prices[r.id])
+        .find((p) => p?.priceType === 'recurring' && p.price?.value != null);
+      return pr ? { ...o, priceLabel: `${money(pr.price.value, pr.price.unit)}/mo` } : null;
+    }).filter(Boolean);
+  if (!options.length) return null;
+  if (!open) {
+    return <Button ghost testID="app-change-plan" label="Change plan — keep your number"
+      onPress={() => setOpen(true)} />;
+  }
+  return (
+    <View testID="app-plan-options">
+      {options.map((o) => (
+        <Row key={o.id} left={o.name}
+             right={<Button ghost testID={`app-pick-${o.id}`} label={busy ? '…' : o.priceLabel}
+               onPress={() => {
+                 if (busy) return;
+                 setBusy(true);
+                 changePlan(product.id, service?.id, o)
+                   .then(() => { setOpen(false); onChanged(o.name); })
+                   .finally(() => setBusy(false));
+               }} />} />
+      ))}
+      <Button ghost label="Cancel" onPress={() => setOpen(false)} />
+    </View>
+  );
+}
+
 export default function Home({ navigation }) {
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
@@ -49,6 +89,8 @@ export default function Home({ navigation }) {
   const [offerings, setOfferings] = useState([]);
   const [prices, setPrices] = useState({});
   const [toppedUp, setToppedUp] = useState(false);
+  const [changed, setChanged] = useState(null);
+  const [org, setOrg] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
@@ -60,6 +102,11 @@ export default function Home({ navigation }) {
     myRecommendations().then(setRecs);
     listOfferings().then(setOfferings);
     priceIndex().then(setPrices);
+    // B2B member? the company pays — the app recomposes around that
+    myParty().then((p) => {
+      const orgId = p?.organization?.id;
+      if (orgId) orgName(orgId).then((n) => setOrg(n || 'your company'));
+    });
   }, []);
   useFocusEffect(load);
 
@@ -79,6 +126,17 @@ export default function Home({ navigation }) {
         </View>
       )}
 
+      {changed && (
+        <View testID="app-plan-changed" style={{ backgroundColor: c.teal, borderRadius: 10, padding: 10, marginBottom: 10 }}>
+          <Text style={{ color: '#fff' }}>✓ Plan changed to {changed} — you keep your number.</Text>
+        </View>
+      )}
+      {org && (
+        <View testID="app-org-banner" style={{ borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: c.line }}>
+          <Dim>Your plan is provided by {org} — charges go on the company's invoice.</Dim>
+        </View>
+      )}
+
       {products.map((p) => {
         const svc = services.find((s) => s.name === p.name);
         const code = (svc?.serviceCharacteristic || []).find((ch) => ch.name === 'activationCode')?.value;
@@ -90,6 +148,8 @@ export default function Home({ navigation }) {
             <Row left={<Dim>your number</Dim>}
                  right={<Text testID="msisdn" style={{ color: c.teal, fontWeight: '600' }}>{numberFor(p.name)}</Text>} />
           )}
+          <PlanChange product={p} service={svc} offerings={offerings} prices={prices}
+            onChanged={(name) => { setChanged(name); setTimeout(load, 2500); }} />
           {numberFor(p.name) && svc && <SimRow serviceId={svc.id} />}
           {numberFor(p.name) && (() => {
             const topup = offerings.find((o) =>
@@ -129,7 +189,7 @@ export default function Home({ navigation }) {
         </Card>
       )}
 
-      {openBill && (
+      {openBill && !org && (
         <Card title={`Your bill · ${money(openBill.amountDue.value, openBill.amountDue.unit)}`}>
           <Button label="View & pay" onPress={() => navigation.navigate('Bills')} />
         </Card>

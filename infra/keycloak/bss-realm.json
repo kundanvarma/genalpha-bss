@@ -895,6 +895,23 @@
       "realmRoles": [
         "business:admin"
       ]
+    },
+    {
+      "username": "emil@acme.example",
+      "email": "emil@acme.example",
+      "firstName": "Emil",
+      "lastName": "Eng",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "emil"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
     }
   ],
   "internationalizationEnabled": true,
