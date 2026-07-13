@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — ten Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — twenty-three Playwright suites drive the
 storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
 campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
@@ -95,7 +95,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time) |
+| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time). **Product content is a per-tenant seam**: device galleries and colour-variant imagery ride the offering's `attachment` list — from the internal TMF667 store by default, or resolved live from **the operator's own PIM** (`pim-base-url` per tenant, keyed by product name, cached, fail-open) — the channels can't tell the difference |
 | product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
 | product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
 | party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
@@ -121,7 +121,7 @@ mobile app recomposes around what the customer owns:
 | geographic-address | TMF673 | 8101 | Address validation + standardization at checkout |
 | recommendation | TMF680 | 8102 | Cross-sell with a learning seam: rule-selected candidates, popularity-ranked (a trained model plugs into the same Ranker interface) |
 | payment-method | TMF670 | 8103 | Tokenized card vault: save at checkout, pay bills one-click |
-| document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear |
+| document | TMF667 | 8106 | Content store: tenant logos and offering artwork the channels wear — the **internal PIM** behind the console's artwork upload |
 | campaign | martech | 8108 | Event-triggered journeys: once-per-customer messages carrying promo codes |
 | quote | TMF648 | 8110 | B2B quotes born from intents: the OSS proposal priced, token allowances on line items, acceptance places the order |
 | intelligence | AI | 8109 | Any-LLM seam (per-tenant overrides): copy assistant + CSR copilot + a churn engine that starts as transparent rules across BSS/CSR/assurance data and **learns in production** — feature snapshots accumulate from day one, outcomes label them, and a per-tenant logistic model trains in-service (or immediately from imported operator history) |
@@ -141,7 +141,7 @@ color** theme every channel from the tenant manifest)
 
 | Channel | Path | For |
 |---|---|---|
-| storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). **My page recomposes around what the customer holds** (the MyJio idea, same as the mobile app's Home): a dashboard card per line of business — Mobile (plans, **every line with its own number and SIM**, data meter, **one-tap top-up**), Broadband, TV & entertainment, Devices, the bundle with its components nested — plus the **latest bill with a Pay link** and a discovery card driven by **TMF680 recommendations** (category gaps as fallback). **Change plan** is like-for-like (mobile→mobile, broadband→broadband — never a device): a TMF622 `modify` order swaps the plan on the same line, same number, including a bundle's broadband tier; commitments block the change until their window ends. **Data top-ups** bought one-time extend this month's meter. **SIM self-care**: masked ICCID, PUK revealed on request, OTA PIN reset through a pluggable SIM-platform seam |
+| storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). **My page recomposes around what the customer holds** (the MyJio idea, same as the mobile app's Home): a dashboard card per line of business — Mobile (plans, **every line with its own number and SIM**, data meter, **one-tap top-up**), Broadband, TV & entertainment, Devices, the bundle with its components nested — plus the **latest bill with a Pay link** and a discovery card driven by **TMF680 recommendations** (category gaps as fallback). **Change plan** is like-for-like (mobile→mobile, broadband→broadband — never a device): a TMF622 `modify` order swaps the plan on the same line, same number, including a bundle's broadband tier; commitments block the change until their window ends. **Data top-ups** bought one-time extend this month's meter. **SIM self-care**: masked ICCID, PUK revealed on request, OTA PIN reset through a pluggable SIM-platform seam. **Devices sell like devices**: product-shot galleries with thumbnails, the hero photo follows the colour pick, phones appear as pictures in the bundle configurator, and an "About this device" table renders the spec's non-configurable facts |
 | business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them **and change a member's plan in place** (same line, same number), see every member's live lines, browse **Plans & your company pricing** (list price vs the org's **negotiated price** — a pricing rule conditioned on `organizationId`/`memberCount`, authored as data, applied on the consolidated invoice too), and read the **consolidated company invoice** with per-person line attribution. **Split billing**: every product bills to its **payer** — orders the admin places are payer-stamped to the company at ordering time; anything a member buys themselves stays on their own personal bill. The admin also sets a **Company policy**: a configurable **device allowance** — the company pays a device's monthly charge up to the cap, and the excess lands on the employee's personal bill as its own labelled line ("above company allowance"). An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, SIM self-care (PUK, PIN reset), the "billed to your company" note — and their **personal bill** (self-bought services + device co-pay excess) right below it. **Localized like the storefront**: the tenant manifest drives language and currency — Nova's business console is Norwegian with NOK invoices |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
 | admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
@@ -173,7 +173,8 @@ docker compose up -d                  # ~25 containers; wait for healthy
 # demo data (idempotent; order matters) — see ops/README.md
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
-         seed_promotions seed_resource_pools seed_ai_slice seed_verified_identity seed_nova seed_content; do python3 ops/seed/$s.py; done
+         seed_promotions seed_resource_pools seed_ai_slice seed_verified_identity seed_nova seed_content \
+         seed_device_content; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

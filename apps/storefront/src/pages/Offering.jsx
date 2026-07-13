@@ -18,6 +18,7 @@ export default function Offering() {
   const [chars, setChars] = useState({});                     // characteristic name -> value
   const [avail, setAvail] = useState({});                     // offering id -> units | null (unmanaged)
   const [extras, setExtras] = useState({});                   // optional component id -> added?
+  const [shot, setShot] = useState(0);                        // gallery index
   const [error, setError] = useState(null);
 
   // TMF620 cardinality: a bundled component with lower limit 0 is optional
@@ -33,6 +34,12 @@ export default function Offering() {
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
+        // the offering's OWN spec carries a standalone device's colours and facts
+        if (o.productSpecification?.id) {
+          getSpec(o.productSpecification.id)
+            .then((sp) => setSpecs((s) => ({ ...s, [sp.id]: sp })))
+            .catch(() => {});
+        }
         // Resolve every choice option AND optional add-on to its full offering.
         const optionRefs = (o.bundledProductOffering || []).filter(isChoice).flatMap((c) => c.options);
         const optionalRefs = (o.bundledProductOffering || [])
@@ -76,10 +83,37 @@ export default function Offering() {
     () => Object.values(chosen).flat().map((oid) => optionOfferings[oid]).filter(Boolean),
     [chosen, optionOfferings]);
 
-  const activeCharacteristics = useMemo(() => selectedOptions.flatMap((option) => {
-    const spec = specs[option.productSpecification?.id];
-    return (spec?.productSpecCharacteristic || []).map((c) => ({ option, characteristic: c }));
-  }), [selectedOptions, specs]);
+  // A standalone device configures its own spec (colour, storage) the same
+  // way a bundle configures its chosen phone's.
+  const ownConfigurable = offering && !offering.isBundle
+    && ((offering.category || [])[0] || {}).name === 'Devices';
+
+  const activeCharacteristics = useMemo(() => {
+    const sources = [...(ownConfigurable ? [offering] : []), ...selectedOptions];
+    return sources.flatMap((option) => {
+      const spec = specs[option.productSpecification?.id];
+      return (spec?.productSpecCharacteristic || [])
+        // configurable=false is a FACT (display, battery) — About table, not a picker
+        .filter((c) => c.configurable !== false)
+        .map((c) => ({ option, characteristic: c }));
+    });
+  }, [ownConfigurable, offering, selectedOptions, specs]);
+
+  // Descriptive facts across the page's devices — "About this device".
+  const deviceFacts = useMemo(() => {
+    const sources = [offering, ...selectedOptions].filter(Boolean);
+    const rows = [];
+    for (const src of sources) {
+      const spec = specs[src.productSpecification?.id];
+      for (const c of spec?.productSpecCharacteristic || []) {
+        if (c.configurable === false) {
+          rows.push({ device: spec.name, name: c.name,
+            value: c.productSpecCharacteristicValue?.[0]?.value });
+        }
+      }
+    }
+    return rows;
+  }, [offering, selectedOptions, specs]);
 
   // Selecting a different phone swaps the characteristic set: keep picks that
   // remain valid, default the rest. Bail out unchanged to avoid re-renders.
@@ -100,6 +134,18 @@ export default function Offering() {
 
   if (error) return <p className="error">{error}</p>;
   if (!offering) return <p className="dim">Loading…</p>;
+
+  // Product imagery: gallery shots come from the catalog's attachment list —
+  // internal document store or the operator's own PIM, the page can't tell.
+  const gallery = (offering.attachment || [])
+    .filter((a) => a.url && !String(a.name || '').startsWith('variant-'));
+  const colorPick = Object.entries(chars).find(([k]) => k.toLowerCase() === 'color')?.[1];
+  const variantUrl = colorPick
+    ? [offering, ...selectedOptions]
+      .flatMap((src) => src?.attachment || [])
+      .find((a) => a.name === `variant-${colorPick}`)?.url
+    : null;
+  const heroUrl = variantUrl || gallery[Math.min(shot, Math.max(gallery.length - 1, 0))]?.url;
 
   const addedExtras = optionalComponents
     .map((e) => (extras[e.id] ? optionOfferings[e.id] : null)).filter(Boolean);
@@ -133,7 +179,11 @@ export default function Offering() {
 
   async function add() {
     try {
-      await addToCart(offering, selections);
+      // a standalone device's own picks ride on the line itself
+      const ownChars = ownConfigurable
+        ? Object.fromEntries(Object.entries(chars).filter(([, v]) => v != null))
+        : null;
+      await addToCart(offering, selections, 1, ownChars);
       navigate('/cart');
     } catch (e) {
       setError(e.message);
@@ -145,6 +195,21 @@ export default function Offering() {
       {offering.isBundle && <span className="tag">Bundle</span>}
       <h1>{offering.name}</h1>
       <p>{offering.description}</p>
+
+      {heroUrl && (
+        <div className="gallery" data-testid="offer-gallery">
+          <img className="hero" data-testid="offer-hero" src={heroUrl} alt={offering.name} />
+          {gallery.length > 1 && (
+            <div className="thumbs">
+              {gallery.map((g, i) => (
+                <img key={g.name || i} src={g.url} alt=""
+                  className={!variantUrl && i === shot ? 'on' : ''}
+                  onClick={() => setShot(i)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {fixed.length > 0 && (
         <>
@@ -188,6 +253,9 @@ export default function Offering() {
                     disabled={multi && !on && picks.length >= upper}
                     onChange={() => toggle(opt.id)}
                   />
+                  {full?.attachment?.[0]?.url && (
+                    <img className="optthumb" src={full.attachment[0].url} alt="" />
+                  )}
                   <span className="optname">{opt.name}</span>
                   {avail[opt.id] != null && avail[opt.id] <= 5 && (
                     <span className={avail[opt.id] === 0 ? 'stocknote out' : 'stocknote'}>
@@ -243,6 +311,22 @@ export default function Offering() {
             </label>
           ))}
         </div>
+      )}
+
+      {deviceFacts.length > 0 && (
+        <>
+          <h2>{t('About this device')}</h2>
+          <table className="pricetable" data-testid="device-facts">
+            <tbody>
+              {deviceFacts.map((f, i) => (
+                <tr key={`${f.device}-${f.name}-${i}`}>
+                  <td>{deviceFacts.some((x) => x.device !== f.device) ? `${f.device} — ${f.name}` : f.name}</td>
+                  <td className="num">{f.value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
 
       {allPrices.length > 0 && (

@@ -72,6 +72,8 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      # nova brings its own PIM — genalpha stays on the internal document store
+      PIM_BASE_URL_NOVA: http://mock-pim:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
@@ -934,6 +936,7 @@ services:
       BIZ_URL: http://business-console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
+      PIM_URL: http://mock-pim:8080
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
       BILLING_URL: http://billing:8080
@@ -1017,6 +1020,13 @@ services:
         condition: service_started
       mobile-app:
         condition: service_started
+
+  # Stands in for the product-content system an operator already owns
+  # (Akeneo/inRiver/DAM). Keyed by product NAME, knows nothing of this BSS.
+  mock-pim:
+    build: ./integrations/mock-pim
+    container_name: bss-mock-pim
+    restart: unless-stopped
 
   console:
     build: ./apps/admin-console

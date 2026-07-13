@@ -111,3 +111,36 @@ one-time fee, and each option's price onto one bill. A bundle component in a
 plan category (the fiber tier, a family line) can later be changed
 like-for-like from My page — same line, same number — while the commitment
 binds the bundle offering itself.
+
+## Pictures and facts — the product content layer
+
+Devices sell on imagery, so every offering can carry it — as plain TMF620
+data the channels read like anything else:
+
+- **`attachment`** on the offering is the imagery list: `{name, mimeType,
+  url}`. Names carry semantics: `gallery-*` entries render as the product
+  page's photo gallery (hero + thumbnails, and the bundle configurator shows
+  each phone option's first image as a thumbnail); `variant-<colour>` entries
+  follow the colour picker — pick *Icy Blue* and the hero swaps to that shot.
+- **Facts** (display, camera, battery, weight) are spec characteristics with
+  `configurable: false` — the storefront renders them as an "About this
+  device" table instead of a dropdown. Anything configurable (colour,
+  storage) stays a picker, and a standalone device's pick rides the cart
+  line as product characteristics.
+- **Authoring**: the console's offering form has an *Artwork* control —
+  upload an image, it lands in the document component (TMF667) and on the
+  offering's attachment list. `seed_device_content.py` shows the same via
+  the API.
+
+### Bring your own PIM
+
+Operators who already run a product-information system (Akeneo, inRiver, a
+homegrown DAM) keep it: the catalog has a per-tenant content seam
+(`pim-base-url` in the tenant registry). When set, offering reads resolve
+imagery live from that system — keyed by **product name**, since the
+operator's PIM has never heard of our UUIDs — cached for a minute and
+failing open to whatever the catalog stores. The demo deployment ships
+`mock-pim` and wires **nova** to it: create "Nordic Phone X" in nova's
+catalog and its gallery arrives from the external PIM with nothing authored
+in the BSS. GenAlpha, one env var away, keeps the internal store. The
+channels cannot tell the difference — that is the point.

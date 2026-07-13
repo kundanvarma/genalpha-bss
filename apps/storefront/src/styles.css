@@ -76,6 +76,15 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .pricing strong { color: var(--teal); font-size: 15.5px; }
 
 .detail { max-width: 620px; }
+.gallery { margin: 6px 0 16px; }
+.gallery .hero { display: block; width: 100%; max-width: 300px; border-radius: 12px;
+  border: 1px solid var(--line); background: #fff; }
+.gallery .thumbs { display: flex; gap: 8px; margin-top: 8px; }
+.gallery .thumbs img { width: 52px; height: 65px; object-fit: cover; border-radius: 8px;
+  border: 1px solid var(--line); cursor: pointer; opacity: 0.7; }
+.gallery .thumbs img.on { border-color: var(--teal); opacity: 1; }
+.optthumb { width: 34px; height: 42px; object-fit: cover; border-radius: 6px;
+  border: 1px solid var(--line); background: #fff; }
 .choice .options { display: flex; flex-direction: column; gap: 8px; }
 .option {
   display: flex; align-items: center; gap: 10px; cursor: pointer;

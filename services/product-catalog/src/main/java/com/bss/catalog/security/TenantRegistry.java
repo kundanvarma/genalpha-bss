@@ -65,6 +65,9 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** This tenant's external PIM (product content) endpoint; empty means
+         * the catalog's own document store carries the imagery. */
+        private String pimBaseUrl;
 
         public String getId() {
             return id;
@@ -112,6 +115,14 @@ public class TenantRegistry {
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
+        }
+
+        public String getPimBaseUrl() {
+            return pimBaseUrl;
+        }
+
+        public void setPimBaseUrl(String pimBaseUrl) {
+            this.pimBaseUrl = pimBaseUrl;
         }
     }
 }

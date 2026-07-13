@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,18 +31,36 @@ public class ProductOfferingService {
     private final ProductOfferingMapper mapper;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.catalog.pim.ProductContentSource content;
 
-    public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope) {
+    public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.catalog.pim.ProductContentSource content) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.content = content;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<ProductOfferingDto> findAll(int offset, int limit, Map<String, String> filters) {
         Page<ProductOffering> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).map(this::withContent).toList(),
+                page.getTotalElements());
+    }
+
+    /**
+     * The PIM seam: a tenant with an external product-content system gets its
+     * imagery resolved from there; everyone else keeps what the catalog
+     * stores (authored via the console + TMF667). Reads only — what's stored
+     * never changes, so the external PIM can be unplugged without loss.
+     */
+    private ProductOfferingDto withContent(ProductOfferingDto dto) {
+        List<Map<String, Object>> external = content.attachmentsFor(tenantScope.currentTenantId(), dto);
+        if (external != null) {
+            dto.setAttachment(external);
+        }
+        return dto;
     }
 
     /**
@@ -81,7 +100,7 @@ public class ProductOfferingService {
     public ProductOfferingDto findById(String id) {
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        return mapper.toDto(entity);
+        return withContent(mapper.toDto(entity));
     }
 
     @Transactional

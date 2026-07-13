@@ -131,7 +131,7 @@ export async function checkoutCart(lines, shippingPlace = null, paymentRefs = nu
     action: 'add',
     quantity: line.quantity,
     productOffering: { id: line.offeringId, name: line.name, '@referredType': 'ProductOffering' },
-    ...productFor(null, line.physical),
+    ...productFor(line.characteristics || null, line.physical),
     ...(line.selections?.length ? {
       productOrderItem: line.selections.map((s, j) => ({
         id: `${i + 1}.${j + 1}`,

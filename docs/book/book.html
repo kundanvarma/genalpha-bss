@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, six customer surfaces, and twenty-one end-to-end test suites that all pass
+    composable components, six customer surfaces, and twenty-two end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1229,6 +1229,42 @@
     raw JSON condition drew the fair complaint that account managers should not write JSON, the console
     grew two plain-English rule kinds: pick the company from a dropdown, type the percent. The engine
     speaks JSON; the humans never have to.</p>
+
+    <h4>The bill splits in two</h4>
+    <p>"No personal bills" held for exactly as long as it took to ask the next question: can an
+    employee buy something the company doesn't cover? Netflix on the work phone. A better handset
+    than the policy allows — "many companies pay a fixed amount, say 8,000; above that the employee
+    pays. This should be configurable." The consolidation model had one bucket per company, and real
+    life needed two.</p>
+
+    <p>The design fell out of a single observation: <em>the payer follows the orderer</em>. When the
+    business administrator places an order, the ordering service stamps it with a payer — the
+    organization — and the products inherit the stamp for life. When a member buys something
+    themselves, there is no stamp, and the charge is theirs. Billing stopped asking "whose company is
+    this?" and started asking "who agreed to pay for this?", regrouping every product by its payer:
+    company-ordered lines consolidate exactly as before, self-bought extras land on a personal bill,
+    and usage is rated once, on whichever bill carries the person's plan. A one-time backfill stamped
+    every pre-existing company product, so the day the feature shipped, no invoice moved by a cent.</p>
+
+    <p>The device allowance became the customer's own dial, not the operator's. The business console
+    grew a "Company policy" card where the admin sets the cap — and the guard around it is the same
+    lesson as every boundary in this book, enforced server-side: an admin may tune <em>their own</em>
+    company's policy and nothing else; renaming the company through that door returns a refusal, and a
+    plain member touching any organization sees a 404. Come the billing run, the company invoice
+    carries "Samsung Galaxy S26 <em>(company share)</em>" capped at the allowance, and the employee's
+    personal bill carries the remainder as its own labelled line — <em>above company allowance</em> —
+    to the cent. The proof is the twenty-second suite: an admin sets the policy in a real browser, a
+    member buys Netflix with her own login, and two bills come out split exactly right.</p>
+
+    <p>The week's hard lesson arrived sideways, as they do. Mid-verification, suites that had nothing
+    to do with billing started failing: personas whose pages had worked for days could not read their
+    own records. The trail led back to the identity provider — a realm re-import during earlier work
+    had quietly re-minted user ids and dropped every role granted live, so logins no longer matched
+    the party records that owned the lines, the SIMs, the bills. The fix was to make identity as
+    declarative as everything else: persona ids pinned in the realm files, the business-admin role a
+    composite in the files rather than a live grant, and the drifted users restored to their original
+    ids so years of accumulated state reattached. "Grant, then restart, then believe" gained a
+    corollary: if it only exists live, it is already lost — the files are the system.</p>
   </section>
 
   <!-- Ch 22 -->
@@ -1391,7 +1427,7 @@
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
     <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
-    role. Twenty-one end-to-end suites, all green in a real browser. Eleven official conformance kits
+    role. Twenty-two end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
