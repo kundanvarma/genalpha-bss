@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, six customer surfaces, and twenty-four end-to-end test suites that all pass
+    composable components, six customer surfaces, and twenty-five end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1354,6 +1354,38 @@
     plain values, marketing can run a campaign on a colour: one rule — the console has a preset for
     it — puts "Titanium launch: 10% off" on the cart preview and the invoice of Titanium buyers
     only. The twenty-fourth suite proves the whole chain, catalog to invoice, to the cent.</p>
+
+    <h4>The catalog learns to listen</h4>
+    <p>The composer had removed the JSON; the next request removed the forms. "I want a feature
+    like a copilot — the product owner chats about the type of product they want to create, it
+    tells them how, and actually creates it if they say yes." The temptation with such a feature
+    is to hand the model the keys. We did the opposite, and the architecture is the story: the
+    model only ever <em>proposes</em>.</p>
+
+    <p>The conversation runs through the intelligence component like every AI feature before it —
+    the same any-model seam, the same audit ledger, and the same privilege stance as the CSR
+    copilot: the console sends the catalog context the owner's token can already see, and the
+    endpoint fetches nothing on its own authority. The owner types "I want to sell a streaming
+    service" and the copilot answers from the modeling rules this book has been accumulating for
+    six acts: that's a <em>partner service</em> — activation will mint an entitlement code with
+    the partner, billing carries the charge — and what should it cost? The reply comes back as a
+    structured proposal: a spec, a price, an offering with its category, rendered not as JSON but
+    as a card — <em>the copilot will create: spec · StreamPlus Service; price · 9.99 EUR/month;
+    offering · StreamPlus [Partner services]</em> — with one button.</p>
+
+    <p>"Yes — create it" is where the design earns its keep. A validator checks the proposal the
+    way the composer would (duplicate names, dangling references, prices that aren't positive),
+    and then a deterministic executor applies it in dependency order — spec, prices, offerings,
+    bundle links — using the product owner's <em>own</em> token, rolling back in reverse if
+    anything fails halfway. The model never holds credentials; role-based access, tenant
+    isolation and the audit trail all hold because the write path is ordinary code making
+    ordinary TMF620 calls. The twenty-fifth suite closes the loop with the only proof that
+    matters: a customer <em>orders</em> the copilot-made product, and the orchestrator mints a
+    real partner entitlement code — the copilot's category choice drove genuine fulfilment. Its
+    second scenario chats a four-part kids-smartwatch bundle into existence — device, child plan,
+    optional GPS tracking, a twelve-month term — applied in one confirmation. And because the
+    deterministic stub provider carries both scenarios, the whole conversation runs in CI with no
+    model anywhere: chat to catalog, keyless, verified.</p>
   </section>
 
   <!-- Ch 23 -->
@@ -1471,7 +1503,7 @@
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
     <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
-    role. Twenty-four end-to-end suites, all green in a real browser. Eleven official conformance kits
+    role. Twenty-five end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
