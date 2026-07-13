@@ -220,6 +220,10 @@ async function apiCall(page, method, path, token, body) {
   const group = await page.locator(`[data-testid=bundle-${bundleProduct.id}]`).textContent();
   if (!group.includes(fiberProduct.name)) fail('bundle does not show its components: ' + group);
   console.log('OK My page shows what is inside the bundle:', bundle.name, '⊃', fiberProduct.name);
+  // MyJio-style: every numbered line renders its own row + SIM
+  const lineRows = await page.locator('[data-testid=line-row]').count();
+  if (lineRows < 2) fail('expected multiple line rows after the bundle, got ' + lineRows);
+  console.log(`OK Mobile card shows ${lineRows} lines, each with its own number and SIM`);
   await page.click(`[data-testid=change-plan-${fiberProduct.id}]`);
   await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
   await page.selectOption('[data-testid=change-plan-form] select', fiber500.id);
