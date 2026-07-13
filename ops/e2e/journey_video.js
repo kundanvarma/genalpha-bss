@@ -292,15 +292,31 @@ async function confirmLogout(page) {
   console.log('· SCENE4-back-signed-in');
   await page.goto('http://localhost:8080/shop/services');
   let numberShown = false;
-  for (let i = 0; i < 30 && !numberShown; i++) {
+  for (let i = 0; i < 50 && !numberShown; i++) {
     await page.reload();
     // wait for the page's own fetch to land before judging
-    numberShown = await page.locator('[data-testid="my-number"]').waitFor({ timeout: 4000 })
+    // .first(): a multi-line customer renders one my-number PER LINE now
+    numberShown = await page.locator('[data-testid="my-number"]').first().waitFor({ timeout: 4000 })
       .then(() => true).catch(() => false);
   }
   if (!numberShown) fail('service/number did not appear for the customer');
   await caption(page, '📱  Seconds later, on Mia\'s side: a live service — and her new number.');
   await captionOff(page);
+  await caption(page, '🪪  Her page recomposes around what she owns — plan, lines, SIM, one place.', 2800);
+  await captionOff(page);
+  // SIM self-care: the PUK, revealed on request — no call to anyone
+  await glideClick(page, page.locator('[data-testid=show-puk]').first());
+  await page.locator('[data-testid=sim-puk]').first().waitFor({ timeout: 10000 });
+  await caption(page, '🔐  Her SIM\'s PUK — self-served in one tap.', 2400);
+  await captionOff(page);
+  // one-tap data top-up
+  const topupBtn = page.locator('[data-testid^=topup-]').first();
+  if (await topupBtn.count()) {
+    await glideClick(page, topupBtn);
+    await page.locator('[data-testid=topup-done]').waitFor({ timeout: 15000 });
+    await caption(page, '➕  Need more data this month? One tap, 5 GB, a one-time charge.', 2600);
+    await captionOff(page);
+  }
   await page.goto('http://localhost:8080/shop/notifications');
   await page.locator('.row', { hasText: 'Order' }).first().waitFor({ timeout: 20000 });
   await caption(page, '📨  Every step became a message in her inbox — order received, completed, installer booked.');
@@ -315,11 +331,46 @@ async function confirmLogout(page) {
   await caption(page, '💚  And marketing\'s rule is already here: 15% off, previewed before checkout.');
   await captionOff(page);
 
-  /* ============ SCENE 5 — the machine tells its own story ============ */
+  /* ============ SCENE 5 — same build, a Norwegian operator ============ */
+  await glideClick(page, page.locator('button', { hasText: 'Sign out' }).first());
+  await confirmLogout(page);
+  await page.goto('http://shop.nova.localhost:8080/shop/');
+  await page.waitForSelector('.card', { timeout: 20000 });
+  console.log('· SCENE5-nova');
+  await caption(page, '🇳🇴  One more thing. Same build, different operator: Nova Telecom of Norway.', 3000);
+  await captionOff(page);
+  await glideClick(page, page.locator('.who >> text=Logg inn'));
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await lens(page);
+  await glideType(page, page.locator('input[name="username"]'), 'nils@nova.local');
+  await page.fill('input[name="password"]', 'nils');
+  await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
+  await page.waitForSelector('.nav', { timeout: 20000 });
+  await glideClick(page, page.locator('.nav >> text=Min side'));
+  await page.waitForSelector('[data-testid=mobile-card]', { timeout: 15000 });
+  await page.waitForTimeout(1500);
+  await caption(page, '💠  Min side: kroner, Norwegian SIM care, a Norwegian bill — the tenant manifest did this, not a fork.', 3800);
+  await captionOff(page);
+  // and the plan change, in Norwegian: same line, same number, new plan
+  await glideClick(page, page.locator('[data-testid^=change-plan-]').first());
+  await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
+  await glideClick(page, page.locator('[data-testid=change-plan-form] select'));
+  const alt = await page.locator('[data-testid=change-plan-form] option:not([value=""])')
+    .first().getAttribute('value');
+  await page.selectOption('[data-testid=change-plan-form] select', alt);
+  await glideClick(page, page.locator('[data-testid=change-plan-form] button.primary'));
+  await page.waitForSelector('[data-testid=plan-changed]', { timeout: 20000 });
+  console.log('· SCENE5-plan-changed-norsk');
+  await caption(page, '🔁  Bytt abonnement: a real TMF622 modify — Nils keeps his number, the price is in kroner.', 3200);
+  await captionOff(page);
+  await glideClick(page, page.locator('button', { hasText: 'Logg ut' }).first());
+  await confirmLogout(page);
+
+  /* ============ SCENE 6 — the machine tells its own story ============ */
   await page.goto('http://localhost:8080/flow/');
   await page.waitForTimeout(3500);
   await caption(page, '🛰  Under the hood, every click you saw was an event — the system narrates itself.', 4000);
-  await caption(page, 'genalpha-bss · 31 ODA components · 11 TM Forum CTKs at zero failures · everything you watched was real.', 4500);
+  await caption(page, 'genalpha-bss · 31 ODA components · 11 CTKs at zero · any language, any currency · everything you watched was real.', 4500);
 
   await ctx.close();
   const video = await page.video().path();
@@ -341,6 +392,27 @@ async function confirmLogout(page) {
       'http://localhost:8080/tmf-api/policyManagement/v4/policyRule/' + r.id,
       { headers: { Authorization: 'Bearer ' + token } });
   }
+  // restore Nils to his usual plan (the film swaps it every take)
+  try {
+    const nilsTok = (await (await cleanupCtx.request.post(
+      'http://localhost:8085/realms/nova/protocol/openid-connect/token',
+      { form: { grant_type: 'password', client_id: 'bss-csr', username: 'nils@nova.local', password: 'nils' } })).json()).access_token;
+    const NH = { Authorization: 'Bearer ' + nilsTok, 'Content-Type': 'application/json' };
+    const offers = await (await cleanupCtx.request.get(
+      'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?limit=100',
+      { headers: { ...NH, Host: 'shop.nova.localhost' } })).json();
+    const unlimited = offers.find((o) => o.name === 'Nova Unlimited 5G');
+    const products = await (await cleanupCtx.request.get(
+      'http://localhost:8080/tmf-api/productInventory/v4/product?status=active', { headers: NH })).json();
+    const current = products.find((p) => p.productOffering?.id !== unlimited.id
+      && (p.name || '').startsWith('Nova '));
+    if (current && unlimited) {
+      await cleanupCtx.request.post('http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder',
+        { headers: NH, data: { productOrderItem: [{ action: 'modify',
+          product: { id: current.id }, productOffering: { id: unlimited.id, name: unlimited.name } }] } });
+      console.log('· Nils restored to Nova Unlimited 5G');
+    }
+  } catch (e) { console.log('· Nils restore skipped:', e.message.split('\n')[0]); }
   console.log('cleanup done');
   await browser.close();
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); console.error(e.stack.split('\n').slice(1,4).join('\n')); process.exit(1); });
