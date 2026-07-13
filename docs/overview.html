@@ -213,14 +213,41 @@ through conditional clients with no-op fallbacks, so absent modules cost nothing
   <li><b>~260 unit and integration tests</b>, including real-PostgreSQL migration tests per
   component and an RLS proof that connects as the restricted role and demonstrates
   zero-visibility without a tenant.</li>
-  <li><b>Eight browser E2E suites</b> (Playwright) driving the real stack: the storefront journey
-  (~40 assertions from registration to a settled, discounted bill), guest checkout with
-  registration mid-flow, both consoles, the mobile app's sign-up-to-activated-plan journey,
-  two-operator tenant isolation, TMF672 role administration, and the martech loop (order →
-  welcome journey fires exactly once, carrying its promo code). The suites run after every
-  change.</li>
-  <li><b>Official TM Forum CTKs</b>: TMF620, 622, 632, 637, 666 pass with zero failures.</li>
+  <li><b>Twenty-one browser E2E suites</b> (Playwright) driving the real stack: the storefront
+  journey, guest checkout, both consoles, the business console (B2B: org boundary, consolidated
+  invoicing, invitations, member my-page), plan change (same number, commitment guard), SIM
+  self-care, the Family Max configurable bundle, value-added services (partner entitlement /
+  security feature / billing-only), business rules and dynamic pricing, soft-bundle
+  cardinality, two-operator tenant isolation <em>including a full purchase in Norwegian with
+  NOK</em>, TMF672 role administration, number porting both directions, the mobile app, and the
+  martech loop. The suites run after every change.</li>
+  <li><b>Official TM Forum CTKs</b>: eleven kits pass with zero failures (TMF620, 622, 632,
+  637, 666, 663, 669, 687, 635, 677, 678) — plus two components that fail their kits on
+  purpose, with the reasons documented.</li>
+  <li><b>The journey film</b> — a 2:54 recording of a human using every surface, re-shot after
+  every feature against the live stack; it has caught real bugs twice.</li>
   <li><b>CI</b> builds and tests every component on every push.</li>
+</ul>
+
+<h2>Security &amp; post-quantum readiness</h2>
+<p>The BSS embeds almost no cryptography of its own — identity, transport and payment crypto
+live behind the same seams as every other vendor dependency, which is precisely the
+crypto-agility that post-quantum migration guidance calls for. The full inventory is published
+in <a href="pqc-readiness.md">docs/pqc-readiness.md</a>; the shipped state:</p>
+<ul>
+  <li><b>Quantum-safe edge, today.</b> The Helm chart ships an Ingress (TLS 1.3 only) plus
+  controller values enabling <b>X25519MLKEM768</b> hybrid key exchange (ML-KEM-768, FIPS 203,
+  classical fallback preserved) — countering <em>harvest-now-decrypt-later</em>, the one
+  quantum risk with a present-tense clock.</li>
+  <li><b>Card secrets encrypted at rest.</b> SIM PUKs are AES-256-GCM field-encrypted with the
+  ICCID bound in as authenticated data; the key arrives from a KMS/secret store. AES-256 is
+  post-quantum comfortable.</li>
+  <li><b>A runtime that already speaks post-quantum.</b> The fleet runs on a JVM carrying
+  ML-KEM and ML-DSA, so the day any OIDC provider signs tokens post-quantum, verification
+  follows via JWKS — a configuration change at the identity seam, not a rewrite.</li>
+  <li><b>Honest remainder:</b> today's token signatures are the IdP's RS256. That is the one
+  quantum-vulnerable primitive left, and it is swappable without touching business code —
+  which is the difference between a PQC <em>rewrite</em> and a PQC <em>checklist</em>.</li>
 </ul>
 
 <h2>Deployment</h2>
