@@ -50,11 +50,12 @@ async function saveItems(cartId, lines) {
   window.dispatchEvent(new Event(CART_EVENT));
 }
 
-function lineKey(offeringId, selections) {
+function lineKey(offeringId, selections, characteristics) {
   const config = (selections || [])
     .map((s) => `${s.offeringId}:${JSON.stringify(Object.entries(s.characteristics || {}).sort())}`)
     .join('|');
-  return `${offeringId}#${config}`;
+  const own = JSON.stringify(Object.entries(characteristics || {}).sort());
+  return `${offeringId}#${config}#${own}`;
 }
 
 export async function cartLines() {
@@ -65,16 +66,18 @@ export async function cartCount() {
   return (await cartLines()).reduce((n, l) => n + (l.quantity || 0), 0);
 }
 
-/** selections: [{offeringId, name, characteristics}] for configured bundles. */
-export async function addToCart(offering, selections = [], quantity = 1) {
+/** selections: [{offeringId, name, characteristics}] for configured bundles;
+ * characteristics: the line's OWN picks (a standalone device's colour). */
+export async function addToCart(offering, selections = [], quantity = 1, characteristics = null) {
   const cart = await fetchCart();
   const lines = cart.cartItem || [];
-  const key = lineKey(offering.id, selections);
+  const key = lineKey(offering.id, selections, characteristics);
   const existing = lines.find((l) => l.key === key);
   if (existing) {
     existing.quantity += quantity;
   } else {
-    lines.push({ id: key, key, offeringId: offering.id, name: offering.name, quantity, selections });
+    lines.push({ id: key, key, offeringId: offering.id, name: offering.name, quantity, selections,
+      ...(characteristics && Object.keys(characteristics).length ? { characteristics } : {}) });
   }
   await saveItems(cart.id, lines);
 }

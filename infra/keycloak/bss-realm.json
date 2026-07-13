@@ -846,7 +846,9 @@
         "qualification:write",
         "policy:read",
         "policy:write",
-        "policy:evaluate"
+        "policy:evaluate",
+        "document:read",
+        "document:write"
       ],
       "id": "b6a86cbf-bbdd-4f91-8cc3-27d2a1cce3b9"
     },

@@ -61,6 +61,7 @@ const RESOURCES = [
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
       { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice' },
+      { name: 'attachment', label: 'Artwork — gallery shots & colour variants', kind: 'artwork' },
     ],
     columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
   },
@@ -579,6 +580,98 @@ function quantityControl(field) {
 }
 
 /** Commitment terms without JSON: none / 12 / 24 months. */
+/**
+ * Product artwork without JSON or a separate DAM: upload an image, it lands
+ * in the document component (TMF667) and the offering's attachment list —
+ * exactly what the storefront and app render. Name an image "gallery-*" for
+ * the product-page gallery or "variant-<colour>" to follow the colour picker.
+ * Operators with their own PIM skip this entirely: the catalog resolves
+ * their imagery per tenant through the same attachment contract.
+ */
+function artworkControl(field) {
+  const box = document.createElement('div');
+  box.style.cssText = 'display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px';
+  let entries = [];
+
+  const strip = document.createElement('div');
+  strip.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+
+  function redraw() {
+    strip.replaceChildren(...entries.map((a, i) => {
+      const cell = document.createElement('div');
+      cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10.5px;color:var(--dim,#8a979c)';
+      const img = document.createElement('img');
+      img.src = a.url;
+      img.alt = a.name || '';
+      img.style.cssText = 'width:52px;height:64px;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:#fff';
+      const cap = document.createElement('span');
+      cap.textContent = a.name || 'image';
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'ghost';
+      del.textContent = '✕';
+      del.style.cssText = 'padding:0 6px;font-size:10px';
+      del.addEventListener('click', () => { entries.splice(i, 1); redraw(); });
+      cell.append(img, cap, del);
+      return cell;
+    }));
+    if (!entries.length) {
+      strip.innerHTML = '<span style="font-size:12px;color:var(--dim,#8a979c)">No images yet — the shop shows this offering text-only.</span>';
+    }
+  }
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;flex-wrap:wrap';
+  const role = document.createElement('input');
+  role.placeholder = 'name, e.g. gallery-front or variant-Icy Blue';
+  role.style.cssText = 'flex:1;min-width:220px';
+  role.dataset.testid = 'art-role';
+  const file = document.createElement('input');
+  file.type = 'file';
+  file.accept = 'image/*';
+  file.dataset.testid = 'art-file';
+  const status = document.createElement('span');
+  status.style.fontSize = '12px';
+  file.addEventListener('change', async () => {
+    const picked = file.files[0];
+    if (!picked) return;
+    status.textContent = 'uploading…';
+    try {
+      const bytes = new Uint8Array(await picked.arrayBuffer());
+      let binary = '';
+      for (const b of bytes) binary += String.fromCharCode(b);
+      const offeringName = el('fields').querySelector('input[name="name"]')?.value || 'offering';
+      const res = await authFetch('/tmf-api/documentManagement/v4/document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${offeringName} — ${role.value || picked.name}`,
+          category: 'offering', mimeType: picked.type || 'image/png', content: btoa(binary),
+        }),
+      });
+      if (!res.ok) throw new Error(`upload failed: HTTP ${res.status}`);
+      const doc = await res.json();
+      entries.push({ name: role.value || `gallery-${entries.length + 1}`,
+        mimeType: picked.type || 'image/png', url: doc.attachmentUrl, '@type': 'Attachment' });
+      role.value = '';
+      file.value = '';
+      status.textContent = '✓ added — save the offering to publish';
+      redraw();
+    } catch (e) {
+      status.textContent = e.message;
+    }
+  });
+  row.append(role, file, status);
+  box.append(strip, row);
+  redraw();
+
+  controls[field.name] = {
+    get: () => entries,
+    set: (item) => { entries = [...(item[field.name] || [])]; redraw(); },
+  };
+  return [box];
+}
+
 function commitmentControl(field) {
   const select = document.createElement('select');
   select.name = field.name;
@@ -845,6 +938,7 @@ function renderEditor() {
       f.kind === 'ref' ? refControl(f, false) :
       f.kind === 'reflist' ? refControl(f, true) :
       f.kind === 'commitment' ? commitmentControl(f) :
+      f.kind === 'artwork' ? artworkControl(f) :
       f.kind === 'bundlecomposer' ? bundleComposerControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'select' ? selectControl(f) :

@@ -105,6 +105,7 @@ services:
       CONSOLE_URL: http://console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
+      PIM_URL: http://mock-pim:8080
       CSR_URL: http://csr-console:8080
   console:
     db: ""
@@ -122,10 +123,17 @@ services:
     db: ""
     healthPath: /healthz
     extraEnv: {}
+  # demo stand-in for an operator's external PIM (bring-your-own-PIM seam)
+  mock-pim:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
-    extraEnv: {}
+    extraEnv:
+      # nova brings its own PIM; genalpha uses the internal document store
+      PIM_BASE_URL_NOVA: http://mock-pim:8080
   product-ordering:
     db: product_ordering
     dbRole: ordering_app

@@ -60,7 +60,7 @@ two demo operators, GenAlpha and Nova Telecom, run side by side on a single depl
 cryptographic identity isolation and database row-level security between them.</p>
 <p>Three properties distinguish it from reference implementations and demo-ware:</p>
 <ul>
-  <li><b>Everything is verified end-to-end in a real browser.</b> Eight Playwright suites walk the
+  <li><b>Everything is verified end-to-end in a real browser.</b> Twenty-three Playwright suites walk the
   storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration
   and campaign journeys on every change. The five core components also pass the official TM Forum conformance kits (CTK) with
   zero failures.</li>
@@ -152,7 +152,7 @@ around them; the same pattern as the mock PSP behind the payment adapter.</div>
 <h3>Channels — one build each, white-labeled per tenant by hostname</h3>
 <table>
 <tr><th>Channel</th><th>Path</th><th>Audience</th></tr>
-<tr><td>storefront</td><td><code>/shop</code></td><td>Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA)</td></tr>
+<tr><td>storefront</td><td><code>/shop</code></td><td>Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). Devices sell with product-shot galleries, colour-variant imagery that follows the picker, and an About-this-device facts table — all plain TMF620 attachments, from the internal content store or the operator's own PIM (per-tenant seam)</td></tr>
 <tr><td>business-console</td><td><code>/biz</code></td><td>B2B self-care: a company admin adds people, orders their subscriptions (own-org boundary enforced server-side), sees live lines, reads the consolidated company invoice, and sets the company policy — a configurable device allowance. Split billing: company-placed orders are payer-stamped to the org; a member's own purchases and any device cost above the allowance bill to the member personally</td></tr>
 <tr><td>csr-console</td><td><code>/csr</code></td><td>Assisted service: customer 360, ticket queue, outage banner, number-porting panel + service cease, org-scoped agents</td></tr>
 <tr><td>admin-console</td><td><code>/console</code></td><td>Back office: catalog, stock, campaigns, AI audit, porting orders, and business Rules with a live dry-run (authored live, no redeploy)</td></tr>

@@ -152,6 +152,15 @@ spring:
             - Path=/app/**
           filters:
             - StripPrefix=1
+        # An operator's external PIM: its media hrefs are gateway-relative
+        # (/pim/assets/...) so the browser fetches product art through the
+        # same front door as everything else.
+        - id: pim
+          uri: ${PIM_URL:http://localhost:8114}
+          predicates:
+            - Path=/pim/**
+          filters:
+            - StripPrefix=1
 
 server:
   port: 8080

@@ -54,6 +54,7 @@ const NO = {
   'active': 'aktiv',
   // commerce
   'Add to cart': 'Legg i handlekurven',
+  'About this device': 'Om denne enheten',
   'Checkout': 'Til kassen',
   'Total': 'Totalt',
   'due now': 'å betale nå',

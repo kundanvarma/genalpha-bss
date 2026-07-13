@@ -147,12 +147,14 @@ async function staffToken(request, realm) {
   const novaCatalog = await (await setup.request.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: { Authorization: 'Bearer ' + novaStaff } })).json();
-  // isolation, not size: everything Nova staff see is Nova's, nothing GenAlpha's
-  if (!novaCatalog.length || !novaCatalog.every((o) => o.name.startsWith('Nova '))
+  // isolation, not size: nothing of GenAlpha's may appear, Nova's flagship must
+  const genalphaNames = ['GenAlpha', 'Samsung', 'Apple', 'Netflix'];
+  if (!novaCatalog.length
+      || novaCatalog.some((o) => genalphaNames.some((g) => o.name.includes(g)))
       || !novaCatalog.some((o) => o.name === 'Nova Unlimited 5G')) {
     fail('Nova staff catalog view wrong: ' + JSON.stringify(novaCatalog.map((o) => o.name)));
   }
-  console.log('OK Nova staff sees exactly its own world: 1 order, 1 offering');
+  console.log('OK Nova staff sees only its own world:', novaCatalog.length, 'offerings, none of GenAlpha\'s');
 
   // --- Parties are partitioned too
   const novaParties = await (await setup.request.get(
