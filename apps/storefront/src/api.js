@@ -451,12 +451,14 @@ export async function myActiveServices() {
  * rules do to this subtotal. Fail-soft — an outage or a guest session simply
  * means no preview, and the bill remains the source of truth.
  */
-export async function previewPrice(subtotal, offeringIds) {
+export async function previewPrice(subtotal, offeringIds, characteristicValues = []) {
   try {
     const res = await authFetch('/tmf-api/policyManagement/v4/price', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ context: { subtotal, offeringIds } }),
+      // characteristicValues ("color:Icy Blue") let marketing run a
+      // campaign on a colour — a pricing rule conditioned on the pick
+      body: JSON.stringify({ context: { subtotal, offeringIds, characteristicValues } }),
     });
     if (!res.ok) return null;
     const result = await res.json();

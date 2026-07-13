@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, six customer surfaces, and twenty-three end-to-end test suites that all pass
+    composable components, six customer surfaces, and twenty-four end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1339,6 +1339,21 @@
     through the same gateway, on the same storefront build. The twenty-third suite walks both paths
     and can't tell them apart from the browser, which is precisely the claim: no PIM required, any
     PIM welcome.</p>
+
+    <p>The pictures raised the next question within the hour: "sometimes prices vary based on phone
+    colour as well — is that going to create many SKUs?" Retail's answer would: one catalog row per
+    colour per storage per device, each with its own prices, stock and campaign references,
+    multiplying until nobody dares touch the range. The TMF answer is a price component with a
+    condition — <code>prodSpecCharValueUse</code>, "+2.00 a month when colour = Titanium Edition" —
+    on the <em>same</em> offering, the same spec. The storefront learned to make the price follow
+    the pick exactly as the photo already did: choose Titanium and the hero swaps <em>and</em> the
+    premium row appears; choose Phantom Black and both revert. The billing run learned the same
+    trick from the other end, rating each customer's product against its <em>configured</em>
+    characteristics — two neighbours buy the same Samsung, one bill says 39.49 and the other 37.49,
+    and no SKU was ever minted. And because the configured picks now ride the pricing context as
+    plain values, marketing can run a campaign on a colour: one rule — the console has a preset for
+    it — puts "Titanium launch: 10% off" on the cart preview and the invoice of Titanium buyers
+    only. The twenty-fourth suite proves the whole chain, catalog to invoice, to the cent.</p>
   </section>
 
   <!-- Ch 23 -->
@@ -1456,7 +1471,7 @@
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
     <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
-    role. Twenty-three end-to-end suites, all green in a real browser. Eleven official conformance kits
+    role. Twenty-four end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and

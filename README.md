@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — twenty-three Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — twenty-four Playwright suites drive the
 storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
 campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
@@ -27,8 +27,9 @@ intentional hardened gaps (payment, communication) — in
 ## A look at it
 
 **🎬 The journey film — a human using the real product, filmed across every screen.**
-One take, no mocks: Mia browses the Samsung with a real **photo gallery whose hero follows the
-colour pick** (no PIM — catalog + document store), configures the bundle, joins mid-checkout, pays;
+One take, no mocks: Mia browses the Samsung with a real **photo gallery whose hero — and price —
+follow the colour pick** (Titanium Edition costs more: a conditioned price component, no colour
+SKUs; no PIM either — catalog + document store), configures the bundle, joins mid-checkout, pays;
 the back office composes Family Max and ships a 15% pricing rule — as data; an agent fulfils her
 order; her number, SIM PUK, Netflix entitlement and inbox light up in the shop; Emil carries his
 company line on mobile; Norway's Nova Telecom runs the same build in Norwegian and kroner — its
@@ -97,7 +98,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time). **Product content is a per-tenant seam**: device galleries and colour-variant imagery ride the offering's `attachment` list — from the internal TMF667 store by default, or resolved live from **the operator's own PIM** (`pim-base-url` per tenant, keyed by product name, cached, fail-open) — the channels can't tell the difference |
+| product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time), plus **characteristic-conditioned pricing** (TMF620 `prodSpecCharValueUse`: "+2.00/mo when colour = Titanium Edition" — one offering, no SKU per variant; the shop, the cart and the billing run all price the *configured* product, and a pricing rule conditioned on `color:X` runs a **campaign on a colour**). **Product content is a per-tenant seam**: device galleries and colour-variant imagery ride the offering's `attachment` list — from the internal TMF667 store by default, or resolved live from **the operator's own PIM** (`pim-base-url` per tenant, keyed by product name, cached, fail-open) — the channels can't tell the difference |
 | product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
 | product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
 | party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
@@ -176,7 +177,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
          seed_promotions seed_resource_pools seed_ai_slice seed_verified_identity seed_nova seed_content \
-         seed_device_content; do python3 ops/seed/$s.py; done
+         seed_device_content seed_color_pricing; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

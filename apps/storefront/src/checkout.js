@@ -51,14 +51,19 @@ export function qualificationItems(lines, offerings) {
   return [...seen.entries()].map(([offeringId, name]) => ({ offeringId, name }));
 }
 
-/** What the cart owes at checkout: one-time charges across all lines. */
+/** What the cart owes at checkout: one-time charges across all lines —
+ * characteristic-conditioned charges included only when the picks match. */
 export function dueNow(lines, offerings, prices) {
   let total = null;
   for (const line of lines) {
-    for (const id of [line.offeringId, ...(line.selections || []).map((s) => s.offeringId)]) {
-      const offering = offerings[id];
+    const parts = [
+      { id: line.offeringId, characteristics: line.characteristics },
+      ...(line.selections || []).map((s) => ({ id: s.offeringId, characteristics: s.characteristics })),
+    ];
+    for (const part of parts) {
+      const offering = offerings[part.id];
       if (!offering) continue;
-      const once = oneTimeTotal(pricesOf(offering, prices));
+      const once = oneTimeTotal(pricesOf(offering, prices, part.characteristics || null));
       if (once) {
         total = total
           ? { value: total.value + once.value * line.quantity, unit: total.unit }
