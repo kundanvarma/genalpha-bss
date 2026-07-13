@@ -64,7 +64,23 @@ const run = Date.now();
   if (!/PUK \d{8}/.test(appPuk)) fail('app PUK reveal wrong: ' + appPuk);
   console.log('OK app SIM care:', appPuk, '— revealed in one tap');
   await page.locator('[data-testid="app-topup"]').first().waitFor({ timeout: 10000 });
-  console.log('OK one-tap top-up offered on the usage card');
+  console.log('OK one-tap top-up offered on the line card');
+
+  // 5c. Plan change from the phone: tap, pick, same number
+  await page.locator('[data-testid="app-change-plan"]').first().click();
+  await page.locator('[data-testid="app-plan-options"]').waitFor({ timeout: 10000 });
+  await page.locator('[data-testid^="app-pick-"]').first().click();
+  await page.locator('[data-testid="app-plan-changed"]').waitFor({ timeout: 20000 });
+  const banner = await page.locator('[data-testid="app-plan-changed"]').textContent();
+  // the number survives the swap
+  let sameNumber = false;
+  for (let attempt = 0; attempt < 10 && !sameNumber; attempt++) {
+    await page.waitForTimeout(2000);
+    const nums = await page.locator('[data-testid="msisdn"]').allTextContents();
+    sameNumber = nums.includes(msisdn);
+  }
+  if (!sameNumber) fail('number lost in app plan change');
+  console.log('OK app plan change:', banner.trim(), '— still', msisdn);
 
   // 6. Help: the order event became a notification
   await page.locator('text=Help').last().click();

@@ -182,6 +182,7 @@ Then browse:
 | http://localhost:8080/shop/ | B2C self-service persona — `kai@bss.local` / `kai` (live line, change plan, SIM PUK/PIN) |
 | http://biz.nova.localhost:8080/biz/ | Norwegian B2B persona — `birgit@fjellheim.no` / `birgit` (bedriftskonsollen in Norwegian: Fjellheim AS, people & lines, consolidated 299 kr invoice) |
 | http://shop.nova.localhost:8080/shop/ | Norwegian B2C persona — `nils@nova.local` / `nils` (Min side in Norwegian: two plan tiers to switch between, 59 kr datapåfyll, a 299 kr bill with Betal, Mobildata meter) |
+| http://localhost:8080/app/ | B2B member on MOBILE — `emil@acme.example` / `emil` (work line, SIM care, plan change; "provided by your company", no personal bill) |
 | http://localhost:8080/biz/ | Business console (B2B customer admin) — `bianca@acme.example` / `bianca`. Members she invites sign in here too, with the credentials shown at invite time, and get their my-page |
 | http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` (full agent) |
 | http://localhost:8080/csr/ | CSR console, junior persona — `jo@bss.local` / `jo` (read + tickets only) |
