@@ -58,8 +58,17 @@ const I18N_NO = {
   'No usage yet.': 'Ingen forbruk ennå.',
   'Your subscription is paid by your company — charges appear on':
     'Abonnementet ditt betales av bedriften din — kostnadene havner på',
-  "your organization's consolidated invoice. Nothing is billed to you personally.":
-    'bedriftens samlefaktura. Ingenting faktureres deg personlig.',
+  "your organization's consolidated invoice. Anything you buy yourself, and any device cost above the company allowance, appears below on your personal bill.":
+    'bedriftens samlefaktura. Alt du kjøper selv, og enhver enhetskostnad over bedriftens ramme, vises nedenfor på din personlige faktura.',
+  'Company policy': 'Bedriftspolicy',
+  'Device allowance: the company pays a device\'s monthly charge up to this amount — anything above it goes on the employee\'s personal bill.':
+    'Enhetsramme: bedriften betaler enhetens månedskostnad opp til dette beløpet — alt over havner på den ansattes personlige faktura.',
+  'Amount per month': 'Beløp per måned',
+  'Save policy': 'Lagre policy',
+  'saving…': 'lagrer…',
+  'enter an amount': 'oppgi et beløp',
+  '✓ saved — applies from the next billing run': '✓ lagret — gjelder fra neste faktureringskjøring',
+  '✓ allowance removed — the company pays devices in full': '✓ ramme fjernet — bedriften betaler enheter fullt ut',
   "Contact your company admin for plan changes, or the operator's customer care for service issues.":
     'Kontakt bedriftsadministratoren for abonnementsendringer, eller operatørens kundeservice ved tjenesteproblemer.',
 };

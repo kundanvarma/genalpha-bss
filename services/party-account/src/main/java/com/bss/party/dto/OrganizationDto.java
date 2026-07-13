@@ -21,6 +21,10 @@ public class OrganizationDto {
     @JsonProperty("parentOrganization")
     private java.util.Map<String, Object> parentOrganization;
 
+    /** {value, unit}: monthly device co-pay the company covers per device. */
+    @JsonProperty("deviceAllowance")
+    private java.util.Map<String, Object> deviceAllowance;
+
     @JsonProperty("@type")
     private String type = "Organization";
 
@@ -69,4 +73,7 @@ public class OrganizationDto {
 
     public java.util.Map<String, Object> getParentOrganization() { return parentOrganization; }
     public void setParentOrganization(java.util.Map<String, Object> parentOrganization) { this.parentOrganization = parentOrganization; }
+
+    public java.util.Map<String, Object> getDeviceAllowance() { return deviceAllowance; }
+    public void setDeviceAllowance(java.util.Map<String, Object> deviceAllowance) { this.deviceAllowance = deviceAllowance; }
 }

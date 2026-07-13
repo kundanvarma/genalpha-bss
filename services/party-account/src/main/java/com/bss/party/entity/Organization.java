@@ -28,6 +28,12 @@ public class Organization {
     @Column(name = "parent_id", length = 36)
     private String parentId;
 
+    @jakarta.persistence.Column(name = "device_allowance_value")
+    private java.math.BigDecimal deviceAllowanceValue;
+
+    @jakarta.persistence.Column(name = "device_allowance_unit")
+    private String deviceAllowanceUnit;
+
     public Organization() {
     }
 
@@ -73,4 +79,9 @@ public class Organization {
 
     public String getParentId() { return parentId; }
     public void setParentId(String parentId) { this.parentId = parentId; }
+
+    public java.math.BigDecimal getDeviceAllowanceValue() { return deviceAllowanceValue; }
+    public void setDeviceAllowanceValue(java.math.BigDecimal v) { this.deviceAllowanceValue = v; }
+    public String getDeviceAllowanceUnit() { return deviceAllowanceUnit; }
+    public void setDeviceAllowanceUnit(String u) { this.deviceAllowanceUnit = u; }
 }

@@ -27,11 +27,13 @@ intentional hardened gaps (payment, communication) — in
 ## A look at it
 
 **🎬 The journey film — a human using the real product, filmed across every screen.**
-One take, no mocks: Mia configures the bundle (phone, color, add-on), joins mid-checkout, pays;
-marketing ships a 15% pricing rule from the back office — as data; an agent fulfils her order in
-the CSR console; her number and inbox light up in the shop; her next cart is already 15% cheaper;
-and Live Flow narrates every event underneath.
-**[▶ Watch the 1:43 journey (MP4)](docs/media/journey.mp4)** · re-record any time with
+One take, no mocks: Mia configures the bundle, joins mid-checkout, pays; the back office composes
+Family Max and ships a 15% pricing rule — as data; an agent fulfils her order; her number, SIM PUK,
+Netflix entitlement and inbox light up in the shop; Emil carries his company line on mobile;
+Norway's Nova Telecom runs the same build in Norwegian and kroner — Nils changes plans, Birgit
+reads Fjellheim's consolidated invoice and sets the **split-billing device allowance**; and Live
+Flow narrates every event underneath, on a quantum-ready Java 25 fleet.
+**[▶ Watch the journey (MP4)](docs/media/journey.mp4)** · re-record any time with
 `node ops/e2e/journey_video.js`
 
 <p align="center">
@@ -140,7 +142,7 @@ color** theme every channel from the tenant manifest)
 | Channel | Path | For |
 |---|---|---|
 | storefront | `/shop` | Self-service: guest browse → configure → cart → checkout → bills → support (React + Vite PWA). **My page recomposes around what the customer holds** (the MyJio idea, same as the mobile app's Home): a dashboard card per line of business — Mobile (plans, **every line with its own number and SIM**, data meter, **one-tap top-up**), Broadband, TV & entertainment, Devices, the bundle with its components nested — plus the **latest bill with a Pay link** and a discovery card driven by **TMF680 recommendations** (category gaps as fallback). **Change plan** is like-for-like (mobile→mobile, broadband→broadband — never a device): a TMF622 `modify` order swaps the plan on the same line, same number, including a bundle's broadband tier; commitments block the change until their window ends. **Data top-ups** bought one-time extend this month's meter. **SIM self-care**: masked ICCID, PUK revealed on request, OTA PIN reset through a pluggable SIM-platform seam |
-| business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them **and change a member's plan in place** (same line, same number), see every member's live lines, browse **Plans & your company pricing** (list price vs the org's **negotiated price** — a pricing rule conditioned on `organizationId`/`memberCount`, authored as data, applied on the consolidated invoice too), and read the **consolidated company invoice** with per-person line attribution. An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, SIM self-care (PUK, PIN reset), and "billed to your company" — deliberately not `/shop`: nothing to buy, no personal bills. **Localized like the storefront**: the tenant manifest drives language and currency — Nova's business console is Norwegian with NOK invoices |
+| business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them **and change a member's plan in place** (same line, same number), see every member's live lines, browse **Plans & your company pricing** (list price vs the org's **negotiated price** — a pricing rule conditioned on `organizationId`/`memberCount`, authored as data, applied on the consolidated invoice too), and read the **consolidated company invoice** with per-person line attribution. **Split billing**: every product bills to its **payer** — orders the admin places are payer-stamped to the company at ordering time; anything a member buys themselves stays on their own personal bill. The admin also sets a **Company policy**: a configurable **device allowance** — the company pays a device's monthly charge up to the cap, and the excess lands on the employee's personal bill as its own labelled line ("above company allowance"). An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, SIM self-care (PUK, PIN reset), the "billed to your company" note — and their **personal bill** (self-bought services + device co-pay excess) right below it. **Localized like the storefront**: the tenant manifest drives language and currency — Nova's business console is Norwegian with NOK invoices |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
 | admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay, **SIM self-care (PUK/PIN) and one-tap data top-ups on the line card, partner entitlement codes, locale-aware money from the tenant manifest**; web today, iOS/Android from the same code |
@@ -182,7 +184,7 @@ Then browse:
 | http://localhost:8080/shop/ | B2C self-service persona — `kai@bss.local` / `kai` (live line, change plan, SIM PUK/PIN) |
 | http://biz.nova.localhost:8080/biz/ | Norwegian B2B persona — `birgit@fjellheim.no` / `birgit` (bedriftskonsollen in Norwegian: Fjellheim AS, people & lines, consolidated 299 kr invoice) |
 | http://shop.nova.localhost:8080/shop/ | Norwegian B2C persona — `nils@nova.local` / `nils` (Min side in Norwegian: two plan tiers to switch between, 59 kr datapåfyll, a 299 kr bill with Betal, Mobildata meter) |
-| http://localhost:8080/app/ | B2B member on MOBILE — `emil@acme.example` / `emil` (work line, SIM care, plan change; "provided by your company", no personal bill) |
+| http://localhost:8080/app/ | B2B member on MOBILE — `emil@acme.example` / `emil` (work line, SIM care, plan change; "provided by your company", personal purchases on his own bill) |
 | http://localhost:8080/biz/ | Business console (B2B customer admin) — `bianca@acme.example` / `bianca`. Members she invites sign in here too, with the credentials shown at invite time, and get their my-page |
 | http://localhost:8080/csr/ | CSR console — `agent-anna` / `agent` (full agent) |
 | http://localhost:8080/csr/ | CSR console, junior persona — `jo@bss.local` / `jo` (read + tickets only) |

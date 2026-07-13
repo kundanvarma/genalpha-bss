@@ -94,26 +94,89 @@ public class BillingRunService {
             }
         }
 
-        // B2B consolidation: an organization's members bill together — one
-        // invoice per company, with per-person attribution on the lines. A
-        // person with no organization (or an unreachable party service) keeps
-        // their own bill, exactly as before.
+        // Split billing: every product bills to the account of its payer.
+        // Orders a company admin places are stamped with a payer related
+        // party at ordering time, so company-paid lines land on the company
+        // bill while anything a member buys themselves stays on their own.
+        // A product with no payer stamp bills to its owner.
         Map<String, List<Map<String, Object>>> byAccount = new LinkedHashMap<>();
-        Map<String, List<String>> membersOf = new LinkedHashMap<>();
+        Map<String, java.util.Set<String>> membersOf = new LinkedHashMap<>();
+        Map<String, String> primaryAccountOf = new HashMap<>();
         java.util.Set<String> orgAccounts = new java.util.HashSet<>();
         for (Map.Entry<String, List<Map<String, Object>>> e : byOwner.entrySet()) {
-            java.util.Optional<String> org = orgs == null ? java.util.Optional.empty()
-                    : orgs.organizationOf(e.getKey());
-            String account = (org == null ? java.util.Optional.<String>empty() : org).orElse(e.getKey());
-            if (org != null && org.isPresent()) {
-                orgAccounts.add(account);
+            String ownerId = e.getKey();
+            for (Map<String, Object> product : e.getValue()) {
+                String payer = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
+                        .filter(p -> "payer".equalsIgnoreCase(String.valueOf(p.get("role"))))
+                        .map(p -> String.valueOf(p.get("id")))
+                        .findFirst().orElse(ownerId);
+                if (!payer.equals(ownerId)) {
+                    orgAccounts.add(payer);
+                    // usage and earned discounts follow the company-paid plan
+                    primaryAccountOf.put(ownerId, payer);
+                }
+                byAccount.computeIfAbsent(payer, k -> new ArrayList<>()).add(product);
+                membersOf.computeIfAbsent(payer, k -> new java.util.LinkedHashSet<>()).add(ownerId);
             }
-            byAccount.computeIfAbsent(account, k -> new ArrayList<>()).addAll(e.getValue());
-            membersOf.computeIfAbsent(account, k -> new ArrayList<>()).add(e.getKey());
+            primaryAccountOf.putIfAbsent(ownerId, ownerId);
         }
 
         Map<String, BigDecimal> priceCache = new HashMap<>();
         Map<String, String> unitCache = new HashMap<>();
+
+        // Configurable device co-pay: the company pays a device's monthly
+        // charge only up to its deviceAllowance policy; anything above it
+        // moves to the employee's personal bill as its own labelled line.
+        Map<String, BigDecimal> companyShareOf = new HashMap<>();
+        Map<String, List<AppliedBillingRate>> personalExcess = new LinkedHashMap<>();
+        Map<String, java.util.Set<String>> categoryCache = new HashMap<>();
+        for (String account : orgAccounts) {
+            Map<String, Object> allowance = orgs == null ? null
+                    : orgs.deviceAllowanceOf(account).orElse(null);
+            if (allowance == null || allowance.get("value") == null) {
+                continue;
+            }
+            BigDecimal cap = new BigDecimal(String.valueOf(allowance.get("value")));
+            for (Map<String, Object> product : byAccount.get(account)) {
+                Object offeringRef = product.get("productOffering");
+                if (!(offeringRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+                    continue;
+                }
+                String offeringId = String.valueOf(ref.get("id"));
+                if (!categoriesOf(offeringId, categoryCache).contains("devices")) {
+                    continue;
+                }
+                BigDecimal monthly = priceCache.computeIfAbsent(offeringId, id -> monthlyFor(id, unitCache));
+                if (monthly.compareTo(cap) <= 0) {
+                    continue;
+                }
+                String deviceOwner = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
+                        .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
+                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(null);
+                if (deviceOwner == null) {
+                    continue;
+                }
+                companyShareOf.put(String.valueOf(product.get("id")), cap);
+                AppliedBillingRate excess = new AppliedBillingRate();
+                excess.setId(UUID.randomUUID().toString());
+                excess.setTenantId(tenantId);
+                excess.setName(product.getOrDefault("name", offeringId) + " — above company allowance");
+                excess.setRateType("recurringCharge");
+                excess.setAmountValue(monthly.subtract(cap));
+                excess.setAmountUnit(unitCache.getOrDefault(offeringId,
+                        String.valueOf(allowance.getOrDefault("unit", "EUR"))));
+                excess.setProductJson("{\"id\":\"" + product.get("id") + "\"}");
+                excess.setOwnerPartyId(deviceOwner);
+                excess.setRateDate(OffsetDateTime.now());
+                personalExcess.computeIfAbsent(deviceOwner, k -> new ArrayList<>()).add(excess);
+            }
+        }
+        // An employee whose only personal charge is a device excess still
+        // needs a personal bill carrying it.
+        for (String deviceOwner : personalExcess.keySet()) {
+            byAccount.computeIfAbsent(deviceOwner, k -> new ArrayList<>());
+            membersOf.computeIfAbsent(deviceOwner, k -> new java.util.LinkedHashSet<>()).add(deviceOwner);
+        }
         int created = 0;
         int skipped = 0;
         for (Map.Entry<String, List<Map<String, Object>>> owner : byAccount.entrySet()) {
@@ -136,12 +199,17 @@ public class BillingRunService {
                     continue;
                 }
                 unit = unitCache.getOrDefault(offeringId, unit);
+                // Device co-pay: the company bill carries only its share.
+                BigDecimal companyShare = companyShareOf.get(String.valueOf(product.get("id")));
+                BigDecimal charged = companyShare != null ? companyShare : monthly;
+                String rateName = String.valueOf(product.getOrDefault("name", offeringId))
+                        + (companyShare != null ? " (company share)" : "");
                 AppliedBillingRate rate = new AppliedBillingRate();
                 rate.setId(UUID.randomUUID().toString());
                 rate.setTenantId(tenantId);
-                rate.setName(String.valueOf(product.getOrDefault("name", offeringId)));
+                rate.setName(rateName);
                 rate.setRateType("recurringCharge");
-                rate.setAmountValue(monthly);
+                rate.setAmountValue(charged);
                 rate.setAmountUnit(unit);
                 rate.setProductJson("{\"id\":\"" + product.get("id") + "\"}");
                 rate.setOwnerPartyId(((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
@@ -149,12 +217,26 @@ public class BillingRunService {
                         .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey()));
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
-                total = total.add(monthly);
-                monthlyByOffering.merge(offeringId, monthly, BigDecimal::add);
+                total = total.add(charged);
+                monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
             }
-            // Metered charges: rate this party's usage for the period and put
-            // the overage on the same bill as the recurring charges.
-            for (String member : membersOf.get(owner.getKey()))
+            // The employee side of a device co-pay: excess lands here, on
+            // the owner's personal bill — never back on a company bill.
+            if (!orgAccounts.contains(owner.getKey())) {
+                for (AppliedBillingRate excess : personalExcess.getOrDefault(owner.getKey(), List.of())) {
+                    unit = excess.getAmountUnit();
+                    billRates.add(excess);
+                    total = total.add(excess.getAmountValue());
+                }
+            }
+            // Metered charges: rate each member's usage for the period on
+            // their primary account — the one carrying their plan — so a
+            // member with both a company bill and a personal extras bill is
+            // rated exactly once.
+            for (String member : membersOf.get(owner.getKey())) {
+            if (!owner.getKey().equals(primaryAccountOf.getOrDefault(member, member))) {
+                continue;
+            }
             for (Map<String, Object> usageCharge : usage.rateForParty(
                     member, periodStart.toString(), periodEnd.toString())) {
                 Map<String, Object> amount = (Map<String, Object>) usageCharge.get("amount");
@@ -170,10 +252,15 @@ public class BillingRunService {
                 billRates.add(rate);
                 total = total.add(rate.getAmountValue());
             }
+            }
             // Earned discounts: each redemption takes its percentage off the
             // recurring charges of the offerings it applies to, while its
-            // duration window is open.
-            for (String member : membersOf.get(owner.getKey()))
+            // duration window is open — applied on the member's primary
+            // account, where those recurring charges live.
+            for (String member : membersOf.get(owner.getKey())) {
+            if (!owner.getKey().equals(primaryAccountOf.getOrDefault(member, member))) {
+                continue;
+            }
             for (Map<String, Object> redemption : promotions.redemptionsFor(member)) {
                 BigDecimal discount = discountFor(redemption, monthlyByOffering, periodStart);
                 if (discount.signum() <= 0) {
@@ -191,6 +278,7 @@ public class BillingRunService {
                 rate.setRateDate(OffsetDateTime.now());
                 billRates.add(rate);
                 total = total.subtract(discount);
+            }
             }
             // Data-authored pricing rules: segment/eligibility-driven adjustments
             // applied to the recurring base, authored in the console with no
@@ -261,7 +349,8 @@ public class BillingRunService {
                     "billNo", bill.getBillNo(),
                     "amountDue", Map.of("unit", unit, "value", total),
                     "relatedParty", List.of(Map.of(
-                            "id", owner.getKey(), "role", "customer", "@referredType", "Individual"))));
+                            "id", owner.getKey(), "role", "customer",
+                            "@referredType", orgAccounts.contains(owner.getKey()) ? "Organization" : "Individual"))));
             created++;
         }
         return Map.of("billsCreated", created, "customersSkipped", skipped,
@@ -288,6 +377,28 @@ public class BillingRunService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal percentage = new BigDecimal(String.valueOf(redemption.get("percentage")));
         return base.multiply(percentage).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * An offering's category names, lowercased, cached for the run's lifetime.
+     * Fails open to no categories — an unreachable catalog means no co-pay
+     * split, never a stopped billing run.
+     */
+    @SuppressWarnings("unchecked")
+    private java.util.Set<String> categoriesOf(String offeringId, Map<String, java.util.Set<String>> cache) {
+        return cache.computeIfAbsent(offeringId, id -> {
+            try {
+                Map<String, Object> offering = catalog.offering(id);
+                if (offering == null || !(offering.get("category") instanceof List<?> categories)) {
+                    return java.util.Set.of();
+                }
+                return ((List<Map<String, Object>>) categories).stream()
+                        .map(c -> String.valueOf(c.getOrDefault("name", "")).toLowerCase())
+                        .collect(java.util.stream.Collectors.toSet());
+            } catch (RuntimeException e) {
+                return java.util.Set.of();
+            }
+        });
     }
 
     /** Monthly recurring total of an offering's linked prices, per catalog right now. */

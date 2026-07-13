@@ -16,6 +16,11 @@ public class OrganizationMapper {
         if (entity.getParentId() != null) {
             dto.setParentOrganization(java.util.Map.of("id", entity.getParentId(), "@referredType", "Organization"));
         }
+        if (entity.getDeviceAllowanceValue() != null) {
+            dto.setDeviceAllowance(java.util.Map.of(
+                    "value", entity.getDeviceAllowanceValue(),
+                    "unit", entity.getDeviceAllowanceUnit() == null ? "EUR" : entity.getDeviceAllowanceUnit()));
+        }
         dto.setType("Organization");
         return dto;
     }
@@ -44,6 +49,13 @@ public class OrganizationMapper {
         }
         if (patch.getTradingName() != null) {
             entity.setTradingName(patch.getTradingName());
+        }
+        if (patch.getDeviceAllowance() != null) {
+            Object value = patch.getDeviceAllowance().get("value");
+            entity.setDeviceAllowanceValue(value == null ? null
+                    : new java.math.BigDecimal(String.valueOf(value)));
+            Object unit = patch.getDeviceAllowance().get("unit");
+            entity.setDeviceAllowanceUnit(unit == null ? null : String.valueOf(unit));
         }
     }
 }

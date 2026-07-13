@@ -142,7 +142,9 @@
             "paymentmethod:read",
             "paymentmethod:write",
             "recommendation:read",
-            "ai:use"
+            "ai:use",
+            "porting:read",
+            "porting:write"
           ]
         }
       },
@@ -169,6 +171,18 @@
       {
         "name": "promotion:write",
         "description": "promotion:write"
+      },
+      {
+        "name": "policy:read",
+        "description": "policy:read"
+      },
+      {
+        "name": "policy:write",
+        "description": "policy:write"
+      },
+      {
+        "name": "policy:evaluate",
+        "description": "policy:evaluate — machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -237,6 +251,32 @@
       {
         "name": "quote:write",
         "description": "Create and manage B2B quotes"
+      },
+      {
+        "name": "porting:read",
+        "description": "View number porting orders"
+      },
+      {
+        "name": "porting:write",
+        "description": "Create/manage number porting"
+      },
+      {
+        "name": "billing:admin",
+        "description": "back-office view of all customer bills"
+      },
+      {
+        "name": "appointment:admin",
+        "description": "back-office view of all appointments"
+      },
+      {
+        "name": "business:admin",
+        "description": "B2B customer admin: manages their own organization's people and lines",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "customer"
+          ]
+        }
       }
     ]
   },
@@ -272,7 +312,8 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://localhost:8080/console/*"
+        "http://localhost:8080/console/*",
+        "http://localhost:8080/flow/*"
       ],
       "webOrigins": [
         "http://localhost:8080"
@@ -402,7 +443,8 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "redirectUris": [
-        "http://localhost:8080/app/*"
+        "http://localhost:8080/app/*",
+        "genalphabss://*"
       ],
       "webOrigins": [
         "http://localhost:8080"
@@ -493,6 +535,24 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "bss-biz",
+      "name": "Business console (customer-admin SPA, code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8080/biz/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
     }
   ],
   "users": [
@@ -510,7 +570,9 @@
         "agreement:read",
         "agreement:write",
         "promotion:write",
-        "promotion:read"
+        "promotion:read",
+        "policy:evaluate",
+        "inventory:read"
       ]
     },
     {
@@ -524,7 +586,8 @@
         "payment:write",
         "usage:read",
         "usage:write",
-        "promotion:read"
+        "promotion:read",
+        "party:read"
       ]
     },
     {
@@ -587,10 +650,18 @@
         "document:write",
         "campaign:read",
         "campaign:write",
+        "policy:read",
+        "policy:write",
         "ai:use",
         "quote:read",
-        "quote:write"
-      ]
+        "quote:write",
+        "porting:read",
+        "porting:write",
+        "policy:evaluate",
+        "billing:admin",
+        "appointment:admin"
+      ],
+      "id": "9b308a96-8629-4614-bc67-6dc10db87b53"
     },
     {
       "username": "agent-anna",
@@ -612,8 +683,13 @@
         }
       ],
       "realmRoles": [
-        "agent"
-      ]
+        "agent",
+        "service:read",
+        "service:write",
+        "porting:read",
+        "porting:write"
+      ],
+      "id": "dfedb9b5-c5c1-4ebb-a3c3-17d1ee6d66f8"
     },
     {
       "username": "partner-paul",
@@ -636,7 +712,8 @@
       ],
       "realmRoles": [
         "agent"
-      ]
+      ],
+      "id": "ebb62713-fa88-40d6-b364-4b70df8c167a"
     },
     {
       "username": "service-account-bss-user-admin",
@@ -678,7 +755,9 @@
       "serviceAccountClientId": "bss-som",
       "realmRoles": [
         "ordering:read",
-        "ordering:write"
+        "ordering:write",
+        "porting:read",
+        "catalog:read"
       ],
       "id": "69af15c4-7f81-58ff-a9a0-6f1124c7a4fd"
     },
@@ -724,6 +803,136 @@
         "ticket:write",
         "ticket:read"
       ]
+    },
+    {
+      "username": "kai@bss.local",
+      "email": "kai@bss.local",
+      "firstName": "Kai",
+      "lastName": "Kunde",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "kai"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ],
+      "id": "b2167f06-2cd9-4d1e-a99b-0e1303989da1"
+    },
+    {
+      "username": "pat@bss.local",
+      "enabled": true,
+      "email": "pat@bss.local",
+      "emailVerified": true,
+      "firstName": "Pat",
+      "lastName": "Product",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "pat",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "stock:read",
+        "stock:write",
+        "qualification:read",
+        "qualification:write",
+        "policy:read",
+        "policy:write",
+        "policy:evaluate"
+      ],
+      "id": "b6a86cbf-bbdd-4f91-8cc3-27d2a1cce3b9"
+    },
+    {
+      "username": "jo@bss.local",
+      "enabled": true,
+      "email": "jo@bss.local",
+      "emailVerified": true,
+      "firstName": "Jo",
+      "lastName": "Junior",
+      "requiredActions": [],
+      "attributes": {
+        "org": [
+          "genalpha-retail"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "jo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "party:read",
+        "ticket:read",
+        "ticket:write",
+        "interaction:read",
+        "interaction:write",
+        "ordering:read",
+        "inventory:read",
+        "service:read",
+        "billing:read",
+        "usage:read",
+        "agreement:read",
+        "appointment:read",
+        "recommendation:read",
+        "catalog:read",
+        "promotion:read",
+        "paymentmethod:read"
+      ],
+      "id": "ad214f72-9b40-4fe2-9523-d2c12da7f57e"
+    },
+    {
+      "username": "bianca@acme.example",
+      "enabled": true,
+      "email": "bianca@acme.example",
+      "emailVerified": true,
+      "firstName": "Bianca",
+      "lastName": "Boss",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "bianca",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "business:admin"
+      ],
+      "id": "afcab905-6b1a-4f00-97c0-159f29bc5c91"
+    },
+    {
+      "username": "emil@acme.example",
+      "email": "emil@acme.example",
+      "firstName": "Emil",
+      "lastName": "Eng",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "emil"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ],
+      "id": "18ade4d7-af1a-400b-97c2-00dc8f492ea6"
     }
-  ]
+  ],
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "en",
+    "no"
+  ],
+  "defaultLocale": "en"
 }
