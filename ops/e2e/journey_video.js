@@ -131,6 +131,28 @@ async function confirmLogout(page) {
       await apiCtx.request.delete(
         'http://localhost:8080/tmf-api/policyManagement/v4/policyRule/' + r.id, { headers: H });
     }
+    // the copilot beat re-creates StreamPlus each take — clear the last one
+    const offers = await (await apiCtx.request.get(
+      'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?limit=100',
+      { headers: H })).json();
+    for (const o of offers.filter((x) => x.name === 'StreamPlus')) {
+      await apiCtx.request.delete(
+        'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering/' + o.id, { headers: H });
+    }
+    const specs = await (await apiCtx.request.get(
+      'http://localhost:8080/tmf-api/productCatalogManagement/v4/productSpecification?limit=100',
+      { headers: H })).json();
+    for (const sp of specs.filter((x) => x.name === 'StreamPlus Service')) {
+      await apiCtx.request.delete(
+        'http://localhost:8080/tmf-api/productCatalogManagement/v4/productSpecification/' + sp.id, { headers: H });
+    }
+    const allPrices = await (await apiCtx.request.get(
+      'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100',
+      { headers: H })).json();
+    for (const pr of allPrices.filter((x) => x.name === 'StreamPlus Monthly')) {
+      await apiCtx.request.delete(
+        'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOfferingPrice/' + pr.id, { headers: H });
+    }
     await apiCtx.close();
     console.log('· preflight: shelf topped up');
   }
@@ -251,6 +273,29 @@ async function confirmLogout(page) {
   await page.waitForSelector('#editor-title:has-text("New")', { timeout: 10000 });
   console.log('· SCENE2-composer');
   await caption(page, '💾  Saved — losslessly. The storefront is already selling this exact structure.', 2600);
+  await captionOff(page);
+
+  // the product owner CHATS the next product into existence
+  await glideClick(page, page.locator('.tab', { hasText: 'Copilot' }));
+  await page.waitForSelector('#copilot-input', { timeout: 10000 });
+  await caption(page, '🤖  Or skip the forms entirely — the Product Copilot. Describe the product you want to sell…', 3000);
+  await captionOff(page);
+  await glideType(page, page.locator('#copilot-input'), 'I want to sell a streaming service');
+  await glideClick(page, page.locator('#copilot-send'));
+  await page.locator('.copilot-ai', { hasText: 'cost per month' }).waitFor({ timeout: 20000 });
+  await page.waitForTimeout(800);
+  await caption(page, '💬  It knows this catalog: a streaming service is a PARTNER SERVICE — activation will mint the partner code. It asks for what is missing.', 3800);
+  await captionOff(page);
+  await glideType(page, page.locator('#copilot-input'), '9.99 per month sounds right');
+  await glideClick(page, page.locator('#copilot-send'));
+  await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 20000 });
+  await page.waitForTimeout(600);
+  await caption(page, '📋  It PROPOSES — spec, price, offering, plain TMF620. The model never writes; the owner decides.', 3400);
+  await captionOff(page);
+  await glideClick(page, page.locator('[data-testid=copilot-create]'));
+  await page.locator('[data-testid=copilot-created]').waitFor({ timeout: 25000 });
+  console.log('· SCENE2-copilot');
+  await caption(page, '✨  "Yes — create it." Applied with the owner\'s own permissions, audited, and already sellable in the shop. Chat to catalog in under a minute.', 4000);
   await captionOff(page);
 
   await caption(page, '📣  Next: marketing wants a 15% launch discount.');
