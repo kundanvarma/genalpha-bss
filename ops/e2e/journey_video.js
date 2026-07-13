@@ -317,6 +317,31 @@ async function confirmLogout(page) {
     await caption(page, '➕  Need more data this month? One tap, 5 GB, a one-time charge.', 2600);
     await captionOff(page);
   }
+
+  // VAS: a PARTNER service — sold like any offering, fulfilled differently
+  await caption(page, '🎬  One more thing for movie night: Netflix, straight onto her GenAlpha bill.', 2600);
+  await captionOff(page);
+  await page.goto('http://localhost:8080/shop/');
+  await page.waitForSelector('.card', { timeout: 20000 });
+  await glideClick(page, page.locator('.card', { hasText: 'Netflix Standard' }).first());
+  await page.locator('button.primary.big').waitFor({ timeout: 15000 });
+  await glideClick(page, page.locator('button.primary.big'));
+  await page.waitForURL('**/cart', { timeout: 15000 });
+  await glideClick(page, page.locator('.cartactions button.primary.big'));
+  await page.waitForURL('**/orders', { timeout: 20000 });
+  console.log('· SCENE4-netflix-ordered');
+  await page.goto('http://localhost:8080/shop/services');
+  let vasShown = false;
+  for (let i = 0; i < 20 && !vasShown; i++) {
+    await page.reload();
+    vasShown = await page.locator('[data-testid=activation-code]').first().waitFor({ timeout: 4000 })
+      .then(() => true).catch(() => false);
+  }
+  if (!vasShown) fail('Netflix entitlement never reached My page');
+  await page.locator('[data-testid=vas-card]').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600);
+  await caption(page, '🤝  No phone number for this one: the SOM activated an ENTITLEMENT with the partner — her code is ready.', 3600);
+  await captionOff(page);
   await page.goto('http://localhost:8080/shop/notifications');
   await page.locator('.row', { hasText: 'Order' }).first().waitFor({ timeout: 20000 });
   await caption(page, '📨  Every step became a message in her inbox — order received, completed, installer booked.');
