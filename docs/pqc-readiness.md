@@ -18,7 +18,7 @@ swapping what the seams point at, not rewriting the system.
 | Payment | PSP seam; the vault stores presentation data only (brand, last4, expiry) — never the PAN | ✅ real card crypto is deliberately the PSP's problem |
 | Data at rest | Postgres; SIM PUKs **AES-256-GCM field-encrypted** (ICCID as AAD, key from the environment/KMS; legacy rows self-upgrade) | ✅ closed — and AES-256 is PQ-comfortable |
 | Kafka / DB connections | plaintext in dev; SASL/TLS is deployment config | ➖ same story as transport |
-| JVM | JDK 17 | ➖ ML-KEM (JEP 496) and ML-DSA (JEP 497) ship in **JDK 24**; BouncyCastle backports both |
+| JVM | **Java 25 LTS across the fleet** (Boot 3.5) — ML-KEM (JEP 496) and ML-DSA (JEP 497) in the standard library | ✅ the runtime already speaks post-quantum; verified by the full 21-suite regression sweep |
 
 ## What "quantum-safe" would take, in priority order
 
@@ -31,9 +31,9 @@ swapping what the seams point at, not rewriting the system.
 2. **PQC token signatures (when the IdP ecosystem lands).** The services never
    hardcode an algorithm — they follow the issuer's JWKS. The day Keycloak (or
    any OIDC provider; vendor-neutrality is the hedge) signs with **ML-DSA** and
-   the JOSE registrations finalize, the migration is: IdP config + a JVM/Nimbus
-   version that knows the algorithm. Prerequisite: move the build to JDK 24+
-   (mechanical; the code is 17-compatible Spring Boot).
+   the JOSE registrations finalize, the migration is IdP configuration — the
+   prerequisite is ✅ DONE: the fleet runs Java 25 LTS (Boot 3.5.7), which
+   carries the NIST algorithms in the standard library.
 3. **Symmetric/at-rest hygiene — ✅ gap CLOSED.** AES-256 and SHA-256 were
    already PQC-fine; SIM PUKs are now field-encrypted at rest —
    **AES-256-GCM**, fresh IV per value, the ICCID bound in as authenticated
@@ -51,10 +51,10 @@ respective problems — each behind a seam that names a real vendor category.
 A BSS that embedded its own crypto would have a PQC *rewrite* ahead of it;
 this one has a PQC *procurement checklist*.
 
-**Bottom line:** items 1 and 3 are shipped in this repo. What remains is one
-quantum-vulnerable primitive — the IdP's RSA token signatures — swappable at
-the identity seam the day the OIDC ecosystem signs with ML-DSA (JDK 24 already
-carries the algorithms; the JDK bump is on the backlog). An architecture whose
-seams make the remaining migration a configuration change, with quantum-safe
-transport and at-rest card secrets already in the box, is a defensible
-"PQC-ready BSS" claim — and this document is the receipt behind it.
+**Bottom line:** everything that was ours to do is done — quantum-safe edge
+config, encrypted card secrets, and a fleet on a post-quantum-capable Java 25
+LTS runtime, all verified by the full regression sweep. What remains is one
+quantum-vulnerable primitive that is deliberately not ours: the IdP's RSA
+token signatures, swappable at the identity seam the day the OIDC ecosystem
+signs with ML-DSA — a configuration change, not a rewrite. That is a
+defensible "PQC-ready BSS" claim, and this document is the receipt behind it.
