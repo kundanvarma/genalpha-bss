@@ -106,9 +106,16 @@ const run = Date.now();
     `/tmf-api/productCatalogManagement/v4/productOffering/${id}`, { method: 'DELETE' }), authored.id);
   console.log('OK a product owner AUTHORED a pick-1-2 bundle + 12-month term in the UI — zero JSON');
 
-  // 4. Prices tab renders Money and charge period
+  // 4. Prices tab renders Money and charge period — the listing pages at 10
+  // rows and the catalog grows, so page forward until the row appears
   await page.locator('.tab', { hasText: 'Prices' }).click();
   const fiberRow = page.locator('#listing-body tr', { hasText: 'Fiber 1000 Monthly' });
+  for (let i = 0; i < 8 && !(await fiberRow.count()); i++) {
+    await page.waitForTimeout(800);
+    if (!(await fiberRow.count()) && !(await page.locator('#next').isDisabled())) {
+      await page.click('#next');
+    }
+  }
   await fiberRow.waitFor({ timeout: 10000 });
   const priceCells = await fiberRow.locator('td').allTextContents();
   if (!priceCells[2].includes('39.99') || !priceCells[2].includes('EUR')) {
@@ -213,12 +220,14 @@ const run = Date.now();
   await pat.click('input[type="submit"], button[type="submit"]');
   await pat.waitForSelector('.tab', { timeout: 20000 });
   const patTabs = (await pat.locator('.tab').allTextContents()).map((t) => t.trim());
+  // pat gained ai:use with the Product Copilot (2026-07-13): Copilot and the
+  // AI Audit trail ride along — auditability goes with AI power, by design
   const expectPat = ['Product Offerings', 'Product Specifications', 'Product Offering Prices',
-    'Product Stock', 'Serviceable Areas', 'Rules'];
+    'Product Stock', 'Serviceable Areas', 'Rules', 'Copilot', 'AI Audit'];
   for (const t of expectPat) {
     if (!patTabs.includes(t)) fail(`product persona missing tab "${t}" — got ${patTabs.join(', ')}`);
   }
-  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'AI Audit', 'Staff']) {
+  for (const t of ['Customer Bills', 'Appointments', 'Campaigns', 'Porting', 'Staff']) {
     if (patTabs.includes(t)) fail(`product persona must NOT see "${t}" — got ${patTabs.join(', ')}`);
   }
   console.log('OK role-scoped console: product-pat sees only', patTabs.join(' | '));

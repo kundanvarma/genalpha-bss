@@ -340,6 +340,14 @@ const RESOURCES = [
     },
   },
   {
+    path: 'copilot',
+    title: 'Copilot',
+    copilot: true,      // custom chat panel, not the generic CRUD table
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -390,6 +398,7 @@ const TAB_ROLE = {
   campaign: 'campaign:read',
   policyRule: 'policy:read',
   numberPortingOrder: 'porting:write',
+  copilot: 'catalog:write',
   staff: 'roles:admin',
   audit: 'ai:use',
 };
@@ -1131,6 +1140,272 @@ const AREAS = [
     roles: ['roles:admin'] },
 ];
 
+
+/* ---------------- Product Copilot: chat about a product, create it ---------------- */
+/* The owner chats; the intelligence component PROPOSES (specs, prices,
+ * offerings, bundles as TMF620 payloads); this panel validates the proposal,
+ * shows it as a human card, and on "Create it" applies it in dependency
+ * order with the OWNER's token — spec, prices, offerings, bundle links.
+ * The model never writes; partial failures roll back in reverse. */
+const copilotChat = []; // [{role, content}]
+
+function copilotPanel() {
+  let panel = document.getElementById('copilot-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'copilot-panel';
+    document.querySelector('.table-wrap').after(panel);
+  }
+  panel.hidden = false;
+  return panel;
+}
+
+async function copilotCatalogContext() {
+  const [offerings, prices] = await Promise.all([
+    authFetch(`${API_BASE}/productOffering?limit=60`).then((r) => r.json()).catch(() => []),
+    authFetch(`${API_BASE}/productOfferingPrice?limit=5`).then((r) => r.json()).catch(() => []),
+  ]);
+  const categories = [...new Set(offerings.flatMap((o) => (o.category || []).map((c) => c.name)).filter(Boolean))];
+  const currency = prices.find((p) => p.price?.unit)?.price?.unit || 'EUR';
+  return {
+    categories,
+    currency,
+    offerings: offerings.slice(0, 40).map((o) => ({ name: o.name, category: (o.category || [])[0]?.name })),
+  };
+}
+
+function copilotValidate(proposal, context) {
+  const problems = [];
+  const offerings = proposal.offerings || [];
+  if (!offerings.length) problems.push('the proposal creates no offerings');
+  const priceRefs = new Set((proposal.prices || []).map((x) => x.ref));
+  const specRefs = new Set((proposal.specs || []).map((x) => x.ref));
+  const offeringRefs = new Set(offerings.map((x) => x.ref));
+  for (const price of proposal.prices || []) {
+    if (!(Number(price.price?.value) > 0)) problems.push(`price "${price.name}" has no positive value`);
+  }
+  for (const o of offerings) {
+    if (!o.name || !String(o.name).trim()) problems.push('an offering has no name');
+    if (context.offerings.some((x) => x.name === o.name)) problems.push(`"${o.name}" already exists in the catalog`);
+    for (const ref of o.priceRefs || []) {
+      if (!priceRefs.has(ref)) problems.push(`offering "${o.name}" references unknown price ${ref}`);
+    }
+    if (o.specRef && !specRefs.has(o.specRef)) problems.push(`offering "${o.name}" references unknown spec ${o.specRef}`);
+    for (const child of o.bundledChildren || []) {
+      if (child.offeringRef && !offeringRefs.has(child.offeringRef)) {
+        problems.push(`bundle "${o.name}" references unknown offering ${child.offeringRef}`);
+      }
+      if (child.existingName && !context.offerings.some((x) => x.name === child.existingName)) {
+        problems.push(`bundle "${o.name}" references "${child.existingName}", not found in the catalog`);
+      }
+    }
+    const cat = (o.category || [])[0]?.name;
+    if (cat && context.categories.length && !context.categories.includes(cat)) {
+      problems.push(`category "${cat}" is new — it will be created by use (placement may need a seed)`);
+    }
+  }
+  return problems;
+}
+
+async function copilotExecute(proposal) {
+  const created = []; // [{kind, id}] for rollback, reverse order
+  const jsonOf = async (res, what) => {
+    if (!res.ok) {
+      const problem = await res.json().catch(() => ({}));
+      throw new Error(`${what}: ${problem.message || 'HTTP ' + res.status}`);
+    }
+    return res.json();
+  };
+  const post = (path, body) => authFetch(`${API_BASE}/${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const specs = {};    // ref -> {id, name}
+    for (const spec of proposal.specs || []) {
+      const made = await jsonOf(await post('productSpecification', {
+        name: spec.name, brand: spec.brand, lifecycleStatus: 'Active',
+        productSpecCharacteristic: spec.productSpecCharacteristic || [],
+      }), `spec "${spec.name}"`);
+      specs[spec.ref] = made;
+      created.push({ kind: 'productSpecification', id: made.id });
+    }
+    const prices = {};
+    for (const price of proposal.prices || []) {
+      const made = await jsonOf(await post('productOfferingPrice', {
+        name: price.name, priceType: price.priceType || 'recurring',
+        recurringChargePeriodType: price.recurringChargePeriodType,
+        price: price.price, prodSpecCharValueUse: price.prodSpecCharValueUse,
+        lifecycleStatus: 'Active',
+      }), `price "${price.name}"`);
+      prices[price.ref] = made;
+      created.push({ kind: 'productOfferingPrice', id: made.id });
+    }
+    const offerings = {};
+    const plain = (proposal.offerings || []).filter((o) => !(o.bundledChildren || []).length);
+    const bundles = (proposal.offerings || []).filter((o) => (o.bundledChildren || []).length);
+    for (const o of [...plain, ...bundles]) {
+      const body = {
+        name: o.name, description: o.description, lifecycleStatus: 'Active',
+        isBundle: Boolean(o.isBundle || (o.bundledChildren || []).length),
+        category: o.category, productOfferingTerm: o.productOfferingTerm,
+      };
+      if (o.specRef && specs[o.specRef]) {
+        body.productSpecification = { id: specs[o.specRef].id, name: specs[o.specRef].name,
+          '@referredType': 'ProductSpecification' };
+      }
+      if ((o.priceRefs || []).length) {
+        body.productOfferingPrice = o.priceRefs.map((ref) => ({
+          id: prices[ref].id, name: prices[ref].name, '@referredType': 'ProductOfferingPrice' }));
+      }
+      if ((o.bundledChildren || []).length) {
+        body.bundledProductOffering = o.bundledChildren.map((child) => {
+          const target = child.offeringRef ? offerings[child.offeringRef] : null;
+          const entry = target
+            ? { id: target.id, name: target.name, href: target.href, '@referredType': 'ProductOffering' }
+            : { name: child.existingName, '@referredType': 'ProductOffering' };
+          if (child.optional) {
+            entry.bundledProductOfferingOption = {
+              numberRelOfferLowerLimit: 0, numberRelOfferUpperLimit: 1 };
+          }
+          return entry;
+        });
+      }
+      const made = await jsonOf(await post('productOffering', body), `offering "${o.name}"`);
+      offerings[o.ref] = made;
+      created.push({ kind: 'productOffering', id: made.id });
+    }
+    return Object.values(offerings);
+  } catch (e) {
+    // roll back what was made, newest first — a half-created product family
+    // is worse than none
+    for (const row of created.reverse()) {
+      await authFetch(`${API_BASE}/${row.kind}/${row.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+    throw e;
+  }
+}
+
+function copilotProposalCard(reply, context, log) {
+  const proposal = reply.proposal;
+  const card = document.createElement('div');
+  card.className = 'copilot-proposal';
+  card.dataset.testid = 'copilot-proposal';
+  const rows = [];
+  for (const spec of proposal.specs || []) rows.push(`spec · ${spec.name}`);
+  for (const price of proposal.prices || []) {
+    const cond = (price.prodSpecCharValueUse || []).length ? ' (conditioned)' : '';
+    rows.push(`price · ${price.name} — ${price.price?.value} ${price.price?.unit}`
+      + (price.priceType === 'recurring' ? '/month' : ' one-time') + cond);
+  }
+  for (const o of proposal.offerings || []) {
+    const kids = (o.bundledChildren || []).length ? ` — bundle of ${o.bundledChildren.length}` : '';
+    rows.push(`offering · ${o.name} [${(o.category || [])[0]?.name || 'no category'}]${kids}`);
+  }
+  const problems = copilotValidate(proposal, context);
+  const hardProblems = problems.filter((x) => !x.includes('is new'));
+  card.innerHTML = `<b>The copilot will create:</b>
+    <ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>
+    ${problems.length ? `<p class="copilot-warn">${problems.join('<br>')}</p>` : ''}`;
+  const actions = document.createElement('div');
+  const create = document.createElement('button');
+  create.className = 'primary';
+  create.textContent = 'Yes — create it';
+  create.dataset.testid = 'copilot-create';
+  create.disabled = hardProblems.length > 0;
+  const status = document.createElement('span');
+  status.style.marginLeft = '10px';
+  create.addEventListener('click', async () => {
+    create.disabled = true;
+    status.textContent = 'creating…';
+    try {
+      const made = await copilotExecute(proposal);
+      status.innerHTML = '';
+      const done = document.createElement('div');
+      done.className = 'copilot-msg copilot-done';
+      done.dataset.testid = 'copilot-created';
+      done.innerHTML = `✓ Created ${made.length + (proposal.specs || []).length + (proposal.prices || []).length}
+        catalog resources. ${made.map((o) =>
+          `<a href="/shop/offering/${o.id}" target="_blank">${o.name} — see it in the shop</a>`).join(' · ')}`;
+      log.append(done);
+      log.scrollTop = log.scrollHeight;
+      copilotChat.push({ role: 'assistant', content: 'Created: ' + made.map((o) => o.name).join(', ') });
+    } catch (e) {
+      create.disabled = false;
+      status.textContent = 'rolled back — ' + e.message;
+    }
+  });
+  actions.append(create, status);
+  card.append(actions);
+  return card;
+}
+
+async function renderProductCopilot() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  const context = await copilotCatalogContext();
+
+  const intro = document.createElement('p');
+  intro.className = 'dim';
+  intro.style.cssText = 'font-size:13px;margin:6px 0 10px';
+  intro.textContent = 'Describe the product you want to sell — the copilot models it '
+    + 'against this catalog and creates it when you confirm. It proposes; you decide.';
+  const log = document.createElement('div');
+  log.id = 'copilot-log';
+  const bar = document.createElement('div');
+  bar.className = 'staffbar';
+  const input = document.createElement('input');
+  input.placeholder = 'e.g. I want to sell a streaming service…';
+  input.id = 'copilot-input';
+  input.style.flex = '1';
+  const send = document.createElement('button');
+  send.className = 'primary';
+  send.textContent = 'Send';
+  send.id = 'copilot-send';
+
+  const bubble = (cls, text) => {
+    const b = document.createElement('div');
+    b.className = 'copilot-msg ' + cls;
+    b.textContent = text;
+    log.append(b);
+    log.scrollTop = log.scrollHeight;
+    return b;
+  };
+  for (const m of copilotChat) {
+    if (m.role === 'user') bubble('copilot-user', m.content);
+    else bubble('copilot-ai', m.content);
+  }
+
+  async function submit() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    bubble('copilot-user', text);
+    copilotChat.push({ role: 'user', content: text });
+    const thinking = bubble('copilot-ai', '…');
+    try {
+      const res = await authFetch('/ai/v1/productCopilot', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: copilotChat, catalog: context }),
+      });
+      if (!res.ok) throw new Error('copilot unavailable (HTTP ' + res.status + ')');
+      const reply = await res.json();
+      thinking.textContent = reply.message;
+      copilotChat.push({ role: 'assistant', content: reply.message });
+      if (reply.kind === 'proposal' && reply.proposal) {
+        log.append(copilotProposalCard(reply, context, log));
+        log.scrollTop = log.scrollHeight;
+      }
+    } catch (e) {
+      thinking.textContent = e.message;
+      thinking.classList.add('copilot-warn');
+    }
+  }
+  send.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  bar.append(input, send);
+  panel.append(intro, log, bar);
+  input.focus();
+}
+
 function staffPanel() {
   let panel = document.getElementById('staff-panel');
   if (!panel) {
@@ -1294,7 +1569,17 @@ function startEditing(item) {
 async function loadList() {
   el('resource-title').textContent = active.title;
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
+  document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.querySelector('.pager')?.removeAttribute('hidden');
+  if (active.copilot) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderProductCopilot();
+    return;
+  }
   if (active.staff) {
     el('editor').hidden = true;
     el('total').textContent = '';
