@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — twenty-six Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — twenty-seven Playwright suites drive the
 storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
 campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
@@ -136,7 +136,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate and complete themselves — **fulfilment decided by catalog category**: network lines draw MSISDNs + SIMs, **partner services (Netflix) mint entitlements** through a pluggable partner seam, security products activate as features, insurance is billing-only |
+| service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate and complete themselves — **fulfilment decided by catalog category**: network lines draw MSISDNs + SIMs, **partner services (Netflix) mint entitlements** through a pluggable partner seam, security products activate as features, insurance is billing-only. **OCS seam**: the catalog *references* charging (spec characteristic `chargingSpecId` — the rate plan lives in the operator's Online Charging System, never in the BSS); activation provisions the subscriber + buckets there, a plan change swaps the rate plan, and it all fails open — charging reconciliation never blocks activation. **TMF654 Prepay Balance Management** projects the OCS's counters (remaining / used / rollover) to the channels and forwards top-up credits; the bundled `mock-ocs` stands in for Ericsson/Huawei/Matrixx in dev |
 | assurance | TMF642 / TMF656 | 8105 | Critical alarms become service problems; the CSR console shows live outages |
 
 **Channels** — one build each, white-labeled per tenant by hostname (logo, name **and brand
@@ -177,7 +177,7 @@ docker compose up -d                  # ~25 containers; wait for healthy
 for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_serviceable_areas seed_usage_allowances seed_agreement_terms \
          seed_promotions seed_resource_pools seed_ai_slice seed_verified_identity seed_nova seed_content \
-         seed_device_content seed_color_pricing; do python3 ops/seed/$s.py; done
+         seed_device_content seed_color_pricing seed_ocs_charging; do python3 ops/seed/$s.py; done
 ```
 
 Then browse:

@@ -48,6 +48,8 @@ springdoc:
 bss:
   events:
     topic: bss.usage.events
+  downstream:
+    ocs-base-url: ${OCS_BASE_URL:}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

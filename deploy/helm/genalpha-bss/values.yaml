@@ -128,6 +128,11 @@ services:
     db: ""
     healthPath: /health
     extraEnv: {}
+  # demo stand-in for the operator's Online Charging System (OCS seam)
+  mock-ocs:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
@@ -207,7 +212,8 @@ services:
   usage:
     db: usage
     dbRole: usage_app
-    extraEnv: {}
+    extraEnv:
+      OCS_BASE_URL: http://mock-ocs:8080
   agreement:
     db: agreement
     dbRole: agreement_app
@@ -289,6 +295,7 @@ services:
       OIDC_CLIENT_SECRET: som-secret
       ORDERING_BASE_URL: http://product-ordering:8080
       PORTING_BASE_URL: http://porting:8080
+      OCS_BASE_URL: http://mock-ocs:8080
   assurance:
     db: assurance
     dbRole: assurance_app

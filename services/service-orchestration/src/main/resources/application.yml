@@ -53,6 +53,7 @@ bss:
   downstream:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
+    ocs-base-url: ${OCS_BASE_URL:}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}
     enabled: ${PORTING_ENABLED:true}

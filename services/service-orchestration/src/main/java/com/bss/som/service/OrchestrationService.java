@@ -50,6 +50,7 @@ public class OrchestrationService {
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.som.client.OcsProvisioningClient ocs;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -57,7 +58,8 @@ public class OrchestrationService {
             com.bss.som.client.CatalogClient catalog,
             com.bss.som.crypto.PukVault pukVault,
             com.bss.som.client.PartnerEntitlementClient partners,
-            OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
+            OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.som.client.OcsProvisioningClient ocs) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -65,6 +67,7 @@ public class OrchestrationService {
         this.assignments = assignments;
         this.sims = sims;
         this.catalog = catalog;
+        this.ocs = ocs;
         this.pukVault = pukVault;
         this.partners = partners;
         this.ordering = ordering;
@@ -228,6 +231,13 @@ public class OrchestrationService {
             // PUK. The PIN lives on the card — set via the SIM-platform seam.
             if (numbered) {
                 mintSim(tenant, serviceId);
+                // charging lifecycle: the catalog references the OCS rate
+                // plan (chargingSpecId); the subscriber and its counters are
+                // provisioned THERE — the OCS stays the charging master
+                String chargingSpec = catalog.chargingSpecOf(so.getOfferingId()).orElse(null);
+                if (chargingSpec != null) {
+                    ocs.provision(tenant, owner, serviceId, chargingSpec);
+                }
             }
 
             so.setState(ServiceOrder.COMPLETED);
@@ -296,6 +306,12 @@ public class OrchestrationService {
                     events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
                             "id", instance.getId(), "name", rename, "state", instance.getState()));
                     log.info("plan change: service {} renamed to '{}'", instance.getId(), rename);
+                    // the OCS follows the plan: swap the rate plan (rollover
+                    // carried by the OCS's own policy)
+                    String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
+                            && off.get("id") != null ? String.valueOf(off.get("id")) : null;
+                    catalog.chargingSpecOf(modifyOfferingId).ifPresent(chargingSpec ->
+                            ocs.changeRatePlan(tenant, instance.getId(), chargingSpec));
                 }
             });
         }
