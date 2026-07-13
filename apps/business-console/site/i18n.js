@@ -12,7 +12,8 @@ const CURRENCY = I18N_CFG.currency || 'EUR';
 const INTL_LOCALE = { no: 'nb-NO', en: 'en-IE' }[LOCALE] || LOCALE;
 
 const I18N_NO = {
-  'BUSINESS': 'BEDRIFT',
+  'BUSINESS': 'MIN BEDRIFT',
+  'Business console': 'Min bedrift',
   'Sign out': 'Logg ut',
   'Your organization:': 'Din organisasjon:',
   'People & their lines': 'Personer og deres linjer',
@@ -82,6 +83,7 @@ function fmtMoney(value, unit) {
 
 /** Translate static markup: <el data-i18n> swaps its text, placeholders too. */
 document.addEventListener('DOMContentLoaded', () => {
+  document.title = t(document.title);
   for (const el of document.querySelectorAll('[data-i18n]')) {
     el.textContent = t(el.textContent.replace(/\s+/g, ' ').trim());
   }

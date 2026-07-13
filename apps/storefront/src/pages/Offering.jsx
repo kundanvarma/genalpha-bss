@@ -13,7 +13,7 @@ export default function Offering() {
   const [offering, setOffering] = useState(null);
   const [prices, setPrices] = useState({});
   const [optionOfferings, setOptionOfferings] = useState({}); // option id -> full offering
-  const [chosen, setChosen] = useState({});                   // choice name -> option id
+  const [chosen, setChosen] = useState({});                   // choice name -> [option ids]
   const [specs, setSpecs] = useState({});                     // spec id -> spec
   const [chars, setChars] = useState({});                     // characteristic name -> value
   const [avail, setAvail] = useState({});                     // offering id -> units | null (unmanaged)
@@ -42,7 +42,11 @@ export default function Offering() {
         setOptionOfferings(Object.fromEntries(full.map((f) => [f.id, f])));
         const defaults = {};
         for (const c of (o.bundledProductOffering || []).filter(isChoice)) {
-          defaults[c.name] = c.default || c.options[0]?.id;
+          const lower = c.numberRelOfferLowerLimit ?? 1;
+          const first = c.default || c.options[0]?.id;
+          // "pick up to N" starts empty; anything with a minimum starts with
+          // the default so the page is orderable out of the box
+          defaults[c.name] = lower === 0 ? [] : [first].filter(Boolean);
         }
         // The radios render before this data arrives — a choice the user
         // already made must never be clobbered by the defaults.
@@ -69,7 +73,7 @@ export default function Offering() {
   }, [chosen, optionOfferings]);
 
   const selectedOptions = useMemo(
-    () => Object.values(chosen).map((oid) => optionOfferings[oid]).filter(Boolean),
+    () => Object.values(chosen).flat().map((oid) => optionOfferings[oid]).filter(Boolean),
     [chosen, optionOfferings]);
 
   const activeCharacteristics = useMemo(() => selectedOptions.flatMap((option) => {
@@ -117,8 +121,12 @@ export default function Offering() {
     ...addedExtras.map((o) => ({ offeringId: o.id, name: o.name, characteristics: {} })),
   ];
 
+  // A group under its minimum blocks ordering — same rule TMF622 enforces.
+  const unmetChoice = choices.find((c) =>
+    (chosen[c.name] || []).length < (c.numberRelOfferLowerLimit ?? 1));
+
   // The page is orderable unless a stock-managed part of it is gone.
-  const relevantIds = [offering.id, ...Object.values(chosen)].filter(Boolean);
+  const relevantIds = [offering.id, ...Object.values(chosen).flat()].filter(Boolean);
   const managed = relevantIds.filter((rid) => avail[rid] != null);
   const scarcest = managed.length ? Math.min(...managed.map((rid) => avail[rid])) : null;
   const outOfStock = scarcest === 0;
@@ -147,20 +155,38 @@ export default function Offering() {
         </>
       )}
 
-      {choices.map((choice) => (
+      {choices.map((choice) => {
+        const lower = choice.numberRelOfferLowerLimit ?? 1;
+        const upper = choice.numberRelOfferUpperLimit ?? 1;
+        const picks = chosen[choice.name] || [];
+        const multi = upper > 1;
+        const hint = multi
+          ? (lower === 0 ? `pick up to ${upper}`
+            : lower === upper ? `pick ${lower}` : `pick ${lower}–${upper}`)
+          : null;
+        const toggle = (optId) => setChosen((c) => {
+          const cur = c[choice.name] || [];
+          if (!multi) return { ...c, [choice.name]: [optId] };
+          if (cur.includes(optId)) return { ...c, [choice.name]: cur.filter((x) => x !== optId) };
+          if (cur.length >= upper) return c; // full — untick something first
+          return { ...c, [choice.name]: [...cur, optId] };
+        });
+        return (
         <div key={choice.name} className="choice">
-          <h2>{choice.name}</h2>
+          <h2>{choice.name}{hint && <span className="dim" style={{ fontSize: 13, fontWeight: 400 }}> — {hint}</span>}</h2>
           <div className="options">
             {choice.options.map((opt) => {
               const full = optionOfferings[opt.id];
               const optMonthly = full ? monthlyTotal(pricesOf(full, prices)) : null;
+              const on = picks.includes(opt.id);
               return (
-                <label key={opt.id} className={chosen[choice.name] === opt.id ? 'option on' : 'option'}>
+                <label key={opt.id} className={on ? 'option on' : 'option'}>
                   <input
-                    type="radio"
+                    type={multi ? 'checkbox' : 'radio'}
                     name={choice.name}
-                    checked={chosen[choice.name] === opt.id}
-                    onChange={() => setChosen((c) => ({ ...c, [choice.name]: opt.id }))}
+                    checked={on}
+                    disabled={multi && !on && picks.length >= upper}
+                    onChange={() => toggle(opt.id)}
                   />
                   <span className="optname">{opt.name}</span>
                   {avail[opt.id] != null && avail[opt.id] <= 5 && (
@@ -174,7 +200,8 @@ export default function Offering() {
             })}
           </div>
         </div>
-      ))}
+        );
+      })}
 
       {optionalComponents.length > 0 && (
         <div className="choice">
@@ -245,7 +272,12 @@ export default function Offering() {
           {outOfStock ? 'Out of stock' : scarcest <= 5 ? `Only ${scarcest} left in stock` : 'In stock'}
         </p>
       )}
-      <button className="primary big" onClick={add} disabled={outOfStock}>
+      {unmetChoice && (
+        <p className="dim" data-testid="choice-hint">
+          {unmetChoice.name}: pick at least {unmetChoice.numberRelOfferLowerLimit ?? 1} to continue.
+        </p>
+      )}
+      <button className="primary big" onClick={add} disabled={outOfStock || Boolean(unmetChoice)}>
         {outOfStock ? t('Out of stock') : t('Add to cart')}
       </button>
     </div>
