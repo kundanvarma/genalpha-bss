@@ -326,7 +326,7 @@ async function confirmLogout(page) {
   // SIM self-care: the PUK, revealed on request — no call to anyone
   await glideClick(page, page.locator('[data-testid=show-puk]').first());
   await page.locator('[data-testid=sim-puk]').first().waitFor({ timeout: 10000 });
-  await caption(page, '🔐  Her SIM\'s PUK — self-served in one tap.', 2400);
+  await caption(page, '🔐  Her SIM\'s PUK — self-served in one tap. At rest it\'s AES-256-GCM ciphertext, bound to her card.', 3200);
   await captionOff(page);
   // one-tap data top-up
   const topupBtn = page.locator('[data-testid^=topup-]').first();
@@ -433,7 +433,8 @@ async function confirmLogout(page) {
   await page.goto('http://localhost:8080/flow/');
   await page.waitForTimeout(3500);
   await caption(page, '🛰  Under the hood, every click you saw was an event — the system narrates itself.', 4000);
-  await caption(page, 'genalpha-bss · 31 ODA components · 11 CTKs at zero · any language, any currency · everything you watched was real.', 4500);
+  await caption(page, '🔮  And under THAT: Java 25 with post-quantum crypto in the runtime, a hybrid ML-KEM edge, encrypted card secrets — PQC-ready, receipts in the repo.', 4200);
+  await caption(page, 'genalpha-bss · 31 ODA components · 11 CTKs at zero · any language, any currency · quantum-ready · everything you watched was real.', 4500);
 
   await ctx.close();
   const video = await page.video().path();
