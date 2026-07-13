@@ -374,10 +374,37 @@ async function confirmLogout(page) {
   await page.locator('[data-testid="price-adjustment"]').first().waitFor({ timeout: 15000 });
   await caption(page, '💚  And marketing\'s rule is already here: 15% off, previewed before checkout.');
   await captionOff(page);
-
-  /* ============ SCENE 5 — same build, a Norwegian operator ============ */
   await glideClick(page, page.locator('button', { hasText: 'Sign out' }).first());
   await confirmLogout(page);
+
+  // B2B in a pocket: Emil's company pays for his line — same app, recomposed
+  await page.goto('http://localhost:8080/app/');
+  // film the web build inside a phone bezel so it reads as what it is
+  await page.addStyleTag({ content: `
+    body{display:flex;justify-content:center;align-items:center;background:#0d1417 !important;min-height:100vh}
+    #root{width:400px !important;max-width:400px;height:820px;overflow:hidden;
+      border:12px solid #1c2326;border-radius:40px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  ` }).catch(() => {});
+  await page.locator('text=Sign in').first().click({ timeout: 20000 }).catch(() => {});
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await lens(page);
+  await glideType(page, page.locator('input[name="username"]'), 'emil@acme.example');
+  await page.fill('input[name="password"]', 'emil');
+  await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
+  await page.waitForSelector('[data-testid="app-org-banner"]', { timeout: 25000 });
+  await page.addStyleTag({ content: `
+    body{display:flex;justify-content:center;align-items:center;background:#0d1417 !important;min-height:100vh}
+    #root{width:400px !important;max-width:400px;height:820px;overflow:hidden;
+      border:12px solid #1c2326;border-radius:40px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  ` }).catch(() => {});
+  await page.waitForTimeout(2000);
+  console.log('· SCENE4-emil-mobile');
+  await caption(page, '📱  B2B in a pocket: Emil\'s line is company-paid — his app knows. Same build, recomposed by data.', 3600);
+  await captionOff(page);
+  await caption(page, '🧰  His whole self-care travels with him: SIM, top-ups, a plan change that keeps his number — while Acme gets the one invoice.', 3600);
+  await captionOff(page);
+
+  /* ============ SCENE 5 — same build, a Norwegian operator ============ */
   await page.goto('http://shop.nova.localhost:8080/shop/');
   await page.waitForSelector('.card', { timeout: 20000 });
   console.log('· SCENE5-nova');
