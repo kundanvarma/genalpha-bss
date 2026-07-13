@@ -19,6 +19,9 @@ and validated by TMF622 at order time — the UI is convenience, the order is la
 | Bundle price + option prices | prices on the bundle for the base + one-time fees; each option carries its own price | the price table recomposes as you configure; one-time fees show as "due now" at checkout | billing rates the provisioned products |
 | Where it appears | `category` refs (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups / Bundles) | shop grouping, My-page card placement, like-for-like plan-change filters | — |
 | Included data | TMF635 `usageAllowance` per offering (`boost:true` = one-time top-up) | usage meters, top-up buttons | overage charges |
+| Partner service (Netflix…) | `category: Partner services` | "My subscriptions & protection" card with the **activation code** | SOM mints an **entitlement** through the partner seam — no phone number |
+| Security feature (anti-fraud…) | `category: Security` | feature row, active badge | an active feature service, zero network resources |
+| Billing-only product (insurance…) | `category: Insurance` | priced like any offering | **no service at all** — the product simply bills |
 | Physical stock | TMF687 stock row per device offering | "only N left" / out-of-stock | reserve at order, consume at completion |
 
 ## Anatomy of Family Max
