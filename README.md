@@ -130,7 +130,7 @@ mobile app recomposes around what the customer owns:
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
-| service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate (drawing MSISDNs from resource pools) and complete themselves |
+| service-orchestration | TMF641 / TMF638 / TMF640 / TMF685 | 8104 | Digital orders decompose, activate and complete themselves — **fulfilment decided by catalog category**: network lines draw MSISDNs + SIMs, **partner services (Netflix) mint entitlements** through a pluggable partner seam, security products activate as features, insurance is billing-only |
 | assurance | TMF642 / TMF656 | 8105 | Critical alarms become service problems; the CSR console shows live outages |
 
 **Channels** — one build each, white-labeled per tenant by hostname (logo, name **and brand

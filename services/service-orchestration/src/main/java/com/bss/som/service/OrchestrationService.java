@@ -44,6 +44,8 @@ public class OrchestrationService {
     private final ResourcePoolRepository pools;
     private final ResourceAssignmentRepository assignments;
     private final com.bss.som.repository.SimCardRepository sims;
+    private final com.bss.som.client.CatalogClient catalog;
+    private final com.bss.som.client.PartnerEntitlementClient partners;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -51,6 +53,8 @@ public class OrchestrationService {
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
             com.bss.som.repository.SimCardRepository sims,
+            com.bss.som.client.CatalogClient catalog,
+            com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope) {
         this.serviceOrders = serviceOrders;
         this.services = services;
@@ -58,6 +62,8 @@ public class OrchestrationService {
         this.pools = pools;
         this.assignments = assignments;
         this.sims = sims;
+        this.catalog = catalog;
+        this.partners = partners;
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -112,6 +118,18 @@ public class OrchestrationService {
             Map<String, Object> offering = (Map<String, Object>) item.get("productOffering");
             String name = offering != null && offering.get("name") != null
                     ? String.valueOf(offering.get("name")) : "service";
+            // The catalog category decides FULFILMENT, not just placement:
+            // insurance is billing-only (no service at all), partner services
+            // activate with the partner, security toggles a feature. Anything
+            // else — or an unreachable catalog — is a network line, as always.
+            String category = catalog.categoryOf(offering == null || offering.get("id") == null
+                    ? null : String.valueOf(offering.get("id"))).orElse("");
+            if ("Insurance".equals(category)) {
+                log.info("'{}' is billing-only (Insurance) — no service to provision", name);
+                continue;
+            }
+            boolean partnerService = "Partner services".equals(category);
+            boolean securityFeature = "Security".equals(category);
             ServiceOrder so = new ServiceOrder();
             String id = UUID.randomUUID().toString();
             so.setId(id);
@@ -151,7 +169,20 @@ public class OrchestrationService {
             }
             services.save(instance);
 
-            String poolType = isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            String poolType = partnerService || securityFeature ? null
+                    : isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            if (partnerService) {
+                // the partner's platform owns the account; we hold the code
+                ResourceAssignment entitlement = new ResourceAssignment();
+                entitlement.setId(UUID.randomUUID().toString());
+                entitlement.setTenantId(tenant);
+                entitlement.setPoolId("partner");
+                entitlement.setValue(partners.activate(name, owner));
+                entitlement.setServiceId(serviceId);
+                entitlement.setOwnerPartyId(owner);
+                entitlement.setAssignedAt(OffsetDateTime.now());
+                assignments.save(entitlement);
+            }
             // Keep-your-number: if the customer ported a number in, activate on
             // it and skip the pool draw entirely.
             String portedNumber = poolType != null && ResourcePool.MSISDN.equals(poolType)

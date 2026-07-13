@@ -233,15 +233,26 @@ public class SomController {
         if (s.getOwnerPartyId() != null) {
             map.put("relatedParty", List.of(Map.of("id", s.getOwnerPartyId(), "role", "customer")));
         }
-        List<Map<String, Object>> supporting = assignments
-                .findByTenantIdAndServiceId(s.getTenantId(), s.getId()).stream()
+        // Partner entitlements are credentials, not network resources: they
+        // surface as an activationCode characteristic, never as a "number".
+        List<com.bss.som.entity.ResourceAssignment> assigned = assignments
+                .findByTenantIdAndServiceId(s.getTenantId(), s.getId());
+        List<Map<String, Object>> supporting = assigned.stream()
+                .filter(a -> !"partner".equals(a.getPoolId()))
                 .map(a -> Map.<String, Object>of("value", a.getValue(), "@referredType", "Resource"))
+                .toList();
+        List<Map<String, Object>> characteristics = assigned.stream()
+                .filter(a -> "partner".equals(a.getPoolId()))
+                .map(a -> Map.<String, Object>of("name", "activationCode", "value", a.getValue()))
                 .toList();
         if (s.getDeliveryPath() != null) {
             map.put("deliveryPath", s.getDeliveryPath());
         }
         if (!supporting.isEmpty()) {
             map.put("supportingResource", supporting);
+        }
+        if (!characteristics.isEmpty()) {
+            map.put("serviceCharacteristic", characteristics);
         }
         map.put("@type", "Service");
         return map;

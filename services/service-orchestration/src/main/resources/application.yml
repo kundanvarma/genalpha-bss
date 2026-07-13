@@ -48,6 +48,7 @@ springdoc:
 bss:
   downstream:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}
     enabled: ${PORTING_ENABLED:true}

@@ -64,6 +64,10 @@ const NO = {
   'from': 'fra',
   'Out of stock': 'Utsolgt',
   'Latest bill': 'Siste faktura',
+  'My subscriptions & protection': 'Mine abonnementer og beskyttelse',
+  'activation code:': 'aktiveringskode:',
+  'manage with the partner': 'administreres hos partneren',
+  'protecting every line on this account': 'beskytter alle linjer på kontoen',
 };
 
 const BUNDLES = { no: NO };

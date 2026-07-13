@@ -238,6 +238,13 @@ export default function Services() {
   // EVERY numbered line gets its own row + SIM — families have several
   const lines = services.filter((sv) => sv.state === 'active'
     && (sv.supportingResource || []).some((r) => r.value));
+  // partner entitlements carry an activationCode characteristic, never a number
+  const activationOf = (sv) => (sv.serviceCharacteristic || [])
+    .find((c) => c.name === 'activationCode')?.value;
+  const entitlements = services.filter((sv) => sv.state === 'active' && activationOf(sv));
+  const features = services.filter((sv) => sv.state === 'active' && !activationOf(sv)
+    && !(sv.supportingResource || []).some((r) => r.value)
+    && categoryOf(offerings[products.find((p) => p.name === sv.name)?.productOffering?.id]) === 'Security');
   const numberOf = (sv) => sv.supportingResource.find((r) => r.value).value;
   const number = lines.length > 0;
   const fmtAmount = (a) => (locale === 'en'
@@ -331,6 +338,27 @@ export default function Services() {
         <section className="card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Also active')}</h2>
           {rowsOf(other)}
+        </section>
+      )}
+
+      {(entitlements.length > 0 || features.length > 0) && (
+        <section className="card" data-testid="vas-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>{t('My subscriptions & protection')}</h2>
+          {entitlements.map((sv) => (
+            <div className="row" key={sv.id} data-testid="entitlement-row">
+              <strong>{sv.name}</strong>
+              <span className="dim">{t('activation code:')}{' '}
+                <code data-testid="activation-code">{activationOf(sv)}</code></span>
+              <span className="dim">{t('manage with the partner')}</span>
+            </div>
+          ))}
+          {features.map((sv) => (
+            <div className="row" key={sv.id} data-testid="feature-row">
+              <strong>{sv.name}</strong>
+              <span className="dim">{t('protecting every line on this account')}</span>
+              <span className={`state ${sv.state}`}>{sv.state}</span>
+            </div>
+          ))}
         </section>
       )}
 
