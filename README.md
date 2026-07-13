@@ -27,12 +27,14 @@ intentional hardened gaps (payment, communication) — in
 ## A look at it
 
 **🎬 The journey film — a human using the real product, filmed across every screen.**
-One take, no mocks: Mia configures the bundle, joins mid-checkout, pays; the back office composes
-Family Max and ships a 15% pricing rule — as data; an agent fulfils her order; her number, SIM PUK,
-Netflix entitlement and inbox light up in the shop; Emil carries his company line on mobile;
-Norway's Nova Telecom runs the same build in Norwegian and kroner — Nils changes plans, Birgit
-reads Fjellheim's consolidated invoice and sets the **split-billing device allowance**; and Live
-Flow narrates every event underneath, on a quantum-ready Java 25 fleet.
+One take, no mocks: Mia browses the Samsung with a real **photo gallery whose hero follows the
+colour pick** (no PIM — catalog + document store), configures the bundle, joins mid-checkout, pays;
+the back office composes Family Max and ships a 15% pricing rule — as data; an agent fulfils her
+order; her number, SIM PUK, Netflix entitlement and inbox light up in the shop; Emil carries his
+company line on mobile; Norway's Nova Telecom runs the same build in Norwegian and kroner — its
+device imagery arrives live from **Nova's own PIM**, Nils changes plans, Birgit reads Fjellheim's
+consolidated invoice and sets the **split-billing device allowance**; and Live Flow narrates every
+event underneath, on a quantum-ready Java 25 fleet.
 **[▶ Watch the journey (MP4)](docs/media/journey.mp4)** · re-record any time with
 `node ops/e2e/journey_video.js`
 
