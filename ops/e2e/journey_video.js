@@ -451,7 +451,18 @@ async function confirmLogout(page) {
   await caption(page, '🏔  And B2B: Birgit runs Fjellheim AS — her people, their lines, one consolidated invoice in kroner.', 3800);
   await captionOff(page);
   await page.locator('.billrow', { hasText: 'BILL-' }).first().waitFor({ timeout: 15000 });
-  await caption(page, '🧾  The company pays; employees see their own work line — nothing billed to them personally.', 3200);
+  await caption(page, '🧾  The company pays for what the company ordered; anything an employee buys themselves lands on their OWN bill — split automatically by who placed the order.', 4000);
+  await captionOff(page);
+  // split billing's knob: the device co-pay policy, set by the customer, not the operator
+  await page.locator('#policy-allowance').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600);
+  await page.fill('#policy-allowance', ''); // takes rerun: loadPolicy prefills last take's value
+  await glideType(page, page.locator('#policy-allowance'), '2000');
+  await page.selectOption('#policy-unit', 'NOK');
+  await glideClick(page, page.locator('#save-policy'));
+  await page.locator('#policy-status.ok').waitFor({ timeout: 15000 });
+  console.log('· SCENE5-split-policy');
+  await caption(page, '📐  Company policy, self-served: Fjellheim covers a device up to 2 000 kr a month — the excess moves to the employee\'s personal bill, line-itemed. Configurable, per company.', 4400);
   await captionOff(page);
   await glideClick(page, page.locator('#logout'));
   await confirmLogout(page);

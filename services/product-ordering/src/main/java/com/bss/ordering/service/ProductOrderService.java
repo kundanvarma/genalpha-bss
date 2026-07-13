@@ -703,5 +703,16 @@ public class ProductOrderService {
             throw new OrderValidationException(
                     "customer '" + customer + "' is not a member of your organization");
         }
+        // SPLIT BILLING: the payer follows the ORDERER. A company admin's
+        // order is company-paid — the org rides the order (and every product
+        // provisioned from it) as the 'payer' related party. A member's own
+        // purchase carries no payer and bills personally.
+        List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());
+        boolean stamped = parties.stream().anyMatch(p -> "payer".equals(p.get("role")));
+        if (!stamped) {
+            parties.add(Map.of("id", adminOrg, "role", "payer",
+                    "@referredType", "Organization"));
+            dto.setRelatedParty(parties);
+        }
     }
 }

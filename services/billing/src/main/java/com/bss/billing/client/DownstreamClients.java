@@ -51,6 +51,13 @@ public final class DownstreamClients {
          * billing keys on this; outages fall back to per-person bills.
          */
         java.util.Optional<String> organizationOf(String partyId);
+
+        /**
+         * The organization's device co-pay policy as {value, unit}, or empty
+         * when the company has none. Above the allowance, a device's monthly
+         * charge moves to the employee's personal bill.
+         */
+        java.util.Optional<Map<String, Object>> deviceAllowanceOf(String orgId);
     }
 
     public interface PaymentClient {

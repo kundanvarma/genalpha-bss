@@ -133,7 +133,7 @@ export default function Home({ navigation }) {
       )}
       {org && (
         <View testID="app-org-banner" style={{ borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: c.line }}>
-          <Dim>Your plan is provided by {org} — charges go on the company's invoice.</Dim>
+          <Dim>Your plan is provided by {org} — company charges go on its invoice. Anything you buy yourself shows on your own bill below.</Dim>
         </View>
       )}
 
@@ -189,8 +189,9 @@ export default function Home({ navigation }) {
         </Card>
       )}
 
-      {openBill && !org && (
-        <Card title={`Your bill · ${money(openBill.amountDue.value, openBill.amountDue.unit)}`}>
+      {openBill && (
+        <Card title={`Your bill · ${money(openBill.amountDue.value, openBill.amountDue.unit)}`} testID="app-personal-bill">
+          {org ? <Dim>Your personal charges — separate from {org}'s invoice.</Dim> : null}
           <Button label="View & pay" onPress={() => navigation.navigate('Bills')} />
         </Card>
       )}

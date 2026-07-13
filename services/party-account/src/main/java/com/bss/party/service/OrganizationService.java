@@ -10,6 +10,7 @@ import com.bss.party.exception.BadRequestException;
 import com.bss.party.exception.NotFoundException;
 import com.bss.party.mapper.OrganizationMapper;
 import com.bss.party.repository.OrganizationRepository;
+import com.bss.party.security.PartyScope;
 import com.bss.party.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -28,9 +29,12 @@ public class OrganizationService {
     private final OrganizationMapper mapper;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.party.repository.IndividualRepository individuals;
 
     public OrganizationService(OrganizationRepository repository, OrganizationMapper mapper,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.party.repository.IndividualRepository individuals) {
+        this.individuals = individuals;
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
@@ -86,10 +90,48 @@ public class OrganizationService {
     public OrganizationDto patch(String id, OrganizationDto patch) {
         Organization entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        restrictBusinessAdminPatch(id, patch);
         mapper.applyPatch(patch, entity);
         OrganizationDto updated = mapper.toDto(repository.save(entity));
         events.publish("OrganizationAttributeValueChangeEvent", "organization", updated);
         return updated;
+    }
+
+    /**
+     * Split billing: a company admin may tune THEIR OWN company policy (the
+     * device allowance) — never rename or re-parent an organization, and
+     * never touch another company. Operator staff stays unbound: business
+     * admins carry party:write too (via the customer composite), so the
+     * presence of business:admin — not the absence of party:write — is what
+     * marks the caller as customer-side.
+     */
+    private void restrictBusinessAdminPatch(String id, OrganizationDto patch) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth == null) {
+            return;
+        }
+        boolean businessAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> "business:admin".equals(a.getAuthority()));
+        boolean customer = auth.getAuthorities().stream()
+                .anyMatch(a -> PartyScope.CUSTOMER_ROLE.equals(a.getAuthority()));
+        if (!businessAdmin) {
+            if (customer) {
+                // a self-scoped customer has no business patching organizations
+                throw NotFoundException.forResource(RESOURCE, id);
+            }
+            return; // operator staff / machine identities stay unbound
+        }
+        String ownOrg = individuals.findByIdAndTenantId(auth.getName(), tenantScope.currentTenantId())
+                .map(com.bss.party.entity.Individual::getOrganizationId).orElse(null);
+        if (!id.equals(ownOrg)) {
+            throw NotFoundException.forResource(RESOURCE, id);
+        }
+        if (patch.getName() != null || patch.getTradingName() != null
+                || patch.getParentOrganization() != null) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "a company admin may only change the company policy (deviceAllowance)");
+        }
     }
 
     @Transactional

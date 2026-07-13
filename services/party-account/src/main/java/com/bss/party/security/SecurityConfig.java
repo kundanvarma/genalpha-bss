@@ -47,6 +47,10 @@ public class SecurityConfig {
                                 ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.PARTY_BASE + "/**",
                                 ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
+                        // company policy: a business admin tunes THEIR OWN org's
+                        // device allowance (ownership + field allow-list in the service)
+                        .requestMatchers(HttpMethod.PATCH, ApiConstants.PARTY_BASE + "/organization/*")
+                        .hasAnyAuthority(WRITE, "business:admin")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.PARTY_BASE + "/**",
                                 ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.PARTY_BASE + "/**",

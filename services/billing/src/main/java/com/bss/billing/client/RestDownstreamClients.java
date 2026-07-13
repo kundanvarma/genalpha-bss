@@ -149,19 +149,41 @@ public class RestDownstreamClients {
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.party-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
-        return (partyId) -> {
-            try {
-                Map<String, Object> person = rest.get()
-                        .uri("/tmf-api/party/v4/individual/{id}", partyId)
-                        .retrieve().body(Map.class);
-                if (person != null && person.get("organization") instanceof Map<?, ?> org
-                        && org.get("id") != null) {
-                    return java.util.Optional.of(String.valueOf(org.get("id")));
+        return new DownstreamClients.OrgClient() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public java.util.Optional<String> organizationOf(String partyId) {
+                try {
+                    Map<String, Object> person = rest.get()
+                            .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                            .retrieve().body(Map.class);
+                    if (person != null && person.get("organization") instanceof Map<?, ?> org
+                            && org.get("id") != null) {
+                        return java.util.Optional.of(String.valueOf(org.get("id")));
+                    }
+                    return java.util.Optional.empty();
+                } catch (RestClientException e) {
+                    // fail open: an unreachable party service means per-person bills
+                    return java.util.Optional.empty();
                 }
-                return java.util.Optional.empty();
-            } catch (RestClientException e) {
-                // fail open: an unreachable party service means per-person bills
-                return java.util.Optional.empty();
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public java.util.Optional<Map<String, Object>> deviceAllowanceOf(String orgId) {
+                try {
+                    Map<String, Object> org = rest.get()
+                            .uri("/tmf-api/party/v4/organization/{id}", orgId)
+                            .retrieve().body(Map.class);
+                    if (org != null && org.get("deviceAllowance") instanceof Map<?, ?> allowance
+                            && allowance.get("value") != null) {
+                        return java.util.Optional.of((Map<String, Object>) allowance);
+                    }
+                    return java.util.Optional.empty();
+                } catch (RestClientException e) {
+                    // fail open: no reachable policy means the company pays in full
+                    return java.util.Optional.empty();
+                }
             }
         };
     }

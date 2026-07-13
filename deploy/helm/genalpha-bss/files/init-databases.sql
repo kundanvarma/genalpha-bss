@@ -29,6 +29,7 @@ CREATE DATABASE campaign;
 CREATE DATABASE intelligence;
 CREATE DATABASE quote;
 CREATE DATABASE porting;
+CREATE DATABASE policy;
 CREATE DATABASE geographic_address;
 CREATE DATABASE payment_method;
 CREATE DATABASE service_om;

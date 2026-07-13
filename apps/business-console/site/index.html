@@ -87,14 +87,30 @@
   </section>
 
   <section class="card">
+    <h2 data-i18n>Company policy</h2>
+    <p class="dimhint" style="font-size:12.5px;margin:0 0 8px" data-i18n>
+      Device allowance: the company pays a device's monthly charge up to this
+      amount — anything above it goes on the employee's personal bill.</p>
+    <div class="addrow">
+      <input id="policy-allowance" placeholder="Amount per month" data-i18n-placeholder
+        inputmode="decimal" style="max-width:160px">
+      <select id="policy-unit" style="max-width:100px">
+        <option>EUR</option><option>NOK</option>
+      </select>
+      <button class="primary" id="save-policy" data-i18n>Save policy</button>
+      <span id="policy-status"></span>
+    </div>
+  </section>
+
+  <section class="card">
     <h2 data-i18n>Company invoices</h2>
     <div id="bills"></div>
   </section>
 </main>
 
 <!-- Org MEMBERS (no business:admin) get their own "my page": the work line
-     their company pays for. Deliberately not /shop — nothing to buy, no
-     personal bills, just what the employer provisioned. -->
+     their company pays for, plus their personal bill — anything they bought
+     themselves and any device cost above the company allowance. -->
 <main id="memberview" hidden>
   <div class="bizhead">
     <h1 data-i18n>My work line at</h1><span class="orgname" id="member-org-name">…</span>
@@ -116,6 +132,7 @@
       Your subscription is paid by your company — charges appear on
       <b id="member-org-bill">your organization</b>'s consolidated invoice.
       Nothing is billed to you personally.</p>
+    <div id="member-bills"></div>
   </section>
 
   <section class="card">

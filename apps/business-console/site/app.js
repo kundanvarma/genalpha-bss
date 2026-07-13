@@ -255,6 +255,36 @@ async function swapPlan() {
   } catch (e) { status.className = 'err'; status.textContent = e.message; }
 }
 
+/* ---------- company policy: the device co-pay allowance ---------- */
+function loadPolicy(org) {
+  const allowance = org?.deviceAllowance;
+  if (allowance?.value != null) {
+    el('policy-allowance').value = allowance.value;
+    el('policy-unit').value = allowance.unit || 'EUR';
+  }
+}
+
+async function savePolicy() {
+  const status = el('policy-status');
+  const value = el('policy-allowance').value.trim();
+  if (value && Number.isNaN(Number(value))) {
+    status.className = 'err'; status.textContent = t('enter an amount');
+    return;
+  }
+  status.className = ''; status.textContent = t('saving…');
+  try {
+    await json(await authFetch(`${PARTY}/organization/${orgId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceAllowance: value === '' ? { value: null }
+        : { value: Number(value), unit: el('policy-unit').value } }),
+    }));
+    status.className = 'ok';
+    status.textContent = value === '' ? t('✓ allowance removed — the company pays devices in full')
+      : t('✓ saved — applies from the next billing run');
+  } catch (e) { status.className = 'err'; status.textContent = e.message; }
+}
+
 /* ---------- the consolidated company invoice ---------- */
 async function loadBills() {
   const bills = await json(await authFetch(`${BILLING}/customerBill?relatedPartyId=${orgId}&limit=50`));
@@ -292,8 +322,38 @@ async function renderMemberView(orgName) {
   note.replaceChildren(
     document.createTextNode(t('Your subscription is paid by your company — charges appear on') + ' '),
     Object.assign(document.createElement('b'), { textContent: orgName }),
-    document.createTextNode(' — ' + t("your organization's consolidated invoice. Nothing is billed to you personally.")));
+    document.createTextNode(' — ' + t("your organization's consolidated invoice. Anything you buy yourself, and any device cost above the company allowance, appears below on your personal bill.")));
   el('memberview').hidden = false;
+
+  // the member's PERSONAL bill: their own purchases + device co-pay excess
+  authFetch(`${BILLING}/customerBill?relatedPartyId=${me.id}&limit=20`)
+    .then(json)
+    .then((personalBills) => {
+      const box = el('member-bills');
+      box.replaceChildren();
+      for (const b of personalBills || []) {
+        const row = document.createElement('div');
+        row.className = 'billrow';
+        row.dataset.personalBill = b.id;
+        row.innerHTML = `<b>${b.billNo}</b> · ${b.state}
+          <span class="amount">${fmtMoney(b.amountDue.value, b.amountDue.unit)}</span>`;
+        const lines = document.createElement('div');
+        lines.className = 'billlines';
+        row.append(lines);
+        box.append(row);
+        authFetch(`${BILLING}/customerBill/${b.id}/appliedCustomerBillingRate`)
+          .then(json)
+          .then((billRates) => {
+            lines.replaceChildren(...billRates.map((r) => {
+              const d = document.createElement('div');
+              d.innerHTML = `${r.name} <span style="float:right">${fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit)}</span>`;
+              return d;
+            }));
+          })
+          .catch(() => { lines.textContent = ''; });
+      }
+    })
+    .catch(() => {});
 
   const box = el('member-lines');
   box.textContent = 'loading…';
@@ -392,6 +452,8 @@ async function main() {
   el('place-order').addEventListener('click', placeOrder);
   el('swap-member').addEventListener('change', loadSwapLines);
   el('swap-plan').addEventListener('click', swapPlan);
+  el('save-policy').addEventListener('click', savePolicy);
+  loadPolicy(org);
   loadBills();
   const [members, orderable] = await Promise.all([loadMembers(), loadOfferings()]);
   loadPlans(orderable, (members || []).length);
