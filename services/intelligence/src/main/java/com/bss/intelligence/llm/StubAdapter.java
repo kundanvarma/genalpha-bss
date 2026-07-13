@@ -75,6 +75,28 @@ public class StubAdapter implements LlmAdapter {
             lastOwner = end > idx ? convo.substring(idx, end) : convo.substring(idx);
         }
         boolean asksWatch = lastOwner.contains("smartwatch") || lastOwner.contains("kids watch");
+        boolean asksPlanWithDiscount = (lastOwner.contains("50 gb") || lastOwner.contains("50gb"))
+                && (lastOwner.contains("discount") || lastOwner.contains("samsung"));
+        if (asksPlanWithDiscount) {
+            return "{\"kind\":\"proposal\",\"message\":\"The plan is a catalog offering; the"
+                    + " Samsung discount is a PRICING RULE — it fires when both are in the cart,"
+                    + " on the preview and on the bill. One confirmation creates both.\","
+                    + "\"proposal\":{"
+                    + "\"specs\":[{\"ref\":\"s1\",\"name\":\"5G Mobile Plan 50 GB\","
+                    + "\"productSpecCharacteristic\":[]}],"
+                    + "\"prices\":[{\"ref\":\"p1\",\"name\":\"5G 50 GB Monthly\","
+                    + "\"priceType\":\"recurring\",\"recurringChargePeriodType\":\"month\","
+                    + "\"price\":{\"unit\":\"EUR\",\"value\":24.99}}],"
+                    + "\"offerings\":[{\"ref\":\"o1\",\"name\":\"5G Mobile Plan 50 GB\","
+                    + "\"description\":\"5G speeds with a 50 GB monthly allowance.\","
+                    + "\"category\":[{\"name\":\"Mobile plans\"}],"
+                    + "\"specRef\":\"s1\",\"priceRefs\":[\"p1\"]}],"
+                    + "\"pricingRules\":[{\"name\":\"Samsung with plan discount\","
+                    + "\"message\":\"10% off — Samsung with your new plan\","
+                    + "\"adjustmentType\":\"percent\",\"adjustmentValue\":-10,"
+                    + "\"audience\":\"consumer\","
+                    + "\"whenCartHas\":[\"o1\",\"Samsung Galaxy S26\"]}]}}";
+        }
         boolean asksStreaming = !asksWatch
                 && (lastOwner.contains("streaming") || convo.contains("streaming"));
         boolean saidMonthly = lastOwner.contains("/month") || lastOwner.contains("per month")

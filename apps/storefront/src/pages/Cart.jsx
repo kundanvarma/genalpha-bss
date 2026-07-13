@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, checkQualification, getOffering, myParty, previewPrice, priceIndex, searchTimeSlots } from '../api.js';
+import { availabilityFor, checkQualification, getOffering, getSpec, myParty, previewPrice, priceIndex, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
-import { CART_EVENT, cartLines, markCartCheckedOut, removeLine, setQuantity } from '../cart.js';
+import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
 import { checkPromotion, savePaymentMethod } from '../api.js';
@@ -104,9 +104,46 @@ export default function Cart() {
   // Dynamic pricing preview: what the operator's enabled pricing rules do to
   // this cart's monthly total — the same rules the bill will apply, shown
   // before checkout instead of after. Fail-soft (guests/outage: no preview).
+  // specs for the cart's offerings: configurable characteristics (a device's
+  // colour) are picked HERE when a line arrived unconfigured (deal adds)
+  const [specsById, setSpecsById] = useState({});
+  useEffect(() => {
+    const wanted = [...new Set(Object.values(offerings)
+      .map((o) => o.productSpecification?.id).filter(Boolean))]
+      .filter((sid) => !specsById[sid]);
+    if (!wanted.length) return;
+    Promise.all(wanted.map((sid) => getSpec(sid).catch(() => null)))
+      .then((loaded) => setSpecsById((prev) => ({ ...prev,
+        ...Object.fromEntries(loaded.filter(Boolean).map((sp) => [sp.id, sp])) })));
+  }, [offerings]);
+
+  // deals that touch a line in this cart but whose partner is missing —
+  // the cart offers to complete them (one idempotent click)
+  const [dealHints, setDealHints] = useState([]);
+  useEffect(() => {
+    if (!lines || !lines.length) { setDealHints([]); return; }
+    const inCart = new Set(lines.map((l) => l.offeringId));
+    Promise.all([...inCart].map((oid) =>
+      fetch(`/tmf-api/policyManagement/v4/price/teaser?offeringId=${oid}`)
+        .then((r) => (r.ok ? r.json() : [])).catch(() => [])))
+      .then(async (all) => {
+        const seen = new Set();
+        const hints = [];
+        for (const teaser of all.flat()) {
+          const missing = (teaser.relatedOfferingIds || []).filter((rid) => !inCart.has(rid));
+          if (!missing.length || seen.has(teaser.name)) continue;
+          seen.add(teaser.name);
+          const partner = await getOffering(missing[0]).catch(() => null);
+          if (partner) hints.push({ message: teaser.message, partner });
+        }
+        setDealHints(hints);
+      })
+      .catch(() => setDealHints([]));
+  }, [lines]);
+
   const [priceAdj, setPriceAdj] = useState(null);
   useEffect(() => {
-    if (!lines || !lines.length || !isSignedIn() || !Object.keys(prices).length) {
+    if (!lines || !lines.length || !Object.keys(prices).length) {
       setPriceAdj(null);
       return;
     }
@@ -133,7 +170,20 @@ export default function Cart() {
       setPriceAdj(null);
       return;
     }
-    previewPrice(Number(subtotal.toFixed(2)), [...ids], [...charValues]).then(setPriceAdj);
+    if (isSignedIn()) {
+      previewPrice(Number(subtotal.toFixed(2)), [...ids], [...charValues]).then(setPriceAdj);
+    } else {
+      // guests see what the PUBLIC deals do — identity-conditioned rules
+      // (negotiated company terms) never leak to an anonymous basket
+      fetch('/tmf-api/policyManagement/v4/price/indicative', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: { subtotal: Number(subtotal.toFixed(2)),
+          offeringIds: [...ids], characteristicValues: [...charValues] } }),
+      }).then((r) => (r.ok ? r.json() : null))
+        .then((result) => setPriceAdj(result && (result.adjustments || []).length ? result : null))
+        .catch(() => setPriceAdj(null));
+    }
   }, [lines, offerings, prices]);
 
   function pickSlot(next) {
@@ -247,10 +297,19 @@ export default function Cart() {
       <h1>Cart</h1>
       {error && <p className="error">{error}</p>}
       <div className="rows">
-        {lines.map((line) => {
+        {lines.map((line, idx) => {
           const monthly = lineMonthly(line);
+          // lines added together as one advertised deal render as a group:
+          // a deal header above the first member, members slightly indented
+          const dealHeader = line.deal && lines.findIndex((l) => l.deal === line.deal) === idx
+            ? <div className="row dealhead" data-testid="deal-group" key={'deal-' + idx}>
+                <span>💡 {line.deal}</span>
+              </div>
+            : null;
           return (
-            <div className="row" key={line.key}>
+            <React.Fragment key={line.key}>
+            {dealHeader}
+            <div className={line.deal ? 'row dealline' : 'row'}>
               <div>
                 <strong>{line.name}</strong>
                 {(line.selections || []).map((s) => (
@@ -259,6 +318,26 @@ export default function Cart() {
                     {Object.entries(s.characteristics || {}).map(([k, v]) => ` · ${v}`).join('')}
                   </div>
                 ))}
+                {!(line.selections || []).length && (() => {
+                  const spec = specsById[offerings[line.offeringId]?.productSpecification?.id];
+                  const configurable = (spec?.productSpecCharacteristic || [])
+                    .filter((c) => c.configurable !== false
+                      && (c.productSpecCharacteristicValue || []).length);
+                  if (!configurable.length) return null;
+                  return (
+                    <div className="lineconfig" data-testid="line-config">
+                      {configurable.map((c) => (
+                        <select key={c.name} value={line.characteristics?.[c.name] || ''}
+                          onChange={(e) => setLineCharacteristics(line.key, { [c.name]: e.target.value })}>
+                          <option value="" disabled>{c.name}…</option>
+                          {(c.productSpecCharacteristicValue || []).map((v) => (
+                            <option key={v.value} value={v.value}>{v.value}</option>
+                          ))}
+                        </select>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="rowend">
                 {monthly && <span className="linetotal">{monthly.value.toFixed(2)} {monthly.unit}/mo</span>}
@@ -272,6 +351,7 @@ export default function Cart() {
                 <button className="ghost danger" onClick={() => removeLine(line.key)}>Remove</button>
               </div>
             </div>
+            </React.Fragment>
           );
         })}
         {grand && (
@@ -296,10 +376,24 @@ export default function Cart() {
         ))}
         {priceAdj && (
           <div className="row granded" data-testid="adjusted-total">
-            <strong>Your price per month</strong>
+            <strong>{priceAdj.indicative ? t('Indicative price per month') : t('Your price per month')}</strong>
             <strong className="linetotal ok">{Number(priceAdj.total).toFixed(2)} {grand?.unit || 'EUR'}</strong>
           </div>
         )}
+        {priceAdj?.indicative && (
+          <p className="dim small" data-testid="indicative-note">
+            {t('Public deals only — sign in for your exact price; business purchases may price differently.')}
+          </p>
+        )}
+        {dealHints.map((hint) => (
+          <div className="row promo" data-testid="deal-hint" key={hint.partner.id}>
+            <span>💡 {hint.message}</span>
+            <button className="ghost" data-testid="deal-hint-add"
+              onClick={() => ensureInCart(hint.partner, hint.message)}>
+              {t('Add')} {hint.partner.name} →
+            </button>
+          </div>
+        ))}
         {due && (
           <div className="row granded duenow">
             <strong>Due now</strong>

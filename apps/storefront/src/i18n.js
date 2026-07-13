@@ -55,6 +55,15 @@ const NO = {
   // commerce
   'Add to cart': 'Legg i handlekurven',
   'About this device': 'Om denne enheten',
+  "private customers only; company purchases don't qualify": 'kun privatkunder; bedriftskjøp kvalifiserer ikke',
+  'for business customers': 'for bedriftskunder',
+  'view the partner product': 'se partnerproduktet',
+  'add the deal to cart': 'legg tilbudet i handlekurven',
+  'Add': 'Legg til',
+  'Indicative price per month': 'Veiledende pris per måned',
+  'Your price per month': 'Din pris per måned',
+  'Public deals only — sign in for your exact price; business purchases may price differently.':
+    'Kun offentlige tilbud — logg inn for din eksakte pris; bedriftskjøp kan prises annerledes.',
   'Checkout': 'Til kassen',
   'Total': 'Totalt',
   'due now': 'å betale nå',

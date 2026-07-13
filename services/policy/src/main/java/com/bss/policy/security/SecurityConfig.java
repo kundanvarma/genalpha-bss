@@ -46,6 +46,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/evaluate").hasAuthority("policy:evaluate")
                         // Price preview is computed from rules the customer will pay under anyway:
                         // any authenticated caller (customer channel, billing machine) may ask.
+                        // teasers are the shop window — marketing copy, anonymous by design
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/price/teaser").permitAll()
+                        // guests may ask what the PUBLIC deals do to a basket
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/price/indicative").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/price").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("policy:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("policy:write")

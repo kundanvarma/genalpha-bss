@@ -448,7 +448,8 @@ function renderTabs() {
     const b = document.createElement('button');
     b.textContent = r.title;
     b.className = r === active ? 'tab on' : 'tab';
-    b.addEventListener('click', () => { active = r; offset = 0; stopEditing(); renderTabs(); loadList(); });
+    b.addEventListener('click', () => { active = r; offset = 0; stopEditing();
+      sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
     return b;
   }));
 }
@@ -1147,7 +1148,12 @@ const AREAS = [
  * shows it as a human card, and on "Create it" applies it in dependency
  * order with the OWNER's token — spec, prices, offerings, bundle links.
  * The model never writes; partial failures roll back in reverse. */
-const copilotChat = []; // [{role, content}]
+// The chat survives reloads and re-auth redirects: a long model
+// conversation must never be lost to a token bounce.
+const copilotChat = JSON.parse(sessionStorage.getItem('bss.console.copilotChat') || '[]');
+function copilotRemember() {
+  sessionStorage.setItem('bss.console.copilotChat', JSON.stringify(copilotChat.slice(-40)));
+}
 
 function copilotPanel() {
   let panel = document.getElementById('copilot-panel');
@@ -1174,10 +1180,47 @@ async function copilotCatalogContext() {
   };
 }
 
+/**
+ * Deterministic repair of KNOWN-wrong model habits before validation: a
+ * non-positive "price" is always a discount in disguise (discounts are
+ * pricing rules), and prodSpecCharValueUse must be a list. Everything
+ * dropped is reported on the card — repaired, never hidden.
+ */
+function copilotSanitize(proposal) {
+  const notes = [];
+  const prices = proposal.prices || [];
+  const bad = prices.filter((p) => !(Number(p.price?.value) > 0));
+  if (bad.length) {
+    proposal.prices = prices.filter((p) => Number(p.price?.value) > 0);
+    const badRefs = new Set(bad.map((b) => b.ref));
+    for (const o of proposal.offerings || []) {
+      o.priceRefs = (o.priceRefs || []).filter((r) => !badRefs.has(r));
+    }
+    notes.push(`dropped ${bad.length} non-positive "price" — a discount belongs in the pricing rule, which this proposal ${(proposal.pricingRules || []).length ? 'has' : 'is missing'}`);
+  }
+  for (const p of proposal.prices || []) {
+    if (p.prodSpecCharValueUse) {
+      // a valid condition is a list of {name, productSpecCharacteristicValue}
+      // objects; anything else (strings, prose) is model noise — drop it and
+      // say so, the price itself is fine unconditioned
+      const valid = Array.isArray(p.prodSpecCharValueUse)
+        ? p.prodSpecCharValueUse.filter((c) => c && typeof c === 'object' && !Array.isArray(c) && c.name)
+        : [];
+      if (valid.length !== (Array.isArray(p.prodSpecCharValueUse) ? p.prodSpecCharValueUse.length : 1)) {
+        notes.push(`ignored a malformed condition on price "${p.name}"`);
+      }
+      if (valid.length) p.prodSpecCharValueUse = valid;
+      else delete p.prodSpecCharValueUse;
+    }
+  }
+  return notes;
+}
+
 function copilotValidate(proposal, context) {
   const problems = [];
   const offerings = proposal.offerings || [];
-  if (!offerings.length) problems.push('the proposal creates no offerings');
+  const rules = proposal.pricingRules || [];
+  if (!offerings.length && !rules.length) problems.push('the proposal creates no offerings');
   const priceRefs = new Set((proposal.prices || []).map((x) => x.ref));
   const specRefs = new Set((proposal.specs || []).map((x) => x.ref));
   const offeringRefs = new Set(offerings.map((x) => x.ref));
@@ -1204,11 +1247,20 @@ function copilotValidate(proposal, context) {
       problems.push(`category "${cat}" is new — it will be created by use (placement may need a seed)`);
     }
   }
+  const offeringRefsAll = new Set(offerings.map((x) => x.ref));
+  for (const rule of rules) {
+    if (!Number(rule.adjustmentValue)) problems.push(`rule "${rule.name}" has no adjustment value`);
+    for (const target of rule.whenCartHas || []) {
+      if (!offeringRefsAll.has(target) && !context.offerings.some((x) => x.name === target)) {
+        problems.push(`rule "${rule.name}" references "${target}", not in this proposal or the catalog`);
+      }
+    }
+  }
   return problems;
 }
 
 async function copilotExecute(proposal) {
-  const created = []; // [{kind, id}] for rollback, reverse order
+  const created = []; // [{kind, id, base?}] for rollback, reverse order
   const jsonOf = async (res, what) => {
     if (!res.ok) {
       const problem = await res.json().catch(() => ({}));
@@ -1279,12 +1331,46 @@ async function copilotExecute(proposal) {
       offerings[o.ref] = made;
       created.push({ kind: 'productOffering', id: made.id });
     }
+    // cross-product discounts land in the pricing-rules engine — the same
+    // rules the cart preview and the billing run already apply
+    const catalogNames = {}; // existing-offering name -> id, resolved lazily
+    for (const rule of proposal.pricingRules || []) {
+      const targets = [];
+      for (const t of rule.whenCartHas || []) {
+        if (offerings[t]) { targets.push(offerings[t].id); continue; }
+        if (!(t in catalogNames)) {
+          const found = await (await authFetch(
+            `${API_BASE}/productOffering?name=${encodeURIComponent(t)}`)).json().catch(() => []);
+          catalogNames[t] = found[0]?.id || null;
+        }
+        if (catalogNames[t]) targets.push(catalogNames[t]);
+      }
+      const clauses = targets.map((id) => ({ in: [id, { var: 'offeringIds' }] }));
+      // consumer-only: the rule requires the ABSENCE of a paying organization,
+      // so it can never touch a company order or a consolidated invoice
+      if (rule.audience === 'consumer') {
+        clauses.push({ '!': { var: 'organizationId' } });
+      } else if (rule.audience === 'business') {
+        clauses.push({ '!!': { var: 'organizationId' } });
+      }
+      const madeRule = await jsonOf(await authFetch(`${POLICY_BASE}/policyRule`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: rule.name, domain: 'pricing', effect: 'adjust', priority: 100, enabled: true,
+          condition: JSON.stringify(clauses.length > 1 ? { and: clauses } : clauses[0] || { '==': [1, 1] }),
+          adjustmentType: rule.adjustmentType || 'percent',
+          adjustmentValue: Number(rule.adjustmentValue),
+          message: rule.message || rule.name,
+        }),
+      }), `pricing rule "${rule.name}"`);
+      created.push({ kind: 'policyRule', id: madeRule.id, base: POLICY_BASE });
+    }
     return Object.values(offerings);
   } catch (e) {
     // roll back what was made, newest first — a half-created product family
     // is worse than none
     for (const row of created.reverse()) {
-      await authFetch(`${API_BASE}/${row.kind}/${row.id}`, { method: 'DELETE' }).catch(() => {});
+      await authFetch(`${row.base || API_BASE}/${row.kind}/${row.id}`, { method: 'DELETE' }).catch(() => {});
     }
     throw e;
   }
@@ -1292,6 +1378,7 @@ async function copilotExecute(proposal) {
 
 function copilotProposalCard(reply, context, log) {
   const proposal = reply.proposal;
+  const repairs = copilotSanitize(proposal);
   const card = document.createElement('div');
   card.className = 'copilot-proposal';
   card.dataset.testid = 'copilot-proposal';
@@ -1304,12 +1391,22 @@ function copilotProposalCard(reply, context, log) {
   }
   for (const o of proposal.offerings || []) {
     const kids = (o.bundledChildren || []).length ? ` — bundle of ${o.bundledChildren.length}` : '';
-    rows.push(`offering · ${o.name} [${(o.category || [])[0]?.name || 'no category'}]${kids}`);
+    const term = (o.productOfferingTerm || [])[0]?.duration;
+    const bind = term?.amount ? ` — ${term.amount}-${term.units || 'month'} commitment` : '';
+    rows.push(`offering · ${o.name} [${(o.category || [])[0]?.name || 'no category'}]${kids}${bind}`);
+  }
+  for (const rule of proposal.pricingRules || []) {
+    const scope = rule.audience === 'consumer' ? ' (private customers only)'
+      : rule.audience === 'business' ? ' (business customers only)' : '';
+    rows.push(`pricing rule · ${rule.name} — ${rule.adjustmentValue}`
+      + (rule.adjustmentType === 'amount' ? '' : '%')
+      + ` when the cart has ${(rule.whenCartHas || []).join(' + ')}${scope}`);
   }
   const problems = copilotValidate(proposal, context);
   const hardProblems = problems.filter((x) => !x.includes('is new'));
   card.innerHTML = `<b>The copilot will create:</b>
     <ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>
+    ${repairs.length ? `<p class="dim" style="font-size:12px">auto-repaired: ${repairs.join('; ')}</p>` : ''}
     ${problems.length ? `<p class="copilot-warn">${problems.join('<br>')}</p>` : ''}`;
   const actions = document.createElement('div');
   const create = document.createElement('button');
@@ -1334,12 +1431,32 @@ function copilotProposalCard(reply, context, log) {
       log.append(done);
       log.scrollTop = log.scrollHeight;
       copilotChat.push({ role: 'assistant', content: 'Created: ' + made.map((o) => o.name).join(', ') });
+      copilotRemember();
     } catch (e) {
       create.disabled = false;
       status.textContent = 'rolled back — ' + e.message;
     }
   });
   actions.append(create, status);
+  if (hardProblems.length) {
+    // close the loop: the validator's findings go BACK to the model as a
+    // corrective turn instead of dead-ending the owner on red text
+    const fix = document.createElement('button');
+    fix.className = 'ghost';
+    fix.textContent = 'Ask the copilot to fix this';
+    fix.dataset.testid = 'copilot-fix';
+    fix.style.marginLeft = '8px';
+    fix.addEventListener('click', () => {
+      const input = document.getElementById('copilot-input');
+      const send = document.getElementById('copilot-send');
+      if (input && send) {
+        input.value = 'That proposal failed validation: ' + hardProblems.join('; ')
+          + '. Please revise it — remember a proposal needs at least one offering.';
+        send.click();
+      }
+    });
+    actions.append(fix);
+  }
   card.append(actions);
   return card;
 }
@@ -1366,6 +1483,19 @@ async function renderProductCopilot() {
   send.className = 'primary';
   send.textContent = 'Send';
   send.id = 'copilot-send';
+  // a fresh product deserves a fresh conversation — the history rides into
+  // every request (context cost) and steers the model (old asks bleed in)
+  const clear = document.createElement('button');
+  clear.className = 'ghost';
+  clear.textContent = 'Clear chat';
+  clear.id = 'copilot-clear';
+  clear.type = 'button';
+  clear.addEventListener('click', () => {
+    copilotChat.length = 0;
+    copilotRemember();
+    log.replaceChildren();
+    input.focus();
+  });
 
   const bubble = (cls, text) => {
     const b = document.createElement('div');
@@ -1386,16 +1516,23 @@ async function renderProductCopilot() {
     input.value = '';
     bubble('copilot-user', text);
     copilotChat.push({ role: 'user', content: text });
+    copilotRemember();
     const thinking = bubble('copilot-ai', '…');
     try {
       const res = await authFetch('/ai/v1/productCopilot', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: copilotChat, catalog: context }),
       });
-      if (!res.ok) throw new Error('copilot unavailable (HTTP ' + res.status + ')');
+      if (!res.ok) {
+        const problem = await res.json().catch(() => null);
+        throw new Error(problem?.message
+          ? problem.message + ' — try sending your message again, or rephrase it.'
+          : 'copilot unavailable (HTTP ' + res.status + ')');
+      }
       const reply = await res.json();
       thinking.textContent = reply.message;
       copilotChat.push({ role: 'assistant', content: reply.message });
+      copilotRemember();
       if (reply.kind === 'proposal' && reply.proposal) {
         log.append(copilotProposalCard(reply, context, log));
         log.scrollTop = log.scrollHeight;
@@ -1407,7 +1544,7 @@ async function renderProductCopilot() {
   }
   send.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  bar.append(input, send);
+  bar.append(input, send, clear);
   panel.append(intro, log, bar);
   input.focus();
 }
@@ -1723,7 +1860,8 @@ async function main() {
     el('tabs').textContent = 'Your account has no back-office areas — ask an admin for a role.';
     return;
   }
-  active = visible[0];
+  const savedTab = sessionStorage.getItem('bss.console.tab');
+  active = visible.find((r) => r.path === savedTab) || visible[0];
   el('username').textContent = tokenClaims().preferred_username || '';
   el('logout').hidden = false;
   el('logout').addEventListener('click', signOut);

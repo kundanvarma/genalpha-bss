@@ -78,6 +78,23 @@ public class PolicyController {
      * enabled pricing rules and return the adjustments plus the adjusted total.
      * Called at cart/quote/bill time — the price reflects rules authored as data.
      */
+    /** The anonymous shop window for rules: what deals mention this offering. */
+    @GetMapping("/price/teaser")
+    public List<Map<String, Object>> teasers(@RequestParam String offeringId) {
+        return service.teasers(offeringId);
+    }
+
+    /** Anonymous indicative pricing: public deals only, labelled as such. */
+    @PostMapping("/price/indicative")
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> indicative(@RequestBody Map<String, Object> body) {
+        Map<String, Object> context = body.get("context") instanceof Map
+                ? (Map<String, Object>) body.get("context") : body;
+        Map<String, Object> result = service.indicative(context).toMap();
+        result.put("indicative", true);
+        return result;
+    }
+
     @PostMapping("/price")
     @SuppressWarnings("unchecked")
     public Map<String, Object> price(@RequestBody Map<String, Object> body) {
