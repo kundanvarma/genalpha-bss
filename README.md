@@ -20,6 +20,7 @@ intentional hardened gaps (payment, communication) — in
 - 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max
 - 📏 **[Product rules — how to use them](docs/product-rules.md)** — author order rules and dynamic pricing as data: console walkthrough, dry-run, customer experience, JSON-logic context reference, API examples
+- 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
 - 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
 
