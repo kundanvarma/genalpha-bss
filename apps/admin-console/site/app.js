@@ -1230,12 +1230,18 @@ async function copilotExecute(proposal) {
     }
     const prices = {};
     for (const price of proposal.prices || []) {
+      // real models occasionally skip a price name or write "EUR/month" as
+      // the unit — normalize deterministically instead of failing the apply
+      const priceName = price.name
+        || `${(proposal.offerings || []).find((o) => (o.priceRefs || []).includes(price.ref))?.name || 'Copilot'} price`;
+      const money = price.price ? { ...price.price,
+        unit: String(price.price.unit || 'EUR').split('/')[0].trim() } : price.price;
       const made = await jsonOf(await post('productOfferingPrice', {
-        name: price.name, priceType: price.priceType || 'recurring',
+        name: priceName, priceType: price.priceType || 'recurring',
         recurringChargePeriodType: price.recurringChargePeriodType,
-        price: price.price, prodSpecCharValueUse: price.prodSpecCharValueUse,
+        price: money, prodSpecCharValueUse: price.prodSpecCharValueUse || undefined,
         lifecycleStatus: 'Active',
-      }), `price "${price.name}"`);
+      }), `price "${priceName}"`);
       prices[price.ref] = made;
       created.push({ kind: 'productOfferingPrice', id: made.id });
     }

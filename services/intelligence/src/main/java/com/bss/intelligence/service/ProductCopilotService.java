@@ -8,7 +8,6 @@ import com.bss.intelligence.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -48,7 +47,10 @@ public class ProductCopilotService {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional
+    // Deliberately NOT @Transactional: when the model misses the contract we
+    // throw AFTER auditing both attempts, and a wrapping transaction would
+    // roll the audit rows back with the failure — the ledger must keep
+    // exactly the turns that failed.
     @SuppressWarnings("unchecked")
     public Map<String, Object> chat(Map<String, Object> request) {
         if (!(request.get("messages") instanceof List<?> messages) || messages.isEmpty()) {
