@@ -209,7 +209,26 @@ async function confirmLogout(page) {
   await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
   await page.waitForSelector('.tab', { timeout: 20000 });
   console.log('· SCENE2-console');
-  await caption(page, '🏢  Meanwhile in the back office: marketing wants a 15% launch discount.');
+
+  // the catalog first: a complicated bundle is DATA a product owner clicks together
+  await caption(page, '🏢  Meanwhile in the back office. First stop: the catalog.');
+  await captionOff(page);
+  let fmRow = page.locator('#listing-body tr', { hasText: 'GenAlpha Family Max' });
+  if (!(await fmRow.count())) { await page.click('#next'); await page.waitForTimeout(800); }
+  await fmRow.waitFor({ timeout: 15000 });
+  await glideClick(page, fmRow.locator('button', { hasText: 'Edit' }));
+  await page.waitForFunction(() => document.querySelectorAll('[data-composer-row]').length >= 5);
+  await page.locator('[data-composer-row="choice"]').first().scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600);
+  await caption(page, '🧩  Family Max: fixed fiber and TV, "pick 1–2 family lines", a phone with a default, optional extras, a 12-month term — assembled by clicking, no JSON.', 4200);
+  await captionOff(page);
+  await glideClick(page, page.locator('#save'));
+  await page.waitForSelector('#editor-title:has-text("New")', { timeout: 10000 });
+  console.log('· SCENE2-composer');
+  await caption(page, '💾  Saved — losslessly. The storefront is already selling this exact structure.', 2600);
+  await captionOff(page);
+
+  await caption(page, '📣  Next: marketing wants a 15% launch discount.');
   await captionOff(page);
   await glideClick(page, page.locator('.tab', { hasText: 'Rules' }));
   await page.waitForSelector('select[name="ruleKind"]', { timeout: 10000 });
