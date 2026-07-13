@@ -1351,15 +1351,24 @@
     hygiene wearing a quantum justification.</p>
 
     <p>The third item was the fleet itself: thirty services on a JVM that had never heard of
-    ML-KEM. "So what's stopping the backlog?" Nothing, it turned out, except doing it — Spring Boot
-    3.2 to 3.5 across thirty poms (one dependency needed pinning; the rest compiled clean), thirty
-    Dockerfiles to a JDK that ships the NIST algorithms in the standard library, and the full
-    twenty-one-suite sweep as the only acceptable definition of done. The remaining migration —
-    the IdP's RSA signatures becoming ML-DSA — waits on the OIDC ecosystem, and when it lands the
-    services will not notice: they have never hardcoded an algorithm, they follow the issuer's
-    published keys. That is the whole argument, and it doubles as the marketing copy precisely
-    because every claim in it has a receipt: a BSS that embedded its own crypto would face a
-    post-quantum rewrite. This one faces a checklist, and half the boxes are already ticked.</p>
+    ML-KEM. "So what's stopping the backlog?" Nothing, it turned out, except doing it — and doing
+    it honestly meant meeting three of Spring Boot 3.5's edges in one afternoon: Flyway had
+    modularised its databases, so twenty-six services booted to "Unsupported Database: PostgreSQL"
+    until each carried the new module; the gateway's Spring Cloud train refused the new Boot on
+    principle until it was bumped two generations; and one test dependency fell out of the managed
+    BOM. The subtlest lesson wasn't in any pom: a single transient image failure aborted the
+    parallel build and left a <em>mixed</em> fleet that still reported healthy — old containers
+    serving happily under new build logs. Trust <code>java -version</code> inside the running
+    container; never trust the tail of a build.</p>
+
+    <p>Then the definition of done: all thirty services healthy on Java 25 LTS, and the full
+    twenty-one-suite sweep — every channel, every tenant, every language — green. The remaining
+    migration, the IdP's RSA signatures becoming ML-DSA, waits on the OIDC ecosystem, and when it
+    lands the services will not notice: they have never hardcoded an algorithm, they follow the
+    issuer's published keys. That is the whole argument, and it doubles as the marketing copy
+    precisely because every claim in it has a receipt: a BSS that embedded its own crypto would
+    face a post-quantum rewrite. This one faced a checklist, and the boxes that were ours to tick
+    are ticked.</p>
   </section>
 
 </div>
