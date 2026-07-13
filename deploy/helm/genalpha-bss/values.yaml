@@ -298,3 +298,26 @@ services:
       OIDC_CLIENT_SECRET: recommendation-secret
       CATALOG_BASE_URL: http://product-catalog:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
+
+# Edge exposure. Off by default (dev clusters port-forward the gateway).
+# When enabled, an Ingress fronts the gateway — and the TLS guidance is
+# post-quantum from day one: terminate with a HYBRID key exchange
+# (X25519MLKEM768) so traffic recorded today cannot be decrypted by a
+# future quantum machine ("harvest now, decrypt later"). The hybrid group
+# is a CONTROLLER-level setting — see files/ingress-nginx-pqc.yaml for the
+# ingress-nginx values that enable it; cloud L7 LBs (ALB, Front Door,
+# Cloud LB) enable their equivalent per listener policy.
+ingress:
+  enabled: false
+  className: nginx
+  host: bss.example.com
+  # Norwegian tenant hostnames ride the same listener
+  extraHosts: []
+  tls:
+    enabled: true
+    secretName: bss-edge-tls
+
+# SIM PUK field encryption (AES-256-GCM at rest). REQUIRED in production:
+# 32 bytes, base64 — source it from a KMS/secret store. Leaving it empty
+# falls back to a fixed dev key that is loudly not for production.
+pukKey: ""

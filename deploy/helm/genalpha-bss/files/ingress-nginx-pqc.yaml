@@ -1,0 +1,11 @@
+# Values for the ingress-nginx CONTROLLER chart (not this chart): post-quantum
+# hybrid key exchange at the edge. X25519MLKEM768 pairs a classical curve with
+# ML-KEM-768 (FIPS 203) — clients that speak it get quantum-resistant key
+# agreement, everyone else falls back down the list. Requires an ingress-nginx
+# build on OpenSSL/BoringSSL with ML-KEM support (v1.12+ images qualify).
+#
+#   helm upgrade ingress-nginx ingress-nginx/ingress-nginx -f ingress-nginx-pqc.yaml
+controller:
+  config:
+    ssl-protocols: "TLSv1.3"
+    ssl-ecdh-curve: "X25519MLKEM768:X25519:prime256v1"

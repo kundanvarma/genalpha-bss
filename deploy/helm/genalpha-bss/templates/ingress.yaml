@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: genalpha-bss
+  annotations:
+    # TLS 1.3 only at the edge; the hybrid PQC group itself is set on the
+    # controller (files/ingress-nginx-pqc.yaml) — annotations cannot pick
+    # key-exchange groups per-Ingress.
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host }}
+        {{- range .Values.ingress.extraHosts }}
+        - {{ . }}
+        {{- end }}
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    {{- range prepend .Values.ingress.extraHosts .Values.ingress.host }}
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 8080
+    {{- end }}
+{{- end }}
