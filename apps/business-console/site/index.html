@@ -34,60 +34,60 @@
 <header>
   <div class="brand">
     <img class="brandlogo" style="height:26px;display:block" src="/tmf-api/documentManagement/v4/document/brand-logo" alt="" onerror="this.style.display='none'"><span class="mark" style="display:none">genalpha-bss</span>
-    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.14em;color:var(--teal);margin-left:10px">BUSINESS</span>
+    <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:0.14em;color:var(--teal);margin-left:10px" data-i18n>BUSINESS</span>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
     <span id="username" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></span>
-    <button id="logout" class="ghost" hidden>Sign out</button>
+    <button id="logout" class="ghost" hidden data-i18n>Sign out</button>
   </div>
 </header>
 
 <main id="main" hidden>
   <div class="bizhead">
-    <h1>Your organization:</h1><span class="orgname" id="org-name">…</span>
+    <h1 data-i18n>Your organization:</h1><span class="orgname" id="org-name">…</span>
   </div>
 
   <section class="card">
-    <h2>People &amp; their lines</h2>
+    <h2 data-i18n>People &amp; their lines</h2>
     <div id="members"></div>
     <div class="addrow">
-      <input id="new-given" placeholder="First name">
-      <input id="new-family" placeholder="Last name">
-      <input id="new-email" placeholder="Email">
-      <button class="primary" id="add-member">Add person</button>
+      <input id="new-given" placeholder="First name" data-i18n-placeholder>
+      <input id="new-family" placeholder="Last name" data-i18n-placeholder>
+      <input id="new-email" placeholder="Email" data-i18n-placeholder>
+      <button class="primary" id="add-member" data-i18n>Add person</button>
       <span id="member-status"></span>
     </div>
   </section>
 
   <section class="card">
-    <h2>Plans &amp; your company pricing</h2>
+    <h2 data-i18n>Plans &amp; your company pricing</h2>
     <div id="plans" class="billlines" style="margin-left:0"></div>
   </section>
 
   <section class="card">
-    <h2>Order a subscription for someone</h2>
+    <h2 data-i18n>Order a subscription for someone</h2>
     <div class="addrow">
       <select id="order-member"></select>
       <select id="order-offering"></select>
-      <button class="primary" id="place-order">Order</button>
+      <button class="primary" id="place-order" data-i18n>Order</button>
       <span id="order-status"></span>
     </div>
   </section>
 
   <section class="card">
-    <h2>Change someone's plan</h2>
-    <p class="dimhint" style="font-size:12.5px;margin:0 0 8px">Same line, same number — only the plan changes.</p>
+    <h2 data-i18n>Change someone's plan</h2>
+    <p class="dimhint" style="font-size:12.5px;margin:0 0 8px" data-i18n>Same line, same number — only the plan changes.</p>
     <div class="addrow">
       <select id="swap-member"></select>
       <select id="swap-line"></select>
       <select id="swap-offering"></select>
-      <button class="primary" id="swap-plan">Change plan</button>
+      <button class="primary" id="swap-plan" data-i18n>Change plan</button>
       <span id="swap-status"></span>
     </div>
   </section>
 
   <section class="card">
-    <h2>Company invoices</h2>
+    <h2 data-i18n>Company invoices</h2>
     <div id="bills"></div>
   </section>
 </main>
@@ -97,21 +97,21 @@
      personal bills, just what the employer provisioned. -->
 <main id="memberview" hidden>
   <div class="bizhead">
-    <h1>My work line at</h1><span class="orgname" id="member-org-name">…</span>
+    <h1 data-i18n>My work line at</h1><span class="orgname" id="member-org-name">…</span>
   </div>
 
   <section class="card">
-    <h2>My services</h2>
+    <h2 data-i18n>My services</h2>
     <div id="member-lines"></div>
   </section>
 
   <section class="card">
-    <h2>My usage</h2>
+    <h2 data-i18n>My usage</h2>
     <div id="member-usage" class="billlines" style="margin-left:0"></div>
   </section>
 
   <section class="card">
-    <h2>Billing</h2>
+    <h2 data-i18n>Billing</h2>
     <p class="dimhint" id="member-billing-note" style="font-size:13px;margin:4px 0">
       Your subscription is paid by your company — charges appear on
       <b id="member-org-bill">your organization</b>'s consolidated invoice.
@@ -119,8 +119,8 @@
   </section>
 
   <section class="card">
-    <h2>Need help?</h2>
-    <p class="dimhint" style="font-size:13px;margin:4px 0">
+    <h2 data-i18n>Need help?</h2>
+    <p class="dimhint" style="font-size:13px;margin:4px 0" data-i18n>
       Contact your company admin for plan changes, or the operator's
       customer care for service issues.</p>
   </section>
@@ -135,6 +135,8 @@
   your account to your company.</p>
 </div>
 
+<script src="/biz/tenant-config.js"></script>
+<script src="i18n.js"></script>
 <script src="auth.js"></script>
 <script src="app.js"></script>
 </body>

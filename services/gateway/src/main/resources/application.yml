@@ -177,7 +177,7 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
-        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost]
+        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
 
 management:
   endpoints:

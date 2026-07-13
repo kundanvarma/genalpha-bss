@@ -21,7 +21,8 @@ public class StorefrontTenantConfigController {
     private static final Map<String, String> CHANNEL_GLOBALS = Map.of(
             "shop", "BSS_STOREFRONT_CONFIG",
             "csr", "BSS_CSR_CONFIG",
-            "console", "BSS_CONSOLE_CONFIG");
+            "console", "BSS_CONSOLE_CONFIG",
+            "biz", "BSS_BIZ_CONFIG");
 
     private final TenantHosts tenants;
 

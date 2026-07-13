@@ -366,6 +366,25 @@ async function confirmLogout(page) {
   await glideClick(page, page.locator('button', { hasText: 'Logg ut' }).first());
   await confirmLogout(page);
 
+  // B2B, same tenant: Fjellheim's admin runs her company from the business
+  // console — people, lines, and ONE consolidated invoice, all in Norwegian.
+  await page.goto('http://biz.nova.localhost:8080/biz/');
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await lens(page);
+  await glideType(page, page.locator('input[name="username"]'), 'birgit@fjellheim.no');
+  await page.fill('input[name="password"]', 'birgit');
+  await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
+  await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+  await page.waitForTimeout(2000);
+  console.log('· SCENE5-b2b-norsk');
+  await caption(page, '🏔  And B2B: Birgit runs Fjellheim AS — her people, their lines, one consolidated invoice in kroner.', 3800);
+  await captionOff(page);
+  await page.locator('.billrow', { hasText: 'BILL-' }).first().waitFor({ timeout: 15000 });
+  await caption(page, '🧾  The company pays; employees see their own work line — nothing billed to them personally.', 3200);
+  await captionOff(page);
+  await glideClick(page, page.locator('#logout'));
+  await confirmLogout(page);
+
   /* ============ SCENE 6 — the machine tells its own story ============ */
   await page.goto('http://localhost:8080/flow/');
   await page.waitForTimeout(3500);
