@@ -1314,6 +1314,54 @@
     manifest did it, not a fork.</p>
   </section>
 
+
+  <!-- Ch 24 -->
+  <section class="chapter" id="ch24pqc">
+    <div class="num">Chapter Twenty-Four</div>
+    <h3>Proof against tomorrow</h3>
+    <div class="epi">"Let me know if our BSS is PQC proof." Five words, and suddenly the audit
+    was of mathematics itself. <span class="who">— from the build log</span></div>
+
+    <p class="drop">Every audit so far had asked whether the system did what it claimed. This one
+    asked whether its arithmetic would survive an adversary that does not exist yet. Post-quantum
+    cryptography sounds like a problem for cryptographers, but for a BSS it is a problem of
+    <em>inventory</em>: where, exactly, does cryptography live in this thing? The grep took minutes
+    and returned the most reassuring answer available: almost nowhere. A secure random generator
+    for PUKs and invitation passwords. A SHA-256 challenge in the login dance — hash-based, and
+    hashes only lose half their margin to a quantum computer. And that was the entire list, because
+    identity, transport and payment crypto had all been pushed behind seams in chapter one, back
+    when "vendor-neutral" was a conviction and not yet a security posture.</p>
+
+    <p>The vulnerable pieces were exactly two, and neither was ours. The identity provider signs
+    every access token with RSA — the algorithm Shor's algorithm eats first. And transport is
+    classical TLS, which matters more than it sounds: an adversary can record encrypted traffic
+    <em>today</em> and decrypt it the day their quantum machine boots. "Harvest now, decrypt later"
+    is the one post-quantum risk with a present-tense clock, and it is entirely a deployment
+    concern.</p>
+
+    <p>So the honest answer went back in two sentences — not PQC-proof, PQC-<em>ready</em> — and
+    the follow-up question wrote the afternoon's work: so what's ours to do? Three things, and two
+    of them shipped the same day. The Helm chart grew an edge: TLS 1.3 only, with controller
+    values that switch the key exchange to a hybrid — a classical curve and ML-KEM-768 riding the
+    same handshake, so clients that speak post-quantum get it and everyone else falls back
+    gracefully. And the SIM PUKs, sitting in the database as an honest dev shortcut, got a vault:
+    AES-256-GCM with the card's own ICCID bound into the ciphertext, so a stolen row cannot even be
+    replayed onto another card. Old plaintext rows quietly upgrade themselves the next time their
+    owner asks to see them. AES-256 is already comfortable against Grover; the fix was classical
+    hygiene wearing a quantum justification.</p>
+
+    <p>The third item was the fleet itself: thirty services on a JVM that had never heard of
+    ML-KEM. "So what's stopping the backlog?" Nothing, it turned out, except doing it — Spring Boot
+    3.2 to 3.5 across thirty poms (one dependency needed pinning; the rest compiled clean), thirty
+    Dockerfiles to a JDK that ships the NIST algorithms in the standard library, and the full
+    twenty-one-suite sweep as the only acceptable definition of done. The remaining migration —
+    the IdP's RSA signatures becoming ML-DSA — waits on the OIDC ecosystem, and when it lands the
+    services will not notice: they have never hardcoded an algorithm, they follow the issuer's
+    published keys. That is the whole argument, and it doubles as the marketing copy precisely
+    because every claim in it has a receipt: a BSS that embedded its own crypto would face a
+    post-quantum rewrite. This one faces a checklist, and half the boxes are already ticked.</p>
+  </section>
+
 </div>
 
 <!-- ============ CODA ============ -->
@@ -1327,9 +1375,9 @@
 
 <div class="page">
 
-  <!-- Ch 24 -->
-  <section class="chapter" id="ch24">
-    <div class="num">Chapter Twenty-Four</div>
+  <!-- Ch 25 -->
+  <section class="chapter" id="ch25">
+    <div class="num">Chapter Twenty-Five</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
@@ -1342,7 +1390,9 @@
     top-ups that genuinely grow the meter; Netflix fulfilled as a partner entitlement because the
     catalog category decides what a product <em>is</em>. A bundle composer so product owners never
     touch JSON, and an order API that enforces what the composer promised. A national
-    number-portability flow, both directions. A network that heals itself and leaves a receipt. And a
+    number-portability flow, both directions. A quantum-safe edge and encrypted card secrets,
+    with the one remaining post-quantum migration parked at a seam. A network that heals itself
+    and leaves a receipt. And a
     film — re-shot after every feature — that keeps catching real bugs, because everything on camera
     is real.</p>
 
