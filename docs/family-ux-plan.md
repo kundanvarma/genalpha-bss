@@ -155,6 +155,23 @@ household guardrails; one-cycle capped rollover at month close.
 
 ---
 
+## Demo data (seeded 2026-07-14)
+
+| Persona | Login | Where | Has |
+|---|---|---|---|
+| Paula (family payer/owner) | `paula@family.example` / `paula` | localhost:8080/shop | 2× 30GB lines (`+46701000616/617`), 4.2 GB used, funds Sonny |
+| Wilma (wife, family admin) | `wilma@family.example` / `wilma` | localhost:8080/shop | admin of Paula's family, no own line |
+| Sonny (adult member) | `sonny@family.example` / `sonny` | localhost:8080/shop | 10GB line `+46701000619`, 3.1 GB used |
+| Nils (network-wide-model tenant) | `nils@nova.example` / `nils` | shop.nova.localhost:8080/shop | Nova Smart 15 GB, line `+46731000041` |
+| Norah (stranger to Nils) | `norah@nova.example` / `norah` | shop.nova.localhost:8080/shop | Nova Smart 15 GB, line `+46731000042` |
+
+Gift walk-through: Paula → My page → 🎁 gift to Sonny (dropdown) or type
+`+46701000619`. Nils → My page → type `+46731000042` — no family needed,
+nova's plan spec carries `giftScope=tenant`. Month close (staff):
+`POST /tmf-api/usageManagement/v4/cycleClose`.
+
+---
+
 ## 4. Data gifting & rollover (researched 2026-07-14)
 
 ### What the field does
