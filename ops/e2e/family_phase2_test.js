@@ -222,7 +222,7 @@ async function token(request, client, user, pass) {
   if (!(await kidGift.text()).includes('family-funded')) fail('child gift rejection unclear');
   const overCap = await gift(VH, gina.id, 3); // 3 + 3 > half of 10
   if (overCap.status() === 200) fail('the half-the-plan gift cap did not hold');
-  if (!(await overCap.text()).includes('capped at half')) fail('cap rejection unclear: ' + await overCap.text());
+  if (!(await overCap.text()).includes('capped at')) fail('cap rejection unclear: ' + await overCap.text());
   const strangerGift = await gift(VH, '00000000-0000-0000-0000-000000000000', 1);
   if (strangerGift.status() === 200) fail('a gift left the household');
   // both sides got the gift story

@@ -215,11 +215,14 @@ services:
   usage:
     db: usage
     dbRole: usage_app
-    # gifting verifies household links at the party source
+    # gifting verifies household links at the party source; the plan's spec
+    # characteristics and the gifting policy rules configure the behavior
     machineIdentity: true
     extraEnv:
       OCS_BASE_URL: http://mock-ocs:8080
       PARTY_BASE_URL: http://party-account:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      POLICY_BASE_URL: http://policy:8080
   agreement:
     db: agreement
     dbRole: agreement_app

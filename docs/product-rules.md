@@ -4,13 +4,14 @@ Business rules in genalpha-bss are **data, not code**. An operator authors a rul
 back-office console (or over the API), and the very next order or price computation obeys it.
 Disable or delete the rule and the behaviour is gone — **no deployment, ever**.
 
-There are two families, served by the same engine (the `policy` component, port 8113,
+There are three families, served by the same engine (the `policy` component, port 8113,
 `/tmf-api/policyManagement/v4`):
 
 | Family | `domain` | `effect` | What it does | Where it acts |
 |---|---|---|---|---|
 | **Order rules** | `order` | `deny` | Blocks an order when the rule matches | Order creation (422 `POLICY_DENIED` with your message) |
 | **Pricing rules** | `pricing` | `adjust` | Adds a discount/surcharge when the rule matches | Cart preview + the monthly bill (labelled line) |
+| **Gifting rules** | `gifting` | `deny` | Vetoes a data gift when the rule matches | The gift call (400 with your message). Context: `giverId`, `receiverId`, `amount`, `relationship` (`household` or `tenant`), `usageType`, `planOfferingId`. Gift *entitlements* (giftable, scope, share cap, rollover) are plan **spec characteristics** — see `docs/family-ux-plan.md` §4 |
 
 Every rule is a **JSON-logic condition** — pure data, evaluated against the request context.
 There is no code execution: the worst a malformed rule can do is evaluate to false.

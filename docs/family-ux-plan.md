@@ -185,6 +185,27 @@ cycle (Jio's cap), and a **child cannot gift** (their data is family-funded),
 only receive. The gift lands as a *Gifted data* bucket on the receiver, named
 from the giver — generosity should be visible.
 
+### Configuration, not code (added after "is this configurable?")
+Gifting and rollover behavior is **product data**, resolved live in this
+order (suite #31 `family_config_test.js` proves all of it on one binary):
+
+| Lever | Where | Default (in code) |
+|---|---|---|
+| `giftable` | plan spec characteristic (TMF620) | true |
+| `giftScope` | plan spec characteristic: `household` \| `tenant` | household |
+| `giftSharePerCycle` | plan spec characteristic (fraction of plan) | 0.5 |
+| `rolloverEligible` | plan spec characteristic | true |
+| `rolloverCapGB` | plan spec characteristic | one month's allowance |
+| any veto (size, segment, "personal subs only"…) | policy rule, domain `gifting`, authored as data in the console | none |
+
+The **nova** tenant runs the network-wide model (any customer gifts to any customer) by
+carrying `giftScope=tenant` on its plan spec — a catalog edit. A child's
+inability to gift stays code: it is a safety invariant, not a product choice.
+The usage component reads levers through a 30-second cache, so an operator's
+edit is live within half a minute, no restart. The Product Copilot can set
+these characteristics like any others ("create a plan with network-wide
+gifting").
+
 **Allowances + ask-to-buy (Family Link × T-Mobile Family Allowances):** the
 owner or an admin sets a monthly top-up allowance per member (EUR). A member's
 top-up inside the remaining allowance completes instantly and notifies the

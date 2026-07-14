@@ -974,7 +974,9 @@
       "enabled": true,
       "serviceAccountClientId": "bss-usage",
       "realmRoles": [
-        "party:read"
+        "party:read",
+        "catalog:read",
+        "policy:evaluate"
       ]
     }
   ],
