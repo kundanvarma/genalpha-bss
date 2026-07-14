@@ -53,6 +53,7 @@ public class UsageService {
     private final com.bss.usage.client.PartyClient partyClient;
     private final com.bss.usage.client.CatalogClient catalogClient;
     private final com.bss.usage.client.PolicyClient policyClient;
+    private final com.bss.usage.client.NumberClient numberClient;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -62,7 +63,8 @@ public class UsageService {
             TenantScope tenantScope, ObjectMapper objectMapper,
             com.bss.usage.client.PartyClient partyClient,
             com.bss.usage.client.CatalogClient catalogClient,
-            com.bss.usage.client.PolicyClient policyClient) {
+            com.bss.usage.client.PolicyClient policyClient,
+            com.bss.usage.client.NumberClient numberClient) {
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -75,6 +77,7 @@ public class UsageService {
         this.partyClient = partyClient;
         this.catalogClient = catalogClient;
         this.policyClient = policyClient;
+        this.numberClient = numberClient;
     }
 
     /** Mediation seam: one usage record in, verbatim semantics, no rating yet. */
@@ -545,11 +548,22 @@ public class UsageService {
      * pair of boosts: minus on the giver, plus on the receiver.
      */
     @Transactional
-    public Map<String, Object> giftData(String receiverId, BigDecimal amount) {
+    public Map<String, Object> giftData(String receiverId, String receiverPhone, BigDecimal amount) {
         String giverId = partyScope.scopedPartyId()
                 .orElseThrow(() -> new BadRequestException("gifting is a customer's own decision"));
         if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
             throw new BadRequestException("the gift must be a whole number of GB");
+        }
+        // gift BY PHONE NUMBER — the way people actually know each other; the
+        // SOM's number pool resolves it, and only within this tenant
+        String phone = receiverPhone == null ? null : receiverPhone.replaceAll("[\\s-]", "");
+        if ((receiverId == null || receiverId.isBlank()) && phone != null && !phone.isBlank()) {
+            receiverId = numberClient.ownerOfNumber(phone)
+                    .orElseThrow(() -> new BadRequestException(
+                            "no customer of ours holds the number " + phone));
+        }
+        if (receiverId == null || receiverId.isBlank()) {
+            throw new BadRequestException("receiverId or receiverPhone is required");
         }
         if (giverId.equals(receiverId)) {
             throw new BadRequestException("you cannot gift data to yourself");
@@ -609,7 +623,10 @@ public class UsageService {
                     throw new BadRequestException(message);
                 });
         String giverName = nameOf(giver);
-        String receiverName = nameOf(receiver);
+        // names only cross by CONSENT: inside a household the receiver is
+        // named; a network-wide gift shows the number the giver typed
+        String receiverName = household ? nameOf(receiver)
+                : (phone != null && !phone.isBlank() ? phone : "a fellow customer");
         String giftId = UUID.randomUUID().toString();
         boosts.save(giftBoost(tenantId, giverId, position.spec(), amount.negate(),
                 "gift-" + giftId + "-out", "gift:to:" + receiverId, periodStart));

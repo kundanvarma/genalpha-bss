@@ -260,6 +260,7 @@ services:
       PARTY_BASE_URL: http://party-account:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       POLICY_BASE_URL: http://policy:8080
+      SOM_BASE_URL: http://service-orchestration:8080
       DB_URL: jdbc:postgresql://postgres:5432/usage
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: usage_app

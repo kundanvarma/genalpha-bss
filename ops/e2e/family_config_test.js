@@ -73,15 +73,46 @@ async function token(ctx, realm, client, user, pass) {
 
   const nils = await mkPerson(NOVA, staff.nova, 'nova', 'Nils');
   const norah = await mkPerson(NOVA, staff.nova, 'nova', 'Norah'); // total strangers
+  // Norah gets a REAL numbered line — Nils will gift to her PHONE NUMBER,
+  // the way people actually know each other on a network
+  await ctx.post(`${NOVA}/tmf-api/productOrderingManagement/v4/productOrder`,
+    { headers: H(norah.token), data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: novaPlan.id, name: novaPlan.name } }],
+      relatedParty: [{ id: norah.id, role: 'customer' }] } });
+  let norahNumber = null;
+  for (let i = 0; i < 30 && !norahNumber; i++) {
+    await sleep(2500);
+    const lines = await (await ctx.get(
+      `${NOVA}/tmf-api/serviceInventory/v4/service?relatedPartyId=${norah.id}`,
+      { headers: H(staff.nova) })).json();
+    norahNumber = (lines || []).flatMap((s) => s.supportingResource || [])
+      .map((r) => r.value).find(Boolean) || null;
+  }
+  if (!norahNumber) fail('Norah\'s line never drew a number');
   await meter(NOVA, staff.nova, nils.id, novaPlan.id, 'Mobildata', 2);
   await meter(NOVA, staff.nova, norah.id, novaPlan.id, 'Mobildata', 1);
   const novaGift = await gift(NOVA, nils.token, norah.id, 2);
   if (novaGift.status() !== 200) fail('nova stranger-gift failed: ' + await novaGift.text());
-  if (await allowedOf(NOVA, staff.nova, norah.id, 'Mobildata') !== 17) {
-    fail('Norah\'s meter did not grow to 17');
-  }
   console.log('OK on nova, Nils gifted 2 GB to Norah — a complete stranger, same network:'
     + ' the network-wide model, live');
+
+  // ...and by PHONE NUMBER, with the receiver's name never disclosed
+  const byNumber = await (await ctx.post(`${NOVA}/tmf-api/usageManagement/v4/gift`,
+    { headers: H(nils.token), data: { receiverPhone: norahNumber, amount: 1 } })).json();
+  if (byNumber.receiver?.id !== norah.id) {
+    fail('the number resolved to the wrong person: ' + JSON.stringify(byNumber).slice(0, 250));
+  }
+  if ((byNumber.receiver?.name || '').includes('Norah')) {
+    fail('a network-wide gift by number leaked the receiver\'s NAME');
+  }
+  if (await allowedOf(NOVA, staff.nova, norah.id, 'Mobildata') !== 18) {
+    fail('Norah\'s meter did not grow to 18');
+  }
+  const unknownNumber = await ctx.post(`${NOVA}/tmf-api/usageManagement/v4/gift`,
+    { headers: H(nils.token), data: { receiverPhone: '+4700000000', amount: 1 } });
+  if (unknownNumber.status() === 200) fail('a gift went to a number nobody holds');
+  console.log('OK Nils typed Norah\'s NUMBER (' + norahNumber + ') and gifted 1 GB — resolved'
+    + ' in the tenant\'s own pool, name never disclosed; unknown numbers bounce');
 
   /* ---------- B. GENALPHA keeps the default: household-only ---------- */
   const PLAN_ID = '14291c1a-df26-4232-8084-500466888e46'; // GenAlpha Mobile 10 GB

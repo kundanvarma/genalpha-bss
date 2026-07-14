@@ -371,13 +371,14 @@ export async function myUsage() {
   return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption`));
 }
 
-/** Gift remaining GB to a family member — my data, my call; usage verifies
- * the household link live. */
-export async function giftData(receiverId, amount) {
+/** Gift remaining GB — to a family member by id, or straight to a phone
+ * number when the plan's giftScope reaches that far; usage verifies the
+ * link (or resolves the number in the tenant's own pool) live. */
+export async function giftData(receiver, amount) {
   return json(await authFetch('/tmf-api/usageManagement/v4/gift', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ receiverId, amount }),
+    body: JSON.stringify({ ...receiver, amount }),
   }));
 }
 

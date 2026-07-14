@@ -1022,7 +1022,8 @@
       "realmRoles": [
         "party:read",
         "catalog:read",
-        "policy:evaluate"
+        "policy:evaluate",
+        "service:read"
       ]
     }
   ],

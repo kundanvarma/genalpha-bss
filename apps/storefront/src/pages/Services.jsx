@@ -478,11 +478,13 @@ function TopUp({ offering, price, onBought }) {
   );
 }
 
-/** GIFT DATA (the gifting move, family-wide): hand whole-GB chunks of your
- * remaining data to a family member. Their meter grows, yours shrinks —
+/** GIFT DATA (the gifting move): hand whole-GB chunks of your remaining data to
+ * a family member — or straight to a PHONE NUMBER, when the plan's
+ * giftScope reaches network-wide. Their meter grows, yours shrinks —
  * generosity, not money, so no approvals. */
 function GiftData({ hh, onDone }) {
   const [to, setTo] = useState('');
+  const [phone, setPhone] = useState('');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState(null);
 
@@ -496,14 +498,14 @@ function GiftData({ hh, onDone }) {
       people.push({ id: d.id, name: `${d.givenName} ${d.familyName}` });
     }
   }
-  if (!people.length) return null;
 
   async function send() {
     setNote(null);
     try {
-      const gift = await giftData(to, Number(amount));
+      const gift = await giftData(phone.trim()
+        ? { receiverPhone: phone.trim() } : { receiverId: to }, Number(amount));
       setNote(`✓ ${t('gifted')} ${gift.amount} GB ${t('to')} ${gift.receiver.name}`);
-      setAmount('');
+      setAmount(''); setPhone('');
       setTimeout(onDone, 2500);
     } catch (e) { setNote(e.message); }
   }
@@ -511,14 +513,21 @@ function GiftData({ hh, onDone }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
       <span className="dim" style={{ fontSize: 13 }}>🎁 {t('Gift data')}</span>
-      <select value={to} data-testid="gift-select" onChange={(e) => setTo(e.target.value)}>
-        <option value="" disabled>{t('to a family member…')}</option>
-        {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
+      {people.length > 0 && (
+        <select value={to} data-testid="gift-select"
+          onChange={(e) => { setTo(e.target.value); setPhone(''); }}>
+          <option value="" disabled>{t('to a family member…')}</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      )}
+      <input style={{ width: '9em' }} inputMode="tel"
+        placeholder={people.length ? t('…or a phone number') : t('their phone number')}
+        data-testid="gift-phone" value={phone}
+        onChange={(e) => { setPhone(e.target.value.replace(/[^0-9+ -]/g, '')); if (e.target.value) setTo(''); }} />
       <input style={{ width: '4.5em' }} inputMode="numeric" placeholder="GB"
         data-testid="gift-amount" value={amount}
         onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} />
-      <button className="ghost" data-testid="gift-send" disabled={!to || !amount}
+      <button className="ghost" data-testid="gift-send" disabled={(!to && !phone.trim()) || !amount}
         onClick={send}>{t('Send')}</button>
       {note && <span className="dim" data-testid="gift-note" style={{ fontSize: 12.5 }}>{note}</span>}
     </div>

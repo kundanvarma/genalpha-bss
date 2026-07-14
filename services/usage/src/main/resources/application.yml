@@ -56,6 +56,8 @@ bss:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     # Operator vetoes: gifting rules authored as data (domain 'gifting').
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    # Gift by phone number: the SOM's number pool knows who holds every MSISDN.
+    som-base-url: ${SOM_BASE_URL:http://localhost:8104}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
