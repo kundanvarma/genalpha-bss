@@ -29,6 +29,9 @@ public class IndividualMapper {
         dto.setGivenName(entity.getGivenName());
         dto.setFamilyName(entity.getFamilyName());
         dto.setContactMedium(readJsonObjectList(entity.getContactMediumJson()));
+        if (entity.getBirthDate() != null) {
+            dto.setBirthDate(entity.getBirthDate().toString());
+        }
         if (entity.getOrganizationId() != null) {
             dto.setOrganization(java.util.Map.of("id", entity.getOrganizationId(), "@referredType", "Organization"));
         }
@@ -53,6 +56,9 @@ public class IndividualMapper {
         entity.setGivenName(dto.getGivenName());
         entity.setFamilyName(dto.getFamilyName());
         entity.setContactMediumJson(writeJsonObjectList(dto.getContactMedium()));
+        if (dto.getBirthDate() != null && !dto.getBirthDate().isBlank()) {
+            entity.setBirthDate(java.time.LocalDate.parse(dto.getBirthDate()));
+        }
         if (dto.getOrganization() != null && dto.getOrganization().get("id") != null) {
             entity.setOrganizationId(String.valueOf(dto.getOrganization().get("id")));
         }
@@ -71,6 +77,9 @@ public class IndividualMapper {
         }
         if (patch.getContactMedium() != null) {
             entity.setContactMediumJson(writeJsonObjectList(patch.getContactMedium()));
+        }
+        if (patch.getBirthDate() != null && !patch.getBirthDate().isBlank()) {
+            entity.setBirthDate(java.time.LocalDate.parse(patch.getBirthDate()));
         }
         if (patch.getOrganization() != null && patch.getOrganization().get("id") != null) {
             entity.setOrganizationId(String.valueOf(patch.getOrganization().get("id")));

@@ -187,7 +187,13 @@ public class UsageService {
     @Transactional(readOnly = true)
     public Map<String, Object> consumptionReport(String requestedPartyId) {
         String tenantId = tenantScope.currentTenantId();
-        String party = partyScope.scopedPartyId().orElse(requestedPartyId);
+        String scoped = partyScope.scopedPartyId().orElse(null);
+        // A guardian's window, CHILD ACCOUNTS ONLY: the payer or a family
+        // admin may read a child's meters — an adult member's usage stays
+        // their own even when the family pays (paying is not watching).
+        String party = scoped != null && requestedPartyId != null && !requestedPartyId.equals(scoped)
+                ? requireChildOf(scoped, requestedPartyId)
+                : (scoped != null ? scoped : requestedPartyId);
         if (party == null) {
             throw new BadRequestException("relatedPartyId is required for unscoped callers");
         }
@@ -494,6 +500,31 @@ public class UsageService {
             bySpec.merge(boost.getUsageSpecName(), boost.getBoostValue(), BigDecimal::add);
         }
         return bySpec;
+    }
+
+    /** The requested party, iff they are an ACTIVE CHILD of the caller's
+     * household (caller = payer or an active admin); 404 otherwise. */
+    private String requireChildOf(String callerId, String requestedPartyId) {
+        Map<String, Object> member = partyClient.individualOf(requestedPartyId)
+                .map(UsageService::linkOf).orElse(null);
+        if (member == null || !"active".equals(member.get("status"))
+                || !"child".equals(member.get("role"))) {
+            throw new com.bss.usage.exception.NotFoundException(
+                    "UsageConsumptionReport for '" + requestedPartyId + "' not found");
+        }
+        String payerId = String.valueOf(member.get("id"));
+        boolean callerIsPayer = callerId.equals(payerId);
+        boolean callerIsAdmin = !callerIsPayer && partyClient.individualOf(callerId)
+                .map(UsageService::linkOf)
+                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> "active".equals(l.get("status")))
+                .filter(l -> "admin".equals(l.get("role")))
+                .isPresent();
+        if (!callerIsPayer && !callerIsAdmin) {
+            throw new com.bss.usage.exception.NotFoundException(
+                    "UsageConsumptionReport for '" + requestedPartyId + "' not found");
+        }
+        return requestedPartyId;
     }
 
     // ---------------- gifting & rollover (the gifting move, family-wide) ----------------

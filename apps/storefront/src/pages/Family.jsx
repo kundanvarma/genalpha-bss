@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { acceptDependent, addFamilyMember, decideApproval, endHouseholdLink, familyApprovals,
-  listOfferings, memberProducts, myHousehold, orderForDependent, priceIndex,
+  listOfferings, memberProducts, memberUsage, myHousehold, orderForDependent, priceIndex,
   requestHouseholdPayer, setAllowance, setFamilyRole } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
@@ -180,9 +180,15 @@ function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, can
   const [paid, setPaid] = useState(null);
   const [pick, setPick] = useState('');
   const [budget, setBudget] = useState(member.topupAllowance ?? '');
+  const [buckets, setBuckets] = useState([]);
 
   useEffect(() => {
     memberProducts(member.id).then(setPaid).catch(() => setPaid([]));
+    // usage meters for CHILD accounts only — an adult's usage stays their
+    // own even when the family pays (paying is not watching)
+    if (member.role === 'child') {
+      memberUsage(member.id).then((r) => setBuckets(r.bucket || [])).catch(() => {});
+    }
   }, [member.id, reloadTick]);
 
   const plans = Object.values(offerings)
@@ -216,6 +222,24 @@ function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, can
           ))}
           {!paid.length && <p className="dim" style={{ fontSize: 13 }}>
             {t('Nothing on the family bill for them yet.')}</p>}
+          {buckets.map((b, i) => {
+            const used = Number(b.usedValue);
+            const allowed = b.allowedValue == null ? null : Number(b.allowedValue);
+            const pct = allowed ? Math.min(100, (used / allowed) * 100) : 0;
+            return (
+              <div className="usage-meter" data-testid="fam-usage" key={i}>
+                <div className="usage-meter-head">
+                  <span>{b.name}</span>
+                  <span className="dim">{used}{allowed != null ? ` / ${allowed}` : ''} {b.units}</span>
+                </div>
+                {allowed != null && (
+                  <div className="usage-meter-track">
+                    <div className="usage-meter-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
           {!isChild && (
             <p className="dim" style={{ fontSize: 12.5, margin: '4px 0' }}>
               {t('What they buy with their own money stays on their own page — paying for someone is not watching them.')}
@@ -281,15 +305,16 @@ function AddFamilyMember({ onAdded }) {
   const [given, setGiven] = useState('');
   const [family, setFamily] = useState('');
   const [email, setEmail] = useState('');
+  const [born, setBorn] = useState('');
   const [made, setMade] = useState(null);
   const [err, setErr] = useState(null);
 
   async function add() {
     setErr(null);
     try {
-      const result = await addFamilyMember(given.trim(), family.trim(), email.trim());
+      const result = await addFamilyMember(given.trim(), family.trim(), email.trim(), born || null);
       setMade(result);
-      setGiven(''); setFamily(''); setEmail('');
+      setGiven(''); setFamily(''); setEmail(''); setBorn('');
       if (onAdded) onAdded();
     } catch (e) { setErr(e.message); }
   }
@@ -311,6 +336,9 @@ function AddFamilyMember({ onAdded }) {
         onChange={(e) => setFamily(e.target.value)} style={{ width: 120 }} />
       <input placeholder={t('Email')} value={email} data-testid="hh-add-email"
         onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+      <input type="date" title={t('Birth date — under 18 joins as a child account')}
+        value={born} data-testid="hh-add-born"
+        onChange={(e) => setBorn(e.target.value)} style={{ width: 150 }} />
       <button className="ghost" data-testid="hh-add" disabled={!given.trim() || !email.trim()}
         onClick={add}>{t('Create their account')}</button>
       {err && <span className="error" style={{ fontSize: 12.5 }}>{err}</span>}

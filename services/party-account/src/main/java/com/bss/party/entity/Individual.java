@@ -41,6 +41,9 @@ public class Individual {
     @jakarta.persistence.Column(name = "household_status", length = 16)
     private String householdStatus;
 
+    @jakarta.persistence.Column(name = "birth_date")
+    private java.time.LocalDate birthDate;
+
     /** member | admin | child — the dependent's role in the household. The
      * payer needs no row: owning the link IS the owner role. */
     @jakarta.persistence.Column(name = "household_role", length = 16)
@@ -106,6 +109,8 @@ public class Individual {
     public void setOrganizationId(String organizationId) { this.organizationId = organizationId; }
     public String getHouseholdPayerId() { return householdPayerId; }
     public void setHouseholdPayerId(String v) { this.householdPayerId = v; }
+    public java.time.LocalDate getBirthDate() { return birthDate; }
+    public void setBirthDate(java.time.LocalDate v) { this.birthDate = v; }
     public String getHouseholdStatus() { return householdStatus; }
     public void setHouseholdStatus(String v) { this.householdStatus = v; }
     public String getHouseholdRole() { return householdRole; }
