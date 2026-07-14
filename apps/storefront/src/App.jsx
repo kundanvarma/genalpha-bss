@@ -34,7 +34,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        await handleCallback(); // completes the redirect leg, if this is one
+        const returnTo = await handleCallback(); // completes the redirect leg, if this is one
         if (!isSignedIn()) {
           setState('guest');
           return;
@@ -58,6 +58,10 @@ export default function App() {
             // signed in, to confirm payment.
             navigate('/cart');
           }
+        } else if (typeof returnTo === 'string') {
+          // The router still sits on the redirect landing page — send the
+          // customer back to the deep link they signed in for.
+          navigate(returnTo, { replace: true });
         }
         setState('ready');
       } catch (e) {

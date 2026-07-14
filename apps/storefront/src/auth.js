@@ -15,6 +15,7 @@ const REFRESH_KEY = 'bss.shop.refresh';
 const EXP_KEY = 'bss.shop.tokenExp';
 const VERIFIER_KEY = 'bss.shop.verifier';
 const STATE_KEY = 'bss.shop.state';
+const RETURN_KEY = 'bss.shop.returnTo';
 
 function b64url(bytes) {
   return btoa(String.fromCharCode(...new Uint8Array(bytes)))
@@ -36,6 +37,13 @@ function redirectUri() {
 }
 
 export async function beginLogin() {
+  // The registered redirect URI is always /shop/, so a deep link (a payer
+  // opening /shop/family/{id} in a fresh tab) would be lost across the
+  // provider bounce — remember it here, restore it after the token exchange.
+  const here = location.pathname.replace(/^\/shop\/?/, '/') + location.search + location.hash;
+  if (here !== '/') {
+    sessionStorage.setItem(RETURN_KEY, here);
+  }
   const verifier = randomString();
   const state = randomString();
   sessionStorage.setItem(VERIFIER_KEY, verifier);
@@ -198,8 +206,9 @@ export async function publicFetch(url, options) {
 }
 
 /**
- * Completes the OIDC redirect leg if this load is one; resolves true when a
- * login just finished. Never initiates a login — checkout does that.
+ * Completes the OIDC redirect leg if this load is one; resolves the deep-link
+ * path saved before the bounce (or true) when a login just finished. Never
+ * initiates a login — checkout does that.
  */
 export async function handleCallback() {
   const params = new URLSearchParams(location.search);
@@ -210,5 +219,7 @@ export async function handleCallback() {
     throw new Error('OIDC state mismatch');
   }
   await completeLogin(params.get('code'));
-  return true;
+  const returnTo = sessionStorage.getItem(RETURN_KEY);
+  sessionStorage.removeItem(RETURN_KEY);
+  return returnTo || true;
 }
