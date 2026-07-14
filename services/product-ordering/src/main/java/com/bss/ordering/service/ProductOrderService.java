@@ -128,7 +128,7 @@ public class ProductOrderService {
             throw new OrderValidationException(
                     "promotion code '" + dto.getPromotionCode() + "' is not valid");
         }
-        partyScope.scopedPartyId().ifPresent(sub -> claimForParty(dto, sub));
+        partyScope.scopedPartyId().ifPresent(sub -> claimOrPayForHousehold(dto, sub));
         requireSameOrgForBusinessAdmin(dto);
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
@@ -535,6 +535,30 @@ public class ProductOrderService {
         List<Map<String, Object>> refs = mapper.toDto(entity).getPayment();
         return refs == null ? List.of()
                 : refs.stream().map(r -> String.valueOf(r.get("id"))).toList();
+    }
+
+    /**
+     * HOUSEHOLD BILLING: a person may order FOR someone whose ACTIVE payer
+     * they are (parent orders the child's plan) — the dependent stays the
+     * customer, the caller rides the order as its payer, and billing puts it
+     * on the payer's bill exactly like a company order. Anyone else naming a
+     * different customer is claimed back to themselves, as always. The link
+     * is looked up live from the party source, never trusted from the request.
+     */
+    private void claimOrPayForHousehold(ProductOrderDto dto, String callerId) {
+        String customer = customerPartyIn(dto.getRelatedParty());
+        if (customer != null && !customer.equals(callerId)
+                && callerId.equals(partyClient.householdPayerOf(customer).orElse(null))) {
+            List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());
+            boolean stamped = parties.stream().anyMatch(p -> "payer".equals(p.get("role")));
+            if (!stamped) {
+                parties.add(Map.of("id", callerId, "role", "payer",
+                        "@referredType", "Individual"));
+                dto.setRelatedParty(parties);
+            }
+            return;
+        }
+        claimForParty(dto, callerId);
     }
 
     /** Orders placed through a customer channel always carry their owner as a related party. */

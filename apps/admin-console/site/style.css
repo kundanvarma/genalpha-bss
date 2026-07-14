@@ -173,3 +173,10 @@ th { border-bottom-color: var(--line); }
 .copilot-proposal ul { margin: 6px 0 10px; padding-left: 18px; }
 .copilot-proposal li { margin: 2px 0; }
 .copilot-warn { color: #b64a3a; font-size: 12.5px; }
+
+/* inline row expansion (bill lines) */
+.detailrow td { background: var(--card, #f5f8f8); padding: 10px 16px; }
+.detailtable { width: 100%; font-size: 12.5px; border-collapse: collapse; }
+.detailtable th { text-align: left; color: var(--dim, #8a979c); font-weight: 600;
+  text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.05em; padding: 3px 10px 3px 0; }
+.detailtable td { padding: 3px 10px 3px 0; border-top: 1px solid var(--line); }

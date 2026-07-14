@@ -33,6 +33,12 @@ public class IndividualMapper {
             dto.setOrganization(java.util.Map.of("id", entity.getOrganizationId(), "@referredType", "Organization"));
         }
         dto.setType("Individual");
+        if (entity.getHouseholdPayerId() != null) {
+            java.util.Map<String, Object> payer = new java.util.LinkedHashMap<>();
+            payer.put("id", entity.getHouseholdPayerId());
+            payer.put("status", entity.getHouseholdStatus());
+            dto.setHouseholdPayer(payer);
+        }
         return dto;
     }
 

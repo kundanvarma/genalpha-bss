@@ -110,6 +110,17 @@ const RESOURCES = [
     readOnly: true,
     fields: [],
     columns: ['billNo', 'relatedParty', 'billingPeriod', 'amountDue', 'state', 'lastUpdate'],
+    // a bill is its LINES — expand them in place
+    detail: async (item) => {
+      const res = await authFetch(`${BILLING_BASE}/customerBill/${item.id}/appliedCustomerBillingRate`);
+      const rates = res.ok ? await res.json() : [];
+      return rates.map((r) => ({
+        line: r.name,
+        type: r.type,
+        amount: `${Number(r.taxExcludedAmount?.value ?? 0).toFixed(2)} ${r.taxExcludedAmount?.unit || ''}`,
+        for: r.forParty?.id ? r.forParty.id.slice(0, 8) + '…' : '—',
+      }));
+    },
   },
   {
     path: 'serviceableArea',
@@ -1768,6 +1779,55 @@ async function loadList() {
     }
     const td = document.createElement('td');
     td.className = 'rowactions';
+    if (active.detail) {
+      // read-only resources can still OPEN: an inline expansion of what the
+      // row contains (a bill's lines), fetched on demand
+      const view = document.createElement('button');
+      view.textContent = 'View';
+      view.className = 'ghost';
+      view.dataset.testid = 'row-view';
+      view.addEventListener('click', async () => {
+        const existing = tr.nextElementSibling;
+        if (existing && existing.classList.contains('detailrow')) {
+          existing.remove();
+          view.textContent = 'View';
+          return;
+        }
+        view.textContent = 'Hide';
+        const detailTr = document.createElement('tr');
+        detailTr.className = 'detailrow';
+        const cell = document.createElement('td');
+        cell.colSpan = active.columns.length + 1;
+        cell.textContent = 'loading…';
+        detailTr.append(cell);
+        tr.after(detailTr);
+        try {
+          const rows = await active.detail(item);
+          if (!rows.length) { cell.textContent = 'nothing inside'; return; }
+          const table = document.createElement('table');
+          table.className = 'detailtable';
+          const head = document.createElement('tr');
+          for (const k of Object.keys(rows[0])) {
+            const th = document.createElement('th');
+            th.textContent = k;
+            head.append(th);
+          }
+          table.append(head, ...rows.map((r) => {
+            const line = document.createElement('tr');
+            for (const v of Object.values(r)) {
+              const c = document.createElement('td');
+              c.textContent = v ?? '—';
+              line.append(c);
+            }
+            return line;
+          }));
+          cell.replaceChildren(table);
+        } catch (e) {
+          cell.textContent = 'could not load: ' + e.message;
+        }
+      });
+      td.append(view);
+    }
     if (active.readOnly) {
       tr.append(td);
       return tr;

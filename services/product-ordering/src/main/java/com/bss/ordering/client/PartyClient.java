@@ -10,4 +10,7 @@ public interface PartyClient {
 
     /** The organization a party belongs to, or empty (unknown party ⇒ empty). */
     java.util.Optional<String> organizationOf(String partyId);
+
+    /** The ACTIVE person-payer of this party, if any (household billing). */
+    java.util.Optional<String> householdPayerOf(String partyId);
 }

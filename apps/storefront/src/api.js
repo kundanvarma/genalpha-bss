@@ -81,6 +81,48 @@ export async function myParty() {
   return json(await authFetch(`${PARTY}/individual/${claims.sub}`));
 }
 
+// ---------------- household billing (person-payer, with consent) ----------------
+
+export async function myHousehold() {
+  const claims = tokenClaims();
+  return json(await authFetch(`${PARTY}/individual/${claims.sub}/household`));
+}
+
+export async function requestHouseholdPayer(payerEmail) {
+  const claims = tokenClaims();
+  return json(await authFetch(`${PARTY}/individual/${claims.sub}/householdPayer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payerEmail }),
+  }));
+}
+
+export async function acceptDependent(dependentId) {
+  return json(await authFetch(`${PARTY}/individual/${dependentId}/householdPayer/accept`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
+export async function endHouseholdLink(dependentId) {
+  return json(await authFetch(`${PARTY}/individual/${dependentId}/householdPayer`, {
+    method: 'DELETE',
+  }));
+}
+
+/** The payer orders FOR a dependent — ordering verifies the live link and
+ * stamps the payer; the plan lands on the payer's bill. */
+export async function orderForDependent(offering, dependentId) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productOrderItem: [{ action: 'add',
+        productOffering: { id: offering.id, name: offering.name } }],
+      relatedParty: [{ id: dependentId, role: 'customer' }],
+    }),
+  }));
+}
+
 export async function updateMyParty(patch) {
   const claims = tokenClaims();
   return json(await authFetch(`${PARTY}/individual/${claims.sub}`, {
