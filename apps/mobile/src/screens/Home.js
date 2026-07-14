@@ -10,7 +10,7 @@ import { TextInput } from 'react-native';
 import { changePlan, listOfferings, myBills, myParty, myProducts, myRecommendations,
   myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin,
   myHousehold, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember,
-  memberProducts } from '../api.js';
+  memberProducts, setAllowance, familyApprovals, decideApproval, giftData } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { money } from '../config.js';
 import { Button, Card, Dim, Meter, Row, palette } from '../ui.js';
@@ -169,11 +169,16 @@ export default function Home({ navigation }) {
             if (!topup) return null;
             const price = (topup.productOfferingPrice || []).map((r) => prices[r.id])
               .find((pr) => pr?.price?.value != null);
-            return toppedUp
+            return toppedUp === 'held'
+              ? <Dim testID="app-topup-held">🔔 sent to your family admin for approval — you'll hear the moment they decide</Dim>
+              : toppedUp
               ? <Dim>✓ top-up added to this month's allowance</Dim>
               : <Button ghost testID="app-topup"
                   label={`＋ ${topup.name}${price ? ` — ${money(price.price.value, price.price.unit)}` : ''}`}
-                  onPress={() => quickOrder(topup).then(() => { setToppedUp(true); setTimeout(load, 4000); })} />;
+                  onPress={() => quickOrder(topup).then((o) => {
+                    setToppedUp(o.state === 'held' ? 'held' : true);
+                    if (o.state !== 'held') setTimeout(load, 4000);
+                  })} />;
           })()}
           {code && (
             <Row left={<Dim>activation code — manage with the partner</Dim>}
@@ -236,15 +241,22 @@ function FamilyCard({ household, offerings, prices, onChanged }) {
   const c = palette();
   const [made, setMade] = useState(null);
   const [note, setNote] = useState(null);
+  const [approvals, setApprovals] = useState([]);
+  const [budget, setBudget] = useState({});
+  const [giftPhone, setGiftPhone] = useState('');
   const me = tokenClaims().sub;
   const isOwner = (household.dependents || []).length > 0;
   // my own dependents as the payer; the payer's family when I am its admin
   const members = isOwner ? household.dependents
     : (household.family || []).filter((d) => d.id !== me);
+  const isAdmin = household.myRole === 'admin' && household.payer?.status === 'active';
+  const canManage = isOwner || isAdmin;
   const roleName = (r) => (r === 'admin' ? 'family admin' : r === 'child' ? 'child' : 'member');
   const plans = offerings.filter((o) =>
     ((o.category || [])[0] || {}).name === 'Mobile plans' && !o.isBundle);
-  const act = (p, ok) => p.then(() => { setNote(ok); onChanged(); }).catch((e) => setNote(e.message));
+  const act = (p, ok) => p.then(() => { setNote(ok); onChanged(); loadApprovals(); }).catch((e) => setNote(e.message));
+  const loadApprovals = () => { if (canManage) familyApprovals().then(setApprovals); };
+  useFocusEffect(useCallback(() => { loadApprovals(); }, [canManage]));
 
   return (
     <Card title="Family 👪" testID="app-family-card">
@@ -256,6 +268,18 @@ function FamilyCard({ household, offerings, prices, onChanged }) {
           right={<Button ghost label="Leave" testID="app-hh-leave"
             onPress={() => act(endHouseholdLink(tokenClaims().sub), 'left the household')} />} />
       )}
+      {approvals.map((o) => (
+        <View key={o.id} testID={'app-approval-' + o.id}>
+          <Row left={<Text style={{ color: c.ink, fontWeight: '600' }}>
+              🔔 {(o.productOrderItem || [])[0]?.productOffering?.name || 'a purchase'} <Dim>· {o.description}</Dim></Text>}
+            right={<View style={{ flexDirection: 'row', gap: 6 }}>
+              <Button label="Approve" testID="app-appr-approve"
+                onPress={() => act(decideApproval(o.id, true), 'approved — it bills to the family payer')} />
+              <Button ghost label="Decline" testID="app-appr-deny"
+                onPress={() => act(decideApproval(o.id, false), 'declined')} />
+            </View>} />
+        </View>
+      ))}
       {members.map((d) => (
         <View key={d.id} testID={'app-hh-dep-' + d.id}>
           <Row left={<Text style={{ color: c.ink, fontWeight: '600' }}>
@@ -266,6 +290,23 @@ function FamilyCard({ household, offerings, prices, onChanged }) {
               : (isOwner ? <Button ghost label="Stop paying" testID="app-hh-stop"
                   onPress={() => act(endHouseholdLink(d.id), 'stopped paying')} /> : null)} />
           {d.status === 'active' && <MemberLines memberId={d.id} isOwner={isOwner} />}
+          {d.status === 'active' && canManage && (
+            <Row left={<Dim>💶 top-up allowance{d.topupAllowance != null ? ` — ${d.topupAllowance} EUR/mo` : ''}</Dim>}
+              right={<View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                <TextInput placeholder="EUR" value={budget[d.id] || ''} inputMode="decimal"
+                  testID="app-fam-allowance"
+                  onChangeText={(v) => setBudget((x) => ({ ...x, [d.id]: v.replace(/[^0-9.]/g, '') }))}
+                  style={{ borderWidth: 1, borderColor: c.line, borderRadius: 8, padding: 5, width: 62, color: c.ink }} />
+                <Button ghost label="Set" testID="app-fam-allowance-set"
+                  onPress={() => budget[d.id] && act(setAllowance(d.id, Number(budget[d.id])),
+                    'allowance set — top-ups inside it bill the family instantly')} />
+              </View>} />
+          )}
+          {d.status === 'active' && (
+            <Row left={<Dim>🎁 gift them a gigabyte</Dim>}
+              right={<Button ghost label="Gift 1 GB" testID="app-gift-1gb"
+                onPress={() => act(giftData({ receiverId: d.id }, 1), 'gifted 1 GB — their meter grew')} />} />
+          )}
           {d.status === 'active' && plans.slice(0, 2).map((o) => (
             <Row key={o.id} left={<Dim>order {o.name} for them</Dim>}
               right={<Button ghost label="Order" testID="app-hh-order"
@@ -274,6 +315,13 @@ function FamilyCard({ household, offerings, prices, onChanged }) {
           ))}
         </View>
       ))}
+      <Row left={<TextInput placeholder="…or gift to a phone number" value={giftPhone}
+          testID="app-gift-phone" inputMode="tel"
+          onChangeText={(v) => setGiftPhone(v.replace(/[^0-9+ -]/g, ''))}
+          style={{ borderWidth: 1, borderColor: c.line, borderRadius: 8, padding: 6, minWidth: 170, color: c.ink }} />}
+        right={<Button ghost label="Gift 1 GB" testID="app-gift-phone-send"
+          onPress={() => giftPhone.trim() && act(giftData({ receiverPhone: giftPhone.trim() }, 1),
+            `gifted 1 GB to ${giftPhone.trim()}`)} />} />
       {!household.payer && (made
         ? <Dim testID="app-hh-credentials">✓ created — they sign in with {made.email} / {made.temporaryPassword} (shown once)</Dim>
         : <AddFamily onMade={(m) => { setMade(m); onChanged(); }} />)}

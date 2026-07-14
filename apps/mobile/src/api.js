@@ -110,6 +110,24 @@ export const addFamilyMember = async (givenName, familyName, email) => {
   return { email, temporaryPassword: login.temporaryPassword };
 };
 
+/** Owner or admin: the family's monthly top-up budget for a member (EUR). */
+export const setAllowance = (memberId, monthlyValue) =>
+  call(`/tmf-api/party/v4/individual/${memberId}/allowance`, {
+    method: 'POST', body: JSON.stringify({ monthlyValue }) });
+
+/** Held ask-to-buy orders across my family — the approvals inbox. */
+export const familyApprovals = () => soft(
+  call('/tmf-api/productOrderingManagement/v4/productOrder/familyApprovals'), []);
+
+export const decideApproval = (orderId, approve) =>
+  call(`/tmf-api/productOrderingManagement/v4/productOrder/${orderId}/approval`, {
+    method: 'POST', body: JSON.stringify({ approve }) });
+
+/** Gift remaining GB — to a family member by id or any number in reach. */
+export const giftData = (receiver, amount) =>
+  call('/tmf-api/usageManagement/v4/gift', {
+    method: 'POST', body: JSON.stringify({ ...receiver, amount }) });
+
 /** One-tap purchase for simple digital items (data top-ups). */
 export const quickOrder = (offering) =>
   call('/tmf-api/productOrderingManagement/v4/productOrder', {
