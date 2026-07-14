@@ -66,6 +66,14 @@ public class TenantRegistry {
         private String machineClientId;
         private String machineClientSecret;
 
+        /** The analytics seam: 'internal' keeps events first-party only;
+         * 'ga4' forwards them to the tenant's own property via the
+         * Measurement Protocol. Bring your own analytics — per tenant. */
+        private String analyticsProvider;
+        private String analyticsMpUrl;
+        private String analyticsMeasurementId;
+        private String analyticsApiSecret;
+
         public String getId() {
             return id;
         }
@@ -113,5 +121,14 @@ public class TenantRegistry {
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }
+
+        public String getAnalyticsProvider() { return analyticsProvider; }
+        public void setAnalyticsProvider(String v) { this.analyticsProvider = v; }
+        public String getAnalyticsMpUrl() { return analyticsMpUrl; }
+        public void setAnalyticsMpUrl(String v) { this.analyticsMpUrl = v; }
+        public String getAnalyticsMeasurementId() { return analyticsMeasurementId; }
+        public void setAnalyticsMeasurementId(String v) { this.analyticsMeasurementId = v; }
+        public String getAnalyticsApiSecret() { return analyticsApiSecret; }
+        public void setAnalyticsApiSecret(String v) { this.analyticsApiSecret = v; }
     }
 }

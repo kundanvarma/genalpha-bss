@@ -135,6 +135,11 @@ services:
     db: ""
     healthPath: /health
     extraEnv: {}
+  # demo stand-in for the operator's web analytics (GA4 seam)
+  mock-analytics:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
@@ -336,6 +341,7 @@ services:
       OIDC_CLIENT_SECRET: recommendation-secret
       CATALOG_BASE_URL: http://product-catalog:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
+      INSIGHT_BASE_URL: http://insight:8080
 
 # Edge exposure. Off by default (dev clusters port-forward the gateway).
 # When enabled, an Ingress fronts the gateway — and the TLS guidance is

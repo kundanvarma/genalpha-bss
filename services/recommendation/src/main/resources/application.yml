@@ -26,6 +26,8 @@ bss:
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
+    # consented interests for the fusion boost (fail-open)
+    insight-base-url: ${INSIGHT_BASE_URL:http://localhost:8119}
   tenants:
     default-tenant: genalpha
     registry:

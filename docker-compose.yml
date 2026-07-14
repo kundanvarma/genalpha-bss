@@ -617,6 +617,7 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       CATALOG_BASE_URL: http://product-catalog:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
+      INSIGHT_BASE_URL: http://insight:8080
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     ports:
       - "8102:8080"
@@ -966,6 +967,14 @@ services:
       kafka:
         condition: service_started
 
+  # demo stand-in for the operator's web analytics (GA4 Measurement Protocol)
+  mock-analytics:
+    build: ./integrations/mock-analytics
+    container_name: bss-mock-analytics
+    restart: unless-stopped
+    ports:
+      - "8120:8080"
+
   insight:
     build: ./services/insight
     container_name: bss-insight
@@ -982,6 +991,12 @@ services:
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       POLICY_BASE_URL: http://policy:8080
+      # the analytics seam: nova brings its own "GA4" (the mock);
+      # genalpha stays internal-only — same binary, per-tenant config
+      ANALYTICS_PROVIDER_NOVA: ga4
+      ANALYTICS_MP_URL_NOVA: http://mock-analytics:8080
+      ANALYTICS_MEASUREMENT_ID_NOVA: G-NOVA-DEMO
+      ANALYTICS_API_SECRET_NOVA: nova-mp-secret
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"

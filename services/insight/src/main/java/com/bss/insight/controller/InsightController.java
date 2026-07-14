@@ -59,6 +59,12 @@ public class InsightController {
         return ResponseEntity.ok(service.experience(visitorId));
     }
 
+    /** A known customer's merged interests (insight:read — machines). */
+    @GetMapping("/partyProfile")
+    public ResponseEntity<Map<String, Object>> partyProfile(@RequestParam String partyId) {
+        return ResponseEntity.ok(service.partyProfile(partyId));
+    }
+
     /** Back-office window into one profile (insight:read). */
     @GetMapping("/profile")
     public ResponseEntity<Map<String, Object>> profile(@RequestParam String visitorId) {
