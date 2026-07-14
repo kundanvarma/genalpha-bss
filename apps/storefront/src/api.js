@@ -236,6 +236,21 @@ export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
 
+/** A family member's products, through the household link: inventory verifies
+ * the caller is their payer or a family admin, live at the party source. */
+export async function memberProducts(memberId) {
+  return json(await authFetch(`${INVENTORY}/product?relatedPartyId=${encodeURIComponent(memberId)}&limit=100`));
+}
+
+/** Owner-only: promote a member to family admin, or demote back. */
+export async function setFamilyRole(memberId, role) {
+  return json(await authFetch(`${PARTY}/individual/${memberId}/householdRole`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role }),
+  }));
+}
+
 /** The SIM behind a line; null when none is on file (pre-SIM activations). */
 export async function mySim(serviceId, reveal = false) {
   const res = await authFetch(`${SERVICE_INV}/service/${serviceId}/sim${reveal ? '?reveal=true' : ''}`);

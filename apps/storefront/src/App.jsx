@@ -9,6 +9,7 @@ import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
 import FamilyMember from './pages/FamilyMember.jsx';
+import Family from './pages/Family.jsx';
 import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
 import Bills from './pages/Bills.jsx';
@@ -96,6 +97,7 @@ export default function App() {
               <NavLink to="/orders">{t('My orders')}</NavLink>
               <NavLink to="/bills">{t('My bills')}</NavLink>
               <NavLink to="/services">{t('My page')}</NavLink>
+              <NavLink to="/family">{t('Family')}</NavLink>
               <NavLink to="/notifications" className="cartlink">
                 {t('Inbox')}{unread > 0 && <span className="badge">{unread}</span>}
               </NavLink>
@@ -120,6 +122,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
+          <Route path="/family" element={<Family />} />
           <Route path="/family/:id" element={<FamilyMember />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />

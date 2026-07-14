@@ -83,6 +83,11 @@ export const acceptDependent = (dependentId) =>
 export const endHouseholdLink = (dependentId) =>
   call(`/tmf-api/party/v4/individual/${dependentId}/householdPayer`, { method: 'DELETE' });
 
+/** A family member's household-funded products — allowed for the payer and
+ * for family admins; inventory verifies the link live. */
+export const memberProducts = (memberId) => soft(
+  call('/tmf-api/productInventory/v4/product?relatedPartyId=' + encodeURIComponent(memberId) + '&limit=50'), []);
+
 export const orderForDependent = (offering, dependentId) =>
   call('/tmf-api/productOrderingManagement/v4/productOrder', {
     method: 'POST',

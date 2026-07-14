@@ -1,6 +1,6 @@
 # Family experience v3 — research and design plan
 
-Status: **proposal, awaiting review** · 2026-07-14
+Status: **Phase 1 delivered** (family hub, roles, admin authorization — suite #29 `family_test.js`) · Phases 2–3 pending · 2026-07-14
 
 The household feature today is plumbing-first: consent links, payer stamps,
 correct bills. It is honest but it is not an *experience*. This plan starts
@@ -139,7 +139,7 @@ by role) on storefront *and* app:
 
 ## 3. Delivery phases
 
-**Phase 1 — the Family hub + roles** (storefront + app + party/ordering)
+**Phase 1 — the Family hub + roles** (storefront + app + party/ordering) — **DONE**
 - `household_role` column + promote/demote endpoints (owner only) and
   admin-aware authorization in party, ordering and inventory ("admin may do
   what the payer may do", except role management).

@@ -540,10 +540,13 @@ public class ProductOrderService {
     /**
      * HOUSEHOLD BILLING: a person may order FOR someone whose ACTIVE payer
      * they are (parent orders the child's plan) — the dependent stays the
-     * customer, the caller rides the order as its payer, and billing puts it
-     * on the payer's bill exactly like a company order. Anyone else naming a
-     * different customer is claimed back to themselves, as always. The link
-     * is looked up live from the party source, never trusted from the request.
+     * customer, the payer rides the order, and billing puts it on the
+     * payer's bill exactly like a company order. A FAMILY ADMIN (a member
+     * the owner promoted) may do the same for members of the same household
+     * — but the payer stamp is the HOUSEHOLD PAYER, never the admin: admin
+     * is management authority, not a wallet. Anyone else naming a different
+     * customer is claimed back to themselves, as always. Links are looked
+     * up live from the party source, never trusted from the request.
      */
     private void claimOrPayForHousehold(ProductOrderDto dto, String callerId) {
         String customer = customerPartyIn(dto.getRelatedParty());
@@ -558,16 +561,25 @@ public class ProductOrderService {
                         + "ordering for them starts after consent");
             }
         }
-        if (customer != null && !customer.equals(callerId)
-                && callerId.equals(partyClient.householdPayerOf(customer).orElse(null))) {
-            List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());
-            boolean stamped = parties.stream().anyMatch(p -> "payer".equals(p.get("role")));
-            if (!stamped) {
-                parties.add(Map.of("id", callerId, "role", "payer",
-                        "@referredType", "Individual"));
-                dto.setRelatedParty(parties);
+        if (customer != null && !customer.equals(callerId)) {
+            String payer = partyClient.householdPayerOf(customer).orElse(null);
+            boolean callerIsPayer = callerId.equals(payer);
+            boolean callerIsAdmin = payer != null && !callerIsPayer
+                    && partyClient.householdLinkOf(callerId)
+                            .filter(l -> payer.equals(String.valueOf(l.get("id"))))
+                            .filter(l -> "active".equals(l.get("status")))
+                            .filter(l -> "admin".equals(l.get("role")))
+                            .isPresent();
+            if (callerIsPayer || callerIsAdmin) {
+                List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());
+                boolean stamped = parties.stream().anyMatch(p -> "payer".equals(p.get("role")));
+                if (!stamped) {
+                    parties.add(Map.of("id", payer, "role", "payer",
+                            "@referredType", "Individual"));
+                    dto.setRelatedParty(parties);
+                }
+                return;
             }
-            return;
         }
         claimForParty(dto, callerId);
     }

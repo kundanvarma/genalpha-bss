@@ -155,7 +155,10 @@ services:
   product-inventory:
     db: product_inventory
     dbRole: inventory_app
-    extraEnv: {}
+    # the family hub: inventory verifies household links at the party source
+    machineIdentity: true
+    extraEnv:
+      PARTY_BASE_URL: http://party-account:8080
   party-account:
     db: party_account
     dbRole: party_app

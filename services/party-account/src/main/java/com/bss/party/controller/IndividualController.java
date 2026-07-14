@@ -113,4 +113,12 @@ public class IndividualController {
     public ResponseEntity<Map<String, Object>> household(@PathVariable String id) {
         return ResponseEntity.ok(service.householdOf(id));
     }
+
+    /** Owner-only: promote a member to family admin, or demote back. */
+    @PostMapping("/{id}/householdRole")
+    public ResponseEntity<IndividualDto> setHouseholdRole(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(service.setHouseholdRole(id,
+                body == null ? null : String.valueOf(body.get("role"))));
+    }
 }

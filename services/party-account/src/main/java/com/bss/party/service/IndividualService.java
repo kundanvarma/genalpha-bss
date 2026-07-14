@@ -207,6 +207,7 @@ public class IndividualService {
                 .orElseThrow(() -> NotFoundException.forResource("Individual", payerEmail));
         dependent.setHouseholdPayerId(payer.getId());
         dependent.setHouseholdStatus("pending");
+        dependent.setHouseholdRole("member");
         IndividualDto updated = mapper.toDto(repository.save(dependent));
         events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
         return updated;
@@ -244,6 +245,7 @@ public class IndividualService {
         }
         dependent.setHouseholdPayerId(null);
         dependent.setHouseholdStatus(null);
+        dependent.setHouseholdRole(null);
         IndividualDto updated = mapper.toDto(repository.save(dependent));
         events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
         return updated;
@@ -253,6 +255,8 @@ public class IndividualService {
      * The caller's household, both directions: who pays for me, and who I
      * pay for. Names cross the party boundary here BY CONSENT — the link
      * itself is the authorization, and only names travel, nothing else.
+     * An ACTIVE ADMIN additionally sees the whole family (the payer's other
+     * dependents) — that is what being promoted means.
      */
     @Transactional(readOnly = true)
     public Map<String, Object> householdOf(String id) {
@@ -271,18 +275,56 @@ public class IndividualService {
                     .ifPresent(p -> payer.put("name",
                             (nullSafe(p.getGivenName()) + " " + nullSafe(p.getFamilyName())).trim()));
             household.put("payer", payer);
+            household.put("myRole", me.getHouseholdRole());
         }
-        household.put("dependents", repository
-                .findByTenantIdAndHouseholdPayerId(tenantScope.currentTenantId(), id).stream()
+        household.put("dependents", dependentsOf(id));
+        if ("admin".equals(me.getHouseholdRole()) && "active".equals(me.getHouseholdStatus())) {
+            household.put("family", dependentsOf(me.getHouseholdPayerId()));
+        }
+        return household;
+    }
+
+    private java.util.List<Map<String, Object>> dependentsOf(String payerId) {
+        return repository
+                .findByTenantIdAndHouseholdPayerId(tenantScope.currentTenantId(), payerId).stream()
                 .map(d -> {
                     Map<String, Object> dep = new java.util.LinkedHashMap<String, Object>();
                     dep.put("id", d.getId());
                     dep.put("givenName", d.getGivenName());
                     dep.put("familyName", d.getFamilyName());
                     dep.put("status", d.getHouseholdStatus());
+                    dep.put("role", d.getHouseholdRole());
                     return dep;
-                }).toList());
-        return household;
+                }).toList();
+    }
+
+    /**
+     * Role management is the OWNER's alone (the Verizon rule: managers can do
+     * nearly everything except manage other managers). Only member↔admin —
+     * a child account stays a child until real age modeling says otherwise.
+     */
+    @Transactional
+    public IndividualDto setHouseholdRole(String dependentId, String role) {
+        if (!"admin".equals(role) && !"member".equals(role)) {
+            throw new com.bss.party.exception.BadRequestException("role must be 'admin' or 'member'");
+        }
+        Individual dependent = repository.findByIdAndTenantId(dependentId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", dependentId));
+        String subject = currentSubject();
+        if (subject == null || !subject.equals(dependent.getHouseholdPayerId())) {
+            throw NotFoundException.forResource("Individual", dependentId);
+        }
+        if (!"active".equals(dependent.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "they have not accepted the household yet — roles come after consent");
+        }
+        if ("child".equals(dependent.getHouseholdRole())) {
+            throw new com.bss.party.exception.BadRequestException("a child account cannot hold family roles");
+        }
+        dependent.setHouseholdRole(role);
+        IndividualDto updated = mapper.toDto(repository.save(dependent));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
     }
 
     /**
@@ -314,6 +356,7 @@ public class IndividualService {
         entity.setHref(com.bss.party.api.ApiConstants.PARTY_BASE + "/individual/" + dto.getId());
         entity.setHouseholdPayerId(payerId);
         entity.setHouseholdStatus("active");
+        entity.setHouseholdRole("child");
         IndividualDto created = mapper.toDto(repository.save(entity));
         partyRoles.grant(created.getId(), "customer");
         events.publish("IndividualCreateEvent", "individual", created);

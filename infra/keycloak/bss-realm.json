@@ -182,7 +182,7 @@
       },
       {
         "name": "policy:evaluate",
-        "description": "policy:evaluate — machine scope for the order pipeline"
+        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -553,6 +553,17 @@
       "attributes": {
         "pkce.code.challenge.method": "S256"
       }
+    },
+    {
+      "clientId": "bss-inventory",
+      "name": "product-inventory machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "inventory-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -961,6 +972,32 @@
         {
           "type": "password",
           "value": "sonny"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
+    },
+    {
+      "username": "service-account-bss-inventory",
+      "enabled": true,
+      "serviceAccountClientId": "bss-inventory",
+      "realmRoles": [
+        "party:read"
+      ]
+    },
+    {
+      "id": "ec15d945-2fd8-453b-88a5-fc5e0a1d09ed",
+      "username": "wilma@family.example",
+      "email": "wilma@family.example",
+      "firstName": "Wilma",
+      "lastName": "Family",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "wilma"
         }
       ],
       "realmRoles": [

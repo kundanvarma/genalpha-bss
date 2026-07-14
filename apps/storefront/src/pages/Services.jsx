@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold, requestHouseholdPayer, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember } from '../api.js';
+import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -224,7 +224,7 @@ export default function Services() {
     return (
       <>
         <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>
-        <Household offerings={offerings} refresh={refresh} />
+        <p><Link to="/family" data-testid="family-hub-link">👪 {t('Family')} →</Link></p>
       </>
     );
   }
@@ -423,78 +423,26 @@ export default function Services() {
           ))}
         </section>
       )}
-      {familyPaid.length > 0 && (
+      {(familyPaid.length > 0 || (hh?.dependents || []).length > 0 || hh?.payer) && (
         <section className="lobcard" data-testid="family-paid-card">
-          <h2>👪 {t('Family — you pay for these')}</h2>
-          {[...new Set(familyPaid.map(ownerIdOf))].map((depId) => {
-            const dep = (hh?.dependents || []).find((d) => d.id === depId);
-            const name = dep ? `${dep.givenName} ${dep.familyName}` : t('family member');
-            return (
-              <div key={depId} style={{ margin: '8px 0' }}>
-                <p style={{ margin: '4px 0', fontWeight: 600 }}>
-                  {name}
-                  <a href={`/shop/family/${depId}`} target="_blank" rel="noreferrer"
-                    className="promolink" data-testid="family-open" style={{ marginLeft: 10 }}>
-                    {t('Open their page')} ↗
-                  </a>
-                </p>
-                {familyPaid.filter((p) => ownerIdOf(p) === depId).map((p) => (
-                  <p key={p.id} className="dim" style={{ margin: '2px 0 2px 10px', fontSize: 13 }}>
-                    {p.name} · {p.status} — {t('billed to you')}
-                  </p>
-                ))}
-              </div>
-            );
-          })}
+          <h2>👪 {t('Family')}</h2>
+          {familyPaid.length > 0 && (
+            <p style={{ margin: '4px 0' }}>
+              {t('You pay for')} <b>{familyPaid.length}</b> {t('service(s) for')}{' '}
+              {[...new Set(familyPaid.map(ownerIdOf))].map((depId) => {
+                const dep = (hh?.dependents || []).find((d) => d.id === depId);
+                return dep ? `${dep.givenName} ${dep.familyName}` : t('a family member');
+              }).join(', ')}.
+            </p>
+          )}
+          <p style={{ margin: '4px 0' }}>
+            <Link to="/family" className="promolink" data-testid="family-hub-link">
+              {t('Manage your family')} →
+            </Link>
+          </p>
         </section>
       )}
-      <Household offerings={offerings} refresh={refresh} />
     </>
-  );
-}
-
-/** Child accounts: the payer creates the kid's login + party in one go —
- * consent is implicit when the payer IS the creator (a minor can't consent).
- * The temporary password shows exactly once, for hand-over to the kid's
- * phone: their own sign-in, their own My page, your bill. */
-function AddFamilyMember({ onAdded }) {
-  const [given, setGiven] = useState('');
-  const [family, setFamily] = useState('');
-  const [email, setEmail] = useState('');
-  const [made, setMade] = useState(null);
-  const [err, setErr] = useState(null);
-
-  async function add() {
-    setErr(null);
-    try {
-      const result = await addFamilyMember(given.trim(), family.trim(), email.trim());
-      setMade(result);
-      setGiven(''); setFamily(''); setEmail('');
-      if (onAdded) onAdded();
-    } catch (e) { setErr(e.message); }
-  }
-
-  if (made) {
-    return (
-      <p data-testid="hh-credentials" style={{ fontSize: 13 }}>
-        ✓ {t('Created — they sign in with')}{' '}
-        <b style={{ fontFamily: 'ui-monospace, monospace' }}>{made.email} / {made.temporaryPassword}</b>
-        <br /><span className="dim">{t('Shown once — hand it over to their phone.')}</span>
-      </p>
-    );
-  }
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-      <input placeholder={t('First name')} value={given} data-testid="hh-add-given"
-        onChange={(e) => setGiven(e.target.value)} style={{ width: 120 }} />
-      <input placeholder={t('Last name')} value={family} data-testid="hh-add-family"
-        onChange={(e) => setFamily(e.target.value)} style={{ width: 120 }} />
-      <input placeholder={t('Email')} value={email} data-testid="hh-add-email"
-        onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-      <button className="ghost" data-testid="hh-add" disabled={!given.trim() || !email.trim()}
-        onClick={add}>{t('Create their account')}</button>
-      {err && <span className="error" style={{ fontSize: 12.5 }}>{err}</span>}
-    </div>
   );
 }
 
@@ -522,108 +470,3 @@ function TopUp({ offering, price, onBought }) {
   );
 }
 
-/**
- * Household billing: one person, many payers — here the PERSON side. The
- * dependent asks someone to pay (by email, pending until accepted); the
- * payer sees requests, accepts, and can order a plan straight onto a
- * dependent's line of life — it bills to the payer, attributed per person,
- * exactly like a company invoice. Either side can end it.
- */
-function Household({ offerings, refresh }) {
-  const [household, setHousehold] = useState(null);
-  const [email, setEmail] = useState('');
-  const [pick, setPick] = useState({});
-  const [note, setNote] = useState(null);
-
-  const load = () => myHousehold().then(setHousehold).catch(() => setHousehold(null));
-  // NOT useEffect(load): load returns a promise, and React would call it as
-  // the unmount cleanup — crashing the whole app on navigation
-  useEffect(() => { load(); }, []);
-  if (!household) return null;
-
-  const dependents = household.dependents || [];
-  const payer = household.payer;
-  const plans = Object.values(offerings)
-    .filter((o) => ((o.category || [])[0] || {}).name === 'Mobile plans' && !o.isBundle);
-
-  const act = async (fn, okText) => {
-    try {
-      await fn();
-      setNote(okText);
-      load();
-      if (refresh) refresh();
-    } catch (e) { setNote(e.message); }
-  };
-
-  return (
-    <section className="lobcard" data-testid="household-card">
-      <h2>👪 {t('My household')}</h2>
-      {payer && (
-        <p style={{ margin: '6px 0' }} data-testid="hh-payer">
-          {payer.status === 'active'
-            ? <>{t('Paid for by')} <b>{payer.name || payer.id}</b> — {t('company-style: their bill, your name on the lines')}.</>
-            : <>{t('Waiting for')} <b>{payer.name || payer.id}</b> {t('to accept your request')}…</>}
-          <button className="ghost" style={{ marginLeft: 10 }} data-testid="hh-leave"
-            onClick={() => act(() => endHouseholdLink(tokenClaims().sub), t('left the household'))}>
-            {t('Leave')}
-          </button>
-        </p>
-      )}
-      {!payer && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0' }}>
-          <input placeholder={t('who pays for you? their email')} value={email}
-            data-testid="hh-request-email" style={{ flex: 1, minWidth: 220 }}
-            onChange={(e) => setEmail(e.target.value)} />
-          <button className="ghost" data-testid="hh-request" disabled={!email.trim()}
-            onClick={() => act(() => requestHouseholdPayer(email.trim()), t('request sent — pending their consent'))}>
-            {t('Ask them to pay')}
-          </button>
-        </div>
-      )}
-      {dependents.map((d) => (
-        <div key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '8px 0' }}
-          data-testid={`hh-dependent-${d.id}`}>
-          <b>{d.givenName} {d.familyName}</b>
-          {d.status === 'pending' ? (
-            <>
-              <span className="dim">{t('asks you to pay for them')}</span>
-              <button className="ghost" data-testid="hh-accept"
-                onClick={() => act(() => acceptDependent(d.id), t('accepted — their orders can bill to you now'))}>
-                {t('Accept')}
-              </button>
-            </>
-          ) : (
-            <>
-              <select value={pick[d.id] || ''} data-testid="hh-order-select"
-                onChange={(e) => setPick((x) => ({ ...x, [d.id]: e.target.value }))}>
-                <option value="" disabled>{t('order a plan for them…')}</option>
-                {plans.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
-              <button className="ghost" data-testid="hh-order" disabled={!pick[d.id]}
-                onClick={() => act(() => orderForDependent(offerings[pick[d.id]], d.id),
-                  t('ordered — it bills to you, attributed to them'))}>
-                {t('Order')}
-              </button>
-            </>
-          )}
-          <button className="ghost danger" data-testid="hh-stop"
-            onClick={() => act(() => endHouseholdLink(d.id), t('stopped paying'))}>
-            {t('Stop paying')}
-          </button>
-        </div>
-      ))}
-      <details style={{ margin: '10px 0 4px' }}>
-        <summary className="dim" style={{ cursor: 'pointer', fontSize: 13 }}>
-          ➕ {t('Add a family member (creates their own sign-in)')}
-        </summary>
-        <AddFamilyMember onAdded={() => { load(); }} />
-      </details>
-      {!payer && !dependents.length && (
-        <p className="dim" style={{ fontSize: 13 }}>
-          {t('One person, many payers: ask someone to pay for your subscriptions, or accept requests from family here.')}
-        </p>
-      )}
-      {note && <p className="dim" data-testid="hh-note" style={{ fontSize: 12.5 }}>{note}</p>}
-    </section>
-  );
-}
