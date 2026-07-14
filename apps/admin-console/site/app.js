@@ -31,6 +31,7 @@ const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
+const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
@@ -194,6 +195,38 @@ const RESOURCES = [
         controls.messageSubject.set({ messageSubject: copy.subject });
         controls.messageContent.set({ messageContent: copy.content });
       },
+    },
+  },
+  {
+    path: 'article',
+    base: KNOWLEDGE_BASE,
+    title: 'Knowledge',
+    // The library every channel reads: FAQs for customers, cheat-sheets for
+    // CSRs, how-tos for product owners. Content is DATA — publish here and
+    // the shop's Support page, the CSR desk and the ask-AI answer from it
+    // immediately.
+    fields: [
+      { name: 'title', label: 'Title', required: true },
+      { name: 'audience', label: 'Who is this for', kind: 'select', options: [
+        { value: 'customer', label: 'Customers (shop Support page)' },
+        { value: 'csr', label: 'CSRs (agent desk)' },
+        { value: 'sales', label: 'Sales' },
+        { value: 'productOwner', label: 'Product owners (console)' },
+        { value: 'all', label: 'Everyone' },
+      ] },
+      { name: 'category', label: 'Category (e.g. Mobile data, Family, Catalog how-to)' },
+      { name: 'tags', label: 'Search tags (comma-separated)' },
+      { name: 'body', label: 'Article body', kind: 'longtext', required: true },
+      { name: 'status', label: 'Status', kind: 'select', options: [
+        { value: 'published', label: 'Published' },
+        { value: 'draft', label: 'Draft (authors only)' },
+      ] },
+    ],
+    columns: ['title', 'audience', 'category', 'status', 'lastUpdate'],
+    detail: async (item) => {
+      const res = await authFetch(`${KNOWLEDGE_BASE}/article/${item.id}`);
+      const full = await res.json();
+      return [{ audience: full.audience, category: full.category || '—', body: full.body }];
     },
   },
   {
@@ -408,6 +441,7 @@ const TAB_ROLE = {
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
   policyRule: 'policy:read',
+  article: 'knowledge:write',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
   staff: 'roles:admin',

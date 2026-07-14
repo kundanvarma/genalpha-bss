@@ -94,6 +94,7 @@ services:
       QUOTE_URL: http://quote:8080
       PORTING_URL: http://porting:8080
       POLICY_URL: http://policy:8080
+      KNOWLEDGE_URL: http://knowledge:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
@@ -252,6 +253,10 @@ services:
     db: policy
     dbRole: policy_app
     extraEnv: {}
+  knowledge:
+    db: knowledge
+    dbRole: knowledge_app
+    extraEnv: {}
   quote:
     db: quote
     dbRole: quote_app
@@ -277,6 +282,7 @@ services:
       USAGE_BASE_URL: http://usage:8080
       TICKET_BASE_URL: http://trouble-ticket:8080
       ASSURANCE_BASE_URL: http://assurance:8080
+      KNOWLEDGE_BASE_URL: http://knowledge:8080
   user-roles:
     db: ""
     machineIdentity: true

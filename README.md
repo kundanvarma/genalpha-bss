@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **31 composable ODA components**
+A vendor-neutral telecom **Business Support System** built as **32 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **five channels** (four web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -131,6 +131,7 @@ mobile app recomposes around what the customer owns:
 | flow | observability | 8111 | **Live Flow** — consumes every `bss.*.events` topic and streams the choreography to a browser (`/flow`); watch components react in real time |
 | porting | MNP | 8112 | Keep-your-number **and** leave-with-your-number: port-in/out through a country clearinghouse seam (NRDB in Norway, pluggable per country). Port-in activates on the ported number; port-out ceases the service, releases the number, and records a churn outcome |
 | policy | rules | 8113 | **Business rules AND dynamic pricing as data, not code**: eligibility / quantity-cap / incompatibility / verified-identity rules enforced at order time, plus **pricing rules** (percent or amount adjustments, conditioned on segment / cart / verified identity) applied at cart and bill time — author or disable any of them in the console as JSON-logic with **no redeploy** ([how-to guide](docs/product-rules.md)). **Rules are also marketing**: anonymous `price/teaser` (a rule's public face per offering) and `price/indicative` (guest basket pricing over a sanitized, identity-free context) power the storefront's deal merchandising. Pluggable engine seam (JSON-logic today, Drools/CEL swappable); tenant-isolated by RLS; fails open if unreachable |
+| knowledge | knowledge base | 8118 | **Articles and FAQ as data, audience-scoped and searchable** (Postgres full-text, no extra infra): customers get the FAQ shelf on the shop's Support page, CSRs add cheat-sheets plus **✨Ask** — a grounded AI answer with named sources, retrieved with the asker's OWN token so the answer can only draw on what they could read themselves — sales get talking points, and **product owners get the how-to-build-products library** (spec→offering→price, bundles, pricing rules, gifting/rollover levers, copilot usage) right in the console where they build. Authored in the console (drafts stay backstage), tenant-isolated by RLS |
 
 **Production (OSS)** — the layer below the BSS, thin but real
 
@@ -224,7 +225,9 @@ cd ops/e2e && npm i playwright && npx playwright install chromium
 node storefront_test.js && node guest_test.js && node console_test.js \
   && node csr_test.js && node tenant_test.js && node roles_test.js \
   && node app_test.js && node martech_test.js && node policy_test.js \
-  && node pricing_test.js && node bundle_test.js && node demo_test.js
+  && node pricing_test.js && node bundle_test.js && node demo_test.js \
+  && node family_test.js && node family_phase2_test.js && node family_config_test.js \
+  && node knowledge_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,

@@ -5,6 +5,7 @@ import { ensureSignedIn, signOut, tokenClaims, hasRole } from './auth.js';
 import Customers from './pages/Customers.jsx';
 import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
+import Knowledge from './pages/Knowledge.jsx';
 import Stock from './pages/Stock.jsx';
 
 export default function App() {
@@ -46,6 +47,7 @@ export default function App() {
         <nav className="nav">
           <NavLink to="/" end>Customers</NavLink>
           <NavLink to="/tickets">Tickets</NavLink>
+          <NavLink to="/knowledge">Knowledge</NavLink>
           {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
         </nav>
         <div className="who">
@@ -65,6 +67,7 @@ export default function App() {
           <Route path="/" element={<Customers />} />
           <Route path="/customer/:id" element={<Customer360 />} />
           <Route path="/tickets" element={<Tickets />} />
+          <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/stock" element={<Stock />} />
         </Routes>
       </main>

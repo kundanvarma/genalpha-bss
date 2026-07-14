@@ -88,6 +88,10 @@ spring:
           uri: ${POLICY_URL:http://localhost:8113}
           predicates:
             - Path=/tmf-api/policyManagement/**
+        - id: knowledge
+          uri: ${KNOWLEDGE_URL:http://localhost:8118}
+          predicates:
+            - Path=/tmf-api/knowledgeManagement/**
         - id: flow
           uri: ${FLOW_URL:http://localhost:8111}
           predicates:

@@ -396,6 +396,11 @@ export async function familyApprovals() {
   return json(await authFetch(`${ORDERING}/productOrder/familyApprovals`));
 }
 
+/** The FAQ library — the customer shelf of the knowledge base. */
+export async function searchFaq(q) {
+  return json(await authFetch(`/tmf-api/knowledgeManagement/v4/article${q ? `?q=${encodeURIComponent(q)}` : ''}`));
+}
+
 export async function decideApproval(orderId, approve) {
   return json(await authFetch(`${ORDERING}/productOrder/${orderId}/approval`, {
     method: 'POST',
