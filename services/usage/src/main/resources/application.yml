@@ -52,6 +52,10 @@ bss:
     ocs-base-url: ${OCS_BASE_URL:}
     # The gift boundary — household links are verified here live.
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
+    # Product levers (giftable/giftScope/rollover*) live on the plan's spec.
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
+    # Operator vetoes: gifting rules authored as data (domain 'gifting').
+    policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

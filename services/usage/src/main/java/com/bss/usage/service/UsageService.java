@@ -51,6 +51,8 @@ public class UsageService {
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
     private final com.bss.usage.client.PartyClient partyClient;
+    private final com.bss.usage.client.CatalogClient catalogClient;
+    private final com.bss.usage.client.PolicyClient policyClient;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -58,7 +60,9 @@ public class UsageService {
             com.bss.usage.repository.AllowanceBoostRepository boosts,
             DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper,
-            com.bss.usage.client.PartyClient partyClient) {
+            com.bss.usage.client.PartyClient partyClient,
+            com.bss.usage.client.CatalogClient catalogClient,
+            com.bss.usage.client.PolicyClient policyClient) {
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -69,6 +73,8 @@ public class UsageService {
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
         this.partyClient = partyClient;
+        this.catalogClient = catalogClient;
+        this.policyClient = policyClient;
     }
 
     /** Mediation seam: one usage record in, verbatim semantics, no rating yet. */
@@ -490,7 +496,8 @@ public class UsageService {
     // ---------------- gifting & rollover (the gifting move, family-wide) ----------------
 
     /** A party's GB position this month, per usage spec: base, boosted, used. */
-    private record GbPosition(String spec, BigDecimal base, BigDecimal allowed, BigDecimal used) {
+    private record GbPosition(String spec, String offeringId,
+            BigDecimal base, BigDecimal allowed, BigDecimal used) {
         BigDecimal remaining() {
             return allowed.subtract(used).max(BigDecimal.ZERO);
         }
@@ -501,6 +508,7 @@ public class UsageService {
         Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, party, periodStart);
         Map<String, BigDecimal> usedBySpec = new LinkedHashMap<>();
         Map<String, BigDecimal> baseBySpec = new LinkedHashMap<>();
+        Map<String, String> offeringBySpec = new LinkedHashMap<>();
         for (UsageRecord r : records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
                 tenantId, party, from, OffsetDateTime.now())) {
             if (!"GB".equalsIgnoreCase(String.valueOf(r.getUnits()))) {
@@ -512,14 +520,18 @@ public class UsageService {
                                 tenantId, r.getProductOfferingId(), r.getUsageSpecName()).stream()
                         .filter(rule -> !rule.isBoost())
                         .findFirst()
-                        .ifPresent(rule -> baseBySpec.put(r.getUsageSpecName(), rule.getAllowanceValue()));
+                        .ifPresent(rule -> {
+                            baseBySpec.put(r.getUsageSpecName(), rule.getAllowanceValue());
+                            offeringBySpec.put(r.getUsageSpecName(), r.getProductOfferingId());
+                        });
             }
         }
         List<GbPosition> positions = new ArrayList<>();
         for (Map.Entry<String, BigDecimal> e : usedBySpec.entrySet()) {
             BigDecimal base = baseBySpec.getOrDefault(e.getKey(), BigDecimal.ZERO);
             BigDecimal allowed = base.add(boostBySpec.getOrDefault(e.getKey(), BigDecimal.ZERO));
-            positions.add(new GbPosition(e.getKey(), base, allowed, e.getValue()));
+            positions.add(new GbPosition(e.getKey(), offeringBySpec.get(e.getKey()),
+                    base, allowed, e.getValue()));
         }
         return positions;
     }
@@ -549,17 +561,27 @@ public class UsageService {
         Map<String, Object> giverLink = linkOf(giver);
         Map<String, Object> receiverLink = linkOf(receiver);
         if (giverLink != null && "child".equals(giverLink.get("role"))) {
+            // the one guardrail that stays CODE: a child's data is family money
             throw new BadRequestException(
                     "a child's data is family-funded — ask your family admin instead");
-        }
-        if (!sameHousehold(giverId, giverLink, receiverId, receiverLink)) {
-            throw new BadRequestException("no household link to that person");
         }
         String tenantId = tenantScope.currentTenantId();
         LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
         GbPosition position = gbPositions(tenantId, giverId, periodStart).stream()
                 .max(java.util.Comparator.comparing(GbPosition::base))
                 .orElseThrow(() -> new BadRequestException("no data allowance to gift from"));
+        // PRODUCT LEVERS (the network-wide framing: gifting is configured on the plan):
+        // the offering's spec characteristics decide whether this plan gifts,
+        // how far the gift reaches, and how much may leave per cycle.
+        Map<String, String> levers = catalogClient.specCharacteristicsOf(position.offeringId());
+        if ("false".equalsIgnoreCase(levers.get("giftable"))) {
+            throw new BadRequestException("this plan does not include data gifting");
+        }
+        boolean tenantWide = "tenant".equalsIgnoreCase(levers.get("giftScope"));
+        boolean household = sameHousehold(giverId, giverLink, receiverId, receiverLink);
+        if (!tenantWide && !household) {
+            throw new BadRequestException("no household link to that person");
+        }
         if (position.remaining().compareTo(amount) < 0) {
             throw new BadRequestException("only " + position.remaining().stripTrailingZeros().toPlainString()
                     + " GB left this month — not enough to gift " + amount.stripTrailingZeros().toPlainString() + " GB");
@@ -569,12 +591,23 @@ public class UsageService {
                 .filter(b -> b.getSource() != null && b.getSource().startsWith("gift:to:"))
                 .map(b -> b.getBoostValue().negate())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal cap = position.base().divide(BigDecimal.valueOf(2));
+        BigDecimal share = leverDecimal(levers, "giftSharePerCycle", new BigDecimal("0.5"));
+        BigDecimal cap = position.base().multiply(share);
         if (giftedAlready.add(amount).compareTo(cap) > 0) {
-            throw new BadRequestException("gifts are capped at half your plan ("
-                    + cap.stripTrailingZeros().toPlainString() + " GB) per month — you have gifted "
+            throw new BadRequestException("gifts are capped at "
+                    + cap.stripTrailingZeros().toPlainString() + " GB per month on your plan — you have gifted "
                     + giftedAlready.stripTrailingZeros().toPlainString() + " GB already");
         }
+        // OPERATOR VETO: gifting rules authored as data (policy, domain
+        // 'gifting') get the last word — e.g. "personal subscriptions only".
+        policyClient.giftingDeny(Map.of(
+                "giverId", giverId, "receiverId", receiverId,
+                "amount", amount, "relationship", household ? "household" : "tenant",
+                "usageType", position.spec(),
+                "planOfferingId", position.offeringId() == null ? "" : position.offeringId()))
+                .ifPresent(message -> {
+                    throw new BadRequestException(message);
+                });
         String giverName = nameOf(giver);
         String receiverName = nameOf(receiver);
         String giftId = UUID.randomUUID().toString();
@@ -611,7 +644,14 @@ public class UsageService {
         int rolled = 0;
         for (String party : parties) {
             for (GbPosition position : gbPositions(tenantId, party, periodStart)) {
-                BigDecimal roll = position.remaining().min(position.base());
+                // rollover is a PRODUCT lever: the plan says whether it rolls
+                // and how much; the coded default is one month's allowance
+                Map<String, String> levers = catalogClient.specCharacteristicsOf(position.offeringId());
+                if ("false".equalsIgnoreCase(levers.get("rolloverEligible"))) {
+                    continue;
+                }
+                BigDecimal rollCap = leverDecimal(levers, "rolloverCapGB", position.base());
+                BigDecimal roll = position.remaining().min(rollCap);
                 String marker = "rollover-" + nextPeriod + "-" + party + "-" + position.spec();
                 if (roll.signum() <= 0
                         || boosts.existsByTenantIdAndProductOrderIdAndUsageSpecName(
@@ -628,6 +668,14 @@ public class UsageService {
             }
         }
         return Map.of("period", periodStart.toString(), "rolledBuckets", rolled);
+    }
+
+    private static BigDecimal leverDecimal(Map<String, String> levers, String name, BigDecimal fallback) {
+        try {
+            return levers.containsKey(name) ? new BigDecimal(levers.get(name)) : fallback;
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private com.bss.usage.entity.AllowanceBoost giftBoost(String tenantId, String owner,
