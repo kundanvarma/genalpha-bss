@@ -2,8 +2,8 @@
  * consolidation, built on the same payer stamp.
  *
  *  - consent is a two-step: Sonny REQUESTS Paula as his payer (by email,
- *    pending); only Paula can ACCEPT — from her My page
- *  - Paula orders a plan FOR Sonny from her My page: ordering verifies the
+ *    pending); only Paula can ACCEPT — from her FAMILY hub
+ *  - Paula orders a plan FOR Sonny from the Family hub: ordering verifies the
  *    live link and stamps payer=Paula (an Individual, not an Organization)
  *  - the billing run puts Sonny's plan on PAULA's bill, attributed to him,
  *    merged with her own products — ONE family bill, no org semantics
@@ -56,7 +56,7 @@ async function token(request, client, user, pass) {
   await sonnyPage.fill('input[name="password"]', sonny.password);
   await sonnyPage.click('input[type="submit"], button[type="submit"]');
   await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
-  await sonnyPage.locator('.nav >> text=My page').click();
+  await sonnyPage.locator('.nav >> text=Family').click();
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
   await sonnyPage.fill('[data-testid=hh-request-email]', paula.email);
   await sonnyPage.click('[data-testid=hh-request]');
@@ -83,16 +83,16 @@ async function token(request, client, user, pass) {
   await paulaPage.fill('input[name="password"]', paula.password);
   await paulaPage.click('input[type="submit"], button[type="submit"]');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
-  await paulaPage.locator('.nav >> text=My page').click();
+  await paulaPage.locator('.nav >> text=Family').click();
   await paulaPage.locator('[data-testid=hh-accept]').waitFor({ timeout: 15000 });
   await paulaPage.click('[data-testid=hh-accept]');
   await paulaPage.locator('[data-testid=hh-order-select]').waitFor({ timeout: 15000 });
-  console.log('OK Paula accepted on her My page — the household is ACTIVE');
+  console.log('OK Paula accepted on her Family hub — the household is ACTIVE');
 
-  /* ---------- Paula orders Sonny's plan from her My page ---------- */
+  /* ---------- Paula orders Sonny's plan from the Family hub ---------- */
   await paulaPage.selectOption('[data-testid=hh-order-select]', { label: 'GenAlpha Mobile 10 GB' });
   await paulaPage.click('[data-testid=hh-order]');
-  await paulaPage.locator('[data-testid=hh-note]', { hasText: 'bills to you' }).waitFor({ timeout: 20000 });
+  await paulaPage.locator('[data-testid=hh-note]', { hasText: 'bills to the family payer' }).waitFor({ timeout: 20000 });
   let product = null;
   for (let i = 0; i < 25 && !product; i++) {
     await new Promise((r) => setTimeout(r, 2500));
@@ -171,22 +171,36 @@ async function token(request, client, user, pass) {
   await paulaPage.goto('http://localhost:8080/shop/');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
   await paulaPage.click('.nav >> text=My page');
-  await paulaPage.locator('[data-testid=family-paid-card]').waitFor({ timeout: 20000 });
+  // the card names the dependent once the household fetch lands
+  await paulaPage.locator('[data-testid=family-paid-card]', { hasText: 'Sonny' })
+    .waitFor({ timeout: 20000 });
   const famCard = await paulaPage.locator('[data-testid=family-paid-card]').textContent();
-  if (!famCard.includes('Sonny') || !famCard.includes('billed to you')) {
-    fail('Paula\'s family section wrong: ' + famCard.slice(0, 160));
+  if (!famCard.includes('You pay for')) {
+    fail('Paula\'s family summary wrong: ' + famCard.slice(0, 160));
   }
-  // the real link opens a new tab; the tab re-authenticates silently (its
-  // own sessionStorage) — the test verifies the same route in-tab
-  const famHref = await paulaPage.locator('[data-testid=family-open]').first().getAttribute('href');
-  await paulaPage.goto('http://localhost:8080' + famHref);
-  await paulaPage.locator('[data-testid=family-member-page]').waitFor({ timeout: 20000 });
-  const famPage = await paulaPage.locator('[data-testid=family-member-page]').textContent();
+  // My page links into the hub; the hub card carries the member's services
+  await paulaPage.click('[data-testid=family-hub-link]');
+  // anchor on the funded-service ROW — the order dropdown also names plans
+  await paulaPage.locator(`[data-testid=fam-member-${sonny.id}] .row`, { hasText: '10 GB' })
+    .waitFor({ timeout: 20000 });
+  const memberCard = await paulaPage.locator(`[data-testid=fam-member-${sonny.id}]`).textContent();
+  if (!memberCard.includes('Sonny') || !memberCard.includes('billed to the family payer')) {
+    fail('Sonny\'s hub card wrong: ' + memberCard.slice(0, 200));
+  }
+  // "Open their page" — the real link opens a NEW TAB whose silent re-auth
+  // must SURVIVE the deep link (the login bounce once dropped it)
+  const [famTab] = await Promise.all([
+    paulaPage.context().waitForEvent('page'),
+    paulaPage.locator('[data-testid=family-open]').first().click(),
+  ]);
+  await famTab.locator('[data-testid=family-member-page]').waitFor({ timeout: 30000 });
+  const famPage = await famTab.locator('[data-testid=family-member-page]').textContent();
   if (!famPage.includes('Sonny') || !famPage.includes('10 GB')) {
     fail('family view page wrong: ' + famPage.slice(0, 160));
   }
-  console.log('OK whose-is-whose: Sonny sees "paid by your household payer", Paula gets a'
-    + ' family section and opens Sonny\'s page in its own tab');
+  await famTab.close();
+  console.log('OK whose-is-whose: Sonny sees "paid by your household payer", Paula\'s hub'
+    + ' shows his funded services and opens his page in its own tab — deep link intact');
 
   /* ---------- boundary: a stranger "ordering for Sonny" orders for themself ---------- */
   const kai = await token(ctx.request, 'bss-biz', 'kai@bss.local', 'kai');
@@ -208,7 +222,7 @@ async function token(request, client, user, pass) {
   /* ---------- either side can leave ---------- */
   await sonnyPage.goto('http://localhost:8080/shop/');
   await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
-  await sonnyPage.click('.nav >> text=My page');
+  await sonnyPage.click('.nav >> text=Family');
   await sonnyPage.locator('[data-testid=hh-leave]').waitFor({ timeout: 20000 });
   await sonnyPage.click('[data-testid=hh-leave]');
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
@@ -217,7 +231,7 @@ async function token(request, client, user, pass) {
   /* ---------- v2: Paula CREATES a child account; the kid gets the APP ---------- */
   await paulaPage.goto('http://localhost:8080/shop/');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
-  await paulaPage.click('.nav >> text=My page');
+  await paulaPage.click('.nav >> text=Family');
   await paulaPage.locator('summary', { hasText: 'Add a family member' }).click();
   await paulaPage.fill('[data-testid=hh-add-given]', 'Kidd');
   await paulaPage.fill('[data-testid=hh-add-family]', `Kid${run}`);
@@ -235,7 +249,7 @@ async function token(request, client, user, pass) {
   await paulaPage.locator('[data-testid=hh-order-select]').last()
     .selectOption({ label: 'GenAlpha Mobile 10 GB' });
   await paulaPage.locator('[data-testid=hh-order]').last().click();
-  await paulaPage.locator('[data-testid=hh-note]', { hasText: 'bills to you' }).waitFor({ timeout: 20000 });
+  await paulaPage.locator('[data-testid=hh-note]', { hasText: 'bills to the family payer' }).waitFor({ timeout: 20000 });
 
   // ...and the kid signs into the MOBILE APP: their own My page, honestly
   // labelled with who pays

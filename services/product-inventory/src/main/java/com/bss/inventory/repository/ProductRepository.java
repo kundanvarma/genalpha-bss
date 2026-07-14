@@ -26,4 +26,19 @@ public interface ProductRepository extends JpaRepository<Product, String> {
         @org.springframework.data.repository.query.Param("tenantId") String tenantId,
         @org.springframework.data.repository.query.Param("partyId") String partyId,
         org.springframework.data.domain.Pageable pageable);
+
+    /** A member's HOUSEHOLD-FUNDED products only: owned by them, stamped with
+     * the family payer. What they bought with their own money stays theirs. */
+    @org.springframework.data.jpa.repository.Query(
+        "select p from Product p where p.tenantId = :tenantId and p.ownerPartyId = :ownerId"
+        + " and p.relatedPartyJson like concat('%', :payerId, '%')"
+        + " and p.relatedPartyJson like '%\"payer\"%'")
+    org.springframework.data.domain.Page<Product> findFundedFor(
+        @org.springframework.data.repository.query.Param("tenantId") String tenantId,
+        @org.springframework.data.repository.query.Param("ownerId") String ownerId,
+        @org.springframework.data.repository.query.Param("payerId") String payerId,
+        org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<Product> findByTenantIdAndOwnerPartyId(
+        String tenantId, String ownerPartyId, org.springframework.data.domain.Pageable pageable);
 }

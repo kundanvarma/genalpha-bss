@@ -41,6 +41,11 @@ public class Individual {
     @jakarta.persistence.Column(name = "household_status", length = 16)
     private String householdStatus;
 
+    /** member | admin | child — the dependent's role in the household. The
+     * payer needs no row: owning the link IS the owner role. */
+    @jakarta.persistence.Column(name = "household_role", length = 16)
+    private String householdRole;
+
     public Individual() {
     }
 
@@ -98,4 +103,6 @@ public class Individual {
     public void setHouseholdPayerId(String v) { this.householdPayerId = v; }
     public String getHouseholdStatus() { return householdStatus; }
     public void setHouseholdStatus(String v) { this.householdStatus = v; }
+    public String getHouseholdRole() { return householdRole; }
+    public void setHouseholdRole(String v) { this.householdRole = v; }
 }

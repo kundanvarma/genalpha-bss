@@ -31,14 +31,17 @@ public class ProductService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
+    private final com.bss.inventory.client.PartyClient partyClient;
 
     public ProductService(ProductRepository repository, ProductMapper mapper,
-            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope) {
+            DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
+            com.bss.inventory.client.PartyClient partyClient) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
+        this.partyClient = partyClient;
     }
 
     @Transactional(readOnly = true)
@@ -53,11 +56,50 @@ public class ProductService {
             return new PagedResult<>(visible.getContent().stream().map(mapper::toDto).toList(),
                     visible.getTotalElements());
         }
+        // A scoped customer asking for ANOTHER party's products is the family
+        // hub: allowed only across a live household link, verified at the
+        // party source — and even then it shows what the family FUNDS, unless
+        // the member is a child account (a child's line is fully visible).
+        if (scoped.isPresent() && filters.size() == 1
+                && filters.containsKey("relatedPartyId")
+                && !scoped.get().equals(filters.get("relatedPartyId"))) {
+            return familyView(scoped.get(), filters.get("relatedPartyId"), offset, limit);
+        }
         Product probe = probeFor(filters);
         probe.setTenantId(tenantScope.currentTenantId());
         // Customers see their own products only, whatever else they filter on.
         scoped.ifPresent(probe::setOwnerPartyId);
         Page<Product> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
+        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
+    }
+
+    /**
+     * The guardian's window: the caller must be the member's ACTIVE household
+     * payer, or an ACTIVE ADMIN of the same household. Everything is checked
+     * live against the party source; anything short of a live link is a 404 —
+     * foreign ids never learn they exist. Adult members show only what the
+     * family pays for; child accounts show their whole line.
+     */
+    private PagedResult<ProductDto> familyView(String callerId, String memberId, int offset, int limit) {
+        Map<String, Object> memberLink = partyClient.householdLinkOf(memberId).orElse(null);
+        if (memberLink == null || !"active".equals(memberLink.get("status"))) {
+            throw NotFoundException.forResource(RESOURCE, memberId);
+        }
+        String payerId = String.valueOf(memberLink.get("id"));
+        boolean callerIsPayer = callerId.equals(payerId);
+        boolean callerIsAdmin = !callerIsPayer && partyClient.householdLinkOf(callerId)
+                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> "active".equals(l.get("status")))
+                .filter(l -> "admin".equals(l.get("role")))
+                .isPresent();
+        if (!callerIsPayer && !callerIsAdmin) {
+            throw NotFoundException.forResource(RESOURCE, memberId);
+        }
+        Page<Product> page = "child".equals(memberLink.get("role"))
+                ? repository.findByTenantIdAndOwnerPartyId(
+                        tenantScope.currentTenantId(), memberId, new OffsetPageRequest(offset, limit))
+                : repository.findFundedFor(
+                        tenantScope.currentTenantId(), memberId, payerId, new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }
 

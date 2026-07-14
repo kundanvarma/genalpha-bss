@@ -37,6 +37,7 @@ public class IndividualMapper {
             java.util.Map<String, Object> payer = new java.util.LinkedHashMap<>();
             payer.put("id", entity.getHouseholdPayerId());
             payer.put("status", entity.getHouseholdStatus());
+            payer.put("role", entity.getHouseholdRole());
             dto.setHouseholdPayer(payer);
         }
         return dto;

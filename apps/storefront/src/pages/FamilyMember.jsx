@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { myHousehold, myProducts } from '../api.js';
+import { memberProducts, myHousehold } from '../api.js';
 import { t } from '../i18n.js';
 
 /**
- * The guardian's window onto a dependent: everything the payer PAYS FOR on
- * that person's life, opened from My page in its own tab. Built strictly
- * from payer-legitimate data — the products carrying the payer's own stamp
- * and the names the consented household link discloses. Usage meters, SIM
- * and full self-care live on the dependent's OWN sign-in: paying for
- * someone is not surveillance of them.
+ * The guardian's window onto a dependent: everything the FAMILY PAYS FOR on
+ * that person's life, opened from the Family hub in its own tab. Works for
+ * the payer and for family admins alike — inventory verifies the household
+ * link live at the party source. Usage meters, SIM and full self-care live
+ * on the dependent's OWN sign-in: paying for someone is not surveillance.
  */
 export default function FamilyMember() {
   const { id } = useParams();
@@ -20,14 +19,14 @@ export default function FamilyMember() {
   useEffect(() => {
     myHousehold()
       .then((hh) => {
-        const found = (hh.dependents || []).find((d) => d.id === id);
+        // my dependents as the payer, or the whole family as an admin
+        const found = [...(hh.dependents || []), ...(hh.family || [])].find((d) => d.id === id);
         if (!found) throw new Error(t('not one of your household dependents'));
         setDep(found);
       })
       .catch((e) => setError(e.message));
-    myProducts()
-      .then((all) => setPaid(all.filter((p) =>
-        (p.relatedParty || []).find((x) => x.role === 'customer')?.id === id)))
+    memberProducts(id)
+      .then(setPaid)
       .catch((e) => setError(e.message));
   }, [id]);
 
@@ -44,7 +43,7 @@ export default function FamilyMember() {
           <span className={`state ${p.status}`}>{p.status}</span>
         </div>
       ))}
-      {!paid.length && <p className="dim">{t('Nothing yet — order for them from your My page.')}</p>}
+      {!paid.length && <p className="dim">{t('Nothing yet — order for them from your Family page.')}</p>}
       <p className="dim" style={{ fontSize: 13, marginTop: 16 }}>
         {t('Usage, SIM care and everything else live on their own sign-in — paying for someone is not watching them.')}
       </p>

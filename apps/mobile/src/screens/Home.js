@@ -9,7 +9,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { TextInput } from 'react-native';
 import { changePlan, listOfferings, myBills, myParty, myProducts, myRecommendations,
   myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin,
-  myHousehold, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember } from '../api.js';
+  myHousehold, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember,
+  memberProducts } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { money } from '../config.js';
 import { Button, Card, Dim, Meter, Row, palette } from '../ui.js';
@@ -207,9 +208,9 @@ export default function Home({ navigation }) {
         </Card>
       )}
 
-      {(household?.payer || (household?.dependents || []).length > 0) && (
+      {(household?.payer || (household?.dependents || []).length > 0
+          || (household?.family || []).length > 0) && (
         <FamilyCard household={household} offerings={offerings} prices={prices}
-          products={products}
           onChanged={() => { myHousehold().then(setHousehold); setTimeout(load, 3000); }} />
       )}
 
@@ -228,12 +229,19 @@ export default function Home({ navigation }) {
 /** One person, many payers — the pocket edition. A dependent sees who pays
  * for them (and can leave); a payer sees their people, accepts requests,
  * orders a plan straight onto a kid's line, or mints a child account whose
- * credentials show once for hand-over to the kid's phone. */
-function FamilyCard({ household, offerings, prices, products = [], onChanged }) {
+ * credentials show once for hand-over to the kid's phone. A FAMILY ADMIN
+ * (promoted by the payer) sees the whole family too — orders bill to the
+ * family payer, never to the admin. */
+function FamilyCard({ household, offerings, prices, onChanged }) {
   const c = palette();
-  const [pick, setPick] = useState({});
   const [made, setMade] = useState(null);
   const [note, setNote] = useState(null);
+  const me = tokenClaims().sub;
+  const isOwner = (household.dependents || []).length > 0;
+  // my own dependents as the payer; the payer's family when I am its admin
+  const members = isOwner ? household.dependents
+    : (household.family || []).filter((d) => d.id !== me);
+  const roleName = (r) => (r === 'admin' ? 'family admin' : r === 'child' ? 'child' : 'member');
   const plans = offerings.filter((o) =>
     ((o.category || [])[0] || {}).name === 'Mobile plans' && !o.isBundle);
   const act = (p, ok) => p.then(() => { setNote(ok); onChanged(); }).catch((e) => setNote(e.message));
@@ -243,36 +251,46 @@ function FamilyCard({ household, offerings, prices, products = [], onChanged }) 
       {household.payer && (
         <Row left={<Dim>{household.payer.status === 'active'
             ? `paid for by ${household.payer.name || household.payer.id}`
+              + (household.myRole === 'admin' ? ' · you are a family admin' : '')
             : `waiting for ${household.payer.name || 'them'} to accept`}</Dim>}
           right={<Button ghost label="Leave" testID="app-hh-leave"
             onPress={() => act(endHouseholdLink(tokenClaims().sub), 'left the household')} />} />
       )}
-      {(household.dependents || []).map((d) => (
+      {members.map((d) => (
         <View key={d.id} testID={'app-hh-dep-' + d.id}>
-          <Row left={<Text style={{ color: c.ink, fontWeight: '600' }}>{d.givenName} {d.familyName}</Text>}
+          <Row left={<Text style={{ color: c.ink, fontWeight: '600' }}>
+              {d.givenName} {d.familyName} <Dim>· {roleName(d.role)}</Dim></Text>}
             right={d.status === 'pending'
-              ? <Button ghost label="Accept" testID="app-hh-accept"
-                  onPress={() => act(acceptDependent(d.id), 'accepted')} />
-              : <Button ghost label="Stop paying" testID="app-hh-stop"
-                  onPress={() => act(endHouseholdLink(d.id), 'stopped paying')} />} />
-          {products.filter((p) => (p.relatedParty || [])
-              .find((x) => x.role === 'customer')?.id === d.id).map((p) => (
-            <Row key={p.id} left={<Dim>{p.name} · {p.status}</Dim>}
-              right={<Dim>billed to you</Dim>} />
-          ))}
+              ? (isOwner ? <Button ghost label="Accept" testID="app-hh-accept"
+                  onPress={() => act(acceptDependent(d.id), 'accepted')} /> : <Dim>pending</Dim>)
+              : (isOwner ? <Button ghost label="Stop paying" testID="app-hh-stop"
+                  onPress={() => act(endHouseholdLink(d.id), 'stopped paying')} /> : null)} />
+          {d.status === 'active' && <MemberLines memberId={d.id} isOwner={isOwner} />}
           {d.status === 'active' && plans.slice(0, 2).map((o) => (
             <Row key={o.id} left={<Dim>order {o.name} for them</Dim>}
               right={<Button ghost label="Order" testID="app-hh-order"
-                onPress={() => act(orderForDependent(o, d.id), 'ordered — bills to you')} />} />
+                onPress={() => act(orderForDependent(o, d.id),
+                  isOwner ? 'ordered — bills to you' : 'ordered — bills to the family payer')} />} />
           ))}
         </View>
       ))}
-      {made
+      {!household.payer && (made
         ? <Dim testID="app-hh-credentials">✓ created — they sign in with {made.email} / {made.temporaryPassword} (shown once)</Dim>
-        : <AddFamily onMade={(m) => { setMade(m); onChanged(); }} />}
+        : <AddFamily onMade={(m) => { setMade(m); onChanged(); }} />)}
       {note && <Dim testID="app-hh-note">{note}</Dim>}
     </Card>
   );
+}
+
+/** What the family pays for on this member's line — fetched through the
+ * household link (inventory verifies it live at the party source). */
+function MemberLines({ memberId, isOwner }) {
+  const [lines, setLines] = useState([]);
+  useFocusEffect(useCallback(() => { memberProducts(memberId).then(setLines); }, [memberId]));
+  return lines.map((p) => (
+    <Row key={p.id} left={<Dim>{p.name} · {p.status}</Dim>}
+      right={<Dim>{isOwner ? 'billed to you' : 'billed to the family payer'}</Dim>} />
+  ));
 }
 
 function AddFamily({ onMade }) {
