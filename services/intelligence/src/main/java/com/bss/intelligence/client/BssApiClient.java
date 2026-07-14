@@ -70,11 +70,21 @@ public class BssApiClient {
         return parse(body);
     }
 
+    /** ALL active agreements, paginated — a sweep that only reads page one
+     * goes blind the day the table outgrows it (it did). */
     public List<Map<String, Object>> activeAgreements() {
-        String body = agreementClient.get()
-                .uri("/tmf-api/agreementManagement/v4/agreement?status=active&limit=100")
-                .retrieve().body(String.class);
-        return parse(body);
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 5000; offset += 100) {
+            String body = agreementClient.get()
+                    .uri("/tmf-api/agreementManagement/v4/agreement?status=active&limit=100&offset=" + offset)
+                    .retrieve().body(String.class);
+            List<Map<String, Object>> page = parse(body);
+            all.addAll(page);
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
     }
 
     @SuppressWarnings("unchecked")

@@ -199,6 +199,32 @@ public class InsightService {
         return Map.of("partyId", partyId, "interests", interests);
     }
 
+    /**
+     * SEGMENT MEMBERS, for segment-triggered campaigns: the KNOWN customers
+     * whose consented profile carries the name — as a browsed interest
+     * (first-party) or as an audience their analytics platform computed.
+     * Only stitched, personalization-consented profiles qualify: a campaign
+     * can never reach someone the consent spine does not cover.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> segmentMembers(String segment) {
+        String tenantId = tenantScope.currentTenantId();
+        java.util.Set<String> parties = new java.util.LinkedHashSet<>();
+        for (VisitorProfile p : profiles.findByTenantIdAndPartyIdIsNotNull(tenantId)) {
+            if (!p.isPersonalizationConsent() || parties.contains(p.getPartyId())) {
+                continue;
+            }
+            boolean interested = events.interestsOf(tenantId, p.getVisitorId()).stream()
+                    .anyMatch(row -> segment.equals(String.valueOf(row[0])));
+            boolean inAudience = !interested
+                    && analytics.audiencesOf(tenantId, p.getVisitorId()).contains(segment);
+            if (interested || inAudience) {
+                parties.add(p.getPartyId());
+            }
+        }
+        return parties.stream().map(id -> Map.<String, Object>of("partyId", id)).toList();
+    }
+
     /** The back-office ledger: recent profiles, consent state first — the
      * operator can SEE what the platform holds and under which consent. */
     @Transactional(readOnly = true)

@@ -33,6 +33,10 @@ public class Campaign {
     @Column(name = "trigger_event_type", nullable = false, length = 128)
     private String triggerEventType;
 
+    /** Insight segment (interest or analytics audience) for blast campaigns. */
+    @Column(name = "segment_name", length = 128)
+    private String segmentName;
+
     @Column(name = "trigger_state", length = 64)
     private String triggerState;
 
@@ -61,6 +65,8 @@ public class Campaign {
     public void setName(String name) { this.name = name; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getSegmentName() { return segmentName; }
+    public void setSegmentName(String v) { this.segmentName = v; }
     public String getTriggerEventType() { return triggerEventType; }
     public void setTriggerEventType(String triggerEventType) { this.triggerEventType = triggerEventType; }
     public String getTriggerState() { return triggerState; }

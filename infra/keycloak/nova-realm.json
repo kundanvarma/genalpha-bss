@@ -828,7 +828,8 @@
       "serviceAccountClientId": "bss-campaign",
       "realmRoles": [
         "communication:write",
-        "communication:read"
+        "communication:read",
+        "insight:read"
       ]
     },
     {
@@ -1020,6 +1021,42 @@
       "serviceAccountClientId": "bss-insight",
       "realmRoles": [
         "policy:evaluate"
+      ]
+    },
+    {
+      "id": "6a4b7392-9a2a-4103-a5da-2f0f9549c6cc",
+      "username": "nils@nova.example",
+      "email": "nils@nova.example",
+      "firstName": "Nils",
+      "lastName": "Norsk",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nils"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
+    },
+    {
+      "id": "e9226b68-7cb2-4a1a-af00-39ac33c4ef7a",
+      "username": "norah@nova.example",
+      "email": "norah@nova.example",
+      "firstName": "Norah",
+      "lastName": "Nord",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "norah"
+        }
+      ],
+      "realmRoles": [
+        "customer"
       ]
     }
   ],

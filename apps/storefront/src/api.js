@@ -610,11 +610,18 @@ export function consentChoice() {
 
 export async function saveConsent(analytics, personalization) {
   localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics, personalization }));
-  await publicFetch(`${INSIGHT}/consent`, {
+  // the choice MUST land server-side (it gates every write there) — retry
+  // through a cold start rather than silently losing it
+  const send = () => publicFetch(`${INSIGHT}/consent`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ visitorId: visitorId(), analytics, personalization }),
-  }).catch(() => {});
+  }).then((r) => { if (!r.ok) throw new Error(String(r.status)); });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try { await send(); return; } catch {
+      await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+    }
+  }
 }
 
 /** Fire-and-forget breadcrumb — the server drops it without consent anyway;

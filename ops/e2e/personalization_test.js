@@ -222,6 +222,32 @@ async function token(request, realm, client, user, pass) {
   console.log('OK NEXT BEST OFFER: "' + nbo.offer.name + '" — reason: "' + nbo.reason
     + '" — TMF680 candidates, the model only supplied the WHY');
 
+  /* ---------- P4: a SEGMENT-TRIGGERED campaign, consent-bounded ---------- */
+  const CAMPAIGN = `${API}/tmf-api/campaignManagement/v4/campaign`;
+  const campaign = await (await ctx.request.post(CAMPAIGN, { headers: H(staff), data: {
+    name: `Device browsers blast ${run}`, segmentName: 'Devices',
+    message: { subject: `A phone deal for you ${run}`,
+      content: 'You have an eye for phones — here is something worth a look.' } } })).json();
+  const blast1 = await (await ctx.request.post(`${CAMPAIGN}/${campaign.id}/execute`,
+    { headers: H(staff), data: {} })).json();
+  if (!blast1.reached || blast1.reached < 1) {
+    fail('the segment blast reached nobody: ' + JSON.stringify(blast1));
+  }
+  let inboxHit = false;
+  for (let i = 0; i < 15 && !inboxHit; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    inboxHit = (await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=100`,
+      { headers: H(persoTok) })).json()).some((m) => m.subject === `A phone deal for you ${run}`);
+  }
+  if (!inboxHit) fail('the stitched device-browser never got the blast message');
+  const blast2 = await (await ctx.request.post(`${CAMPAIGN}/${campaign.id}/execute`,
+    { headers: H(staff), data: {} })).json();
+  if (blast2.reached !== 0) fail('re-executing the blast double-sent: ' + JSON.stringify(blast2));
+  console.log('OK SEGMENT BLAST: the campaign named an insight segment (\'Devices\'), reached'
+    + ' ' + blast1.reached + ' consented, stitched customer(s) once — re-running reached 0:'
+    + ' idempotent, and anonymous or non-consenting visitors are unreachable by construction');
+
   /* ---------- tenant wall ---------- */
   const novaStaff = await token(ctx.request, 'nova', 'bss-demo', 'demo', 'demo');
   const cross = await ctx.request.get(
