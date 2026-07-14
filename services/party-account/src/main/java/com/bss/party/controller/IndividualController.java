@@ -81,4 +81,28 @@ public class IndividualController {
         service.delete(id);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
+
+    // ---------------- household billing (consent endpoints) ----------------
+
+    @PostMapping("/{id}/householdPayer")
+    public ResponseEntity<IndividualDto> requestHouseholdPayer(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(service.requestHouseholdPayer(id,
+                body == null ? null : String.valueOf(body.get("payerEmail"))));
+    }
+
+    @PostMapping("/{id}/householdPayer/accept")
+    public ResponseEntity<IndividualDto> acceptHouseholdPayer(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptHouseholdPayer(id));
+    }
+
+    @DeleteMapping("/{id}/householdPayer")
+    public ResponseEntity<IndividualDto> clearHouseholdPayer(@PathVariable String id) {
+        return ResponseEntity.ok(service.clearHouseholdPayer(id));
+    }
+
+    @GetMapping("/{id}/household")
+    public ResponseEntity<Map<String, Object>> household(@PathVariable String id) {
+        return ResponseEntity.ok(service.householdOf(id));
+    }
 }

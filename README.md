@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — twenty-seven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — twenty-eight Playwright suites drive the
 storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
 campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
@@ -101,7 +101,7 @@ mobile app recomposes around what the customer owns:
 | product-catalog | TMF620 | 8081 | Offerings, prices, commitment terms, **categories** (Mobile plans / Broadband / Devices / TV & Add-ons / Top-ups — channels group "my plan" vs extras and keep plan changes like-for-like), and **hard + soft bundles** (TMF620 `bundledProductOfferingOption` cardinality: mandatory components, optional standalone add-ons, and "pick N of M" choice groups enforced at order time), plus **characteristic-conditioned pricing** (TMF620 `prodSpecCharValueUse`: "+2.00/mo when colour = Titanium Edition" — one offering, no SKU per variant; the shop, the cart and the billing run all price the *configured* product, and a pricing rule conditioned on `color:X` runs a **campaign on a colour**). **Product content is a per-tenant seam**: device galleries and colour-variant imagery ride the offering's `attachment` list — from the internal TMF667 store by default, or resolved live from **the operator's own PIM** (`pim-base-url` per tenant, keyed by product name, cached, fail-open) — the channels can't tell the difference |
 | product-ordering | TMF622 | 8082 | Order capture, validation, completion orchestration |
 | product-inventory | TMF637 | 8083 | What each customer has, provisioned per order item |
-| party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles |
+| party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles. **Household billing**: a PERSON can be another person's payer — consent-gated (the dependent requests by email, only the named payer accepts, either side can leave); the payer then orders onto the dependent's line from My page and it bills to the payer with per-person attribution — one family bill, the same payer machinery as B2B, zero org semantics |
 | gateway | ODA exposure | 8080 | Single entry point; white-label host → tenant routing |
 
 **Optional components** (leave any out via the [composer](docs/composer.html) — channels adapt)

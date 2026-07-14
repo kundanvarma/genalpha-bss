@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin } from '../api.js';
+import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold, requestHouseholdPayer, acceptDependent, endHouseholdLink, orderForDependent } from '../api.js';
+import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
 
@@ -211,7 +212,12 @@ export default function Services() {
   if (error) return <p className="error">{error}</p>;
   if (!products) return <p className="dim">{t('Loading your page…')}</p>;
   if (!products.length) {
-    return <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>;
+    return (
+      <>
+        <p className="dim">Nothing active yet — your plan appears here once an order completes.</p>
+        <Household offerings={offerings} refresh={refresh} />
+      </>
+    );
   }
 
   // The MyJio idea: the page RECOMPOSES around what this customer holds —
@@ -401,6 +407,7 @@ export default function Services() {
           ))}
         </section>
       )}
+      <Household offerings={offerings} refresh={refresh} />
     </>
   );
 }
@@ -426,5 +433,105 @@ function TopUp({ offering, price, onBought }) {
       {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ added to this month's allowance</span>}
       {state && state !== 'done' && state !== 'busy' && <span className="error"> {state}</span>}
     </p>
+  );
+}
+
+/**
+ * Household billing: one person, many payers — here the PERSON side. The
+ * dependent asks someone to pay (by email, pending until accepted); the
+ * payer sees requests, accepts, and can order a plan straight onto a
+ * dependent's line of life — it bills to the payer, attributed per person,
+ * exactly like a company invoice. Either side can end it.
+ */
+function Household({ offerings, refresh }) {
+  const [household, setHousehold] = useState(null);
+  const [email, setEmail] = useState('');
+  const [pick, setPick] = useState({});
+  const [note, setNote] = useState(null);
+
+  const load = () => myHousehold().then(setHousehold).catch(() => setHousehold(null));
+  // NOT useEffect(load): load returns a promise, and React would call it as
+  // the unmount cleanup — crashing the whole app on navigation
+  useEffect(() => { load(); }, []);
+  if (!household) return null;
+
+  const dependents = household.dependents || [];
+  const payer = household.payer;
+  const plans = Object.values(offerings)
+    .filter((o) => ((o.category || [])[0] || {}).name === 'Mobile plans' && !o.isBundle);
+
+  const act = async (fn, okText) => {
+    try {
+      await fn();
+      setNote(okText);
+      load();
+      if (refresh) refresh();
+    } catch (e) { setNote(e.message); }
+  };
+
+  return (
+    <section className="lobcard" data-testid="household-card">
+      <h2>👪 {t('My household')}</h2>
+      {payer && (
+        <p style={{ margin: '6px 0' }} data-testid="hh-payer">
+          {payer.status === 'active'
+            ? <>{t('Paid for by')} <b>{payer.name || payer.id}</b> — {t('company-style: their bill, your name on the lines')}.</>
+            : <>{t('Waiting for')} <b>{payer.name || payer.id}</b> {t('to accept your request')}…</>}
+          <button className="ghost" style={{ marginLeft: 10 }} data-testid="hh-leave"
+            onClick={() => act(() => endHouseholdLink(tokenClaims().sub), t('left the household'))}>
+            {t('Leave')}
+          </button>
+        </p>
+      )}
+      {!payer && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '6px 0' }}>
+          <input placeholder={t('who pays for you? their email')} value={email}
+            data-testid="hh-request-email" style={{ flex: 1, minWidth: 220 }}
+            onChange={(e) => setEmail(e.target.value)} />
+          <button className="ghost" data-testid="hh-request" disabled={!email.trim()}
+            onClick={() => act(() => requestHouseholdPayer(email.trim()), t('request sent — pending their consent'))}>
+            {t('Ask them to pay')}
+          </button>
+        </div>
+      )}
+      {dependents.map((d) => (
+        <div key={d.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '8px 0' }}
+          data-testid={`hh-dependent-${d.id}`}>
+          <b>{d.givenName} {d.familyName}</b>
+          {d.status === 'pending' ? (
+            <>
+              <span className="dim">{t('asks you to pay for them')}</span>
+              <button className="ghost" data-testid="hh-accept"
+                onClick={() => act(() => acceptDependent(d.id), t('accepted — their orders can bill to you now'))}>
+                {t('Accept')}
+              </button>
+            </>
+          ) : (
+            <>
+              <select value={pick[d.id] || ''} data-testid="hh-order-select"
+                onChange={(e) => setPick((x) => ({ ...x, [d.id]: e.target.value }))}>
+                <option value="" disabled>{t('order a plan for them…')}</option>
+                {plans.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <button className="ghost" data-testid="hh-order" disabled={!pick[d.id]}
+                onClick={() => act(() => orderForDependent(offerings[pick[d.id]], d.id),
+                  t('ordered — it bills to you, attributed to them'))}>
+                {t('Order')}
+              </button>
+            </>
+          )}
+          <button className="ghost danger" data-testid="hh-stop"
+            onClick={() => act(() => endHouseholdLink(d.id), t('stopped paying'))}>
+            {t('Stop paying')}
+          </button>
+        </div>
+      ))}
+      {!payer && !dependents.length && (
+        <p className="dim" style={{ fontSize: 13 }}>
+          {t('One person, many payers: ask someone to pay for your subscriptions, or accept requests from family here.')}
+        </p>
+      )}
+      {note && <p className="dim" data-testid="hh-note" style={{ fontSize: 12.5 }}>{note}</p>}
+    </section>
   );
 }

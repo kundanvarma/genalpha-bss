@@ -106,13 +106,21 @@ public class BillingRunService {
         for (Map.Entry<String, List<Map<String, Object>>> e : byOwner.entrySet()) {
             String ownerId = e.getKey();
             for (Map<String, Object> product : e.getValue()) {
-                String payer = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
+                Map<String, Object> payerParty = ((List<Map<String, Object>>) product
+                        .getOrDefault("relatedParty", List.of())).stream()
                         .filter(p -> "payer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                        .map(p -> String.valueOf(p.get("id")))
-                        .findFirst().orElse(ownerId);
+                        .findFirst().orElse(null);
+                String payer = payerParty == null ? ownerId : String.valueOf(payerParty.get("id"));
                 if (!payer.equals(ownerId)) {
-                    orgAccounts.add(payer);
-                    // usage and earned discounts follow the company-paid plan
+                    // HOUSEHOLD vs B2B: a payer can be a person (parent pays
+                    // for the child) — only Organization payers make an ORG
+                    // account (org pricing context, device co-pay policy);
+                    // a household bill stays a consumer bill under the payer
+                    if (payerParty != null
+                            && "Organization".equals(String.valueOf(payerParty.get("@referredType")))) {
+                        orgAccounts.add(payer);
+                    }
+                    // usage and earned discounts follow the paid-for plan
                     primaryAccountOf.put(ownerId, payer);
                 }
                 byAccount.computeIfAbsent(payer, k -> new ArrayList<>()).add(product);

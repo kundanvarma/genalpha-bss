@@ -176,4 +176,122 @@ public class IndividualService {
             }
         });
     }
+
+    // ---------------- household billing: person-payer with consent ----------------
+
+    /**
+     * The dependent asks a PERSON to pay for them (by email — the one thing
+     * you know about your parent). Two-step by design: this only creates a
+     * PENDING link; nothing bills anywhere until the payer accepts. Self-
+     * service is self-scoped: you can only request a payer for yourself.
+     */
+    @Transactional
+    public IndividualDto requestHouseholdPayer(String id, String payerEmail) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(id)) {
+            throw NotFoundException.forResource("Individual", id);
+        }
+        if (payerEmail == null || payerEmail.isBlank()) {
+            throw new com.bss.party.exception.BadRequestException("payerEmail is required");
+        }
+        Individual dependent = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", id));
+        if ("active".equals(dependent.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "already in a household — leave it before requesting a new payer");
+        }
+        Individual payer = repository.findByTenantIdAndContactMediumJsonContaining(
+                        tenantScope.currentTenantId(), payerEmail).stream()
+                .filter(p -> !p.getId().equals(id))
+                .findFirst()
+                .orElseThrow(() -> NotFoundException.forResource("Individual", payerEmail));
+        dependent.setHouseholdPayerId(payer.getId());
+        dependent.setHouseholdStatus("pending");
+        IndividualDto updated = mapper.toDto(repository.save(dependent));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
+    }
+
+    /** Only the NAMED payer can accept — consent is theirs to give. */
+    @Transactional
+    public IndividualDto acceptHouseholdPayer(String dependentId) {
+        String caller = currentSubject();
+        Individual dependent = repository.findByIdAndTenantId(dependentId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", dependentId));
+        if (caller == null || !caller.equals(dependent.getHouseholdPayerId())) {
+            throw NotFoundException.forResource("Individual", dependentId);
+        }
+        if (!"pending".equals(dependent.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException("no pending household request");
+        }
+        dependent.setHouseholdStatus("active");
+        IndividualDto updated = mapper.toDto(repository.save(dependent));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
+    }
+
+    /** Either side may leave: the dependent walks, or the payer stops paying. */
+    @Transactional
+    public IndividualDto clearHouseholdPayer(String dependentId) {
+        Individual dependent = repository.findByIdAndTenantId(dependentId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", dependentId));
+        String caller = partyScope.scopedPartyId().orElse(null);
+        String subject = currentSubject();
+        boolean dependentSelf = caller == null || caller.equals(dependentId);
+        boolean payerSelf = subject != null && subject.equals(dependent.getHouseholdPayerId());
+        if (!dependentSelf && !payerSelf) {
+            throw NotFoundException.forResource("Individual", dependentId);
+        }
+        dependent.setHouseholdPayerId(null);
+        dependent.setHouseholdStatus(null);
+        IndividualDto updated = mapper.toDto(repository.save(dependent));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
+    }
+
+    /**
+     * The caller's household, both directions: who pays for me, and who I
+     * pay for. Names cross the party boundary here BY CONSENT — the link
+     * itself is the authorization, and only names travel, nothing else.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> householdOf(String id) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(id)) {
+            throw NotFoundException.forResource("Individual", id);
+        }
+        Individual me = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", id));
+        Map<String, Object> household = new java.util.LinkedHashMap<>();
+        if (me.getHouseholdPayerId() != null) {
+            Map<String, Object> payer = new java.util.LinkedHashMap<>();
+            payer.put("id", me.getHouseholdPayerId());
+            payer.put("status", me.getHouseholdStatus());
+            repository.findByIdAndTenantId(me.getHouseholdPayerId(), tenantScope.currentTenantId())
+                    .ifPresent(p -> payer.put("name",
+                            (nullSafe(p.getGivenName()) + " " + nullSafe(p.getFamilyName())).trim()));
+            household.put("payer", payer);
+        }
+        household.put("dependents", repository
+                .findByTenantIdAndHouseholdPayerId(tenantScope.currentTenantId(), id).stream()
+                .map(d -> {
+                    Map<String, Object> dep = new java.util.LinkedHashMap<String, Object>();
+                    dep.put("id", d.getId());
+                    dep.put("givenName", d.getGivenName());
+                    dep.put("familyName", d.getFamilyName());
+                    dep.put("status", d.getHouseholdStatus());
+                    return dep;
+                }).toList());
+        return household;
+    }
+
+    private static String nullSafe(String s) {
+        return s == null ? "" : s;
+    }
+
+    private String currentSubject() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth == null ? null : auth.getName();
+    }
 }

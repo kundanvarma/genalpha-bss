@@ -32,6 +32,15 @@ public class Individual {
     @Column(name = "organization_id", length = 36)
     private String organizationId;
 
+    /** Household billing: the PERSON who pays for this individual's products
+     * (pending until they accept). Mirrors the organization membership, one
+     * axis over: identity here, money at the payer. */
+    @jakarta.persistence.Column(name = "household_payer_id", length = 36)
+    private String householdPayerId;
+
+    @jakarta.persistence.Column(name = "household_status", length = 16)
+    private String householdStatus;
+
     public Individual() {
     }
 
@@ -85,4 +94,8 @@ public class Individual {
 
     public String getOrganizationId() { return organizationId; }
     public void setOrganizationId(String organizationId) { this.organizationId = organizationId; }
+    public String getHouseholdPayerId() { return householdPayerId; }
+    public void setHouseholdPayerId(String v) { this.householdPayerId = v; }
+    public String getHouseholdStatus() { return householdStatus; }
+    public void setHouseholdStatus(String v) { this.householdStatus = v; }
 }

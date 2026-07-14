@@ -29,6 +29,11 @@ public class IndividualDto {
     @JsonProperty("organization")
     private Map<String, Object> organization;
 
+    /** Read-only projection: {id, status} of the person who pays for this
+     * individual. Written ONLY through the consent endpoints, never PATCH. */
+    @JsonProperty("householdPayer")
+    private Map<String, Object> householdPayer;
+
     @JsonProperty("@type")
     private String type = "Individual";
 
@@ -85,4 +90,6 @@ public class IndividualDto {
 
     public Map<String, Object> getOrganization() { return organization; }
     public void setOrganization(Map<String, Object> organization) { this.organization = organization; }
+    public Map<String, Object> getHouseholdPayer() { return householdPayer; }
+    public void setHouseholdPayer(Map<String, Object> v) { this.householdPayer = v; }
 }
