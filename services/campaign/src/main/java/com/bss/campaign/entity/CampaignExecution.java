@@ -28,6 +28,16 @@ public class CampaignExecution {
     @Column(name = "executed_at", nullable = false)
     private OffsetDateTime executedAt;
 
+    /** treated (got the message) | holdout (control group, got nothing). */
+    @Column(name = "variant", length = 16)
+    private String variant = "treated";
+
+    @Column(name = "converted_at")
+    private OffsetDateTime convertedAt;
+
+    @Column(name = "conversion_ref", length = 64)
+    private String conversionRef;
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getId() { return id; }
@@ -38,4 +48,10 @@ public class CampaignExecution {
     public void setPartyId(String partyId) { this.partyId = partyId; }
     public OffsetDateTime getExecutedAt() { return executedAt; }
     public void setExecutedAt(OffsetDateTime executedAt) { this.executedAt = executedAt; }
+    public String getVariant() { return variant; }
+    public void setVariant(String variant) { this.variant = variant; }
+    public OffsetDateTime getConvertedAt() { return convertedAt; }
+    public void setConvertedAt(OffsetDateTime convertedAt) { this.convertedAt = convertedAt; }
+    public String getConversionRef() { return conversionRef; }
+    public void setConversionRef(String conversionRef) { this.conversionRef = conversionRef; }
 }

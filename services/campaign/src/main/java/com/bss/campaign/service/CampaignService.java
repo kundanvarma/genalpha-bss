@@ -80,6 +80,18 @@ public class CampaignService {
         entity.setMessageContent(String.valueOf(message.get("content")));
         entity.setPromotionCode(dto.get("promotionCode") == null ? null
                 : String.valueOf(dto.get("promotionCode")));
+        entity.setConversionEvent(dto.get("conversionEvent") == null ? null
+                : String.valueOf(dto.get("conversionEvent")));
+        if (dto.get("conversionWindowDays") != null) {
+            entity.setConversionWindowDays(Integer.parseInt(String.valueOf(dto.get("conversionWindowDays"))));
+        }
+        if (dto.get("holdoutPercent") != null) {
+            int holdout = Integer.parseInt(String.valueOf(dto.get("holdoutPercent")));
+            if (holdout < 0 || holdout > 90) {
+                throw new BadRequestException("holdoutPercent must be 0-90");
+            }
+            entity.setHoldoutPercent(holdout);
+        }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(campaigns.save(entity));
@@ -100,6 +112,76 @@ public class CampaignService {
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(campaigns.save(entity));
+    }
+
+    /**
+     * The other half of measurement: when a customer's business event
+     * matches a campaign's conversion event INSIDE the window, their open
+     * execution converts — treated or holdout alike; lift is the gap.
+     */
+    private void recordConversions(String tenant, String eventType, String state, String partyId) {
+        java.util.List<CampaignExecution> open =
+                executions.findByTenantIdAndPartyIdAndConvertedAtIsNull(tenant, partyId);
+        if (open.isEmpty()) {
+            return;
+        }
+        for (CampaignExecution execution : open) {
+            Campaign campaign = campaigns
+                    .findByIdAndTenantId(execution.getCampaignId(), tenant).orElse(null);
+            if (campaign == null) {
+                continue;
+            }
+            String wanted = campaign.getConversionEvent() == null || campaign.getConversionEvent().isBlank()
+                    ? "ProductOrderStateChangeEvent:completed" : campaign.getConversionEvent();
+            String[] parts = wanted.split(":", 2);
+            boolean matches = parts[0].equals(eventType)
+                    && (parts.length < 2 || parts[1].equals(state));
+            boolean inWindow = execution.getExecutedAt()
+                    .plusDays(campaign.getConversionWindowDays()).isAfter(OffsetDateTime.now());
+            if (matches && inWindow) {
+                execution.setConvertedAt(OffsetDateTime.now());
+                execution.setConversionRef(eventType);
+                executions.save(execution);
+                log.info("campaign '{}' conversion: party {} ({})",
+                        campaign.getName(), partyId, execution.getVariant());
+            }
+        }
+    }
+
+    /** The readout: reached / held out / conversions per variant / LIFT. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> statsOf(String campaignId) {
+        Campaign campaign = campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
+        java.util.List<CampaignExecution> all =
+                executions.findByTenantIdAndCampaignId(tenantScope.currentTenantId(), campaignId);
+        long treated = all.stream().filter(e -> !"holdout".equals(e.getVariant())).count();
+        long heldOut = all.size() - treated;
+        long treatedConv = all.stream()
+                .filter(e -> !"holdout".equals(e.getVariant()) && e.getConvertedAt() != null).count();
+        long holdoutConv = all.stream()
+                .filter(e -> "holdout".equals(e.getVariant()) && e.getConvertedAt() != null).count();
+        Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
+        Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
+        Map<String, Object> stats = new java.util.LinkedHashMap<>();
+        stats.put("campaignId", campaignId);
+        stats.put("reached", treated);
+        stats.put("heldOut", heldOut);
+        stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
+        if (treatedRate != null) {
+            stats.put("treatedRate", Math.round(treatedRate * 1000) / 10.0);
+        }
+        if (holdoutRate != null) {
+            stats.put("holdoutRate", Math.round(holdoutRate * 1000) / 10.0);
+        }
+        if (treatedRate != null && holdoutRate != null) {
+            stats.put("liftPoints", Math.round((treatedRate - holdoutRate) * 1000) / 10.0);
+        }
+        stats.put("conversionWindowDays", campaign.getConversionWindowDays());
+        if (heldOut > 0 && heldOut < 5) {
+            stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
+        }
+        return stats;
     }
 
     /**
@@ -128,30 +210,38 @@ public class CampaignService {
                 "reached", reached);
     }
 
-    /** One customer, once: the shared delivery step for events and blasts. */
+    /** One customer, once: the shared delivery step for events and blasts.
+     * A deterministic N% land in the HOLDOUT — same ledger, no message —
+     * so lift can be measured instead of asserted. */
     private boolean reach(Campaign campaign, String partyId) {
         String tenant = tenantScope.currentTenantId();
         if (executions.existsByTenantIdAndCampaignIdAndPartyId(tenant, campaign.getId(), partyId)) {
             return false;
         }
+        boolean holdout = campaign.getHoldoutPercent() > 0
+                && Math.floorMod((campaign.getId() + partyId).hashCode(), 100) < campaign.getHoldoutPercent();
         CampaignExecution execution = new CampaignExecution();
         execution.setId(UUID.randomUUID().toString());
         execution.setTenantId(tenant);
         execution.setCampaignId(campaign.getId());
         execution.setPartyId(partyId);
+        execution.setVariant(holdout ? "holdout" : "treated");
         execution.setExecutedAt(OffsetDateTime.now());
         try {
             executions.save(execution);
         } catch (DataIntegrityViolationException e) {
             return false; // concurrent duplicate delivery lost the race — fine
         }
-        String content = campaign.getPromotionCode() == null
-                ? campaign.getMessageContent()
-                : campaign.getMessageContent().replace("{code}", campaign.getPromotionCode());
-        communication.send(partyId, campaign.getMessageSubject(), content);
+        if (!holdout) {
+            String content = campaign.getPromotionCode() == null
+                    ? campaign.getMessageContent()
+                    : campaign.getMessageContent().replace("{code}", campaign.getPromotionCode());
+            communication.send(partyId, campaign.getMessageSubject(), content);
+        }
         events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
-                "campaignId", campaign.getId(), "partyId", partyId));
-        log.info("campaign '{}' reached party {}", campaign.getName(), partyId);
+                "campaignId", campaign.getId(), "partyId", partyId, "variant", execution.getVariant()));
+        log.info("campaign '{}' {} party {}", campaign.getName(),
+                holdout ? "held out" : "reached", partyId);
         return true;
     }
 
@@ -175,6 +265,7 @@ public class CampaignService {
     @Transactional
     public void onEvent(String eventType, String state, String partyId) {
         String tenant = tenantScope.currentTenantId();
+        recordConversions(tenant, eventType, state, partyId);
         for (Campaign campaign : campaigns.findByTenantIdAndStatusAndTriggerEventType(
                 tenant, Campaign.ACTIVE, eventType)) {
             if (campaign.getTriggerState() != null && !campaign.getTriggerState().equals(state)) {
@@ -203,6 +294,9 @@ public class CampaignService {
         map.put("message", Map.of("subject", c.getMessageSubject(), "content", c.getMessageContent()));
         if (c.getPromotionCode() != null) map.put("promotionCode", c.getPromotionCode());
         if (c.getSegmentName() != null) map.put("segmentName", c.getSegmentName());
+        map.put("holdoutPercent", c.getHoldoutPercent());
+        map.put("conversionWindowDays", c.getConversionWindowDays());
+        if (c.getConversionEvent() != null) map.put("conversionEvent", c.getConversionEvent());
         map.put("@type", "Campaign");
         return map;
     }

@@ -10,4 +10,7 @@ public interface CampaignExecutionRepository extends JpaRepository<CampaignExecu
     boolean existsByTenantIdAndCampaignIdAndPartyId(String tenantId, String campaignId, String partyId);
 
     List<CampaignExecution> findByTenantIdAndCampaignId(String tenantId, String campaignId);
+
+    java.util.List<com.bss.campaign.entity.CampaignExecution>
+            findByTenantIdAndPartyIdAndConvertedAtIsNull(String tenantId, String partyId);
 }
