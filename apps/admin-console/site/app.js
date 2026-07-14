@@ -158,12 +158,24 @@ const RESOURCES = [
         base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
       { name: 'messageSubject', label: 'Message subject', required: true },
       { name: 'messageContent', label: 'Message — {code} inserts the promo code', kind: 'longtext', required: true },
+      { name: 'holdoutPercent', label: 'Holdout % — a control group that gets NO message, so lift can be measured', kind: 'number', placeholder: '0' },
+      { name: 'conversionWindowDays', label: 'Conversion window (days)', kind: 'number', placeholder: '7' },
     ],
     assemble: (body) => {
       const { messageSubject, messageContent, ...rest } = body;
       return { ...rest, message: { subject: messageSubject, content: messageContent } };
     },
     columns: ['name', 'status', 'triggerEventType', 'segmentName', 'promotionCode', 'reached'],
+    detail: async (item) => {
+      const res = await authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}/stats`);
+      const s = await res.json();
+      return [{
+        reached: s.reached, heldOut: s.heldOut,
+        converted: `treated ${s.conversions.treated} (${s.treatedRate ?? '—'}%) · holdout ${s.conversions.holdout} (${s.holdoutRate ?? '—'}%)`,
+        lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
+        note: s.note || `${s.conversionWindowDays}-day window`,
+      }];
+    },
     rowAction: {
       label: (item) => (item.status === 'active' ? 'Pause' : 'Resume'),
       apply: (item) => authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}`, {

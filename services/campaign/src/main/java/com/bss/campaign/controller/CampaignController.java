@@ -49,6 +49,13 @@ public class CampaignController {
         return org.springframework.http.ResponseEntity.ok(service.executeSegment(id));
     }
 
+    /** The measurement readout: reached / held out / conversions / lift. */
+    @GetMapping("/{id}/stats")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> stats(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        return org.springframework.http.ResponseEntity.ok(service.statsOf(id));
+    }
+
     @GetMapping("/{id}/execution")
     public ResponseEntity<List<Map<String, Object>>> executions(@PathVariable String id) {
         return ResponseEntity.ok(service.executionsOf(id));

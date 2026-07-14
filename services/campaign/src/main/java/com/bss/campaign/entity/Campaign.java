@@ -37,6 +37,17 @@ public class Campaign {
     @Column(name = "segment_name", length = 128)
     private String segmentName;
 
+    /** 'EventType' or 'EventType:state'; null = completed orders. */
+    @Column(name = "conversion_event", length = 128)
+    private String conversionEvent;
+
+    @Column(name = "conversion_window_days")
+    private int conversionWindowDays = 7;
+
+    /** Random N% deliberately NOT messaged — the control group. */
+    @Column(name = "holdout_percent")
+    private int holdoutPercent;
+
     @Column(name = "trigger_state", length = 64)
     private String triggerState;
 
@@ -67,6 +78,12 @@ public class Campaign {
     public void setStatus(String status) { this.status = status; }
     public String getSegmentName() { return segmentName; }
     public void setSegmentName(String v) { this.segmentName = v; }
+    public String getConversionEvent() { return conversionEvent; }
+    public void setConversionEvent(String v) { this.conversionEvent = v; }
+    public int getConversionWindowDays() { return conversionWindowDays; }
+    public void setConversionWindowDays(int v) { this.conversionWindowDays = v; }
+    public int getHoldoutPercent() { return holdoutPercent; }
+    public void setHoldoutPercent(int v) { this.holdoutPercent = v; }
     public String getTriggerEventType() { return triggerEventType; }
     public void setTriggerEventType(String triggerEventType) { this.triggerEventType = triggerEventType; }
     public String getTriggerState() { return triggerState; }
