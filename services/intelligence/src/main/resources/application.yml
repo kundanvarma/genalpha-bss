@@ -54,6 +54,9 @@ bss:
     ticket-base-url: ${TICKET_BASE_URL:http://localhost:8092}
     assurance-base-url: ${ASSURANCE_BASE_URL:http://localhost:8105}
     knowledge-base-url: ${KNOWLEDGE_BASE_URL:http://localhost:8118}
+    recommendation-base-url: ${RECOMMENDATION_BASE_URL:http://localhost:8102}
+    insight-base-url: ${INSIGHT_BASE_URL:http://localhost:8119}
+    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8083}
   intelligence:
     churn:
       # Structured rules, not a model: commitment ending within N days;

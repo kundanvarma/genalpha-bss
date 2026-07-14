@@ -18,6 +18,29 @@ public class StubAdapter implements LlmAdapter {
         if (system.contains("product copilot")) {
             return productCopilot(user);
         }
+        if (system.contains("next best offer adviser")) {
+            // deterministic: first candidate, reason grounded in the lines given
+            String name = null, id = null, interest = null, holding = null;
+            for (String line : user.split("\n")) {
+                if (line.startsWith("CANDIDATE: ") && name == null) {
+                    String[] parts = line.substring(11).split(" \\| ");
+                    name = parts[0].trim();
+                    id = parts.length > 1 ? parts[1].trim() : "";
+                }
+                if (line.startsWith("INTEREST: ") && interest == null) {
+                    interest = line.substring(10).trim();
+                }
+                if (line.startsWith("HOLDING: ") && holding == null) {
+                    holding = line.substring(9).trim();
+                }
+            }
+            String reason = (interest != null
+                    ? "They have been browsing " + interest + " — this is the strongest match"
+                    : "Top ranked for this customer")
+                    + (holding != null ? " and it complements their " + holding + "." : ".");
+            return "{\"offerName\": \"" + name + "\", \"offerId\": \"" + id
+                    + "\", \"reason\": \"" + reason + "\"}";
+        }
         if (system.contains("knowledge assistant")) {
             // grounded even in the stub: quote the top retrieved article back
             String title = "the knowledge base";

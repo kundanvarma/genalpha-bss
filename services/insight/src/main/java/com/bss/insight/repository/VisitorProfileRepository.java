@@ -12,4 +12,6 @@ public interface VisitorProfileRepository extends JpaRepository<VisitorProfile, 
     Optional<VisitorProfile> findByTenantIdAndVisitorId(String tenantId, String visitorId);
 
     java.util.List<VisitorProfile> findByTenantIdAndPartyId(String tenantId, String partyId);
+
+    java.util.List<VisitorProfile> findTop100ByTenantIdOrderByLastUpdateDesc(String tenantId);
 }

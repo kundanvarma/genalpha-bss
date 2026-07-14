@@ -118,8 +118,8 @@
     <div class="num">Preface</div>
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
-    operator sells, bills, and serves customers through — from an empty repository to thirty-two
-    composable components, six customer surfaces, and thirty-three end-to-end test suites that all pass
+    operator sells, bills, and serves customers through — from an empty repository to thirty-three
+    composable components, six customer surfaces, and thirty-four end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1604,14 +1604,68 @@
     person at the desk can find the customer they're talking to.</p>
   </section>
 
-  <!-- Ch 27 (the closer) -->
-  <section class="chapter" id="ch25">
+  <!-- Ch 27: personalization -->
+  <section class="chapter" id="ch27insight">
     <div class="num">Chapter Twenty-Seven</div>
+    <h3>The shop that pays attention</h3>
+    <div class="epi">"Is building a CDP for this BSS as a BSS component wrong from an ODA
+    perspective, or otherwise?" <span class="who">— the operator, asking the right question
+    before the first line was written</span></div>
+
+    <p class="drop">Personalization arrived the way every good feature had: as a question with a
+    trap in it. Connect Google Analytics and social signals for visitors, fuse them with BSS data
+    for customers, personalize the pages and the offers — every operator wants it, and the obvious
+    way to build it is wrong. The obvious way is to become a CDP: an identity graph, an event lake,
+    audience machinery. The research said the field always builds the same pipeline — events,
+    identity, profile, segments, a decision, an experience — and the architecture said the pipeline
+    does not have to live in one box. So the answer to the operator's question became the design:
+    a BSS should be CDP-<em>ready</em>, never a CDP. The enterprise identity graph belongs behind a
+    seam, like the charging system and the PIM before it. What the BSS legitimately owns is small
+    and load-bearing: the first-party, service-context profile — and the consent that gates it.</p>
+
+    <p>Consent went in first, as structure rather than ceremony. A loud, brand-framed card on the
+    shop's front page asks one question in plain words, decline exactly as prominent as accept, and
+    the promise underneath is mechanical: nothing is stored before the answer, a rejecting visitor
+    generates <em>no rows at all</em> — the suite fires a rude, consent-ignoring event straight at
+    the API and asserts the profile holds nothing — and revoking consent deletes what was held.
+    "Privacy choices" reopens the card forever, because changing your mind must be as easy as
+    consenting was. The banner's promise is real, and tested, which is the only kind of privacy
+    copy worth printing.</p>
+
+    <p>Then the loop: a consenting guest browses a Samsung, and the home page says so — "because
+    you were looking at Devices" — with the Devices rail leading. The decisioning went where all
+    behaviour goes in this system: the policy engine grew its fourth rules-as-data family,
+    <em>personalization</em> experiences, so an operator writes "visitors interested in Devices see
+    this banner and that pinned offer" in the console and deletes it just as easily. Signing in
+    performs the one CDP trick worth stealing — the stitch: this browser's guest interests now
+    belong to this customer, by consent, and the TMF680 recommendation engine folds them into its
+    ranking. The suite's customer browsed one phone as a stranger and got Devices at the top of
+    "Recommended for you" as a customer. BSS truth plus browsing, one answer.</p>
+
+    <h2>The seam flows both ways</h2>
+    <p>The analytics seam kept the promise the OCS and PIM chapters made: bring your own. Nova
+    configured <code>ANALYTICS_PROVIDER=ga4</code> and its consented events flowed to "its own GA4
+    property" over Google's real Measurement Protocol — a mock playing GA4 in dev, exactly as
+    mock-ocs plays the charging system — while genalpha, on the same running binary, stayed
+    first-party only; the test asserts a genalpha visitor never appears in nova's property. And the
+    seam pulls as well as pushes: audiences the platform computes come back as rule-addressable
+    segments, campaign tags classify the channel (instagram is social, google is search), and a
+    console preset turns "an analytics segment sees this experience" into one form. On top of it
+    all, next best offer: the CSR presses one button, the TMF680 ranking supplies the candidates,
+    and the model's only job is the WHY — "they have been browsing Devices; this is the strongest
+    match" — grounded, sourced, never inventing an offer that is not on the shelf. The console got
+    an Insight ledger so the operator can SEE what the platform holds and under which consent —
+    read-only by design, because the visitor owns the data; the operator only gets to look.</p>
+  </section>
+
+  <!-- Ch 28 (the closer) -->
+  <section class="chapter" id="ch25">
+    <div class="num">Chapter Twenty-Eight</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
-    <p class="drop">Thirty-two components. Six customer surfaces, one of them wearing two faces by
-    role. Thirty-three end-to-end suites, all green in a real browser. Eleven official conformance kits
+    <p class="drop">Thirty-three components. Six customer surfaces, one of them wearing two faces by
+    role. Thirty-four end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and

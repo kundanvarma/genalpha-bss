@@ -839,7 +839,10 @@
         "agreement:read",
         "usage:read",
         "ticket:read",
-        "assurance:read"
+        "assurance:read",
+        "recommendation:read",
+        "insight:read",
+        "inventory:read"
       ]
     },
     {

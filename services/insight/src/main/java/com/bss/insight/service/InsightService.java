@@ -141,14 +141,23 @@ public class InsightService {
                 .map(row -> String.valueOf(row[0]))
                 .limit(5)
                 .toList();
+        // segments the tenant's own analytics computed (the seam, inbound)
+        List<String> segments = analytics.audiencesOf(tenantId, visitorId);
+        String channel = channelOf(p.getUtmSource());
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("interests", interests);
         context.put("topInterest", interests.isEmpty() ? "" : interests.get(0));
         context.put("utmSource", p.getUtmSource() == null ? "" : p.getUtmSource());
+        context.put("channel", channel);
+        context.put("segments", segments);
         context.put("knownCustomer", p.getPartyId() != null);
         Map<String, Object> decision = policy.experience(context).orElse(null);
-        out.put("personalized", !interests.isEmpty() || decision != null);
+        out.put("personalized", !interests.isEmpty() || decision != null || !segments.isEmpty());
         out.put("interests", interests);
+        out.put("channel", channel);
+        if (!segments.isEmpty()) {
+            out.put("segments", segments);
+        }
         if (!interests.isEmpty()) {
             out.put("heroCategory", interests.get(0));
         }
@@ -190,6 +199,24 @@ public class InsightService {
         return Map.of("partyId", partyId, "interests", interests);
     }
 
+    /** The back-office ledger: recent profiles, consent state first — the
+     * operator can SEE what the platform holds and under which consent. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> recentProfiles() {
+        return profiles.findTop100ByTenantIdOrderByLastUpdateDesc(tenantScope.currentTenantId())
+                .stream().map(p -> {
+                    Map<String, Object> m = new LinkedHashMap<String, Object>();
+                    m.put("id", p.getVisitorId());
+                    m.put("visitorId", p.getVisitorId());
+                    m.put("partyId", p.getPartyId());
+                    m.put("analyticsConsent", p.isAnalyticsConsent());
+                    m.put("personalizationConsent", p.isPersonalizationConsent());
+                    m.put("utmSource", p.getUtmSource());
+                    m.put("lastUpdate", p.getLastUpdate());
+                    return m;
+                }).toList();
+    }
+
     /** Back-office window (and the E2E's honesty probe): the raw profile. */
     @Transactional(readOnly = true)
     public Map<String, Object> profileOf(String visitorId) {
@@ -208,6 +235,22 @@ public class InsightService {
                 .map(row -> Map.of("category", String.valueOf(row[0]), "views", row[1]))
                 .toList());
         return out;
+    }
+
+    /** Social attribution the honest way: the campaign tag says where they
+     * came from; the platform APIs can refine it later. */
+    private static String channelOf(String utmSource) {
+        if (utmSource == null || utmSource.isBlank()) {
+            return "direct";
+        }
+        String s = utmSource.toLowerCase();
+        if (List.of("facebook", "instagram", "tiktok", "x", "twitter", "linkedin", "snapchat").contains(s)) {
+            return "social";
+        }
+        if (List.of("google", "bing", "duckduckgo").contains(s)) {
+            return "search";
+        }
+        return "campaign";
     }
 
     private static void requireVisitor(String visitorId) {

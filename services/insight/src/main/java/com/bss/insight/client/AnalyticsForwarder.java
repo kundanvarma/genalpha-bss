@@ -31,6 +31,27 @@ public class AnalyticsForwarder {
         this.restClient = builder.build();
     }
 
+    /**
+     * Audience PULL-BACK: segments the tenant's own analytics computed about
+     * this visitor (GA4 audiences in production, the mock's /audiences in
+     * dev) become rule-addressable context. Fail-open to none.
+     */
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> audiencesOf(String tenantId, String visitorId) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || !"ga4".equalsIgnoreCase(tenant.getAnalyticsProvider())) {
+            return List.of();
+        }
+        try {
+            List<String> names = restClient.get()
+                    .uri(tenant.getAnalyticsMpUrl() + "/audiences?client_id=" + visitorId)
+                    .retrieve().body(List.class);
+            return names == null ? List.of() : names;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     public void forward(String tenantId, String visitorId, String type,
             String category, String offeringId) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
