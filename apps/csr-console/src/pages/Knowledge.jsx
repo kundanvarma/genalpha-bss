@@ -20,7 +20,11 @@ export default function Knowledge() {
   const search = (term) => {
     searchKnowledge(term).then(setArticles).catch((e) => setError(e.message));
   };
-  useEffect(() => { search(''); }, []);
+  // type-ahead: results refresh 300ms after the last keystroke
+  useEffect(() => {
+    const t = setTimeout(() => { search(q); }, q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [q]);
 
   async function ask() {
     setBusy(true); setAnswer(null); setError(null);

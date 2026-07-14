@@ -133,7 +133,14 @@ async function token(request, realm, client, user, pass) {
   const knowledgeTab = con.locator('.tabs >> text=Knowledge');
   if (!(await knowledgeTab.count())) fail('the Knowledge tab is missing for a product owner');
   await knowledgeTab.click();
-  await con.locator('td', { hasText: 'How to create a product' }).first().waitFor({ timeout: 15000 });
+  // the library outgrows one page — page forward until the how-to shows
+  let found = false;
+  for (let p = 0; p < 5 && !found; p++) {
+    found = await con.locator('td', { hasText: 'How to create a product' }).first()
+      .waitFor({ timeout: 4000 }).then(() => true).catch(() => false);
+    if (!found) await con.click('#next');
+  }
+  if (!found) fail('the product-owner how-to never surfaced in the console listing');
   console.log('OK the console has the Knowledge tab — pat opens the how-to library where'
     + ' the products are built');
 

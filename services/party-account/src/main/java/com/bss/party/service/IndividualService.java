@@ -44,6 +44,20 @@ public class IndividualService {
 
     @Transactional(readOnly = true)
     public PagedResult<IndividualDto> findAll(int offset, int limit, Map<String, String> filters) {
+        // LOOSE search (?q=): the CSR types a fragment — given or family
+        // name, email, anything in the contact medium — case-blind. Only for
+        // unscoped callers (staff/agents); customers stay pinned to self.
+        String q = filters.remove("q");
+        if (q != null && !q.isBlank() && partyScope.scopedPartyId().isEmpty()) {
+            String org = businessAdminOrg().orElse(null);
+            java.util.List<IndividualDto> hits = repository
+                    .searchLoose(tenantScope.currentTenantId(), q.trim()).stream()
+                    .filter(i -> org == null || org.equals(i.getOrganizationId()))
+                    .limit(limit)
+                    .map(mapper::toDto)
+                    .toList();
+            return new PagedResult<>(hits, hits.size());
+        }
         Individual probe = probeFor(filters);
         // A business admin lists people, but only ever their own organization's.
         businessAdminOrg().ifPresent(probe::setOrganizationId);

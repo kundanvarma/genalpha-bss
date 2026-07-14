@@ -34,9 +34,19 @@ async function json(res) {
   return res.json();
 }
 
-export async function searchCustomers(familyName) {
-  const filter = familyName ? `&familyName=${encodeURIComponent(familyName)}` : '';
+export async function searchCustomers(q) {
+  const filter = q ? `&q=${encodeURIComponent(q)}` : '';
   return json(await authFetch(`${PARTY}/individual?limit=50${filter}`));
+}
+
+/** A typed MSISDN resolves in the tenant's own number pool (agents are
+ * unscoped there); empty when nobody holds it. */
+export async function customerByNumber(number) {
+  const res = await authFetch(`/tmf-api/serviceInventory/v4/numberOwner?number=${encodeURIComponent(number)}`);
+  if (!res.ok) return null;
+  const owner = await res.json();
+  const customer = await authFetch(`${PARTY}/individual/${owner.partyId}`);
+  return customer.ok ? customer.json() : null;
 }
 
 export async function getCustomer(id) {

@@ -10,7 +10,11 @@ function Faq() {
   const [open, setOpen] = useState(null);
 
   const search = (term) => { searchFaq(term).then(setArticles).catch(() => {}); };
-  useEffect(() => { search(''); }, []);
+  // type-ahead: the FAQ refreshes 300ms after the last keystroke
+  useEffect(() => {
+    const t = setTimeout(() => { search(q); }, q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [q]);
 
   return (
     <section className="lobcard" data-testid="faq-card">
