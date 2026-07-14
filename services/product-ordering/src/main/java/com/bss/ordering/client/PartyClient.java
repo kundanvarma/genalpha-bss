@@ -13,4 +13,7 @@ public interface PartyClient {
 
     /** The ACTIVE person-payer of this party, if any (household billing). */
     java.util.Optional<String> householdPayerOf(String partyId);
+
+    /** The household link in ANY state: {id, status}, or empty. */
+    java.util.Optional<java.util.Map<String, Object>> householdLinkOf(String partyId);
 }

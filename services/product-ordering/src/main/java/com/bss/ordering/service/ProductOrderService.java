@@ -547,6 +547,17 @@ public class ProductOrderService {
      */
     private void claimOrPayForHousehold(ProductOrderDto dto, String callerId) {
         String customer = customerPartyIn(dto.getRelatedParty());
+        if (customer != null && !customer.equals(callerId)) {
+            // a PENDING link must fail LOUDLY: silently claiming the order
+            // to the caller bought a parent two plans for themselves once
+            java.util.Map<String, Object> link = partyClient.householdLinkOf(customer).orElse(null);
+            if (link != null && callerId.equals(String.valueOf(link.get("id")))
+                    && "pending".equals(link.get("status"))) {
+                throw new OrderValidationException(
+                        "they have not accepted your household request yet — "
+                        + "ordering for them starts after consent");
+            }
+        }
         if (customer != null && !customer.equals(callerId)
                 && callerId.equals(partyClient.householdPayerOf(customer).orElse(null))) {
             List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());

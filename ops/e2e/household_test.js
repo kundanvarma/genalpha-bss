@@ -69,9 +69,11 @@ async function token(request, client, user, pass) {
       productOrderItem: [{ action: 'add', productOffering: { name: 'x', id: 'x' } }],
       relatedParty: [{ id: sonny.id, role: 'customer' }] } });
   const earlyBody = await early.json().catch(() => ({}));
-  const claimed = (earlyBody.relatedParty || []).some((p) => p.id === paula.id && p.role === 'customer');
-  if (early.status() === 201 && !claimed) fail('a PENDING link let the payer order for the dependent');
-  console.log('OK a pending link grants nothing — consent is not decoration');
+  if (early.status() === 201) fail('a PENDING order-for was accepted — it must fail loudly');
+  if (!(earlyBody.message || '').includes('not accepted')) {
+    fail('pending rejection unclear: ' + JSON.stringify(earlyBody).slice(0, 160));
+  }
+  console.log('OK a pending order-for FAILS LOUDLY — no silent self-purchases, consent first');
 
   const paulaPage = await (await browser.newContext()).newPage();
   await paulaPage.goto(`${API}/shop/`);
@@ -153,6 +155,39 @@ async function token(request, client, user, pass) {
   console.log('OK ONE family bill under Paula (Sonny\'s plan, attributed to him) — and'
     + ' Sonny\'s Netflix on his OWN bill');
 
+  /* ---------- whose sub is whose: labels + the guardian's family view ---------- */
+  await sonnyPage.goto('http://localhost:8080/shop/');
+  await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
+  await sonnyPage.click('.nav >> text=My page');
+  try {
+    await sonnyPage.locator('[data-testid=paid-by]').first().waitFor({ timeout: 20000 });
+  } catch (e) {
+    console.log('DEBUG url:', sonnyPage.url());
+    console.log('DEBUG main:', (await sonnyPage.locator('main').textContent().catch(() => 'no main')).slice(0, 300));
+    throw e;
+  }
+  const tag = await sonnyPage.locator('[data-testid=paid-by]').first().textContent();
+  if (!tag.includes('household payer')) fail('Sonny\'s plan not labelled with its payer: ' + tag);
+  await paulaPage.goto('http://localhost:8080/shop/');
+  await paulaPage.waitForSelector('.nav', { timeout: 20000 });
+  await paulaPage.click('.nav >> text=My page');
+  await paulaPage.locator('[data-testid=family-paid-card]').waitFor({ timeout: 20000 });
+  const famCard = await paulaPage.locator('[data-testid=family-paid-card]').textContent();
+  if (!famCard.includes('Sonny') || !famCard.includes('billed to you')) {
+    fail('Paula\'s family section wrong: ' + famCard.slice(0, 160));
+  }
+  // the real link opens a new tab; the tab re-authenticates silently (its
+  // own sessionStorage) — the test verifies the same route in-tab
+  const famHref = await paulaPage.locator('[data-testid=family-open]').first().getAttribute('href');
+  await paulaPage.goto('http://localhost:8080' + famHref);
+  await paulaPage.locator('[data-testid=family-member-page]').waitFor({ timeout: 20000 });
+  const famPage = await paulaPage.locator('[data-testid=family-member-page]').textContent();
+  if (!famPage.includes('Sonny') || !famPage.includes('10 GB')) {
+    fail('family view page wrong: ' + famPage.slice(0, 160));
+  }
+  console.log('OK whose-is-whose: Sonny sees "paid by your household payer", Paula gets a'
+    + ' family section and opens Sonny\'s page in its own tab');
+
   /* ---------- boundary: a stranger "ordering for Sonny" orders for themself ---------- */
   const kai = await token(ctx.request, 'bss-biz', 'kai@bss.local', 'kai');
   const kaiSub = JSON.parse(Buffer.from(kai.split('.')[1], 'base64').toString()).sub;
@@ -171,14 +206,18 @@ async function token(request, client, user, pass) {
     + ' no household power');
 
   /* ---------- either side can leave ---------- */
-  await sonnyPage.reload();
-  await sonnyPage.locator('[data-testid=hh-leave]').waitFor({ timeout: 15000 });
+  await sonnyPage.goto('http://localhost:8080/shop/');
+  await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
+  await sonnyPage.click('.nav >> text=My page');
+  await sonnyPage.locator('[data-testid=hh-leave]').waitFor({ timeout: 20000 });
   await sonnyPage.click('[data-testid=hh-leave]');
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
   console.log('OK Sonny left the household — future orders are his own again');
 
   /* ---------- v2: Paula CREATES a child account; the kid gets the APP ---------- */
-  await paulaPage.reload();
+  await paulaPage.goto('http://localhost:8080/shop/');
+  await paulaPage.waitForSelector('.nav', { timeout: 20000 });
+  await paulaPage.click('.nav >> text=My page');
   await paulaPage.locator('summary', { hasText: 'Add a family member' }).click();
   await paulaPage.fill('[data-testid=hh-add-given]', 'Kidd');
   await paulaPage.fill('[data-testid=hh-add-family]', `Kid${run}`);
@@ -225,4 +264,4 @@ async function token(request, client, user, pass) {
   console.log('\nALL HOUSEHOLD CHECKS PASSED — consent-gated person-payer, family bill with'
     + ' attribution, own purchases stay personal, strangers get nothing, either side can'
     + ' leave; child accounts hand the kid their own app.');
-})().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });
+})().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

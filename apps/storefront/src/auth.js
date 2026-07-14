@@ -11,6 +11,7 @@ const AUTH_CONFIG = Object.assign({
 }, window.BSS_STOREFRONT_CONFIG || {});
 
 const TOKEN_KEY = 'bss.shop.token';
+const REFRESH_KEY = 'bss.shop.refresh';
 const EXP_KEY = 'bss.shop.tokenExp';
 const VERIFIER_KEY = 'bss.shop.verifier';
 const STATE_KEY = 'bss.shop.state';
@@ -69,11 +70,55 @@ async function completeLogin(code) {
     throw new Error('token exchange failed: HTTP ' + res.status);
   }
   const tokens = await res.json();
-  sessionStorage.setItem(TOKEN_KEY, tokens.access_token);
-  sessionStorage.setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
+  storeTokens(tokens);
   sessionStorage.removeItem(VERIFIER_KEY);
   sessionStorage.removeItem(STATE_KEY);
   history.replaceState(null, '', redirectUri());
+}
+
+function storeTokens(tokens) {
+  sessionStorage.setItem(TOKEN_KEY, tokens.access_token);
+  sessionStorage.setItem(EXP_KEY, String(Date.now() + (tokens.expires_in - 15) * 1000));
+  if (tokens.refresh_token) {
+    sessionStorage.setItem(REFRESH_KEY, tokens.refresh_token);
+  }
+}
+
+/**
+ * Silent renewal, single-flight: WITHOUT this, several parallel authFetch
+ * calls on an idle page each start their own login redirect, their PKCE
+ * verifiers race, and the customer lands on an error page — the exact bug
+ * the household suite caught on a page left open past token expiry.
+ */
+let refreshing = null;
+async function tryRefresh() {
+  if (refreshing) return refreshing;
+  const refreshToken = sessionStorage.getItem(REFRESH_KEY);
+  if (!refreshToken) return false;
+  refreshing = (async () => {
+    try {
+      const res = await fetch(AUTH_CONFIG.issuer + '/protocol/openid-connect/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: AUTH_CONFIG.clientId,
+          refresh_token: refreshToken,
+        }),
+      });
+      if (!res.ok) {
+        sessionStorage.removeItem(REFRESH_KEY);
+        return false;
+      }
+      storeTokens(await res.json());
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      refreshing = null;
+    }
+  })();
+  return refreshing;
 }
 
 function currentToken() {
@@ -96,6 +141,7 @@ export function tokenClaims() {
 
 export function signOut() {
   sessionStorage.removeItem(TOKEN_KEY);
+  sessionStorage.removeItem(REFRESH_KEY);
   sessionStorage.removeItem(EXP_KEY);
   location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/logout?' + new URLSearchParams({
     client_id: AUTH_CONFIG.clientId,
@@ -107,17 +153,29 @@ export function isSignedIn() {
   return currentToken() != null;
 }
 
-/** Fetch with the bearer token; a 401 restarts login (token expired/revoked). */
+/** Fetch with the bearer token; expiry refreshes SILENTLY and single-flight —
+ * the login redirect is the last resort, never the first answer to a 401. */
 export async function authFetch(url, options) {
-  const token = currentToken();
+  let token = currentToken();
   if (!token) {
-    await beginLogin();
-    return new Promise(() => {}); // navigation takes over
+    if (await tryRefresh()) {
+      token = sessionStorage.getItem(TOKEN_KEY);
+    } else {
+      await beginLogin();
+      return new Promise(() => {}); // navigation takes over
+    }
   }
-  const opts = Object.assign({}, options);
-  opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + token });
-  const res = await fetch(url, opts);
+  const call = (bearer) => {
+    const opts = Object.assign({}, options);
+    opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + bearer });
+    return fetch(url, opts);
+  };
+  let res = await call(token);
   if (res.status === 401) {
+    if (await tryRefresh()) {
+      res = await call(sessionStorage.getItem(TOKEN_KEY));
+      if (res.status !== 401) return res;
+    }
     sessionStorage.removeItem(TOKEN_KEY);
     await beginLogin();
     return new Promise(() => {});
