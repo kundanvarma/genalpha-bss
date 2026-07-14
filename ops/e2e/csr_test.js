@@ -55,8 +55,16 @@ async function agentLogin(page, username) {
   if (org !== 'genalpha-retail') fail(`agent org badge wrong: ${org}`);
   console.log('OK agent-anna signed in to CSR, org:', org);
 
+  // TYPE-AHEAD, loose matching: a lowercase PARTIAL family name, no submit —
+  // results settle after the debounce
+  await a.fill('.searchbar input', FAMILY.toLowerCase().slice(0, -2));
+  await a.locator('.rowlink', { hasText: FAMILY }).first().waitFor({ timeout: 15000 });
+  console.log('OK search-as-you-type finds a lowercase partial name');
+  // ...and a PHONE NUMBER resolves in the tenant's own pool (permanent persona)
+  await a.fill('.searchbar input', '+46701000619');
+  await a.locator('.rowlink', { hasText: 'Sonny' }).first().waitFor({ timeout: 15000 });
+  console.log('OK a typed phone number resolves to its holder');
   await a.fill('.searchbar input', FAMILY);
-  await a.click('.searchbar button');
   const hit = a.locator('.rowlink', { hasText: FAMILY });
   await hit.waitFor({ timeout: 15000 });
   await hit.click();
