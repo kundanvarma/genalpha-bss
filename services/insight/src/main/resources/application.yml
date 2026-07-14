@@ -63,9 +63,17 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-insight}
         machine-client-secret: ${OIDC_CLIENT_SECRET:insight-secret}
+        analytics-provider: ${ANALYTICS_PROVIDER:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-insight}
         machine-client-secret: ${OIDC_CLIENT_SECRET:insight-secret}
+        analytics-provider: ${ANALYTICS_PROVIDER_NOVA:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_NOVA:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_NOVA:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_NOVA:}

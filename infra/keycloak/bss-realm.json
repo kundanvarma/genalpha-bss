@@ -786,7 +786,8 @@
       "serviceAccountClientId": "bss-recommendation",
       "realmRoles": [
         "catalog:read",
-        "inventory:read"
+        "inventory:read",
+        "insight:read"
       ],
       "id": "34bdb2d2-9986-5600-b57e-8cb4fedf2d51"
     },

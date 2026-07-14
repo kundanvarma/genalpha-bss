@@ -10,4 +10,6 @@ import java.util.Optional;
 public interface VisitorProfileRepository extends JpaRepository<VisitorProfile, String> {
 
     Optional<VisitorProfile> findByTenantIdAndVisitorId(String tenantId, String visitorId);
+
+    java.util.List<VisitorProfile> findByTenantIdAndPartyId(String tenantId, String partyId);
 }

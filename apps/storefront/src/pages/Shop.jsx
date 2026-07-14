@@ -108,12 +108,21 @@ function ConsentBanner({ onDecided }) {
       </p>
     );
   }
+  // deliberately LOUD: the brand accent frames the one question we must
+  // never sneak past anyone — both answers equally prominent
   return (
-    <section className="lobcard" data-testid="consent-banner" style={{ padding: '10px 16px' }}>
-      <p style={{ margin: '0 0 8px', fontSize: 13.5 }}>
-        {t('May we use your browsing here to personalize offers? First-party only, deleted on decline — your choice either way.')}
+    <section className="lobcard" data-testid="consent-banner" style={{
+      padding: '14px 18px',
+      border: '2px solid var(--teal)',
+      background: 'var(--teal-soft, rgba(69,175,172,.12))',
+      boxShadow: '0 6px 22px rgba(0,0,0,.12)' }}>
+      <p style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600 }}>
+        🍪 {t('May we use your browsing here to personalize offers?')}
       </p>
-      <div style={{ display: 'flex', gap: 10, maxWidth: 420 }}>
+      <p className="dim" style={{ margin: '0 0 10px', fontSize: 13 }}>
+        {t('First-party only, deleted on decline — your choice either way.')}
+      </p>
+      <div style={{ display: 'flex', gap: 10, maxWidth: 460 }}>
         <button className="primary" data-testid="consent-accept" style={{ flex: 1 }}
           onClick={() => decide(true)}>{t('Yes, personalize')}</button>
         <button className="primary" data-testid="consent-reject" style={{ flex: 1 }}

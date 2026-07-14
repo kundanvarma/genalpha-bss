@@ -19,6 +19,27 @@ public class RestCommerceClients {
     }
 
     @Bean
+    CommerceClients.InsightClient insightClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.insight-base-url:http://localhost:8119}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return (partyId) -> {
+            // fail-open: no insight component, no consent, no interests — the
+            // popularity ranking stands on its own
+            try {
+                java.util.Map<String, Object> profile = rest.get()
+                        .uri("/insight/v1/partyProfile?partyId=" + partyId)
+                        .retrieve().body(java.util.Map.class);
+                Object interests = profile == null ? null : profile.get("interests");
+                return interests instanceof List<?> l
+                        ? l.stream().map(String::valueOf).toList() : List.of();
+            } catch (Exception e) {
+                return List.of();
+            }
+        };
+    }
+
+    @Bean
     CommerceClients.CatalogClient catalogClient(RestClient.Builder builder,
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {

@@ -25,13 +25,16 @@ public class RecommendationService {
 
     private final CommerceClients.CatalogClient catalog;
     private final CommerceClients.InventoryClient inventory;
+    private final CommerceClients.InsightClient insight;
     private final PartyScope partyScope;
     private final Ranker ranker;
 
     public RecommendationService(CommerceClients.CatalogClient catalog,
-            CommerceClients.InventoryClient inventory, PartyScope partyScope, Ranker ranker) {
+            CommerceClients.InventoryClient inventory, PartyScope partyScope, Ranker ranker,
+            CommerceClients.InsightClient insight) {
         this.catalog = catalog;
         this.inventory = inventory;
+        this.insight = insight;
         this.partyScope = partyScope;
         this.ranker = ranker;
     }
@@ -47,11 +50,22 @@ public class RecommendationService {
                 owned.add(String.valueOf(ref.get("id")));
             }
         }
+        // FUSION: the customer's consented browsing interests (from the
+        // insight component) boost matching categories to the front — a
+        // stable re-sort, so the base ranking still decides within groups.
+        // Fail-open: no consent or no insight means popularity stands alone.
+        List<String> interests = insight.interestsOf(party);
+        java.util.function.Predicate<Map<String, Object>> interesting = (o) ->
+                o.get("category") instanceof List<?> cats && cats.stream()
+                        .anyMatch(c -> c instanceof Map<?, ?> m
+                                && interests.contains(String.valueOf(m.get("name"))));
         List<Map<String, Object>> candidates = ranker.rank(catalog.activeOfferings().stream()
                 .filter(o -> !owned.contains(String.valueOf(o.get("id"))))
                 .filter(o -> !Boolean.FALSE.equals(o.get("isSellable")))
                 .toList())
-                .stream().limit(5).toList();
+                .stream()
+                .sorted((a, b) -> Boolean.compare(interesting.test(b), interesting.test(a)))
+                .limit(5).toList();
 
         List<Map<String, Object>> items = new java.util.ArrayList<>();
         for (int i = 0; i < candidates.size(); i++) {

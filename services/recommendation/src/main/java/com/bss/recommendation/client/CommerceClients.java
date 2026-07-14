@@ -13,6 +13,11 @@ public final class CommerceClients {
         List<Map<String, Object>> activeOfferings();
     }
 
+    public interface InsightClient {
+        /** The customer's consented interests (category names), or empty. */
+        List<String> interestsOf(String partyId);
+    }
+
     public interface InventoryClient {
         List<Map<String, Object>> productsOf(String partyId);
 

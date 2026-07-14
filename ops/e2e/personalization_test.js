@@ -126,6 +126,53 @@ async function token(request, realm, client, user, pass) {
   console.log('OK signing in STITCHED this browser\'s profile to the customer — the'
     + ' guest\'s interests now belong to a known person, by consent');
 
+  /* ---------- fusion: the known customer's recommendations lean their way ---------- */
+  const persoTok = await token(ctx.request, 'bss', 'bss-biz',
+    `perso-${run}@example.com`, login.temporaryPassword);
+  let deviceFirst = false;
+  for (let i = 0; i < 10 && !deviceFirst; i++) {
+    const recs = await (await ctx.request.get(
+      `${API}/tmf-api/recommendationManagement/v4/recommendation`,
+      { headers: H(persoTok) })).json();
+    const first = recs[0]?.recommendationItem?.[0]?.offering;
+    if (first) {
+      const off = await (await ctx.request.get(
+        `${API}/tmf-api/productCatalogManagement/v4/productOffering/${first.id}`,
+        { headers: H(staff) })).json();
+      deviceFirst = (off.category || []).some((c) => c.name === 'Devices');
+    }
+    if (!deviceFirst) await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (!deviceFirst) fail('the known customer\'s device interest did not lead the recommendations');
+  console.log('OK FUSION: the stitched customer\'s TMF680 recommendations now lead with'
+    + ' Devices — BSS ranking plus consented browsing, one answer');
+
+  /* ---------- the analytics seam: nova brings its own GA4 ---------- */
+  const NOVA = 'http://shop.nova.localhost:8080';
+  const novaVid = `nova-vis-${run}`;
+  await ctx.request.post(`${NOVA}/insight/v1/consent`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: novaVid, analytics: true, personalization: true } });
+  await ctx.request.post(`${NOVA}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: novaVid, type: 'view', category: 'Mobilabonnement', offeringId: 'x-demo' } });
+  let forwarded = [];
+  for (let i = 0; i < 10 && !forwarded.length; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    forwarded = (await (await ctx.request.get(
+      'http://localhost:8120/events?measurement_id=G-NOVA-DEMO')).json())
+      .filter((e) => e.client_id === novaVid);
+  }
+  if (!forwarded.length || forwarded[0].name !== 'view_item') {
+    fail('nova\'s consented event never reached its own analytics: ' + JSON.stringify(forwarded));
+  }
+  // genalpha is internal-only: the earlier genalpha visitors must NOT be there
+  const all = await (await ctx.request.get(
+    'http://localhost:8120/events?measurement_id=G-NOVA-DEMO')).json();
+  if (all.some((e) => e.client_id === ruledVid || e.client_id === yesVid)) {
+    fail('a genalpha visitor leaked into nova\'s analytics property');
+  }
+  console.log('OK the ANALYTICS SEAM: nova\'s consented events land in nova\'s own "GA4"'
+    + ' (Measurement Protocol, mock in dev) — genalpha stays first-party-only, same binary');
+
   /* ---------- tenant wall ---------- */
   const novaStaff = await token(ctx.request, 'nova', 'bss-demo', 'demo', 'demo');
   const cross = await ctx.request.get(

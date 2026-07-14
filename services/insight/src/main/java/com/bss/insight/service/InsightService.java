@@ -31,13 +31,16 @@ public class InsightService {
     private final VisitorEventRepository events;
     private final PolicyClient policy;
     private final TenantScope tenantScope;
+    private final com.bss.insight.client.AnalyticsForwarder analytics;
 
     public InsightService(VisitorProfileRepository profiles, VisitorEventRepository events,
-            PolicyClient policy, TenantScope tenantScope) {
+            PolicyClient policy, TenantScope tenantScope,
+            com.bss.insight.client.AnalyticsForwarder analytics) {
         this.profiles = profiles;
         this.events = events;
         this.policy = policy;
         this.tenantScope = tenantScope;
+        this.analytics = analytics;
     }
 
     /** The consent choice — the only write allowed for an unknown visitor.
@@ -94,6 +97,8 @@ public class InsightService {
         e.setOfferingId(offeringId);
         e.setCreatedAt(OffsetDateTime.now());
         events.save(e);
+        // the seam: a ga4 tenant's consented events also reach THEIR property
+        analytics.forward(tenantId, visitorId, type, category, offeringId);
     }
 
     /** The login stitch: this browser's profile belongs to this party now —
@@ -157,6 +162,32 @@ public class InsightService {
             out.put("ruleName", decision.get("ruleName"));
         }
         return out;
+    }
+
+    /**
+     * The fusion window: a KNOWN customer's interests, merged across every
+     * browser they stitched — for the recommendation engine. Consent is
+     * embedded in the data itself: only consented breadcrumbs exist, only
+     * consented stitches link them.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> partyProfile(String partyId) {
+        String tenantId = tenantScope.currentTenantId();
+        Map<String, Long> merged = new LinkedHashMap<>();
+        for (VisitorProfile p : profiles.findByTenantIdAndPartyId(tenantId, partyId)) {
+            if (!p.isPersonalizationConsent()) {
+                continue;
+            }
+            for (Object[] row : events.interestsOf(tenantId, p.getVisitorId())) {
+                merged.merge(String.valueOf(row[0]), ((Number) row[1]).longValue(), Long::sum);
+            }
+        }
+        List<String> interests = merged.entrySet().stream()
+                .sorted((a, b) -> Long.compare(b.getValue(), a.getValue()))
+                .map(Map.Entry::getKey)
+                .limit(5)
+                .toList();
+        return Map.of("partyId", partyId, "interests", interests);
     }
 
     /** Back-office window (and the E2E's honesty probe): the raw profile. */
