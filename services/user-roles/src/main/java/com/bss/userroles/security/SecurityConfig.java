@@ -45,11 +45,13 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("roles:admin")
-                        // Login provisioning is the one write a customer-side org admin
-                        // may perform: inviting their own people. The service hardcodes
-                        // the new account to the customer role, so no escalation path.
+                        // Login provisioning is the one write customer-side identities
+                        // may perform: an org admin invites their people, a household
+                        // payer creates a child's account. The service hardcodes every
+                        // new account to the customer role — no escalation path, and no
+                        // more power than open self-registration already grants.
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/user")
-                        .hasAnyAuthority("roles:admin", "business:admin")
+                        .hasAnyAuthority("roles:admin", "business:admin", "customer")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("roles:admin")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("roles:admin")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("roles:admin")

@@ -109,6 +109,27 @@ export async function endHouseholdLink(dependentId) {
   }));
 }
 
+/** CHILD ACCOUNT: the payer mints the kid's login (TMF672, customer role
+ * only) and creates their party record with the household link born active.
+ * The temporary password is returned ONCE, for hand-over. */
+export async function addFamilyMember(givenName, familyName, email) {
+  const login = await json(await authFetch('/tmf-api/rolesAndPermissionsManagement/v4/user', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, givenName, familyName }),
+  }));
+  const claims = tokenClaims();
+  await json(await authFetch(`${PARTY}/individual/${claims.sub}/dependents`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: login.id, givenName, familyName,
+      contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }],
+    }),
+  }));
+  return { id: login.id, email, temporaryPassword: login.temporaryPassword };
+}
+
 /** The payer orders FOR a dependent — ordering verifies the live link and
  * stamps the payer; the plan lands on the payer's bill. */
 export async function orderForDependent(offering, dependentId) {

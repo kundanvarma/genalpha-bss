@@ -8,7 +8,9 @@ import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { TextInput } from 'react-native';
 import { changePlan, listOfferings, myBills, myParty, myProducts, myRecommendations,
-  myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin } from '../api.js';
+  myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin,
+  myHousehold, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember } from '../api.js';
+import { tokenClaims } from '../auth.js';
 import { money } from '../config.js';
 import { Button, Card, Dim, Meter, Row, palette } from '../ui.js';
 
@@ -91,6 +93,7 @@ export default function Home({ navigation }) {
   const [toppedUp, setToppedUp] = useState(false);
   const [changed, setChanged] = useState(null);
   const [org, setOrg] = useState(null);
+  const [household, setHousehold] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(() => {
@@ -107,6 +110,7 @@ export default function Home({ navigation }) {
       const orgId = p?.organization?.id;
       if (orgId) orgName(orgId).then((n) => setOrg(n || 'your company'));
     });
+    myHousehold().then(setHousehold);
   }, []);
   useFocusEffect(load);
 
@@ -134,6 +138,11 @@ export default function Home({ navigation }) {
       {org && (
         <View testID="app-org-banner" style={{ borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: c.line }}>
           <Dim>Your plan is provided by {org} — company charges go on its invoice. Anything you buy yourself shows on your own bill below.</Dim>
+        </View>
+      )}
+      {household?.payer?.status === 'active' && (
+        <View testID="app-household-banner" style={{ borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: c.line }}>
+          <Dim>Your plan is paid for by {household.payer.name || 'your family'} — it goes on their bill. Anything you buy yourself shows on your own bill.</Dim>
         </View>
       )}
 
@@ -196,6 +205,11 @@ export default function Home({ navigation }) {
         </Card>
       )}
 
+      {(household?.payer || (household?.dependents || []).length > 0) && (
+        <FamilyCard household={household} offerings={offerings} prices={prices}
+          onChanged={() => { myHousehold().then(setHousehold); setTimeout(load, 3000); }} />
+      )}
+
       {recs.length > 0 && (
         <Card title={products.length ? 'Complete your home' : 'For you'} testID="recs-card">
           {recs.slice(0, 3).map((it) => (
@@ -207,3 +221,70 @@ export default function Home({ navigation }) {
     </ScrollView>
   );
 }
+
+/** One person, many payers — the pocket edition. A dependent sees who pays
+ * for them (and can leave); a payer sees their people, accepts requests,
+ * orders a plan straight onto a kid's line, or mints a child account whose
+ * credentials show once for hand-over to the kid's phone. */
+function FamilyCard({ household, offerings, prices, onChanged }) {
+  const c = palette();
+  const [pick, setPick] = useState({});
+  const [made, setMade] = useState(null);
+  const [note, setNote] = useState(null);
+  const plans = offerings.filter((o) =>
+    ((o.category || [])[0] || {}).name === 'Mobile plans' && !o.isBundle);
+  const act = (p, ok) => p.then(() => { setNote(ok); onChanged(); }).catch((e) => setNote(e.message));
+
+  return (
+    <Card title="Family 👪" testID="app-family-card">
+      {household.payer && (
+        <Row left={<Dim>{household.payer.status === 'active'
+            ? `paid for by ${household.payer.name || household.payer.id}`
+            : `waiting for ${household.payer.name || 'them'} to accept`}</Dim>}
+          right={<Button ghost label="Leave" testID="app-hh-leave"
+            onPress={() => act(endHouseholdLink(tokenClaims().sub), 'left the household')} />} />
+      )}
+      {(household.dependents || []).map((d) => (
+        <View key={d.id} testID={'app-hh-dep-' + d.id}>
+          <Row left={<Text style={{ color: c.ink, fontWeight: '600' }}>{d.givenName} {d.familyName}</Text>}
+            right={d.status === 'pending'
+              ? <Button ghost label="Accept" testID="app-hh-accept"
+                  onPress={() => act(acceptDependent(d.id), 'accepted')} />
+              : <Button ghost label="Stop paying" testID="app-hh-stop"
+                  onPress={() => act(endHouseholdLink(d.id), 'stopped paying')} />} />
+          {d.status === 'active' && plans.slice(0, 2).map((o) => (
+            <Row key={o.id} left={<Dim>order {o.name} for them</Dim>}
+              right={<Button ghost label="Order" testID="app-hh-order"
+                onPress={() => act(orderForDependent(o, d.id), 'ordered — bills to you')} />} />
+          ))}
+        </View>
+      ))}
+      {made
+        ? <Dim testID="app-hh-credentials">✓ created — they sign in with {made.email} / {made.temporaryPassword} (shown once)</Dim>
+        : <AddFamily onMade={(m) => { setMade(m); onChanged(); }} />}
+      {note && <Dim testID="app-hh-note">{note}</Dim>}
+    </Card>
+  );
+}
+
+function AddFamily({ onMade }) {
+  const c = palette();
+  const [given, setGiven] = useState('');
+  const [email, setEmail] = useState('');
+  const [err, setErr] = useState(null);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+      <TextInput placeholder="first name" value={given} onChangeText={setGiven}
+        testID="app-hh-add-given"
+        style={{ borderWidth: 1, borderColor: c.line, borderRadius: 8, padding: 6, minWidth: 90, color: c.ink }} />
+      <TextInput placeholder="email" value={email} onChangeText={setEmail}
+        testID="app-hh-add-email" autoCapitalize="none"
+        style={{ borderWidth: 1, borderColor: c.line, borderRadius: 8, padding: 6, flex: 1, minWidth: 140, color: c.ink }} />
+      <Button ghost label="＋ Add family member" testID="app-hh-add"
+        onPress={() => addFamilyMember(given.trim(), 'Family', email.trim())
+          .then(onMade).catch((e) => setErr(e.message))} />
+      {err ? <Dim>{err}</Dim> : null}
+    </View>
+  );
+}
+

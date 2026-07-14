@@ -71,6 +71,40 @@ export const myParty = () => soft(call('/tmf-api/party/v4/individual/' + tokenCl
 export const orgName = (id) => soft(call('/tmf-api/party/v4/organization/' + id)
   .then((o) => o.name), null);
 
+// ---------------- household billing (one person, many payers) ----------------
+
+export const myHousehold = () => soft(
+  call('/tmf-api/party/v4/individual/' + tokenClaims().sub + '/household'), null);
+
+export const acceptDependent = (dependentId) =>
+  call(`/tmf-api/party/v4/individual/${dependentId}/householdPayer/accept`, {
+    method: 'POST', body: '{}' });
+
+export const endHouseholdLink = (dependentId) =>
+  call(`/tmf-api/party/v4/individual/${dependentId}/householdPayer`, { method: 'DELETE' });
+
+export const orderForDependent = (offering, dependentId) =>
+  call('/tmf-api/productOrderingManagement/v4/productOrder', {
+    method: 'POST',
+    body: JSON.stringify({ productOrderItem: [{ action: 'add',
+      productOffering: { id: offering.id, name: offering.name } }],
+      relatedParty: [{ id: dependentId, role: 'customer' }] }),
+  });
+
+/** Child account: mint the kid's login + party, household link born active. */
+export const addFamilyMember = async (givenName, familyName, email) => {
+  const login = await call('/tmf-api/rolesAndPermissionsManagement/v4/user', {
+    method: 'POST',
+    body: JSON.stringify({ email, givenName, familyName }),
+  });
+  await call(`/tmf-api/party/v4/individual/${tokenClaims().sub}/dependents`, {
+    method: 'POST',
+    body: JSON.stringify({ id: login.id, givenName, familyName,
+      contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] }),
+  });
+  return { email, temporaryPassword: login.temporaryPassword };
+};
+
 /** One-tap purchase for simple digital items (data top-ups). */
 export const quickOrder = (offering) =>
   call('/tmf-api/productOrderingManagement/v4/productOrder', {
