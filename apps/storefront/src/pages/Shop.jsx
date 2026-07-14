@@ -88,7 +88,6 @@ export default function Shop() {
  */
 function ConsentBanner({ onDecided }) {
   const [answered, setAnswered] = useState(Boolean(consentChoice()));
-  if (answered) return null;
   const decide = async (yes) => {
     await saveConsent(yes, yes);
     setAnswered(true);
@@ -97,6 +96,18 @@ function ConsentBanner({ onDecided }) {
       onDecided();
     }
   };
+  // changing your mind must be as easy as consenting was
+  if (answered) {
+    return (
+      <p style={{ margin: '2px 0' }}>
+        <button className="ghost" data-testid="consent-reopen"
+          style={{ fontSize: 12, padding: '2px 8px' }}
+          onClick={() => setAnswered(false)}>
+          {t('Privacy choices')}
+        </button>
+      </p>
+    );
+  }
   return (
     <section className="lobcard" data-testid="consent-banner" style={{ padding: '10px 16px' }}>
       <p style={{ margin: '0 0 8px', fontSize: 13.5 }}>
