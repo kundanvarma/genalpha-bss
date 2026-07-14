@@ -546,12 +546,68 @@ async function confirmLogout(page) {
   await glideClick(page, page.locator('#logout'));
   await confirmLogout(page);
 
+  /* ============ SCENE 5.5 — the family ledger & the library ============ */
+  // a lingering genalpha SSO session would skip the login form — end it first
+  await page.goto('http://localhost:8085/realms/bss/protocol/openid-connect/logout');
+  await confirmLogout(page);
+  await page.goto('http://localhost:8080/shop/');
+  await page.waitForSelector('.card', { timeout: 20000 });
+  await glideClick(page, page.locator('.who >> text=Sign in'));
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await lens(page);
+  await glideType(page, page.locator('input[name="username"]'), 'paula@family.example');
+  await page.fill('input[name="password"]', 'paula');
+  await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
+  await page.waitForSelector('.nav', { timeout: 20000 });
+  console.log('· SCENE5.5-family');
+  await glideClick(page, page.locator('.nav >> text=Family'));
+  await page.locator('[data-testid=role-chip]').first().waitFor({ timeout: 20000 });
+  await caption(page, '👪  The FAMILY HUB: Paula pays, Wilma co-admins, Sonny\'s plan is family-funded — roles from Verizon, consent from Jio, one bill with per-person lines.', 4600);
+  await caption(page, '💶  Each member can carry a top-up ALLOWANCE: inside it the kid buys instantly on the family bill; above it, the order HOLDS and Paula gets the ask — Google Family Link, telco edition.', 4600);
+  await captionOff(page);
+  await page.locator(`[data-testid=fam-member-841856ed-4732-4276-879c-9e3a7f5b4b04] .row`).first()
+    .waitFor({ timeout: 15000 }).catch(() => {});
+  await glideClick(page, page.locator('.nav >> text=My page'));
+  await page.locator('[data-testid=gift-select]').waitFor({ timeout: 20000 });
+  await page.locator('[data-testid=gift-select]').scrollIntoViewIfNeeded();
+  await page.selectOption('[data-testid=gift-select]', { index: 1 });
+  await glideType(page, page.locator('[data-testid=gift-amount]'), '2');
+  await caption(page, '🎁  The gifting move: gift gigabytes to family — or to ANY phone number, when the plan\'s giftScope says so. Nova runs it network-wide; genalpha keeps it in the family. Same binary, catalog data.', 5000);
+  await caption(page, '📆  Unused data rolls into next month, capped like T-Mobile\'s stash — and every lever (giftable, scope, share, rollover) is a spec characteristic, not code.', 4400);
+  await captionOff(page);
+  await glideClick(page, page.locator('.nav >> text=Support'));
+  await page.locator('[data-testid=faq-card]').waitFor({ timeout: 20000 });
+  await glideType(page, page.locator('[data-testid=faq-search]'), 'gift');
+  await page.locator('[data-testid=faq-faq-gift-data]').waitFor({ timeout: 15000 });
+  await glideClick(page, page.locator('[data-testid=faq-faq-gift-data]'));
+  await caption(page, '📚  Component #32, the KNOWLEDGE BASE: answers first, tickets second. One library, audience shelves — customers get FAQs, agents get cheat-sheets, product owners get the how-to-build-products shelf in the console.', 5200);
+  await captionOff(page);
+  await glideClick(page, page.locator('.who >> text=Sign out'));
+  await confirmLogout(page);
+
+  // the CSR desk: ask in plain words, get a grounded answer with sources
+  await page.goto('http://localhost:8080/csr/');
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await lens(page);
+  await glideType(page, page.locator('input[name="username"]'), 'agent-anna');
+  await page.fill('input[name="password"]', 'agent');
+  await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
+  await page.waitForSelector('.nav', { timeout: 20000 });
+  console.log('· SCENE5.5-csr-ask');
+  await glideClick(page, page.locator('.nav >> text=Knowledge'));
+  await page.locator('[data-testid=kb-search]').waitFor({ timeout: 20000 });
+  await glideType(page, page.locator('[data-testid=kb-search]'), 'can a child gift data?');
+  await glideClick(page, page.locator('[data-testid=kb-ask]'));
+  await page.locator('[data-testid=kb-answer]').waitFor({ timeout: 30000 });
+  await caption(page, '✨  Anna ASKS in plain words — the AI answers FROM the retrieved articles, sources named, fetched with HER token: a customer asking the same question gets the customer shelf only.', 5200);
+  await captionOff(page);
+
   /* ============ SCENE 6 — the machine tells its own story ============ */
   await page.goto('http://localhost:8080/flow/');
   await page.waitForTimeout(3500);
   await caption(page, '🛰  Under the hood, every click you saw was an event — the system narrates itself.', 4000);
   await caption(page, '🔮  And under THAT: Java 25 with post-quantum crypto in the runtime, a hybrid ML-KEM edge, encrypted card secrets — PQC-ready, receipts in the repo.', 4200);
-  await caption(page, 'genalpha-bss · 31 ODA components · 11 CTKs at zero · any language, any currency · quantum-ready · everything you watched was real.', 4500);
+  await caption(page, 'genalpha-bss · 32 ODA components · 11 CTKs at zero · families, gifting, a knowledge base · any language, any currency · quantum-ready · everything you watched was real.', 4500);
 
   await ctx.close();
   const video = await page.video().path();

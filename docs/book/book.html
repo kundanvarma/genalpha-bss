@@ -118,8 +118,8 @@
     <div class="num">Preface</div>
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
-    operator sells, bills, and serves customers through — from an empty repository to thirty-one
-    composable components, six customer surfaces, and twenty-five end-to-end test suites that all pass
+    operator sells, bills, and serves customers through — from an empty repository to thirty-two
+    composable components, six customer surfaces, and thirty-three end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1496,14 +1496,122 @@
 
 <div class="page">
 
-  <!-- Ch 25 -->
-  <section class="chapter" id="ch25">
+  <!-- Ch 25: the family -->
+  <section class="chapter" id="ch25family">
     <div class="num">Chapter Twenty-Five</div>
+    <h3>The family ledger</h3>
+    <div class="epi">"I think before developing you should think about plan, do some research on ux
+    and flow by other big companies like Orange, Jio… because I really want to give a good user
+    experience for end customers." <span class="who">— the operator, pulling the handbrake</span></div>
+
+    <p class="drop">The household had started as billing plumbing: a person could pay for another
+    person, consent-gated, one family bill with per-person attribution. Correct, tested, honest — and
+    not an experience. The operator's own click-through proved it. Two subscriptions on a page with no
+    hint of whose they were; a link that promised "open their page" and opened the wrong one, because
+    a login redirect quietly dropped the deep link on the floor. The bug was one line. The verdict was
+    bigger: stop patching, go read how the operators people actually live with present a family.</p>
+
+    <p>So the research came first, for once, and it converged fast. Jio's parent SIM is a hub — the
+    parent's app lists every linked number and drills into each one, and adding a member sends the OTP
+    to <em>their</em> phone, consent built into the gesture. Orange lets a second parent co-pilot the
+    children's accounts. Verizon has the cleanest role grammar in the industry: one Owner, up to three
+    Account Managers who can do nearly everything except manage each other, Members who see only their
+    own line. T-Mobile's Family Allowances let the owner set caps the managed lines can see but not
+    change. And Google's Family Link solved the purchase question years ago: the child taps "buy", the
+    parent gets the ask, nobody hits a dead end. None of them scatter labels across the member's own
+    page. All of them build a family <em>place</em>.</p>
+
+    <p>The family hub followed in three phases, each shipped against a live suite. Phase one was the
+    place itself: a Family tab where the payer — the <em>owner</em>, in Verizon's grammar — sees every
+    member as a card with a role chip and the services the family funds, and where "my wife can also
+    be the admin" became a button. Promotion is the owner's alone; an admin sees the whole family and
+    orders for any member, but the payer stamp on that order is the <em>household payer's</em>, never
+    the admin's — admin is authority, not a wallet. The suite proves the sentence: the wife orders the
+    son's plan from her own hub, and the bill lands on the owner. Privacy stayed proportional the whole
+    way down. Through the family window an adult shows only what the family funds; the son's own
+    Netflix, bought with his own money, never crosses the glass. Paying is not watching.</p>
+
+    <p>Phase two took Family Link's insight and T-Mobile's caps and fused them onto the order pipeline.
+    Each member can carry a monthly top-up allowance in euros, set from their card on the hub. Inside
+    it, a child's top-up completes instantly on the family bill and the payer just hears money moved.
+    Above it, the order parks in a state the fulfilment layer ignores by its own guard — <em>held</em>
+    — and an approvals inbox grows at the top of the hub. Approve, and the state flips; the machinery
+    picks it up exactly like a fresh order. Decline, and the requester gets a kind sentence in their
+    inbox instead of a dead end. Adults are never blocked: over the cap they simply pay from their own
+    pocket, as any adult may.</p>
+
+    <h2>The gifting move</h2>
+    <p>Then came gifting, and with it the question that mattered more than the feature. In Norway, a CSP
+    rolls unused data forward automatically and lets a customer gift it to <em>anyone on the network</em>.
+    "Are these features configurable," the operator asked, "or does everything need to be recoded?"
+    The honest answer was: hardcoded, today. The right answer took an afternoon: gifting scope, share
+    caps, giftability, rollover eligibility and rollover caps all moved onto the plan's spec
+    characteristics — product data, read through a thirty-second cache — and the policy engine grew a
+    third rules-as-data family, <em>gifting</em> vetoes, for whatever the levers can't say. The proof
+    was theatrical on purpose: the test itself, acting as Nova's staff, put <code>giftScope=tenant</code>
+    on Nova's plan spec — a catalog edit — and two complete strangers gifted gigabytes to each other on
+    one tenant while the other tenant, on the same running binary, still answered "no household link
+    to that person." The feature nobody hardcoded, running both ways at once.</p>
+
+    <p>Gifting by phone number closed the loop, because that is how people actually know each other.
+    The number pool had held the answer all along — every assigned MSISDN already mapped to its holder
+    in the fulfilment layer — so a typed number resolves server-side, agents and machines only, and
+    the confirmation echoes the number back, never the stranger's name. Names cross by consent;
+    numbers are how you address a gift. Phase three made age real data instead of an assumption — a
+    birth date on the party record, an adult joining as a member where an undated dependent stays
+    safely a child — and gave the guardian's window its meters, for children only. The child's card on
+    the hub carries a live usage bar. The adult's never does, even when the family pays. The suite
+    asserts both sentences, because the second one is the product.</p>
+  </section>
+
+  <!-- Ch 26: knowledge -->
+  <section class="chapter" id="ch26library">
+    <div class="num">Chapter Twenty-Six</div>
+    <h3>The library</h3>
+    <div class="epi">"I also need a knowledge management feature… so customers or CSR or sales can
+    query if they are wondering on stuff within BSS or channels. How big is that to build?"
+    <span class="who">— the operator</span></div>
+
+    <p class="drop">By now the platform had thirty-one components and a family saga, and the honest
+    gap was that nobody could <em>ask it anything</em>. The answer became component thirty-two, and it
+    followed every rule the previous thirty-one had taught. Articles and FAQs as data, authored in the
+    console, tenant-walled by row-level security, searched by the database's own full-text engine —
+    no new infrastructure, because Postgres was already load-bearing. One library, with one law:
+    <em>who you are decides what you see.</em> A customer searching "gift" gets the FAQ shelf on the
+    shop's Support page — answers first, tickets second. An agent running the same search gets the
+    cheat-sheets on top: the household role grammar, what a held order is and who may release it. A
+    product owner opens the console and finds the shelf this book's machinery deserves: how to create
+    a product — spec, offering, price, in that order — how bundles compose, which spec characteristics
+    flip gifting network-wide, how to talk to the copilot. The how-to-build-products library lives
+    where the products are built.</p>
+
+    <p>The layer that made it more than a search box reused the oldest seam in the system. Ask a
+    question in plain words at the CSR desk and the intelligence component retrieves first, then lets
+    the model answer <em>from the retrieved articles only</em>, sources named, honest "I don't know"
+    when the library is silent. The retrieval runs with the asker's own token — not a machine identity —
+    so a customer's question can only ever be answered from articles a customer could read. The
+    audience filter isn't advice to the model; it is the shape of what the model is allowed to see.
+    On the keyless stub the answer points at the right article; with a real key it becomes synthesis.
+    Either way it cites its shelf.</p>
+
+    <p>The week's small confession belongs in this chapter, because it is the same lesson at desk
+    height: the CSR customer search had been an <em>exact family-name match</em> since the day it was
+    born. Typing "gina" — a given name, lowercase — found nobody, in a system that could split a bill
+    three ways. The fix was ordinary (any case-blind fragment of a name, an email, an address line;
+    results settling three hundred milliseconds after the last keystroke) plus one flourish the number
+    pool made free: paste a phone number into the same box and the holder's 360 opens, their numbers
+    now sitting in the header where a ringing phone needs them. Features are load-bearing only if the
+    person at the desk can find the customer they're talking to.</p>
+  </section>
+
+  <!-- Ch 27 (the closer) -->
+  <section class="chapter" id="ch25">
+    <div class="num">Chapter Twenty-Seven</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
-    <p class="drop">Thirty-one components. Six customer surfaces, one of them wearing two faces by
-    role. Twenty-five end-to-end suites, all green in a real browser. Eleven official conformance kits
+    <p class="drop">Thirty-two components. Six customer surfaces, one of them wearing two faces by
+    role. Thirty-three end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
