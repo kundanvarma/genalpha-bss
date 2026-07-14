@@ -91,6 +91,11 @@ export default function Customer360() {
     .find((m) => m.mediumType === 'postalAddress')?.characteristic;
   const email = (customer.contactMedium || [])
     .find((m) => m.mediumType === 'email')?.characteristic?.emailAddress;
+  // the numbers the customer actually calls from — their active lines
+  const numbers = [...new Set(activeServices
+    .flatMap((sv) => sv.supportingResource || [])
+    .map((r) => r.value)
+    .filter(Boolean))];
 
   async function act(fn) {
     try {
@@ -110,6 +115,9 @@ export default function Customer360() {
       </h1>
       <p className="dim small">
         {email || <span title={customer.id}>{customer.id.slice(0, 8)}…</span>}
+        {numbers.length > 0 && <> · <span data-testid="cust-numbers">
+          📞 {numbers.map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
+        </span></>}
         {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
       {error && <p className="error">{error}</p>}
 
