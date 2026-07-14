@@ -16,6 +16,8 @@ const PORT = process.env.PORT || 8080;
 
 /** measurement_id -> [{client_id, name, params, receivedAt}] */
 const received = new Map();
+/** client_id -> [audience names] */
+const audiences = new Map();
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -51,6 +53,24 @@ const server = http.createServer((req, res) => {
       }
     });
     return;
+  }
+
+  // audiences the platform computed (the real GA4 exposes these via the
+  // Data/Audience Export APIs; the mock keeps the same idea reachable)
+  if (req.method === 'POST' && url.pathname === '/audiences') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      try {
+        const { client_id, audiences: names } = JSON.parse(body || '{}');
+        audiences.set(client_id, names || []);
+        json(200, { client_id, audiences: names || [] });
+      } catch { json(400, { error: 'unparseable payload' }); }
+    });
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/audiences') {
+    return json(200, audiences.get(url.searchParams.get('client_id')) || []);
   }
 
   if (req.method === 'GET' && url.pathname === '/events') {

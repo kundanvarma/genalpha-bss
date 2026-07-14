@@ -245,3 +245,14 @@ export async function askKnowledge(question) {
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
   return res.json();
 }
+
+/** Next best offer with the WHY — TMF680 candidates, the model reasons. */
+export async function aiNextBestOffer(partyId) {
+  const res = await authFetch('/ai/v1/nextBestOffer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ partyId }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}

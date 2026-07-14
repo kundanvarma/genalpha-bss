@@ -65,9 +65,10 @@ public class InsightController {
         return ResponseEntity.ok(service.partyProfile(partyId));
     }
 
-    /** Back-office window into one profile (insight:read). */
+    /** Back-office window (insight:read): one profile, or the recent ledger. */
     @GetMapping("/profile")
-    public ResponseEntity<Map<String, Object>> profile(@RequestParam String visitorId) {
-        return ResponseEntity.ok(service.profileOf(visitorId));
+    public ResponseEntity<?> profile(@RequestParam(required = false) String visitorId) {
+        return ResponseEntity.ok(visitorId == null || visitorId.isBlank()
+                ? service.recentProfiles() : service.profileOf(visitorId));
     }
 }

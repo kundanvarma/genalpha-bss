@@ -45,8 +45,15 @@ async function token(request, realm, client, user, pass) {
   await yes.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
   await yes.click('[data-testid=consent-accept]');
   await browse(yes);
-  await yes.reload();
-  await yes.locator('[data-testid=personal-banner]', { hasText: 'Devices' }).waitFor({ timeout: 15000 });
+  // cold-start friendly: the first insight round-trips (machine token mint,
+  // JIT) can outlive one page load — poll a few reloads before judging
+  let bannerUp = false;
+  for (let i = 0; i < 5 && !bannerUp; i++) {
+    await yes.reload();
+    bannerUp = await yes.locator('[data-testid=personal-banner]', { hasText: 'Devices' })
+      .waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+  }
+  if (!bannerUp) fail('the consenting guest never saw the personalized home');
   const yesVid = await visitorOf(yes);
   const yesProfile = await (await profileOf(yesVid)).json();
   if (!yesProfile.analyticsConsent || yesProfile.eventCount < 1) {
@@ -172,6 +179,48 @@ async function token(request, realm, client, user, pass) {
   }
   console.log('OK the ANALYTICS SEAM: nova\'s consented events land in nova\'s own "GA4"'
     + ' (Measurement Protocol, mock in dev) — genalpha stays first-party-only, same binary');
+
+  /* ---------- P3: the platform's audiences come BACK as rule context ---------- */
+  await ctx.request.post('http://localhost:8120/audiences', { headers: { 'Content-Type': 'application/json' },
+    data: { client_id: novaVid, audiences: ['high-value-browsers'] } });
+  const novaExp = await (await ctx.request.get(
+    `${NOVA}/insight/v1/experience?visitorId=${novaVid}`)).json();
+  if (!(novaExp.segments || []).includes('high-value-browsers')) {
+    fail('the analytics audience never came back as a segment: ' + JSON.stringify(novaExp));
+  }
+  console.log('OK AUDIENCE IMPORT: the segment nova\'s own analytics computed'
+    + ' (\'high-value-browsers\') is now rule-addressable context — the seam flows both ways');
+
+  /* ---------- P3: social attribution from the campaign tag ---------- */
+  const socialVid = `social-vis-${run}`;
+  await ctx.request.post(`${API}/insight/v1/consent`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: socialVid, analytics: true, personalization: true } });
+  await ctx.request.post(`${API}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: socialVid, type: 'view', category: 'Mobile plans', utmSource: 'instagram' } });
+  const socialExp = await (await ctx.request.get(
+    `${API}/insight/v1/experience?visitorId=${socialVid}`)).json();
+  if (socialExp.channel !== 'social') {
+    fail('an instagram utm did not classify as social: ' + JSON.stringify(socialExp));
+  }
+  console.log('OK SOCIAL ATTRIBUTION: utm_source=instagram classifies the visit as'
+    + ' channel=social — rules can greet the platform they came from');
+
+  /* ---------- P3: next best offer, with the WHY ---------- */
+  const annaTok = await token(ctx.request, 'bss', 'bss-csr', 'agent-anna', 'agent');
+  const nbo = await (await ctx.request.post(`${API}/ai/v1/nextBestOffer`,
+    { headers: H(annaTok), data: { partyId: login.id } })).json();
+  if (!nbo.offer || !nbo.offer.name) fail('NBO returned no offer: ' + JSON.stringify(nbo).slice(0, 200));
+  if (!(nbo.reason || '').includes('Devices')) {
+    fail('the NBO reason is not grounded in the customer\'s interest: ' + nbo.reason);
+  }
+  const nboOff = await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering/${nbo.offer.id}`,
+    { headers: H(staff) })).json();
+  if (!(nboOff.category || []).some((c) => c.name === 'Devices')) {
+    fail('the NBO offer is not from the interest category: ' + nboOff.name);
+  }
+  console.log('OK NEXT BEST OFFER: "' + nbo.offer.name + '" — reason: "' + nbo.reason
+    + '" — TMF680 candidates, the model only supplied the WHY');
 
   /* ---------- tenant wall ---------- */
   const novaStaff = await token(ctx.request, 'nova', 'bss-demo', 'demo', 'demo');

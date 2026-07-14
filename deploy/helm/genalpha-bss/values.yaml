@@ -296,6 +296,9 @@ services:
       TICKET_BASE_URL: http://trouble-ticket:8080
       ASSURANCE_BASE_URL: http://assurance:8080
       KNOWLEDGE_BASE_URL: http://knowledge:8080
+      RECOMMENDATION_BASE_URL: http://recommendation:8080
+      INSIGHT_BASE_URL: http://insight:8080
+      INVENTORY_BASE_URL: http://product-inventory:8080
   user-roles:
     db: ""
     machineIdentity: true

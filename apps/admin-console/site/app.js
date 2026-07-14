@@ -230,6 +230,27 @@ const RESOURCES = [
     },
   },
   {
+    path: 'profile',
+    base: '/insight/v1',
+    title: 'Insight',
+    // The consent ledger: WHO the shop is watching, under WHICH consent —
+    // and what it learned. Read-only by design; the visitor owns the data,
+    // the operator only gets to SEE what it holds.
+    readOnly: true,
+    fields: [],
+    columns: ['visitorId', 'partyId', 'analyticsConsent', 'personalizationConsent', 'utmSource', 'lastUpdate'],
+    detail: async (item) => {
+      const res = await authFetch(`/insight/v1/profile?visitorId=${item.visitorId}`);
+      const full = await res.json();
+      return [{
+        consent: `analytics: ${full.analyticsConsent} · personalization: ${full.personalizationConsent}`,
+        events: full.eventCount,
+        interests: (full.interests || []).map((i) => `${i.category} (${i.views})`).join(', ') || '—',
+        campaign: full.utmSource || '—',
+      }];
+    },
+  },
+  {
     path: 'policyRule',
     base: POLICY_BASE,
     title: 'Rules',
@@ -250,6 +271,8 @@ const RESOURCES = [
         { value: 'price-characteristic', label: 'Price: campaign on a configured choice (e.g. a colour)' },
         { value: 'price-volume', label: 'Price: volume deal — any company with enough people (B2B)' },
         { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
+        { value: 'perso-interest', label: 'Personalize: visitors interested in a category see a banner + pinned offer' },
+        { value: 'perso-segment', label: 'Personalize: an analytics segment (audience) sees a banner + pinned offer' },
       ] },
       { name: 'organization', label: 'Company (the deal applies to this organization only)', kind: 'ref',
         base: '/tmf-api/party/v4', resource: 'organization', referredType: 'Organization',
@@ -260,6 +283,13 @@ const RESOURCES = [
         showWhen: { field: 'ruleKind', in: ['price-characteristic'] } },
       { name: 'characteristicValue', label: 'Value the campaign applies to (e.g. Icy Blue)',
         showWhen: { field: 'ruleKind', in: ['price-characteristic'] } },
+      { name: 'interestCategory', label: 'Interest — the category they have been browsing (e.g. Devices)',
+        showWhen: { field: 'ruleKind', in: ['perso-interest'] } },
+      { name: 'segmentName', label: 'Segment — audience name from your analytics (e.g. high-value-browsers)',
+        showWhen: { field: 'ruleKind', in: ['perso-segment'] } },
+      { name: 'pinnedOffering', label: 'Offering to pin on top of the shop', kind: 'ref',
+        resource: 'productOffering', referredType: 'ProductOffering',
+        showWhen: { field: 'ruleKind', in: ['perso-interest', 'perso-segment'] } },
       { name: 'offeringA', label: 'Item', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering',
         showWhen: { field: 'ruleKind', in: ['quantity-cap', 'incompatibility', 'requires-verified-id', 'price-when-item'] } },
       { name: 'maxQuantity', label: 'Max quantity (blank = 1)', kind: 'number',
@@ -286,8 +316,15 @@ const RESOURCES = [
       const max = Number(body.maxQuantity);
       const kind = body.ruleKind || '';
       const isPricing = kind.startsWith('price-');
+      const isPerso = kind.startsWith('perso-');
       let condition = body.condition;
       switch (kind) {
+        case 'perso-interest':
+          condition = JSON.stringify({ in: [(body.interestCategory || '').trim(), { var: 'interests' }] });
+          break;
+        case 'perso-segment':
+          condition = JSON.stringify({ in: [(body.segmentName || '').trim(), { var: 'segments' }] });
+          break;
         case 'quantity-cap':
           condition = JSON.stringify({ '>': [{ var: a ? `quantityByOffering.${a}` : 'maxLineQuantity' }, Number.isFinite(max) && max > 0 ? max : 1] });
           break;
@@ -328,14 +365,16 @@ const RESOURCES = [
       return {
         name: body.name,
         description: body.description,
-        domain: isPricing ? 'pricing' : 'order',
-        effect: isPricing ? 'adjust' : 'deny',
+        domain: isPerso ? 'personalization' : isPricing ? 'pricing' : 'order',
+        effect: isPerso ? 'experience' : isPricing ? 'adjust' : 'deny',
         priority: body.priority,
         enabled: body.enabled,
         condition,
         message: body.message,
         adjustmentType: isPricing ? (body.adjustmentType || 'percent') : undefined,
         adjustmentValue: isPricing ? body.adjustmentValue : undefined,
+        experience: isPerso && body.pinnedOffering
+          ? { teaserOfferingId: idOf(body.pinnedOffering) } : undefined,
       };
     },
     columns: ['name', 'domain', 'effect', 'enabled', 'priority', 'adjustmentValue', 'condition', 'lastUpdate'],
@@ -442,6 +481,7 @@ const TAB_ROLE = {
   campaign: 'campaign:read',
   policyRule: 'policy:read',
   article: 'knowledge:write',
+  profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
   staff: 'roles:admin',

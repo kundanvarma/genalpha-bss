@@ -21,12 +21,15 @@ public class CopilotController {
     private final CopilotService service;
     private final ProductCopilotService productCopilot;
     private final KnowledgeAskService knowledgeAsk;
+    private final com.bss.intelligence.service.NextBestOfferService nextBestOffer;
 
     public CopilotController(CopilotService service, ProductCopilotService productCopilot,
-            KnowledgeAskService knowledgeAsk) {
+            KnowledgeAskService knowledgeAsk,
+            com.bss.intelligence.service.NextBestOfferService nextBestOffer) {
         this.service = service;
         this.productCopilot = productCopilot;
         this.knowledgeAsk = knowledgeAsk;
+        this.nextBestOffer = nextBestOffer;
     }
 
     @PostMapping("/customerSummary")
@@ -54,6 +57,14 @@ public class CopilotController {
     @PostMapping("/ticketReply")
     public ResponseEntity<Map<String, Object>> reply(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(service.draftTicketReply(request));
+    }
+
+    /** Next best offer: TMF680 candidates (interest-fused), the model
+     * supplies only the WHY. */
+    @PostMapping("/nextBestOffer")
+    public ResponseEntity<Map<String, Object>> nextBestOffer(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(nextBestOffer.nextBestOffer(
+                String.valueOf(request.getOrDefault("partyId", ""))));
     }
 
     /** Ask the knowledge base: retrieval with the ASKER's own token (their

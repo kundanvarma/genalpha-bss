@@ -4,7 +4,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
-  revokePaymentMethod, usageOf } from '../api.js';
+  revokePaymentMethod, usageOf , aiNextBestOffer } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -39,7 +39,8 @@ export default function Customer360() {
   const [note, setNote] = useState('');
   const [ticketName, setTicketName] = useState('');
   const [error, setError] = useState(null);
-  const [copilot, setCopilot] = useState(null); // null | 'loading' | {summary, nextActions}
+  const [copilot, setCopilot] = useState(null);
+  const [nbo, setNbo] = useState(null); // null | 'loading' | {summary, nextActions}
 
   async function summarize() {
     setCopilot('loading');
@@ -120,6 +121,23 @@ export default function Customer360() {
         </span></>}
         {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
       {error && <p className="error">{error}</p>}
+
+      <section className="copilot" data-testid="nbo-card">
+        {!nbo && hasRole('ai:use') && (
+          <button className="ghost" data-testid="nbo-ask" onClick={async () => {
+            setNbo('loading');
+            try { setNbo(await aiNextBestOffer(id)); } catch (e) { setNbo({ reason: e.message }); }
+          }}>
+            🎯 Next best offer
+          </button>
+        )}
+        {nbo === 'loading' && <p className="dim small">Weighing the shelf against this customer…</p>}
+        {nbo && nbo !== 'loading' && (
+          <p data-testid="nbo-answer">
+            {nbo.offer ? <strong>{nbo.offer.name}</strong> : null} <span className="dim">{nbo.reason}</span>
+          </p>
+        )}
+      </section>
 
       <section className="copilot" data-testid="copilot-card">
         {!copilot && hasRole('ai:use') && (
