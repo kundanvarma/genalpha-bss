@@ -112,7 +112,7 @@ export async function endHouseholdLink(dependentId) {
 /** CHILD ACCOUNT: the payer mints the kid's login (TMF672, customer role
  * only) and creates their party record with the household link born active.
  * The temporary password is returned ONCE, for hand-over. */
-export async function addFamilyMember(givenName, familyName, email) {
+export async function addFamilyMember(givenName, familyName, email, birthDate) {
   const login = await json(await authFetch('/tmf-api/rolesAndPermissionsManagement/v4/user', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -124,6 +124,7 @@ export async function addFamilyMember(givenName, familyName, email) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       id: login.id, givenName, familyName,
+      ...(birthDate ? { birthDate } : {}),
       contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }],
     }),
   }));
@@ -394,6 +395,12 @@ export async function setAllowance(memberId, monthlyValue) {
 /** Held ask-to-buy orders across my family — the hub's approvals inbox. */
 export async function familyApprovals() {
   return json(await authFetch(`${ORDERING}/productOrder/familyApprovals`));
+}
+
+/** A CHILD's usage meters, through the household link (payer/admin only —
+ * an adult member's usage stays their own even when the family pays). */
+export async function memberUsage(memberId) {
+  return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption?relatedPartyId=${encodeURIComponent(memberId)}`));
 }
 
 /** The FAQ library — the customer shelf of the knowledge base. */

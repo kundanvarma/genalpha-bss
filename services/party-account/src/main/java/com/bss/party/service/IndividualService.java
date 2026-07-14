@@ -408,7 +408,11 @@ public class IndividualService {
         entity.setHref(com.bss.party.api.ApiConstants.PARTY_BASE + "/individual/" + dto.getId());
         entity.setHouseholdPayerId(payerId);
         entity.setHouseholdStatus("active");
-        entity.setHouseholdRole("child");
+        // age is DATA when given: an adult the payer creates joins as a plain
+        // member; without a birth date the safe default stays 'child'
+        boolean adult = entity.getBirthDate() != null
+                && entity.getBirthDate().isBefore(java.time.LocalDate.now().minusYears(18));
+        entity.setHouseholdRole(adult ? "member" : "child");
         IndividualDto created = mapper.toDto(repository.save(entity));
         partyRoles.grant(created.getId(), "customer");
         events.publish("IndividualCreateEvent", "individual", created);

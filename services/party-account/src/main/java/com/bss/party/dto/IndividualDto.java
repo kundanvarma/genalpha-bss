@@ -29,6 +29,9 @@ public class IndividualDto {
     @JsonProperty("organization")
     private Map<String, Object> organization;
 
+    @JsonProperty("birthDate")
+    private String birthDate;
+
     /** Read-only projection: {id, status} of the person who pays for this
      * individual. Written ONLY through the consent endpoints, never PATCH. */
     @JsonProperty("householdPayer")
@@ -43,6 +46,9 @@ public class IndividualDto {
     public String getId() {
         return id;
     }
+
+    public String getBirthDate() { return birthDate; }
+    public void setBirthDate(String birthDate) { this.birthDate = birthDate; }
 
     public void setId(String id) {
         this.id = id;
