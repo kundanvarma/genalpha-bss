@@ -42,6 +42,13 @@ public class CampaignController {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 
+    /** Segment blast: reach everyone in the campaign's insight segment, once. */
+    @PostMapping("/{id}/execute")
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> execute(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        return org.springframework.http.ResponseEntity.ok(service.executeSegment(id));
+    }
+
     @GetMapping("/{id}/execution")
     public ResponseEntity<List<Map<String, Object>>> executions(@PathVariable String id) {
         return ResponseEntity.ok(service.executionsOf(id));

@@ -52,7 +52,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/stitch").authenticated()
                         // the raw profile is back-office only
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/profile",
-                                ApiConstants.BASE_PATH + "/partyProfile").hasAuthority("insight:read")
+                                ApiConstants.BASE_PATH + "/partyProfile",
+                                ApiConstants.BASE_PATH + "/segmentMembers").hasAuthority("insight:read")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));

@@ -170,7 +170,7 @@ async function staffToken(request, realm) {
         .find((r) => r.textContent.includes(name));
       return tr && !tr.textContent.includes('…');
     }, guiName, { timeout: 10000 });
-    reached = (await row.locator('td').nth(4).textContent()).trim();
+    reached = (await row.locator('td').nth(5).textContent()).trim();
   }
   if (!reached.startsWith('1 customer')) fail('reached counter never hit 1: ' + reached);
   const guiHits = (await (await ctx.request.get(

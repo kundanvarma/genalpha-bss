@@ -246,6 +246,7 @@ services:
       OIDC_CLIENT_ID: bss-campaign
       OIDC_CLIENT_SECRET: campaign-secret
       COMMUNICATION_BASE_URL: http://communication:8080
+      INSIGHT_BASE_URL: http://insight:8080
   flow:
     db: ""
     healthPath: /actuator/health

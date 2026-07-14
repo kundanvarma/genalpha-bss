@@ -39,25 +39,30 @@ public class CampaignService {
     private final CampaignRepository campaigns;
     private final CampaignExecutionRepository executions;
     private final CommunicationClient communication;
+    private final com.bss.campaign.client.InsightClient insight;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
-            CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope) {
+            CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.campaign.client.InsightClient insight) {
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
+        this.insight = insight;
         this.events = events;
         this.tenantScope = tenantScope;
     }
 
     @Transactional
     public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || dto.get("triggerEventType") == null
+        if (dto.get("name") == null
+                || (dto.get("triggerEventType") == null && dto.get("segmentName") == null)
                 || !(dto.get("message") instanceof Map<?, ?> message)
                 || message.get("subject") == null || message.get("content") == null) {
             throw new BadRequestException(
-                    "name, triggerEventType and message {subject, content} are required");
+                    "name, message {subject, content} and a trigger (triggerEventType"
+                    + " or segmentName) are required");
         }
         Campaign entity = new Campaign();
         String id = UUID.randomUUID().toString();
@@ -66,7 +71,10 @@ public class CampaignService {
         entity.setHref(ApiConstants.BASE_PATH + "/campaign/" + id);
         entity.setName(String.valueOf(dto.get("name")));
         entity.setStatus(dto.get("status") == null ? Campaign.ACTIVE : requireStatus(dto.get("status")));
-        entity.setTriggerEventType(String.valueOf(dto.get("triggerEventType")));
+        entity.setTriggerEventType(dto.get("triggerEventType") == null ? null
+                : String.valueOf(dto.get("triggerEventType")));
+        entity.setSegmentName(dto.get("segmentName") == null ? null
+                : String.valueOf(dto.get("segmentName")));
         entity.setTriggerState(dto.get("triggerState") == null ? null : String.valueOf(dto.get("triggerState")));
         entity.setMessageSubject(String.valueOf(message.get("subject")));
         entity.setMessageContent(String.valueOf(message.get("content")));
@@ -94,6 +102,59 @@ public class CampaignService {
         return toMap(campaigns.save(entity));
     }
 
+    /**
+     * SEGMENT BLAST: reach every consented, stitched customer the insight
+     * component puts in the segment — once. Re-executing is idempotent (the
+     * per-party execution row dedupes), so a growing segment can be swept
+     * again and only the newcomers hear it.
+     */
+    @Transactional
+    public Map<String, Object> executeSegment(String campaignId) {
+        Campaign campaign = campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
+        if (campaign.getSegmentName() == null || campaign.getSegmentName().isBlank()) {
+            throw new BadRequestException("this campaign has no segment — it runs on events");
+        }
+        if (!Campaign.ACTIVE.equals(campaign.getStatus())) {
+            throw new BadRequestException("only an active campaign can be executed");
+        }
+        int reached = 0;
+        for (Map<String, Object> member : insight.segmentMembers(campaign.getSegmentName())) {
+            if (reach(campaign, String.valueOf(member.get("partyId")))) {
+                reached++;
+            }
+        }
+        return Map.of("campaignId", campaignId, "segment", campaign.getSegmentName(),
+                "reached", reached);
+    }
+
+    /** One customer, once: the shared delivery step for events and blasts. */
+    private boolean reach(Campaign campaign, String partyId) {
+        String tenant = tenantScope.currentTenantId();
+        if (executions.existsByTenantIdAndCampaignIdAndPartyId(tenant, campaign.getId(), partyId)) {
+            return false;
+        }
+        CampaignExecution execution = new CampaignExecution();
+        execution.setId(UUID.randomUUID().toString());
+        execution.setTenantId(tenant);
+        execution.setCampaignId(campaign.getId());
+        execution.setPartyId(partyId);
+        execution.setExecutedAt(OffsetDateTime.now());
+        try {
+            executions.save(execution);
+        } catch (DataIntegrityViolationException e) {
+            return false; // concurrent duplicate delivery lost the race — fine
+        }
+        String content = campaign.getPromotionCode() == null
+                ? campaign.getMessageContent()
+                : campaign.getMessageContent().replace("{code}", campaign.getPromotionCode());
+        communication.send(partyId, campaign.getMessageSubject(), content);
+        events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
+                "campaignId", campaign.getId(), "partyId", partyId));
+        log.info("campaign '{}' reached party {}", campaign.getName(), partyId);
+        return true;
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> executionsOf(String campaignId) {
         campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
@@ -119,27 +180,7 @@ public class CampaignService {
             if (campaign.getTriggerState() != null && !campaign.getTriggerState().equals(state)) {
                 continue;
             }
-            if (executions.existsByTenantIdAndCampaignIdAndPartyId(tenant, campaign.getId(), partyId)) {
-                continue;
-            }
-            CampaignExecution execution = new CampaignExecution();
-            execution.setId(UUID.randomUUID().toString());
-            execution.setTenantId(tenant);
-            execution.setCampaignId(campaign.getId());
-            execution.setPartyId(partyId);
-            execution.setExecutedAt(OffsetDateTime.now());
-            try {
-                executions.save(execution);
-            } catch (DataIntegrityViolationException e) {
-                continue; // concurrent duplicate delivery lost the race — fine
-            }
-            String content = campaign.getPromotionCode() == null
-                    ? campaign.getMessageContent()
-                    : campaign.getMessageContent().replace("{code}", campaign.getPromotionCode());
-            communication.send(partyId, campaign.getMessageSubject(), content);
-            events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
-                    "campaignId", campaign.getId(), "partyId", partyId));
-            log.info("campaign '{}' reached party {} on {}", campaign.getName(), partyId, eventType);
+            reach(campaign, partyId);
         }
     }
 
@@ -161,6 +202,7 @@ public class CampaignService {
         if (c.getTriggerState() != null) map.put("triggerState", c.getTriggerState());
         map.put("message", Map.of("subject", c.getMessageSubject(), "content", c.getMessageContent()));
         if (c.getPromotionCode() != null) map.put("promotionCode", c.getPromotionCode());
+        if (c.getSegmentName() != null) map.put("segmentName", c.getSegmentName());
         map.put("@type", "Campaign");
         return map;
     }

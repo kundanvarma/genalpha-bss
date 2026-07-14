@@ -59,6 +59,13 @@ public class InsightController {
         return ResponseEntity.ok(service.experience(visitorId));
     }
 
+    /** Known customers in a segment (insight:read — the campaign engine). */
+    @GetMapping("/segmentMembers")
+    public ResponseEntity<java.util.List<Map<String, Object>>> segmentMembers(
+            @RequestParam String segment) {
+        return ResponseEntity.ok(service.segmentMembers(segment));
+    }
+
     /** A known customer's merged interests (insight:read — machines). */
     @GetMapping("/partyProfile")
     public ResponseEntity<Map<String, Object>> partyProfile(@RequestParam String partyId) {

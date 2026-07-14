@@ -151,7 +151,8 @@ const RESOURCES = [
     noDelete: true,
     fields: [
       { name: 'name', label: 'Name', required: true },
-      { name: 'triggerEventType', label: 'Trigger', kind: 'select', required: true, options: TRIGGER_EVENTS },
+      { name: 'triggerEventType', label: 'Trigger (event campaigns)', kind: 'select', options: TRIGGER_EVENTS },
+      { name: 'segmentName', label: 'Segment (blast campaigns) — an Insight interest (e.g. Devices) or analytics audience', placeholder: 'leave blank for event campaigns' },
       { name: 'triggerState', label: 'State filter', placeholder: 'e.g. completed (optional)' },
       { name: 'promotionCode', label: 'Promo code to include', kind: 'codepick',
         base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
@@ -162,7 +163,7 @@ const RESOURCES = [
       const { messageSubject, messageContent, ...rest } = body;
       return { ...rest, message: { subject: messageSubject, content: messageContent } };
     },
-    columns: ['name', 'status', 'triggerEventType', 'promotionCode', 'reached'],
+    columns: ['name', 'status', 'triggerEventType', 'segmentName', 'promotionCode', 'reached'],
     rowAction: {
       label: (item) => (item.status === 'active' ? 'Pause' : 'Resume'),
       apply: (item) => authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}`, {

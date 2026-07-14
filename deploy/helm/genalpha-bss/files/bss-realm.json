@@ -818,7 +818,8 @@
       "serviceAccountClientId": "bss-campaign",
       "realmRoles": [
         "communication:write",
-        "communication:read"
+        "communication:read",
+        "insight:read"
       ]
     },
     {
