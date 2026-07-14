@@ -74,6 +74,25 @@ public class RestPartyClient implements PartyClient {
 
     @Override
     @SuppressWarnings("unchecked")
+    public java.util.List<java.util.Map<String, Object>> dependentsOf(String payerId) {
+        try {
+            java.util.Map<String, Object> household = restClient.get()
+                    .uri("/tmf-api/party/v4/individual/{id}/household", payerId)
+                    .retrieve()
+                    .body(java.util.Map.class);
+            if (household != null && household.get("dependents") instanceof java.util.List<?> deps) {
+                return (java.util.List<java.util.Map<String, Object>>) deps;
+            }
+            return java.util.List.of();
+        } catch (HttpClientErrorException.NotFound e) {
+            return java.util.List.of();
+        } catch (RestClientException e) {
+            throw new DownstreamException("party-account is unreachable", e);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public java.util.Optional<String> householdPayerOf(String partyId) {
         try {
             java.util.Map<String, Object> person = restClient.get()

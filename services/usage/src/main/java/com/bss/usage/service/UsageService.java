@@ -50,13 +50,15 @@ public class UsageService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
+    private final com.bss.usage.client.PartyClient partyClient;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
             RatedChargeRepository ratedCharges,
             com.bss.usage.repository.AllowanceBoostRepository boosts,
             DomainEventPublisher events, PartyScope partyScope,
-            TenantScope tenantScope, ObjectMapper objectMapper) {
+            TenantScope tenantScope, ObjectMapper objectMapper,
+            com.bss.usage.client.PartyClient partyClient) {
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -66,6 +68,7 @@ public class UsageService {
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+        this.partyClient = partyClient;
     }
 
     /** Mediation seam: one usage record in, verbatim semantics, no rating yet. */
@@ -482,6 +485,194 @@ public class UsageService {
             bySpec.merge(boost.getUsageSpecName(), boost.getBoostValue(), BigDecimal::add);
         }
         return bySpec;
+    }
+
+    // ---------------- gifting & rollover (the gifting move, family-wide) ----------------
+
+    /** A party's GB position this month, per usage spec: base, boosted, used. */
+    private record GbPosition(String spec, BigDecimal base, BigDecimal allowed, BigDecimal used) {
+        BigDecimal remaining() {
+            return allowed.subtract(used).max(BigDecimal.ZERO);
+        }
+    }
+
+    private List<GbPosition> gbPositions(String tenantId, String party, LocalDate periodStart) {
+        OffsetDateTime from = periodStart.atStartOfDay().atOffset(ZoneOffset.UTC);
+        Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, party, periodStart);
+        Map<String, BigDecimal> usedBySpec = new LinkedHashMap<>();
+        Map<String, BigDecimal> baseBySpec = new LinkedHashMap<>();
+        for (UsageRecord r : records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
+                tenantId, party, from, OffsetDateTime.now())) {
+            if (!"GB".equalsIgnoreCase(String.valueOf(r.getUnits()))) {
+                continue;
+            }
+            usedBySpec.merge(r.getUsageSpecName(), r.getValue(), BigDecimal::add);
+            if (r.getProductOfferingId() != null && !baseBySpec.containsKey(r.getUsageSpecName())) {
+                allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
+                                tenantId, r.getProductOfferingId(), r.getUsageSpecName()).stream()
+                        .filter(rule -> !rule.isBoost())
+                        .findFirst()
+                        .ifPresent(rule -> baseBySpec.put(r.getUsageSpecName(), rule.getAllowanceValue()));
+            }
+        }
+        List<GbPosition> positions = new ArrayList<>();
+        for (Map.Entry<String, BigDecimal> e : usedBySpec.entrySet()) {
+            BigDecimal base = baseBySpec.getOrDefault(e.getKey(), BigDecimal.ZERO);
+            BigDecimal allowed = base.add(boostBySpec.getOrDefault(e.getKey(), BigDecimal.ZERO));
+            positions.add(new GbPosition(e.getKey(), base, allowed, e.getValue()));
+        }
+        return positions;
+    }
+
+    /**
+     * GIFT DATA (the network-wide move, inside our consent boundary): a member hands
+     * whole-GB chunks of their remaining data to another ACTIVE member of
+     * the same household. Guardrails from the field: at most half the plan
+     * allowance leaves per cycle (Jio's cap), and a CHILD cannot gift —
+     * their data is family-funded — only receive. The gift is a matched
+     * pair of boosts: minus on the giver, plus on the receiver.
+     */
+    @Transactional
+    public Map<String, Object> giftData(String receiverId, BigDecimal amount) {
+        String giverId = partyScope.scopedPartyId()
+                .orElseThrow(() -> new BadRequestException("gifting is a customer's own decision"));
+        if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
+            throw new BadRequestException("the gift must be a whole number of GB");
+        }
+        if (giverId.equals(receiverId)) {
+            throw new BadRequestException("you cannot gift data to yourself");
+        }
+        Map<String, Object> giver = partyClient.individualOf(giverId)
+                .orElseThrow(() -> new BadRequestException("your party record is not reachable"));
+        Map<String, Object> receiver = partyClient.individualOf(receiverId)
+                .orElseThrow(() -> new BadRequestException("no household link to that person"));
+        Map<String, Object> giverLink = linkOf(giver);
+        Map<String, Object> receiverLink = linkOf(receiver);
+        if (giverLink != null && "child".equals(giverLink.get("role"))) {
+            throw new BadRequestException(
+                    "a child's data is family-funded — ask your family admin instead");
+        }
+        if (!sameHousehold(giverId, giverLink, receiverId, receiverLink)) {
+            throw new BadRequestException("no household link to that person");
+        }
+        String tenantId = tenantScope.currentTenantId();
+        LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
+        GbPosition position = gbPositions(tenantId, giverId, periodStart).stream()
+                .max(java.util.Comparator.comparing(GbPosition::base))
+                .orElseThrow(() -> new BadRequestException("no data allowance to gift from"));
+        if (position.remaining().compareTo(amount) < 0) {
+            throw new BadRequestException("only " + position.remaining().stripTrailingZeros().toPlainString()
+                    + " GB left this month — not enough to gift " + amount.stripTrailingZeros().toPlainString() + " GB");
+        }
+        BigDecimal giftedAlready = boosts
+                .findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, giverId, periodStart).stream()
+                .filter(b -> b.getSource() != null && b.getSource().startsWith("gift:to:"))
+                .map(b -> b.getBoostValue().negate())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal cap = position.base().divide(BigDecimal.valueOf(2));
+        if (giftedAlready.add(amount).compareTo(cap) > 0) {
+            throw new BadRequestException("gifts are capped at half your plan ("
+                    + cap.stripTrailingZeros().toPlainString() + " GB) per month — you have gifted "
+                    + giftedAlready.stripTrailingZeros().toPlainString() + " GB already");
+        }
+        String giverName = nameOf(giver);
+        String receiverName = nameOf(receiver);
+        String giftId = UUID.randomUUID().toString();
+        boosts.save(giftBoost(tenantId, giverId, position.spec(), amount.negate(),
+                "gift-" + giftId + "-out", "gift:to:" + receiverId, periodStart));
+        boosts.save(giftBoost(tenantId, receiverId, position.spec(), amount,
+                "gift-" + giftId + "-in", "gift:from:" + giverName, periodStart));
+        Map<String, Object> gift = Map.of(
+                "id", giftId,
+                "giver", Map.of("id", giverId, "name", giverName),
+                "receiver", Map.of("id", receiverId, "name", receiverName),
+                "amount", amount, "units", "GB", "usageType", position.spec());
+        events.publish("DataGiftEvent", "dataGift", gift);
+        return gift;
+    }
+
+    /**
+     * MONTH CLOSE (the AT&T rollover with T-Mobile's cap): each party's
+     * unused GB becomes a rollover boost for the NEXT cycle, capped at one
+     * month's plan allowance; last cycle's rollover has already lapsed by
+     * construction (boosts bind to their period). Idempotent per
+     * (party, spec, next period) — run it twice, roll once. Parties without
+     * usage this month have nothing metered, so nothing rolls.
+     */
+    @Transactional
+    public Map<String, Object> cycleClose() {
+        String tenantId = tenantScope.currentTenantId();
+        LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
+        LocalDate nextPeriod = periodStart.plusMonths(1);
+        List<String> parties = records.findByTenantId(tenantId).stream()
+                .map(UsageRecord::getOwnerPartyId)
+                .filter(java.util.Objects::nonNull)
+                .distinct().toList();
+        int rolled = 0;
+        for (String party : parties) {
+            for (GbPosition position : gbPositions(tenantId, party, periodStart)) {
+                BigDecimal roll = position.remaining().min(position.base());
+                String marker = "rollover-" + nextPeriod + "-" + party + "-" + position.spec();
+                if (roll.signum() <= 0
+                        || boosts.existsByTenantIdAndProductOrderIdAndUsageSpecName(
+                                tenantId, marker, position.spec())) {
+                    continue;
+                }
+                boosts.save(giftBoost(tenantId, party, position.spec(), roll,
+                        marker, "rollover", nextPeriod));
+                events.publish("DataRolloverEvent", "dataRollover", Map.of(
+                        "relatedParty", List.of(Map.of("id", party, "role", "customer")),
+                        "amount", roll, "units", "GB", "usageType", position.spec(),
+                        "period", nextPeriod.toString()));
+                rolled++;
+            }
+        }
+        return Map.of("period", periodStart.toString(), "rolledBuckets", rolled);
+    }
+
+    private com.bss.usage.entity.AllowanceBoost giftBoost(String tenantId, String owner,
+            String spec, BigDecimal value, String marker, String source, LocalDate periodStart) {
+        com.bss.usage.entity.AllowanceBoost b = new com.bss.usage.entity.AllowanceBoost();
+        b.setId(UUID.randomUUID().toString());
+        b.setTenantId(tenantId);
+        b.setOwnerPartyId(owner);
+        b.setUsageSpecName(spec);
+        b.setBoostValue(value);
+        b.setUnits("GB");
+        b.setPeriodStart(periodStart);
+        b.setProductOrderId(marker);
+        b.setSource(source);
+        b.setCreatedAt(OffsetDateTime.now());
+        return b;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> linkOf(Map<String, Object> individual) {
+        return individual.get("householdPayer") instanceof Map<?, ?> link
+                ? (Map<String, Object>) link : null;
+    }
+
+    private static boolean active(Map<String, Object> link) {
+        return link != null && "active".equals(link.get("status"));
+    }
+
+    /** Same household: shared payer, or one side IS the other's payer. */
+    private static boolean sameHousehold(String giverId, Map<String, Object> giverLink,
+            String receiverId, Map<String, Object> receiverLink) {
+        if (active(giverLink) && active(receiverLink)
+                && String.valueOf(giverLink.get("id")).equals(String.valueOf(receiverLink.get("id")))) {
+            return true;
+        }
+        if (active(giverLink) && receiverId.equals(String.valueOf(giverLink.get("id")))) {
+            return true;
+        }
+        return active(receiverLink) && giverId.equals(String.valueOf(receiverLink.get("id")));
+    }
+
+    private static String nameOf(Map<String, Object> individual) {
+        String given = individual.get("givenName") == null ? "" : String.valueOf(individual.get("givenName"));
+        String family = individual.get("familyName") == null ? "" : String.valueOf(individual.get("familyName"));
+        return (given + " " + family).trim();
     }
 
     /** Admin data: which offerings include how much of what, and the price beyond. */

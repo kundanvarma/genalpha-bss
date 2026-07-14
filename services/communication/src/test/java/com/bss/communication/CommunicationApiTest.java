@@ -61,13 +61,13 @@ class CommunicationApiTest {
 
     @Test
     void eventsBecomeNotifications_idempotently_andOnlyTheSignalOnes() {
-        Optional<EventNotificationMapper.Notification> n =
+        List<EventNotificationMapper.Notification> n =
                 mapper.map("ProductOrderCreateEvent", orderEvent("cust-n1", "GenAlpha One"));
-        assertThat(n).isPresent();
-        assertThat(n.get().subject()).isEqualTo("Order received");
+        assertThat(n).hasSize(1);
+        assertThat(n.get(0).subject()).isEqualTo("Order received");
 
-        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get());
-        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get()); // duplicate delivery
+        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get(0));
+        service.mint("evt-1", "ProductOrderCreateEvent", null, n.get(0)); // duplicate delivery
 
         // Noise events map to nothing.
         assertThat(mapper.map("ProductOrderAttributeValueChangeEvent",

@@ -50,6 +50,8 @@ bss:
     topic: bss.usage.events
   downstream:
     ocs-base-url: ${OCS_BASE_URL:}
+    # The gift boundary — household links are verified here live.
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
@@ -59,6 +61,12 @@ bss:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-usage}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:usage-secret}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-usage}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:usage-secret}

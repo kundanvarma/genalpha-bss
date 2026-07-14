@@ -215,8 +215,11 @@ services:
   usage:
     db: usage
     dbRole: usage_app
+    # gifting verifies household links at the party source
+    machineIdentity: true
     extraEnv:
       OCS_BASE_URL: http://mock-ocs:8080
+      PARTY_BASE_URL: http://party-account:8080
   agreement:
     db: agreement
     dbRole: agreement_app

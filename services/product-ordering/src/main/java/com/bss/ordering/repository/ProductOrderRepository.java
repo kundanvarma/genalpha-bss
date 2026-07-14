@@ -10,4 +10,12 @@ import java.util.Optional;
 public interface ProductOrderRepository extends JpaRepository<ProductOrder, String> {
 
     Optional<ProductOrder> findByIdAndTenantId(String id, String tenantId);
+
+    /** A member's orders in one category — the allowance ledger reads these. */
+    java.util.List<ProductOrder> findByTenantIdAndOwnerPartyIdAndCategory(
+            String tenantId, String ownerPartyId, String category);
+
+    /** A member's orders awaiting family approval. */
+    java.util.List<ProductOrder> findByTenantIdAndOwnerPartyIdAndState(
+            String tenantId, String ownerPartyId, String state);
 }

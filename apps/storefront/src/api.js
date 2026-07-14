@@ -371,6 +371,38 @@ export async function myUsage() {
   return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption`));
 }
 
+/** Gift remaining GB to a family member — my data, my call; usage verifies
+ * the household link live. */
+export async function giftData(receiverId, amount) {
+  return json(await authFetch('/tmf-api/usageManagement/v4/gift', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ receiverId, amount }),
+  }));
+}
+
+/** Owner or admin: the family's monthly top-up budget for a member (EUR). */
+export async function setAllowance(memberId, monthlyValue) {
+  return json(await authFetch(`${PARTY}/individual/${memberId}/allowance`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ monthlyValue }),
+  }));
+}
+
+/** Held ask-to-buy orders across my family — the hub's approvals inbox. */
+export async function familyApprovals() {
+  return json(await authFetch(`${ORDERING}/productOrder/familyApprovals`));
+}
+
+export async function decideApproval(orderId, approve) {
+  return json(await authFetch(`${ORDERING}/productOrder/${orderId}/approval`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approve }),
+  }));
+}
+
 const BILLING = '/tmf-api/customerBillManagement/v4';
 
 export async function myBills() {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { acceptDependent, addFamilyMember, endHouseholdLink, listOfferings, memberProducts,
-  myHousehold, orderForDependent, priceIndex, requestHouseholdPayer, setFamilyRole } from '../api.js';
+import { acceptDependent, addFamilyMember, decideApproval, endHouseholdLink, familyApprovals,
+  listOfferings, memberProducts, myHousehold, orderForDependent, priceIndex,
+  requestHouseholdPayer, setAllowance, setFamilyRole } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -21,8 +22,12 @@ export default function Family() {
   const [note, setNote] = useState(null);
   const [error, setError] = useState(null);
   const [reloadTick, setReloadTick] = useState(0);
+  const [approvals, setApprovals] = useState([]);
 
-  const load = () => myHousehold().then(setHh).catch((e) => setError(e.message));
+  const load = () => {
+    myHousehold().then(setHh).catch((e) => setError(e.message));
+    familyApprovals().then(setApprovals).catch(() => {});
+  };
   useEffect(() => {
     load();
     listOfferings().then((all) =>
@@ -104,6 +109,27 @@ export default function Family() {
         </section>
       )}
 
+      {approvals.length > 0 && (
+        <section className="lobcard" data-testid="approvals-inbox">
+          <h2>🔔 {t('Waiting for your OK')}</h2>
+          {approvals.map((o) => (
+            <div className="row" key={o.id} data-testid={`approval-${o.id}`}>
+              <strong>{(o.productOrderItem || [])[0]?.productOffering?.name || t('a purchase')}</strong>
+              <span className="dim">{o.description}</span>
+              <button className="primary" data-testid="appr-approve"
+                onClick={() => act(() => decideApproval(o.id, true),
+                  t('approved — it bills to the family payer'))}>
+                {t('Approve')}
+              </button>
+              <button className="ghost danger" data-testid="appr-deny"
+                onClick={() => act(() => decideApproval(o.id, false), t('declined'))}>
+                {t('Decline')}
+              </button>
+            </div>
+          ))}
+        </section>
+      )}
+
       {pending.map((d) => (
         <section className="lobcard" key={d.id} data-testid={`hh-dependent-${d.id}`}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -121,7 +147,8 @@ export default function Family() {
 
       {active.map((d) => (
         <MemberCard key={d.id} member={d} offerings={offerings} prices={prices}
-          canManageRoles={isOwner} canEndLink={isOwner} act={act} reloadTick={reloadTick} />
+          canManageRoles={isOwner} canEndLink={isOwner} canSetAllowance={isOwner || isAdmin}
+          act={act} reloadTick={reloadTick} />
       ))}
 
       {(isOwner || isAdmin) && !active.length && !pending.length && (
@@ -149,9 +176,10 @@ export default function Family() {
  * line (their own purchases stay theirs — paying is not surveillance),
  * order-for, and — for the owner alone, the Verizon rule — role management.
  */
-function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, act, reloadTick }) {
+function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, canSetAllowance, act, reloadTick }) {
   const [paid, setPaid] = useState(null);
   const [pick, setPick] = useState('');
+  const [budget, setBudget] = useState(member.topupAllowance ?? '');
 
   useEffect(() => {
     memberProducts(member.id).then(setPaid).catch(() => setPaid([]));
@@ -225,6 +253,22 @@ function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, act
           </button>
         )}
       </div>
+      {canSetAllowance && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+          <span className="dim" style={{ fontSize: 13 }}>
+            💶 {t('Top-up allowance')}{member.topupAllowance != null
+              ? ` — ${member.topupAllowance} EUR/${t('month')}` : ` — ${t('none: they ask (child) or self-pay (adult)')}`}
+          </span>
+          <input style={{ width: '5.5em' }} inputMode="decimal" placeholder="EUR"
+            data-testid="fam-allowance-input" value={budget}
+            onChange={(e) => setBudget(e.target.value.replace(/[^0-9.]/g, ''))} />
+          <button className="ghost" data-testid="fam-allowance-set" disabled={budget === ''}
+            onClick={() => act(() => setAllowance(member.id, Number(budget)),
+              t('allowance set — top-ups inside it bill the family instantly'))}>
+            {t('Set')}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

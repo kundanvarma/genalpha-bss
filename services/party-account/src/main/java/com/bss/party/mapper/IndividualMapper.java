@@ -38,6 +38,9 @@ public class IndividualMapper {
             payer.put("id", entity.getHouseholdPayerId());
             payer.put("status", entity.getHouseholdStatus());
             payer.put("role", entity.getHouseholdRole());
+            if (entity.getTopupAllowanceValue() != null) {
+                payer.put("topupAllowance", entity.getTopupAllowanceValue());
+            }
             dto.setHouseholdPayer(payer);
         }
         return dto;

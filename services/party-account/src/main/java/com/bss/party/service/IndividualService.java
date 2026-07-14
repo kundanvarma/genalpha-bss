@@ -294,8 +294,46 @@ public class IndividualService {
                     dep.put("familyName", d.getFamilyName());
                     dep.put("status", d.getHouseholdStatus());
                     dep.put("role", d.getHouseholdRole());
+                    if (d.getTopupAllowanceValue() != null) {
+                        dep.put("topupAllowance", d.getTopupAllowanceValue());
+                    }
                     return dep;
                 }).toList();
+    }
+
+    /**
+     * The family's monthly top-up budget for a member — set by the OWNER or
+     * an ACTIVE ADMIN (the co-parent configures too; that is what admin
+     * means). Within it the member's top-up bills the family instantly;
+     * above it a child asks. Zero means "always ask"; null withdraws family
+     * funding entirely.
+     */
+    @Transactional
+    public IndividualDto setTopupAllowance(String dependentId, java.math.BigDecimal value) {
+        if (value != null && value.signum() < 0) {
+            throw new com.bss.party.exception.BadRequestException("the allowance cannot be negative");
+        }
+        Individual dependent = repository.findByIdAndTenantId(dependentId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", dependentId));
+        if (!"active".equals(dependent.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "they have not accepted the household yet — allowances come after consent");
+        }
+        String subject = currentSubject();
+        boolean isOwner = subject != null && subject.equals(dependent.getHouseholdPayerId());
+        boolean isAdmin = !isOwner && subject != null
+                && repository.findByIdAndTenantId(subject, tenantScope.currentTenantId())
+                        .filter(a -> "active".equals(a.getHouseholdStatus()))
+                        .filter(a -> "admin".equals(a.getHouseholdRole()))
+                        .filter(a -> dependent.getHouseholdPayerId().equals(a.getHouseholdPayerId()))
+                        .isPresent();
+        if (!isOwner && !isAdmin) {
+            throw NotFoundException.forResource("Individual", dependentId);
+        }
+        dependent.setTopupAllowanceValue(value);
+        IndividualDto updated = mapper.toDto(repository.save(dependent));
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
     }
 
     /**
