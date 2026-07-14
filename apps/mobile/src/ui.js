@@ -50,8 +50,8 @@ export function Button({ label, onPress, ghost, testID }) {
   );
 }
 
-export function Dim({ children }) {
-  return <Text style={{ color: palette().dim, fontSize: 13 }}>{children}</Text>;
+export function Dim({ children, testID }) {
+  return <Text testID={testID} style={{ color: palette().dim, fontSize: 13 }}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
