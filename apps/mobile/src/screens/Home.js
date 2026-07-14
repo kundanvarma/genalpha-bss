@@ -146,7 +146,9 @@ export default function Home({ navigation }) {
         </View>
       )}
 
-      {products.map((p) => {
+      {products.filter((p) => ((p.relatedParty || [])
+          .find((x) => x.role === 'customer')?.id ?? tokenClaims().sub) === tokenClaims().sub)
+        .map((p) => {
         const svc = services.find((s) => s.name === p.name);
         const code = (svc?.serviceCharacteristic || []).find((ch) => ch.name === 'activationCode')?.value;
         return (
@@ -207,6 +209,7 @@ export default function Home({ navigation }) {
 
       {(household?.payer || (household?.dependents || []).length > 0) && (
         <FamilyCard household={household} offerings={offerings} prices={prices}
+          products={products}
           onChanged={() => { myHousehold().then(setHousehold); setTimeout(load, 3000); }} />
       )}
 
@@ -226,7 +229,7 @@ export default function Home({ navigation }) {
  * for them (and can leave); a payer sees their people, accepts requests,
  * orders a plan straight onto a kid's line, or mints a child account whose
  * credentials show once for hand-over to the kid's phone. */
-function FamilyCard({ household, offerings, prices, onChanged }) {
+function FamilyCard({ household, offerings, prices, products = [], onChanged }) {
   const c = palette();
   const [pick, setPick] = useState({});
   const [made, setMade] = useState(null);
@@ -252,6 +255,11 @@ function FamilyCard({ household, offerings, prices, onChanged }) {
                   onPress={() => act(acceptDependent(d.id), 'accepted')} />
               : <Button ghost label="Stop paying" testID="app-hh-stop"
                   onPress={() => act(endHouseholdLink(d.id), 'stopped paying')} />} />
+          {products.filter((p) => (p.relatedParty || [])
+              .find((x) => x.role === 'customer')?.id === d.id).map((p) => (
+            <Row key={p.id} left={<Dim>{p.name} · {p.status}</Dim>}
+              right={<Dim>billed to you</Dim>} />
+          ))}
           {d.status === 'active' && plans.slice(0, 2).map((o) => (
             <Row key={o.id} left={<Dim>order {o.name} for them</Dim>}
               right={<Button ghost label="Order" testID="app-hh-order"

@@ -43,10 +43,20 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public PagedResult<ProductDto> findAll(int offset, int limit, Map<String, String> filters) {
+        // A plain "my products" list includes what the party PAYS for too —
+        // a parent sees the child's plan they fund (labelled by the channel).
+        // Filtered queries keep the strict owner scope.
+        java.util.Optional<String> scoped = partyScope.scopedPartyId();
+        if (scoped.isPresent() && filters.isEmpty()) {
+            Page<Product> visible = repository.findVisibleToParty(
+                    tenantScope.currentTenantId(), scoped.get(), new OffsetPageRequest(offset, limit));
+            return new PagedResult<>(visible.getContent().stream().map(mapper::toDto).toList(),
+                    visible.getTotalElements());
+        }
         Product probe = probeFor(filters);
         probe.setTenantId(tenantScope.currentTenantId());
         // Customers see their own products only, whatever else they filter on.
-        partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
+        scoped.ifPresent(probe::setOwnerPartyId);
         Page<Product> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
         return new PagedResult<>(page.getContent().stream().map(mapper::toDto).toList(), page.getTotalElements());
     }

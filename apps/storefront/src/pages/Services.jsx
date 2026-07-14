@@ -164,6 +164,12 @@ function bundleChildIds(offering) {
 }
 
 function ProductRow({ product, services, offerings, prices, onChanged, nested }) {
+  const payerTag = (() => {
+    const payer = (product.relatedParty || []).find((x) => x.role === 'payer');
+    if (!payer || payer.id === tokenClaims().sub) return null;
+    return payer['@referredType'] === 'Organization'
+      ? t('paid by your company') : t('paid by your household payer');
+  })();
   const offering = offerings[product.productOffering?.id];
   const monthly = offering ? pricesOf(offering, prices).find((p) => p.priceType === 'recurring') : null;
   const changeable = product.status === 'active' && PLAN_CATEGORIES.includes(categoryOf(offering));
@@ -171,6 +177,7 @@ function ProductRow({ product, services, offerings, prices, onChanged, nested })
     <div className="row" style={nested ? { marginLeft: '1.6em' } : undefined}>
       <strong>{product.name}</strong>
       {monthly && <span className="dim">{fmtPrice(monthly)}</span>}
+      {payerTag && <span className="dim" data-testid="paid-by" style={{ fontSize: 12 }}>💳 {payerTag}</span>}
       <span className={`state ${product.status}`}>{product.status}</span>
       {changeable && (
         <ChangePlan product={product} services={services}
@@ -191,6 +198,7 @@ export default function Services() {
   const [recIds, setRecIds] = useState([]);
   const [error, setError] = useState(null);
 
+  const [hh, setHh] = useState(null);
   function refresh() {
     myProducts().then(setProducts).catch((e) => setError(e.message));
     myActiveServices().then(setServices).catch(() => {});
@@ -200,6 +208,7 @@ export default function Services() {
   }
   useEffect(() => {
     refresh();
+    myHousehold().then(setHh).catch(() => {});
     listOfferings().then((all) =>
       setOfferings(Object.fromEntries(all.map((o) => [o.id, o])))).catch(() => {});
     priceIndex().then(setPrices).catch(() => {});
@@ -222,17 +231,24 @@ export default function Services() {
 
   // The MyJio idea: the page RECOMPOSES around what this customer holds —
   // one dashboard card per line of business, discovery for what they lack.
+  // WHOSE is whose: products I merely PAY for (a dependent's plan reaches
+  // this list through the payer stamp) split into their own family section.
+  const me = tokenClaims().sub;
+  const ownerIdOf = (p) => (p.relatedParty || []).find((x) => x.role === 'customer')?.id;
+  const payerPartyOf = (p) => (p.relatedParty || []).find((x) => x.role === 'payer');
+  const familyPaid = products.filter((p) => ownerIdOf(p) && ownerIdOf(p) !== me);
+  const own = products.filter((p) => !familyPaid.includes(p));
   const onChanged = (name) => { setChanged(name); refresh(); };
   const catOfProduct = (p) => categoryOf(offerings[p.productOffering?.id]);
-  const bundles = products.filter((p) => offerings[p.productOffering?.id]?.isBundle);
+  const bundles = own.filter((p) => offerings[p.productOffering?.id]?.isBundle);
   const claimed = new Set(bundles.map((p) => p.id));
   const componentsOf = (bundleProduct) => {
     const childIds = bundleChildIds(offerings[bundleProduct.productOffering?.id]);
-    return products.filter((p) => !claimed.has(p.id) && childIds.has(p.productOffering?.id)
+    return own.filter((p) => !claimed.has(p.id) && childIds.has(p.productOffering?.id)
       && (claimed.add(p.id), true));
   };
   const bundleGroups = bundles.map((b) => ({ bundle: b, components: componentsOf(b) }));
-  const standalone = products.filter((p) => !claimed.has(p.id));
+  const standalone = own.filter((p) => !claimed.has(p.id));
   const byCat = (cat) => standalone.filter((p) => catOfProduct(p) === cat);
   const mobilePlans = byCat('Mobile plans');
   const broadband = byCat('Broadband');
@@ -405,6 +421,31 @@ export default function Services() {
               <Link to="/">{m.label} →</Link>
             </p>
           ))}
+        </section>
+      )}
+      {familyPaid.length > 0 && (
+        <section className="lobcard" data-testid="family-paid-card">
+          <h2>👪 {t('Family — you pay for these')}</h2>
+          {[...new Set(familyPaid.map(ownerIdOf))].map((depId) => {
+            const dep = (hh?.dependents || []).find((d) => d.id === depId);
+            const name = dep ? `${dep.givenName} ${dep.familyName}` : t('family member');
+            return (
+              <div key={depId} style={{ margin: '8px 0' }}>
+                <p style={{ margin: '4px 0', fontWeight: 600 }}>
+                  {name}
+                  <a href={`/shop/family/${depId}`} target="_blank" rel="noreferrer"
+                    className="promolink" data-testid="family-open" style={{ marginLeft: 10 }}>
+                    {t('Open their page')} ↗
+                  </a>
+                </p>
+                {familyPaid.filter((p) => ownerIdOf(p) === depId).map((p) => (
+                  <p key={p.id} className="dim" style={{ margin: '2px 0 2px 10px', fontSize: 13 }}>
+                    {p.name} · {p.status} — {t('billed to you')}
+                  </p>
+                ))}
+              </div>
+            );
+          })}
         </section>
       )}
       <Household offerings={offerings} refresh={refresh} />

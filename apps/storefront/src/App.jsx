@@ -8,6 +8,7 @@ import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
 import Offering from './pages/Offering.jsx';
+import FamilyMember from './pages/FamilyMember.jsx';
 import Cart from './pages/Cart.jsx';
 import Orders from './pages/Orders.jsx';
 import Bills from './pages/Bills.jsx';
@@ -115,6 +116,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
+          <Route path="/family/:id" element={<FamilyMember />} />
           <Route path="/cart" element={<Cart />} />
           <Route path="/orders" element={<Orders />} />
           <Route path="/bills" element={<Bills />} />
