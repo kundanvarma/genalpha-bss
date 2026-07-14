@@ -930,6 +930,42 @@
         "customer"
       ],
       "id": "18ade4d7-af1a-400b-97c2-00dc8f492ea6"
+    },
+    {
+      "id": "159ff958-e16b-4cf6-b9e8-a42041775a02",
+      "username": "paula@family.example",
+      "email": "paula@family.example",
+      "firstName": "Paula",
+      "lastName": "Family",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "paula"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
+    },
+    {
+      "id": "841856ed-4732-4276-879c-9e3a7f5b4b04",
+      "username": "sonny@family.example",
+      "email": "sonny@family.example",
+      "firstName": "Sonny",
+      "lastName": "Family",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sonny"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
     }
   ],
   "internationalizationEnabled": true,
