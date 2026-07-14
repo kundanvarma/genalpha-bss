@@ -109,6 +109,69 @@ async function token(ctx, client, user, pass) {
     + `${stats.liftPoints} points of lift, honestly labelled `
     + `("${stats.note || stats.conversionWindowDays + '-day window'}")`);
 
-  console.log('\nALL GROWTH-M1 CHECKS PASSED — holdouts are real control groups, conversions'
-    + ' count inside the window, and lift is a number, not a claim.');
+  /* ================= M2 — JOURNEYS: sequences with an exit rule ================= */
+  const JOURNEY = `${API}/tmf-api/campaignManagement/v4/journey`;
+  const step1 = `Welcome aboard ${run}`;
+  const step2 = `Still thinking? ${run}`;
+  const journey = await (await ctx.post(JOURNEY, { headers: H(staff), data: {
+    name: `Welcome journey ${run}`, segmentName: SEGMENT, holdoutPercent: 0,
+    steps: [
+      { type: 'message', subject: step1, content: 'Good to have you looking around.' },
+      { type: 'wait', seconds: 25 },
+      { type: 'message', subject: step2, content: 'That plan is still worth a look.' },
+    ] } })).json();
+  if (!journey.id) fail('journey create failed: ' + JSON.stringify(journey).slice(0, 200));
+  const enrolled = await (await ctx.post(`${JOURNEY}/${journey.id}/enroll`,
+    { headers: H(staff), data: {} })).json();
+  if (enrolled.enrolled !== 6) fail('enrollment missed the segment: ' + JSON.stringify(enrolled));
+  console.log('OK the welcome journey enrolled the whole segment of six');
+
+  /* step 1 lands for everyone (no holdout on this journey) */
+  for (const p of people) {
+    let got = false;
+    for (let i = 0; i < 15 && !got; i++) {
+      got = (await inboxOf(p)).includes(step1);
+      if (!got) await sleep(1500);
+    }
+    if (!got) fail('step 1 never reached ' + p.email);
+  }
+  console.log('OK step 1 reached all six — the tick walks the ledger');
+
+  /* the EXIT RULE: one enrollee converts during the wait — no follow-up for them */
+  const exiter = people[1].id === converter.id ? people[2] : people[1];
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(exiter.tok), data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: PLAN_ID, name: 'GenAlpha Mobile 10 GB' } }] } });
+  let jstats = null;
+  for (let i = 0; i < 30; i++) {
+    await sleep(2000);
+    jstats = await (await ctx.get(`${JOURNEY}/${journey.id}/stats`, { headers: H(staff) })).json();
+    if (jstats.conversions.treated >= 1) break;
+  }
+  if (jstats.conversions.treated < 1) fail('the journey conversion never registered: ' + JSON.stringify(jstats));
+  console.log('OK the exit rule fired: the buyer CONVERTED OUT during the wait');
+
+  /* after the wait: follow-ups land for the patient, NEVER for the converted */
+  const stayer = people.find((p) => p.id !== exiter.id && p.id !== converter.id);
+  let followedUp = false;
+  for (let i = 0; i < 30 && !followedUp; i++) {
+    await sleep(2000);
+    followedUp = (await inboxOf(stayer)).includes(step2);
+  }
+  if (!followedUp) fail('the follow-up never reached a non-converter');
+  await sleep(3000);
+  if ((await inboxOf(exiter)).includes(step2)) {
+    fail('a CONVERTER received the follow-up — the exit rule is the whole point');
+  }
+  jstats = await (await ctx.get(`${JOURNEY}/${journey.id}/stats`, { headers: H(staff) })).json();
+  if (!jstats.completedUnconverted || jstats.completedUnconverted < 1) {
+    fail('the funnel did not complete: ' + JSON.stringify(jstats));
+  }
+  console.log(`OK the funnel reads honestly: entered ${jstats.entered}, converted out `
+    + `${jstats.conversions.treated}, completed unconverted ${jstats.completedUnconverted} — `
+    + 'and nobody got "10% off!" the day after they paid full price');
+
+  console.log('\nALL GROWTH CHECKS PASSED — M1: holdouts are real control groups, conversions'
+    + ' count inside the window, lift is a number. M2: journeys walk, wait, follow up —'
+    + ' and the conversion event exits people from ANY step.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });
