@@ -37,6 +37,10 @@ public class PolicyRule {
     // Pricing rules only (domain='pricing', effect='adjust'): 'percent' | 'amount'.
     @Column(name = "adjustment_type")
     private String adjustmentType;
+
+    // Personalization rules only (domain='personalization'): JSON payload
+    // the channel renders — {"heroCategory": ..., "teaserOfferingId": ...}.
+    private String experience;
     // Signed: negative = discount, positive = surcharge.
     @Column(name = "adjustment_value")
     private java.math.BigDecimal adjustmentValue;
@@ -133,6 +137,9 @@ public class PolicyRule {
     public void setMessage(String message) {
         this.message = message;
     }
+
+    public String getExperience() { return experience; }
+    public void setExperience(String experience) { this.experience = experience; }
 
     public String getAdjustmentType() {
         return adjustmentType;

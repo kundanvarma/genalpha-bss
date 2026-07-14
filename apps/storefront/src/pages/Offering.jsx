@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { availabilityFor, getOffering, getSpec, priceIndex } from '../api.js';
+import { availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
 import { addToCart, ensureInCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -35,6 +35,8 @@ export default function Offering() {
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
+        // a consented breadcrumb: this visitor looked at this category
+        beacon('view', ((o.category || [])[0] || {}).name || null, o.id);
         // deals that mention this offering are its shop window — fail-soft
         fetch(`/tmf-api/policyManagement/v4/price/teaser?offeringId=${o.id}`)
           .then((r) => (r.ok ? r.json() : []))

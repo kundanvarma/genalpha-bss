@@ -49,6 +49,47 @@ public class PolicyService {
 
     /** The order pipeline's question: given this context, allow or deny? */
     @Transactional(readOnly = true)
+    /**
+     * The personalization decision: first ENABLED rule in domain
+     * 'personalization' whose condition matches the visitor context wins —
+     * its `experience` payload tells the channel what to show, its
+     * `message` is the banner copy. No match means "no opinion": the
+     * caller's coded default applies.
+     */
+    public Map<String, Object> experienceFor(Map<String, Object> context) {
+        for (PolicyRule rule : repository.findByDomainAndEnabledTrueOrderByPriorityAsc("personalization")) {
+            if (engine.matches(rule.getCondition(), context)) {
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("ruleId", rule.getId());
+                out.put("ruleName", rule.getName());
+                if (rule.getMessage() != null) {
+                    out.put("banner", rule.getMessage());
+                }
+                if (rule.getExperience() != null) {
+                    out.put("experience", fromJson(rule.getExperience()));
+                }
+                return out;
+            }
+        }
+        return Map.of();
+    }
+
+    private String toJson(Object value) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new com.bss.policy.exception.BadRequestException("experience is not serializable JSON");
+        }
+    }
+
+    private Object fromJson(String json) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Object.class);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            return json; // legacy free text renders as-is
+        }
+    }
+
     public Decision evaluate(String domain, Map<String, Object> context) {
         String d = (domain == null || domain.isBlank()) ? "order" : domain;
         List<PolicyRule> rules = repository.findByDomainAndEnabledTrueOrderByPriorityAsc(d);
@@ -268,6 +309,8 @@ public class PolicyService {
         rule.setMessage(str(body.get("message")));
         rule.setAdjustmentType(str(body.get("adjustmentType")));
         rule.setAdjustmentValue(decimal(body.get("adjustmentValue")));
+        rule.setExperience(body.get("experience") instanceof Map
+                ? toJson(body.get("experience")) : str(body.get("experience")));
         OffsetDateTime now = OffsetDateTime.now();
         rule.setCreatedAt(now);
         rule.setLastUpdate(now);
@@ -307,6 +350,10 @@ public class PolicyService {
         }
         if (body.containsKey("message")) {
             rule.setMessage(str(body.get("message")));
+        }
+        if (body.containsKey("experience")) {
+            rule.setExperience(body.get("experience") instanceof Map
+                    ? toJson(body.get("experience")) : str(body.get("experience")));
         }
         if (body.containsKey("adjustmentType")) {
             rule.setAdjustmentType(str(body.get("adjustmentType")));
@@ -350,6 +397,9 @@ public class PolicyService {
         m.put("message", rule.getMessage());
         m.put("adjustmentType", rule.getAdjustmentType());
         m.put("adjustmentValue", rule.getAdjustmentValue());
+        if (rule.getExperience() != null) {
+            m.put("experience", fromJson(rule.getExperience()));
+        }
         m.put("lastUpdate", rule.getLastUpdate());
         m.put("@type", "PolicyRule");
         return m;

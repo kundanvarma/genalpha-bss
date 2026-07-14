@@ -287,6 +287,10 @@
       {
         "name": "knowledge:write",
         "description": "Author knowledge articles"
+      },
+      {
+        "name": "insight:read",
+        "description": "Read visitor insight profiles (back office)"
       }
     ]
   },
@@ -585,6 +589,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-insight",
+      "name": "insight machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "insight-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -693,7 +708,8 @@
         "billing:admin",
         "appointment:admin",
         "knowledge:read",
-        "knowledge:write"
+        "knowledge:write",
+        "insight:read"
       ],
       "id": "9b308a96-8629-4614-bc67-6dc10db87b53"
     },
@@ -1038,6 +1054,14 @@
         "catalog:read",
         "policy:evaluate",
         "service:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-insight",
+      "enabled": true,
+      "serviceAccountClientId": "bss-insight",
+      "realmRoles": [
+        "policy:evaluate"
       ]
     }
   ],

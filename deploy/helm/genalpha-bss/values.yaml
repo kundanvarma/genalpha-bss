@@ -95,6 +95,7 @@ services:
       PORTING_URL: http://porting:8080
       POLICY_URL: http://policy:8080
       KNOWLEDGE_URL: http://knowledge:8080
+      INSIGHT_URL: http://insight:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
@@ -257,6 +258,13 @@ services:
     db: knowledge
     dbRole: knowledge_app
     extraEnv: {}
+  insight:
+    db: insight
+    dbRole: insight_app
+    # first-party profile + consent; decisioning via policy rules-as-data
+    machineIdentity: true
+    extraEnv:
+      POLICY_BASE_URL: http://policy:8080
   quote:
     db: quote
     dbRole: quote_app
