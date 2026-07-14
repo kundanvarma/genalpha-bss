@@ -92,6 +92,10 @@ spring:
           uri: ${KNOWLEDGE_URL:http://localhost:8118}
           predicates:
             - Path=/tmf-api/knowledgeManagement/**
+        - id: insight
+          uri: ${INSIGHT_URL:http://localhost:8119}
+          predicates:
+            - Path=/insight/**
         - id: flow
           uri: ${FLOW_URL:http://localhost:8111}
           predicates:

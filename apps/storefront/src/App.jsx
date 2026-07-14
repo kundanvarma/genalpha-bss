@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { t } from './i18n.js';
 import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
-import { ensureParty, myNotifications } from './api.js';
+import { ensureParty, myNotifications, stitchVisitor } from './api.js';
 import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from './cart.js';
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
@@ -41,6 +41,9 @@ export default function App() {
           return;
         }
         await ensureParty();
+        // the login stitch: this browser's insight profile belongs to this
+        // customer now — only ever under personalization consent
+        stitchVisitor();
         await claimCart();
         myNotifications()
           .then((ms) => setUnread(ms.filter((m) => m.status !== 'read').length))
@@ -136,3 +139,4 @@ export default function App() {
     </>
   );
 }
+

@@ -64,6 +64,15 @@ public class PolicyController {
      * context, allow or deny. Returns 200 always (the decision is in the body);
      * a deny carries the rule id/name and the customer-facing message.
      */
+    /** The personalization decision: the insight component asks, the
+     * operator's experience rules (data, not code) answer. */
+    @PostMapping("/personalization/experience")
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> experience(@RequestBody Map<String, Object> body) {
+        Object ctx = body.get("context");
+        return service.experienceFor(ctx instanceof Map ? (Map<String, Object>) ctx : Map.of());
+    }
+
     @PostMapping("/evaluate")
     @SuppressWarnings("unchecked")
     public Map<String, Object> evaluate(@RequestBody Map<String, Object> body) {

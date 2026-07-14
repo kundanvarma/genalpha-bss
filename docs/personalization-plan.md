@@ -1,6 +1,6 @@
 # Personalization — research and plan
 
-Status: **proposal, awaiting review** · 2026-07-14
+Status: **P1 delivered** (insight component #33, consent spine, guest personalization, experience rules, login stitch — suite #34 `personalization_test.js`) · P2 (GA4 seam + known-customer fusion) pending · 2026-07-14
 
 The ask: personalize pages and offers — for **anonymous visitors** using web
 analytics / social signals (Google Analytics etc.), and for **known

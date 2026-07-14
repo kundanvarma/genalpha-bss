@@ -44,6 +44,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/evaluate").hasAuthority("policy:evaluate")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/personalization/experience").hasAuthority("policy:evaluate")
                         // Price preview is computed from rules the customer will pay under anyway:
                         // any authenticated caller (customer channel, billing machine) may ask.
                         // teasers are the shop window — marketing copy, anonymous by design

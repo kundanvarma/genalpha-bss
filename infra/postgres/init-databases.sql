@@ -36,3 +36,4 @@ CREATE DATABASE service_om;
 CREATE DATABASE assurance;
 CREATE DATABASE document;
 CREATE DATABASE knowledge;
+CREATE DATABASE insight;

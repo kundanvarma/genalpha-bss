@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getOffering, listOfferings, myRecommendations, priceIndex } from '../api.js';
+import { beacon, consentChoice, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent } from '../api.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -9,12 +9,15 @@ export default function Shop() {
   const [offerings, setOfferings] = useState(null);
   const [prices, setPrices] = useState({});
   const [recommended, setRecommended] = useState([]);
+  const [experience, setExperience] = useState(null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
       .then(([o, p]) => { setOfferings(o); setPrices(p); })
       .catch((e) => setError(e.message));
+    // the insight question is additive too: no consent, default page
+    myExperience().then(setExperience).catch(() => {});
     // TMF680 is additive: the shop renders fine without it.
     if (isSignedIn()) {
       myRecommendations()
@@ -27,8 +30,18 @@ export default function Shop() {
   if (!offerings) return <p className="dim">Loading offers…</p>;
 
   const bundles = offerings.filter((o) => o.isBundle);
-  const singles = offerings.filter((o) => !o.isBundle);
+  let singles = offerings.filter((o) => !o.isBundle);
   const picks = recommended.map((id) => offerings.find((o) => o.id === id)).filter(Boolean);
+
+  // personalization, honest and gentle: what they looked at leads; an
+  // operator experience rule can pin one offering on top of that
+  const hero = experience?.personalized ? experience.heroCategory : null;
+  const catOf = (o) => ((o.category || [])[0] || {}).name || '';
+  if (hero) {
+    singles = [...singles].sort((a, b) => (catOf(b) === hero) - (catOf(a) === hero));
+  }
+  const pinned = experience?.teaserOfferingId
+    ? offerings.find((o) => o.id === experience.teaserOfferingId) : null;
 
   const brand = window.BSS_STOREFRONT_CONFIG || {};
   return (
@@ -37,6 +50,17 @@ export default function Shop() {
         <h1>{brand.brandName || 'Welcome'}</h1>
         <p>Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.</p>
       </section>
+      <ConsentBanner onDecided={() => myExperience().then(setExperience).catch(() => {})} />
+      {hero && (
+        <p className="dim" data-testid="personal-banner" style={{ margin: '4px 0' }}>
+          ✨ {experience.banner || `${t('Because you were looking at')} ${hero}`}
+        </p>
+      )}
+      {pinned && (
+        <div className="cards" data-testid="personal-pick">
+          <OfferingCard key={'pin-' + pinned.id} offering={pinned} prices={prices} />
+        </div>
+      )}
       {picks.length > 0 && (
         <>
           <h1>Recommended for you</h1>
@@ -54,6 +78,37 @@ export default function Shop() {
         {singles.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
       </div>
     </>
+  );
+}
+
+/**
+ * The consent choice, honestly presented: decline exactly as prominent as
+ * accept, nothing collected before the answer — and a decline means the
+ * insight component holds NOTHING about this browser.
+ */
+function ConsentBanner({ onDecided }) {
+  const [answered, setAnswered] = useState(Boolean(consentChoice()));
+  if (answered) return null;
+  const decide = async (yes) => {
+    await saveConsent(yes, yes);
+    setAnswered(true);
+    if (yes) {
+      beacon('page', null, null); // the visit itself, now that we may
+      onDecided();
+    }
+  };
+  return (
+    <section className="lobcard" data-testid="consent-banner" style={{ padding: '10px 16px' }}>
+      <p style={{ margin: '0 0 8px', fontSize: 13.5 }}>
+        {t('May we use your browsing here to personalize offers? First-party only, deleted on decline — your choice either way.')}
+      </p>
+      <div style={{ display: 'flex', gap: 10, maxWidth: 420 }}>
+        <button className="primary" data-testid="consent-accept" style={{ flex: 1 }}
+          onClick={() => decide(true)}>{t('Yes, personalize')}</button>
+        <button className="primary" data-testid="consent-reject" style={{ flex: 1 }}
+          onClick={() => decide(false)}>{t('No thanks')}</button>
+      </div>
+    </section>
   );
 }
 

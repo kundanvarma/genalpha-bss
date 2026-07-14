@@ -1,0 +1,140 @@
+/* Personalization phase 1 (component #33, insight): consent first, then
+ * first-party signals, then the experience.
+ *
+ *  - a CONSENTING guest's browsing personalizes the home page ("because you
+ *    were looking at Devices") — first-party breadcrumbs only
+ *  - a REJECTING guest generates NOTHING: no rows, no personalization —
+ *    asserted at the source, not just the pixel
+ *  - revoking consent DELETES what was held
+ *  - operator EXPERIENCE RULES (policy, domain 'personalization', data not
+ *    code) override the coded default: banner copy + a pinned offering
+ *  - login STITCHES the browser profile to the customer — consent-gated
+ *  - the tenant wall holds
+ */
+const { chromium } = require('playwright');
+
+const API = 'http://localhost:8080';
+const run = Date.now();
+
+async function token(request, realm, client, user, pass) {
+  const res = await request.post(`http://localhost:8085/realms/${realm}/protocol/openid-connect/token`,
+    { form: { grant_type: 'password', client_id: client, username: user, password: pass } });
+  return (await res.json()).access_token;
+}
+
+(async () => {
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext();
+  const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
+  const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
+  const staff = await token(ctx.request, 'bss', 'bss-demo', 'demo', 'demo');
+  const profileOf = async (vid) => ctx.request.get(
+    `${API}/insight/v1/profile?visitorId=${vid}`, { headers: H(staff) });
+
+  const browse = async (page) => {
+    await page.locator('text=Samsung').first().click();
+    await page.waitForTimeout(1200);
+    await page.goBack();
+    await page.locator('.cards').first().waitFor({ timeout: 10000 });
+  };
+  const visitorOf = (page) => page.evaluate(() => localStorage.getItem('bss.shop.visitor'));
+
+  /* ---------- the consenting guest ---------- */
+  const yes = await (await browser.newContext()).newPage();
+  await yes.goto(`${API}/shop/`);
+  await yes.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
+  await yes.click('[data-testid=consent-accept]');
+  await browse(yes);
+  await yes.reload();
+  await yes.locator('[data-testid=personal-banner]', { hasText: 'Devices' }).waitFor({ timeout: 15000 });
+  const yesVid = await visitorOf(yes);
+  const yesProfile = await (await profileOf(yesVid)).json();
+  if (!yesProfile.analyticsConsent || yesProfile.eventCount < 1) {
+    fail('the consenting guest left no trace where there should be one: ' + JSON.stringify(yesProfile));
+  }
+  console.log('OK a consenting guest browsed Devices — the home page says so, first-party only');
+
+  /* ---------- the rejecting guest: NOTHING, asserted at the source ---------- */
+  const no = await (await browser.newContext()).newPage();
+  await no.goto(`${API}/shop/`);
+  await no.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
+  await no.click('[data-testid=consent-reject]');
+  await browse(no);
+  // even a rude client that ignores the choice gets dropped server-side
+  const noVid = await visitorOf(no);
+  await ctx.request.post(`${API}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: noVid, type: 'view', category: 'Devices' } });
+  await no.reload();
+  await no.waitForTimeout(2500);
+  if (await no.locator('[data-testid=personal-banner]').count()) {
+    fail('a rejecting guest got personalized');
+  }
+  const noProfile = await (await profileOf(noVid)).json();
+  if (noProfile.analyticsConsent || noProfile.eventCount !== 0) {
+    fail('a rejecting guest left breadcrumbs: ' + JSON.stringify(noProfile));
+  }
+  console.log('OK a rejecting guest generates NOTHING — no rows even when the client'
+    + ' misbehaves, and the page stays default');
+
+  /* ---------- revoking consent deletes what was held ---------- */
+  await ctx.request.post(`${API}/insight/v1/consent`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: yesVid, analytics: false, personalization: false } });
+  const wiped = await (await profileOf(yesVid)).json();
+  if (wiped.eventCount !== 0) fail('revoked consent did not delete the breadcrumbs');
+  console.log('OK revoking consent DELETED the held breadcrumbs — the promise on the banner is real');
+
+  /* ---------- the operator's experience rule (data, not code) ---------- */
+  const offers = await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H(staff) })).json();
+  const pinnedOffer = offers.find((o) => o.name === 'GenAlpha Mobile 60 GB 5G')
+    || offers.find((o) => !o.isBundle);
+  const rule = await (await ctx.request.post(`${API}/tmf-api/policyManagement/v4/policyRule`,
+    { headers: H(staff), data: { name: `Device browsers pitch ${run}`, domain: 'personalization',
+      effect: 'experience', priority: 10, enabled: true,
+      condition: JSON.stringify({ in: ['Devices', { var: 'interests' }] }),
+      message: 'Phone fans: pair it with the 60 GB 5G plan.',
+      experience: { teaserOfferingId: pinnedOffer.id } } })).json();
+  const ruled = await (await browser.newContext()).newPage();
+  await ruled.goto(`${API}/shop/`);
+  await ruled.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
+  await ruled.click('[data-testid=consent-accept]');
+  await browse(ruled);
+  await ruled.reload();
+  await ruled.locator('[data-testid=personal-banner]', { hasText: 'Phone fans' }).waitFor({ timeout: 15000 });
+  await ruled.locator('[data-testid=personal-pick]', { hasText: pinnedOffer.name }).waitFor({ timeout: 10000 });
+  await ctx.request.delete(`${API}/tmf-api/policyManagement/v4/policyRule/${rule.id}`, { headers: H(staff) });
+  console.log('OK an operator EXPERIENCE RULE took over the banner and pinned an offering'
+    + ' — authored as data, deleted as data');
+
+  /* ---------- login stitches, consent-gated ---------- */
+  const login = await (await ctx.request.post(
+    `${API}/tmf-api/rolesAndPermissionsManagement/v4/user`, { headers: H(staff),
+      data: { email: `perso-${run}@example.com`, givenName: 'Perso', familyName: `Nal${run}` } })).json();
+  const ruledVid = await visitorOf(ruled);
+  await ruled.locator('.who >> text=Sign in').click();
+  await ruled.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await ruled.fill('input[name="username"]', `perso-${run}@example.com`);
+  await ruled.fill('input[name="password"]', login.temporaryPassword);
+  await ruled.click('input[type="submit"], button[type="submit"]');
+  await ruled.waitForSelector('.nav', { timeout: 20000 });
+  let stitched = null;
+  for (let i = 0; i < 10 && stitched !== login.id; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    stitched = ((await (await profileOf(ruledVid)).json()) || {}).partyId;
+  }
+  if (stitched !== login.id) fail('the login did not stitch the visitor to the party: ' + stitched);
+  console.log('OK signing in STITCHED this browser\'s profile to the customer — the'
+    + ' guest\'s interests now belong to a known person, by consent');
+
+  /* ---------- tenant wall ---------- */
+  const novaStaff = await token(ctx.request, 'nova', 'bss-demo', 'demo', 'demo');
+  const cross = await ctx.request.get(
+    `http://shop.nova.localhost:8080/insight/v1/profile?visitorId=${ruledVid}`,
+    { headers: H(novaStaff) });
+  if (cross.status() === 200) fail('a genalpha visitor profile leaked into nova');
+  console.log('OK the tenant wall: nova cannot see genalpha\'s visitors');
+
+  await browser.close();
+  console.log('\nALL PERSONALIZATION CHECKS PASSED — consent first (and honest), first-party'
+    + ' breadcrumbs, operator experience rules as data, the login stitch, tenant walls.');
+})().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

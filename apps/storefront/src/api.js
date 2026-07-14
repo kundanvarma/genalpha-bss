@@ -588,3 +588,59 @@ export async function previewPrice(subtotal, offeringIds, characteristicValues =
     return (result.adjustments || []).length ? result : null;
   } catch { return null; }
 }
+
+// ---------------- customer insight (first-party, consent first) ----------------
+
+const INSIGHT = '/insight/v1';
+const VISITOR_KEY = 'bss.shop.visitor';
+const CONSENT_KEY = 'bss.shop.consent';
+
+export function visitorId() {
+  let id = localStorage.getItem(VISITOR_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(VISITOR_KEY, id);
+  }
+  return id;
+}
+
+export function consentChoice() {
+  try { return JSON.parse(localStorage.getItem(CONSENT_KEY)); } catch { return null; }
+}
+
+export async function saveConsent(analytics, personalization) {
+  localStorage.setItem(CONSENT_KEY, JSON.stringify({ analytics, personalization }));
+  await publicFetch(`${INSIGHT}/consent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ visitorId: visitorId(), analytics, personalization }),
+  }).catch(() => {});
+}
+
+/** Fire-and-forget breadcrumb — the server drops it without consent anyway;
+ * the client also holds back, out of politeness. */
+export function beacon(type, category, offeringId) {
+  if (!consentChoice()?.analytics) return;
+  publicFetch(`${INSIGHT}/event`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ visitorId: visitorId(), type, category, offeringId,
+      utmSource: new URLSearchParams(location.search).get('utm_source') || undefined }),
+  }).catch(() => {});
+}
+
+export async function myExperience() {
+  if (!consentChoice()?.personalization) return { personalized: false };
+  const res = await publicFetch(`${INSIGHT}/experience?visitorId=${visitorId()}`);
+  return res.ok ? res.json() : { personalized: false };
+}
+
+/** On login: this browser's profile belongs to this customer now. */
+export function stitchVisitor() {
+  if (!consentChoice()?.personalization) return;
+  authFetch(`${INSIGHT}/stitch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ visitorId: visitorId() }),
+  }).catch(() => {});
+}

@@ -109,7 +109,8 @@
             "recommendation:read",
             "paymentmethod:read",
             "paymentmethod:write",
-            "service:read"
+            "service:read",
+            "knowledge:read"
           ]
         }
       },
@@ -144,7 +145,8 @@
             "recommendation:read",
             "ai:use",
             "porting:read",
-            "porting:write"
+            "porting:write",
+            "knowledge:read"
           ]
         }
       },
@@ -277,6 +279,18 @@
             "customer"
           ]
         }
+      },
+      {
+        "name": "knowledge:read",
+        "description": "Read the knowledge base (audience-filtered)"
+      },
+      {
+        "name": "knowledge:write",
+        "description": "Author knowledge articles"
+      },
+      {
+        "name": "insight:read",
+        "description": "Read visitor insight profiles (back office)"
       }
     ]
   },
@@ -575,6 +589,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-insight",
+      "name": "insight machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "insight-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -681,7 +706,10 @@
         "porting:write",
         "policy:evaluate",
         "billing:admin",
-        "appointment:admin"
+        "appointment:admin",
+        "knowledge:read",
+        "knowledge:write",
+        "insight:read"
       ],
       "id": "9b308a96-8629-4614-bc67-6dc10db87b53"
     },
@@ -871,7 +899,9 @@
         "policy:evaluate",
         "document:read",
         "document:write",
-        "ai:use"
+        "ai:use",
+        "knowledge:read",
+        "knowledge:write"
       ],
       "id": "b6a86cbf-bbdd-4f91-8cc3-27d2a1cce3b9"
     },
@@ -1024,6 +1054,14 @@
         "catalog:read",
         "policy:evaluate",
         "service:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-insight",
+      "enabled": true,
+      "serviceAccountClientId": "bss-insight",
+      "realmRoles": [
+        "policy:evaluate"
       ]
     }
   ],

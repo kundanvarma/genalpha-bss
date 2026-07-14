@@ -966,6 +966,35 @@ services:
       kafka:
         condition: service_started
 
+  insight:
+    build: ./services/insight
+    container_name: bss-insight
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/insight
+      DB_USERNAME: insight_app
+      DB_PASSWORD: insight_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      POLICY_BASE_URL: http://policy:8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    ports:
+      - "8119:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   gateway:
     build: ./services/gateway
     container_name: bss-gateway
@@ -998,6 +1027,7 @@ services:
       PORTING_URL: http://porting:8080
       POLICY_URL: http://policy:8080
       KNOWLEDGE_URL: http://knowledge:8080
+      INSIGHT_URL: http://insight:8080
       FLOW_URL: http://flow:8080
       USER_ROLES_URL: http://user-roles:8080
       ADDRESS_URL: http://geographic-address:8080
