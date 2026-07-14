@@ -52,11 +52,14 @@ public class UsageController {
         return ResponseEntity.ok(service.findUsageById(id));
     }
 
-    /** Gift remaining GB to a family member — the caller's own data, their call. */
+    /** Gift remaining GB — to a family member by id, or to any number the
+     * plan's giftScope reaches. The caller's own data, their call. */
     @PostMapping(ApiConstants.BASE_PATH + "/gift")
     public ResponseEntity<Map<String, Object>> gift(@RequestBody Map<String, Object> dto) {
         Object amount = dto.get("amount");
-        return ResponseEntity.ok(service.giftData(String.valueOf(dto.get("receiverId")),
+        return ResponseEntity.ok(service.giftData(
+                dto.get("receiverId") == null ? null : String.valueOf(dto.get("receiverId")),
+                dto.get("receiverPhone") == null ? null : String.valueOf(dto.get("receiverPhone")),
                 amount == null ? null : new java.math.BigDecimal(String.valueOf(amount))));
     }
 

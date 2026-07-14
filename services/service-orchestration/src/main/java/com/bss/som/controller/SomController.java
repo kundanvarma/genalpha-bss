@@ -131,6 +131,30 @@ public class SomController {
         return ResponseEntity.ok(rows.stream().map(this::orderMap).toList());
     }
 
+    /**
+     * Number -> owner, for GIFTING by phone number: the number pool already
+     * knows who holds every assigned MSISDN. MACHINE/STAFF ONLY — a scoped
+     * customer probing numbers for party ids gets a 404, and the answer is
+     * an opaque party id, never a name.
+     */
+    @GetMapping(ApiConstants.INVENTORY_BASE + "/numberOwner")
+    public ResponseEntity<Map<String, Object>> numberOwner(@RequestParam String number) {
+        if (partyScope.scopedPartyId().isPresent()) {
+            throw com.bss.som.exception.NotFoundException.forResource("Number", number);
+        }
+        // Tolerant matching: people type numbers without '+', and a '+' in a
+        // query string arrives as a space — try the bare digits with a '+' too.
+        String normalized = number.replaceAll("[\\s-]", "");
+        String tenant = tenantScope.currentTenantId();
+        return assignments.findFirstByTenantIdAndValue(tenant, normalized)
+                .or(() -> normalized.startsWith("+") ? java.util.Optional.empty()
+                        : assignments.findFirstByTenantIdAndValue(tenant, "+" + normalized))
+                .filter(a -> a.getOwnerPartyId() != null)
+                .map(a -> ResponseEntity.ok(Map.<String, Object>of(
+                        "number", a.getValue(), "partyId", a.getOwnerPartyId())))
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Number", number));
+    }
+
     @GetMapping(ApiConstants.INVENTORY_BASE + "/service")
     public ResponseEntity<List<Map<String, Object>>> services(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
