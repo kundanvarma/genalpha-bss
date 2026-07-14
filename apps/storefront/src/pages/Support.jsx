@@ -1,5 +1,37 @@
 import { useEffect, useState } from 'react';
-import { closeTicket, myTickets, raiseTicket } from '../api.js';
+import { closeTicket, myTickets, raiseTicket, searchFaq } from '../api.js';
+import { t } from '../i18n.js';
+
+/** Answers first, tickets second: the FAQ shelf sits above the ticket form,
+ * searched live from the knowledge base — most questions never need a human. */
+function Faq() {
+  const [q, setQ] = useState('');
+  const [articles, setArticles] = useState([]);
+  const [open, setOpen] = useState(null);
+
+  const search = (term) => { searchFaq(term).then(setArticles).catch(() => {}); };
+  useEffect(() => { search(''); }, []);
+
+  return (
+    <section className="lobcard" data-testid="faq-card">
+      <h2>{t('Quick answers')}</h2>
+      <div style={{ display: 'flex', gap: 8, margin: '6px 0' }}>
+        <input placeholder={t('Search the FAQ…')} value={q} data-testid="faq-search"
+          style={{ flex: 1 }} onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && search(q)} />
+        <button className="ghost" data-testid="faq-go" onClick={() => search(q)}>{t('Search')}</button>
+      </div>
+      {articles.map((a) => (
+        <div key={a.id} data-testid={`faq-${a.id}`} style={{ margin: '6px 0', cursor: 'pointer' }}
+          onClick={() => setOpen(open === a.id ? null : a.id)}>
+          <strong>{open === a.id ? '▾' : '▸'} {a.title}</strong>
+          {open === a.id && <p className="dim" style={{ whiteSpace: 'pre-wrap' }} data-testid="faq-body">{a.body}</p>}
+        </div>
+      ))}
+      {!articles.length && <p className="dim">{t('Nothing found — raise a ticket below.')}</p>}
+    </section>
+  );
+}
 
 export default function Support() {
   const [tickets, setTickets] = useState(null);
@@ -37,6 +69,8 @@ export default function Support() {
     <>
       <h1>Support</h1>
       {error && <p className="error">{error}</p>}
+
+      <Faq />
 
       <form className="supportform" onSubmit={submit}>
         <input name="name" placeholder="What's wrong? (short summary)" value={name}

@@ -18,6 +18,19 @@ public class StubAdapter implements LlmAdapter {
         if (system.contains("product copilot")) {
             return productCopilot(user);
         }
+        if (system.contains("knowledge assistant")) {
+            // grounded even in the stub: quote the top retrieved article back
+            String title = "the knowledge base";
+            for (String line : system.split("\n")) {
+                if (line.startsWith("TITLE: ")) {
+                    title = "\"" + line.substring(7).trim() + "\"";
+                    break;
+                }
+            }
+            return "According to " + title + ", the short answer is in that article — open it"
+                    + " for the exact steps. (Stub provider: configure a real model and this"
+                    + " becomes a synthesized answer drawn from the retrieved articles.)";
+        }
         if (system.contains("SUMMARY:")) {
             return "SUMMARY: The provided customer data is summarized deterministically (stub"
                     + " provider — configure a real model for genuine insight). Nothing here"

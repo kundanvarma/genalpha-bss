@@ -215,3 +215,23 @@ export async function aiTicketReply(payload) {
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
   return res.json();
 }
+
+const KNOWLEDGE = '/tmf-api/knowledgeManagement/v4';
+
+/** The library, audience-filtered by the agent's own token. */
+export async function searchKnowledge(q) {
+  const res = await authFetch(`${KNOWLEDGE}/article${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** Grounded answer with sources — retrieval runs as the asker. */
+export async function askKnowledge(question) {
+  const res = await authFetch('/ai/v1/knowledgeAsk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question }),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+  return res.json();
+}
