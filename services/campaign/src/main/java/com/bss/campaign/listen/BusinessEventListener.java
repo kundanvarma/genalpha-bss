@@ -28,10 +28,13 @@ public class BusinessEventListener {
 
     private final CampaignService campaigns;
     private final ObjectMapper objectMapper;
+    private final com.bss.campaign.service.JourneyService journeys;
 
-    public BusinessEventListener(CampaignService campaigns, ObjectMapper objectMapper) {
+    public BusinessEventListener(CampaignService campaigns, ObjectMapper objectMapper,
+            com.bss.campaign.service.JourneyService journeys) {
         this.campaigns = campaigns;
         this.objectMapper = objectMapper;
+        this.journeys = journeys;
     }
 
     @KafkaListener(topics = "#{'${bss.campaign.topics}'.split(',')}", groupId = "campaign")
@@ -54,6 +57,7 @@ public class BusinessEventListener {
                     : resource.get("status") != null ? String.valueOf(resource.get("status")) : null;
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 campaigns.onEvent(eventType, state, party);
+                journeys.onEvent(eventType, state, party);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());

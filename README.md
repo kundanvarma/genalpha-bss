@@ -229,7 +229,7 @@ node storefront_test.js && node guest_test.js && node console_test.js \
   && node pricing_test.js && node bundle_test.js && node demo_test.js \
   && node family_test.js && node family_phase2_test.js && node family_config_test.js \
   && node family_phase3_test.js \
-  && node knowledge_test.js && node personalization_test.js
+  && node knowledge_test.js && node personalization_test.js && node growth_test.js
 ```
 
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,

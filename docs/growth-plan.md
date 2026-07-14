@@ -1,6 +1,6 @@
 # Growth engine — measurement & journeys: research and plan
 
-Status: **proposal, awaiting review** · 2026-07-15
+Status: **M1 + M2 delivered** (holdouts/windows/lift on campaigns; journeys with exit-on-conversion, funnel, holdout lift — suite #35 `growth_test.js`) · follow-ups: branches, A/B arms, frequency caps, ESP seam, TMF699 leads · 2026-07-15
 
 The thesis (from the operator): a BSS holds the richest customer data in
 the building — why is it only a product-and-billing system? The CVM layer

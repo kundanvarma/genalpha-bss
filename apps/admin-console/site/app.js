@@ -144,6 +144,44 @@ const RESOURCES = [
     columns: ['description', 'validFor', 'status', 'relatedParty', 'lastUpdate'],
   },
   {
+    path: 'journey',
+    base: CAMPAIGN_BASE,
+    title: 'Journeys',
+    // Sequences as DATA: ordered message/wait steps, a conversion event
+    // that is also the always-on exit rule, holdouts for honest lift.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'name', label: 'Name', required: true },
+      { name: 'triggerEventType', label: 'Trigger event (leave blank for segment journeys)' },
+      { name: 'segmentName', label: 'Segment (from Insight — enroll with the row action)' },
+      { name: 'steps', label: 'Steps — JSON: [{"type":"message","subject":"…","content":"…"},{"type":"wait","days":3}, …]', kind: 'longtext', required: true },
+      { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },
+      { name: 'holdoutPercent', label: 'Holdout % — control group, no messages, measurable lift', kind: 'number', placeholder: '0' },
+    ],
+    assemble: (body) => {
+      let steps = body.steps;
+      try { steps = JSON.parse(body.steps); } catch { /* the API rejects with a clear message */ }
+      return { ...body, steps };
+    },
+    columns: ['name', 'status', 'segmentName', 'holdoutPercent', 'lastUpdate'],
+    detail: async (item) => {
+      const res = await authFetch(`${CAMPAIGN_BASE}/journey/${item.id}/stats`);
+      const s = await res.json();
+      return [{
+        entered: s.entered, heldOut: s.heldOut,
+        inFlight: Object.entries(s.activeAtStep || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—',
+        converted: `treated ${s.conversions.treated} (${s.treatedRate ?? '—'}%) · holdout ${s.conversions.holdout} (${s.holdoutRate ?? '—'}%)`,
+        lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
+        note: s.note || `${s.completedUnconverted} completed unconverted`,
+      }];
+    },
+    rowAction: {
+      label: () => 'Enroll segment',
+      apply: (item) => authFetch(`${CAMPAIGN_BASE}/journey/${item.id}/enroll`, { method: 'POST' }),
+    },
+  },
+  {
     path: 'campaign',
     base: CAMPAIGN_BASE,
     title: 'Campaigns',
@@ -492,6 +530,7 @@ const TAB_ROLE = {
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
+  journey: 'campaign:read',
   policyRule: 'policy:read',
   article: 'knowledge:write',
   profile: 'insight:read',
