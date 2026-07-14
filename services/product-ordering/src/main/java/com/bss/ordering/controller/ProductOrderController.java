@@ -84,9 +84,23 @@ public class ProductOrderController {
                 .toList();
     }
 
+    /** The hub's approvals inbox: held orders across the caller's family. */
+    @GetMapping("/familyApprovals")
+    public ResponseEntity<java.util.List<ProductOrderDto>> familyApprovals() {
+        return ResponseEntity.ok(service.familyApprovals());
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ProductOrderDto> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
+    }
+
+    /** Approve (release) or deny (cancel) a held ask-to-buy order. */
+    @PostMapping("/{id}/approval")
+    public ResponseEntity<ProductOrderDto> approval(@PathVariable("id") String id,
+            @RequestBody java.util.Map<String, Object> body) {
+        boolean approve = Boolean.TRUE.equals(body.get("approve"));
+        return ResponseEntity.ok(service.decideApproval(id, approve));
     }
 
     @PostMapping

@@ -1,6 +1,6 @@
 # Family experience v3 — research and design plan
 
-Status: **Phase 1 delivered** (family hub, roles, admin authorization — suite #29 `family_test.js`) · Phases 2–3 pending · 2026-07-14
+Status: **Phases 1–2 delivered** (family hub + roles, suite #29; allowances/ask-to-buy + gifting + rollover, suite #30 `family_phase2_test.js`) · Phase 3 pending · 2026-07-14
 
 The household feature today is plumbing-first: consent links, payer stamps,
 correct bills. It is honest but it is not an *experience*. This plan starts
@@ -146,12 +146,52 @@ by role) on storefront *and* app:
 - Family tab with member cards, in-page member view, My-page summary card.
 - E2E: wife-as-admin orders for Sonny; admin cannot demote another admin.
 
-**Phase 2 — allowances + ask-to-buy**
-- Allowance policy rules + evaluation in the top-up path; held orders with
-  `pendingApproval`; approvals inbox with approve/deny; notifications both
-  directions.
-- E2E: child tops up inside cap (instant), above cap (held → approved →
-  delivered), denied (friendly cancel).
+**Phase 2 — allowances + ask-to-buy** — **DONE** (plus gifting & rollover
+from §4): per-member EUR allowance on the household link; in-cap top-ups
+instant on the family bill, over-cap child orders `held` with an approvals
+inbox in the hub; adults always self-pay through; notifications both
+directions via the event stream; family data gifts with the child/half-plan/
+household guardrails; one-cycle capped rollover at month close.
+
+---
+
+## 4. Data gifting & rollover (researched 2026-07-14)
+
+### What the field does
+- **Jio**: two sharing modes — a RECURRING share (5/10/15/20 % of the parent's
+  quota per member, auto-applied each cycle) and a ONE-TIME transfer up to
+  50 %; transfer counts are capped per cycle (5 per member, 15 total). Coarse,
+  legible chunks.
+- **One Nordic CSP**: unused data **rolls over automatically**; rollover data
+  can be **gifted** to anyone on the network from the app — personal
+  subscriptions only.
+- **T-Mobile Data Stash**: rollover capped (20 GB), 12-month expiry, and the
+  order of burn matters: **plan data first, oldest stash after**.
+- **AT&T**: rollover lives exactly ONE cycle — the simplest honest model.
+
+### Design for genalpha-bss
+**Rollover (the AT&T model with a T-Mobile cap):** at cycle close the unused
+remainder of each data bucket becomes a *Rollover data* bucket for the next
+cycle, capped at one month's plan allowance; rollover lives one cycle and
+lapses if unused. Plan data burns first. Native implementation in the usage
+component (a cycle-close endpoint the demo can trigger); when the OCS seam is
+live the rate plans in OCS own this and usage merely projects it.
+
+**Gifting (the network-wide move, inside our consent boundary):** a member may gift
+whole-GB chunks of their remaining data to any ACTIVE member of the same
+household — the household link is the trust boundary (some CSPs gift network-wide;
+we start family-wide). Guardrails: max 50 % of the plan allowance gifted per
+cycle (Jio's cap), and a **child cannot gift** (their data is family-funded),
+only receive. The gift lands as a *Gifted data* bucket on the receiver, named
+from the giver — generosity should be visible.
+
+**Allowances + ask-to-buy (Family Link × T-Mobile Family Allowances):** the
+owner or an admin sets a monthly top-up allowance per member (EUR). A member's
+top-up inside the remaining allowance completes instantly and notifies the
+payer; above it (or with no allowance — a child's default) the ORDER HOLDS in
+`held` state, a purchase request lands in the hub's approvals inbox and the
+admins' inbox notifications, and approve releases it / deny cancels it with a
+note to the requester. The member never hits a dead end.
 
 **Phase 3 — visibility & polish**
 - Per-member usage bars from OCS, spend history per member, `birthDate`

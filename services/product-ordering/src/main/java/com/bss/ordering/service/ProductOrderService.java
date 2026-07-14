@@ -38,6 +38,8 @@ public class ProductOrderService {
 
     private static final String RESOURCE = "ProductOrder";
     private static final String STATE_COMPLETED = "completed";
+    private static final String STATE_HELD = "held";
+    private static final String TOPUP_CATEGORY = "Top-ups";
     private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled");
 
     private final ProductOrderRepository repository;
@@ -129,6 +131,7 @@ public class ProductOrderService {
                     "promotion code '" + dto.getPromotionCode() + "' is not valid");
         }
         partyScope.scopedPartyId().ifPresent(sub -> claimOrPayForHousehold(dto, sub));
+        partyScope.scopedPartyId().ifPresent(sub -> fundOrHoldTopUp(dto, sub));
         requireSameOrgForBusinessAdmin(dto);
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
@@ -582,6 +585,204 @@ public class ProductOrderService {
             }
         }
         claimForParty(dto, callerId);
+    }
+
+    /**
+     * ASK-TO-BUY (Family Link x T-Mobile Family Allowances): a household
+     * member's SELF-ordered top-up is family money, governed by the family's
+     * allowance. Within the monthly budget it completes instantly on the
+     * family bill (payer stamp). Above it — or with no allowance at all — a
+     * CHILD's order HOLDS for an admin's approval, while an adult simply
+     * pays for it themselves, as any adult may. Only the Top-ups category
+     * is governed: it is digital, stockless and prepaid by the family.
+     */
+    private void fundOrHoldTopUp(ProductOrderDto dto, String callerId) {
+        String customer = customerPartyIn(dto.getRelatedParty());
+        if (customer == null || !customer.equals(callerId)) {
+            return; // order-for flows carry their own funding rules
+        }
+        if (dto.getRelatedParty().stream().anyMatch(p -> "payer".equals(p.get("role")))) {
+            return;
+        }
+        Map<String, Object> link = partyClient.householdLinkOf(callerId).orElse(null);
+        if (link == null || !"active".equals(link.get("status"))) {
+            return;
+        }
+        java.math.BigDecimal price = topupPriceOf(dto);
+        if (price == null) {
+            return; // not a top-up order
+        }
+        String payerId = String.valueOf(link.get("id"));
+        dto.setCategory(TOPUP_CATEGORY);
+        java.math.BigDecimal allowance = link.get("topupAllowance") instanceof Number n
+                ? new java.math.BigDecimal(n.toString()) : null;
+        if (allowance != null
+                && topupSpentThisMonth(callerId, payerId).add(price).compareTo(allowance) <= 0) {
+            stampPayer(dto, payerId);
+            return; // family-funded, instant — the payer hears about it
+        }
+        if ("child".equals(link.get("role"))) {
+            stampPayer(dto, payerId);
+            dto.setState(STATE_HELD); // the kid never dead-ends: it becomes an ask
+        }
+        // an adult over (or without) an allowance pays for it themselves
+    }
+
+    private void stampPayer(ProductOrderDto dto, String payerId) {
+        List<Map<String, Object>> parties = new ArrayList<>(dto.getRelatedParty());
+        parties.add(Map.of("id", payerId, "role", "payer", "@referredType", "Individual"));
+        dto.setRelatedParty(parties);
+    }
+
+    /** The order's one-time top-up price, or null when it is not a pure top-up order. */
+    private java.math.BigDecimal topupPriceOf(ProductOrderDto dto) {
+        List<Map<String, Object>> items = flattenItemMaps(dto.getProductOrderItem());
+        java.math.BigDecimal total = java.math.BigDecimal.ZERO;
+        for (Map<String, Object> item : items) {
+            if (!(item.get("productOffering") instanceof Map<?, ?> ref) || ref.get("id") == null) {
+                return null;
+            }
+            Map<String, Object> offering =
+                    catalogClient.findOfferingDetail(String.valueOf(ref.get("id"))).orElse(null);
+            if (offering == null || !hasCategory(offering, TOPUP_CATEGORY)) {
+                return null;
+            }
+            java.math.BigDecimal one = oneTimePriceOf(offering);
+            if (one == null) {
+                return null;
+            }
+            int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
+            total = total.add(one.multiply(java.math.BigDecimal.valueOf(quantity)));
+        }
+        return items.isEmpty() ? null : total;
+    }
+
+    private boolean hasCategory(Map<String, Object> offering, String name) {
+        return offering.get("category") instanceof List<?> categories && categories.stream()
+                .anyMatch(c -> c instanceof Map<?, ?> m && name.equals(m.get("name")));
+    }
+
+    private java.math.BigDecimal oneTimePriceOf(Map<String, Object> offering) {
+        if (!(offering.get("productOfferingPrice") instanceof List<?> refs)) {
+            return null;
+        }
+        for (Object r : refs) {
+            if (r instanceof Map<?, ?> ref && ref.get("id") != null) {
+                Map<String, Object> price =
+                        catalogClient.findPrice(String.valueOf(ref.get("id"))).orElse(null);
+                if (price != null && "oneTime".equals(price.get("priceType"))
+                        && price.get("price") instanceof Map<?, ?> money
+                        && money.get("value") instanceof Number value) {
+                    return new java.math.BigDecimal(value.toString());
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Family money already spent on this member's top-ups this calendar month. */
+    private java.math.BigDecimal topupSpentThisMonth(String memberId, String payerId) {
+        OffsetDateTime monthStart = OffsetDateTime.now()
+                .withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+        Map<String, java.math.BigDecimal> priceCache = new java.util.HashMap<>();
+        java.math.BigDecimal spent = java.math.BigDecimal.ZERO;
+        for (ProductOrder order : repository.findByTenantIdAndOwnerPartyIdAndCategory(
+                tenantScope.currentTenantId(), memberId, TOPUP_CATEGORY)) {
+            if (order.getOrderDate() == null || order.getOrderDate().isBefore(monthStart)
+                    || "cancelled".equals(order.getState()) || STATE_HELD.equals(order.getState())) {
+                continue;
+            }
+            ProductOrderDto past = mapper.toDto(order);
+            boolean familyFunded = past.getRelatedParty() != null && past.getRelatedParty().stream()
+                    .anyMatch(p -> "payer".equals(p.get("role")) && payerId.equals(p.get("id")));
+            if (!familyFunded) {
+                continue;
+            }
+            for (Map<String, Object> item : flattenItemMaps(past.getProductOrderItem())) {
+                if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+                    java.math.BigDecimal one = priceCache.computeIfAbsent(
+                            String.valueOf(ref.get("id")),
+                            oid -> catalogClient.findOfferingDetail(oid)
+                                    .map(this::oneTimePriceOf).orElse(java.math.BigDecimal.ZERO));
+                    int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
+                    spent = spent.add(one.multiply(java.math.BigDecimal.valueOf(quantity)));
+                }
+            }
+        }
+        return spent;
+    }
+
+    /**
+     * The approvals decision — the payer's or a family admin's alone. Approve
+     * releases the held order into the normal flow (the SOM picks up the
+     * state change exactly like a fresh order); deny cancels it with the
+     * usual releases. The requester hears the outcome either way, via the
+     * event stream.
+     */
+    @Transactional
+    public ProductOrderDto decideApproval(String orderId, boolean approve) {
+        ProductOrder entity = repository.findByIdAndTenantId(orderId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, orderId));
+        if (!STATE_HELD.equals(entity.getState())) {
+            throw new OrderValidationException("order '" + orderId + "' is not awaiting approval");
+        }
+        String caller = partyScope.scopedPartyId()
+                .orElseThrow(() -> new OrderValidationException("approvals are a customer decision"));
+        ProductOrderDto held = mapper.toDto(entity);
+        String payerId = held.getRelatedParty() == null ? null : held.getRelatedParty().stream()
+                .filter(p -> "payer".equals(p.get("role")))
+                .map(p -> String.valueOf(p.get("id")))
+                .findFirst().orElse(null);
+        boolean isPayer = caller.equals(payerId);
+        boolean isAdmin = payerId != null && !isPayer && partyClient.householdLinkOf(caller)
+                .filter(l -> payerId.equals(String.valueOf(l.get("id"))))
+                .filter(l -> "active".equals(l.get("status")))
+                .filter(l -> "admin".equals(l.get("role")))
+                .isPresent();
+        if (!isPayer && !isAdmin) {
+            throw NotFoundException.forResource(RESOURCE, orderId);
+        }
+        if (approve) {
+            entity.setState("acknowledged");
+        } else {
+            entity.setState("cancelled");
+            stockClient.release(entity.getId());
+            paymentRefIds(entity).forEach(paymentClient::voidPayment);
+        }
+        ProductOrderDto updated = mapper.toDto(repository.save(entity));
+        events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
+        return updated;
+    }
+
+    /** Every held order across the caller's family — the hub's approvals inbox. */
+    @Transactional(readOnly = true)
+    public List<ProductOrderDto> familyApprovals() {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller == null) {
+            return List.of();
+        }
+        String payerId = caller;
+        List<Map<String, Object>> members = partyClient.dependentsOf(caller);
+        if (members.isEmpty()) {
+            Map<String, Object> link = partyClient.householdLinkOf(caller).orElse(null);
+            if (link == null || !"active".equals(link.get("status"))
+                    || !"admin".equals(link.get("role"))) {
+                return List.of();
+            }
+            payerId = String.valueOf(link.get("id"));
+            members = partyClient.dependentsOf(payerId);
+        }
+        List<ProductOrderDto> held = new ArrayList<>();
+        for (Map<String, Object> member : members) {
+            for (ProductOrder order : repository.findByTenantIdAndOwnerPartyIdAndState(
+                    tenantScope.currentTenantId(), String.valueOf(member.get("id")), STATE_HELD)) {
+                ProductOrderDto dto = mapper.toDto(order);
+                dto.setDescription((dto.getDescription() == null ? "" : dto.getDescription() + " ")
+                        + "requested by " + member.get("givenName") + " " + member.get("familyName"));
+                held.add(dto);
+            }
+        }
+        return held;
     }
 
     /** Orders placed through a customer channel always carry their owner as a related party. */

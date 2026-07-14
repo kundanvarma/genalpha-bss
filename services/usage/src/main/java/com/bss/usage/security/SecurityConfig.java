@@ -48,6 +48,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.GET, ApiConstants.CONSUMPTION_BASE_PATH + "/**").hasAuthority("usage:read")
+                        // gifting is customer self-service: their data, their call
+                        // (the household check happens in the service, live)
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/gift").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:write")
                         .anyRequest().authenticated())

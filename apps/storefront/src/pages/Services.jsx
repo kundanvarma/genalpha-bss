@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold } from '../api.js';
+import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -332,6 +332,7 @@ export default function Services() {
             const oneTime = pricesOf(t, prices).find((p) => p.priceType === 'oneTime');
             return <TopUp key={t.id} offering={t} price={oneTime} onBought={refresh} />;
           })}
+          <GiftData hh={hh} onDone={refresh} />
         </section>
       )}
 
@@ -446,13 +447,18 @@ export default function Services() {
   );
 }
 
-/** One tap, more data now: buys the top-up and the meter grows this month. */
+/** One tap, more data now: buys the top-up and the meter grows this month.
+ * A held order is the ask-to-buy path — the family admin decides. */
 function TopUp({ offering, price, onBought }) {
-  const [state, setState] = useState(null); // null | 'busy' | 'done' | error
+  const [state, setState] = useState(null); // null | 'busy' | 'done' | 'held' | error
   async function buy() {
     setState('busy');
     try {
-      await quickOrder(offering);
+      const order = await quickOrder(offering);
+      if (order.state === 'held') {
+        setState('held');
+        return;
+      }
       setState('done');
       // the boost lands via the event stream; give it a beat then refresh
       setTimeout(onBought, 2500);
@@ -465,8 +471,57 @@ function TopUp({ offering, price, onBought }) {
         {state === 'busy' ? t('Buying…') : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
       </button>
       {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ added to this month's allowance</span>}
-      {state && state !== 'done' && state !== 'busy' && <span className="error"> {state}</span>}
+      {state === 'held' && <span className="dim" data-testid="topup-held">
+        {' '}🔔 {t('sent to your family admin for approval — you\'ll hear the moment they decide')}</span>}
+      {state && state !== 'done' && state !== 'held' && state !== 'busy' && <span className="error"> {state}</span>}
     </p>
+  );
+}
+
+/** GIFT DATA (the gifting move, family-wide): hand whole-GB chunks of your
+ * remaining data to a family member. Their meter grows, yours shrinks —
+ * generosity, not money, so no approvals. */
+function GiftData({ hh, onDone }) {
+  const [to, setTo] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState(null);
+
+  const people = [];
+  if (hh?.payer && hh.payer.status === 'active') {
+    people.push({ id: hh.payer.id, name: hh.payer.name || t('your payer') });
+  }
+  const me = tokenClaims().sub;
+  for (const d of [...(hh?.dependents || []), ...(hh?.family || [])]) {
+    if (d.status === 'active' && d.id !== me && !people.some((p) => p.id === d.id)) {
+      people.push({ id: d.id, name: `${d.givenName} ${d.familyName}` });
+    }
+  }
+  if (!people.length) return null;
+
+  async function send() {
+    setNote(null);
+    try {
+      const gift = await giftData(to, Number(amount));
+      setNote(`✓ ${t('gifted')} ${gift.amount} GB ${t('to')} ${gift.receiver.name}`);
+      setAmount('');
+      setTimeout(onDone, 2500);
+    } catch (e) { setNote(e.message); }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
+      <span className="dim" style={{ fontSize: 13 }}>🎁 {t('Gift data')}</span>
+      <select value={to} data-testid="gift-select" onChange={(e) => setTo(e.target.value)}>
+        <option value="" disabled>{t('to a family member…')}</option>
+        {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+      <input style={{ width: '4.5em' }} inputMode="numeric" placeholder="GB"
+        data-testid="gift-amount" value={amount}
+        onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} />
+      <button className="ghost" data-testid="gift-send" disabled={!to || !amount}
+        onClick={send}>{t('Send')}</button>
+      {note && <span className="dim" data-testid="gift-note" style={{ fontSize: 12.5 }}>{note}</span>}
+    </div>
   );
 }
 

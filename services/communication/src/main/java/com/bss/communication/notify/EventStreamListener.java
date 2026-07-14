@@ -51,14 +51,18 @@ public class EventStreamListener {
             @SuppressWarnings("unchecked")
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : null;
-            mapper.map(eventType, event).ifPresent(notification -> {
+            var notifications = mapper.map(eventType, event);
+            for (int i = 0; i < notifications.size(); i++) {
                 // Act as the producing tenant so the row-level policies admit
                 // the insert; pre-tenancy envelopes fall back to the default.
+                // One event may speak to several people (a gift has two ends)
+                // — each recipient gets their own idempotency key.
+                String mintId = i == 0 ? eventId : eventId + "#" + i;
                 try (TenantContext ignored = TenantContext.actAs(
                         tenantId != null ? tenantId : "genalpha")) {
-                    messages.mint(eventId, eventType, tenantId, notification);
+                    messages.mint(mintId, eventType, tenantId, notifications.get(i));
                 }
-            });
+            }
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());
         }

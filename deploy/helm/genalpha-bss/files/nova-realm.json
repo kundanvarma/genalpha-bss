@@ -574,6 +574,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-usage",
+      "name": "usage machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "usage-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -954,6 +965,14 @@
       "username": "service-account-bss-inventory",
       "enabled": true,
       "serviceAccountClientId": "bss-inventory",
+      "realmRoles": [
+        "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-usage",
+      "enabled": true,
+      "serviceAccountClientId": "bss-usage",
       "realmRoles": [
         "party:read"
       ]

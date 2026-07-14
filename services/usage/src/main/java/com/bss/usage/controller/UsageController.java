@@ -52,6 +52,20 @@ public class UsageController {
         return ResponseEntity.ok(service.findUsageById(id));
     }
 
+    /** Gift remaining GB to a family member — the caller's own data, their call. */
+    @PostMapping(ApiConstants.BASE_PATH + "/gift")
+    public ResponseEntity<Map<String, Object>> gift(@RequestBody Map<String, Object> dto) {
+        Object amount = dto.get("amount");
+        return ResponseEntity.ok(service.giftData(String.valueOf(dto.get("receiverId")),
+                amount == null ? null : new java.math.BigDecimal(String.valueOf(amount))));
+    }
+
+    /** Month close: unused GB rolls into next cycle (back-office/scheduler). */
+    @PostMapping(ApiConstants.BASE_PATH + "/cycleClose")
+    public ResponseEntity<Map<String, Object>> cycleClose() {
+        return ResponseEntity.ok(service.cycleClose());
+    }
+
     // ---- UsageSpecification (TMF635) ----
 
     @PostMapping(ApiConstants.BASE_PATH + "/usageSpecification")

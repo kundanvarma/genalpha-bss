@@ -12,6 +12,12 @@ public interface CatalogClient {
 
     Optional<OfferingRef> findOffering(String id);
 
+    /** The raw offering payload — category and price refs included. */
+    Optional<Map<String, Object>> findOfferingDetail(String id);
+
+    /** A TMF620 productOfferingPrice by id. */
+    Optional<Map<String, Object>> findPrice(String id);
+
     record OfferingRef(String id, String name, List<Map<String, Object>> productOfferingTerm,
             boolean requiresVerifiedIdentity, Boolean isBundle,
             List<Map<String, Object>> bundledProductOffering) {

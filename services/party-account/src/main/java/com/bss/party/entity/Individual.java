@@ -46,6 +46,11 @@ public class Individual {
     @jakarta.persistence.Column(name = "household_role", length = 16)
     private String householdRole;
 
+    /** Monthly EUR budget the family funds for this member's top-ups
+     * (ask-to-buy above it); NULL = no family funding. */
+    @jakarta.persistence.Column(name = "topup_allowance_value")
+    private java.math.BigDecimal topupAllowanceValue;
+
     public Individual() {
     }
 
@@ -105,4 +110,6 @@ public class Individual {
     public void setHouseholdStatus(String v) { this.householdStatus = v; }
     public String getHouseholdRole() { return householdRole; }
     public void setHouseholdRole(String v) { this.householdRole = v; }
+    public java.math.BigDecimal getTopupAllowanceValue() { return topupAllowanceValue; }
+    public void setTopupAllowanceValue(java.math.BigDecimal v) { this.topupAllowanceValue = v; }
 }

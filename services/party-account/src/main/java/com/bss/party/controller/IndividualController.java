@@ -121,4 +121,13 @@ public class IndividualController {
         return ResponseEntity.ok(service.setHouseholdRole(id,
                 body == null ? null : String.valueOf(body.get("role"))));
     }
+
+    /** Owner or admin: the family's monthly top-up budget for a member. */
+    @PostMapping("/{id}/allowance")
+    public ResponseEntity<IndividualDto> setTopupAllowance(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        Object v = body == null ? null : body.get("monthlyValue");
+        return ResponseEntity.ok(service.setTopupAllowance(id,
+                v == null ? null : new java.math.BigDecimal(String.valueOf(v))));
+    }
 }

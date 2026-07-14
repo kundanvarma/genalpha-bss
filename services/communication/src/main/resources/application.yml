@@ -48,7 +48,7 @@ springdoc:
 bss:
   notify:
     consumer-enabled: ${NOTIFY_CONSUMER_ENABLED:true}
-    topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events}
+    topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events,bss.usage.events}
   events:
     topic: bss.communication.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

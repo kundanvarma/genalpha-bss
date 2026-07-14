@@ -14,6 +14,9 @@ public interface PartyClient {
     /** The ACTIVE person-payer of this party, if any (household billing). */
     java.util.Optional<String> householdPayerOf(String partyId);
 
-    /** The household link in ANY state: {id, status}, or empty. */
+    /** The household link in ANY state: {id, status, role}, or empty. */
     java.util.Optional<java.util.Map<String, Object>> householdLinkOf(String partyId);
+
+    /** The dependents of a payer: [{id, givenName, familyName, status, role}]. */
+    java.util.List<java.util.Map<String, Object>> dependentsOf(String payerId);
 }
