@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold, requestHouseholdPayer, acceptDependent, endHouseholdLink, orderForDependent } from '../api.js';
+import { changePlan, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold, requestHouseholdPayer, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -412,6 +412,51 @@ export default function Services() {
   );
 }
 
+/** Child accounts: the payer creates the kid's login + party in one go —
+ * consent is implicit when the payer IS the creator (a minor can't consent).
+ * The temporary password shows exactly once, for hand-over to the kid's
+ * phone: their own sign-in, their own My page, your bill. */
+function AddFamilyMember({ onAdded }) {
+  const [given, setGiven] = useState('');
+  const [family, setFamily] = useState('');
+  const [email, setEmail] = useState('');
+  const [made, setMade] = useState(null);
+  const [err, setErr] = useState(null);
+
+  async function add() {
+    setErr(null);
+    try {
+      const result = await addFamilyMember(given.trim(), family.trim(), email.trim());
+      setMade(result);
+      setGiven(''); setFamily(''); setEmail('');
+      if (onAdded) onAdded();
+    } catch (e) { setErr(e.message); }
+  }
+
+  if (made) {
+    return (
+      <p data-testid="hh-credentials" style={{ fontSize: 13 }}>
+        ✓ {t('Created — they sign in with')}{' '}
+        <b style={{ fontFamily: 'ui-monospace, monospace' }}>{made.email} / {made.temporaryPassword}</b>
+        <br /><span className="dim">{t('Shown once — hand it over to their phone.')}</span>
+      </p>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+      <input placeholder={t('First name')} value={given} data-testid="hh-add-given"
+        onChange={(e) => setGiven(e.target.value)} style={{ width: 120 }} />
+      <input placeholder={t('Last name')} value={family} data-testid="hh-add-family"
+        onChange={(e) => setFamily(e.target.value)} style={{ width: 120 }} />
+      <input placeholder={t('Email')} value={email} data-testid="hh-add-email"
+        onChange={(e) => setEmail(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+      <button className="ghost" data-testid="hh-add" disabled={!given.trim() || !email.trim()}
+        onClick={add}>{t('Create their account')}</button>
+      {err && <span className="error" style={{ fontSize: 12.5 }}>{err}</span>}
+    </div>
+  );
+}
+
 /** One tap, more data now: buys the top-up and the meter grows this month. */
 function TopUp({ offering, price, onBought }) {
   const [state, setState] = useState(null); // null | 'busy' | 'done' | error
@@ -526,6 +571,12 @@ function Household({ offerings, refresh }) {
           </button>
         </div>
       ))}
+      <details style={{ margin: '10px 0 4px' }}>
+        <summary className="dim" style={{ cursor: 'pointer', fontSize: 13 }}>
+          ➕ {t('Add a family member (creates their own sign-in)')}
+        </summary>
+        <AddFamilyMember onAdded={() => { load(); }} />
+      </details>
       {!payer && !dependents.length && (
         <p className="dim" style={{ fontSize: 13 }}>
           {t('One person, many payers: ask someone to pay for your subscriptions, or accept requests from family here.')}

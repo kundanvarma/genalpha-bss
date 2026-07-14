@@ -101,6 +101,14 @@ public class IndividualController {
         return ResponseEntity.ok(service.clearHouseholdPayer(id));
     }
 
+    /** Child accounts: the payer creates the dependent — link born active. */
+    @PostMapping("/{id}/dependents")
+    public ResponseEntity<IndividualDto> createDependent(@PathVariable String id,
+            @RequestBody IndividualDto dto) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(service.createDependent(id, dto));
+    }
+
     @GetMapping("/{id}/household")
     public ResponseEntity<Map<String, Object>> household(@PathVariable String id) {
         return ResponseEntity.ok(service.householdOf(id));

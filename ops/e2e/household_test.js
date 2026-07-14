@@ -177,7 +177,52 @@ async function token(request, client, user, pass) {
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
   console.log('OK Sonny left the household — future orders are his own again');
 
+  /* ---------- v2: Paula CREATES a child account; the kid gets the APP ---------- */
+  await paulaPage.reload();
+  await paulaPage.locator('summary', { hasText: 'Add a family member' }).click();
+  await paulaPage.fill('[data-testid=hh-add-given]', 'Kidd');
+  await paulaPage.fill('[data-testid=hh-add-family]', `Kid${run}`);
+  const kidEmail = `kidd-${run}@family.example`;
+  await paulaPage.fill('[data-testid=hh-add-email]', kidEmail);
+  await paulaPage.click('[data-testid=hh-add]');
+  await paulaPage.locator('[data-testid=hh-credentials]').waitFor({ timeout: 20000 });
+  const creds = await paulaPage.locator('[data-testid=hh-credentials] b').textContent();
+  const kidPassword = creds.split('/').pop().trim();
+  console.log('OK Paula created the child account — consent implicit when the payer IS the'
+    + ' creator; credentials shown once');
+
+  // the link was born ACTIVE: Paula orders the kid's plan immediately
+  await paulaPage.locator('[data-testid=hh-order-select]').last().waitFor({ timeout: 15000 });
+  await paulaPage.locator('[data-testid=hh-order-select]').last()
+    .selectOption({ label: 'GenAlpha Mobile 10 GB' });
+  await paulaPage.locator('[data-testid=hh-order]').last().click();
+  await paulaPage.locator('[data-testid=hh-note]', { hasText: 'bills to you' }).waitFor({ timeout: 20000 });
+
+  // ...and the kid signs into the MOBILE APP: their own My page, honestly
+  // labelled with who pays
+  const app = await (await browser.newContext({ viewport: { width: 400, height: 860 } })).newPage();
+  await app.goto(`${API}/app/`);
+  await app.locator('[data-testid=signin]').click();
+  await app.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await app.fill('input[name="username"]', kidEmail);
+  await app.fill('input[name="password"]', kidPassword);
+  await app.click('input[type="submit"], button[type="submit"]');
+  await app.locator('[data-testid=app-household-banner]').waitFor({ timeout: 30000 });
+  const banner = await app.locator('[data-testid=app-household-banner]').textContent();
+  if (!banner.includes('Paula')) fail('app banner does not name the payer: ' + banner);
+  let lobCard = false;
+  for (let i = 0; i < 20 && !lobCard; i++) {
+    await app.waitForTimeout(2500);
+    await app.reload();
+    await app.locator('[data-testid=app-household-banner]').waitFor({ timeout: 20000 }).catch(() => {});
+    lobCard = (await app.locator('[data-testid=lob-card]', { hasText: '10 GB' }).count()) > 0;
+  }
+  if (!lobCard) fail("the kid's plan never appeared on their app Home");
+  console.log('OK the kid signed into the APP: own My page, own line, banner says'
+    + ' "paid for by Paula" — one person, many payers, pocket edition');
+
   await browser.close();
   console.log('\nALL HOUSEHOLD CHECKS PASSED — consent-gated person-payer, family bill with'
-    + ' attribution, own purchases stay personal, strangers get nothing, either side can leave.');
+    + ' attribution, own purchases stay personal, strangers get nothing, either side can'
+    + ' leave; child accounts hand the kid their own app.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

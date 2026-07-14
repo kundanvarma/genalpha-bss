@@ -285,6 +285,41 @@ public class IndividualService {
         return household;
     }
 
+    /**
+     * CHILD ACCOUNTS: the payer CREATES the dependent (a kid who can't
+     * consent for themselves) — the party record is pinned to the freshly
+     * minted login and the household link is born ACTIVE, exactly like a
+     * company admin inviting an employee. Self-scoped: you can only create
+     * dependents under yourself.
+     */
+    @Transactional
+    public IndividualDto createDependent(String payerId, IndividualDto dto) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(payerId)) {
+            throw NotFoundException.forResource("Individual", payerId);
+        }
+        repository.findByIdAndTenantId(payerId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", payerId));
+        if (dto.getId() == null || dto.getId().isBlank()) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "id (the dependent's login subject) is required");
+        }
+        if (repository.findByIdAndTenantId(dto.getId(), tenantScope.currentTenantId()).isPresent()) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "individual '" + dto.getId() + "' already exists");
+        }
+        Individual entity = mapper.toEntity(dto);
+        entity.setId(dto.getId());
+        entity.setTenantId(tenantScope.currentTenantId());
+        entity.setHref(com.bss.party.api.ApiConstants.PARTY_BASE + "/individual/" + dto.getId());
+        entity.setHouseholdPayerId(payerId);
+        entity.setHouseholdStatus("active");
+        IndividualDto created = mapper.toDto(repository.save(entity));
+        partyRoles.grant(created.getId(), "customer");
+        events.publish("IndividualCreateEvent", "individual", created);
+        return created;
+    }
+
     private static String nullSafe(String s) {
         return s == null ? "" : s;
     }
