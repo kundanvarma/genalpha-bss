@@ -97,3 +97,58 @@ tool and a message cannon.
 - **Later, named**: branch steps, A/B arms, frequency caps + quiet hours,
   revenue attribution (order value into lift), ESP delivery seam,
   TMF699 leads/opportunities for the sales funnel.
+
+
+---
+
+## 4. Phase 3 — A/B arms, the ESP seam, TMF699 leads (researched 2026-07-15)
+
+### What the field does
+- **A/B arms**: platforms split the audience across up to ~3 message
+  variants, pick winners by a chosen metric, and warn about sample size —
+  Braze runs chi-squared at p<0.05 and refuses to crown winners on small
+  samples; Mailchimp's guidance is that under ~30/arm nothing means
+  anything. The mechanics: deterministic assignment, per-arm ledger,
+  per-arm conversion rates, and an honest significance note.
+- **ESP (Email Service Provider) delivery**: SendGrid v3 (`POST
+  /v3/mail/send`, JSON: personalizations/from/subject/content), Mailgun,
+  SES — and Twilio for SMS — all share the shape: an API send + an async
+  status webhook. Operators already pay for one; a BSS should USE theirs,
+  not become one.
+- **TMF699 Sales Management**: TM Forum's own answer to the sales funnel —
+  `salesLead` (the first stage of SPANCO: an interaction with a PROSPECT)
+  qualifies into `salesOpportunity` (revenue potential, linked onward to
+  quote and order). This is the standards story for "why can a BSS not be
+  a sales tool".
+
+### Design
+1. **A/B arms (campaign component)**: optional `messageVariants`
+   [{name, subject, content}] on a campaign; after the holdout carve-out,
+   treated customers split deterministically across arms; executions
+   record the arm; `/stats` grows per-arm sent/conversions/rate, a leader,
+   and a two-proportion significance note ("too small to mean anything"
+   below threshold). Journeys inherit arms later.
+2. **ESP seam (communication component)** — per-tenant, like GA4/OCS/PIM:
+   `DELIVERY_PROVIDER=internal|esp` + esp-url/api-key/from. In `esp` mode
+   every customer message ALSO goes out via the provider (SendGrid v3
+   shape), to the party''s email resolved live from party-account. In-app
+   inbox stays the source of truth; the ESP send is async and fail-open.
+   `mock-esp` container plays SendGrid in dev; nova rides it, genalpha
+   stays internal — same binary, config apart.
+3. **TMF699 leads (quote component becomes the SALES component)**:
+   `/tmf-api/salesManagement/v4/salesLead` (CRUD; states acknowledged →
+   qualified | unqualified) and `salesOpportunity` (created by qualifying
+   a lead; developed → won | lost, optional quote ref). Capture at the
+   edge: a "Talk to sales" mini-form on the storefront (anonymous, tenant
+   by hostname — the marketing→sales loop closes: campaigns create
+   interest, the form catches it, the console works it). Console gains a
+   Sales tab (leads + qualify action + opportunities).
+
+### E2E
+- growth_test grows the A/B block: two arms over a run-unique segment,
+  both ledgered, inbox subjects split, conversion attributes to the right
+  arm, stats name a leader with the honesty note.
+- ESP: a nova message lands in mock-esp with the right recipient;
+  genalpha messages never appear there.
+- sales_test.js (#36): guest submits the storefront lead → console shows
+  it → qualify → opportunity → won with a quote reference; state guards.
