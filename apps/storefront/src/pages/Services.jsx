@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, replaceMySim, resetSimPin, myHousehold } from '../api.js';
+import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -269,7 +269,8 @@ export default function Services() {
     && catOfProduct(p) !== 'Top-ups');
 
   // EVERY numbered line gets its own row + SIM — families have several
-  const lines = services.filter((sv) => sv.state === 'active'
+  // (a PAUSED line stays visible: it is still yours, just sleeping)
+  const lines = services.filter((sv) => ['active', 'suspended'].includes(sv.state)
     && (sv.supportingResource || []).some((r) => r.value));
   // partner entitlements carry an activationCode characteristic, never a number
   const activationOf = (sv) => (sv.serviceCharacteristic || [])
@@ -334,8 +335,26 @@ export default function Services() {
           {rowsOf(mobilePlans)}
           {number ? lines.map((sv) => (
             <div key={sv.id} data-testid="line-row">
-              <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{numberOf(sv)}</strong></p>
-              <SimCard serviceId={sv.id} />
+              <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{numberOf(sv)}</strong>
+                {sv.state === 'suspended' && <span className="state suspended" data-testid="line-paused"> {t('paused')}</span>}
+                {' '}
+                {sv.state === 'active' ? (
+                  <button className="ghost" data-testid="pause-line"
+                    onClick={async () => {
+                      const days = window.prompt(t('Pause this line for how many days? (1-90)'), '30');
+                      if (!days) return;
+                      try { await pauseMyService(sv.id, Number(days)); refresh(); } catch { /* stays on */ }
+                    }}>
+                    {t('Pause line')}
+                  </button>
+                ) : (
+                  <button className="ghost" data-testid="resume-line"
+                    onClick={async () => { try { await resumeMyService(sv.id); refresh(); } catch { /* stays paused */ } }}>
+                    {t('Resume now')}
+                  </button>
+                )}
+              </p>
+              {sv.state === 'active' && <SimCard serviceId={sv.id} />}
             </div>
           )) : <p className="dim">{t('Your line appears here once the plan activates.')}</p>}
           {dataBuckets.map((b, i) => <UsageMeter bucket={b} key={i} />)}

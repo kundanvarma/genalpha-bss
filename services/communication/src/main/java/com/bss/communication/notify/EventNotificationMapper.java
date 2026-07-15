@@ -31,6 +31,20 @@ public class EventNotificationMapper {
                             "Your SIM PIN was changed",
                             "The PIN on your SIM " + sim.getOrDefault("iccid", "") + " was just changed."
                             + " If this was not you, contact us immediately."))));
+            case "ServiceSuspendedEvent" -> one(resource(event, "service").flatMap(svc ->
+                    customer(svc).map(party -> new Notification(party,
+                            "Your line is paused",
+                            svc.getOrDefault("name", "Your service") + " is paused"
+                            + (svc.get("resumeAt") != null
+                                ? " until " + String.valueOf(svc.get("resumeAt")).substring(0, 10)
+                                    + " — it will resume by itself."
+                                : " until you ask us to resume it.")
+                            + " Your number and SIM stay yours."))));
+            case "ServiceResumedEvent" -> one(resource(event, "service").flatMap(svc ->
+                    customer(svc).map(party -> new Notification(party,
+                            "Your line is back on",
+                            svc.getOrDefault("name", "Your service")
+                            + " is active again. Welcome back."))));
             // an unrequested number change is a takeover in progress — say so
             case "NumberChangedEvent" -> one(resource(event, "service").flatMap(svc ->
                     customer(svc).map(party -> new Notification(party,

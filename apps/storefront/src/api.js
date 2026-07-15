@@ -259,6 +259,21 @@ export async function mySim(serviceId, reveal = false) {
   return res.json();
 }
 
+/** Going away? Pause the line — your number and SIM stay yours, and the
+ * hold lifts itself on the day you pick. */
+export async function pauseMyService(serviceId, days) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/suspend`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(days ? { days } : {}),
+  }));
+}
+
+export async function resumeMyService(serviceId) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/resume`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 /** Lost your SIM? Block the old card and get a fresh one on the same
  * number — you will be notified, and the new PUK is revealable as usual. */
 export async function replaceMySim(serviceId, reason) {

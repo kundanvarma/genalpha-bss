@@ -231,6 +231,52 @@ public class SomController {
         return ResponseEntity.ok(response);
     }
 
+    /** Vacation hold: pause the line — number and SIM stay yours, charging
+     * pauses, and the hold lifts itself at the agreed date (max 90 days). */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/suspend")
+    public ResponseEntity<Map<String, Object>> suspend(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> body) {
+        ServiceInstance instance = requireOwnService(id);
+        Map<String, Object> dto = body == null ? Map.of() : body;
+        String reason = String.valueOf(dto.getOrDefault("reason", "vacation"));
+        java.time.OffsetDateTime resumeAt = null;
+        if (dto.get("until") != null) {
+            try {
+                resumeAt = java.time.OffsetDateTime.parse(String.valueOf(dto.get("until")));
+            } catch (Exception e) {
+                throw new com.bss.som.exception.BadRequestException("until must be an ISO date-time");
+            }
+        } else if (dto.get("days") != null) {
+            resumeAt = java.time.OffsetDateTime.now()
+                    .plusDays(Long.parseLong(String.valueOf(dto.get("days"))));
+        }
+        if (resumeAt != null && (resumeAt.isBefore(java.time.OffsetDateTime.now())
+                || resumeAt.isAfter(java.time.OffsetDateTime.now().plusDays(90)))) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "the hold must end in the future and within 90 days");
+        }
+        return ResponseEntity.ok(orchestration.suspend(instance, reason, resumeAt));
+    }
+
+    /** Lift the hold early — or at all, when no end date was set. */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/resume")
+    public ResponseEntity<Map<String, Object>> resume(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        return ResponseEntity.ok(orchestration.resume(requireOwnService(id), "request"));
+    }
+
+    private ServiceInstance requireOwnService(String serviceId) {
+        ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenantScope.currentTenantId())
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", serviceId));
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(instance.getOwnerPartyId())) {
+                throw com.bss.som.exception.NotFoundException.forResource("Service", serviceId);
+            }
+        });
+        return instance;
+    }
+
     private com.bss.som.entity.SimCard requireOwnSim(String serviceId) {
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenant)
