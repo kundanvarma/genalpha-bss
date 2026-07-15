@@ -36,33 +36,42 @@ public class CampaignService {
     private static final Logger log = LoggerFactory.getLogger(CampaignService.class);
     private static final Set<String> STATUSES = Set.of(Campaign.ACTIVE, Campaign.PAUSED);
 
+    private static final com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>
+            ARM_LIST = new com.fasterxml.jackson.core.type.TypeReference<>() { };
+
     private final CampaignRepository campaigns;
     private final CampaignExecutionRepository executions;
     private final CommunicationClient communication;
     private final com.bss.campaign.client.InsightClient insight;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
-            com.bss.campaign.client.InsightClient insight) {
+            com.bss.campaign.client.InsightClient insight,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
         this.insight = insight;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
     public Map<String, Object> create(Map<String, Object> dto) {
+        List<Map<String, Object>> arms = parseArms(dto.get("messageVariants"));
+        Map<?, ?> message = dto.get("message") instanceof Map<?, ?> m ? m
+                : arms != null ? arms.get(0) : null;
         if (dto.get("name") == null
                 || (dto.get("triggerEventType") == null && dto.get("segmentName") == null)
-                || !(dto.get("message") instanceof Map<?, ?> message)
+                || message == null
                 || message.get("subject") == null || message.get("content") == null) {
             throw new BadRequestException(
-                    "name, message {subject, content} and a trigger (triggerEventType"
-                    + " or segmentName) are required");
+                    "name, message {subject, content} (or messageVariants) and a trigger"
+                    + " (triggerEventType or segmentName) are required");
         }
         Campaign entity = new Campaign();
         String id = UUID.randomUUID().toString();
@@ -91,6 +100,13 @@ public class CampaignService {
                 throw new BadRequestException("holdoutPercent must be 0-90");
             }
             entity.setHoldoutPercent(holdout);
+        }
+        if (arms != null) {
+            try {
+                entity.setArms(objectMapper.writeValueAsString(arms));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new BadRequestException("messageVariants could not be stored");
+            }
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -181,7 +197,74 @@ public class CampaignService {
         if (heldOut > 0 && heldOut < 5) {
             stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
         }
+        List<Map<String, Object>> arms = armsOf(campaign);
+        if (arms != null) {
+            stats.put("arms", armStats(arms, all));
+        }
         return stats;
+    }
+
+    /**
+     * The A/B readout: per-arm sent / conversions / rate, a leader, and an
+     * honest verdict — a two-proportion z-test at 95% decides whether the
+     * gap is a finding or noise (with tiny samples it is ALWAYS noise, and
+     * the readout says so instead of crowning a winner).
+     */
+    private Map<String, Object> armStats(List<Map<String, Object>> arms,
+            List<CampaignExecution> all) {
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (Map<String, Object> arm : arms) {
+            String name = String.valueOf(arm.get("name"));
+            long sent = all.stream().filter(e -> name.equals(e.getArm())).count();
+            long conv = all.stream()
+                    .filter(e -> name.equals(e.getArm()) && e.getConvertedAt() != null).count();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("subject", arm.get("subject"));
+            row.put("sent", sent);
+            row.put("conversions", conv);
+            row.put("rate", sent == 0 ? null : Math.round((double) conv / sent * 1000) / 10.0);
+            rows.add(row);
+        }
+        Map<String, Object> best = rows.stream()
+                .filter(r -> r.get("rate") != null)
+                .max(java.util.Comparator
+                        .comparingDouble((Map<String, Object> r) -> (Double) r.get("rate"))
+                        .thenComparingLong(r -> (Long) r.get("conversions")))
+                .orElse(null);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("arms", rows);
+        if (best != null && rows.size() >= 2) {
+            List<Map<String, Object>> sorted = rows.stream()
+                    .filter(r -> r.get("rate") != null)
+                    .sorted(java.util.Comparator.comparingDouble(
+                            (Map<String, Object> r) -> (Double) r.get("rate")).reversed())
+                    .toList();
+            out.put("leader", best.get("name"));
+            if (sorted.size() >= 2) {
+                long n1 = (Long) sorted.get(0).get("sent"), n2 = (Long) sorted.get(1).get("sent");
+                long c1 = (Long) sorted.get(0).get("conversions"),
+                        c2 = (Long) sorted.get(1).get("conversions");
+                out.put("verdict", verdictOf(n1, c1, n2, c2, String.valueOf(best.get("name"))));
+            }
+        }
+        return out;
+    }
+
+    private String verdictOf(long n1, long c1, long n2, long c2, String leader) {
+        if (n1 < 30 || n2 < 30) {
+            return "arms under 30 people — the split is an anecdote, keep the test running";
+        }
+        double p1 = (double) c1 / n1, p2 = (double) c2 / n2;
+        double pooled = (double) (c1 + c2) / (n1 + n2);
+        double se = Math.sqrt(pooled * (1 - pooled) * (1.0 / n1 + 1.0 / n2));
+        if (se == 0) {
+            return "no conversions yet — nothing to compare";
+        }
+        double z = (p1 - p2) / se;
+        return Math.abs(z) >= 1.96
+                ? "arm " + leader + " wins at 95% confidence"
+                : "the gap is inside the noise (not significant at 95%) — keep the test running";
     }
 
     /**
@@ -220,12 +303,21 @@ public class CampaignService {
         }
         boolean holdout = campaign.getHoldoutPercent() > 0
                 && Math.floorMod((campaign.getId() + partyId).hashCode(), 100) < campaign.getHoldoutPercent();
+        List<Map<String, Object>> arms = armsOf(campaign);
+        Map<String, Object> arm = holdout || arms == null ? null
+                // a DIFFERENT hash than the holdout bucket, so arms split the
+                // treated group evenly instead of mirroring the holdout edge
+                : arms.get(Math.floorMod((campaign.getId() + ":arm:" + partyId).hashCode(),
+                        arms.size()));
         CampaignExecution execution = new CampaignExecution();
         execution.setId(UUID.randomUUID().toString());
         execution.setTenantId(tenant);
         execution.setCampaignId(campaign.getId());
         execution.setPartyId(partyId);
         execution.setVariant(holdout ? "holdout" : "treated");
+        if (arm != null) {
+            execution.setArm(String.valueOf(arm.get("name")));
+        }
         execution.setExecutedAt(OffsetDateTime.now());
         try {
             executions.save(execution);
@@ -233,10 +325,13 @@ public class CampaignService {
             return false; // concurrent duplicate delivery lost the race — fine
         }
         if (!holdout) {
+            String subject = arm != null ? String.valueOf(arm.get("subject"))
+                    : campaign.getMessageSubject();
+            String body = arm != null ? String.valueOf(arm.get("content"))
+                    : campaign.getMessageContent();
             String content = campaign.getPromotionCode() == null
-                    ? campaign.getMessageContent()
-                    : campaign.getMessageContent().replace("{code}", campaign.getPromotionCode());
-            communication.send(partyId, campaign.getMessageSubject(), content);
+                    ? body : body.replace("{code}", campaign.getPromotionCode());
+            communication.send(partyId, subject, content);
         }
         events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
                 "campaignId", campaign.getId(), "partyId", partyId, "variant", execution.getVariant()));
@@ -275,6 +370,46 @@ public class CampaignService {
         }
     }
 
+    /** A/B arms: 2-4 variants, each a complete message with a name. */
+    private List<Map<String, Object>> parseArms(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (!(raw instanceof List<?> list) || list.size() < 2 || list.size() > 4) {
+            throw new BadRequestException("messageVariants must be a list of 2-4 arms");
+        }
+        List<Map<String, Object>> arms = new java.util.ArrayList<>();
+        Set<String> names = new java.util.HashSet<>();
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> arm) || arm.get("name") == null
+                    || arm.get("subject") == null || arm.get("content") == null) {
+                throw new BadRequestException("every arm needs name, subject and content");
+            }
+            if (!names.add(String.valueOf(arm.get("name")))) {
+                throw new BadRequestException("arm names must be unique");
+            }
+            Map<String, Object> clean = new LinkedHashMap<>();
+            clean.put("name", String.valueOf(arm.get("name")));
+            clean.put("subject", String.valueOf(arm.get("subject")));
+            clean.put("content", String.valueOf(arm.get("content")));
+            arms.add(clean);
+        }
+        return arms;
+    }
+
+    private List<Map<String, Object>> armsOf(Campaign campaign) {
+        if (campaign.getArms() == null || campaign.getArms().isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(campaign.getArms(), ARM_LIST);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            log.warn("campaign '{}' has unreadable arms — falling back to the base message",
+                    campaign.getName());
+            return null;
+        }
+    }
+
     private String requireStatus(Object status) {
         String value = String.valueOf(status);
         if (!STATUSES.contains(value)) {
@@ -294,6 +429,8 @@ public class CampaignService {
         map.put("message", Map.of("subject", c.getMessageSubject(), "content", c.getMessageContent()));
         if (c.getPromotionCode() != null) map.put("promotionCode", c.getPromotionCode());
         if (c.getSegmentName() != null) map.put("segmentName", c.getSegmentName());
+        List<Map<String, Object>> arms = armsOf(c);
+        if (arms != null) map.put("messageVariants", arms);
         map.put("holdoutPercent", c.getHoldoutPercent());
         map.put("conversionWindowDays", c.getConversionWindowDays());
         if (c.getConversionEvent() != null) map.put("conversionEvent", c.getConversionEvent());

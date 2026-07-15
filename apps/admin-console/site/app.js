@@ -196,6 +196,8 @@ const RESOURCES = [
         base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
       { name: 'messageSubject', label: 'Message subject', required: true },
       { name: 'messageContent', label: 'Message — {code} inserts the promo code', kind: 'longtext', required: true },
+      { name: 'messageVariants', label: 'A/B arms (JSON, optional) — 2-4 of {name, subject, content}; treated customers split evenly and stats read per arm', kind: 'jsontext',
+        placeholder: '[{"name":"A","subject":"…","content":"…"},{"name":"B","subject":"…","content":"…"}]' },
       { name: 'holdoutPercent', label: 'Holdout % — a control group that gets NO message, so lift can be measured', kind: 'number', placeholder: '0' },
       { name: 'conversionWindowDays', label: 'Conversion window (days)', kind: 'number', placeholder: '7' },
     ],
@@ -207,12 +209,19 @@ const RESOURCES = [
     detail: async (item) => {
       const res = await authFetch(`${CAMPAIGN_BASE}/campaign/${item.id}/stats`);
       const s = await res.json();
-      return [{
+      const row = {
         reached: s.reached, heldOut: s.heldOut,
         converted: `treated ${s.conversions.treated} (${s.treatedRate ?? '—'}%) · holdout ${s.conversions.holdout} (${s.holdoutRate ?? '—'}%)`,
         lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
         note: s.note || `${s.conversionWindowDays}-day window`,
-      }];
+      };
+      if (s.arms) {
+        row.abTest = s.arms.arms
+          .map((a) => `${a.name}: ${a.conversions}/${a.sent}${a.rate != null ? ` (${a.rate}%)` : ''}`)
+          .join(' · ');
+        row.verdict = s.arms.verdict || '—';
+      }
+      return [row];
     },
     rowAction: {
       label: (item) => (item.status === 'active' ? 'Pause' : 'Resume'),

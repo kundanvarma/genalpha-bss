@@ -32,6 +32,10 @@ public class CampaignExecution {
     @Column(name = "variant", length = 16)
     private String variant = "treated";
 
+    /** Which A/B arm spoke to this customer (null when the campaign has one message). */
+    @Column(name = "arm", length = 32)
+    private String arm;
+
     @Column(name = "converted_at")
     private OffsetDateTime convertedAt;
 
@@ -50,6 +54,8 @@ public class CampaignExecution {
     public void setExecutedAt(OffsetDateTime executedAt) { this.executedAt = executedAt; }
     public String getVariant() { return variant; }
     public void setVariant(String variant) { this.variant = variant; }
+    public String getArm() { return arm; }
+    public void setArm(String arm) { this.arm = arm; }
     public OffsetDateTime getConvertedAt() { return convertedAt; }
     public void setConvertedAt(OffsetDateTime convertedAt) { this.convertedAt = convertedAt; }
     public String getConversionRef() { return conversionRef; }

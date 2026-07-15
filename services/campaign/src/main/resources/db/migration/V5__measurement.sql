@@ -9,4 +9,6 @@ ALTER TABLE campaign ADD COLUMN holdout_percent INT NOT NULL DEFAULT 0;
 ALTER TABLE campaign_execution ADD COLUMN variant VARCHAR(16) NOT NULL DEFAULT 'treated';
 ALTER TABLE campaign_execution ADD COLUMN converted_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE campaign_execution ADD COLUMN conversion_ref VARCHAR(64);
-CREATE INDEX idx_execution_party_open ON campaign_execution (tenant_id, party_id) WHERE converted_at IS NULL;
+-- plain index here (H2-safe); Postgres upgrades it to a partial index in
+-- the vendor location
+CREATE INDEX idx_execution_party_open ON campaign_execution (tenant_id, party_id);
