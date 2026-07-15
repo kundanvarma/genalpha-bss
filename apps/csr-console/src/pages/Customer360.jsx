@@ -4,7 +4,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
-  revokePaymentMethod, usageOf , aiNextBestOffer } from '../api.js';
+  revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -137,6 +137,21 @@ export default function Customer360() {
         {nbo && nbo !== 'loading' && (
           <p data-testid="nbo-answer">
             {nbo.offer ? <strong>{nbo.offer.name}</strong> : null} <span className="dim">{nbo.reason}</span>
+            {nbo.offer && (
+              <>
+                {' '}
+                <button className="ghost" data-testid="nbo-send"
+                        onClick={() => act(() => sendOffer(id, nbo.offer, 'Your agent'))}>
+                  Send offer
+                </button>
+                {hasRole('ordering:write') && (
+                  <button className="ghost" data-testid="nbo-order"
+                          onClick={() => act(() => orderForCustomer(id, nbo.offer))}>
+                    Order now
+                  </button>
+                )}
+              </>
+            )}
           </p>
         )}
       </section>
@@ -338,8 +353,21 @@ export default function Customer360() {
           <div className="rows" data-testid="suggest-card">
             {suggestions.slice(0, 3).map((it) => (
               <div className="row" key={it.offering.id}>
-                <span>{it.offering.name}</span>
-                <span className="dim small">#{it.priority}</span>
+                <span>{it.offering.name} <span className="dim small">#{it.priority}</span></span>
+                <div className="rowend">
+                  <button className="ghost" data-testid={`send-offer-${it.offering.id}`}
+                          title="A personal message to their inbox (and email, if the tenant sends email)"
+                          onClick={() => act(() => sendOffer(id, it.offering, 'Your agent'))}>
+                    Send offer
+                  </button>
+                  {hasRole('ordering:write') && (
+                    <button className="ghost" data-testid={`order-now-${it.offering.id}`}
+                            title="Order on the customer's behalf — with their say-so on the line"
+                            onClick={() => act(() => orderForCustomer(id, it.offering))}>
+                      Order now
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
             {!suggestions.length && <p className="dim small">Nothing to suggest.</p>}
