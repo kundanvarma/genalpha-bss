@@ -19,4 +19,11 @@ public class MockSimPlatformClient implements SimPlatformClient {
                 iccid.substring(Math.max(0, iccid.length() - 5)));
         return true;
     }
+
+    @Override
+    public boolean block(String iccid) {
+        log.info("mock SIM platform: ICCID …{} BLOCKED at the network",
+                iccid.substring(Math.max(0, iccid.length() - 5)));
+        return true;
+    }
 }

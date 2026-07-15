@@ -28,6 +28,12 @@ public class SimCard {
 
     private String puk;
 
+    /** active | blocked (lost/stolen) | replaced (upgrade/damaged). */
+    private String status = "active";
+
+    @Column(name = "replaced_reason", length = 32)
+    private String replacedReason;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -42,6 +48,10 @@ public class SimCard {
     public void setServiceId(String serviceId) { this.serviceId = serviceId; }
     public String getPuk() { return puk; }
     public void setPuk(String puk) { this.puk = puk; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getReplacedReason() { return replacedReason; }
+    public void setReplacedReason(String v) { this.replacedReason = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

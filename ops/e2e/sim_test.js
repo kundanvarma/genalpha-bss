@@ -138,8 +138,45 @@ async function apiCall(page, method, path, token, body) {
   if (!warned) fail('the customer was never told their PIN changed');
   console.log('OK Sam was TOLD: "Your SIM PIN was changed — if this was not you, contact us"');
 
+  // --- "I LOST MY SIM": the agent blocks the old card and issues a new one.
+  // The number never moves (it lives on the service); the old ICCID dies at
+  // the platform FIRST; the new card has its own PUK; and Sam is warned —
+  // a silent SIM swap is the textbook account-takeover.
+  const replaced = await (await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/sim/replace`,
+    { headers: AH, data: { reason: 'lost' } })).json();
+  if (replaced.oldSim?.status !== 'blocked') fail('a LOST card must be blocked: ' + JSON.stringify(replaced));
+  if (!replaced.iccid || replaced.iccid === replaced.oldSim.iccid) {
+    fail('the replacement is not a new card: ' + JSON.stringify(replaced));
+  }
+  const newSim = await apiCall(page, 'GET',
+    `/tmf-api/serviceInventory/v4/service/${service.id}/sim?reveal=true`, sam);
+  if (!newSim.body.iccid.includes(replaced.iccid.slice(-5))) {
+    fail('the service does not carry the new card: ' + JSON.stringify(newSim.body));
+  }
+  if (newSim.body.puk === apiPuk) fail('the new card reused the old PUK');
+  if (!/^\d{8}$/.test(newSim.body.puk)) fail('the new PUK is not revealable: ' + newSim.body.puk);
+  console.log('OK LOST SIM replaced: old card blocked at the platform, new card on the SAME'
+    + ' number with its OWN PUK');
+
+  const badReason = await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/sim/replace`,
+    { headers: AH, data: { reason: 'because' } });
+  if (badReason.status() !== 400) fail('nonsense replacement reasons must be refused: ' + badReason.status());
+
+  let swapWarned = false;
+  for (let i = 0; i < 20 && !swapWarned; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inboxRes = await apiCall(page, 'GET',
+      '/tmf-api/communicationManagement/v4/communicationMessage?limit=50', sam);
+    swapWarned = (inboxRes.body || []).some?.((m) => (m.subject || '').includes('new SIM was issued'));
+  }
+  if (!swapWarned) fail('the customer was never told their SIM was replaced');
+  console.log('OK Sam was WARNED: "A new SIM was issued for your number — if this was not you,'
+    + ' contact us immediately"');
+
   await browser.close();
   console.log('\nALL SIM CHECKS PASSED — minted at activation, PUK on request, OTA PIN reset,'
-    + ' owner-scoped — and the call-in flow: agent reveals the PUK on the record, resets the'
-    + ' PIN, and the customer hears about it.');
+    + ' owner-scoped — the call-in flow (PUK on the record, PIN reset with a receipt) and the'
+    + ' lost-SIM replacement: old card dead first, same number, new PUK, loud warning.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

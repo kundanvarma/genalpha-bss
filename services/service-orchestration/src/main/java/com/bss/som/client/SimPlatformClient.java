@@ -10,4 +10,7 @@ public interface SimPlatformClient {
 
     /** Push a new PIN to the card. Returns false when the platform refuses. */
     boolean resetPin(String iccid, String newPin);
+
+    /** Kill a card at the network (lost/stolen/replaced). False = refused. */
+    boolean block(String iccid);
 }

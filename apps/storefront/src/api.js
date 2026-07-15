@@ -259,6 +259,16 @@ export async function mySim(serviceId, reveal = false) {
   return res.json();
 }
 
+/** Lost your SIM? Block the old card and get a fresh one on the same
+ * number — you will be notified, and the new PUK is revealable as usual. */
+export async function replaceMySim(serviceId, reason) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/sim/replace`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  }));
+}
+
 /** OTA PIN change — pushed to the card via the operator's SIM platform. */
 export async function resetSimPin(serviceId, newPin) {
   return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/sim/resetPin`, {

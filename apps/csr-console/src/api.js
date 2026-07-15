@@ -264,6 +264,16 @@ export async function resetSimPin(serviceId, newPin) {
   }));
 }
 
+/** Lost/stolen/damaged/upgrade: block the old card at the network and
+ * mint a fresh one against the same service — the number never moves. */
+export async function replaceSim(serviceId, reason) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim/replace`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  }));
+}
+
 /** UPSELL, acted on: order the suggested offering ON BEHALF of the
  * customer (with their say-so on the line) — the agent is unscoped, so
  * the relatedParty in the body names the owner. */

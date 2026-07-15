@@ -257,7 +257,7 @@ public class OrchestrationService {
     }
 
     /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
-    private void mintSim(String tenant, String serviceId) {
+    public com.bss.som.entity.SimCard mintSim(String tenant, String serviceId) {
         java.security.SecureRandom random = new java.security.SecureRandom();
         StringBuilder iccid = new StringBuilder("8946");
         for (int i = 0; i < 15; i++) {
@@ -271,7 +271,7 @@ public class OrchestrationService {
                 String.format("%08d", random.nextInt(100_000_000)), sim.getIccid()));
         sim.setCreatedAt(OffsetDateTime.now());
         sim.setLastUpdate(OffsetDateTime.now());
-        sims.save(sim);
+        return sims.save(sim);
     }
 
     /**

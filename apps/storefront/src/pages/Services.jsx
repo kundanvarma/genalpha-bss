@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, resetSimPin, myHousehold } from '../api.js';
+import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, priceIndex, quickOrder, replaceMySim, resetSimPin, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -57,6 +57,17 @@ function SimCard({ serviceId }) {
           {t('Reset PIN')}
         </button>
         {pinState === 'done' && <span className="dim" data-testid="pin-done"> ✓ sent to your SIM</span>}
+        <button className="ghost danger" data-testid="replace-sim"
+          onClick={async () => {
+            if (!window.confirm(t('Lost or broken SIM? Your old card stops working IMMEDIATELY and a new one is issued on the same number.'))) return;
+            try {
+              await replaceMySim(serviceId, 'lost');
+              setPuk(null);
+              setSim(await mySim(serviceId));
+            } catch { /* the card stays */ }
+          }}>
+          {t('Replace SIM')}
+        </button>
         {pinState && pinState !== 'done' && pinState !== 'busy' && <span className="error"> {pinState}</span>}
       </span>
     </div>
