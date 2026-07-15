@@ -42,6 +42,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // TMF699: lead CAPTURE is open — a prospect has no token yet
+                        // (tenant comes from the gateway's hostname mapping); working
+                        // the funnel is back-office
+                        .requestMatchers(HttpMethod.POST, ApiConstants.SALES_BASE + "/salesLead").permitAll()
+                        .requestMatchers(HttpMethod.GET, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:read")
+                        .requestMatchers(HttpMethod.PATCH, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:write")

@@ -33,6 +33,7 @@ const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
 const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
+const SALES_BASE = '/tmf-api/salesManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -290,6 +291,63 @@ const RESOURCES = [
     },
   },
   {
+    path: 'salesLead',
+    base: SALES_BASE,
+    title: 'Sales leads',
+    // TMF699: prospects knocking — the storefront's "Talk to sales" form,
+    // campaigns, CSRs. Qualify turns a lead into an opportunity.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'name', label: 'What is the lead about?', required: true },
+      { name: 'contactName', label: 'Contact name' },
+      { name: 'contactEmail', label: 'Contact email' },
+      { name: 'company', label: 'Company' },
+      { name: 'description', label: 'Notes', kind: 'longtext' },
+    ],
+    columns: ['name', 'company', 'contactEmail', 'source', 'state', 'lastUpdate'],
+    rowAction: {
+      label: (item) => (item.state === 'acknowledged' ? 'Qualify' : '—'),
+      apply: (item) => (item.state === 'acknowledged'
+        ? authFetch(`${SALES_BASE}/salesLead/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: 'qualified' }),
+          })
+        : Promise.resolve()),
+    },
+    detail: async (item) => [{
+      contact: [item.contactName, item.contactEmail, item.company].filter(Boolean).join(' · ') || '—',
+      notes: item.description || '—',
+      opportunity: item.salesOpportunity ? item.salesOpportunity.id : '— (qualify to create one)',
+    }],
+  },
+  {
+    path: 'salesOpportunity',
+    base: SALES_BASE,
+    title: 'Opportunities',
+    // The revenue conversation a qualified lead became: developed until
+    // won (ideally with the quote that sealed it) or lost.
+    readOnly: true,
+    fields: [],
+    columns: ['name', 'state', 'lastUpdate'],
+    rowAction: {
+      label: (item) => (item.state === 'developed' ? 'Mark won' : '—'),
+      apply: (item) => (item.state === 'developed'
+        ? authFetch(`${SALES_BASE}/salesOpportunity/${item.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: 'won' }),
+          })
+        : Promise.resolve()),
+    },
+    detail: async (item) => [{
+      lead: item.salesLead ? item.salesLead.id : '—',
+      state: item.state,
+      quote: item.quote ? item.quote.id : '— (attach by winning with a quote ref via API)',
+    }],
+  },
+  {
     path: 'profile',
     base: '/insight/v1',
     title: 'Insight',
@@ -542,6 +600,8 @@ const TAB_ROLE = {
   journey: 'campaign:read',
   policyRule: 'policy:read',
   article: 'knowledge:write',
+  salesLead: 'quote:read',
+  salesOpportunity: 'quote:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',

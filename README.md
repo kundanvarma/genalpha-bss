@@ -6,9 +6,11 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — twenty-eight Playwright suites drive the
-storefront, guest checkout, both consoles, the mobile app, tenant isolation, role administration,
-campaign journeys, the AI-slice lead-to-assure loop and BankID step-up against the full stack.
+**Every feature is verified end-to-end in a real browser** — thirty-seven Playwright suites drive the
+storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
+campaign journeys with holdout-measured lift and A/B arms, the per-tenant ESP email seam, the
+TMF699 lead-to-opportunity sales funnel, the AI-slice lead-to-assure loop and BankID step-up
+against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
 usage-consumption and TMF678 customer-bill. See the full, honest scorecard — including the two
