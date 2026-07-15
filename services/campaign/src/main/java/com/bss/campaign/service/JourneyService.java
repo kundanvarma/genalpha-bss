@@ -87,8 +87,30 @@ public class JourneyService {
                 if (waitSeconds(step) <= 0) {
                     throw new BadRequestException("wait steps need seconds/minutes/hours/days > 0");
                 }
+            } else if ("branch".equals(type)) {
+                // the journey READS the customer before speaking: an insight
+                // segment decides which of two messages (either may be
+                // omitted = say nothing on that side)
+                if (step.get("inSegment") == null || String.valueOf(step.get("inSegment")).isBlank()) {
+                    throw new BadRequestException("branch steps need inSegment (an insight segment name)");
+                }
+                boolean anyPath = false;
+                for (String path : List.of("then", "else")) {
+                    if (step.get(path) == null) {
+                        continue;
+                    }
+                    if (!(step.get(path) instanceof Map<?, ?> m)
+                            || m.get("subject") == null || m.get("content") == null) {
+                        throw new BadRequestException(
+                                "branch '" + path + "' must be a message {subject, content}");
+                    }
+                    anyPath = true;
+                }
+                if (!anyPath) {
+                    throw new BadRequestException("a branch needs at least one of then/else");
+                }
             } else {
-                throw new BadRequestException("step type must be 'message' or 'wait'");
+                throw new BadRequestException("step type must be 'message', 'wait' or 'branch'");
             }
         }
         Journey entity = new Journey();
@@ -254,24 +276,13 @@ public class JourneyService {
         int index = enrollment.getStepIndex();
         while (index < steps.size()) {
             Map<String, Object> step = steps.get(index);
-            if ("message".equals(String.valueOf(step.get("type")))) {
-                if (!"holdout".equals(enrollment.getVariant())) {
-                    // frequency cap: a customer at their marketing budget is
-                    // POSTPONED, not dropped — the journey retries in an hour
-                    if (!frequency.canSend(enrollment.getPartyId())) {
-                        enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
-                        enrollments.save(enrollment);
-                        log.info("journey '{}' postponed for party {} — marketing budget spent",
-                                journey.getName(), enrollment.getPartyId());
-                        return;
-                    }
-                    String content = String.valueOf(step.get("content"));
-                    if (step.get("promotionCode") != null) {
-                        content = content.replace("{code}", String.valueOf(step.get("promotionCode")));
-                    }
-                    communication.send(enrollment.getPartyId(),
-                            String.valueOf(step.get("subject")), content);
-                    frequency.record(enrollment.getPartyId(), "journey");
+            String type = String.valueOf(step.get("type"));
+            if ("message".equals(type) || "branch".equals(type)) {
+                Map<String, Object> message = "message".equals(type) ? step
+                        : branchMessage(journey, enrollment, step);
+                if (message != null && !"holdout".equals(enrollment.getVariant())
+                        && !sendGuarded(journey, enrollment, message)) {
+                    return; // parked by quiet hours or the frequency cap
                 }
                 index++;
             } else { // wait
@@ -286,6 +297,63 @@ public class JourneyService {
         enrollment.setStatus("completed");
         enrollment.setNextActionAt(null);
         enrollments.save(enrollment);
+    }
+
+    /**
+     * BRANCH: the journey reads the customer before speaking — membership
+     * in an insight segment picks the message (a missing side = silence).
+     * An unreachable insight fails SAFE to the 'else' side: the generic
+     * message beats a wrong one.
+     */
+    private Map<String, Object> branchMessage(Journey journey, JourneyEnrollment enrollment,
+            Map<String, Object> step) {
+        String segment = String.valueOf(step.get("inSegment"));
+        boolean member = false;
+        try {
+            member = insight.segmentMembers(segment).stream()
+                    .anyMatch(m -> enrollment.getPartyId().equals(String.valueOf(m.get("partyId"))));
+        } catch (Exception e) {
+            log.warn("journey '{}' branch on '{}' could not read insight — taking 'else': {}",
+                    journey.getName(), segment, e.getMessage());
+        }
+        Object chosen = member ? step.get("then") : step.get("else");
+        log.info("journey '{}' branch on '{}': party {} is {}",
+                journey.getName(), segment, enrollment.getPartyId(), member ? "IN" : "OUT");
+        return chosen instanceof Map<?, ?> m ? castMessage(m) : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> castMessage(Map<?, ?> m) {
+        return (Map<String, Object>) m;
+    }
+
+    /** The guarded send every journey message goes through: quiet hours
+     * park to the window's end, a spent budget postpones an hour.
+     * @return false when parked (the enrollment was saved with a new time). */
+    private boolean sendGuarded(Journey journey, JourneyEnrollment enrollment,
+            Map<String, Object> message) {
+        java.util.Optional<OffsetDateTime> quiet = frequency.quietUntil();
+        if (quiet.isPresent()) {
+            enrollment.setNextActionAt(quiet.get());
+            enrollments.save(enrollment);
+            log.info("journey '{}' parked for party {} — quiet hours until {}",
+                    journey.getName(), enrollment.getPartyId(), quiet.get());
+            return false;
+        }
+        if (!frequency.canSend(enrollment.getPartyId())) {
+            enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
+            enrollments.save(enrollment);
+            log.info("journey '{}' postponed for party {} — marketing budget spent",
+                    journey.getName(), enrollment.getPartyId());
+            return false;
+        }
+        String content = String.valueOf(message.get("content"));
+        if (message.get("promotionCode") != null) {
+            content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
+        }
+        communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content);
+        frequency.record(enrollment.getPartyId(), "journey");
+        return true;
     }
 
     // ---------------- the funnel ----------------

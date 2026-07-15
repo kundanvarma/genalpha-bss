@@ -151,7 +151,53 @@ async function token(ctx, realm, user, pass) {
   if (off[0].capActive) fail('the cap did not switch off after the test');
   console.log('OK the cap is data: switched off as easily as it was set');
 
+  /* ================= QUIET HOURS (genalpha) ================= */
+  try {
+    // a window that covers RIGHT NOW, tenant-local = UTC for determinism
+    const hhmm = (d) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+    const quiet = await (await ctx.post(SETTINGS, { headers: H(staff), data: {
+      maxMarketingMessages: 0,
+      quietStart: hhmm(new Date(Date.now() - 3600e3)),
+      quietEnd: hhmm(new Date(Date.now() + 3600e3)),
+      timeZone: 'UTC' } })).json();
+    if (!quiet.quietActive) fail('quiet hours did not activate: ' + JSON.stringify(quiet));
+    console.log(`OK quiet hours set: ${quiet.quietStart}–${quiet.quietEnd} UTC — the tenant is asleep`);
+
+    /* a fresh segment customer; the blast finds NOBODY awake */
+    const qEmail = `quiet-${run}@example.com`;
+    const qLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+      { headers: H(staff), data: { email: qEmail, givenName: 'Qui', familyName: `Et${run}` } })).json();
+    const qVid = `quiet-vis-${run}`;
+    const QSEG = `QuietCat${run}`;
+    await ctx.post(`${API}/insight/v1/consent`, { headers: { 'Content-Type': 'application/json' },
+      data: { visitorId: qVid, analytics: true, personalization: true } });
+    await ctx.post(`${API}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+      data: { visitorId: qVid, type: 'view', category: QSEG } });
+    const qTok = await token(ctx, 'bss', qEmail, qLogin.temporaryPassword);
+    await ctx.post(`${API}/insight/v1/stitch`, { headers: H(qTok), data: { visitorId: qVid } });
+
+    const qc = await (await ctx.post(CAMPAIGN, { headers: H(staff), data: {
+      name: `Quiet blast ${run}`, segmentName: QSEG,
+      message: { subject: `Night pitch ${run}`, content: 'zzz' } } })).json();
+    const silent = await (await ctx.post(`${CAMPAIGN}/${qc.id}/execute`,
+      { headers: H(staff), data: {} })).json();
+    if (silent.reached !== 0) fail('a campaign spoke during quiet hours: ' + JSON.stringify(silent));
+    console.log('OK SILENT: the blast reached nobody inside the window — quiet hours are a wall,'
+      + ' not a suggestion');
+
+    /* morning comes (settings save is full-replace: no quiet fields = cleared) */
+    await ctx.post(SETTINGS, { headers: H(staff), data: { maxMarketingMessages: 0 } });
+    const morning = await (await ctx.post(`${CAMPAIGN}/${qc.id}/execute`,
+      { headers: H(staff), data: {} })).json();
+    if (morning.reached !== 1) fail('the skipped customer was not reachable after quiet hours: '
+      + JSON.stringify(morning));
+    console.log('OK MORNING: the same execute reaches them once the window lifts — skipped, never lost');
+  } finally {
+    await ctx.post(SETTINGS, { headers: H(staff), data: { maxMarketingMessages: 0 } });
+  }
+
   console.log('\nALL GUARDRAIL CHECKS PASSED — the provider\'s receipts stamp messages and feed'
     + ' the suppression list; a suppressed address never gets another email; the frequency cap'
-    + ' makes "leave the customer alone" a budget, not an etiquette.');
+    + ' makes "leave the customer alone" a budget, not an etiquette; and quiet hours mean the'
+    + ' brand sleeps when the customer does.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

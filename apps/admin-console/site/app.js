@@ -156,7 +156,7 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true },
       { name: 'triggerEventType', label: 'Trigger event (leave blank for segment journeys)' },
       { name: 'segmentName', label: 'Segment (from Insight — enroll with the row action)' },
-      { name: 'steps', label: 'Steps — JSON: [{"type":"message","subject":"…","content":"…"},{"type":"wait","days":3}, …]', kind: 'longtext', required: true },
+      { name: 'steps', label: 'Steps — JSON: [{"type":"message","subject":"…","content":"…"},{"type":"wait","days":3},{"type":"branch","inSegment":"Devices","then":{…},"else":{…}}, …]', kind: 'longtext', required: true },
       { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },
       { name: 'holdoutPercent', label: 'Holdout % — control group, no messages, measurable lift', kind: 'number', placeholder: '0' },
     ],
@@ -302,8 +302,11 @@ const RESOURCES = [
     fields: [
       { name: 'maxMarketingMessages', label: 'Max marketing messages per customer (0 = no cap)', kind: 'number', required: true },
       { name: 'perDays', label: '…per how many days', kind: 'number', placeholder: '1' },
+      { name: 'quietStart', label: 'Quiet hours start (HH:mm, tenant-local) — campaigns skip, journeys park', placeholder: 'e.g. 21:00' },
+      { name: 'quietEnd', label: 'Quiet hours end (HH:mm)', placeholder: 'e.g. 08:00' },
+      { name: 'timeZone', label: 'Time zone', placeholder: 'e.g. Europe/Oslo (blank = server zone)' },
     ],
-    columns: ['maxMarketingMessages', 'perDays', 'capActive'],
+    columns: ['maxMarketingMessages', 'perDays', 'capActive', 'quietStart', 'quietEnd', 'quietActive'],
   },
   {
     path: 'salesLead',
