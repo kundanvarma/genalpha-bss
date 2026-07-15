@@ -65,6 +65,13 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** ESP delivery seam: 'internal' keeps messages in-app only; 'esp'
+         * ALSO sends each customer message out through the tenant's own
+         * email provider (SendGrid v3 wire shape). */
+        private String deliveryProvider = "internal";
+        private String espUrl;
+        private String espApiKey;
+        private String espFrom;
 
         public String getId() {
             return id;
@@ -112,6 +119,38 @@ public class TenantRegistry {
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
+        }
+
+        public String getDeliveryProvider() {
+            return deliveryProvider;
+        }
+
+        public void setDeliveryProvider(String deliveryProvider) {
+            this.deliveryProvider = deliveryProvider;
+        }
+
+        public String getEspUrl() {
+            return espUrl;
+        }
+
+        public void setEspUrl(String espUrl) {
+            this.espUrl = espUrl;
+        }
+
+        public String getEspApiKey() {
+            return espApiKey;
+        }
+
+        public void setEspApiKey(String espApiKey) {
+            this.espApiKey = espApiKey;
+        }
+
+        public String getEspFrom() {
+            return espFrom;
+        }
+
+        public void setEspFrom(String espFrom) {
+            this.espFrom = espFrom;
         }
     }
 }

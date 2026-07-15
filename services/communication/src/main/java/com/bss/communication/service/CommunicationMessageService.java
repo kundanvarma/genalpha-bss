@@ -37,13 +37,15 @@ public class CommunicationMessageService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
+    private final com.bss.communication.client.EspForwarder esp;
 
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, TenantScope tenantScope) {
+            PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
+        this.esp = esp;
     }
 
     /** Consumer path: idempotent on the source event id (at-least-once upstream). */
@@ -72,6 +74,7 @@ public class CommunicationMessageService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         repository.save(entity);
+        esp.forward(tenantId, n.partyId(), n.subject(), n.content());
     }
 
     @Transactional(readOnly = true)
@@ -124,6 +127,7 @@ public class CommunicationMessageService {
         entity.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = toMap(repository.save(entity));
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
+        esp.forward(entity.getTenantId(), receiver, entity.getSubject(), entity.getContent());
         return created;
     }
 

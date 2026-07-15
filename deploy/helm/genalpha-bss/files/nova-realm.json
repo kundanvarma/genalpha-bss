@@ -184,7 +184,7 @@
       },
       {
         "name": "policy:evaluate",
-        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
+        "description": "policy:evaluate — machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -607,6 +607,17 @@
       "protocol": "openid-connect",
       "publicClient": false,
       "secret": "insight-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-communication",
+      "name": "communication machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "communication-secret",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
@@ -1057,6 +1068,14 @@
       ],
       "realmRoles": [
         "customer"
+      ]
+    },
+    {
+      "username": "service-account-bss-communication",
+      "enabled": true,
+      "serviceAccountClientId": "bss-communication",
+      "realmRoles": [
+        "party:read"
       ]
     }
   ],
