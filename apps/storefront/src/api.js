@@ -595,6 +595,17 @@ const INSIGHT = '/insight/v1';
 const VISITOR_KEY = 'bss.shop.visitor';
 const CONSENT_KEY = 'bss.shop.consent';
 
+/** TMF699: a prospect knocks — no account, no token, just interest. */
+export async function submitSalesLead(lead) {
+  const res = await publicFetch('/tmf-api/salesManagement/v4/salesLead', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(lead),
+  });
+  if (!res.ok) throw new Error('Could not reach sales right now — please try again.');
+  return res.json();
+}
+
 export function visitorId() {
   let id = localStorage.getItem(VISITOR_KEY);
   if (!id) {

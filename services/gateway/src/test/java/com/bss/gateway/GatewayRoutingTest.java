@@ -58,7 +58,7 @@ class GatewayRoutingTest {
                 "product-catalog", "product-ordering", "product-inventory", "party-account",
                 "product-stock", "payment", "billing", "qualification", "appointment",
                 "trouble-ticket", "party-interaction", "communication", "shopping-cart",
-                "usage", "agreement", "promotion", "campaign", "intelligence", "quote", "flow", "porting", "user-roles", "geographic-address", "document", "recommendation", "payment-method", "service-orchestration", "assurance", "csr-console", "admin-console", "storefront", "mobile-app");
+                "usage", "agreement", "promotion", "campaign", "intelligence", "quote", "sales", "flow", "porting", "user-roles", "geographic-address", "document", "recommendation", "payment-method", "service-orchestration", "assurance", "policy", "knowledge", "insight", "pim", "csr-console", "admin-console", "business-console", "storefront", "mobile-app");
     }
 
     @Test

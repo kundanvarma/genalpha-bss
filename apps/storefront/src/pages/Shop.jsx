@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { beacon, consentChoice, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent } from '../api.js';
+import { beacon, consentChoice, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -77,7 +77,55 @@ export default function Shop() {
       <div className="cards">
         {singles.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
       </div>
+      <TalkToSales />
     </>
+  );
+}
+
+/**
+ * TMF699 at the edge: a business prospect isn't a customer yet — no
+ * account, no cart. This mini-form mints a salesLead; sales works it in
+ * the console (qualify → opportunity → quote).
+ */
+function TalkToSales() {
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState(null);
+  const submit = async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      await submitSalesLead({
+        name: f.get('need'), contactName: f.get('who'), contactEmail: f.get('email'),
+        company: f.get('company'), source: 'storefront',
+      });
+      setSent(true);
+    } catch (err) { setError(err.message); }
+  };
+  if (sent) {
+    return (
+      <section className="lobcard" data-testid="sales-thanks" style={{ marginTop: 24 }}>
+        <p style={{ margin: 0 }}>✅ {t('Thanks — our sales team will be in touch shortly.')}</p>
+      </section>
+    );
+  }
+  return (
+    <section className="lobcard" data-testid="talk-to-sales" style={{ marginTop: 24 }}>
+      <h2 style={{ marginTop: 0 }}>{t('Something bigger in mind?')}</h2>
+      <p className="dim" style={{ marginTop: 0 }}>
+        {t('Fleets, offices, IoT — tell us what you need and sales will call you back.')}
+      </p>
+      <form onSubmit={submit} style={{ display: 'grid', gap: 8, maxWidth: 460 }}>
+        <input name="who" placeholder={t('Your name')} required data-testid="sales-name" />
+        <input name="email" type="email" placeholder={t('Work email')} required data-testid="sales-email" />
+        <input name="company" placeholder={t('Company')} data-testid="sales-company" />
+        <textarea name="need" rows="2" required data-testid="sales-need"
+          placeholder={t('What do you need? e.g. 40 SIMs for delivery vans')} />
+        <button className="primary" type="submit" data-testid="sales-submit">
+          {t('Talk to sales')}
+        </button>
+      </form>
+      {error && <p className="error">{error}</p>}
+    </section>
   );
 }
 

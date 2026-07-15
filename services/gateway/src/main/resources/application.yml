@@ -80,6 +80,10 @@ spring:
           uri: ${QUOTE_URL:http://localhost:8110}
           predicates:
             - Path=/tmf-api/quoteManagement/**
+        - id: sales
+          uri: ${QUOTE_URL:http://localhost:8110}
+          predicates:
+            - Path=/tmf-api/salesManagement/**
         - id: porting
           uri: ${PORTING_URL:http://localhost:8112}
           predicates:
