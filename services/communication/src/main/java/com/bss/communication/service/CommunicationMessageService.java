@@ -74,6 +74,9 @@ public class CommunicationMessageService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         repository.save(entity);
+        // minted notifications are customer touchpoints too — downstream
+        // (the TMF683 timeline) hears about EVERY message, not only ad-hoc
+        events.publish("CommunicationMessageCreateEvent", "communicationMessage", toMap(entity));
         esp.forward(tenantId, id, n.partyId(), n.subject(), n.content());
     }
 

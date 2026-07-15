@@ -45,6 +45,14 @@ public class PartyInteraction {
     @Column(name = "payload_json", length = 8000)
     private String payloadJson;
 
+    /** Where the touchpoint came from (communication, csr-console, an
+     * external CRM…) and its idempotency key when event-minted. */
+    @Column(name = "source_system", length = 64)
+    private String sourceSystem;
+
+    @Column(name = "source_ref", length = 64)
+    private String sourceRef;
+
     @Column(name = "interaction_date")
     private OffsetDateTime interactionDate;
 
@@ -152,4 +160,20 @@ public class PartyInteraction {
 
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+
+    public String getSourceSystem() {
+        return sourceSystem;
+    }
+
+    public void setSourceSystem(String sourceSystem) {
+        this.sourceSystem = sourceSystem;
+    }
+
+    public String getSourceRef() {
+        return sourceRef;
+    }
+
+    public void setSourceRef(String sourceRef) {
+        this.sourceRef = sourceRef;
+    }
 }

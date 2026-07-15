@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and thirty-five end-to-end test suites that all pass
+    composable components, six customer surfaces, and forty end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1658,14 +1658,102 @@
     read-only by design, because the visitor owns the data; the operator only gets to look.</p>
   </section>
 
-  <!-- Ch 28 (the closer) -->
-  <section class="chapter" id="ch25">
+  <section class="chapter" id="ch28growth">
     <div class="num">Chapter Twenty-Eight</div>
+    <h3>The growth engine, hands-on</h3>
+    <div class="epi">"Why is a BSS only product and billing? Most of the data lives here. I want
+    to challenge the status quo." <span class="who">— the operator, and then the operator's whole
+    roadmap</span></div>
+
+    <p class="drop">This chapter is the manual the thesis earned: how a product owner actually
+    RUNS the marketing engine, end to end, with nothing but rows in the console. Everything below
+    is data — no deploys, no vendor onboarding, no CSV exports — and every step has a suite behind
+    it. It reads as one continuous play because that is how the engine was built to be used: the
+    shop pays attention, a segment forms, a campaign speaks, the readout tells the truth, and every
+    word said lands on the customer's record.</p>
+
+    <h2>1 · A segment is a noticed interest</h2>
+    <p>There is no segment builder, because there is nothing to build. A consented visitor who
+    keeps returning to the <em>Devices</em> category IS the Devices segment; the login stitch makes
+    the membership customer-grade. In the console's <b>Insight</b> tab the operator can see the
+    ledger; in <b>Audiences</b>, the names the tenant's own analytics computed (imported live over
+    the GA4 Data API's <code>runReport</code> wire) sit beside the first-party interests, equally
+    addressable. Any of those names can go straight into the next step.</p>
+
+    <h2>2 · A campaign that can prove itself</h2>
+    <p>Console → <b>Campaigns</b> → New: name it, put <code>Devices</code> in the segment field,
+    write the message ("<code>{code}</code> inserts the promo"), and — this is the part the industry
+    skips — set <b>Holdout&nbsp;10%</b> and a seven-day conversion window. Execute. A deterministic
+    tenth of the segment is ledgered and deliberately NOT messaged; they are the control group. A
+    week later the detail row does not say "reached 4,000" and stop; it says <em>treated converted
+    at 22%, holdout at 8%, fourteen points of lift, worth 6.10 per customer/month</em> — the
+    conversion carries the catalog's own monthly price of what was actually ordered, so lift reads
+    in currency. Under five holdouts, the row says "an anecdote, not a measurement," because a
+    readout that flatters is worse than none.</p>
+
+    <h2>3 · Two pitches, one honest verdict</h2>
+    <p>Add <b>A/B arms</b> as a JSON field — two to four variants of <code>{name, subject,
+    content}</code> — and the treated group splits evenly and deterministically. The stats read per
+    arm, and the verdict is a two-proportion test that refuses flattery: under thirty people per
+    arm it answers "the split is an anecdote — keep the test running," and it crowns a winner only
+    at 95% confidence. The suite's favourite assertion: six customers, one conversion, and the
+    engine declining to declare victory.</p>
+
+    <h2>4 · Journeys that read before they speak</h2>
+    <p><b>Journeys</b> are sequences as data: <code>[message, wait 3 days, branch, message]</code>.
+    The journey-level conversion event is also the ALWAYS-ON exit rule — the customer who buys
+    during the wait leaves from any step and never gets "10% off!" the day after paying full price.
+    The <code>branch</code> step asks insight a question at send time — <em>is this customer in the
+    Devices segment?</em> — and speaks the matching pitch: the gadget lover hears the accessory
+    line, everyone else the generic one, nobody hears both. An unreachable insight fails SAFE to
+    the generic side, on the principle that the right-but-late message beats the wrong one.</p>
+
+    <h2>5 · Guardrails are settings, not etiquette</h2>
+    <p>The <b>Guardrails</b> tab holds two numbers and a window: <em>max marketing messages per
+    customer per N days</em> (campaigns skip the capped, journeys postpone an hour) and <em>quiet
+    hours</em> in tenant-local time (campaigns reach nobody inside the window — and the same
+    execute reaches them in the morning, skipped never lost; journeys park to the window's end).
+    Braze's own retrospective said teams forget optional guardrails, so here they are model, not
+    manners.</p>
+
+    <h2>6 · The message leaves the building — and answers back</h2>
+    <p>With <code>DELIVERY_PROVIDER=esp</code> a tenant's messages ALSO ride its own email
+    provider — SendGrid's v3 wire shape, address looked up live from party management, the in-app
+    inbox always the source of truth. The provider's receipts come home over its webhook: delivered
+    stamps the message, a bounce puts the address on the suppression list and the engine never
+    emails that door again — in-app continues, compliance is not optional. Segments flow outward
+    too: one call pushes a segment to the tenant's social platform as SHA-256 hashes (Meta's
+    Custom Audience schema — not one address in the clear), and the platform's lead-gen forms flow
+    back through the same seam into TMF699 salesLeads, idempotent on the platform's own id. Social
+    ad → lead → qualify → opportunity → quote → order, one system.</p>
+
+    <h2>7 · Every word lands on the record</h2>
+    <p>The oldest component in the sales story turned out to be the keystone. TMF683, the
+    interaction log built back in the CSR chapter, became the OMNICHANNEL record: every message the
+    communication component sends — a blast, a journey step, an order notification — mints a
+    touchpoint on the customer's timeline automatically, tagged with its source. And because the
+    TMF683 door is a plain open POST, anything else in the operator's landscape — the legacy CRM,
+    the retail till, the field-tech app — logs its calls and visits into the same timeline. The CSR
+    opens the 360 and reads, in one place: <em>campaign pitch Tuesday (outbound, in-app, via
+    communication), order confirmation Wednesday, a phone call Thursday (inbound, via legacy-crm,
+    "prefers email, has 12 vans")</em> — and speaks like someone who was paying attention. That
+    timeline is what "omnichannel" means when it is real: not a slogan about channels, but one
+    memory shared by all of them — the shop, the CSR, the campaign engine and the systems the
+    operator already owns, none of them asking the customer to repeat themselves.</p>
+
+    <p class="pull edge">A marketing tool proves it moved money. A sales tool remembers every
+    conversation. A BSS that does both, natively, is no longer missing the point of its own
+    data.</p>
+  </section>
+
+  <!-- Ch 29 (the closer) -->
+  <section class="chapter" id="ch25">
+    <div class="num">Chapter Twenty-Nine</div>
     <h3>The load-bearing wall</h3>
     <div class="epi">"Make it work, make it right, make it fast." <span class="who">— Kent Beck</span></div>
 
     <p class="drop">Thirty-three components. Six customer surfaces, one of them wearing two faces by
-    role. Thirty-five end-to-end suites, all green in a real browser. Eleven official conformance kits
+    role. Forty end-to-end suites, all green in a real browser. Eleven official conformance kits
     passing with zero failures — and two components that fail their kits on purpose, with the reasons
     written down. Business rules, prices and corporate deals that change with a row, never a redeploy.
     Isolation proven against a real database — and then proven again in Norwegian, in kroner, B2C and
