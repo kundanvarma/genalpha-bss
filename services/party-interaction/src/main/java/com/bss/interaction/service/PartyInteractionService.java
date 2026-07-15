@@ -114,6 +114,9 @@ public class PartyInteractionService {
         entity.setDirection(dto.get("direction") == null ? "inbound" : String.valueOf(dto.get("direction")));
         entity.setStatus("completed");
         entity.setCustomerPartyId(customer);
+        if (dto.get("sourceSystem") != null) {
+            entity.setSourceSystem(String.valueOf(dto.get("sourceSystem")));
+        }
         entity.setAgentId(SecurityContextHolder.getContext().getAuthentication() == null ? null
                 : SecurityContextHolder.getContext().getAuthentication().getName());
         entity.setOrgId(orgScope.scopedOrgId().orElse(defaultOrg));

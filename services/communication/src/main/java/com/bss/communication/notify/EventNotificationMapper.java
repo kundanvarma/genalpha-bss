@@ -25,6 +25,12 @@ public class EventNotificationMapper {
         return switch (eventType) {
             case "ProductOrderCreateEvent" -> resource(event, "productOrder")
                     .map(this::orderCreated).orElse(List.of());
+            // a changed credential is never silent: the owner hears about it
+            case "SimPinResetEvent" -> one(resource(event, "sim").flatMap(sim ->
+                    customer(sim).map(party -> new Notification(party,
+                            "Your SIM PIN was changed",
+                            "The PIN on your SIM " + sim.getOrDefault("iccid", "") + " was just changed."
+                            + " If this was not you, contact us immediately."))));
             case "ProductOrderStateChangeEvent" -> resource(event, "productOrder")
                     .map(this::orderStateChanged).orElse(List.of());
             case "CustomerBillCreateEvent" -> one(resource(event, "customerBill").flatMap(bill ->
