@@ -23,6 +23,17 @@ public class MartechSetting {
     @Column(name = "per_days", nullable = false)
     private int perDays = 1;
 
+    /** Quiet hours (tenant-local, "HH:mm", window may wrap midnight);
+     * null start/end = no quiet hours. */
+    @Column(name = "quiet_start", length = 5)
+    private String quietStart;
+
+    @Column(name = "quiet_end", length = 5)
+    private String quietEnd;
+
+    @Column(name = "time_zone", length = 64)
+    private String timeZone;
+
     @Column(name = "last_update", nullable = false)
     private OffsetDateTime lastUpdate;
 
@@ -32,6 +43,12 @@ public class MartechSetting {
     public void setMaxMarketingMessages(int v) { this.maxMarketingMessages = v; }
     public int getPerDays() { return perDays; }
     public void setPerDays(int v) { this.perDays = v; }
+    public String getQuietStart() { return quietStart; }
+    public void setQuietStart(String v) { this.quietStart = v; }
+    public String getQuietEnd() { return quietEnd; }
+    public void setQuietEnd(String v) { this.quietEnd = v; }
+    public String getTimeZone() { return timeZone; }
+    public void setTimeZone(String v) { this.timeZone = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
 }

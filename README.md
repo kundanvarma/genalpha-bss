@@ -8,8 +8,9 @@ prove it.
 
 **Every feature is verified end-to-end in a real browser** — thirty-eight Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
-campaign journeys with holdout-measured lift and A/B arms, the per-tenant ESP email seam with
-delivery receipts and bounce suppression, tenant-wide frequency caps, the TMF699
+campaign journeys with holdout-measured lift, A/B arms and segment-read branch steps, the
+per-tenant ESP email seam with delivery receipts and bounce suppression, tenant-wide frequency
+caps and quiet hours, the TMF699
 lead-to-opportunity sales funnel, the AI-slice lead-to-assure loop and BankID step-up
 against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)

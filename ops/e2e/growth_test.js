@@ -42,7 +42,7 @@ async function token(ctx, client, user, pass) {
       data: { visitorId: vid, type: 'view', category: SEGMENT } });
     const tok = await token(ctx, 'bss-biz', email, login.temporaryPassword);
     await ctx.post(`${API}/insight/v1/stitch`, { headers: H(tok), data: { visitorId: vid } });
-    people.push({ id: login.id, email, tok });
+    people.push({ id: login.id, email, tok, vid });
   }
   console.log('OK six consented customers browsed the run-unique category — a segment of exactly six');
 
@@ -238,8 +238,41 @@ async function token(ctx, client, user, pass) {
   console.log(`OK arm ${abBuyer.arm} leads (${armRead.conversions}/${armRead.sent}) and the verdict`
     + ` stays honest: "${abStats.arms.verdict}"`);
 
+  /* ================= BRANCHES: the journey reads before it speaks ================= */
+  const BRANCH_SEG = `BranchCat${run}`;
+  const gadgetLover = people[4];
+  await ctx.post(`${API}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+    data: { visitorId: gadgetLover.vid, type: 'view', category: BRANCH_SEG } });
+  const brThen = `For the gadget lover ${run}`;
+  const brElse = `For everyone else ${run}`;
+  const branchy = await (await ctx.post(JOURNEY, { headers: H(staff), data: {
+    name: `Branch journey ${run}`, segmentName: SEGMENT, holdoutPercent: 0,
+    steps: [{ type: 'branch', inSegment: BRANCH_SEG,
+      then: { subject: brThen, content: 'That accessory shelf you kept visiting…' },
+      else: { subject: brElse, content: 'A plan for normal humans.' } }] } })).json();
+  if (!branchy.id) fail('branch journey create failed: ' + JSON.stringify(branchy).slice(0, 200));
+  const brEnrolled = await (await ctx.post(`${JOURNEY}/${branchy.id}/enroll`,
+    { headers: H(staff), data: {} })).json();
+  if (brEnrolled.enrolled !== 6) fail('branch journey missed the segment: ' + JSON.stringify(brEnrolled));
+
+  /* the gadget lover hears the THEN pitch; a plain member hears the ELSE */
+  const plain = people.find((p) => p.id !== gadgetLover.id);
+  let loverSubjects = [], plainSubjects = [];
+  for (let i = 0; i < 20; i++) {
+    [loverSubjects, plainSubjects] = [await inboxOf(gadgetLover), await inboxOf(plain)];
+    if (loverSubjects.includes(brThen) && plainSubjects.includes(brElse)) break;
+    await sleep(1500);
+  }
+  if (!loverSubjects.includes(brThen)) fail('the segment member never heard the THEN pitch');
+  if (loverSubjects.includes(brElse)) fail('the segment member heard BOTH pitches');
+  if (!plainSubjects.includes(brElse)) fail('a plain member never heard the ELSE pitch');
+  if (plainSubjects.includes(brThen)) fail('a plain member heard the gadget pitch');
+  console.log('OK BRANCHES: the journey read each customer before speaking — the gadget lover'
+    + ' heard the gadget pitch, everyone else the generic one, nobody heard both');
+
   console.log('\nALL GROWTH CHECKS PASSED — M1: holdouts are real control groups, conversions'
     + ' count inside the window, lift is a number. M2: journeys walk, wait, follow up —'
     + ' and the conversion event exits people from ANY step. A/B: arms split deterministically,'
-    + ' convert separately, and never crown a winner on six people.');
+    + ' convert separately, and never crown a winner on six people. Branches: the journey reads'
+    + ' the customer before it speaks.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

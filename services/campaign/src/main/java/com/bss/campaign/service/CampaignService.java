@@ -303,6 +303,13 @@ public class CampaignService {
         if (executions.existsByTenantIdAndCampaignIdAndPartyId(tenant, campaign.getId(), partyId)) {
             return false;
         }
+        // quiet hours: the tenant is asleep — nobody is reached now; a
+        // later execute (or the event stream tomorrow) picks them up
+        if (frequency.quietUntil().isPresent()) {
+            log.info("campaign '{}' silent: quiet hours until {}",
+                    campaign.getName(), frequency.quietUntil().orElse(null));
+            return false;
+        }
         // frequency cap, checked BEFORE the variant hash so treated and
         // holdout are capped alike (no ledger row — a later execute may
         // reach them once their budget frees up)
