@@ -55,13 +55,27 @@ public class BusinessEventListener {
             }
             String state = resource.get("state") != null ? String.valueOf(resource.get("state"))
                     : resource.get("status") != null ? String.valueOf(resource.get("status")) : null;
+            List<String> offeringIds = offeringsOf(resource);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                campaigns.onEvent(eventType, state, party);
-                journeys.onEvent(eventType, state, party);
+                campaigns.onEvent(eventType, state, party, offeringIds);
+                journeys.onEvent(eventType, state, party, offeringIds);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());
         }
+    }
+
+    /** What the event's order added — the raw material of attributed revenue. */
+    private List<String> offeringsOf(Map<String, Object> resource) {
+        if (!(resource.get("productOrderItem") instanceof List<?> items)) {
+            return List.of();
+        }
+        return items.stream()
+                .filter(i -> i instanceof Map<?, ?> item
+                        && !"delete".equalsIgnoreCase(String.valueOf(item.get("action")))
+                        && item.get("productOffering") instanceof Map<?, ?> po && po.get("id") != null)
+                .map(i -> String.valueOf(((Map<?, ?>) ((Map<?, ?>) i).get("productOffering")).get("id")))
+                .toList();
     }
 
     @SuppressWarnings("unchecked")

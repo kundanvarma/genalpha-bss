@@ -42,6 +42,10 @@ public class CampaignExecution {
     @Column(name = "conversion_ref", length = 64)
     private String conversionRef;
 
+    /** Monthly money the converting order carries (catalog recurring prices). */
+    @Column(name = "conversion_value", precision = 12, scale = 2)
+    private java.math.BigDecimal conversionValue;
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getId() { return id; }
@@ -60,4 +64,6 @@ public class CampaignExecution {
     public void setConvertedAt(OffsetDateTime convertedAt) { this.convertedAt = convertedAt; }
     public String getConversionRef() { return conversionRef; }
     public void setConversionRef(String conversionRef) { this.conversionRef = conversionRef; }
+    public java.math.BigDecimal getConversionValue() { return conversionValue; }
+    public void setConversionValue(java.math.BigDecimal v) { this.conversionValue = v; }
 }

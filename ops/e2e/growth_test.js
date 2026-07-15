@@ -109,6 +109,32 @@ async function token(ctx, client, user, pass) {
     + `${stats.liftPoints} points of lift, honestly labelled `
     + `("${stats.note || stats.conversionWindowDays + '-day window'}")`);
 
+  /* REVENUE ATTRIBUTION: the conversion carries the plan's real catalog price */
+  const offering = await (await ctx.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering/${PLAN_ID}`)).json();
+  let expectedMonthly = 0;
+  for (const ref of offering.productOfferingPrice || []) {
+    const price = await (await ctx.get(
+      `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice/${ref.id}`)).json();
+    if (price.priceType === 'recurring' && price.recurringChargePeriodType === 'month') {
+      expectedMonthly += price.price.value;
+    }
+  }
+  if (!(expectedMonthly > 0)) fail('the test plan has no monthly price to attribute');
+  if (!stats.revenue || Math.abs(stats.revenue.treated - expectedMonthly) > 0.01) {
+    fail(`attributed revenue is not the catalog's number: wanted ${expectedMonthly}, `
+      + `got ${JSON.stringify(stats.revenue)}`);
+  }
+  if (Number(stats.revenue.holdout) !== 0) {
+    fail('the holdout earned revenue it was never pitched: ' + JSON.stringify(stats.revenue));
+  }
+  if (!(stats.revenue.liftPerCustomer > 0)) {
+    fail('revenue lift per customer missing: ' + JSON.stringify(stats.revenue));
+  }
+  console.log(`OK REVENUE: the conversion is worth ${stats.revenue.treated}/month — the`
+    + ` catalog's own number — and the lift reads ${stats.revenue.liftPerCustomer} per`
+    + ` customer/month, not just points`);
+
   /* ================= M2 — JOURNEYS: sequences with an exit rule ================= */
   const JOURNEY = `${API}/tmf-api/campaignManagement/v4/journey`;
   const step1 = `Welcome aboard ${run}`;

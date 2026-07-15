@@ -42,6 +42,10 @@ public class JourneyEnrollment {
     @Column(name = "converted_at")
     private OffsetDateTime convertedAt;
 
+    /** Monthly money the converting order carries (catalog recurring prices). */
+    @Column(name = "conversion_value", precision = 12, scale = 2)
+    private java.math.BigDecimal conversionValue;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }
@@ -62,4 +66,6 @@ public class JourneyEnrollment {
     public void setEnrolledAt(OffsetDateTime v) { this.enrolledAt = v; }
     public OffsetDateTime getConvertedAt() { return convertedAt; }
     public void setConvertedAt(OffsetDateTime v) { this.convertedAt = v; }
+    public java.math.BigDecimal getConversionValue() { return conversionValue; }
+    public void setConversionValue(java.math.BigDecimal v) { this.conversionValue = v; }
 }

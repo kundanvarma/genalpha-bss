@@ -25,7 +25,7 @@ class BusinessEventListenerTest {
                  "event": {"productOrder": {"id": "po-1", "state": "acknowledged",
                    "relatedParty": [{"id": "party-9", "role": "customer"}]}}}
                 """);
-        verify(service).onEvent("ProductOrderCreateEvent", "acknowledged", "party-9");
+        verify(service).onEvent("ProductOrderCreateEvent", "acknowledged", "party-9", java.util.List.of());
     }
 
     @Test
@@ -35,6 +35,6 @@ class BusinessEventListenerTest {
                  "event": {"resourcePool": {"id": "pool-1"}}}
                 """);
         listener.onEvent("not json at all");
-        verify(service, never()).onEvent(any(), any(), any());
+        verify(service, never()).onEvent(any(), any(), any(), any());
     }
 }

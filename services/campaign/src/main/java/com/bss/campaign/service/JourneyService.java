@@ -51,11 +51,12 @@ public class JourneyService {
     private final TenantRegistry tenants;
     private final ObjectMapper objectMapper;
     private final FrequencyGuard frequency;
+    private final com.bss.campaign.client.CatalogClient catalog;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
             TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper,
-            FrequencyGuard frequency) {
+            FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog) {
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -64,6 +65,7 @@ public class JourneyService {
         this.tenants = tenants;
         this.objectMapper = objectMapper;
         this.frequency = frequency;
+        this.catalog = catalog;
     }
 
     // ---------------- authoring ----------------
@@ -187,7 +189,8 @@ public class JourneyService {
 
     /** Event entry: business events enroll customers into matching journeys. */
     @Transactional
-    public void onEvent(String eventType, String state, String partyId) {
+    public void onEvent(String eventType, String state, String partyId,
+            List<String> offeringIds) {
         String tenant = tenantScope.currentTenantId();
         for (Journey journey : journeys.findByTenantIdAndStatusAndTriggerEventType(
                 tenant, Journey.ACTIVE, eventType)) {
@@ -198,6 +201,7 @@ public class JourneyService {
         }
         // the always-on exit rule: a matching conversion event converts every
         // ACTIVE enrollment whose journey names it — out from any step
+        java.math.BigDecimal value = null; // catalog is asked once, and only on a match
         for (JourneyEnrollment enrollment
                 : enrollments.findByTenantIdAndPartyIdAndStatus(tenant, partyId, "active")) {
             Journey journey = journeys.findByIdAndTenantId(enrollment.getJourneyId(), tenant).orElse(null);
@@ -208,11 +212,16 @@ public class JourneyService {
                     ? "ProductOrderStateChangeEvent:completed" : journey.getConversionEvent();
             String[] parts = wanted.split(":", 2);
             if (parts[0].equals(eventType) && (parts.length < 2 || parts[1].equals(state))) {
+                if (value == null) {
+                    value = catalog.monthlyValueOf(tenant, offeringIds);
+                }
                 enrollment.setStatus("converted");
                 enrollment.setConvertedAt(OffsetDateTime.now());
+                enrollment.setConversionValue(value);
                 enrollments.save(enrollment);
-                log.info("journey '{}' conversion: party {} exited from step {} ({})",
-                        journey.getName(), partyId, enrollment.getStepIndex(), enrollment.getVariant());
+                log.info("journey '{}' conversion: party {} exited from step {} ({}) worth {}/month",
+                        journey.getName(), partyId, enrollment.getStepIndex(),
+                        enrollment.getVariant(), value);
             }
         }
     }
@@ -396,7 +405,34 @@ public class JourneyService {
         if (heldOut > 0 && heldOut < 5) {
             stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
         }
+        // attributed revenue, per exposed customer (see the campaign readout)
+        java.math.BigDecimal treatedRevenue = enrollmentRevenue(all, false);
+        java.math.BigDecimal holdoutRevenue = enrollmentRevenue(all, true);
+        if (treatedRevenue.signum() != 0 || holdoutRevenue.signum() != 0) {
+            Map<String, Object> revenue = new LinkedHashMap<>();
+            revenue.put("treated", treatedRevenue);
+            revenue.put("holdout", holdoutRevenue);
+            if (treated > 0 && heldOut > 0) {
+                revenue.put("liftPerCustomer", perCustomer(treatedRevenue, treated)
+                        .subtract(perCustomer(holdoutRevenue, heldOut)));
+            }
+            revenue.put("basis", "monthly recurring value of converting orders");
+            stats.put("revenue", revenue);
+        }
         return stats;
+    }
+
+    private java.math.BigDecimal enrollmentRevenue(List<JourneyEnrollment> all, boolean holdout) {
+        return all.stream()
+                .filter(e -> holdout == "holdout".equals(e.getVariant()))
+                .map(JourneyEnrollment::getConversionValue)
+                .filter(java.util.Objects::nonNull)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+    }
+
+    private java.math.BigDecimal perCustomer(java.math.BigDecimal total, long customers) {
+        return total.divide(java.math.BigDecimal.valueOf(customers), 2,
+                java.math.RoundingMode.HALF_UP);
     }
 
     // ---------------- helpers ----------------

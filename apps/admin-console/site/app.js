@@ -175,6 +175,8 @@ const RESOURCES = [
         converted: `treated ${s.conversions.treated} (${s.treatedRate ?? '—'}%) · holdout ${s.conversions.holdout} (${s.holdoutRate ?? '—'}%)`,
         lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
         note: s.note || `${s.completedUnconverted} completed unconverted`,
+        revenue: s.revenue ? `treated ${s.revenue.treated} · holdout ${s.revenue.holdout}`
+          + (s.revenue.liftPerCustomer != null ? ` · lift ${s.revenue.liftPerCustomer} per customer/month` : '') : '—'
       }];
     },
     rowAction: {
@@ -216,6 +218,10 @@ const RESOURCES = [
         lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
         note: s.note || `${s.conversionWindowDays}-day window`,
       };
+      if (s.revenue) {
+        row.revenue = `treated ${s.revenue.treated} · holdout ${s.revenue.holdout}`
+          + (s.revenue.liftPerCustomer != null ? ` · lift ${s.revenue.liftPerCustomer} per customer/month` : '');
+      }
       if (s.arms) {
         row.abTest = s.arms.arms
           .map((a) => `${a.name}: ${a.conversions}/${a.sent}${a.rate != null ? ` (${a.rate}%)` : ''}`)
