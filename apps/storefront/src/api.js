@@ -509,6 +509,21 @@ export async function myAppointments() {
 }
 
 /** Settle a bill with an authorized payment; billing captures it. */
+/** PAY IN PARTS: split an unpaid bill into monthly installments. */
+export async function splitBill(billId, installments) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/installmentPlan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installments }),
+  }));
+}
+
+export async function payInstallment(billId, paymentRef) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/installmentPlan/pay`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ payment: [paymentRef] }),
+  }));
+}
+
 export async function settleBill(billId, paymentRef) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}`, {
     method: 'PATCH',

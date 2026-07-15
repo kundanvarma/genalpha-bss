@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, myBills, myPaymentMethods, paymentWithSavedMethod, settleBill } from '../api.js';
+import { billRates, createPayment, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, settleBill, splitBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -33,14 +33,20 @@ export default function Bills() {
     }
   }
 
+  // a bill on an active plan pays its NEXT INSTALLMENT; anything else pays in full
+  const dueNow = (bill) => bill.installmentPlan?.status === 'active'
+    ? { unit: bill.installmentPlan.currency, value: Number(bill.installmentPlan.nextAmount) }
+    : bill.amountDue;
+  const settleOrInstall = (bill, payment) => bill.installmentPlan?.status === 'active'
+    ? payInstallment(bill.id, { id: payment.id, href: payment.href, '@referredType': 'Payment' })
+    : settleBill(bill.id, { id: payment.id, href: payment.href, '@referredType': 'Payment' });
+
   async function pay(bill) {
     setBusy(true);
     setError(null);
     try {
-      const payment = await createPayment(
-        { unit: bill.amountDue.unit, value: bill.amountDue.value },
-        card, `Bill ${bill.billNo}`);
-      await settleBill(bill.id, { id: payment.id, href: payment.href, '@referredType': 'Payment' });
+      const payment = await createPayment(dueNow(bill), card, `Bill ${bill.billNo}`);
+      await settleOrInstall(bill, payment);
       setPaying(null);
       setCard({ cardNumber: '', expiry: '', cvc: '' });
       load();
@@ -55,13 +61,20 @@ export default function Bills() {
     setError(null);
     try {
       const payment = await paymentWithSavedMethod(
-        bill.amountDue, method.id, `Bill ${bill.billNo}`);
-      await settleBill(bill.id, { id: payment.id, href: payment.href, '@referredType': 'Payment' });
+        dueNow(bill), method.id, `Bill ${bill.billNo}`);
+      await settleOrInstall(bill, payment);
       setPaying(null);
       load();
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  async function split(bill) {
+    const n = window.prompt('Split this bill into how many monthly payments? (2-12)', '3');
+    if (!n) return;
+    setError(null);
+    try { await splitBill(bill.id, Number(n)); load(); } catch (e) { setError(e.message); }
   }
 
   const cardReady = card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim();
@@ -87,9 +100,22 @@ export default function Bills() {
               <div className="rowend">
                 <span className="linetotal">{bill.amountDue.value.toFixed(2)} {bill.amountDue.unit}</span>
                 <span className={`state ${bill.state}`}>{bill.state}</span>
-                {bill.state === 'new' && (
-                  <button className="primary" onClick={() => setPaying(paying === bill.id ? null : bill.id)}>
-                    Pay
+                {bill.installmentPlan && bill.installmentPlan.status !== 'cancelled' && (
+                  <span className="dim small" data-testid="plan-chip">
+                    {bill.installmentPlan.paidCount}/{bill.installmentPlan.installments} paid
+                  </span>
+                )}
+                {bill.state === 'new' && !bill.installmentPlan && (
+                  <button className="ghost" data-testid="split-bill" onClick={() => split(bill)}>
+                    Pay in parts
+                  </button>
+                )}
+                {(bill.state === 'new' || (bill.state === 'partiallyPaid'
+                    && bill.installmentPlan?.status === 'active')) && (
+                  <button className="primary" data-testid="pay-bill"
+                          onClick={() => setPaying(paying === bill.id ? null : bill.id)}>
+                    {bill.installmentPlan?.status === 'active'
+                      ? `Pay part ${bill.installmentPlan.paidCount + 1}` : 'Pay'}
                   </button>
                 )}
               </div>
@@ -131,7 +157,7 @@ export default function Bills() {
                 <div className="cartactions">
                   <span />
                   <button className="primary" disabled={busy || !cardReady} onClick={() => pay(bill)}>
-                    {busy ? 'Paying…' : `Pay ${bill.amountDue.value.toFixed(2)} ${bill.amountDue.unit}`}
+                    {busy ? 'Paying…' : `Pay ${Number(dueNow(bill).value).toFixed(2)} ${dueNow(bill).unit}`}
                   </button>
                 </div>
               </div>

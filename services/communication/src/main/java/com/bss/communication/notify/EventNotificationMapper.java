@@ -31,6 +31,26 @@ public class EventNotificationMapper {
                             "Your SIM PIN was changed",
                             "The PIN on your SIM " + sim.getOrDefault("iccid", "") + " was just changed."
                             + " If this was not you, contact us immediately."))));
+            case "InstallmentPlanCreatedEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
+                    customer(plan).map(party -> new Notification(party,
+                            "Your bill is split into " + plan.getOrDefault("installments", "?") + " payments",
+                            "Bill " + plan.getOrDefault("billNo", "") + ": "
+                            + plan.getOrDefault("installments", "?") + " monthly payments of "
+                            + plan.getOrDefault("amountPer", "?") + " " + plan.getOrDefault("currency", "")
+                            + " (last " + plan.getOrDefault("lastAmount", "?") + "). First due "
+                            + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "InstallmentPaidEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
+                    customer(plan).map(party -> new Notification(party,
+                            "Installment " + plan.getOrDefault("paidCount", "?") + " of "
+                                    + plan.getOrDefault("installments", "?") + " received",
+                            "completed".equals(plan.get("status"))
+                                ? "That was the last one — bill " + plan.getOrDefault("billNo", "")
+                                    + " is settled. Thank you."
+                                : "We received " + plan.getOrDefault("paidAmount", "?") + " "
+                                    + plan.getOrDefault("currency", "") + " for bill "
+                                    + plan.getOrDefault("billNo", "") + ". Next payment of "
+                                    + plan.getOrDefault("nextAmount", "?") + " due "
+                                    + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
             case "ServiceSuspendedEvent" -> one(resource(event, "service").flatMap(svc ->
                     customer(svc).map(party -> new Notification(party,
                             "Your line is paused",

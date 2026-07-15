@@ -5,7 +5,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService } from '../api.js';
+  simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -380,7 +380,28 @@ export default function Customer360() {
                 <span>{b.billNo}</span>
                 <span className="rowend">
                   <span className="linetotal">{b.amountDue.value.toFixed(2)} {b.amountDue.unit}</span>
+                  {b.installmentPlan && b.installmentPlan.status !== 'cancelled' && (
+                    <span className="dim small">{b.installmentPlan.paidCount}/{b.installmentPlan.installments} paid</span>
+                  )}
                   <span className={`state ${b.state}`}>{b.state}</span>
+                  {b.state === 'new' && !b.installmentPlan && (
+                    <button className="ghost" data-testid="csr-split-bill"
+                        title="Split into monthly installments — the customer pays each part in the shop"
+                        onClick={() => {
+                          const n = window.prompt('Split into how many monthly payments? (2-12)', '3');
+                          if (!n) return;
+                          act(async () => {
+                            await splitBill(b.id, Number(n));
+                            await logInteraction({
+                              description: `Bill ${b.billNo} (${b.amountDue.value.toFixed(2)} ${b.amountDue.unit}) split into ${n} installments on request`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Installments
+                    </button>
+                  )}
                 </span>
               </div>
             ))}

@@ -479,7 +479,7 @@ async function apiGet(page, path, token) {
   console.log('OK bill for', billTotal, 'with', itemCount, 'line items incl usage overage');
 
   // Pay the bill with the card SAVED at checkout (TMF670) — no retyping.
-  await billRow.locator('button', { hasText: 'Pay' }).click();
+  await billRow.locator('[data-testid=pay-bill]').click();
   const savedCard = a.locator('[data-testid="saved-card"]').first();
   await savedCard.waitFor({ timeout: 10000 });
   const savedLabel = (await savedCard.textContent()).trim();
