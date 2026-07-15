@@ -57,7 +57,10 @@ public class MachineTokenInterceptor implements ClientHttpRequestInterceptor {
         }
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || tenant.getTokenUri() == null || tenant.getTokenUri().isBlank()) {
-            throw new IllegalStateException("no machine credentials configured for tenant '" + tenantId + "'");
+            // a RestClientException, so callers' fail-open catches treat a
+            // missing credential like any other unreachable downstream
+            throw new org.springframework.web.client.RestClientException(
+                    "no machine credentials configured for tenant '" + tenantId + "'");
         }
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("grant_type", "client_credentials");

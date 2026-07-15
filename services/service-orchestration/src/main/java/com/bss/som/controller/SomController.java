@@ -101,9 +101,17 @@ public class SomController {
         if (!simPlatform.resetPin(sim.getIccid(), pin)) {
             throw new com.bss.som.exception.BadRequestException("the SIM platform refused the PIN change");
         }
-        events.publish("SimPinResetEvent", "sim", Map.of(
-                "serviceId", id,
-                "iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5)));
+        // the OWNER rides the event so the customer is told their PIN
+        // changed — a silent credential change is a gift to fraudsters
+        String owner = services.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .map(ServiceInstance::getOwnerPartyId).orElse(null);
+        Map<String, Object> pinEvent = new LinkedHashMap<>();
+        pinEvent.put("serviceId", id);
+        pinEvent.put("iccid", "•••• " + sim.getIccid().substring(sim.getIccid().length() - 5));
+        if (owner != null) {
+            pinEvent.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+        }
+        events.publish("SimPinResetEvent", "sim", pinEvent);
         return ResponseEntity.ok(Map.of("status", "done", "@type", "SimPinReset"));
     }
 

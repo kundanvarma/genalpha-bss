@@ -104,6 +104,42 @@ async function apiCall(page, method, path, token, body) {
   if (foreignPin.status !== 404) fail("Eve reset Sam's PIN: " + foreignPin.status);
   console.log("OK scoping: another customer gets 404 for Sam's SIM and PIN — existence never leaks");
 
+  // --- THE CALL-IN: "I forgot my PIN." The agent reveals the PUK (identity
+  // checked, disclosure LOGGED) and pushes a new PIN — and Sam is TOLD his
+  // PIN changed, because silent credential changes are a gift to fraudsters.
+  const annaRes = await ctx.request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'agent-anna', password: 'agent' } });
+  const anna = (await annaRes.json()).access_token;
+  const AH = { Authorization: 'Bearer ' + anna, 'Content-Type': 'application/json' };
+  const samParty = JSON.parse(Buffer.from(sam.split('.')[1], 'base64url').toString()).sub;
+
+  const agentReveal = await (await ctx.request.get(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/sim?reveal=true`,
+    { headers: AH })).json();
+  if (agentReveal.puk !== apiPuk) fail('the agent read a different PUK than the card holds');
+  await ctx.request.post('http://localhost:8080/tmf-api/partyInteraction/v4/partyInteraction',
+    { headers: AH, data: { description: `PUK disclosed for Sam's line after identity verification`,
+      channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+      relatedParty: [{ id: samParty, role: 'customer', '@referredType': 'Individual' }] } });
+  console.log('OK the agent revealed the PUK for the caller — and the disclosure is on the record');
+
+  const agentPin = await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/sim/resetPin`,
+    { headers: AH, data: { newPin: '7777' } });
+  if (agentPin.status() !== 200) fail('the agent could not reset the PIN: ' + agentPin.status());
+  let warned = false;
+  for (let i = 0; i < 20 && !warned; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inboxRes = await apiCall(page, 'GET',
+      '/tmf-api/communicationManagement/v4/communicationMessage?limit=50', sam);
+    warned = (inboxRes.body || []).some?.((m) => (m.subject || '').includes('SIM PIN was changed'));
+  }
+  if (!warned) fail('the customer was never told their PIN changed');
+  console.log('OK Sam was TOLD: "Your SIM PIN was changed — if this was not you, contact us"');
+
   await browser.close();
-  console.log('\nALL SIM CHECKS PASSED — minted at activation, PUK on request, OTA PIN reset, owner-scoped.');
+  console.log('\nALL SIM CHECKS PASSED — minted at activation, PUK on request, OTA PIN reset,'
+    + ' owner-scoped — and the call-in flow: agent reveals the PUK on the record, resets the'
+    + ' PIN, and the customer hears about it.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

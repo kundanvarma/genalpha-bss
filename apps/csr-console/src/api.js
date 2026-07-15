@@ -247,6 +247,23 @@ export async function askKnowledge(question) {
 }
 
 /** Next best offer with the WHY — TMF680 candidates, the model reasons. */
+/** The SIM behind a service — the PUK only with reveal (read it to the
+ * caller AFTER verifying identity; the disclosure is logged). */
+export async function simOf(serviceId, reveal = false) {
+  const res = await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim${reveal ? '?reveal=true' : ''}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+/** OTA PIN reset through the SIM-platform seam; the owner is notified. */
+export async function resetSimPin(serviceId, newPin) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/sim/resetPin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ newPin }),
+  }));
+}
+
 /** UPSELL, acted on: order the suggested offering ON BEHALF of the
  * customer (with their say-so on the line) — the agent is unscoped, so
  * the relatedParty in the body names the owner. */

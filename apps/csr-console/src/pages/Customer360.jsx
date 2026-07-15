@@ -4,7 +4,8 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
-  revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer } from '../api.js';
+  revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
+  simOf, resetSimPin } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -41,6 +42,7 @@ export default function Customer360() {
   const [error, setError] = useState(null);
   const [copilot, setCopilot] = useState(null);
   const [nbo, setNbo] = useState(null); // null | 'loading' | {summary, nextActions}
+  const [puks, setPuks] = useState({}); // serviceId -> revealed PUK
 
   async function summarize() {
     setCopilot('loading');
@@ -215,6 +217,36 @@ export default function Customer360() {
                 <div className="rowend">
                   <span className="msisdn">{sv.supportingResource[0].value}</span>
                   <span className={`state ${sv.state}`}>{sv.state}</span>
+                  {sv.state === 'active' && (
+                    puks[sv.id]
+                      ? <span className="dim small" data-testid="csr-puk">
+                          PUK <strong>{puks[sv.id]}</strong></span>
+                      : <button className="ghost" data-testid="reveal-puk"
+                          title="Verify the caller's identity FIRST — the disclosure is logged"
+                          onClick={() => act(async () => {
+                            const sim = await simOf(sv.id, true);
+                            if (!sim?.puk) throw new Error('No SIM on this service.');
+                            setPuks((p) => ({ ...p, [sv.id]: sim.puk }));
+                            // a credential disclosure belongs on the record
+                            await logInteraction({
+                              description: `PUK disclosed for ${sv.supportingResource[0].value} after identity verification`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          })}>
+                          Reveal PUK
+                        </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-reset-pin"
+                        title="Push a new PIN to the card over the air — the customer is notified"
+                        onClick={() => {
+                          const pin = window.prompt('New SIM PIN (4-8 digits) — agreed with the caller:');
+                          if (pin) act(() => resetSimPin(sv.id, pin.trim()));
+                        }}>
+                      Reset PIN
+                    </button>
+                  )}
                   {sv.state === 'active' && hasRole('service:write') && (
                     <button className="ghost danger" data-testid="cease-service"
                             onClick={() => window.confirm(`Cease ${sv.name} and release ${sv.supportingResource[0].value}?`)
