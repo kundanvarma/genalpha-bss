@@ -769,6 +769,16 @@ services:
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      PARTY_BASE_URL: http://party-account:8080
+      # ESP delivery seam: nova's customer messages ALSO leave via "their"
+      # email provider (the SendGrid-shaped mock); genalpha stays in-app
+      # only — same binary, per-tenant config.
+      DELIVERY_PROVIDER_NOVA: esp
+      ESP_URL_NOVA: http://mock-esp:8080
+      ESP_API_KEY_NOVA: nova-esp-key
+      ESP_FROM_NOVA: no-reply@nova.example
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
@@ -978,6 +988,14 @@ services:
     restart: unless-stopped
     ports:
       - "8120:8080"
+
+  # demo stand-in for the operator's email provider (SendGrid v3 wire shape)
+  mock-esp:
+    build: ./integrations/mock-esp
+    container_name: bss-mock-esp
+    restart: unless-stopped
+    ports:
+      - "8121:8080"
 
   insight:
     build: ./services/insight

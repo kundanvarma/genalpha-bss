@@ -46,6 +46,8 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  downstream:
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
   notify:
     consumer-enabled: ${NOTIFY_CONSUMER_ENABLED:true}
     topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events,bss.usage.events}
@@ -60,6 +62,20 @@ bss:
       - id: genalpha
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-communication}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:communication-secret}
+        delivery-provider: ${DELIVERY_PROVIDER:internal}
+        esp-url: ${ESP_URL:}
+        esp-api-key: ${ESP_API_KEY:}
+        esp-from: ${ESP_FROM:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-communication}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:communication-secret}
+        delivery-provider: ${DELIVERY_PROVIDER_NOVA:internal}
+        esp-url: ${ESP_URL_NOVA:}
+        esp-api-key: ${ESP_API_KEY_NOVA:}
+        esp-from: ${ESP_FROM_NOVA:}

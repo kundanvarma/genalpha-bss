@@ -140,6 +140,11 @@ services:
     db: ""
     healthPath: /health
     extraEnv: {}
+  # demo stand-in for the operator's email provider (ESP seam, SendGrid v3)
+  mock-esp:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
@@ -214,7 +219,17 @@ services:
   communication:
     db: communication
     dbRole: communication_app
-    extraEnv: {}
+    # ESP delivery seam: per-tenant email provider (SendGrid v3 wire shape);
+    # party lookup for the recipient address needs machine identity
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-communication
+      OIDC_CLIENT_SECRET: communication-secret
+      PARTY_BASE_URL: http://party-account:8080
+      DELIVERY_PROVIDER_NOVA: esp
+      ESP_URL_NOVA: http://mock-esp:8080
+      ESP_API_KEY_NOVA: nova-esp-key
+      ESP_FROM_NOVA: no-reply@nova.example
   shopping-cart:
     db: shopping_cart
     dbRole: cart_app
