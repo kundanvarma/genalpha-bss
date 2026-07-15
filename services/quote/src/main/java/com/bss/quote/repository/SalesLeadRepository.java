@@ -13,4 +13,6 @@ public interface SalesLeadRepository extends JpaRepository<SalesLead, String> {
     List<SalesLead> findByTenantIdOrderByCreatedAtDesc(String tenantId);
 
     Optional<SalesLead> findByIdAndTenantId(String id, String tenantId);
+
+    boolean existsByTenantIdAndSocialRef(String tenantId, String socialRef);
 }

@@ -372,6 +372,17 @@ const RESOURCES = [
     }],
   },
   {
+    path: 'audiences',
+    base: '/insight/v1',
+    title: 'Audiences',
+    // What the tenant's OWN analytics computed, imported live through the
+    // GA4 Data API wire shape — these names are usable as campaign and
+    // journey segments.
+    readOnly: true,
+    fields: [],
+    columns: ['name', 'size', 'source'],
+  },
+  {
     path: 'profile',
     base: '/insight/v1',
     title: 'Insight',
@@ -627,6 +638,7 @@ const TAB_ROLE = {
   settings: 'campaign:read',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
+  audiences: 'insight:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',

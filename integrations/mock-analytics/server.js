@@ -77,6 +77,36 @@ const server = http.createServer((req, res) => {
     return json(200, received.get(url.searchParams.get('measurement_id')) || []);
   }
 
+  // The REAL import path: GA4 Data API runReport, in miniature. The BSS
+  // asks for the audience catalog (audienceName x activeUsers) with a
+  // bearer token — swap this host for analyticsdata.googleapis.com and
+  // the wire shape is the same.
+  const runReport = url.pathname.match(/^\/v1beta\/properties\/([^/:]+):runReport$/);
+  if (req.method === 'POST' && runReport) {
+    if (!(req.headers.authorization || '').startsWith('Bearer ')) {
+      return json(401, { error: { code: 401, message: 'authorization required' } });
+    }
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      const counts = new Map();
+      for (const names of audiences.values()) {
+        for (const n of names) counts.set(n, (counts.get(n) || 0) + 1);
+      }
+      json(200, {
+        dimensionHeaders: [{ name: 'audienceName' }],
+        metricHeaders: [{ name: 'activeUsers', type: 'TYPE_INTEGER' }],
+        rows: [...counts.entries()].map(([name, c]) => ({
+          dimensionValues: [{ value: name }],
+          metricValues: [{ value: String(c) }],
+        })),
+        rowCount: counts.size,
+        kind: 'analyticsData#runReport',
+      });
+    });
+    return;
+  }
+
   json(404, { error: 'not found' });
 });
 

@@ -65,6 +65,11 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Social platform seam (Meta Marketing API wire shape): where a
+         * segment's hashed emails go for retargeting. Null url = no
+         * platform connected for this tenant. */
+        private String socialApiUrl;
+        private String socialAccessToken;
 
         public String getId() {
             return id;
@@ -112,6 +117,22 @@ public class TenantRegistry {
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
+        }
+
+        public String getSocialApiUrl() {
+            return socialApiUrl;
+        }
+
+        public void setSocialApiUrl(String socialApiUrl) {
+            this.socialApiUrl = socialApiUrl;
+        }
+
+        public String getSocialAccessToken() {
+            return socialAccessToken;
+        }
+
+        public void setSocialAccessToken(String socialAccessToken) {
+            this.socialAccessToken = socialAccessToken;
         }
     }
 }

@@ -67,6 +67,9 @@ bss:
         analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
         analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID:}
         analytics-api-secret: ${ANALYTICS_API_SECRET:}
+        analytics-data-url: ${ANALYTICS_DATA_URL:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -77,3 +80,6 @@ bss:
         analytics-mp-url: ${ANALYTICS_MP_URL_NOVA:https://www.google-analytics.com}
         analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_NOVA:}
         analytics-api-secret: ${ANALYTICS_API_SECRET_NOVA:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_NOVA:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_NOVA:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_NOVA:}

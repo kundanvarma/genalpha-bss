@@ -53,7 +53,8 @@ public class SecurityConfig {
                         // the raw profile is back-office only
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/profile",
                                 ApiConstants.BASE_PATH + "/partyProfile",
-                                ApiConstants.BASE_PATH + "/segmentMembers").hasAuthority("insight:read")
+                                ApiConstants.BASE_PATH + "/segmentMembers",
+                                ApiConstants.BASE_PATH + "/audiences").hasAuthority("insight:read")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));

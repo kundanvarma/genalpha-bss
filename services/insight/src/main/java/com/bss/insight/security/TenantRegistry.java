@@ -73,6 +73,11 @@ public class TenantRegistry {
         private String analyticsMpUrl;
         private String analyticsMeasurementId;
         private String analyticsApiSecret;
+        /** GA4 Data API seam (audience catalog import): base url, property
+         * and an OAuth bearer — real Google or the mock, config apart. */
+        private String analyticsDataUrl;
+        private String analyticsPropertyId;
+        private String analyticsDataToken;
 
         public String getId() {
             return id;
@@ -130,5 +135,11 @@ public class TenantRegistry {
         public void setAnalyticsMeasurementId(String v) { this.analyticsMeasurementId = v; }
         public String getAnalyticsApiSecret() { return analyticsApiSecret; }
         public void setAnalyticsApiSecret(String v) { this.analyticsApiSecret = v; }
+        public String getAnalyticsDataUrl() { return analyticsDataUrl; }
+        public void setAnalyticsDataUrl(String v) { this.analyticsDataUrl = v; }
+        public String getAnalyticsPropertyId() { return analyticsPropertyId; }
+        public void setAnalyticsPropertyId(String v) { this.analyticsPropertyId = v; }
+        public String getAnalyticsDataToken() { return analyticsDataToken; }
+        public void setAnalyticsDataToken(String v) { this.analyticsDataToken = v; }
     }
 }

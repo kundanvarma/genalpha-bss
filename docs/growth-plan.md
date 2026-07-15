@@ -1,6 +1,6 @@
 # Growth engine — measurement & journeys: research and plan
 
-Status: **M1 + M2 + Phase 3 delivered** (holdouts/windows/lift; journeys with exit-on-conversion; A/B arms with per-arm stats and an honest verdict — `growth_test.js`; ESP delivery seam — suite #36 `esp_test.js`; TMF699 leads→opportunities — suite #37 `sales_test.js`) · delivery receipts + suppression, FREQUENCY CAPS and QUIET HOURS shipped (suite #38 `guardrails_test.js`), journey BRANCH steps and REVENUE ATTRIBUTION shipped (growth_test — conversions carry the catalog's monthly value; lift reads in currency per exposed customer) · the named martech backlog is EMPTY · 2026-07-15
+Status: **M1 + M2 + Phase 3 delivered** (holdouts/windows/lift; journeys with exit-on-conversion; A/B arms with per-arm stats and an honest verdict — `growth_test.js`; ESP delivery seam — suite #36 `esp_test.js`; TMF699 leads→opportunities — suite #37 `sales_test.js`) · delivery receipts + suppression, FREQUENCY CAPS and QUIET HOURS shipped (suite #38 `guardrails_test.js`), journey BRANCH steps and REVENUE ATTRIBUTION shipped (growth_test — conversions carry the catalog's monthly value; lift reads in currency per exposed customer) · GA4 Data API audience import + social platform seams (Custom Audience push, Lead Ads import) shipped — suite #39 `social_test.js` · the martech backlog is EMPTY, further-out ideas all landed · 2026-07-15
 
 The thesis (from the operator): a BSS holds the richest customer data in
 the building — why is it only a product-and-billing system? The CVM layer

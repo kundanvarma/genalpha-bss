@@ -38,13 +38,86 @@ public class SalesService {
     private final SalesOpportunityRepository opportunities;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.quote.security.TenantRegistry tenants;
+    private final org.springframework.web.client.RestClient socialClient;
 
     public SalesService(SalesLeadRepository leads, SalesOpportunityRepository opportunities,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.quote.security.TenantRegistry tenants,
+            org.springframework.web.client.RestClient.Builder builder) {
         this.leads = leads;
         this.opportunities = opportunities;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.tenants = tenants;
+        this.socialClient = builder.build();
+    }
+
+    /**
+     * SOCIAL LEAD IMPORT: pull the tenant's lead-gen form entries (Meta
+     * Lead Ads wire shape) into TMF699 salesLeads. Idempotent on the
+     * platform's lead id — pull as often as you like.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> importSocial() {
+        String tenantId = tenantScope.currentTenantId();
+        com.bss.quote.security.TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || tenant.getSocialApiUrl() == null || tenant.getSocialApiUrl().isBlank()
+                || tenant.getSocialLeadFormId() == null || tenant.getSocialLeadFormId().isBlank()) {
+            throw new BadRequestException(
+                    "no social lead form is configured for this tenant — the seam is per-tenant");
+        }
+        Map<String, Object> response = socialClient.get()
+                .uri(tenant.getSocialApiUrl() + "/v1/" + tenant.getSocialLeadFormId() + "/leads")
+                .header("Authorization", "Bearer " + tenant.getSocialAccessToken())
+                .retrieve().body(Map.class);
+        int imported = 0;
+        int seen = 0;
+        if (response != null && response.get("data") instanceof List<?> entries) {
+            seen = entries.size();
+            for (Object o : entries) {
+                if (o instanceof Map<?, ?> entry && importOne((Map<String, Object>) entry, tenantId)) {
+                    imported++;
+                }
+            }
+        }
+        log.info("social lead import for '{}': {} entries at the platform, {} new", tenantId, seen, imported);
+        return Map.of("form", tenant.getSocialLeadFormId(), "entries", seen, "imported", imported);
+    }
+
+    private boolean importOne(Map<String, Object> entry, String tenantId) {
+        String socialRef = entry.get("id") == null ? null : String.valueOf(entry.get("id"));
+        if (socialRef == null || leads.existsByTenantIdAndSocialRef(tenantId, socialRef)) {
+            return false;
+        }
+        Map<String, String> fields = new LinkedHashMap<>();
+        if (entry.get("field_data") instanceof List<?> data) {
+            for (Object f : data) {
+                if (f instanceof Map<?, ?> field && field.get("name") != null
+                        && field.get("values") instanceof List<?> values && !values.isEmpty()) {
+                    fields.put(String.valueOf(field.get("name")), String.valueOf(values.get(0)));
+                }
+            }
+        }
+        SalesLead lead = new SalesLead();
+        String id = UUID.randomUUID().toString();
+        lead.setId(id);
+        lead.setTenantId(tenantId);
+        lead.setHref(ApiConstants.SALES_BASE + "/salesLead/" + id);
+        lead.setName(fields.getOrDefault("need",
+                "Social lead — " + fields.getOrDefault("full_name", socialRef)));
+        lead.setContactName(fields.get("full_name"));
+        lead.setContactEmail(fields.get("email"));
+        lead.setCompany(fields.get("company"));
+        lead.setSource("social");
+        lead.setSocialRef(socialRef);
+        lead.setState(SalesLead.ACKNOWLEDGED);
+        lead.setCreatedAt(OffsetDateTime.now());
+        lead.setLastUpdate(OffsetDateTime.now());
+        Map<String, Object> created = leadToMap(leads.save(lead));
+        events.publish("SalesLeadCreateEvent", "salesLead", created);
+        return true;
     }
 
     /** Anyone may knock: the capture endpoint is open (the tenant comes
