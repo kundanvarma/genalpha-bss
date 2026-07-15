@@ -5,7 +5,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  simOf, resetSimPin, replaceSim } from '../api.js';
+  simOf, resetSimPin, replaceSim, changeNumber } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -236,6 +236,23 @@ export default function Customer360() {
                           })}>
                           Reveal PUK
                         </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-change-number"
+                        title="New number on the same line — the old one is quarantined; the customer is notified"
+                        onClick={() => {
+                          if (!window.confirm(`Give ${sv.supportingResource[0].value} a NEW number? The old one stops working immediately.`)) return;
+                          act(async () => {
+                            const done = await changeNumber(sv.id);
+                            await logInteraction({
+                              description: `Number changed on request: ${done.oldNumber} → ${done.number}`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Change number
+                    </button>
                   )}
                   {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-replace-sim"

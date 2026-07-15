@@ -175,8 +175,54 @@ async function apiCall(page, method, path, token, body) {
   console.log('OK Sam was WARNED: "A new SIM was issued for your number — if this was not you,'
     + ' contact us immediately"');
 
+  // --- "I WANT A NEW NUMBER": the MSISDN moves, everything else stays.
+  // Old number quarantined (never back into circulation), the same
+  // assignment carries the new draw, the SIM keeps working — and Sam is
+  // told, loudly, with both numbers spelled out.
+  const svcList = (await apiCall(page, 'GET', '/tmf-api/serviceInventory/v4/service', sam)).body;
+  const before = svcList.find((sv) => sv.id === service.id);
+  const oldNumber = before.supportingResource[0].value;
+  const changed = await (await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/changeNumber`,
+    { headers: AH, data: {} })).json();
+  if (changed.oldNumber !== oldNumber || !changed.number || changed.number === oldNumber) {
+    fail('the number did not move: ' + JSON.stringify(changed));
+  }
+  const after = ((await apiCall(page, 'GET', '/tmf-api/serviceInventory/v4/service', sam)).body)
+    .find((sv) => sv.id === service.id);
+  if (after.supportingResource[0].value !== changed.number) {
+    fail('the service does not carry the new number: ' + JSON.stringify(after.supportingResource));
+  }
+  // the CSR number search follows: new number resolves, the old one is nobody's
+  const newOwner = await (await ctx.request.get(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/numberOwner?number=${encodeURIComponent(changed.number)}`,
+    { headers: AH })).json();
+  if (newOwner.partyId !== samParty) fail('the new number does not resolve to Sam');
+  const oldOwner = await ctx.request.get(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/numberOwner?number=${encodeURIComponent(oldNumber)}`,
+    { headers: AH });
+  if (oldOwner.status() !== 404) fail('the OLD number still resolves: ' + oldOwner.status());
+  const simStill = await apiCall(page, 'GET',
+    `/tmf-api/serviceInventory/v4/service/${service.id}/sim`, sam);
+  if (simStill.status !== 200) fail('the SIM did not survive the number change');
+  console.log(`OK NUMBER CHANGED: ${oldNumber} -> ${changed.number} — same service, same SIM,`
+    + ' old number quarantined and unfindable');
+
+  let numberWarned = false;
+  for (let i = 0; i < 20 && !numberWarned; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inboxRes = await apiCall(page, 'GET',
+      '/tmf-api/communicationManagement/v4/communicationMessage?limit=50', sam);
+    numberWarned = (inboxRes.body || []).some?.((m) => (m.subject || '').includes('phone number has changed')
+      && (m.content || '').includes(changed.number));
+  }
+  if (!numberWarned) fail('the customer was never told their number changed');
+  console.log('OK Sam was TOLD, with both numbers spelled out — an unrequested change would'
+    + ' announce itself');
+
   await browser.close();
   console.log('\nALL SIM CHECKS PASSED — minted at activation, PUK on request, OTA PIN reset,'
-    + ' owner-scoped — the call-in flow (PUK on the record, PIN reset with a receipt) and the'
-    + ' lost-SIM replacement: old card dead first, same number, new PUK, loud warning.');
+    + ' owner-scoped — the call-in flow (PUK on the record, PIN reset with a receipt), the'
+    + ' lost-SIM replacement (old card dead first, same number, new PUK) and the number change'
+    + ' (old number quarantined, same SIM, loud warning).');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });
