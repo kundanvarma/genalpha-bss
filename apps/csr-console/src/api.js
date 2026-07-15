@@ -274,6 +274,14 @@ export async function replaceSim(serviceId, reason) {
   }));
 }
 
+/** MSISDN change: old number quarantined, new one drawn onto the SAME
+ * service — SIM, usage and billing untouched; the customer is warned. */
+export async function changeNumber(serviceId) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/changeNumber`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 /** UPSELL, acted on: order the suggested offering ON BEHALF of the
  * customer (with their say-so on the line) — the agent is unscoped, so
  * the relatedParty in the body names the owner. */

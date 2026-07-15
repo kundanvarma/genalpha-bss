@@ -4,6 +4,7 @@ import com.bss.som.api.ApiConstants;
 import com.bss.som.entity.ServiceInstance;
 import com.bss.som.entity.ServiceOrder;
 import com.bss.som.repository.ServiceInstanceRepository;
+import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.repository.ResourceAssignmentRepository;
 import com.bss.som.repository.ResourcePoolRepository;
@@ -37,6 +38,7 @@ public class SomController {
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.SimPlatformClient simPlatform;
     private final com.bss.som.crypto.PukVault pukVault;
+    private final com.bss.som.repository.NumberQuarantineRepository quarantine;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -45,7 +47,8 @@ public class SomController {
             com.bss.som.service.OrchestrationService orchestration,
             com.bss.som.repository.SimCardRepository sims,
             com.bss.som.client.SimPlatformClient simPlatform,
-            com.bss.som.crypto.PukVault pukVault) {
+            com.bss.som.crypto.PukVault pukVault,
+            com.bss.som.repository.NumberQuarantineRepository quarantine) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -57,6 +60,7 @@ public class SomController {
         this.sims = sims;
         this.simPlatform = simPlatform;
         this.pukVault = pukVault;
+        this.quarantine = quarantine;
     }
 
     /**
@@ -160,6 +164,70 @@ public class SomController {
         response.put("iccid", event.get("iccid"));
         response.put("note", "the new card is active; its PUK is revealable the usual way");
         response.put("@type", "SimReplacement");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * NUMBER CHANGE — the other classic call. The number lives on the
+     * service, so everything else survives: the SIM keeps working, usage
+     * and billing follow the service id, only the MSISDN moves. The old
+     * number goes on the QUARANTINE shelf (auditable, never re-issued
+     * straight into circulation) and the owner is told loudly — a number
+     * change the customer did not ask for is a takeover in progress.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/changeNumber")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Map<String, Object>> changeNumber(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(instance.getOwnerPartyId())) {
+                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+            }
+        });
+        ResourceAssignment current = assignments.findByTenantIdAndServiceId(tenant, id).stream()
+                .filter(a -> !"partner".equals(a.getPoolId()))
+                .findFirst()
+                .orElseThrow(() -> new com.bss.som.exception.BadRequestException(
+                        "this service carries no number to change"));
+        ResourcePool pool = pools.findFirstByTenantIdAndResourceType(tenant, ResourcePool.MSISDN)
+                .orElseThrow(() -> new com.bss.som.exception.BadRequestException(
+                        "no number pool configured for this tenant"));
+        String oldNumber = current.getValue();
+        // the old number goes on the shelf, with its story
+        com.bss.som.entity.NumberQuarantine shelf = new com.bss.som.entity.NumberQuarantine();
+        shelf.setId(java.util.UUID.randomUUID().toString());
+        shelf.setTenantId(tenant);
+        shelf.setNumber(oldNumber);
+        shelf.setServiceId(id);
+        shelf.setReason("numberChange");
+        shelf.setReleasedAt(java.time.OffsetDateTime.now());
+        quarantine.save(shelf);
+        // the same assignment row carries the new draw — holder unchanged
+        String fresh = pool.getPrefix() + String.format("%06d", pool.getNextValue());
+        pool.setNextValue(pool.getNextValue() + 1);
+        pool.setLastUpdate(java.time.OffsetDateTime.now());
+        pools.save(pool);
+        current.setPoolId(pool.getId());
+        current.setValue(fresh);
+        current.setAssignedAt(java.time.OffsetDateTime.now());
+        assignments.save(current);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("serviceId", id);
+        event.put("oldNumber", oldNumber);
+        event.put("number", fresh);
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("NumberChangedEvent", "service", event);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("serviceId", id);
+        response.put("oldNumber", oldNumber);
+        response.put("number", fresh);
+        response.put("note", "the old number is quarantined; SIM, usage and billing are untouched");
+        response.put("@type", "NumberChange");
         return ResponseEntity.ok(response);
     }
 

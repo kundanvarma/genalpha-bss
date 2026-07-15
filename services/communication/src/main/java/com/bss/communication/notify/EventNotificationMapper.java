@@ -31,6 +31,14 @@ public class EventNotificationMapper {
                             "Your SIM PIN was changed",
                             "The PIN on your SIM " + sim.getOrDefault("iccid", "") + " was just changed."
                             + " If this was not you, contact us immediately."))));
+            // an unrequested number change is a takeover in progress — say so
+            case "NumberChangedEvent" -> one(resource(event, "service").flatMap(svc ->
+                    customer(svc).map(party -> new Notification(party,
+                            "Your phone number has changed",
+                            "Your number is now " + svc.getOrDefault("number", "")
+                            + ". The old number " + svc.getOrDefault("oldNumber", "")
+                            + " no longer reaches you — tell your contacts."
+                            + " If you did not ask for this, contact us immediately."))));
             // and a SWAPPED card even less so — the textbook account-takeover
             case "SimReplacedEvent" -> one(resource(event, "sim").flatMap(sim ->
                     customer(sim).map(party -> new Notification(party,
