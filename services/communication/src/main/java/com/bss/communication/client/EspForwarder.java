@@ -1,5 +1,7 @@
 package com.bss.communication.client;
 
+import com.bss.communication.repository.SuppressionRepository;
+import com.bss.communication.security.TenantContext;
 import com.bss.communication.security.TenantRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +22,10 @@ import java.util.concurrent.CompletableFuture;
  * fire-and-forget and fail-open, so a slow or dead ESP never delays a
  * notification. The recipient's address is looked up live from party
  * management — the BSS already knows it; no second copy.
+ *
+ * Respecting the answer: an address the provider bounced sits on the
+ * tenant's suppression list and is skipped here (custom_args carries the
+ * message id so the provider's receipts can find their way back).
  */
 @Component
 public class EspForwarder {
@@ -28,18 +34,22 @@ public class EspForwarder {
 
     private final TenantRegistry tenants;
     private final MachineTokens tokens;
+    private final SuppressionRepository suppressions;
     private final RestClient partyClient;
     private final RestClient espClient;
 
-    public EspForwarder(TenantRegistry tenants, MachineTokens tokens, RestClient.Builder builder,
+    public EspForwarder(TenantRegistry tenants, MachineTokens tokens,
+            SuppressionRepository suppressions, RestClient.Builder builder,
             @Value("${bss.downstream.party-base-url:http://localhost:8081}") String partyBaseUrl) {
         this.tenants = tenants;
         this.tokens = tokens;
+        this.suppressions = suppressions;
         this.partyClient = builder.baseUrl(partyBaseUrl).build();
         this.espClient = builder.build();
     }
 
-    public void forward(String tenantId, String partyId, String subject, String content) {
+    public void forward(String tenantId, String messageId, String partyId,
+            String subject, String content) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !"esp".equalsIgnoreCase(tenant.getDeliveryProvider())
                 || tenant.getEspUrl() == null || tenant.getEspUrl().isBlank()
@@ -47,10 +57,16 @@ public class EspForwarder {
             return;
         }
         CompletableFuture.runAsync(() -> {
-            try {
+            // an async thread has no request; act as the tenant so the
+            // row-level policies admit the suppression lookup
+            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 String email = emailOf(tenantId, partyId);
                 if (email == null) {
                     log.debug("esp skipped: party {} has no email address", partyId);
+                    return;
+                }
+                if (suppressions.existsByTenantIdAndEmail(tenantId, email)) {
+                    log.info("esp suppressed: {} bounced before — in-app only", email);
                     return;
                 }
                 Map<String, Object> mail = Map.of(
@@ -59,7 +75,9 @@ public class EspForwarder {
                                 ? "no-reply@" + tenantId + ".example" : tenant.getEspFrom()),
                         "subject", subject,
                         "content", List.of(Map.of("type", "text/plain",
-                                "value", content == null ? "" : content)));
+                                "value", content == null ? "" : content)),
+                        // the receipt's way home (SendGrid echoes these back)
+                        "custom_args", Map.of("messageId", messageId, "tenant", tenantId));
                 espClient.post().uri(tenant.getEspUrl() + "/v3/mail/send")
                         .header("Authorization", "Bearer " + tenant.getEspApiKey())
                         .body(mail)

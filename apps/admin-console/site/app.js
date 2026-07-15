@@ -291,6 +291,21 @@ const RESOURCES = [
     },
   },
   {
+    path: 'settings',
+    base: CAMPAIGN_BASE,
+    title: 'Guardrails',
+    // The tenant's marketing-touch budget: campaigns skip and journeys
+    // postpone once a customer is at their cap. 0 = off. Saving replaces
+    // the single settings row.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'maxMarketingMessages', label: 'Max marketing messages per customer (0 = no cap)', kind: 'number', required: true },
+      { name: 'perDays', label: '…per how many days', kind: 'number', placeholder: '1' },
+    ],
+    columns: ['maxMarketingMessages', 'perDays', 'capActive'],
+  },
+  {
     path: 'salesLead',
     base: SALES_BASE,
     title: 'Sales leads',
@@ -600,6 +615,7 @@ const TAB_ROLE = {
   journey: 'campaign:read',
   policyRule: 'policy:read',
   article: 'knowledge:write',
+  settings: 'campaign:read',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   profile: 'insight:read',

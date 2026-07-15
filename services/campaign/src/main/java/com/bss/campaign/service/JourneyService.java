@@ -50,10 +50,12 @@ public class JourneyService {
     private final TenantScope tenantScope;
     private final TenantRegistry tenants;
     private final ObjectMapper objectMapper;
+    private final FrequencyGuard frequency;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
-            TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper) {
+            TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper,
+            FrequencyGuard frequency) {
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -61,6 +63,7 @@ public class JourneyService {
         this.tenantScope = tenantScope;
         this.tenants = tenants;
         this.objectMapper = objectMapper;
+        this.frequency = frequency;
     }
 
     // ---------------- authoring ----------------
@@ -253,12 +256,22 @@ public class JourneyService {
             Map<String, Object> step = steps.get(index);
             if ("message".equals(String.valueOf(step.get("type")))) {
                 if (!"holdout".equals(enrollment.getVariant())) {
+                    // frequency cap: a customer at their marketing budget is
+                    // POSTPONED, not dropped — the journey retries in an hour
+                    if (!frequency.canSend(enrollment.getPartyId())) {
+                        enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
+                        enrollments.save(enrollment);
+                        log.info("journey '{}' postponed for party {} — marketing budget spent",
+                                journey.getName(), enrollment.getPartyId());
+                        return;
+                    }
                     String content = String.valueOf(step.get("content"));
                     if (step.get("promotionCode") != null) {
                         content = content.replace("{code}", String.valueOf(step.get("promotionCode")));
                     }
                     communication.send(enrollment.getPartyId(),
                             String.valueOf(step.get("subject")), content);
+                    frequency.record(enrollment.getPartyId(), "journey");
                 }
                 index++;
             } else { // wait

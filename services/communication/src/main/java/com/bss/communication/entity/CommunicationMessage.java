@@ -36,6 +36,11 @@ public class CommunicationMessage {
     @Column(name = "status")
     private String status;
 
+    /** What the tenant's ESP reported back (delivered, bounced…); null for
+     * in-app-only tenants or before the receipt arrives. */
+    @Column(name = "delivery_status", length = 32)
+    private String deliveryStatus;
+
     @Column(name = "receiver_party_id")
     private String receiverPartyId;
 
@@ -108,6 +113,14 @@ public class CommunicationMessage {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
     }
 
     public String getReceiverPartyId() {

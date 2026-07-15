@@ -74,7 +74,7 @@ public class CommunicationMessageService {
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         repository.save(entity);
-        esp.forward(tenantId, n.partyId(), n.subject(), n.content());
+        esp.forward(tenantId, id, n.partyId(), n.subject(), n.content());
     }
 
     @Transactional(readOnly = true)
@@ -127,7 +127,8 @@ public class CommunicationMessageService {
         entity.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = toMap(repository.save(entity));
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
-        esp.forward(entity.getTenantId(), receiver, entity.getSubject(), entity.getContent());
+        esp.forward(entity.getTenantId(), entity.getId(), receiver,
+                entity.getSubject(), entity.getContent());
         return created;
     }
 
@@ -173,6 +174,9 @@ public class CommunicationMessageService {
         map.put("content", entity.getContent());
         map.put("messageType", entity.getMessageType());
         map.put("status", entity.getStatus());
+        if (entity.getDeliveryStatus() != null) {
+            map.put("deliveryStatus", entity.getDeliveryStatus());
+        }
         map.put("relatedParty", List.of(Map.of(
                 "id", entity.getReceiverPartyId(), "role", "customer", "@referredType", "Individual")));
         if (entity.getSourceEventType() != null) {
