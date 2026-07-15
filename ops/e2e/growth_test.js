@@ -171,7 +171,75 @@ async function token(ctx, client, user, pass) {
     + `${jstats.conversions.treated}, completed unconverted ${jstats.completedUnconverted} — `
     + 'and nobody got "10% off!" the day after they paid full price');
 
+  /* ================= A/B ARMS: two messages, one honest readout ================= */
+  const subjA = `Pitch A ${run}`;
+  const subjB = `Pitch B ${run}`;
+  // arm assignment hashes the campaign id — re-create until the six split
+  // across BOTH arms (a same-arm run is legal but proves nothing)
+  let ab = null, abStats = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    ab = await (await ctx.post(CAMPAIGN, { headers: H(staff), data: {
+      name: `AB test ${run}.${attempt}`, segmentName: SEGMENT,
+      messageVariants: [
+        { name: 'A', subject: subjA, content: 'The direct pitch.' },
+        { name: 'B', subject: subjB, content: 'The playful pitch.' },
+      ] } })).json();
+    if (!ab.id) fail('A/B campaign create failed: ' + JSON.stringify(ab).slice(0, 200));
+    await ctx.post(`${CAMPAIGN}/${ab.id}/execute`, { headers: H(staff), data: {} });
+    abStats = await (await ctx.get(`${CAMPAIGN}/${ab.id}/stats`, { headers: H(staff) })).json();
+    const sent = abStats.arms.arms.map((a) => a.sent);
+    if (sent[0] > 0 && sent[1] > 0) break;
+    abStats = null;
+  }
+  if (!abStats) fail('six attempts never split across both arms — the hash is not splitting');
+  const sentA = abStats.arms.arms.find((a) => a.name === 'A').sent;
+  const sentB = abStats.arms.arms.find((a) => a.name === 'B').sent;
+  if (sentA + sentB !== 6) fail('the arms do not cover the segment: ' + JSON.stringify(abStats.arms));
+  console.log(`OK the A/B split is deterministic and total: ${sentA} heard pitch A, ${sentB} heard pitch B`);
+
+  /* every inbox has exactly ONE of the two pitches, and the tallies agree */
+  let inboxA = 0, inboxB = 0;
+  for (const p of people) {
+    let subjects = [];
+    for (let i = 0; i < 10; i++) {
+      subjects = await inboxOf(p);
+      if (subjects.includes(subjA) || subjects.includes(subjB)) break;
+      await sleep(1000);
+    }
+    const hasA = subjects.includes(subjA), hasB = subjects.includes(subjB);
+    if (hasA === hasB) fail(`${p.email} heard ${hasA ? 'BOTH pitches' : 'neither pitch'}`);
+    if (hasA) { inboxA++; p.arm = 'A'; } else { inboxB++; p.arm = 'B'; }
+  }
+  if (inboxA !== sentA || inboxB !== sentB) {
+    fail(`inboxes disagree with the arm ledger: heard ${inboxA}/${inboxB}, ledger says ${sentA}/${sentB}`);
+  }
+  console.log('OK every customer heard exactly one pitch — and the inboxes match the ledger');
+
+  /* a fresh buyer converts — the conversion lands on THEIR arm only */
+  const abBuyer = people.find((p) => p.id !== converter.id && p.id !== exiter.id);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(abBuyer.tok), data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: PLAN_ID, name: 'GenAlpha Mobile 10 GB' } }] } });
+  let armRead = null;
+  for (let i = 0; i < 30 && !armRead; i++) {
+    await sleep(2000);
+    abStats = await (await ctx.get(`${CAMPAIGN}/${ab.id}/stats`, { headers: H(staff) })).json();
+    const mine = abStats.arms.arms.find((a) => a.name === abBuyer.arm);
+    if (mine.conversions === 1) armRead = mine;
+  }
+  if (!armRead) fail('the conversion never landed on the buyer\'s arm: ' + JSON.stringify(abStats.arms));
+  const other = abStats.arms.arms.find((a) => a.name !== abBuyer.arm);
+  if (other.conversions !== 0) fail('a conversion leaked onto the arm that never spoke: ' + JSON.stringify(abStats.arms));
+  if (abStats.arms.leader !== abBuyer.arm) fail('the leader is not the converting arm: ' + JSON.stringify(abStats.arms));
+  if (!abStats.arms.verdict || !abStats.arms.verdict.includes('anecdote')) {
+    fail('six people crowned a winner — the verdict must call small samples an anecdote: '
+      + JSON.stringify(abStats.arms.verdict));
+  }
+  console.log(`OK arm ${abBuyer.arm} leads (${armRead.conversions}/${armRead.sent}) and the verdict`
+    + ` stays honest: "${abStats.arms.verdict}"`);
+
   console.log('\nALL GROWTH CHECKS PASSED — M1: holdouts are real control groups, conversions'
     + ' count inside the window, lift is a number. M2: journeys walk, wait, follow up —'
-    + ' and the conversion event exits people from ANY step.');
+    + ' and the conversion event exits people from ANY step. A/B: arms split deterministically,'
+    + ' convert separately, and never crown a winner on six people.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

@@ -48,6 +48,10 @@ public class Campaign {
     @Column(name = "holdout_percent")
     private int holdoutPercent;
 
+    /** A/B arms: JSON [{name, subject, content}] — null means one message. */
+    @Column(name = "arms", length = 4000)
+    private String arms;
+
     @Column(name = "trigger_state", length = 64)
     private String triggerState;
 
@@ -84,6 +88,8 @@ public class Campaign {
     public void setConversionWindowDays(int v) { this.conversionWindowDays = v; }
     public int getHoldoutPercent() { return holdoutPercent; }
     public void setHoldoutPercent(int v) { this.holdoutPercent = v; }
+    public String getArms() { return arms; }
+    public void setArms(String v) { this.arms = v; }
     public String getTriggerEventType() { return triggerEventType; }
     public void setTriggerEventType(String triggerEventType) { this.triggerEventType = triggerEventType; }
     public String getTriggerState() { return triggerState; }
