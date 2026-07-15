@@ -72,7 +72,11 @@ public class PartyInteractionService {
         }
         partyScope.scopedPartyId().ifPresent(probe::setCustomerPartyId);
         orgScope.scopedOrgId().ifPresent(probe::setOrgId);
-        Page<PartyInteraction> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
+        // the CSR timeline reads newest-first; the id tiebreak keeps pages stable
+        Page<PartyInteraction> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit,
+                org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Order.desc("interactionDate"),
+                        org.springframework.data.domain.Sort.Order.asc("id"))));
         return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
     }
 

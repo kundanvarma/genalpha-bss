@@ -85,8 +85,9 @@ export default function Customer360() {
   };
   useEffect(reload, [id]);
 
-  if (error) return <p className="error">{error}</p>;
-  if (!customer) return <p className="dim">Loading…</p>;
+  // an error is a banner, never a page-replacement — losing the whole 360
+  // over one failed call reads like being thrown out of the room
+  if (!customer) return error ? <p className="error">{error}</p> : <p className="dim">Loading…</p>;
 
   const address = (customer.contactMedium || [])
     .find((m) => m.mediumType === 'postalAddress')?.characteristic;
@@ -110,6 +111,7 @@ export default function Customer360() {
 
   return (
     <>
+      {error && <p className="error">{error}</p>}
       <h1>
         <span className="avatar big">{(customer.givenName?.[0] || '?').toUpperCase()}{(customer.familyName?.[0] || '').toUpperCase()}</span>
         {customer.givenName} {customer.familyName}

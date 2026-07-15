@@ -50,9 +50,27 @@ public class IndividualService {
         String q = filters.remove("q");
         if (q != null && !q.isBlank() && partyScope.scopedPartyId().isEmpty()) {
             String org = businessAdminOrg().orElse(null);
+            // multi-word queries match term-by-term ("paula family" finds
+            // Paula Family, and "family paula" does too): the first term
+            // narrows in the database, the rest filter in memory
+            String[] terms = q.trim().toLowerCase().split("\\s+");
+            java.util.function.Function<Individual, String> nameOf = i ->
+                    ((i.getGivenName() == null ? "" : i.getGivenName()) + " "
+                            + (i.getFamilyName() == null ? "" : i.getFamilyName())).toLowerCase();
             java.util.List<IndividualDto> hits = repository
-                    .searchLoose(tenantScope.currentTenantId(), q.trim()).stream()
+                    .searchLoose(tenantScope.currentTenantId(), terms[0]).stream()
                     .filter(i -> org == null || org.equals(i.getOrganizationId()))
+                    .filter(i -> {
+                        String haystack = nameOf.apply(i) + " "
+                                + (i.getContactMediumJson() == null ? "" : i.getContactMediumJson())
+                                        .toLowerCase();
+                        return java.util.Arrays.stream(terms).allMatch(haystack::contains);
+                    })
+                    // people whose NAME carries every term outrank rows that
+                    // only matched somewhere in the contact details
+                    .sorted(java.util.Comparator.comparing((Individual i) ->
+                            java.util.Arrays.stream(terms).allMatch(nameOf.apply(i)::contains) ? 0 : 1)
+                            .thenComparing(nameOf))
                     .limit(limit)
                     .map(mapper::toDto)
                     .toList();
