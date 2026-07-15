@@ -46,11 +46,12 @@ public class CampaignService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final FrequencyGuard frequency;
 
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.campaign.client.InsightClient insight,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency) {
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
@@ -58,6 +59,7 @@ public class CampaignService {
         this.events = events;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+        this.frequency = frequency;
     }
 
     @Transactional
@@ -301,6 +303,14 @@ public class CampaignService {
         if (executions.existsByTenantIdAndCampaignIdAndPartyId(tenant, campaign.getId(), partyId)) {
             return false;
         }
+        // frequency cap, checked BEFORE the variant hash so treated and
+        // holdout are capped alike (no ledger row — a later execute may
+        // reach them once their budget frees up)
+        if (!frequency.canSend(partyId)) {
+            log.info("campaign '{}' capped: party {} is at their marketing budget",
+                    campaign.getName(), partyId);
+            return false;
+        }
         boolean holdout = campaign.getHoldoutPercent() > 0
                 && Math.floorMod((campaign.getId() + partyId).hashCode(), 100) < campaign.getHoldoutPercent();
         List<Map<String, Object>> arms = armsOf(campaign);
@@ -332,6 +342,7 @@ public class CampaignService {
             String content = campaign.getPromotionCode() == null
                     ? body : body.replace("{code}", campaign.getPromotionCode());
             communication.send(partyId, subject, content);
+            frequency.record(partyId, "campaign");
         }
         events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
                 "campaignId", campaign.getId(), "partyId", partyId, "variant", execution.getVariant()));

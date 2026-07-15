@@ -994,6 +994,9 @@ services:
     build: ./integrations/mock-esp
     container_name: bss-mock-esp
     restart: unless-stopped
+    environment:
+      # delivery receipts knock on the communication component's door
+      WEBHOOK_URL: http://communication:8080/esp/v1/event
     ports:
       - "8121:8080"
 

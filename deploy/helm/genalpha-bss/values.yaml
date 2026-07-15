@@ -144,7 +144,8 @@ services:
   mock-esp:
     db: ""
     healthPath: /health
-    extraEnv: {}
+    extraEnv:
+      WEBHOOK_URL: http://communication:8080/esp/v1/event
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
