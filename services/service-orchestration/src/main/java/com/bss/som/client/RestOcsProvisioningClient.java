@@ -75,4 +75,39 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
                     serviceId, e.getMessage());
         }
     }
+
+    @Override
+    public void suspend(String tenantId, String serviceId) {
+        setChargingState(tenantId, serviceId, "suspend");
+    }
+
+    @Override
+    public void resume(String tenantId, String serviceId) {
+        setChargingState(tenantId, serviceId, "resume");
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setChargingState(String tenantId, String serviceId, String action) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> subs = restClient.get()
+                    .uri("/subscribers?tenantId={t}", tenantId)
+                    .retrieve().body(List.class);
+            Map<String, Object> sub = subs == null ? null : subs.stream()
+                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
+                    .findFirst().orElse(null);
+            if (sub == null) {
+                log.warn("OCS: no subscriber for service {} — {} not mirrored", serviceId, action);
+                return;
+            }
+            restClient.post().uri("/subscribers/{id}/" + action, String.valueOf(sub.get("id")))
+                    .retrieve().toBodilessEntity();
+            log.info("OCS: charging {} for service {}", action + "ed", serviceId);
+        } catch (RuntimeException e) {
+            log.warn("OCS {} failed for service {} ({}) — reconcile later",
+                    action, serviceId, e.getMessage());
+        }
+    }
 }

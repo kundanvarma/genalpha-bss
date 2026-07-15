@@ -13,4 +13,7 @@ public interface ServiceInstanceRepository extends JpaRepository<ServiceInstance
     List<ServiceInstance> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 
     List<ServiceInstance> findByTenantIdAndDeliveryPath(String tenantId, String deliveryPath);
+
+    List<ServiceInstance> findTop100ByTenantIdAndStateAndResumeAtBefore(
+            String tenantId, String state, java.time.OffsetDateTime cutoff);
 }

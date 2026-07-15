@@ -51,6 +51,7 @@ public class OrchestrationService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.som.client.OcsProvisioningClient ocs;
+    private final com.bss.som.security.TenantRegistry tenants;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -59,7 +60,8 @@ public class OrchestrationService {
             com.bss.som.crypto.PukVault pukVault,
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
-            com.bss.som.client.OcsProvisioningClient ocs) {
+            com.bss.som.client.OcsProvisioningClient ocs,
+            com.bss.som.security.TenantRegistry tenants) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -68,6 +70,7 @@ public class OrchestrationService {
         this.sims = sims;
         this.catalog = catalog;
         this.ocs = ocs;
+        this.tenants = tenants;
         this.pukVault = pukVault;
         this.partners = partners;
         this.ordering = ordering;
@@ -328,6 +331,84 @@ public class OrchestrationService {
             }
             if (item.get("productOrderItem") instanceof List<?> children) {
                 collectItems((List<Map<String, Object>>) children, into);
+            }
+        }
+    }
+
+    /**
+     * TEMPORARY SUSPENSION (vacation hold, mislaid phone): the line pauses,
+     * the number and SIM stay the customer's, charging pauses at the OCS
+     * (fail-open), and the hold lifts ITSELF at resume_at — a pause nobody
+     * remembers to lift becomes a churn letter.
+     */
+    @Transactional
+    public Map<String, Object> suspend(ServiceInstance instance, String reason,
+            java.time.OffsetDateTime resumeAt) {
+        if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "only an active service can be paused (state: " + instance.getState() + ")");
+        }
+        instance.setState(ServiceInstance.SUSPENDED);
+        instance.setSuspendReason(reason);
+        instance.setResumeAt(resumeAt);
+        instance.setLastUpdate(OffsetDateTime.now());
+        services.save(instance);
+        ocs.suspend(instance.getTenantId(), instance.getId());
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("id", instance.getId());
+        event.put("name", instance.getName());
+        event.put("state", instance.getState());
+        event.put("reason", reason);
+        if (resumeAt != null) event.put("resumeAt", resumeAt.toString());
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceSuspendedEvent", "service", event);
+        log.info("suspended service {} ({}) until {}", instance.getName(), reason, resumeAt);
+        return event;
+    }
+
+    @Transactional
+    public Map<String, Object> resume(ServiceInstance instance, String how) {
+        if (!ServiceInstance.SUSPENDED.equals(instance.getState())) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "only a suspended service can resume (state: " + instance.getState() + ")");
+        }
+        instance.setState(ServiceInstance.ACTIVE);
+        instance.setSuspendReason(null);
+        instance.setResumeAt(null);
+        instance.setLastUpdate(OffsetDateTime.now());
+        services.save(instance);
+        ocs.resume(instance.getTenantId(), instance.getId());
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("id", instance.getId());
+        event.put("name", instance.getName());
+        event.put("state", instance.getState());
+        event.put("resumedBy", how);
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceResumedEvent", "service", event);
+        log.info("resumed service {} ({})", instance.getName(), how);
+        return event;
+    }
+
+    /** The hold lifts itself: due suspensions resume, tenant by tenant
+     * (acting as each so the row-level policies admit the reads). */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${bss.som.resume-tick-ms:5000}")
+    public void resumeDueTick() {
+        for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+            try (com.bss.som.security.TenantContext ignored =
+                    com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                for (ServiceInstance due : services.findTop100ByTenantIdAndStateAndResumeAtBefore(
+                        tenant.getId(), ServiceInstance.SUSPENDED, OffsetDateTime.now())) {
+                    try {
+                        resume(due, "schedule");
+                    } catch (Exception e) {
+                        log.warn("auto-resume failed for {}: {}", due.getId(), e.getMessage());
+                    }
+                }
             }
         }
     }

@@ -17,4 +17,9 @@ public interface OcsProvisioningClient {
     void provision(String tenantId, String partyId, String serviceId, String chargingSpecId);
 
     void changeRatePlan(String tenantId, String serviceId, String chargingSpecId);
+
+    /** Pause / unpause charging for a line (vacation hold). Fail-open. */
+    void suspend(String tenantId, String serviceId);
+
+    void resume(String tenantId, String serviceId);
 }

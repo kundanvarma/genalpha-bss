@@ -282,6 +282,21 @@ export async function changeNumber(serviceId) {
   }));
 }
 
+/** Vacation hold: pause the line (charging pauses, number and SIM stay);
+ * the hold lifts itself at the agreed date, or on request. */
+export async function suspendService(serviceId, days) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/suspend`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(days ? { days } : {}),
+  }));
+}
+
+export async function resumeService(serviceId) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/resume`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 /** UPSELL, acted on: order the suggested offering ON BEHALF of the
  * customer (with their say-so on the line) — the agent is unscoped, so
  * the relatedParty in the body names the owner. */

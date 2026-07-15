@@ -220,9 +220,56 @@ async function apiCall(page, method, path, token, body) {
   console.log('OK Sam was TOLD, with both numbers spelled out — an unrequested change would'
     + ' announce itself');
 
+  // --- "PAUSE MY LINE, I'M AWAY": the vacation hold. Charging pauses at
+  // the OCS, the number and SIM stay Sam's, the shop still shows the line
+  // (paused, with a Resume button) — and the hold LIFTS ITSELF at the
+  // agreed time, because a pause nobody remembers becomes a churn letter.
+  const until = new Date(Date.now() + 15000).toISOString();
+  const paused = await (await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/suspend`,
+    { headers: AH, data: { reason: 'vacation', until } })).json();
+  if (paused.state !== 'suspended') fail('the line did not pause: ' + JSON.stringify(paused));
+  const whilePaused = ((await apiCall(page, 'GET', '/tmf-api/serviceInventory/v4/service', sam)).body)
+    .find((sv) => sv.id === service.id);
+  if (whilePaused.state !== 'suspended') fail('the customer does not see the pause');
+  const doublePause = await ctx.request.post(
+    `http://localhost:8080/tmf-api/serviceInventory/v4/service/${service.id}/suspend`,
+    { headers: AH, data: {} });
+  if (doublePause.status() !== 400) fail('a paused line was paused again: ' + doublePause.status());
+  let told = false;
+  for (let i = 0; i < 15 && !told; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inboxRes = await apiCall(page, 'GET',
+      '/tmf-api/communicationManagement/v4/communicationMessage?limit=50', sam);
+    told = (inboxRes.body || []).some?.((m) => (m.subject || '').includes('line is paused'));
+  }
+  if (!told) fail('the customer was never told the line paused');
+  console.log('OK PAUSED: charging on hold, state visible to the customer, double-pause refused,'
+    + ' and Sam was told — with the resume date');
+
+  /* the hold lifts itself */
+  let awake = null;
+  for (let i = 0; i < 30 && !awake; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const now = ((await apiCall(page, 'GET', '/tmf-api/serviceInventory/v4/service', sam)).body)
+      .find((sv) => sv.id === service.id);
+    if (now.state === 'active') awake = now;
+  }
+  if (!awake) fail('the hold never lifted itself');
+  let welcomed = false;
+  for (let i = 0; i < 15 && !welcomed; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inboxRes = await apiCall(page, 'GET',
+      '/tmf-api/communicationManagement/v4/communicationMessage?limit=50', sam);
+    welcomed = (inboxRes.body || []).some?.((m) => (m.subject || '').includes('line is back on'));
+  }
+  if (!welcomed) fail('the customer was never welcomed back');
+  console.log('OK the hold LIFTED ITSELF at the agreed time — "Your line is back on. Welcome back."');
+
   await browser.close();
   console.log('\nALL SIM CHECKS PASSED — minted at activation, PUK on request, OTA PIN reset,'
     + ' owner-scoped — the call-in flow (PUK on the record, PIN reset with a receipt), the'
-    + ' lost-SIM replacement (old card dead first, same number, new PUK) and the number change'
-    + ' (old number quarantined, same SIM, loud warning).');
+    + ' lost-SIM replacement (old card dead first, same number, new PUK), the number change'
+    + ' (old number quarantined, same SIM, loud warning) and the vacation hold that lifts'
+    + ' itself.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

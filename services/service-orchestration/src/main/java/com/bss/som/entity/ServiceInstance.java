@@ -13,6 +13,7 @@ import java.time.OffsetDateTime;
 public class ServiceInstance {
 
     public static final String ACTIVE = "active";
+    public static final String SUSPENDED = "suspended";
     public static final String TERMINATED = "terminated";
 
     @jakarta.persistence.Column(name = "delivery_path", length = 128)
@@ -36,6 +37,14 @@ public class ServiceInstance {
 
     @Column(name = "state", nullable = false, length = 32)
     private String state;
+
+    /** When a temporary suspension lifts by itself (null = not suspended
+     * or manual-resume only). */
+    @Column(name = "resume_at")
+    private java.time.OffsetDateTime resumeAt;
+
+    @Column(name = "suspend_reason", length = 32)
+    private String suspendReason;
 
     @Column(name = "service_order_id", nullable = false, length = 36)
     private String serviceOrderId;
@@ -67,4 +76,9 @@ public class ServiceInstance {
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime lastUpdate) { this.lastUpdate = lastUpdate; }
+
+    public java.time.OffsetDateTime getResumeAt() { return resumeAt; }
+    public void setResumeAt(java.time.OffsetDateTime v) { this.resumeAt = v; }
+    public String getSuspendReason() { return suspendReason; }
+    public void setSuspendReason(String v) { this.suspendReason = v; }
 }

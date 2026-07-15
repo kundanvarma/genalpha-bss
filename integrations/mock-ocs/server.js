@@ -76,11 +76,17 @@ const server = http.createServer((req, res) => {
         (!tenantId || s.tenantId === tenantId) && (!partyId || s.partyId === partyId)));
     }
 
-    const m = url.pathname.match(/^\/subscribers\/([^/]+)(?:\/(usage|credit))?$/);
+    const m = url.pathname.match(/^\/subscribers\/([^/]+)(?:\/(usage|credit|suspend|resume))?$/);
     if (m && subscribers.has(m[1])) {
       const sub = subscribers.get(m[1]);
+      // vacation hold: a suspended line charges nothing and passes nothing
+      if (req.method === 'POST' && (m[2] === 'suspend' || m[2] === 'resume')) {
+        sub.status = m[2] === 'suspend' ? 'suspended' : 'active';
+        return send(200, sub);
+      }
       // simulated network charging (Gy would do this in production)
       if (req.method === 'POST' && m[2] === 'usage') {
+        if (sub.status === 'suspended') return send(409, { error: 'line is suspended' });
         const bucket = sub.buckets[0];
         bucket.usedGB = Number((bucket.usedGB + Number(body.gb || 0)).toFixed(3));
         return send(200, sub);

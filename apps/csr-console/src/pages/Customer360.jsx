@@ -5,7 +5,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  simOf, resetSimPin, replaceSim, changeNumber } from '../api.js';
+  simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -236,6 +236,31 @@ export default function Customer360() {
                           })}>
                           Reveal PUK
                         </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-pause-service"
+                        title="Vacation hold: charging pauses, number and SIM stay — lifts itself after the agreed days"
+                        onClick={() => {
+                          const days = window.prompt('Pause this line for how many days? (1-90, blank = until they call back)', '30');
+                          if (days === null) return;
+                          act(async () => {
+                            await suspendService(sv.id, days.trim() ? Number(days.trim()) : undefined);
+                            await logInteraction({
+                              description: `Line ${sv.supportingResource[0].value} paused`
+                                + (days.trim() ? ` for ${days.trim()} days` : ' until further notice'),
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Pause
+                    </button>
+                  )}
+                  {sv.state === 'suspended' && (
+                    <button className="ghost" data-testid="csr-resume-service"
+                        onClick={() => act(() => resumeService(sv.id))}>
+                      Resume
+                    </button>
                   )}
                   {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-change-number"
