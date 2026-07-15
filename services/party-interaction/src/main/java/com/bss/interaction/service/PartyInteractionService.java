@@ -177,6 +177,42 @@ public class PartyInteractionService {
     }
 
     @SuppressWarnings("unchecked")
+    /**
+     * The OMNICHANNEL feed: a customer message that just went out (martech
+     * blast, journey step, order notification — whatever channel spoke)
+     * becomes a touchpoint on the timeline, idempotent on the source event
+     * id. CSRs stop asking "what have we already said to you?" — the log
+     * knows, whoever said it.
+     */
+    @Transactional
+    public void mintTouchpoint(String sourceRef, String sourceSystem, String description,
+            String channel, String customerPartyId) {
+        String tenant = tenantScope.currentTenantId();
+        if (repository.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return;
+        }
+        PartyInteraction entity = new PartyInteraction();
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setTenantId(tenant);
+        entity.setHref(ApiConstants.BASE_PATH + "/partyInteraction/" + id);
+        entity.setDescription(description);
+        entity.setChannel(channel);
+        entity.setDirection("outbound");
+        entity.setStatus("completed");
+        entity.setCustomerPartyId(customerPartyId);
+        entity.setOrgId(defaultOrg);
+        entity.setSourceRef(sourceRef);
+        entity.setSourceSystem(sourceSystem);
+        entity.setInteractionDate(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        try {
+            repository.save(entity);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // concurrent duplicate delivery lost the race — fine
+        }
+    }
+
     private Map<String, Object> toMap(PartyInteraction entity) {
         Map<String, Object> map = new LinkedHashMap<>();
         // Start from the posted body so every spec field round-trips, then
@@ -200,6 +236,9 @@ public class PartyInteractionService {
         }
         map.put("direction", entity.getDirection());
         map.put("status", entity.getStatus());
+        if (entity.getSourceSystem() != null) {
+            map.put("sourceSystem", entity.getSourceSystem());
+        }
         // Server-derived relatedParty only when we tracked a customer (app path);
         // CTK-created interactions keep whatever relatedParty they posted (overlaid above).
         if (entity.getCustomerPartyId() != null) {

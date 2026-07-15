@@ -72,10 +72,12 @@ class PartyInteractionApiTest {
     }
 
     @Test
-    void interactionsRequireACustomer() throws Exception {
+    void interactionsWithoutACustomerAreSpecLegal() throws Exception {
+        // TMF683 makes relatedParty optional (the CTK posts bare bodies);
+        // customer-less interactions are stored, they just have no timeline
         mockMvc.perform(post(BASE).with(agent("agent-anna", "genalpha-retail"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\": \"orphan note\"}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated());
     }
 }

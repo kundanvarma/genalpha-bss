@@ -8,4 +8,6 @@ import java.util.Optional;
 public interface PartyInteractionRepository extends JpaRepository<PartyInteraction, String> {
 
     Optional<PartyInteraction> findByIdAndTenantId(String id, String tenantId);
+
+    boolean existsByTenantIdAndSourceRef(String tenantId, String sourceRef);
 }

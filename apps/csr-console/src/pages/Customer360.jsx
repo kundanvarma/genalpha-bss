@@ -367,7 +367,7 @@ export default function Customer360() {
               <div className="row" key={ix.id}>
                 <div>
                   <span>{ix.description || ix.reason}</span>
-                  <div className="dim small">{chan(ix.channel)} · {ix.direction} · {dt(ix.interactionDate)}</div>
+                  <div className="dim small">{chan(ix.channel)} · {ix.direction} · {dt(ix.interactionDate)}{ix.sourceSystem ? ` · via ${ix.sourceSystem}` : ''}</div>
                 </div>
               </div>
             ))}
