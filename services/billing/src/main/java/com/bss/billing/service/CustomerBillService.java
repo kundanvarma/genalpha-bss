@@ -44,14 +44,17 @@ public class CustomerBillService {
     private final ObjectMapper objectMapper;
 
     private final com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository;
+    private final com.bss.billing.repository.InstallmentPlanRepository plans;
 
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
             com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository,
             DownstreamClients.PaymentClient paymentClient, DomainEventPublisher events, PartyScope partyScope,
-            TenantScope tenantScope, ObjectMapper objectMapper) {
+            TenantScope tenantScope, ObjectMapper objectMapper,
+            com.bss.billing.repository.InstallmentPlanRepository plans) {
         this.repository = repository;
         this.rateRepository = rateRepository;
         this.onDemandRepository = onDemandRepository;
+        this.plans = plans;
         this.paymentClient = paymentClient;
         this.events = events;
         this.partyScope = partyScope;
@@ -205,6 +208,125 @@ public class CustomerBillService {
     }
 
     /**
+     * PAY IN PARTS: split an unpaid bill into 2-12 equal monthly
+     * installments (the last takes the rounding remainder). One plan per
+     * bill; the customer is told the terms in plain numbers.
+     */
+    @Transactional
+    public Map<String, Object> createInstallmentPlan(String billId, Map<String, Object> dto) {
+        CustomerBill bill = repository.findByIdAndTenantId(billId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
+        requireOwn(bill);
+        if (!CustomerBill.NEW.equals(bill.getState())) {
+            throw new ConflictException("only an unpaid bill can be split (state: " + bill.getState() + ")");
+        }
+        if (plans.findByTenantIdAndBillId(bill.getTenantId(), billId).isPresent()) {
+            throw new ConflictException("this bill already has an installment plan");
+        }
+        int n = dto.get("installments") == null ? 3
+                : Integer.parseInt(String.valueOf(dto.get("installments")));
+        if (n < 2 || n > 12) {
+            throw new BadRequestException("installments must be 2-12");
+        }
+        com.bss.billing.entity.InstallmentPlan plan = new com.bss.billing.entity.InstallmentPlan();
+        plan.setId(java.util.UUID.randomUUID().toString());
+        plan.setTenantId(bill.getTenantId());
+        plan.setBillId(billId);
+        plan.setInstallments(n);
+        plan.setAmountPer(bill.getAmountDueValue()
+                .divide(java.math.BigDecimal.valueOf(n), 2, java.math.RoundingMode.DOWN));
+        plan.setCurrency(bill.getAmountDueUnit());
+        plan.setPaidCount(0);
+        plan.setStatus(com.bss.billing.entity.InstallmentPlan.ACTIVE);
+        plan.setNextDueAt(OffsetDateTime.now().plusMonths(1));
+        plan.setCreatedAt(OffsetDateTime.now());
+        plan.setLastUpdate(OffsetDateTime.now());
+        plans.save(plan);
+        Map<String, Object> view = planView(plan, bill);
+        Map<String, Object> event = new java.util.LinkedHashMap<>(view);
+        event.put("billNo", bill.getBillNo());
+        event.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
+        events.publish("InstallmentPlanCreatedEvent", "installmentPlan", event);
+        return view;
+    }
+
+    /** One part lands: an authorized payment covering THIS installment is
+     * captured; the last part settles the bill itself. */
+    @Transactional
+    public Map<String, Object> payInstallment(String billId, Map<String, Object> dto) {
+        CustomerBill bill = repository.findByIdAndTenantId(billId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
+        requireOwn(bill);
+        com.bss.billing.entity.InstallmentPlan plan = plans
+                .findByTenantIdAndBillId(bill.getTenantId(), billId)
+                .filter(p -> com.bss.billing.entity.InstallmentPlan.ACTIVE.equals(p.getStatus()))
+                .orElseThrow(() -> new BadRequestException("this bill has no active installment plan"));
+        Object paymentId = dto.get("payment") instanceof List<?> refs && !refs.isEmpty()
+                && refs.get(0) instanceof Map<?, ?> ref ? ref.get("id") : null;
+        if (paymentId == null) {
+            throw new BadRequestException("an installment needs a payment reference");
+        }
+        java.math.BigDecimal due = plan.amountOf(plan.getPaidCount(), bill.getAmountDueValue());
+        String problem = paymentClient.validateAuthorized(String.valueOf(paymentId),
+                bill.getOwnerPartyId(), due);
+        if (!problem.isEmpty()) {
+            throw new ConflictException(problem);
+        }
+        paymentClient.capture(String.valueOf(paymentId));
+        plan.setPaidCount(plan.getPaidCount() + 1);
+        boolean done = plan.getPaidCount() >= plan.getInstallments();
+        plan.setStatus(done ? com.bss.billing.entity.InstallmentPlan.COMPLETED
+                : com.bss.billing.entity.InstallmentPlan.ACTIVE);
+        plan.setNextDueAt(done ? null : OffsetDateTime.now().plusMonths(1));
+        plan.setLastUpdate(OffsetDateTime.now());
+        plans.save(plan);
+        bill.setState(done ? CustomerBill.SETTLED : CustomerBill.PARTIALLY_PAID);
+        bill.setLastUpdate(OffsetDateTime.now());
+        CustomerBillDto updated = toDto(repository.save(bill));
+        Map<String, Object> view = planView(plan, bill);
+        Map<String, Object> event = new java.util.LinkedHashMap<>(view);
+        event.put("billNo", bill.getBillNo());
+        event.put("paidAmount", due);
+        event.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
+        events.publish("InstallmentPaidEvent", "installmentPlan", event);
+        if (done) {
+            events.publish("CustomerBillStateChangeEvent", "customerBill", updated);
+        }
+        return view;
+    }
+
+    /** The plan as both surfaces read it. */
+    private Map<String, Object> planView(com.bss.billing.entity.InstallmentPlan plan, CustomerBill bill) {
+        Map<String, Object> view = new java.util.LinkedHashMap<>();
+        view.put("billId", bill.getId());
+        view.put("installments", plan.getInstallments());
+        view.put("paidCount", plan.getPaidCount());
+        view.put("amountPer", plan.getAmountPer());
+        view.put("lastAmount", plan.amountOf(plan.getInstallments() - 1, bill.getAmountDueValue()));
+        view.put("nextAmount", plan.getPaidCount() < plan.getInstallments()
+                ? plan.amountOf(plan.getPaidCount(), bill.getAmountDueValue()) : null);
+        view.put("currency", plan.getCurrency());
+        view.put("status", plan.getStatus());
+        if (plan.getNextDueAt() != null) {
+            view.put("nextDueAt", plan.getNextDueAt().toString());
+        }
+        view.put("@type", "InstallmentPlan");
+        return view;
+    }
+
+    /** Attach the plan (when one exists) to a bill DTO for the UIs. */
+    public Map<String, Object> planOf(String tenantId, String billId,
+            java.math.BigDecimal total, String unit) {
+        return plans.findByTenantIdAndBillId(tenantId, billId).map(plan -> {
+            CustomerBill shim = new CustomerBill();
+            shim.setId(billId);
+            shim.setAmountDueValue(total);
+            shim.setAmountDueUnit(unit);
+            return planView(plan, shim);
+        }).orElse(null);
+    }
+
+    /**
      * Scoped tokens address only their own bills; anything else is a 404,
      * not a 403, so foreign ids do not leak existence.
      */
@@ -218,6 +340,8 @@ public class CustomerBillService {
 
     private CustomerBillDto toDto(CustomerBill entity) {
         CustomerBillDto dto = new CustomerBillDto();
+        dto.setInstallmentPlan(planOf(entity.getTenantId(), entity.getId(),
+                entity.getAmountDueValue(), entity.getAmountDueUnit()));
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setBillNo(entity.getBillNo());

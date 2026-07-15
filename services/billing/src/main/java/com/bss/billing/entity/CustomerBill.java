@@ -15,6 +15,7 @@ public class CustomerBill {
 
     public static final String NEW = "new";
     public static final String SETTLED = "settled";
+    public static final String PARTIALLY_PAID = "partiallyPaid";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)

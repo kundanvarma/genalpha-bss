@@ -115,4 +115,18 @@ public class CustomerBillController {
                                                   @RequestBody CustomerBillDto patch) {
         return ResponseEntity.ok(service.settle(id, patch));
     }
+
+    /** PAY IN PARTS: split an unpaid bill into 2-12 monthly installments. */
+    @PostMapping("/customerBill/{id}/installmentPlan")
+    public ResponseEntity<Map<String, Object>> installmentPlan(@PathVariable("id") String id,
+            @RequestBody(required = false) Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createInstallmentPlan(id, dto == null ? Map.of() : dto));
+    }
+
+    /** One part lands: an authorized payment covering THIS installment. */
+    @PostMapping("/customerBill/{id}/installmentPlan/pay")
+    public ResponseEntity<Map<String, Object>> payInstallment(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.payInstallment(id, dto));
+    }
 }

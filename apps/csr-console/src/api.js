@@ -297,6 +297,14 @@ export async function resumeService(serviceId) {
   }));
 }
 
+/** Hardship/retention: split an unpaid bill into monthly installments. */
+export async function splitBill(billId, installments) {
+  return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/installmentPlan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ installments }),
+  }));
+}
+
 /** UPSELL, acted on: order the suggested offering ON BEHALF of the
  * customer (with their say-so on the line) — the agent is unscoped, so
  * the relatedParty in the body names the owner. */
