@@ -47,11 +47,13 @@ public class CampaignService {
     private final TenantScope tenantScope;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final FrequencyGuard frequency;
+    private final com.bss.campaign.client.CatalogClient catalog;
 
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.campaign.client.InsightClient insight,
-            com.fasterxml.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency) {
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency,
+            com.bss.campaign.client.CatalogClient catalog) {
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
@@ -60,6 +62,7 @@ public class CampaignService {
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
         this.frequency = frequency;
+        this.catalog = catalog;
     }
 
     @Transactional
@@ -137,12 +140,14 @@ public class CampaignService {
      * matches a campaign's conversion event INSIDE the window, their open
      * execution converts — treated or holdout alike; lift is the gap.
      */
-    private void recordConversions(String tenant, String eventType, String state, String partyId) {
+    private void recordConversions(String tenant, String eventType, String state, String partyId,
+            java.util.List<String> offeringIds) {
         java.util.List<CampaignExecution> open =
                 executions.findByTenantIdAndPartyIdAndConvertedAtIsNull(tenant, partyId);
         if (open.isEmpty()) {
             return;
         }
+        java.math.BigDecimal value = null; // catalog is asked once, and only on a match
         for (CampaignExecution execution : open) {
             Campaign campaign = campaigns
                     .findByIdAndTenantId(execution.getCampaignId(), tenant).orElse(null);
@@ -157,11 +162,15 @@ public class CampaignService {
             boolean inWindow = execution.getExecutedAt()
                     .plusDays(campaign.getConversionWindowDays()).isAfter(OffsetDateTime.now());
             if (matches && inWindow) {
+                if (value == null) {
+                    value = catalog.monthlyValueOf(tenant, offeringIds);
+                }
                 execution.setConvertedAt(OffsetDateTime.now());
                 execution.setConversionRef(eventType);
+                execution.setConversionValue(value);
                 executions.save(execution);
-                log.info("campaign '{}' conversion: party {} ({})",
-                        campaign.getName(), partyId, execution.getVariant());
+                log.info("campaign '{}' conversion: party {} ({}) worth {}/month",
+                        campaign.getName(), partyId, execution.getVariant(), value);
             }
         }
     }
@@ -199,11 +208,47 @@ public class CampaignService {
         if (heldOut > 0 && heldOut < 5) {
             stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
         }
+        // ATTRIBUTED REVENUE: the monthly money conversions carry, read per
+        // EXPOSED customer (incrementality is per person reached, not per
+        // converter) — the revenue lift is what one more treated customer
+        // is worth versus leaving them alone
+        java.math.BigDecimal treatedRevenue = revenueOf(all, false);
+        java.math.BigDecimal holdoutRevenue = revenueOf(all, true);
+        if (treatedRevenue.signum() != 0 || holdoutRevenue.signum() != 0) {
+            Map<String, Object> revenue = new java.util.LinkedHashMap<>();
+            revenue.put("treated", treatedRevenue);
+            revenue.put("holdout", holdoutRevenue);
+            if (treated > 0) {
+                revenue.put("treatedPerCustomer", perCustomer(treatedRevenue, treated));
+            }
+            if (heldOut > 0) {
+                revenue.put("holdoutPerCustomer", perCustomer(holdoutRevenue, heldOut));
+            }
+            if (treated > 0 && heldOut > 0) {
+                revenue.put("liftPerCustomer", perCustomer(treatedRevenue, treated)
+                        .subtract(perCustomer(holdoutRevenue, heldOut)));
+            }
+            revenue.put("basis", "monthly recurring value of converting orders");
+            stats.put("revenue", revenue);
+        }
         List<Map<String, Object>> arms = armsOf(campaign);
         if (arms != null) {
             stats.put("arms", armStats(arms, all));
         }
         return stats;
+    }
+
+    private java.math.BigDecimal revenueOf(List<CampaignExecution> all, boolean holdout) {
+        return all.stream()
+                .filter(e -> holdout == "holdout".equals(e.getVariant()))
+                .map(CampaignExecution::getConversionValue)
+                .filter(java.util.Objects::nonNull)
+                .reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+    }
+
+    private java.math.BigDecimal perCustomer(java.math.BigDecimal total, long customers) {
+        return total.divide(java.math.BigDecimal.valueOf(customers), 2,
+                java.math.RoundingMode.HALF_UP);
     }
 
     /**
@@ -376,9 +421,10 @@ public class CampaignService {
      * active campaign triggered by it reaches the event's customer once.
      */
     @Transactional
-    public void onEvent(String eventType, String state, String partyId) {
+    public void onEvent(String eventType, String state, String partyId,
+            java.util.List<String> offeringIds) {
         String tenant = tenantScope.currentTenantId();
-        recordConversions(tenant, eventType, state, partyId);
+        recordConversions(tenant, eventType, state, partyId, offeringIds);
         for (Campaign campaign : campaigns.findByTenantIdAndStatusAndTriggerEventType(
                 tenant, Campaign.ACTIVE, eventType)) {
             if (campaign.getTriggerState() != null && !campaign.getTriggerState().equals(state)) {

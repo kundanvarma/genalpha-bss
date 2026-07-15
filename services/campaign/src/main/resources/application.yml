@@ -57,6 +57,7 @@ bss:
     communication-base-url: ${COMMUNICATION_BASE_URL:http://localhost:8095}
     # segment membership for blast campaigns — consent-aware, in insight
     insight-base-url: ${INSIGHT_BASE_URL:http://localhost:8119}
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8082}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

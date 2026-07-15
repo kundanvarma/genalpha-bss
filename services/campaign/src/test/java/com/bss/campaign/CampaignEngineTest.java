@@ -45,9 +45,9 @@ class CampaignEngineTest {
         String campaignId = createWelcomeCampaign("genalpha", "OnceProbeEvent");
 
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
-            service.onEvent("OnceProbeEvent", "acknowledged", "party-engine-1");
-            service.onEvent("OnceProbeEvent", "acknowledged", "party-engine-1");
-            service.onEvent("OnceProbeEvent", "completed", "party-engine-2");
+            service.onEvent("OnceProbeEvent", "acknowledged", "party-engine-1", java.util.List.of());
+            service.onEvent("OnceProbeEvent", "acknowledged", "party-engine-1", java.util.List.of());
+            service.onEvent("OnceProbeEvent", "completed", "party-engine-2", java.util.List.of());
 
             verify(communicationClient, times(1)).send(
                     eq("party-engine-1"), eq("Welcome!"), eq("Use WELCOME10 on your next order."));
@@ -63,9 +63,9 @@ class CampaignEngineTest {
         String campaignId = createWelcomeCampaign("genalpha", "PausedProbeEvent");
 
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
-            service.onEvent("SomeOtherEvent", null, "party-engine-3");
+            service.onEvent("SomeOtherEvent", null, "party-engine-3", java.util.List.of());
             service.patch(campaignId, Map.of("status", "paused"));
-            service.onEvent("PausedProbeEvent", null, "party-engine-3");
+            service.onEvent("PausedProbeEvent", null, "party-engine-3", java.util.List.of());
             verify(communicationClient, never()).send(eq("party-engine-3"), any(), any());
         }
     }
@@ -79,10 +79,10 @@ class CampaignEngineTest {
                     "triggerState", "completed",
                     "message", Map.of("subject", "Enjoy!", "content", "Your order is live.")));
 
-            service.onEvent("ProductOrderStateChangeEvent", "inProgress", "party-engine-4");
+            service.onEvent("ProductOrderStateChangeEvent", "inProgress", "party-engine-4", java.util.List.of());
             verify(communicationClient, never()).send(eq("party-engine-4"), any(), any());
 
-            service.onEvent("ProductOrderStateChangeEvent", "completed", "party-engine-4");
+            service.onEvent("ProductOrderStateChangeEvent", "completed", "party-engine-4", java.util.List.of());
             verify(communicationClient, times(1)).send(eq("party-engine-4"), eq("Enjoy!"), anyString());
         }
     }
@@ -92,7 +92,7 @@ class CampaignEngineTest {
         createWelcomeCampaign("tenant-a", "TenantProbeEvent");
 
         try (TenantContext ignored = TenantContext.actAs("tenant-b")) {
-            service.onEvent("TenantProbeEvent", null, "party-engine-5");
+            service.onEvent("TenantProbeEvent", null, "party-engine-5", java.util.List.of());
         }
         verify(communicationClient, never()).send(eq("party-engine-5"), any(), any());
     }
