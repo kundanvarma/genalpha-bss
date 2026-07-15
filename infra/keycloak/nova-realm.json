@@ -146,7 +146,8 @@
             "ai:use",
             "porting:read",
             "porting:write",
-            "knowledge:read"
+            "knowledge:read",
+            "communication:write"
           ]
         }
       },

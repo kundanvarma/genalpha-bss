@@ -247,6 +247,36 @@ export async function askKnowledge(question) {
 }
 
 /** Next best offer with the WHY — TMF680 candidates, the model reasons. */
+/** UPSELL, acted on: order the suggested offering ON BEHALF of the
+ * customer (with their say-so on the line) — the agent is unscoped, so
+ * the relatedParty in the body names the owner. */
+export async function orderForCustomer(customerId, offering) {
+  return json(await authFetch(`${ORDERING}/productOrder`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      productOrderItem: [{ action: 'add',
+        productOffering: { id: offering.id, name: offering.name } }],
+      relatedParty: [{ id: customerId, role: 'customer', '@referredType': 'Individual' }],
+    }),
+  }));
+}
+
+/** Or send the offer instead: a personal message that lands in the inbox
+ * (and the ESP, and the interaction timeline — the whole omnichannel loop). */
+export async function sendOffer(customerId, offering, agentName) {
+  return json(await authFetch('/tmf-api/communicationManagement/v4/communicationMessage', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      subject: `An offer picked for you: ${offering.name}`,
+      content: `${agentName || 'Your agent'} thought ${offering.name} fits how you use your services. `
+        + 'Find it in the shop, or reply to this message and we will set it up.',
+      relatedParty: [{ id: customerId, role: 'customer', '@referredType': 'Individual' }],
+    }),
+  }));
+}
+
 export async function aiNextBestOffer(partyId) {
   const res = await authFetch('/ai/v1/nextBestOffer', {
     method: 'POST',

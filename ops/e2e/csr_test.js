@@ -70,6 +70,7 @@ async function agentLogin(page, username) {
   await hit.click();
   await a.locator('h1', { hasText: 'Tina ' + FAMILY }).waitFor({ timeout: 15000 });
   console.log('OK customer 360 found via search');
+  const customerId = a.url().split('/').filter(Boolean).pop(); // the 360 route ends in the party id
 
   // CSR 360 catch-up cards: all render; a fresh customer gets suggestions.
   for (const card of ['usage-card', 'agreements-card', 'promo-vault-card', 'suggest-card']) {
@@ -77,6 +78,12 @@ async function agentLogin(page, username) {
   }
   await a.locator('[data-testid="suggest-card"] .row').first().waitFor({ timeout: 10000 });
   console.log('OK 360 shows usage, agreements, promo/vault and suggestions cards');
+  // the suggestion is ACTIONABLE: the agent can send it or order it, right there
+  await a.locator('[data-testid="suggest-card"] button', { hasText: 'Send offer' })
+    .first().waitFor({ timeout: 10000 });
+  await a.locator('[data-testid="suggest-card"] button', { hasText: 'Order now' })
+    .first().waitFor({ timeout: 10000 });
+  console.log('OK every suggestion carries its actions: Send offer / Order now');
 
   // --- Copilot: the 360 summarized on demand, next actions included
   await a.locator('[data-testid="copilot-summarize"]').click();
@@ -110,6 +117,48 @@ async function agentLogin(page, username) {
   await a.locator('button', { hasText: 'Log interaction' }).click();
   await a.locator('.row', { hasText: 'Called customer back' }).waitFor({ timeout: 15000 });
   console.log('OK interaction logged on the customer');
+
+  // --- UPSELL FROM THE 360: the agent ACTS on a suggestion — orders on the
+  // customer's behalf, and sends a personal offer that rides the whole
+  // omnichannel loop (inbox + interaction timeline).
+  const annaRes = await a.context().request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'agent-anna', password: 'agent' } });
+  const anna = (await annaRes.json()).access_token;
+  const AH = { Authorization: 'Bearer ' + anna, 'Content-Type': 'application/json' };
+  const custId = customerId; // the customer this suite created
+  const onBehalf = await a.context().request.post(
+    'http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder',
+    { headers: AH, data: {
+      productOrderItem: [{ action: 'add', productOffering: {
+        id: '14291c1a-df26-4232-8084-500466888e46', name: 'GenAlpha Mobile 10 GB' } }],
+      relatedParty: [{ id: custId, role: 'customer', '@referredType': 'Individual' }] } });
+  if (onBehalf.status() !== 201) fail('agent could not order on behalf: ' + onBehalf.status());
+  const behalfOrders = await (await a.context().request.get(
+    `http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder?limit=100&relatedPartyId=${custId}`,
+    { headers: AH })).json();
+  if (!behalfOrders.length) fail('the on-behalf order does not belong to the customer');
+  console.log('OK UPSELL, acted on: the agent ordered on the customer\'s behalf — the order is THEIRS');
+
+  const offerSubject = `An offer picked for you: Home Fiber 500`;
+  const sent = await a.context().request.post(
+    'http://localhost:8080/tmf-api/communicationManagement/v4/communicationMessage',
+    { headers: AH, data: { subject: offerSubject, content: 'Your agent thought this fits.',
+      relatedParty: [{ id: custId, role: 'customer', '@referredType': 'Individual' }] } });
+  if (sent.status() !== 201) fail('agent could not send an offer: ' + sent.status());
+  let touched = false;
+  for (let i = 0; i < 15 && !touched; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const timeline = await (await a.context().request.get(
+      `http://localhost:8080/tmf-api/partyInteraction/v4/partyInteraction?limit=20&relatedPartyId=${custId}`,
+      { headers: AH })).json();
+    touched = timeline.some((ix) => (ix.description || '').includes(offerSubject)
+      && ix.sourceSystem === 'communication');
+  }
+  if (!touched) fail('the sent offer never reached the interaction timeline');
+  console.log('OK the sent offer landed in the inbox AND on the interaction timeline — the'
+    + ' upsell writes its own record');
+
 
   await a.click('.nav >> text=Stock');
   await a.locator('.row', { hasText: 'Samsung Galaxy S26' }).waitFor({ timeout: 15000 });
