@@ -284,4 +284,10 @@ public class InsightService {
             throw new BadRequestException("visitorId is required");
         }
     }
+
+    /** The tenant's audience catalog, imported live through the GA4 Data
+     * API wire shape (what their analytics computed, name + size). */
+    public java.util.List<java.util.Map<String, Object>> audienceCatalog() {
+        return analytics.audienceCatalog(tenantScope.currentTenantId());
+    }
 }

@@ -361,6 +361,11 @@ services:
       COMMUNICATION_BASE_URL: http://communication:8080
       INSIGHT_BASE_URL: http://insight:8080
       CATALOG_BASE_URL: http://product-catalog:8080
+      PARTY_BASE_URL: http://party-account:8080
+      # social activation seam: genalpha pushes Custom Audiences to "its"
+      # platform (the Meta-shaped mock); nova stays unconnected
+      SOCIAL_API_URL: http://mock-social:8080
+      SOCIAL_ACCESS_TOKEN: genalpha-social-token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
@@ -425,6 +430,10 @@ services:
     container_name: bss-quote
     restart: unless-stopped
     environment:
+      # social lead-ads seam: genalpha pulls its lead-gen form into TMF699
+      SOCIAL_API_URL: http://mock-social:8080
+      SOCIAL_ACCESS_TOKEN: genalpha-social-token
+      SOCIAL_LEAD_FORM_ID: form-genalpha-fiber
       DB_URL: jdbc:postgresql://postgres:5432/quote
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: quote_app
@@ -990,6 +999,15 @@ services:
     ports:
       - "8120:8080"
 
+  # demo stand-in for the operator's social platform (Meta Marketing API:
+  # Custom Audiences + Lead Ads wire shapes)
+  mock-social:
+    build: ./integrations/mock-social
+    container_name: bss-mock-social
+    restart: unless-stopped
+    ports:
+      - "8122:8080"
+
   # demo stand-in for the operator's email provider (SendGrid v3 wire shape)
   mock-esp:
     build: ./integrations/mock-esp
@@ -1023,6 +1041,10 @@ services:
       ANALYTICS_MP_URL_NOVA: http://mock-analytics:8080
       ANALYTICS_MEASUREMENT_ID_NOVA: G-NOVA-DEMO
       ANALYTICS_API_SECRET_NOVA: nova-mp-secret
+      # audience catalog import through the GA4 Data API wire shape
+      ANALYTICS_DATA_URL_NOVA: http://mock-analytics:8080
+      ANALYTICS_PROPERTY_ID_NOVA: "123456"
+      ANALYTICS_DATA_TOKEN_NOVA: nova-data-token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"

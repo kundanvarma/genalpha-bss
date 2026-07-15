@@ -72,6 +72,13 @@ public class InsightController {
         return ResponseEntity.ok(service.partyProfile(partyId));
     }
 
+    /** The tenant's audience catalog from their OWN analytics, through the
+     * GA4 Data API wire shape (insight:read). */
+    @GetMapping("/audiences")
+    public ResponseEntity<java.util.List<Map<String, Object>>> audiences() {
+        return ResponseEntity.ok(service.audienceCatalog());
+    }
+
     /** Back-office window (insight:read): one profile, or the recent ledger. */
     @GetMapping("/profile")
     public ResponseEntity<?> profile(@RequestParam(required = false) String visitorId) {

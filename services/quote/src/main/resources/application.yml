@@ -66,9 +66,15 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-quote}
         machine-client-secret: ${OIDC_CLIENT_SECRET:quote-secret}
+        social-api-url: ${SOCIAL_API_URL:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-quote}
         machine-client-secret: ${OIDC_CLIENT_SECRET:quote-secret}
+        social-api-url: ${SOCIAL_API_URL_NOVA:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_NOVA:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NOVA:}

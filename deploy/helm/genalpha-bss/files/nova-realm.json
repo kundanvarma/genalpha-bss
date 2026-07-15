@@ -840,7 +840,8 @@
       "realmRoles": [
         "communication:write",
         "communication:read",
-        "insight:read"
+        "insight:read",
+        "party:read"
       ]
     },
     {

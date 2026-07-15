@@ -58,6 +58,7 @@ bss:
     # segment membership for blast campaigns — consent-aware, in insight
     insight-base-url: ${INSIGHT_BASE_URL:http://localhost:8119}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8082}
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
@@ -70,9 +71,13 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-campaign}
         machine-client-secret: ${OIDC_CLIENT_SECRET:campaign-secret}
+        social-api-url: ${SOCIAL_API_URL:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-campaign}
         machine-client-secret: ${OIDC_CLIENT_SECRET:campaign-secret}
+        social-api-url: ${SOCIAL_API_URL_NOVA:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_NOVA:}

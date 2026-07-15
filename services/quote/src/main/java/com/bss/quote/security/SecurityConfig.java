@@ -47,6 +47,7 @@ public class SecurityConfig {
                         // the funnel is back-office
                         .requestMatchers(HttpMethod.POST, ApiConstants.SALES_BASE + "/salesLead").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:write")

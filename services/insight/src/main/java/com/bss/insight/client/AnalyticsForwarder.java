@@ -52,6 +52,52 @@ public class AnalyticsForwarder {
         }
     }
 
+    /**
+     * The AUDIENCE CATALOG, through the real wire: GA4 Data API runReport
+     * (audienceName x activeUsers) with a bearer token. Swap the mock's
+     * host for analyticsdata.googleapis.com and nothing else changes.
+     * Fail-open to an empty catalog.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> audienceCatalog(String tenantId) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || tenant.getAnalyticsDataUrl() == null
+                || tenant.getAnalyticsDataUrl().isBlank()
+                || tenant.getAnalyticsPropertyId() == null
+                || tenant.getAnalyticsPropertyId().isBlank()) {
+            return List.of();
+        }
+        try {
+            Map<String, Object> report = restClient.post()
+                    .uri(tenant.getAnalyticsDataUrl() + "/v1beta/properties/"
+                            + tenant.getAnalyticsPropertyId() + ":runReport")
+                    .header("Authorization", "Bearer " + tenant.getAnalyticsDataToken())
+                    .body(Map.of(
+                            "dimensions", List.of(Map.of("name", "audienceName")),
+                            "metrics", List.of(Map.of("name", "activeUsers"))))
+                    .retrieve().body(Map.class);
+            if (report == null || !(report.get("rows") instanceof List<?> rows)) {
+                return List.of();
+            }
+            List<Map<String, Object>> catalog = new java.util.ArrayList<>();
+            for (Object row : rows) {
+                if (!(row instanceof Map<?, ?> r)) {
+                    continue;
+                }
+                String name = ((Map<String, Object>) ((List<?>) r.get("dimensionValues")).get(0))
+                        .get("value").toString();
+                String size = ((Map<String, Object>) ((List<?>) r.get("metricValues")).get(0))
+                        .get("value").toString();
+                catalog.add(Map.of("name", name, "size", Long.parseLong(size),
+                        "source", "analytics"));
+            }
+            return catalog;
+        } catch (Exception e) {
+            log.debug("audience catalog import skipped: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
     public void forward(String tenantId, String visitorId, String type,
             String category, String offeringId) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);

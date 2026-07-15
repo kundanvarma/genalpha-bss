@@ -49,6 +49,12 @@ public class SalesController {
         return ResponseEntity.ok(service.patchLead(id, patch));
     }
 
+    /** Pull the tenant's social lead-gen form into the pipeline (idempotent). */
+    @PostMapping("/salesLead/importSocial")
+    public ResponseEntity<Map<String, Object>> importSocial() {
+        return ResponseEntity.ok(service.importSocial());
+    }
+
     @GetMapping("/salesOpportunity")
     public ResponseEntity<List<Map<String, Object>>> opportunities() {
         return ResponseEntity.ok(service.findOpportunities());

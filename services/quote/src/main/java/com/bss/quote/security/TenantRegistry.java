@@ -65,6 +65,11 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Social lead-ads seam (Meta wire shape): where TMF699 pulls
+         * lead-gen form entries from. Null url = not connected. */
+        private String socialApiUrl;
+        private String socialAccessToken;
+        private String socialLeadFormId;
 
         public String getId() {
             return id;
@@ -112,6 +117,30 @@ public class TenantRegistry {
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
+        }
+
+        public String getSocialApiUrl() {
+            return socialApiUrl;
+        }
+
+        public void setSocialApiUrl(String socialApiUrl) {
+            this.socialApiUrl = socialApiUrl;
+        }
+
+        public String getSocialAccessToken() {
+            return socialAccessToken;
+        }
+
+        public void setSocialAccessToken(String socialAccessToken) {
+            this.socialAccessToken = socialAccessToken;
+        }
+
+        public String getSocialLeadFormId() {
+            return socialLeadFormId;
+        }
+
+        public void setSocialLeadFormId(String socialLeadFormId) {
+            this.socialLeadFormId = socialLeadFormId;
         }
     }
 }

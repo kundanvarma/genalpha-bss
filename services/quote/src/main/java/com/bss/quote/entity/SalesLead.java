@@ -52,6 +52,10 @@ public class SalesLead {
     @Column(name = "opportunity_id", length = 36)
     private String opportunityId;
 
+    /** The social platform's lead id — makes the import idempotent. */
+    @Column(name = "social_ref", length = 128)
+    private String socialRef;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -80,6 +84,8 @@ public class SalesLead {
     public void setState(String v) { this.state = v; }
     public String getOpportunityId() { return opportunityId; }
     public void setOpportunityId(String v) { this.opportunityId = v; }
+    public String getSocialRef() { return socialRef; }
+    public void setSocialRef(String v) { this.socialRef = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

@@ -146,6 +146,11 @@ services:
     healthPath: /health
     extraEnv:
       WEBHOOK_URL: http://communication:8080/esp/v1/event
+  # demo stand-in for the operator's social platform (Meta wire shapes)
+  mock-social:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
   product-catalog:
     db: product_catalog
     dbRole: catalog_app
@@ -264,6 +269,9 @@ services:
       COMMUNICATION_BASE_URL: http://communication:8080
       INSIGHT_BASE_URL: http://insight:8080
       CATALOG_BASE_URL: http://product-catalog:8080
+      PARTY_BASE_URL: http://party-account:8080
+      SOCIAL_API_URL: http://mock-social:8080
+      SOCIAL_ACCESS_TOKEN: genalpha-social-token
   flow:
     db: ""
     healthPath: /actuator/health
@@ -288,6 +296,9 @@ services:
     machineIdentity: true
     extraEnv:
       POLICY_BASE_URL: http://policy:8080
+      ANALYTICS_DATA_URL_NOVA: http://mock-analytics:8080
+      ANALYTICS_PROPERTY_ID_NOVA: "123456"
+      ANALYTICS_DATA_TOKEN_NOVA: nova-data-token
   quote:
     db: quote
     dbRole: quote_app
@@ -296,6 +307,9 @@ services:
       OIDC_CLIENT_ID: bss-quote
       OIDC_CLIENT_SECRET: quote-secret
       SOM_BASE_URL: http://service-orchestration:8080
+      SOCIAL_API_URL: http://mock-social:8080
+      SOCIAL_ACCESS_TOKEN: genalpha-social-token
+      SOCIAL_LEAD_FORM_ID: form-genalpha-fiber
       CATALOG_BASE_URL: http://product-catalog:8080
       USAGE_BASE_URL: http://usage:8080
       ORDERING_BASE_URL: http://product-ordering:8080
