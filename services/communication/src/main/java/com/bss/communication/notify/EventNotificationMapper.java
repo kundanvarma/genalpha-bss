@@ -31,6 +31,14 @@ public class EventNotificationMapper {
                             "Your SIM PIN was changed",
                             "The PIN on your SIM " + sim.getOrDefault("iccid", "") + " was just changed."
                             + " If this was not you, contact us immediately."))));
+            // and a SWAPPED card even less so — the textbook account-takeover
+            case "SimReplacedEvent" -> one(resource(event, "sim").flatMap(sim ->
+                    customer(sim).map(party -> new Notification(party,
+                            "A new SIM was issued for your number",
+                            "Your old card " + sim.getOrDefault("oldIccid", "")
+                            + " has stopped working (" + sim.getOrDefault("reason", "replaced")
+                            + ") and a new SIM " + sim.getOrDefault("iccid", "") + " is active."
+                            + " If this was not you, contact us immediately."))));
             case "ProductOrderStateChangeEvent" -> resource(event, "productOrder")
                     .map(this::orderStateChanged).orElse(List.of());
             case "CustomerBillCreateEvent" -> one(resource(event, "customerBill").flatMap(bill ->

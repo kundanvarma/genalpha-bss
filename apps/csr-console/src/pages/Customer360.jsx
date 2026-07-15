@@ -5,7 +5,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  simOf, resetSimPin } from '../api.js';
+  simOf, resetSimPin, replaceSim } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -236,6 +236,27 @@ export default function Customer360() {
                           })}>
                           Reveal PUK
                         </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-replace-sim"
+                        title="Block the old card at the network and issue a new one — the number stays; the customer is notified"
+                        onClick={() => {
+                          const reason = window.prompt(
+                            'Why is the SIM being replaced? (lost / stolen / damaged / upgrade)', 'lost');
+                          if (!reason) return;
+                          act(async () => {
+                            const done = await replaceSim(sv.id, reason.trim().toLowerCase());
+                            setPuks((p) => ({ ...p, [sv.id]: undefined }));
+                            await logInteraction({
+                              description: `SIM replaced (${reason.trim()}) for ${sv.supportingResource[0].value}`
+                                + ` — old card blocked, new ${done.iccid} active`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Replace SIM
+                    </button>
                   )}
                   {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-reset-pin"

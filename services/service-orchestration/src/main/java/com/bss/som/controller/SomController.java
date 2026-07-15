@@ -115,6 +115,54 @@ public class SomController {
         return ResponseEntity.ok(Map.of("status", "done", "@type", "SimPinReset"));
     }
 
+    /**
+     * SIM replacement — the classic call. The NUMBER lives on the service;
+     * the card is expendable: the old one is BLOCKED at the platform FIRST
+     * (a lost card must die before anything else happens), a fresh card is
+     * minted against the same service, and the owner is told on every
+     * channel — a silent SIM swap is the textbook account-takeover.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/sim/replace")
+    public ResponseEntity<Map<String, Object>> replaceSim(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        String reason = String.valueOf(body.getOrDefault("reason", "lost"));
+        if (!java.util.Set.of("lost", "stolen", "damaged", "upgrade").contains(reason)) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "reason must be lost, stolen, damaged or upgrade");
+        }
+        com.bss.som.entity.SimCard old = requireOwnSim(id);
+        if (!simPlatform.block(old.getIccid())) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "the SIM platform refused to block the old card — nothing was replaced");
+        }
+        old.setStatus(java.util.Set.of("lost", "stolen").contains(reason) ? "blocked" : "replaced");
+        old.setReplacedReason(reason);
+        old.setLastUpdate(java.time.OffsetDateTime.now());
+        sims.save(old);
+        String tenant = tenantScope.currentTenantId();
+        com.bss.som.entity.SimCard fresh = orchestration.mintSim(tenant, id);
+        String owner = services.findByIdAndTenantId(id, tenant)
+                .map(ServiceInstance::getOwnerPartyId).orElse(null);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("serviceId", id);
+        event.put("reason", reason);
+        event.put("oldIccid", "•••• " + old.getIccid().substring(old.getIccid().length() - 5));
+        event.put("iccid", "•••• " + fresh.getIccid().substring(fresh.getIccid().length() - 5));
+        if (owner != null) {
+            event.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+        }
+        events.publish("SimReplacedEvent", "sim", event);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("serviceId", id);
+        response.put("reason", reason);
+        response.put("oldSim", Map.of("iccid", event.get("oldIccid"), "status", old.getStatus()));
+        response.put("iccid", event.get("iccid"));
+        response.put("note", "the new card is active; its PUK is revealable the usual way");
+        response.put("@type", "SimReplacement");
+        return ResponseEntity.ok(response);
+    }
+
     private com.bss.som.entity.SimCard requireOwnSim(String serviceId) {
         String tenant = tenantScope.currentTenantId();
         ServiceInstance instance = services.findByIdAndTenantId(serviceId, tenant)
@@ -124,7 +172,8 @@ public class SomController {
                 throw com.bss.som.exception.NotFoundException.forResource("Service", serviceId);
             }
         });
-        return sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+        // one ACTIVE card per service; blocked/replaced rows keep the history
+        return sims.findFirstByTenantIdAndServiceIdAndStatus(tenant, serviceId, "active")
                 .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("SIM for service", serviceId));
     }
 
