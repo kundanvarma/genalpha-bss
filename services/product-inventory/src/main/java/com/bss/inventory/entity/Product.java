@@ -36,6 +36,14 @@ public class Product {
     @Column(name = "product_price", length = 4000)
     private String productPriceJson;
 
+    /** Mid-cycle plan change: what this product WAS, and when it switched
+     * (billing prorates each plan for its own days). */
+    @Column(name = "previous_offering", length = 4000)
+    private String previousOfferingJson;
+
+    @Column(name = "offering_changed_at")
+    private java.time.OffsetDateTime offeringChangedAt;
+
     @Column(name = "related_party", length = 4000)
     private String relatedPartyJson;
 
@@ -137,4 +145,9 @@ public class Product {
     public void setOwnerPartyId(String ownerPartyId) {
         this.ownerPartyId = ownerPartyId;
     }
+
+    public String getPreviousOfferingJson() { return previousOfferingJson; }
+    public void setPreviousOfferingJson(String v) { this.previousOfferingJson = v; }
+    public java.time.OffsetDateTime getOfferingChangedAt() { return offeringChangedAt; }
+    public void setOfferingChangedAt(java.time.OffsetDateTime v) { this.offeringChangedAt = v; }
 }

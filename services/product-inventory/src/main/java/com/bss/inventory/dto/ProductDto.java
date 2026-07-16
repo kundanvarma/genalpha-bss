@@ -10,6 +10,14 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ProductDto {
 
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonProperty("previousOffering")
+    private java.util.Map<String, Object> previousOffering;
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonProperty("offeringChangedAt")
+    private String offeringChangedAt;
+
     @JsonProperty("id")
     private String id;
 
@@ -123,4 +131,9 @@ public class ProductDto {
     public void setType(String type) {
         this.type = type;
     }
+
+    public java.util.Map<String, Object> getPreviousOffering() { return previousOffering; }
+    public void setPreviousOffering(java.util.Map<String, Object> v) { this.previousOffering = v; }
+    public String getOfferingChangedAt() { return offeringChangedAt; }
+    public void setOfferingChangedAt(String v) { this.offeringChangedAt = v; }
 }
