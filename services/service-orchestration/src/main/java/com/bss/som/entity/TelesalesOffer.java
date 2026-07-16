@@ -29,8 +29,16 @@ public class TelesalesOffer {
 
     private String store;
 
-    @Column(name = "customer_id", nullable = false)
+    @Column(name = "customer_id")
     private String customerId;
+
+    /** A COLD prospect: not a customer yet — the offer carries their
+     * contact, and identity arrives when they register and confirm. */
+    @Column(name = "prospect_email")
+    private String prospectEmail;
+
+    @Column(name = "prospect_name")
+    private String prospectName;
 
     @Column(name = "customer_phone")
     private String customerPhone;
@@ -72,6 +80,10 @@ public class TelesalesOffer {
     public void setStore(String v) { this.store = v; }
     public String getCustomerId() { return customerId; }
     public void setCustomerId(String v) { this.customerId = v; }
+    public String getProspectEmail() { return prospectEmail; }
+    public void setProspectEmail(String v) { this.prospectEmail = v; }
+    public String getProspectName() { return prospectName; }
+    public void setProspectName(String v) { this.prospectName = v; }
     public String getCustomerPhone() { return customerPhone; }
     public void setCustomerPhone(String v) { this.customerPhone = v; }
     public String getOfferingId() { return offeringId; }

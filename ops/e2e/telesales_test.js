@@ -194,6 +194,86 @@ async function token(ctx, user, pass) {
   console.log('OK ON THE RECORD: the dialer logged its call through the TMF683 open door and'
     + ' the CSR 360 reads it — the outbound channel shares the one memory like every other');
 
+  /* ---------- 8. THE DIAL LIST: consent at the source, washed numbers only ---------- */
+  // three consented browsers of a run-unique category = the segment; one
+  // carries a RESERVED number and must be excluded, never listed
+  const SEG = `winter-cat-${run}`;
+  const dialFolk = [];
+  const folkSpecs = [['lista', '+47 400 11 001'], ['listb', '+47 400 11 002'],
+    ['listc', '+47 999 99 999']];
+  for (const [tag, phone] of folkSpecs) {
+    const email = `${tag}-${run}@example.com`;
+    const login = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+      { headers: H(staff), data: { email, givenName: 'Di', familyName: `Al${tag}${run}` } })).json();
+    await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
+      id: login.id, givenName: 'Di', familyName: `Al${tag}${run}`,
+      contactMedium: [
+        { mediumType: 'email', characteristic: { emailAddress: email } },
+        { mediumType: 'phone', characteristic: { phoneNumber: phone } }] } });
+    const vid = `vid-${tag}-${run}`;
+    await ctx.post(`${API}/insight/v1/consent`, { headers: { 'Content-Type': 'application/json' },
+      data: { visitorId: vid, analytics: true, personalization: true } });
+    await ctx.post(`${API}/insight/v1/event`, { headers: { 'Content-Type': 'application/json' },
+      data: { visitorId: vid, type: 'view', category: SEG } });
+    const tok = await token(ctx, email, login.temporaryPassword);
+    await ctx.post(`${API}/insight/v1/stitch`, { headers: H(tok), data: { visitorId: vid } });
+    dialFolk.push({ id: login.id, phone });
+  }
+  const list = await (await ctx.get(
+    `${API}/dealer/v1/telesales/dialList?segment=${encodeURIComponent(SEG)}`,
+    { headers: H(agent) })).json();
+  if (list.entries.length !== 2 || list.reservedExcluded !== 1) {
+    fail('the dial list is wrong: ' + JSON.stringify({ entries: list.entries.length,
+      reserved: list.reservedExcluded }));
+  }
+  if (list.entries.some((e) => e.phone.replace(/\D/g, '').endsWith('9999'))) {
+    fail('a RESERVED number is ON the list');
+  }
+  if (!list.entries.every((e) => e.phone && e.name && e.consent.includes('washed'))) {
+    fail('list entries are missing their facts: ' + JSON.stringify(list.entries[0]));
+  }
+  console.log('OK THE DIAL LIST: the dialer pulled the same segment campaigns use — consent'
+    + ' filtered at the source, every number washed, and the reserved citizen EXCLUDED and'
+    + ' counted (' + list.reservedExcluded + '), never listed');
+
+  /* ---------- 9. THE COLD PROSPECT: identity arrives with the confirmation ---------- */
+  const coldEmail = `coldcall-${run}@example.com`;
+  const coldOffer = await (await ctx.post(`${API}/dealer/v1/telesales/offer`, { headers: H(agent),
+    data: { customerEmail: coldEmail, prospectName: 'Kald Kunde', phone: '+47 400 22 001',
+      offeringId: PLAN.id, offeringName: PLAN.name, campaign: 'Cold winter' } })).json();
+  if (!coldOffer.prospect || !coldOffer.confirmToken) {
+    fail('the cold offer returned no code for the partner SMS: ' + JSON.stringify(coldOffer));
+  }
+  // the prospect REGISTERS with the offered email — that is the identity
+  // proof — then signs in and confirms with the code from the SMS
+  const coldLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: coldEmail, givenName: 'Kald', familyName: `Kunde${run}` } })).json();
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
+    id: coldLogin.id, givenName: 'Kald', familyName: `Kunde${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: coldEmail } }] } });
+  const cold = await token(ctx, coldEmail, coldLogin.temporaryPassword);
+  // a different registered person with the stolen code still sees nothing
+  const thief = await ctx.post(`${API}/telesales/v1/confirm`,
+    { headers: H(target.tok), data: { token: coldOffer.confirmToken } });
+  if (thief.status() !== 404) fail("someone else confirmed the cold prospect's offer");
+  const coldYes = await (await ctx.post(`${API}/telesales/v1/confirm`,
+    { headers: H(cold), data: { token: coldOffer.confirmToken } })).json();
+  if (coldYes.status !== 'confirmed' || !coldYes.productOrderId) {
+    fail('the cold confirmation did not order: ' + JSON.stringify(coldYes));
+  }
+  let coldLine = null;
+  for (let i = 0; i < 25 && !coldLine; i++) {
+    await sleep(2000);
+    const services = await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`,
+      { headers: H(cold) })).json();
+    coldLine = (Array.isArray(services) ? services : []).find((s) => s.state === 'active') || null;
+  }
+  if (!coldLine) fail('the cold prospect never activated');
+  console.log('OK THE COLD PROSPECT: not a customer when the phone rang — the offer held their'
+    + ' contact, the partner\'s own SMS carried the code, and REGISTERING with the offered email'
+    + ' was the identity proof: signed in, confirmed, ordered, activated. A registered stranger'
+    + ' with the stolen code saw a 404');
+
   console.log('\nALL TELESALES CHECKS PASSED — the wash refuses the reserved and the unwashed,'
     + ' the call makes an offer and the CUSTOMER makes it an order, commission is born with the'
     + ' agreement, silence expires, and every call is on the record. Outbound, shaped by the'

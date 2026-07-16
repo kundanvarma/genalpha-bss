@@ -76,6 +76,14 @@ public class DealerController {
         return ResponseEntity.ok(telesales.offer(dto));
     }
 
+    /** THE DIAL LIST: segment members, consent at the source, every
+     * number washed — reserved citizens excluded, never listed. */
+    @GetMapping("/dealer/v1/telesales/dialList")
+    public ResponseEntity<Map<String, Object>> dialList(
+            @org.springframework.web.bind.annotation.RequestParam("segment") String segment) {
+        return ResponseEntity.ok(telesales.dialList(segment));
+    }
+
     /** The partner's pipeline: their own offers, whatever became of them. */
     @GetMapping("/dealer/v1/telesales/offers")
     public ResponseEntity<List<Map<String, Object>>> telesalesOffers() {
