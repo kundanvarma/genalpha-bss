@@ -113,6 +113,20 @@ export default function Bills() {
               <div className="rowend">
                 <span className="linetotal">{bill.amountDue.value.toFixed(2)} {bill.amountDue.unit}</span>
                 <span className={`state ${bill.state}`}>{bill.state}</span>
+                <a className="ghost" data-testid="bill-pdf" style={{ textDecoration: 'none' }}
+                   href={`/tmf-api/customerBillManagement/v4/customerBill/${bill.id}/document.pdf`}
+                   target="_blank" rel="noreferrer"
+                   onClick={(e) => { // carry the token: fetch and open as a blob
+                     e.preventDefault();
+                     import('../auth.js').then(async ({ authFetch }) => {
+                       const res = await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${bill.id}/document.pdf`);
+                       if (!res.ok) { setError('PDF: HTTP ' + res.status); return; }
+                       const blob = await res.blob();
+                       window.open(URL.createObjectURL(blob), '_blank');
+                     });
+                   }}>
+                  PDF
+                </a>
                 {bill.dispute && (
                   <span className={`state ${bill.dispute.status === 'open' ? 'onHold' : bill.dispute.status}`}
                         data-testid="dispute-chip" title={bill.dispute.reason}>

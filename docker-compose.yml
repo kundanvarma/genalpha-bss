@@ -869,6 +869,19 @@ services:
       # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
       BSS_BILLING_DUNNING_TICK_MS: "5000"
       BSS_BILLING_DUNNING_GRACE_MS: "20000"
+      # bill distribution: genalpha's bills go to the PRINT house as CII-
+      # era PDFs; nova's leave as EHF e-invoices — formats and channels
+      # are config, never code
+      BILL_DISTRIBUTION_PROVIDER: partner
+      BILL_DISTRIBUTION_URL: http://mock-distribution:8080
+      BILL_DISTRIBUTION_TOKEN: genalpha-dist-token
+      BILL_DISTRIBUTION_FORMAT: cii
+      BILL_DISTRIBUTION_CHANNEL: print
+      BILL_DISTRIBUTION_PROVIDER_NOVA: partner
+      BILL_DISTRIBUTION_URL_NOVA: http://mock-distribution:8080
+      BILL_DISTRIBUTION_TOKEN_NOVA: nova-dist-token
+      BILL_DISTRIBUTION_FORMAT_NOVA: ehf
+      BILL_DISTRIBUTION_CHANNEL_NOVA: einvoice
       DB_URL: jdbc:postgresql://postgres:5432/billing
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: billing_app
@@ -1012,6 +1025,15 @@ services:
     restart: unless-stopped
     ports:
       - "8122:8080"
+
+  # demo stand-in for the invoice distribution partner (Peppol access
+  # point / print house): EHF & CII e-invoices in, print jobs in
+  mock-distribution:
+    build: ./integrations/mock-distribution
+    container_name: bss-mock-distribution
+    restart: unless-stopped
+    ports:
+      - "8124:8080"
 
   # demo stand-in for the operator's email provider (SendGrid v3 wire shape)
   mock-esp:

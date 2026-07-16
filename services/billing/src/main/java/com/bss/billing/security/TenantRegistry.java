@@ -65,6 +65,17 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Bill distribution seam: where finished bills go — a Peppol
+         * access point or a print house. none = the bill stays in-app. */
+        private String billDistributionProvider = "none";
+        private String billDistributionUrl;
+        private String billDistributionToken;
+        /** ehf (Norway CIUS of Peppol BIS 3.0) | peppol | cii (EN 16931's
+         * other syntax). */
+        private String billDistributionFormat = "peppol";
+        /** einvoice (XML to the access point) | print (PDF to the print
+         * house). */
+        private String billDistributionChannel = "einvoice";
 
         public String getId() {
             return id;
@@ -113,5 +124,16 @@ public class TenantRegistry {
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }
+
+        public String getBillDistributionProvider() { return billDistributionProvider; }
+        public void setBillDistributionProvider(String v) { this.billDistributionProvider = v; }
+        public String getBillDistributionUrl() { return billDistributionUrl; }
+        public void setBillDistributionUrl(String v) { this.billDistributionUrl = v; }
+        public String getBillDistributionToken() { return billDistributionToken; }
+        public void setBillDistributionToken(String v) { this.billDistributionToken = v; }
+        public String getBillDistributionFormat() { return billDistributionFormat; }
+        public void setBillDistributionFormat(String v) { this.billDistributionFormat = v; }
+        public String getBillDistributionChannel() { return billDistributionChannel; }
+        public void setBillDistributionChannel(String v) { this.billDistributionChannel = v; }
     }
 }

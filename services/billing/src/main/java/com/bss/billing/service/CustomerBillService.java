@@ -393,8 +393,10 @@ public class CustomerBillService {
         dto.setBillDocument(List.of(Map.of(
                 "id", entity.getId() + "-document",
                 "name", "Bill " + entity.getBillNo(),
+                "mimeType", "application/pdf",
                 "@type", "AttachmentRefOrValue",
-                "href", entity.getHref() + "/document")));
+                "href", entity.getHref() + "/document.pdf",
+                "url", entity.getHref() + "/document.pdf")));
         dto.setBillDate(entity.getBillDate());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setType("CustomerBill");

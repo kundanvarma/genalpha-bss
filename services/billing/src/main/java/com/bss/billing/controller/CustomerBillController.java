@@ -37,16 +37,19 @@ public class CustomerBillController {
     private final FieldSelector fieldSelector;
     private final com.bss.billing.service.DunningService dunningService;
     private final com.bss.billing.service.DisputeService disputeService;
+    private final com.bss.billing.service.BillDocumentService documentService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
     public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
             com.bss.billing.service.DunningService dunningService,
             com.bss.billing.service.DisputeService disputeService,
-            com.bss.billing.security.TenantScope tenantScope) {
+            com.bss.billing.security.TenantScope tenantScope,
+            com.bss.billing.service.BillDocumentService documentService) {
         this.service = service;
         this.fieldSelector = fieldSelector;
         this.dunningService = dunningService;
         this.disputeService = disputeService;
+        this.documentService = documentService;
         this.tenantScope = tenantScope;
     }
 
@@ -123,6 +126,15 @@ public class CustomerBillController {
     public ResponseEntity<CustomerBillDto> settle(@PathVariable("id") String id,
                                                   @RequestBody CustomerBillDto patch) {
         return ResponseEntity.ok(service.settle(id, patch));
+    }
+
+    /** The bill as a PDF a person can save, print or forward. */
+    @GetMapping(value = "/customerBill/{id}/document.pdf",
+            produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> pdf(@PathVariable("id") String id) {
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "inline; filename=\"" + id + ".pdf\"")
+                .body(documentService.pdfOf(id));
     }
 
     /** "This charge is wrong": open a dispute (customer or agent). */

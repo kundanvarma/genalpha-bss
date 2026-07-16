@@ -68,9 +68,19 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-billing}
         machine-client-secret: ${OIDC_CLIENT_SECRET:billing-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT:peppol}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL:einvoice}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-billing}
         machine-client-secret: ${OIDC_CLIENT_SECRET:billing-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_NOVA:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_NOVA:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NOVA:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_NOVA:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_NOVA:einvoice}
