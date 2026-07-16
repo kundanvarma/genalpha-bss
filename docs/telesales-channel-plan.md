@@ -60,4 +60,8 @@ Both named follow-ups shipped in the same suite:
   email is the identity proof: the prospect signs up, signs in, and
   confirms — a registered stranger with a stolen code sees a 404.
 
-Remaining follow-up: a telesales tab in the dealer console.
+The console desk shipped too: the dealer console's Telesales card pulls
+the washed dial list ("1 reserved excluded" said out loud), records
+warm and cold offers (a cold one hands the agent the code their SMS
+carries), and shows the pipeline with its honest states — offered,
+confirmed, expired. The follow-up list of this plan is empty.
