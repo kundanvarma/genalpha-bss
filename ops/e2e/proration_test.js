@@ -158,7 +158,55 @@ async function token(ctx, user, pass) {
     + ` for ${totalDays - daysBefore} days = ${bill.amountDue.value} ${bill.amountDue.unit} —`
     + ' two line items that name their dates');
 
-  console.log('\nALL PRORATION CHECKS PASSED — a mid-cycle plan change bills each plan for its'
-    + ' own days, in line items that explain themselves. Fair both directions: an upgrade is'
-    + ' never double-charged, a downgrade is never a leak.');
+  /* ========== ACT 3: the LEAVER — cease today, pay for today only ========== */
+  const email3 = `leaver-${run}@example.com`;
+  const login3 = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: email3, givenName: 'Lea', familyName: `Ver${run}` } })).json();
+  const leaver = await token(ctx, email3, login3.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(leaver), data: {
+      productOrderItem: [{ action: 'add', productOffering: PLAN_A }] } });
+  let lSvc = null;
+  for (let i = 0; i < 30 && !lSvc; i++) {
+    await sleep(2000);
+    const svcs = await (await ctx.get(
+      `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${login3.id}`,
+      { headers: H(staff) })).json();
+    lSvc = (svcs || []).find((sv) => sv.state === 'active') || null;
+  }
+  if (!lSvc) fail('the leaver\'s service never activated');
+
+  /* the agent ceases the line; the product record must FOLLOW */
+  await ctx.post(`${API}/tmf-api/serviceInventory/v4/service/${lSvc.id}/terminate`,
+    { headers: H(staff), data: { reason: 'customer leaving' } });
+  let closed = null;
+  for (let i = 0; i < 20 && !closed; i++) {
+    await sleep(2000);
+    const products = await (await ctx.get(
+      `${API}/tmf-api/productInventory/v4/product?relatedPartyId=${login3.id}&limit=20`,
+      { headers: H(staff) })).json();
+    closed = (products || []).find((p) => p.status === 'cancelled' && p.terminationDate) || null;
+  }
+  if (!closed) fail('the ceased service never closed its product — billing would charge a ghost');
+  console.log('OK the CEASE closed the product record: cancelled, terminationDate '
+    + closed.terminationDate.slice(0, 10) + ' — no ghost line left behind for billing');
+
+  /* the final bill: started today, ended today — ONE day of service */
+  await ctx.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: H(staff) });
+  const lBills = await (await ctx.get(
+    `${API}/tmf-api/customerBillManagement/v4/customerBill?limit=50`, { headers: H(leaver) })).json();
+  const lBill = lBills.find((b) => b.state === 'new');
+  if (!lBill) fail('no final bill for the leaver');
+  const oneDay = round2(oldMonthly * 1 / totalDays);
+  if (Math.abs(lBill.amountDue.value - oneDay) > 0.011) {
+    fail(`one day of service must cost one day: wanted ~${oneDay}, got ${lBill.amountDue.value}`);
+  }
+  console.log(`OK the FINAL BILL: joined and left today — ${lBill.amountDue.value} `
+    + `${lBill.amountDue.unit} for exactly one day of ${totalDays}. Leaving is priced as`
+    + ' fairly as arriving.');
+
+  console.log('\nALL PRORATION CHECKS PASSED — a mid-month start pays from its first day, a'
+    + ' mid-cycle plan change bills each plan for its own days, and a cease bills only to the'
+    + ' end date. Segments with dates on every line: the bill explains itself, in every'
+    + ' direction.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

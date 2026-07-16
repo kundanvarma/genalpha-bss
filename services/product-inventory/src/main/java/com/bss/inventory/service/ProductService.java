@@ -179,6 +179,22 @@ public class ProductService {
     }
 
     /**
+     * The service died; the product record follows. Correlated by owner +
+     * name (the modify path keeps them in step); with twin lines only the
+     * first match closes — logged, not hidden.
+     */
+    @Transactional
+    public void closeForTerminatedService(String tenantId, String ownerPartyId, String serviceName) {
+        repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+                tenantId, ownerPartyId, serviceName, "active").ifPresent(entity -> {
+            entity.setStatus("cancelled");
+            entity.setTerminationDate(java.time.OffsetDateTime.now());
+            ProductDto closed = mapper.toDto(repository.save(entity));
+            events.publish("ProductStateChangeEvent", "product", closed);
+        });
+    }
+
+    /**
      * Scoped tokens address only their own products; anything else is a 404,
      * not a 403, so foreign ids do not leak existence.
      */

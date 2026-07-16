@@ -31,24 +31,30 @@ public class RestDownstreamClients {
             @Value("${bss.downstream.inventory-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
         return () -> {
+            // active products AND cancelled ones — a line ceased mid-period
+            // still owes its days; the run's date-math decides what counts
             List<Map<String, Object>> all = new ArrayList<>();
+            for (String status : List.of("active", "cancelled")) {
             int offset = 0;
             while (true) {
                 try {
                     List<Map<String, Object>> page = rest.get()
-                            .uri("/tmf-api/productInventory/v4/product?status=active&offset={o}&limit=100", offset)
+                            .uri("/tmf-api/productInventory/v4/product?status={s}&offset={o}&limit=100",
+                                    status, offset)
                             .retrieve()
-                            .body(new org.springframework.core.ParameterizedTypeReference<>() {
+                            .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
                             });
                     all.addAll(page);
                     if (page.size() < 100) {
-                        return all;
+                        break;
                     }
                     offset += 100;
                 } catch (RestClientException e) {
                     throw new DownstreamException("product-inventory is unreachable", e);
                 }
             }
+            }
+            return all;
         };
     }
 

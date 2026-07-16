@@ -229,7 +229,14 @@ public class BillingRunService {
                 if (effStart == null) {
                     continue; // starts after this period — nothing to charge yet
                 }
+                LocalDate effEnd = effectiveEnd(product, periodStart, periodEnd);
+                if (effEnd == null || effEnd.isBefore(effStart)) {
+                    continue; // ended before this period (or before it started) — nothing owed
+                }
                 LocalDate changedOn = changeDateWithin(product, periodStart, periodEnd);
+                if (changedOn != null && changedOn.isAfter(effEnd)) {
+                    changedOn = null; // changed after the line already ended here
+                }
                 if (changedOn != null && !changedOn.isAfter(effStart)) {
                     changedOn = null; // changed before it even started billing here
                 }
@@ -256,16 +263,21 @@ public class BillingRunService {
                         }
                         effStart = changedOn; // the new plan takes over from here
                     }
-                    long days = java.time.temporal.ChronoUnit.DAYS.between(effStart, periodEnd) + 1;
+                    long days = java.time.temporal.ChronoUnit.DAYS.between(effStart, effEnd) + 1;
                     boolean partial = days < totalDays;
                     BigDecimal charged = partial
                             ? monthly.multiply(BigDecimal.valueOf(days))
                                     .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP)
                             : monthly;
                     if (charged.signum() > 0) {
+                        String window = !partial ? ""
+                                : effEnd.isBefore(periodEnd) && effStart.isAfter(periodStart)
+                                        ? " (" + effStart + " to " + effEnd + ", " + days + " days)"
+                                : effEnd.isBefore(periodEnd)
+                                        ? " (until " + effEnd + ", " + days + " days)"
+                                        : " (from " + effStart + ", " + days + " days)";
                         lines.add(rateOf(tenantId, ownerParty, product,
-                                String.valueOf(product.getOrDefault("name", offeringId))
-                                + (partial ? " (from " + effStart + ", " + days + " days)" : ""),
+                                String.valueOf(product.getOrDefault("name", offeringId)) + window,
                                 charged, unit));
                         monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
                     }
@@ -549,6 +561,26 @@ public class BillingRunService {
             return started.isBefore(periodStart) ? periodStart : started;
         } catch (Exception e) {
             return periodStart;
+        }
+    }
+
+    /** When this product stops paying in this period: the earlier of the
+     * period end and its terminationDate; null = ended before the period
+     * (nothing owed here). No terminationDate = still running. */
+    private LocalDate effectiveEnd(Map<String, Object> product,
+            LocalDate periodStart, LocalDate periodEnd) {
+        if (product.get("terminationDate") == null) {
+            return "cancelled".equals(product.get("status")) ? null : periodEnd;
+        }
+        try {
+            LocalDate ended = OffsetDateTime.parse(String.valueOf(product.get("terminationDate")))
+                    .toLocalDate();
+            if (ended.isBefore(periodStart)) {
+                return null;
+            }
+            return ended.isAfter(periodEnd) ? periodEnd : ended;
+        } catch (Exception e) {
+            return periodEnd;
         }
     }
 
