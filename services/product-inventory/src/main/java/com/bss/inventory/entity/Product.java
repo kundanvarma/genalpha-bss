@@ -44,6 +44,11 @@ public class Product {
     @Column(name = "offering_changed_at")
     private java.time.OffsetDateTime offeringChangedAt;
 
+    /** TMF637 startDate — when the product began (billing prorates a
+     * mid-period start; null = before any open period). */
+    @Column(name = "start_date")
+    private java.time.OffsetDateTime startDate;
+
     @Column(name = "related_party", length = 4000)
     private String relatedPartyJson;
 
@@ -150,4 +155,6 @@ public class Product {
     public void setPreviousOfferingJson(String v) { this.previousOfferingJson = v; }
     public java.time.OffsetDateTime getOfferingChangedAt() { return offeringChangedAt; }
     public void setOfferingChangedAt(java.time.OffsetDateTime v) { this.offeringChangedAt = v; }
+    public java.time.OffsetDateTime getStartDate() { return startDate; }
+    public void setStartDate(java.time.OffsetDateTime v) { this.startDate = v; }
 }

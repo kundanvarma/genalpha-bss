@@ -42,6 +42,9 @@ public class ProductMapper {
         if (entity.getOfferingChangedAt() != null) {
             dto.setOfferingChangedAt(entity.getOfferingChangedAt().toString());
         }
+        if (entity.getStartDate() != null) {
+            dto.setStartDate(entity.getStartDate().toString());
+        }
         dto.setType("Product");
         return dto;
     }

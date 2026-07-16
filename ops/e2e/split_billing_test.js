@@ -176,9 +176,18 @@ async function token(request, client, user, pass) {
   if (Math.abs(excessLine.taxExcludedAmount.value - excess) > 0.01) {
     fail(`device excess should be ${excess}, got ${excessLine.taxExcludedAmount.value}`);
   }
+  // the VAS was ordered mid-month, so it pays only for its own days
+  const now = new Date();
+  const pStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const pEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+  const daysTotal = Math.round((pEnd - pStart) / 86400000) + 1;
+  const daysLeft = Math.round((pEnd - new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))) / 86400000) + 1;
+  const vasExpected = daysLeft < daysTotal
+    ? Math.round(vasMonthly * daysLeft / daysTotal * 100) / 100 : vasMonthly;
   const vasLine = miaLines.find((r) => String(r.name).includes(vas.name));
-  if (!vasLine || Math.abs(vasLine.taxExcludedAmount.value - vasMonthly) > 0.01) {
-    fail(`personal bill should carry ${vas.name} at ${vasMonthly}`);
+  if (!vasLine || Math.abs(vasLine.taxExcludedAmount.value - vasExpected) > 0.011) {
+    fail(`personal bill should carry ${vas.name} at ~${vasExpected} (prorated): `
+      + JSON.stringify(vasLine));
   }
   if (miaLines.some((r) => String(r.name).includes(plan.name))) {
     fail('the company-paid plan leaked onto the personal bill');

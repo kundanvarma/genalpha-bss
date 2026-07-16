@@ -147,9 +147,17 @@ async function token(request, client, user, pass) {
         { headers: H })).json()).find((p) => p.givenName === 'Erik').id}`,
     { headers: H })).json();
   if (erikBills.length) fail('Erik got a personal bill — should be consolidated under Acme');
-  // the negotiated deal must land on the INVOICE, not just the preview
-  if (Math.abs(orgBills[0].amountDue.value - expectedOrgPrice) > 0.01) {
-    fail(`consolidated bill should carry the Acme deal: expected ${expectedOrgPrice.toFixed(2)}, got ${orgBills[0].amountDue.value}`);
+  // the negotiated deal must land on the INVOICE, not just the preview —
+  // prorated to the days since Erik's line went live (ordered today)
+  const nowB2b = new Date();
+  const b2bStart = Date.UTC(nowB2b.getUTCFullYear(), nowB2b.getUTCMonth(), 1);
+  const b2bEnd = Date.UTC(nowB2b.getUTCFullYear(), nowB2b.getUTCMonth() + 1, 0);
+  const b2bTotalDays = Math.round((b2bEnd - b2bStart) / 86400000) + 1;
+  const b2bDaysLeft = Math.round((b2bEnd - Date.UTC(nowB2b.getUTCFullYear(), nowB2b.getUTCMonth(), nowB2b.getUTCDate())) / 86400000) + 1;
+  const expectedProrated = Math.round(expectedOrgPrice * b2bDaysLeft / b2bTotalDays * 100) / 100;
+  if (Math.abs(orgBills[0].amountDue.value - expectedProrated) > 0.02) {
+    fail(`consolidated bill should carry the Acme deal prorated: expected ~${expectedProrated.toFixed(2)}`
+      + ` (${expectedOrgPrice.toFixed(2)} × ${b2bDaysLeft}/${b2bTotalDays} days), got ${orgBills[0].amountDue.value}`);
   }
   const billLines = await (await ctx.request.get(
     `${API}/tmf-api/customerBillManagement/v4/customerBill/${orgBills[0].id}/appliedCustomerBillingRate`,

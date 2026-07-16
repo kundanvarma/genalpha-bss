@@ -46,24 +46,61 @@ async function token(ctx, user, pass) {
     fail(`the two plans need distinct monthly prices: ${oldMonthly} vs ${newMonthly}`);
   }
 
-  /* ---------- order plan A, then change to plan B mid-cycle ---------- */
+  /* the shared day-math */
+  const now = new Date();
+  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const totalDays = Math.round((periodEnd - periodStart) / 86400000) + 1;
+  const round2 = (x) => Math.round(x * 100) / 100;
+
+  /* ========== ACT 1: a NEW product mid-month pays only its own days ========== */
+  const email1 = `newcomer-${run}@example.com`;
+  const login1 = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: email1, givenName: 'New', familyName: `Comer${run}` } })).json();
+  const newcomer = await token(ctx, email1, login1.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(newcomer), data: {
+      productOrderItem: [{ action: 'add', productOffering: PLAN_A }] } });
+  let fresh = null;
+  for (let i = 0; i < 30 && !fresh; i++) {
+    await sleep(2000);
+    const products = await (await ctx.get(
+      `${API}/tmf-api/productInventory/v4/product?limit=50`, { headers: H(newcomer) })).json();
+    fresh = products.find((p) => p.status === 'active' && p.productOffering?.id === PLAN_A.id) || null;
+  }
+  if (!fresh) fail('the newcomer plan never activated');
+  if (!fresh.startDate) fail('the product does not know when it started');
+  await ctx.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: H(staff) });
+  const nBills = await (await ctx.get(
+    `${API}/tmf-api/customerBillManagement/v4/customerBill?limit=50`, { headers: H(newcomer) })).json();
+  const nBill = nBills.find((b) => b.state === 'new');
+  if (!nBill) fail('no bill for the newcomer');
+  const startedOn = new Date(fresh.startDate.slice(0, 10) + 'T00:00:00Z');
+  const newcomerDays = Math.round((periodEnd - startedOn) / 86400000) + 1;
+  const expectedFresh = newcomerDays < totalDays
+    ? round2(oldMonthly * newcomerDays / totalDays) : oldMonthly;
+  if (Math.abs(nBill.amountDue.value - expectedFresh) > 0.011) {
+    fail(`a mid-month start must be prorated: wanted ~${expectedFresh}`
+      + ` (${newcomerDays}/${totalDays} days of ${oldMonthly}), got ${nBill.amountDue.value}`);
+  }
+  console.log(`OK NEW MID-MONTH: the newcomer pays ${nBill.amountDue.value} for ${newcomerDays}`
+    + ` of ${totalDays} days — not a whole month for half a month's service`);
+
+  /* ========== ACT 2: plan change mid-cycle on a line as old as the month ========== */
   const email = `prorate-${run}@example.com`;
   const login = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
     { headers: H(staff), data: { email, givenName: 'Pro', familyName: `Rata${run}` } })).json();
   const cust = await token(ctx, email, login.temporaryPassword);
-  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
-    headers: H(cust), data: {
-      productOrderItem: [{ action: 'add', productOffering: PLAN_A }] } });
-  let product = null;
-  for (let i = 0; i < 30 && !product; i++) {
-    await sleep(2000);
-    const products = await (await ctx.get(
-      `${API}/tmf-api/productInventory/v4/product?limit=50`, { headers: H(cust) })).json();
-    product = products.find((p) => p.status === 'active'
-      && p.productOffering?.id === PLAN_A.id) || null;
-  }
-  if (!product) fail('plan A never activated');
-  console.log(`OK on ${PLAN_A.name} (${oldMonthly}/month) — now the upgrade, mid-cycle`);
+  // the line predates the month: seed the installed product with a
+  // backdated TMF637 startDate (a migration would do exactly this)
+  const product = await (await ctx.post(`${API}/tmf-api/productInventory/v4/product`,
+    { headers: H(staff), data: {
+      name: PLAN_A.name, status: 'active', productOffering: PLAN_A,
+      startDate: new Date(periodStart.getTime() - 86400000 * 40).toISOString(),
+      relatedParty: [{ id: login.id, role: 'customer', '@referredType': 'Individual' }] } })).json();
+  if (!product.id) fail('could not seed the backdated product: ' + JSON.stringify(product).slice(0, 200));
+  console.log(`OK on ${PLAN_A.name} (${oldMonthly}/month) since last month — now the upgrade, mid-cycle`);
 
   await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H(cust), data: {
@@ -95,13 +132,8 @@ async function token(ctx, user, pass) {
     { headers: H(cust) })).json();
 
   // the same day-math the run uses
-  const now = new Date();
-  const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const periodEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
-  const totalDays = Math.round((periodEnd - periodStart) / 86400000) + 1;
   const changed = new Date(switched.offeringChangedAt.slice(0, 10) + 'T00:00:00Z');
   const daysBefore = Math.round((changed - periodStart) / 86400000);
-  const round2 = (x) => Math.round(x * 100) / 100;
   const expectedOld = round2(oldMonthly * daysBefore / totalDays);
   const expectedNew = round2(newMonthly * (totalDays - daysBefore) / totalDays);
 
