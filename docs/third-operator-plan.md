@@ -37,6 +37,22 @@ editing ~30 yml files and rebuilding. That is the wall this arc removes.
    nothing of theirs). The suite asserts the afternoon: wall-clock from
    script start to first activated service.
 
+## Build findings (milestone 1, in progress)
+
+- 31 services carry a `bss.tenants.registry`; 14 of them embed their
+  MACHINE identity (machine-client-id/secret) as yml DEFAULTS — compose
+  sets no OIDC_CLIENT_ID anywhere. Spring config imports replace list
+  properties WHOLESALE, so the shared file must be the UNION of all
+  per-tenant fields (unknown fields are ignored by binding) with
+  `${ENV:default}` placeholders — and the machine identity must move to
+  per-service compose env (`OIDC_CLIENT_ID`/`OIDC_CLIENT_SECRET`, values
+  scripted out of each service's current yml defaults) so the shared
+  placeholders resolve per container exactly as today.
+- The compose sweep is: per Java service, add SPRING_CONFIG_IMPORT env,
+  the OIDC machine env pair, and the `./infra/tenants:/config:ro` mount.
+- `infra/tenants/tenants.yml` drafted (billing-shaped; needs the union
+  of esp/bank/distribution/pim fields from communication, catalog et al).
+
 ## Open questions to resolve while building
 
 - Which services read tenant config beyond the registry (channel manifest
