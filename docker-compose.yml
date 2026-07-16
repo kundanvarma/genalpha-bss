@@ -63,6 +63,8 @@ services:
     container_name: bss-product-catalog
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: catalog_app
@@ -78,6 +80,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8081:8080"
     depends_on:
@@ -93,6 +97,10 @@ services:
     container_name: bss-product-ordering
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-ordering
+      OIDC_CLIENT_SECRET: ordering-secret
       DB_URL: jdbc:postgresql://postgres:5432/product_ordering
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: ordering_app
@@ -116,6 +124,8 @@ services:
       AGREEMENT_BASE_URL: http://agreement:8080
       PROMOTION_BASE_URL: http://promotion:8080
       POLICY_BASE_URL: http://policy:8080
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8082:8080"
     depends_on:
@@ -141,6 +151,10 @@ services:
     container_name: bss-product-inventory
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-inventory
+      OIDC_CLIENT_SECRET: inventory-secret
       DB_URL: jdbc:postgresql://postgres:5432/product_inventory
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: inventory_app
@@ -157,6 +171,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8083:8080"
     depends_on:
@@ -172,6 +188,8 @@ services:
     container_name: bss-trouble-ticket
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/trouble_ticket
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: ticket_app
@@ -185,6 +203,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8092:8080"
     depends_on:
@@ -200,6 +220,8 @@ services:
     container_name: bss-party-interaction
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/party_interaction
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: interaction_app
@@ -213,6 +235,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8093:8080"
     depends_on:
@@ -228,6 +252,8 @@ services:
     container_name: bss-shopping-cart
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/shopping_cart
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: cart_app
@@ -241,6 +267,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8096:8080"
     depends_on:
@@ -256,6 +284,10 @@ services:
     container_name: bss-usage
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-usage
+      OIDC_CLIENT_SECRET: usage-secret
       OCS_BASE_URL: http://mock-ocs:8080
       PARTY_BASE_URL: http://party-account:8080
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -276,6 +308,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8097:8080"
     depends_on:
@@ -291,6 +325,8 @@ services:
     container_name: bss-agreement
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/agreement
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: agreement_app
@@ -304,6 +340,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8098:8080"
     depends_on:
@@ -319,6 +357,8 @@ services:
     container_name: bss-promotion
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/promotion
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: promotion_app
@@ -332,6 +372,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8099:8080"
     depends_on:
@@ -347,6 +389,10 @@ services:
     container_name: bss-campaign
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-campaign
+      OIDC_CLIENT_SECRET: campaign-secret
       DB_URL: jdbc:postgresql://postgres:5432/campaign
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: campaign_app
@@ -369,6 +415,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8108:8080"
     depends_on:
@@ -386,6 +434,10 @@ services:
     container_name: bss-intelligence
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-intelligence
+      OIDC_CLIENT_SECRET: intelligence-secret
       DB_URL: jdbc:postgresql://postgres:5432/intelligence
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: intelligence_app
@@ -415,6 +467,8 @@ services:
       AI_API_KEY: ${AI_API_KEY:-}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8109:8080"
     depends_on:
@@ -430,6 +484,10 @@ services:
     container_name: bss-quote
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-quote
+      OIDC_CLIENT_SECRET: quote-secret
       # social lead-ads seam: genalpha pulls its lead-gen form into TMF699
       SOCIAL_API_URL: http://mock-social:8080
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
@@ -453,6 +511,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8110:8080"
     depends_on:
@@ -468,6 +528,8 @@ services:
     container_name: bss-porting
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/porting
       DB_USERNAME: porting_app
       DB_PASSWORD: porting_app
@@ -481,6 +543,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8112:8080"
     depends_on:
@@ -496,6 +560,8 @@ services:
     container_name: bss-policy
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/policy
       DB_USERNAME: policy_app
       DB_PASSWORD: policy_app
@@ -507,6 +573,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8113:8080"
     depends_on:
@@ -522,6 +590,8 @@ services:
     container_name: bss-knowledge
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/knowledge
       DB_USERNAME: knowledge_app
       DB_PASSWORD: knowledge_app
@@ -533,6 +603,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8118:8080"
     depends_on:
@@ -579,12 +651,18 @@ services:
     container_name: bss-user-roles
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-user-admin
+      OIDC_CLIENT_SECRET: user-admin-secret
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8100:8080"
     depends_on:
@@ -596,6 +674,8 @@ services:
     container_name: bss-geographic-address
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/geographic_address
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: address_app
@@ -609,6 +689,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8101:8080"
     depends_on:
@@ -624,6 +706,10 @@ services:
     container_name: bss-recommendation
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-recommendation
+      OIDC_CLIENT_SECRET: recommendation-secret
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
@@ -633,6 +719,8 @@ services:
       INVENTORY_BASE_URL: http://product-inventory:8080
       INSIGHT_BASE_URL: http://insight:8080
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8102:8080"
     depends_on:
@@ -648,6 +736,8 @@ services:
     container_name: bss-payment-method
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/payment_method
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: paymentmethod_app
@@ -661,6 +751,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8103:8080"
     depends_on:
@@ -676,6 +768,10 @@ services:
     container_name: bss-som
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-som
+      OIDC_CLIENT_SECRET: som-secret
       # dev clocks: commission hardens in 15s (prod: 14 days), tick 5s
       BSS_SOM_COMMISSION_WINDOW_MS: "15000"
       BSS_SOM_COMMISSION_TICK_MS: "5000"
@@ -700,6 +796,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8104:8080"
     depends_on:
@@ -717,6 +815,10 @@ services:
     container_name: bss-assurance
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-assurance
+      OIDC_CLIENT_SECRET: assurance-secret
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       SOM_BASE_URL: http://service-orchestration:8080
@@ -733,6 +835,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8105:8080"
     depends_on:
@@ -748,6 +852,8 @@ services:
     container_name: bss-document
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/document
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: document_app
@@ -760,6 +866,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8106:8080"
     depends_on:
@@ -775,6 +883,10 @@ services:
     container_name: bss-communication
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-communication
+      OIDC_CLIENT_SECRET: communication-secret
       DB_URL: jdbc:postgresql://postgres:5432/communication
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: communication_app
@@ -798,6 +910,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8095:8080"
     depends_on:
@@ -813,6 +927,8 @@ services:
     container_name: bss-qualification
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/qualification
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: qualification_app
@@ -826,6 +942,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8089:8080"
     depends_on:
@@ -841,6 +959,8 @@ services:
     container_name: bss-appointment
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/appointment
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: appointment_app
@@ -854,6 +974,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8091:8080"
     depends_on:
@@ -869,6 +991,10 @@ services:
     container_name: bss-billing
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-billing
+      OIDC_CLIENT_SECRET: billing-secret
       # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
       BSS_BILLING_DUNNING_TICK_MS: "5000"
       BSS_BILLING_DUNNING_GRACE_MS: "20000"
@@ -913,6 +1039,8 @@ services:
       PROMOTION_BASE_URL: http://promotion:8080
       POLICY_BASE_URL: http://policy:8080
       PARTY_BASE_URL: http://party-account:8080
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8088:8080"
     depends_on:
@@ -934,6 +1062,10 @@ services:
     container_name: bss-payment
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-payment
+      OIDC_CLIENT_SECRET: payment-secret
       PAYMENT_PSP: ${PAYMENT_PSP:-mock}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
@@ -952,6 +1084,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8087:8080"
     depends_on:
@@ -967,6 +1101,8 @@ services:
     container_name: bss-product-stock
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/product_stock
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: stock_app
@@ -980,6 +1116,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8086:8080"
     depends_on:
@@ -995,6 +1133,8 @@ services:
     container_name: bss-party-account
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/party_account
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: party_app
@@ -1008,6 +1148,8 @@ services:
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8084:8080"
     depends_on:
@@ -1063,6 +1205,10 @@ services:
     container_name: bss-insight
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_CLIENT_ID: bss-insight
+      OIDC_CLIENT_SECRET: insight-secret
       DB_URL: jdbc:postgresql://postgres:5432/insight
       DB_USERNAME: insight_app
       DB_PASSWORD: insight_app
@@ -1087,6 +1233,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8119:8080"
     depends_on:
@@ -1102,6 +1250,8 @@ services:
     container_name: bss-gateway
     restart: unless-stopped
     environment:
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       # dev clocks: partner rate window small enough for a suite to trip
       BSS_GATEWAY_PARTNER_RATE_CAPACITY: "10"
       BSS_GATEWAY_PARTNER_RATE_WINDOW_MS: "2000"
@@ -1143,6 +1293,8 @@ services:
       SOM_URL: http://service-orchestration:8080
       ASSURANCE_URL: http://assurance:8080
       CSR_URL: http://csr-console:8080
+    volumes:
+      - ./infra/tenants:/config:ro
     ports:
       - "8080:8080"
     depends_on:

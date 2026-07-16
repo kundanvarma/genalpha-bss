@@ -1,9 +1,9 @@
 # THE TENANT FLEET AS A FILE — mounted read-only into every service at
-# /config/tenants.yml and loaded via SPRING_CONFIG_IMPORT. Onboarding a
-# new operator = append a block here + restart the fleet. No rebuild.
-# Env vars still override (Spring precedence puts env above imports).
-# Service-specific fields (bill distribution, ESP, banks) keep their
-# ${ENV:default} placeholders, resolved per service exactly as before.
+# /config/tenants.yml (SPRING_CONFIG_IMPORT). Onboarding a new operator =
+# append a block + restart the fleet. No rebuild. This is the UNION of
+# every service's per-tenant fields: binding ignores fields a service
+# does not know, and ${ENV:default} placeholders resolve per container
+# (machine identities ride OIDC_CLIENT_ID/SECRET env set in compose).
 bss:
   tenants:
     default-tenant: genalpha
@@ -12,23 +12,67 @@ bss:
         issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
         jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
-        machine-client-id: ${OIDC_CLIENT_ID:bss-billing}
-        machine-client-secret: ${OIDC_CLIENT_SECRET:billing-secret}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN:}
         bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT:peppol}
         bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL:einvoice}
         bank-token: ${BANK_TOKEN:}
+        social-api-url: ${SOCIAL_API_URL:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN:}
+        delivery-provider: ${DELIVERY_PROVIDER:internal}
+        esp-url: ${ESP_URL:}
+        esp-api-key: ${ESP_API_KEY:}
+        esp-from: ${ESP_FROM:}
+        brand-name: MyGenAlpha
+        brand-color: "#0E7C7B"
+        locale: en
+        currency: EUR
+        hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET:}
+        analytics-data-url: ${ANALYTICS_DATA_URL:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN:}
+        pim-base-url: ${PIM_BASE_URL:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
-        machine-client-id: ${OIDC_CLIENT_ID:bss-billing}
-        machine-client-secret: ${OIDC_CLIENT_SECRET:billing-secret}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
         bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_NOVA:none}
         bill-distribution-url: ${BILL_DISTRIBUTION_URL_NOVA:}
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NOVA:}
         bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_NOVA:ehf}
         bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_NOVA:einvoice}
         bank-token: ${BANK_TOKEN_NOVA:}
+        social-api-url: ${SOCIAL_API_URL_NOVA:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_NOVA:}
+        delivery-provider: ${DELIVERY_PROVIDER_NOVA:internal}
+        esp-url: ${ESP_URL_NOVA:}
+        esp-api-key: ${ESP_API_KEY_NOVA:}
+        esp-from: ${ESP_FROM_NOVA:}
+        brand-name: MyNova
+        brand-color: "#5B3FA8"
+        locale: "no"
+        currency: NOK
+        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_NOVA:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_NOVA:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_NOVA:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_NOVA:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_NOVA:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_NOVA:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_NOVA:}
+        ai-provider: ${AI_PROVIDER_NOVA:}
+        ai-base-url: ${AI_BASE_URL_NOVA:}
+        ai-api-key: ${AI_API_KEY_NOVA:}
+        ai-model: ${AI_MODEL_NOVA:}
+        pim-base-url: ${PIM_BASE_URL_NOVA:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NOVA:}
