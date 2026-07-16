@@ -50,6 +50,13 @@ public class EspForwarder {
 
     public void forward(String tenantId, String messageId, String partyId,
             String subject, String content) {
+        forward(tenantId, messageId, partyId, subject, content, null, null);
+    }
+
+    /** With an optional document riding along — SendGrid v3's attachments
+     * array (base64), which the mock and real gateways both speak. */
+    public void forward(String tenantId, String messageId, String partyId,
+            String subject, String content, String attachmentName, String attachmentBase64) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !"esp".equalsIgnoreCase(tenant.getDeliveryProvider())
                 || tenant.getEspUrl() == null || tenant.getEspUrl().isBlank()
@@ -69,15 +76,22 @@ public class EspForwarder {
                     log.info("esp suppressed: {} bounced before — in-app only", email);
                     return;
                 }
-                Map<String, Object> mail = Map.of(
-                        "personalizations", List.of(Map.of("to", List.of(Map.of("email", email)))),
-                        "from", Map.of("email", tenant.getEspFrom() == null
-                                ? "no-reply@" + tenantId + ".example" : tenant.getEspFrom()),
-                        "subject", subject,
-                        "content", List.of(Map.of("type", "text/plain",
-                                "value", content == null ? "" : content)),
-                        // the receipt's way home (SendGrid echoes these back)
-                        "custom_args", Map.of("messageId", messageId, "tenant", tenantId));
+                Map<String, Object> mail = new java.util.LinkedHashMap<>();
+                mail.put("personalizations", List.of(Map.of("to", List.of(Map.of("email", email)))));
+                mail.put("from", Map.of("email", tenant.getEspFrom() == null
+                        ? "no-reply@" + tenantId + ".example" : tenant.getEspFrom()));
+                mail.put("subject", subject);
+                mail.put("content", List.of(Map.of("type", "text/plain",
+                        "value", content == null ? "" : content)));
+                if (attachmentName != null && attachmentBase64 != null) {
+                    mail.put("attachments", List.of(Map.of(
+                            "content", attachmentBase64,
+                            "type", "application/pdf",
+                            "filename", attachmentName,
+                            "disposition", "attachment")));
+                }
+                // the receipt's way home (SendGrid echoes these back)
+                mail.put("custom_args", Map.of("messageId", messageId, "tenant", tenantId));
                 espClient.post().uri(tenant.getEspUrl() + "/v3/mail/send")
                         .header("Authorization", "Bearer " + tenant.getEspApiKey())
                         .body(mail)

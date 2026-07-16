@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { ScrollView, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { billRates, myBills, myMethods, payBill } from '../api.js';
+import { billRates, myBills, myMethods, openBillPdf, payBill } from '../api.js';
 import { Button, Card, Dim, Row, palette } from '../ui.js';
 
 export default function Bills() {
@@ -43,6 +43,8 @@ export default function Bills() {
                  right={`${r.taxExcludedAmount.value.toFixed(2)}`} />
           ))}
           {!lines[b.id] && <Button ghost label="Line items" onPress={() => showLines(b)} />}
+          <Button ghost testID="bill-pdf" label="Open PDF"
+            onPress={() => openBillPdf(b.id).catch((e) => setError(e.message))} />
           {b.state !== 'settled' && methods.map((m) => (
             <Button key={m.id} testID="pay-saved"
               label={`Pay with ${m.details.brand} •••• ${m.details.lastFourDigits}`}

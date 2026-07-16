@@ -127,6 +127,17 @@ export default function Bills() {
                    }}>
                   PDF
                 </a>
+                <button className="ghost" data-testid="email-bill"
+                  title="Email this invoice (PDF) to your address on file"
+                  onClick={async () => {
+                    const { authFetch } = await import('../auth.js');
+                    const res = await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${bill.id}/resend`,
+                      { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                    if (!res.ok) { setError('Email: HTTP ' + res.status); return; }
+                    setError(null);
+                  }}>
+                  Email me
+                </button>
                 {bill.dispute && (
                   <span className={`state ${bill.dispute.status === 'open' ? 'onHold' : bill.dispute.status}`}
                         data-testid="dispute-chip" title={bill.dispute.reason}>

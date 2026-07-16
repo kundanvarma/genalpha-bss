@@ -80,6 +80,9 @@ const server = http.createServer((req, res) => {
           from: (mail.from || {}).email || null,
           subject: mail.subject,
           content: ((mail.content || [])[0] || {}).value || '',
+          attachments: (mail.attachments || []).map((a) => ({
+            filename: a.filename, type: a.type, content: a.content,
+          })),
           apiKey: auth.slice('Bearer '.length),
           customArgs: mail.custom_args || {},
           receivedAt: new Date().toISOString(),

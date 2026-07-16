@@ -6,7 +6,8 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
-  disputeBill, transferService, findCustomerByEmail, diagnoseService } from '../api.js';
+  disputeBill, transferService, findCustomerByEmail, diagnoseService,
+  openBillPdf, resendBill } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -436,6 +437,23 @@ export default function Customer360() {
                     <span className="dim small">{b.installmentPlan.paidCount}/{b.installmentPlan.installments} paid</span>
                   )}
                   <span className={`state ${b.state}`}>{b.state}</span>
+                  <button className="ghost" data-testid="csr-bill-pdf"
+                      title="Open the bill exactly as the customer sees it"
+                      onClick={() => act(() => openBillPdf(b.id))}>
+                    PDF
+                  </button>
+                  <button className="ghost" data-testid="csr-resend-bill"
+                      title="Email a copy of this invoice (PDF) to the customer's address on file"
+                      onClick={() => act(async () => {
+                        await resendBill(b.id);
+                        await logInteraction({
+                          description: `Invoice copy of ${b.billNo} emailed to the customer's address on file`,
+                          channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                          relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                        });
+                      })}>
+                    Email bill
+                  </button>
                   {(!b.dispute || b.dispute.status !== 'open') && (
                     <button className="ghost" data-testid="csr-dispute-bill"
                         title="Open a dispute for the caller — collection pauses while it is investigated"

@@ -333,6 +333,21 @@ export async function disputeBill(billId, reason) {
   }));
 }
 
+/** The bill as the customer sees it — a PDF, opened in a new tab. */
+export async function openBillPdf(billId) {
+  const res = await authFetch(`${BILLING}/customerBill/${billId}/document.pdf`);
+  if (!res.ok) throw new Error('could not fetch the bill PDF');
+  window.open(URL.createObjectURL(await res.blob()), '_blank');
+}
+
+/** "Send me a copy of my invoice" — emails the PDF to the address on
+ * file (never one dictated over the phone). */
+export async function resendBill(billId) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/resend`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+  }));
+}
+
 /** Hardship/retention: split an unpaid bill into monthly installments. */
 export async function splitBill(billId, installments) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/installmentPlan`, {

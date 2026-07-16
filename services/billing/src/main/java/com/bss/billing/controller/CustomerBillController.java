@@ -137,6 +137,13 @@ public class CustomerBillController {
                 .body(documentService.pdfOf(id));
     }
 
+    /** "Send me a copy of my invoice" — emails the PDF to the address on
+     * file, from the CSR console or self-served. */
+    @PostMapping("/customerBill/{id}/resend")
+    public ResponseEntity<Map<String, Object>> resend(@PathVariable("id") String id) {
+        return ResponseEntity.accepted().body(documentService.resend(id));
+    }
+
     /** "This charge is wrong": open a dispute (customer or agent). */
     @PostMapping("/customerBill/{id}/dispute")
     public ResponseEntity<Map<String, Object>> dispute(@PathVariable("id") String id,
