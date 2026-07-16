@@ -76,6 +76,30 @@
   </section>
 
   <section class="card">
+    <h2>Telesales</h2>
+    <p class="dim" style="font-size:12.5px;margin:0 0 8px">The dial list is consented at the
+    source and washed against the reservation register — reserved citizens are excluded, never
+    shown. A call makes an OFFER; the customer's written confirmation makes it an order.</p>
+    <div class="addrow">
+      <input id="dial-segment" placeholder="Segment (e.g. winter-cat)" data-testid="dial-segment">
+      <button id="dial-go" data-testid="dial-go">Pull dial list</button>
+    </div>
+    <p id="dial-summary" class="dim" style="font-size:12.5px" hidden></p>
+    <div id="dial-list"></div>
+    <div class="addrow" style="margin-top:14px">
+      <input id="ts-email" placeholder="customer@email" data-testid="ts-email">
+      <input id="ts-name" placeholder="Prospect name (cold only)" data-testid="ts-name">
+      <input id="ts-phone" placeholder="+47 …" data-testid="ts-phone">
+      <select id="ts-offering" data-testid="ts-offering"></select>
+      <input id="ts-campaign" placeholder="Campaign" data-testid="ts-campaign">
+      <button id="ts-go" data-testid="ts-go">Record offer</button>
+    </div>
+    <p id="ts-msg" class="ok" hidden></p>
+    <p id="ts-err" class="err" hidden></p>
+    <div id="ts-pipeline"></div>
+  </section>
+
+  <section class="card">
     <h2>Commission</h2>
     <div class="totals" id="commission-totals"></div>
     <div id="commission"></div>

@@ -111,6 +111,69 @@ async function loadCommission() {
   }
 }
 
+async function pullDialList() {
+  el('dial-summary').hidden = true;
+  el('dial-list').innerHTML = '';
+  try {
+    const list = await json(await authFetch(
+      `${DEALER}/telesales/dialList?segment=${encodeURIComponent(el('dial-segment').value.trim())}`));
+    el('dial-summary').textContent = `${list.entries.length} callable · `
+      + `${list.reservedExcluded} reserved excluded · ${list.unwashedExcluded} unwashable excluded`;
+    el('dial-summary').hidden = false;
+    for (const entry of list.entries) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.dataset.testid = 'dial-row';
+      row.innerHTML = `<span>${entry.name}</span><span class="code">${entry.phone}</span>`
+        + `<span class="dim">${entry.consent}</span>`;
+      el('dial-list').append(row);
+    }
+  } catch (e) { alert(e.message); }
+}
+
+async function recordOffer() {
+  el('ts-msg').hidden = true;
+  el('ts-err').hidden = true;
+  const offering = el('ts-offering');
+  try {
+    const offer = await json(await authFetch(`${DEALER}/telesales/offer`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        customerEmail: el('ts-email').value.trim(),
+        prospectName: el('ts-name').value.trim() || undefined,
+        phone: el('ts-phone').value.trim(),
+        offeringId: offering.value,
+        offeringName: offering.selectedOptions[0]?.dataset.name,
+        campaign: el('ts-campaign').value.trim() || undefined,
+      }),
+    }));
+    el('ts-msg').textContent = offer.prospect
+      ? `Offer recorded — COLD prospect: read them code ${offer.confirmToken} (your SMS carries it).`
+        + ' It binds only when they register and confirm.'
+      : 'Offer recorded — the customer has the confirmation in their inbox. Nothing is ordered'
+        + ' until they say yes in writing.';
+    el('ts-msg').hidden = false;
+    loadPipeline();
+  } catch (e) {
+    el('ts-err').textContent = e.message;
+    el('ts-err').hidden = false;
+  }
+}
+
+async function loadPipeline() {
+  const offers = await json(await authFetch(`${DEALER}/telesales/offers`));
+  el('ts-pipeline').innerHTML = '';
+  for (const offer of offers.slice(0, 15)) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.dataset.testid = 'ts-offer-row';
+    row.innerHTML = `<span>${offer.offeringName || 'offer'}</span>`
+      + `<span class="dim">${offer.campaign || ''}</span>`
+      + `<span class="end"><span class="state ${offer.status}">${offer.status}</span></span>`;
+    el('ts-pipeline').append(row);
+  }
+}
+
 /* ---------- boot ---------- */
 async function main() {
   const ready = await ensureSignedIn().catch(() => false);
@@ -132,7 +195,13 @@ async function main() {
   el('main').hidden = false;
   el('sell-go').addEventListener('click', sell);
   el('batch-go').addEventListener('click', mintBatch);
+  el('dial-go').addEventListener('click', pullDialList);
+  el('ts-go').addEventListener('click', recordOffer);
   await Promise.all([loadOfferings(), loadKits()]);
+  // the telesales offering picker shares the catalog the sell form loads
+  const sellOptions = el('sell-offering').innerHTML;
+  el('ts-offering').innerHTML = sellOptions;
+  loadPipeline();
   loadCommission();
   setInterval(loadCommission, 8000);
 }
