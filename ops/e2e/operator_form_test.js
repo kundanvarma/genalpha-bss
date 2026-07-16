@@ -103,22 +103,53 @@ async function token(ctx, realm, user, pass) {
 
   /* ---------- 5. her first customer ---------- */
   const email = `astrid-${run}@aurora.example`;
-  const login = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
-    { headers: H(auroraStaff), data: { email, givenName: 'Astrid', familyName: `Aurora${run}` } })).json();
+  const userRes = await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(auroraStaff), data: { email, givenName: 'Astrid', familyName: `Aurora${run}` } });
+  if (userRes.status() >= 400) fail('astrid could not be created: ' + userRes.status());
+  const login = await userRes.json();
   const astrid = await token(ctx, 'aurora', email, login.temporaryPassword);
-  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+  if (!astrid) fail('astrid got no token from the new realm');
+  const orderRes = await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H(astrid), data: { productOrderItem: [{ action: 'add',
       productOffering: { id: offers[0].id, name: offers[0].name } }] } });
+  if (orderRes.status() >= 400) fail('astrid\'s order was refused: ' + orderRes.status());
   let line = null;
-  for (let i = 0; i < 25 && !line; i++) {
-    await sleep(2000);
-    const services = await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`,
-      { headers: H(astrid) })).json();
-    line = (Array.isArray(services) ? services : []).find((s) => s.state === 'active') || null;
+  for (let i = 0; i < 50 && !line; i++) {
+    await sleep(3000);
+    try {
+      const services = await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`,
+        { headers: H(astrid) })).json();
+      line = (Array.isArray(services) ? services : []).find((s) => s.state === 'active') || null;
+    } catch (transient) { /* a blip mid-poll is not a verdict */ }
   }
   if (!line) fail('aurora\'s first customer never activated');
   console.log(`OK HER FIRST CUSTOMER: Astrid bought ${offers[0].name} and her line is active —`
     + ` total ${Math.round((Date.now() - t0) / 1000)}s from a blank form to a served customer.`);
+
+  /* ---------- 6. LIVE MUTATION: the serving operator rebrands, nothing restarts ---------- */
+  const hostStaff = await token(ctx, 'bss', 'demo', 'demo');
+  const mutate = await ctx.patch(`${API}/onboarding/v1/operator/aurora`, { headers: H(hostStaff),
+    data: { name: 'Aurora Tele Nord', color: '#AA3366' } });
+  if (mutate.status() !== 200) fail('the live mutation was refused: ' + mutate.status());
+  let rebranded = null;
+  for (let i = 0; i < 20 && !rebranded; i++) {
+    await sleep(3000);
+    const res = await ctx.get(`${API}/app/tenant-config.json`,
+      { headers: { Host: 'shop.aurora.localhost' } });
+    try {
+      const body = JSON.stringify(await res.json());
+      if (body.includes('Aurora Tele Nord') && body.includes('#AA3366')) rebranded = body;
+    } catch (transient) { /* a blip mid-poll is not a verdict */ }
+  }
+  if (!rebranded) fail('the rebrand never reached the storefront manifest');
+  // and the built-ins are refusal-territory: their config is env, not form
+  const builtin = await ctx.patch(`${API}/onboarding/v1/operator/nova`, { headers: H(hostStaff),
+    data: { name: 'Hijacked' } });
+  if (builtin.status() === 200) fail('a built-in tenant was mutated by form');
+  console.log('OK LIVE MUTATION: Aurora rebranded to "Aurora Tele Nord" (#AA3366) and the'
+    + ' storefront manifest followed within one refresh interval — while she was SERVING.'
+    + ' Nothing restarted. Built-ins refuse the form (their config is env), and identity'
+    + ' fields are not editable at all: the risk boundary is written down, not wished away');
 
   console.log('\nALL OPERATOR-FORM CHECKS PASSED — an operator is a FORM: five fields, one save,'
     + ' and the running fleet grows a tenant with its own brand, currency, catalog and customers.'

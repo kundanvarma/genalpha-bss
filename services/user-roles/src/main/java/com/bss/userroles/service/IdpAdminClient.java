@@ -10,6 +10,11 @@ import java.util.Map;
  */
 public interface IdpAdminClient {
 
+    /** A re-minted realm invalidates cached machine tokens; IdPs without
+     * a cache simply ignore this. */
+    default void evictTokens(String tenantId) {
+    }
+
     List<Map<String, Object>> realmRoles(String tenantId);
 
     List<Map<String, Object>> users(String tenantId, String username);

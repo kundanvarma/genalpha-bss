@@ -53,8 +53,22 @@ public class TenantFileRefresher {
             Map<String, Object> block = (Map<String, Object>) bss.get("tenants");
             for (Map<String, Object> entry : (List<Map<String, Object>>) block.get("registry")) {
                 String id = String.valueOf(entry.get("id"));
-                if (tenants.byId(id) != null) {
-                    continue; // existing tenants are restart-territory
+                Object existing = tenants.byId(id);
+                if (existing != null) {
+                    // LIVE MUTATION for a serving tenant: seams, brand and
+                    // hosts follow the file; identity (id, issuer, key
+                    // endpoints) stays restart-territory — the security
+                    // resolvers cache per issuer, and lying about that
+                    // boundary would be worse than having it
+                    for (Map.Entry<String, Object> field : entry.entrySet()) {
+                        String key = field.getKey();
+                        if (key.equals("id") || key.equals("issuer")
+                                || key.equals("jwks-uri") || key.equals("token-uri")) {
+                            continue;
+                        }
+                        bindIfChanged(existing, key, field.getValue(), id);
+                    }
+                    continue;
                 }
                 Object fresh = newEntry();
                 for (Map.Entry<String, Object> field : entry.entrySet()) {
@@ -79,6 +93,28 @@ public class TenantFileRefresher {
             }
         }
         throw new IllegalStateException("no TenantEntry inner class");
+    }
+
+    /** Update one field on a LIVE entry, logging what changed. */
+    private void bindIfChanged(Object entry, String key, Object value, String tenantId) {
+        try {
+            String[] parts = key.split("-");
+            StringBuilder base = new StringBuilder();
+            for (String p : parts) {
+                base.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1));
+            }
+            Method getter = entry.getClass().getMethod("get" + base);
+            Object current = getter.invoke(entry);
+            Object next = value instanceof List ? value : resolve(String.valueOf(value));
+            if (current == null ? (next == null || String.valueOf(next).isEmpty())
+                    : String.valueOf(current).equals(String.valueOf(next))) {
+                return;
+            }
+            bind(entry, key, value);
+            log.info("tenant '{}' field '{}' mutated LIVE", tenantId, key);
+        } catch (Exception ignored) {
+            // no getter here — not this service's field
+        }
     }
 
     /** kebab-case yml key -> setter; unknown fields are simply not ours. */

@@ -130,8 +130,8 @@ bss:
         esp-url: ${ESP_URL_AURORA:}
         esp-api-key: ${ESP_API_KEY_AURORA:}
         esp-from: ${ESP_FROM_AURORA:}
-        brand-name: Aurora Tele
-        brand-color: "#0E7C61"
+        brand-name: Aurora Tele Nord
+        brand-color: "#AA3366"
         locale: "sv"
         currency: SEK
         hosts: [shop.aurora.localhost, csr.aurora.localhost, console.aurora.localhost, biz.aurora.localhost]

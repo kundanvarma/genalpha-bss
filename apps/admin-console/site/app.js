@@ -383,7 +383,7 @@ const RESOURCES = [
     // OPERATOR-AS-A-FORM: the host admin mints a whole new operator —
     // realm, registry entry, starter catalog — from this page. The fleet
     // picks the newcomer up LIVE; nothing restarts, nothing rebuilds.
-    noEdit: true,
+    // editing = LIVE mutation: brand/locale/currency follow the form
     noDelete: true,
     fields: [
       { name: 'id', label: 'Operator id (a-z, digits — becomes the realm & hostnames)', required: true },
