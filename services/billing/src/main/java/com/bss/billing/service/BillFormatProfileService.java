@@ -85,6 +85,8 @@ public class BillFormatProfileService {
 
     private Map<String, Object> toMap(BillFormatProfile p) {
         Map<String, Object> map = new LinkedHashMap<>();
+        // the code IS the public identity (the tenant's format points at it)
+        map.put("id", p.getCode());
         map.put("code", p.getCode());
         map.put("name", p.getName());
         map.put("syntax", p.getSyntax());

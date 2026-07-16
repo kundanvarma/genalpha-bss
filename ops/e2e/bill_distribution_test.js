@@ -9,7 +9,7 @@
  *  - the mock partner VALIDATES like a real access point: an 'ehf' claim
  *    without the Peppol customization is refused
  */
-const { request } = require('playwright');
+const { chromium, request } = require('playwright');
 
 const API = 'http://localhost:8080';
 const DIST = 'http://localhost:8124';
@@ -324,6 +324,40 @@ async function token(ctx, realm, user, pass) {
   console.log('OK THE ROW IS LOAD-BEARING: the admin edited the EHF profile row and the very'
     + ' next e-invoice carried the change on the wire — the profile is data an admin owns,'
     + ' not a constant a release owns');
+
+  /* ---------- the console page: profiles readable and a country ADDED through the UI ---------- */
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.goto('http://localhost:8080/console/');
+  await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
+  if (await page.locator('input[name="username"]').count()) {
+    await page.fill('input[name="username"]', 'demo');
+    await page.fill('input[name="password"]', 'demo');
+    await page.click('input[type="submit"], button[type="submit"]');
+  }
+  await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
+  await page.locator('.tab', { hasText: 'Bill formats' }).click();
+  await page.waitForSelector('#listing-body tr:has-text("A-NZ Peppol")', { timeout: 15000 })
+    .catch(() => fail('the seeded A-NZ profile row is not visible on the console page'));
+  console.log('OK CONSOLE PAGE: Bill formats renders the profile rows — the operator SEES what'
+    + ' every outgoing e-invoice declares, next to disputes and dunning');
+
+  // add Germany through the UI: XRechnung is one more row on the UBL skeleton
+  const xrCode = `xrechnung${run}`;
+  await page.fill('input[name="code"]', xrCode);
+  await page.fill('input[name="name"]', 'XRechnung 3.0 (Germany)');
+  await page.selectOption('select[name="syntax"]', 'ubl');
+  await page.fill('input[name="customizationId"]',
+    'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0');
+  await page.click('#save');
+  await page.waitForSelector(`#listing-body tr:has-text("${xrCode}")`, { timeout: 15000 });
+  const viaApi = await (await ctx.get(`${PROFILES}/${xrCode}`, { headers: H(staff) })).json();
+  if (!viaApi.customizationId || !viaApi.customizationId.includes('xrechnung')) {
+    fail('the UI-created profile did not land as a real row: ' + JSON.stringify(viaApi));
+  }
+  await browser.close();
+  console.log('OK A COUNTRY ADDED FROM THE CONSOLE: Germany (XRechnung 3.0) entered as a form'
+    + ' — and the API serves it back as a live profile row. No deploy, no code, a row');
 
   console.log('\nALL BILL-DISTRIBUTION CHECKS PASSED — the bill is a PDF anyone can save, the'
     + ' agent sees and resends the same document (to the address on file only), and a'

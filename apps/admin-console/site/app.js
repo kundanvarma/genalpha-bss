@@ -353,6 +353,29 @@ const RESOURCES = [
     },
   },
   {
+    path: 'billFormatProfile',
+    base: BILLING_BASE,
+    title: 'Bill formats',
+    // FORMAT PROFILES AS CONFIG ROWS: what a country's e-invoice profile
+    // IS — the syntax, the CustomizationID/ProfileID it declares, whether
+    // a payment reference is required. Adding a country here is an
+    // insert, not a deploy; the tenant's distribution format picks a row
+    // by code and the renderer follows the row.
+    noDelete: true,
+    fields: [
+      { name: 'code', label: 'Code (the key the distribution format points at)', required: true },
+      { name: 'name', label: 'Name', required: true },
+      { name: 'syntax', label: 'Syntax (EN 16931 carries both)', kind: 'select', options: [
+        { value: 'ubl', label: 'UBL 2.1 (Peppol BIS, EHF, A-NZ…)' },
+        { value: 'cii', label: 'UN/CEFACT CII (DACH / France)' },
+      ] },
+      { name: 'customizationId', label: 'CustomizationID the document declares' },
+      { name: 'profileId', label: 'ProfileID' },
+      { name: 'paymentReference', label: 'Payment reference required (Norway NO-R / KID)', kind: 'checkbox' },
+    ],
+    columns: ['code', 'name', 'syntax', 'paymentReference', 'lastUpdate'],
+  },
+  {
     path: 'salesLead',
     base: SALES_BASE,
     title: 'Sales leads',
@@ -650,6 +673,7 @@ const COLUMN_LABELS = {
   recurringChargePeriodType: 'Charge period', phoneNumber: 'Phone number',
   otherOperator: 'Other operator', clearinghouse: 'Clearinghouse',
   scheduledCutover: 'Cutover', createdAt: 'When', useCase: 'Use case',
+  customizationId: 'Customization', profileId: 'Profile', paymentReference: 'Payment ref',
 };
 const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.label]));
 
@@ -676,6 +700,7 @@ const TAB_ROLE = {
   settings: 'campaign:read',
   dispute: 'billing:admin',
   dunning: 'billing:admin',
+  billFormatProfile: 'billing:admin',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   audiences: 'insight:read',
