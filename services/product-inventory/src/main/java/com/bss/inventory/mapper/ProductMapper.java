@@ -36,6 +36,12 @@ public class ProductMapper {
         dto.setProductCharacteristic(orEmpty(readArray(entity.getProductCharacteristicJson())));
         dto.setProductPrice(orEmpty(readArray(entity.getProductPriceJson())));
         dto.setRelatedParty(orEmpty(readArray(entity.getRelatedPartyJson())));
+        if (entity.getPreviousOfferingJson() != null) {
+            dto.setPreviousOffering(readObject(entity.getPreviousOfferingJson()));
+        }
+        if (entity.getOfferingChangedAt() != null) {
+            dto.setOfferingChangedAt(entity.getOfferingChangedAt().toString());
+        }
         dto.setType("Product");
         return dto;
     }
@@ -65,6 +71,15 @@ public class ProductMapper {
             entity.setStatus(patch.getStatus());
         }
         if (patch.getProductOffering() != null) {
+            // a REPOINTED offering is a plan change: remember what it was
+            // and when, so the billing run can prorate the month honestly
+            java.util.Map<String, Object> before = readObject(entity.getProductOfferingJson());
+            Object oldId = before == null ? null : before.get("id");
+            Object newId = patch.getProductOffering().get("id");
+            if (oldId != null && newId != null && !String.valueOf(oldId).equals(String.valueOf(newId))) {
+                entity.setPreviousOfferingJson(entity.getProductOfferingJson());
+                entity.setOfferingChangedAt(java.time.OffsetDateTime.now());
+            }
             entity.setProductOfferingJson(writeJson(patch.getProductOffering()));
         }
         if (patch.getBillingAccount() != null) {

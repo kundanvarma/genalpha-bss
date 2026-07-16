@@ -213,24 +213,51 @@ public class BillingRunService {
                 unit = unitCache.getOrDefault(offeringId, unit);
                 // Device co-pay: the company bill carries only its share.
                 BigDecimal companyShare = companyShareOf.get(String.valueOf(product.get("id")));
-                BigDecimal charged = companyShare != null ? companyShare : monthly;
-                String rateName = String.valueOf(product.getOrDefault("name", offeringId))
-                        + (companyShare != null ? " (company share)" : "");
-                AppliedBillingRate rate = new AppliedBillingRate();
-                rate.setId(UUID.randomUUID().toString());
-                rate.setTenantId(tenantId);
-                rate.setName(rateName);
-                rate.setRateType("recurringCharge");
-                rate.setAmountValue(charged);
-                rate.setAmountUnit(unit);
-                rate.setProductJson("{\"id\":\"" + product.get("id") + "\"}");
-                rate.setOwnerPartyId(((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
+                String ownerParty = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
                         .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
-                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey()));
-                rate.setRateDate(OffsetDateTime.now());
-                billRates.add(rate);
-                total = total.add(charged);
-                monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
+                        .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey());
+                // MID-CYCLE PLAN CHANGE: each plan pays for its own days.
+                // The product remembers what it was and when it switched;
+                // both plans appear as their own line items, so the bill
+                // explains itself instead of pretending the month had one
+                // price. (Device co-pay lines are never plans — skipped.)
+                java.util.List<AppliedBillingRate> lines = new ArrayList<>();
+                LocalDate changedOn = changeDateWithin(product, periodStart, periodEnd);
+                if (companyShare == null && changedOn != null) {
+                    String oldOfferingId = String.valueOf(
+                            ((Map<?, ?>) product.get("previousOffering")).get("id"));
+                    BigDecimal oldMonthly = priceCache.computeIfAbsent(oldOfferingId + "|" + productChars,
+                            k -> monthlyFor(oldOfferingId, productChars, unitCache));
+                    long totalDays = java.time.temporal.ChronoUnit.DAYS.between(
+                            periodStart, periodEnd) + 1;
+                    long daysBefore = java.time.temporal.ChronoUnit.DAYS.between(periodStart, changedOn);
+                    BigDecimal before = oldMonthly.multiply(BigDecimal.valueOf(daysBefore))
+                            .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP);
+                    BigDecimal after = monthly.multiply(BigDecimal.valueOf(totalDays - daysBefore))
+                            .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP);
+                    if (before.signum() > 0) {
+                        lines.add(rateOf(tenantId, ownerParty, product,
+                                String.valueOf(((Map<String, Object>) product.get("previousOffering"))
+                                        .getOrDefault("name", oldOfferingId))
+                                + " (until " + changedOn + ", " + daysBefore + " days)", before, unit));
+                        monthlyByOffering.merge(oldOfferingId, before, BigDecimal::add);
+                    }
+                    lines.add(rateOf(tenantId, ownerParty, product,
+                            String.valueOf(product.getOrDefault("name", offeringId))
+                            + " (from " + changedOn + ", " + (totalDays - daysBefore) + " days)",
+                            after, unit));
+                    monthlyByOffering.merge(offeringId, after, BigDecimal::add);
+                } else {
+                    BigDecimal charged = companyShare != null ? companyShare : monthly;
+                    lines.add(rateOf(tenantId, ownerParty, product,
+                            String.valueOf(product.getOrDefault("name", offeringId))
+                            + (companyShare != null ? " (company share)" : ""), charged, unit));
+                    monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
+                }
+                for (AppliedBillingRate line : lines) {
+                    billRates.add(line);
+                    total = total.add(line.getAmountValue());
+                }
             }
             // The employee side of a device co-pay: excess lands here, on
             // the owner's personal bill — never back on a company bill.
@@ -487,5 +514,37 @@ public class BillingRunService {
             }
         }
         return chars;
+    }
+
+    /** The plan-change date, when it falls inside this billing period. */
+    private LocalDate changeDateWithin(Map<String, Object> product,
+            LocalDate periodStart, LocalDate periodEnd) {
+        if (product.get("offeringChangedAt") == null
+                || !(product.get("previousOffering") instanceof Map<?, ?> prev)
+                || prev.get("id") == null) {
+            return null;
+        }
+        try {
+            LocalDate changed = OffsetDateTime.parse(String.valueOf(product.get("offeringChangedAt")))
+                    .toLocalDate();
+            return changed.isBefore(periodStart) || changed.isAfter(periodEnd) ? null : changed;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private AppliedBillingRate rateOf(String tenantId, String ownerParty,
+            Map<String, Object> product, String name, BigDecimal amount, String unit) {
+        AppliedBillingRate rate = new AppliedBillingRate();
+        rate.setId(UUID.randomUUID().toString());
+        rate.setTenantId(tenantId);
+        rate.setName(name);
+        rate.setRateType("recurringCharge");
+        rate.setAmountValue(amount);
+        rate.setAmountUnit(unit);
+        rate.setProductJson("{\"id\":\"" + product.get("id") + "\"}");
+        rate.setOwnerPartyId(ownerParty);
+        rate.setRateDate(OffsetDateTime.now());
+        return rate;
     }
 }
