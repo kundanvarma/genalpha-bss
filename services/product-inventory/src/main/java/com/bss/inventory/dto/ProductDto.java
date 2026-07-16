@@ -18,6 +18,10 @@ public class ProductDto {
     @com.fasterxml.jackson.annotation.JsonProperty("offeringChangedAt")
     private String offeringChangedAt;
 
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonProperty("startDate")
+    private String startDate;
+
     @JsonProperty("id")
     private String id;
 
@@ -136,4 +140,6 @@ public class ProductDto {
     public void setPreviousOffering(java.util.Map<String, Object> v) { this.previousOffering = v; }
     public String getOfferingChangedAt() { return offeringChangedAt; }
     public void setOfferingChangedAt(String v) { this.offeringChangedAt = v; }
+    public String getStartDate() { return startDate; }
+    public void setStartDate(String v) { this.startDate = v; }
 }

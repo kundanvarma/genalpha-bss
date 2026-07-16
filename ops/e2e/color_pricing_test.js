@@ -151,8 +151,16 @@ async function token(request, user, pass) {
     .reduce((s, r) => s + r.taxExcludedAmount.value, 0);
   const tinaRecurring = recurringOf(tinaLines);
   const paalRecurring = recurringOf(paalLines);
-  if (Math.abs(tinaRecurring - paalRecurring - premiumValue) > 0.01) {
-    fail(`bills should differ by the premium: titanium ${tinaRecurring}, black ${paalRecurring}`);
+  // both ordered today, so both bills are prorated — the premium is too
+  const nowC = new Date();
+  const cStart = Date.UTC(nowC.getUTCFullYear(), nowC.getUTCMonth(), 1);
+  const cEnd = Date.UTC(nowC.getUTCFullYear(), nowC.getUTCMonth() + 1, 0);
+  const cTotal = Math.round((cEnd - cStart) / 86400000) + 1;
+  const cLeft = Math.round((cEnd - Date.UTC(nowC.getUTCFullYear(), nowC.getUTCMonth(), nowC.getUTCDate())) / 86400000) + 1;
+  const proratedPremium = premiumValue * cLeft / cTotal;
+  if (Math.abs(tinaRecurring - paalRecurring - proratedPremium) > 0.02) {
+    fail(`bills should differ by the prorated premium ~${proratedPremium.toFixed(2)}: `
+      + `titanium ${tinaRecurring}, black ${paalRecurring}`);
   }
   if (!tinaLines.some((r) => (r.name || '').includes('Titanium launch'))) {
     fail('Titanium bill missing the colour-campaign discount line');

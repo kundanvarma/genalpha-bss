@@ -467,16 +467,32 @@ async function apiGet(page, path, token) {
   const billRow = a.locator('.row', { hasText: 'BILL-' }).first();
   await billRow.waitFor({ timeout: 15000 });
   const billTotal = (await billRow.locator('.linetotal').textContent()).trim();
-  // 2× bundle (64.98 + Samsung 37.49) + iPhone 17 (33.29) = 238.23 recurring,
-  // + 2.3 GB roaming overage × 2.50 = 5.75 usage → 243.98 total.
-  if (!billTotal.startsWith('243.98')) fail(`expected bill 243.98, got "${billTotal}"`);
+  // 2× bundle (64.98 + Samsung 37.49) + iPhone 17 (33.29) = 238.23/month
+  // recurring — PRORATED to the days since Alice ordered (today) — plus
+  // 2.3 GB roaming overage × 2.50 = 5.75 usage, never prorated.
+  const nowB = new Date();
+  const pStartB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), 1);
+  const pEndB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth() + 1, 0);
+  const dTotal = Math.round((pEndB - pStartB) / 86400000) + 1;
+  const dLeft = Math.round((pEndB - Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), nowB.getUTCDate())) / 86400000) + 1;
+  const expectedRecurring = 238.23 * dLeft / dTotal; // per-line rounding drifts a few cents
+  const expectedBill = expectedRecurring + 5.75;
+  const shown = parseFloat(billTotal);
+  if (Math.abs(shown - expectedBill) > 0.06) {
+    fail(`expected ~${expectedBill.toFixed(2)} (238.23 × ${dLeft}/${dTotal} days + 5.75 usage), got "${billTotal}"`);
+  }
   await billRow.locator('.linkish').click();
   await a.locator('.billitems .row').first().waitFor({ timeout: 10000 });
   const itemCount = await a.locator('.billitems .row').count();
   if (itemCount !== 6) fail(`expected 6 bill line items (2 bundle, 2 samsung, 1 iphone, 1 usage), got ${itemCount}`);
+  if (dLeft < dTotal) {
+    const proratedNames = await a.locator('.billitems .row', { hasText: '(from' }).count();
+    if (proratedNames !== 5) fail(`all 5 recurring items must name their start date, got ${proratedNames}`);
+  }
   const usageLine = a.locator('.billitems .row', { hasText: 'EU roaming data overage' });
   if (!(await usageLine.count())) fail('bill missing the usage overage line item');
-  console.log('OK bill for', billTotal, 'with', itemCount, 'line items incl usage overage');
+  console.log('OK bill for', billTotal, `(${dLeft}/${dTotal} days prorated) with`, itemCount,
+    'line items incl usage overage');
 
   // Pay the bill with the card SAVED at checkout (TMF670) — no retyping.
   await billRow.locator('[data-testid=pay-bill]').click();
@@ -494,8 +510,10 @@ async function apiGet(page, path, token) {
   const billPaymentId = settledBill.payment[0].id;
   const billPayment = JSON.parse((await apiGet(a,
     `/tmf-api/paymentManagement/v4/payment/${billPaymentId}`, tokenA)).body);
-  if (billPayment.status !== 'captured' || billPayment.amount.value !== 243.98) {
-    fail('bill payment wrong: ' + JSON.stringify(billPayment).slice(0, 200));
+  if (billPayment.status !== 'captured'
+      || Math.abs(billPayment.amount.value - shown) > 0.011) {
+    fail('bill payment wrong (wanted the prorated bill ' + shown + '): '
+      + JSON.stringify(billPayment).slice(0, 200));
   }
   console.log('OK bill settled, payment of', billPayment.amount.value, billPayment.amount.unit, 'captured');
 

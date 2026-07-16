@@ -141,6 +141,17 @@ public class ProductService {
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/product/" + id);
+        // TMF637 startDate: the posted value wins (migrations, backdating);
+        // otherwise the product starts NOW — billing prorates from here
+        if (dto.getStartDate() != null) {
+            try {
+                entity.setStartDate(java.time.OffsetDateTime.parse(dto.getStartDate()));
+            } catch (Exception e) {
+                entity.setStartDate(java.time.OffsetDateTime.now());
+            }
+        } else {
+            entity.setStartDate(java.time.OffsetDateTime.now());
+        }
         ProductDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductCreateEvent", "product", created);
         return created;

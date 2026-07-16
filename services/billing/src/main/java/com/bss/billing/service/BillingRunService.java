@@ -216,43 +216,59 @@ public class BillingRunService {
                 String ownerParty = ((List<Map<String, Object>>) product.getOrDefault("relatedParty", List.of())).stream()
                         .filter(p -> "customer".equalsIgnoreCase(String.valueOf(p.get("role"))))
                         .map(p -> String.valueOf(p.get("id"))).findFirst().orElse(owner.getKey());
-                // MID-CYCLE PLAN CHANGE: each plan pays for its own days.
-                // The product remembers what it was and when it switched;
-                // both plans appear as their own line items, so the bill
-                // explains itself instead of pretending the month had one
-                // price. (Device co-pay lines are never plans — skipped.)
+                // MID-CYCLE FAIRNESS: each plan pays for its own days, and a
+                // product pays only from the day it STARTED. The period is
+                // split into segments — [start..change) at the old plan,
+                // [change..end] at the new; no change = one segment — and each
+                // segment is its own line item naming its dates, so the bill
+                // explains itself. (Device co-pay lines are policy-split, not
+                // plans — they stay whole.)
                 java.util.List<AppliedBillingRate> lines = new ArrayList<>();
+                long totalDays = java.time.temporal.ChronoUnit.DAYS.between(periodStart, periodEnd) + 1;
+                LocalDate effStart = effectiveStart(product, periodStart, periodEnd);
+                if (effStart == null) {
+                    continue; // starts after this period — nothing to charge yet
+                }
                 LocalDate changedOn = changeDateWithin(product, periodStart, periodEnd);
-                if (companyShare == null && changedOn != null) {
-                    String oldOfferingId = String.valueOf(
-                            ((Map<?, ?>) product.get("previousOffering")).get("id"));
-                    BigDecimal oldMonthly = priceCache.computeIfAbsent(oldOfferingId + "|" + productChars,
-                            k -> monthlyFor(oldOfferingId, productChars, unitCache));
-                    long totalDays = java.time.temporal.ChronoUnit.DAYS.between(
-                            periodStart, periodEnd) + 1;
-                    long daysBefore = java.time.temporal.ChronoUnit.DAYS.between(periodStart, changedOn);
-                    BigDecimal before = oldMonthly.multiply(BigDecimal.valueOf(daysBefore))
-                            .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP);
-                    BigDecimal after = monthly.multiply(BigDecimal.valueOf(totalDays - daysBefore))
-                            .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP);
-                    if (before.signum() > 0) {
-                        lines.add(rateOf(tenantId, ownerParty, product,
-                                String.valueOf(((Map<String, Object>) product.get("previousOffering"))
-                                        .getOrDefault("name", oldOfferingId))
-                                + " (until " + changedOn + ", " + daysBefore + " days)", before, unit));
-                        monthlyByOffering.merge(oldOfferingId, before, BigDecimal::add);
-                    }
+                if (changedOn != null && !changedOn.isAfter(effStart)) {
+                    changedOn = null; // changed before it even started billing here
+                }
+                if (companyShare != null) {
                     lines.add(rateOf(tenantId, ownerParty, product,
                             String.valueOf(product.getOrDefault("name", offeringId))
-                            + " (from " + changedOn + ", " + (totalDays - daysBefore) + " days)",
-                            after, unit));
-                    monthlyByOffering.merge(offeringId, after, BigDecimal::add);
+                            + " (company share)", companyShare, unit));
+                    monthlyByOffering.merge(offeringId, companyShare, BigDecimal::add);
                 } else {
-                    BigDecimal charged = companyShare != null ? companyShare : monthly;
-                    lines.add(rateOf(tenantId, ownerParty, product,
-                            String.valueOf(product.getOrDefault("name", offeringId))
-                            + (companyShare != null ? " (company share)" : ""), charged, unit));
-                    monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
+                    if (changedOn != null) {
+                        String oldOfferingId = String.valueOf(
+                                ((Map<?, ?>) product.get("previousOffering")).get("id"));
+                        BigDecimal oldMonthly = priceCache.computeIfAbsent(oldOfferingId + "|" + productChars,
+                                k -> monthlyFor(oldOfferingId, productChars, unitCache));
+                        long oldDays = java.time.temporal.ChronoUnit.DAYS.between(effStart, changedOn);
+                        BigDecimal before = oldMonthly.multiply(BigDecimal.valueOf(oldDays))
+                                .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP);
+                        if (before.signum() > 0) {
+                            lines.add(rateOf(tenantId, ownerParty, product,
+                                    String.valueOf(((Map<String, Object>) product.get("previousOffering"))
+                                            .getOrDefault("name", oldOfferingId))
+                                    + " (until " + changedOn + ", " + oldDays + " days)", before, unit));
+                            monthlyByOffering.merge(oldOfferingId, before, BigDecimal::add);
+                        }
+                        effStart = changedOn; // the new plan takes over from here
+                    }
+                    long days = java.time.temporal.ChronoUnit.DAYS.between(effStart, periodEnd) + 1;
+                    boolean partial = days < totalDays;
+                    BigDecimal charged = partial
+                            ? monthly.multiply(BigDecimal.valueOf(days))
+                                    .divide(BigDecimal.valueOf(totalDays), 2, java.math.RoundingMode.HALF_UP)
+                            : monthly;
+                    if (charged.signum() > 0) {
+                        lines.add(rateOf(tenantId, ownerParty, product,
+                                String.valueOf(product.getOrDefault("name", offeringId))
+                                + (partial ? " (from " + effStart + ", " + days + " days)" : ""),
+                                charged, unit));
+                        monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
+                    }
                 }
                 for (AppliedBillingRate line : lines) {
                     billRates.add(line);
@@ -514,6 +530,26 @@ public class BillingRunService {
             }
         }
         return chars;
+    }
+
+    /** When this product starts paying in this period: the later of the
+     * period start and the product's own startDate; null = starts after
+     * the period (charge nothing yet). No startDate = before any period. */
+    private LocalDate effectiveStart(Map<String, Object> product,
+            LocalDate periodStart, LocalDate periodEnd) {
+        if (product.get("startDate") == null) {
+            return periodStart;
+        }
+        try {
+            LocalDate started = OffsetDateTime.parse(String.valueOf(product.get("startDate")))
+                    .toLocalDate();
+            if (started.isAfter(periodEnd)) {
+                return null;
+            }
+            return started.isBefore(periodStart) ? periodStart : started;
+        } catch (Exception e) {
+            return periodStart;
+        }
     }
 
     /** The plan-change date, when it falls inside this billing period. */
