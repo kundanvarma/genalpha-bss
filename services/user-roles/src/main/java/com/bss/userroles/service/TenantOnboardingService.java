@@ -43,6 +43,8 @@ public class TenantOnboardingService {
     private final String tenantsFile;
     private final String catalogBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
+    private final String protectedTenants;
+    private final IdpAdminClient idp;
     private final com.bss.userroles.security.TenantFileRefresher refresher;
 
     public TenantOnboardingService(RestClient.Builder builder,
@@ -52,6 +54,8 @@ public class TenantOnboardingService {
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
+            @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
+            IdpAdminClient idp,
             com.bss.userroles.security.TenantRegistry tenants,
             com.bss.userroles.security.TenantFileRefresher refresher) {
         this.rest = builder.build();
@@ -61,6 +65,8 @@ public class TenantOnboardingService {
         this.templatePath = templatePath;
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
+        this.protectedTenants = protectedTenants;
+        this.idp = idp;
         this.tenants = tenants;
         this.refresher = refresher;
     }
@@ -106,6 +112,8 @@ public class TenantOnboardingService {
                 .retrieve().toBodilessEntity();
         log.info("realm '{}' created from the template", id);
 
+        // the realm was replaced: any cached machine token for it is now a lie
+        idp.evictTokens(id);
         appendTenantBlock(id, name, locale, currency, color);
         // this service joins its own fleet immediately; the rest follow
         // within one refresh interval
@@ -116,6 +124,47 @@ public class TenantOnboardingService {
         log.info("operator '{}' ({}) is LIVE in {}s — no restart, no rebuild", name, id, seconds);
         return Map.of("id", id, "name", name, "locale", locale, "currency", currency,
                 "storefrontHost", "shop." + id + ".localhost", "seconds", seconds);
+    }
+
+    /**
+     * LIVE MUTATION of a serving operator: brand, locale, currency, color
+     * are rewritten in the tenant's block and the fleet's refreshers carry
+     * them out within one interval — no restart. Identity (id, issuer,
+     * key endpoints) is deliberately NOT editable here.
+     */
+    public Map<String, Object> mutate(String id, Map<String, Object> dto) throws Exception {
+        // the SEED operators are env-governed and form-protected — only
+        // form-born operators are form-mutable
+        if (java.util.Set.of(protectedTenants.split(",")).contains(id)) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "operator '" + id + "' is a seed operator — its config is env, not form");
+        }
+        if (tenants.byId(id) == null) {
+            throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
+        }
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        if (!m.find()) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "operator '" + id + "' is a built-in — built-ins mutate by env, not by form");
+        }
+        String block = m.group(1);
+        if (dto.get("name") != null) {
+            block = block.replaceAll("brand-name: .*", "brand-name: " + dto.get("name"));
+        }
+        if (dto.get("color") != null) {
+            block = block.replaceAll("brand-color: .*", "brand-color: \"" + dto.get("color") + "\"");
+        }
+        if (dto.get("locale") != null) {
+            block = block.replaceAll("locale: .*", "locale: \"" + dto.get("locale") + "\"");
+        }
+        if (dto.get("currency") != null) {
+            block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
+        }
+        Files.writeString(Path.of(tenantsFile), yml.replace(m.group(1), block));
+        refresher.refresh();
+        log.info("operator '{}' mutated LIVE — the fleet follows within one refresh interval", id);
+        return Map.of("id", id, "mutated", true);
     }
 
     private String masterAdminToken() {

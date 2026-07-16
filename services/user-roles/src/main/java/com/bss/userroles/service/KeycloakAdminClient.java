@@ -30,6 +30,12 @@ public class KeycloakAdminClient implements IdpAdminClient {
     private final RestClient rest;
     private final Map<String, CachedToken> tokens = new ConcurrentHashMap<>();
 
+    /** A re-minted realm invalidates every old machine token for it. */
+    @Override
+    public void evictTokens(String tenantId) {
+        tokens.remove(tenantId);
+    }
+
     public KeycloakAdminClient(TenantRegistry tenants, RestClient.Builder builder) {
         this.tenants = tenants;
         this.rest = builder.build();

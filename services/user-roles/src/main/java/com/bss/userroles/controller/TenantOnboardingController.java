@@ -45,6 +45,15 @@ public class TenantOnboardingController {
         return ResponseEntity.ok(onboarding.onboard(dto));
     }
 
+    /** Live rebrand/re-currency of a serving operator — no restart. */
+    @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/operator/{id}")
+    public ResponseEntity<Map<String, Object>> mutate(
+            @org.springframework.web.bind.annotation.PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) throws Exception {
+        requireHostOperator();
+        return ResponseEntity.ok(onboarding.mutate(id, dto));
+    }
+
     private void requireHostOperator() {
         if (!hostTenant.equals(tenantScope.currentTenantId())) {
             throw new com.bss.userroles.exception.BadRequestException(

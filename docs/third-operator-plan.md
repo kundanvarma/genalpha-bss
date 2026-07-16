@@ -94,6 +94,22 @@ and the row-level walls hold in both directions against genalpha.
   honors aurora's first token with zero restarts; the manifest wears the
   brand; Astrid buys the seeded plan and activates.
 
+## Live mutation of existing tenants (shipped — the last follow-up)
+
+The refreshers now UPDATE serving tenants in place: any field changed in
+the shared file follows within one interval — seams, brand, hosts —
+except identity (`id`, `issuer`, key endpoints), which stays
+restart-territory because the security resolvers cache per issuer; the
+boundary is enforced in code, not wished away. The console's Operators
+tab edits form-born operators (PATCH /onboarding/v1/operator/{id});
+SEED operators (genalpha, nova — the protected list) refuse the form:
+their config is env. Two live-fire findings: a failed suite run briefly
+renamed nova via the unguarded endpoint and the refreshers HEALED it
+fleet-wide the moment the file was corrected — live mutation cutting
+both ways; and re-onboarding a realm invalidates cached machine tokens,
+so onboarding now evicts them (IdpAdminClient.evictTokens — a seam
+method, so the mock IdP in tests simply ignores it).
+
 ## Open questions to resolve while building
 
 - Which services read tenant config beyond the registry (channel manifest
