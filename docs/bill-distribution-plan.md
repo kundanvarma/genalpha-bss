@@ -78,5 +78,14 @@ config, not code.
   fail-open by the billing run, honored by the distribution seam: the
   customer picks the *channel*; the partner, token and XML syntax stay
   tenant config. Every change notifies the customer.
+- **Format profiles as config rows** — what a country's profile IS
+  (syntax, CustomizationID, ProfileID, payment-reference rule) lives in
+  `bill_format_profile` rows, tenant-scoped under RLS, seeded with EHF,
+  Peppol BIS, CII and A-NZ, readable/editable at
+  `/billFormatProfile` (edits are `billing:admin`). The renderer reads
+  the row; built-in shapes remain the fail-open fallback. Adding a
+  country is an INSERT, not a deploy — proven live: an admin edit to the
+  EHF row changed the next e-invoice on the wire.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format; a business-
+  console page over `/billFormatProfile`.

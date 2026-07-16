@@ -37,18 +37,21 @@ public class CustomerBillController {
     private final FieldSelector fieldSelector;
     private final com.bss.billing.service.DunningService dunningService;
     private final com.bss.billing.service.DisputeService disputeService;
+    private final com.bss.billing.service.BillFormatProfileService formatProfileService;
     private final com.bss.billing.service.BillDocumentService documentService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
     public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
             com.bss.billing.service.DunningService dunningService,
             com.bss.billing.service.DisputeService disputeService,
+            com.bss.billing.service.BillFormatProfileService formatProfileService,
             com.bss.billing.security.TenantScope tenantScope,
             com.bss.billing.service.BillDocumentService documentService) {
         this.service = service;
         this.fieldSelector = fieldSelector;
         this.dunningService = dunningService;
         this.disputeService = disputeService;
+        this.formatProfileService = formatProfileService;
         this.documentService = documentService;
         this.tenantScope = tenantScope;
     }
@@ -149,6 +152,25 @@ public class CustomerBillController {
     public ResponseEntity<Map<String, Object>> dispute(@PathVariable("id") String id,
             @RequestBody Map<String, Object> dto) {
         return ResponseEntity.ok(disputeService.open(id, dto));
+    }
+
+    /** FORMAT PROFILES AS CONFIG ROWS: what each e-invoice profile is —
+     * readable by anyone with billing read, editable by the tenant admin.
+     * Adding a country is a POST here, not a deploy. */
+    @GetMapping("/billFormatProfile")
+    public ResponseEntity<java.util.List<Map<String, Object>>> formatProfiles() {
+        return ResponseEntity.ok(formatProfileService.findAll());
+    }
+
+    @GetMapping("/billFormatProfile/{code}")
+    public ResponseEntity<Map<String, Object>> formatProfile(@PathVariable("code") String code) {
+        return ResponseEntity.ok(formatProfileService.findByCode(code));
+    }
+
+    @PatchMapping("/billFormatProfile/{code}")
+    public ResponseEntity<Map<String, Object>> upsertFormatProfile(
+            @PathVariable("code") String code, @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(formatProfileService.upsert(code, dto));
     }
 
     /** The disputes worklist (staff). */
