@@ -65,3 +65,18 @@ PDF: magic bytes + owner-scoping (stranger = 404) + the shop button.
 Distribution: nova's bill lands at the partner as EHF UBL naming the bill and
 total; genalpha's lands as a print job carrying the PDF; the difference is
 config, not code.
+
+## 4. Shipped after the plan (same seam, new doors)
+
+- **The invoice copy** — CSR Customer 360 opens the bill PDF and emails it;
+  customers self-serve the same from the shop and the app. The copy goes to
+  the **address on file only** (never one dictated over the phone). Delivery
+  rides the existing per-tenant ESP seam: an in-app inbox message always,
+  plus a real email with the PDF attached where the tenant has an ESP.
+- **Per-customer delivery preference** — `paper | einvoice | digital` on the
+  individual (null = tenant default), set from the shop or by the CSR, read
+  fail-open by the billing run, honored by the distribution seam: the
+  customer picks the *channel*; the partner, token and XML syntax stay
+  tenant config. Every change notifies the customer.
+- Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format.

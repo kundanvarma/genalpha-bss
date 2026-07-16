@@ -348,6 +348,15 @@ export async function resendBill(billId) {
   }));
 }
 
+/** How the customer's bill arrives (paper / einvoice / digital) — set
+ * on their behalf, with their say-so on the line. */
+export async function setBillDeliveryFor(customerId, preference) {
+  return json(await authFetch(`${PARTY}/individual/${customerId}/billDelivery`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preference }),
+  }));
+}
+
 /** Hardship/retention: split an unpaid bill into monthly installments. */
 export async function splitBill(billId, installments) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/installmentPlan`, {

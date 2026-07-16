@@ -176,6 +176,22 @@ public class RestDownstreamClients {
 
             @Override
             @SuppressWarnings("unchecked")
+            public java.util.Optional<String> billDeliveryOf(String partyId) {
+                try {
+                    Map<String, Object> person = rest.get()
+                            .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                            .retrieve().body(Map.class);
+                    return person == null || person.get("billDelivery") == null
+                            ? java.util.Optional.empty()
+                            : java.util.Optional.of(String.valueOf(person.get("billDelivery")));
+                } catch (RestClientException e) {
+                    // fail open: unreachable party source means the tenant default
+                    return java.util.Optional.empty();
+                }
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
             public java.util.Optional<String> organizationOf(String partyId) {
                 try {
                     Map<String, Object> person = rest.get()

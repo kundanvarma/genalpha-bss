@@ -185,6 +185,91 @@ async function token(ctx, realm, user, pass) {
     + ' the email arrives at the ADDRESS ON FILE (never one dictated over the phone) with '
     + novaBill.billNo + '.pdf attached — a real PDF, same bytes the endpoint serves');
 
+  /* ---------- per-customer DELIVERY PREFERENCE beats the tenant default ---------- */
+  // nova ships e-invoices by default — but THIS customer wants paper.
+  // Their choice picks the channel; the partner and token stay tenant config.
+  const pEmail = `paperlover-${run}@nova.example`;
+  const pLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(novaStaff), data: { email: pEmail, givenName: 'Pia', familyName: `Post${run}` } })).json();
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(novaStaff), data: {
+    id: pLogin.id, givenName: 'Pia', familyName: `Post${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: pEmail } }] } });
+  const pia = await token(ctx, 'nova', pEmail, pLogin.temporaryPassword);
+  const badPref = await ctx.post(`${API}/tmf-api/party/v4/individual/${pLogin.id}/billDelivery`,
+    { headers: H(pia), data: { preference: 'carrier-pigeon' } });
+  if (badPref.status() !== 400) fail('a nonsense preference was accepted: ' + badPref.status());
+  const setPaper = await ctx.post(`${API}/tmf-api/party/v4/individual/${pLogin.id}/billDelivery`,
+    { headers: H(pia), data: { preference: 'paper' } });
+  if (setPaper.status() !== 200) fail('could not choose paper: ' + setPaper.status());
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(pia), data: { productOrderItem: [{ action: 'add',
+      productOffering: { id: novaPlan.id, name: novaPlan.name } }] } });
+  let piaBill = null;
+  for (let i = 0; i < 30 && !piaBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(novaStaff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(pia) })).json();
+    piaBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!piaBill) fail('no bill for the paper-preferring nova customer');
+  let piaJob = null;
+  for (let i = 0; i < 15 && !piaJob; i++) {
+    await sleep(1500);
+    const jobs = await (await ctx.get(`${DIST}/invoices?billNo=${piaBill.billNo}`)).json();
+    piaJob = jobs[0] || null;
+  }
+  if (!piaJob) fail('the paper-preference bill never reached the partner');
+  if (piaJob.channel !== 'print' || piaJob.format !== 'pdf' || piaJob.token !== 'nova-dist-token'
+      || !Buffer.from(piaJob.payload, 'base64').slice(0, 4).toString().startsWith('%PDF')) {
+    fail('paper preference did not override the einvoice default: '
+      + JSON.stringify({ channel: piaJob.channel, format: piaJob.format }));
+  }
+  console.log('OK PREFERENCE BEATS DEFAULT: nova ships EHF e-invoices by default, but THIS'
+    + ' customer chose paper — their bill left as a PRINT job (a real PDF, nova\'s own token).'
+    + ' The customer picks the channel; the plumbing stays tenant config');
+
+  let prefNote = null;
+  for (let i = 0; i < 10 && !prefNote; i++) {
+    await sleep(1500);
+    const inbox = await (await ctx.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: H(pia) })).json();
+    prefNote = inbox.find((m) => (m.subject || '').includes('How you get your bill')) || null;
+  }
+  if (!prefNote) fail('the delivery change was silent — no inbox notification');
+  console.log('OK never silent: "How you get your bill changed" landed in the inbox'
+    + ' (and on the TMF683 timeline like every message)');
+
+  // ...and a genalpha customer who wants DIGITAL ONLY: the tenant default
+  // is print, but their bill must NOT reach the print house at all
+  const dEmail = `digital-${run}@example.com`;
+  const dLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: dEmail, givenName: 'Dee', familyName: `Gital${run}` } })).json();
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
+    id: dLogin.id, givenName: 'Dee', familyName: `Gital${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: dEmail } }] } });
+  const dee = await token(ctx, 'bss', dEmail, dLogin.temporaryPassword);
+  // the CSR sets it on the caller's behalf — staff token, customer id
+  const setDigital = await ctx.post(`${API}/tmf-api/party/v4/individual/${dLogin.id}/billDelivery`,
+    { headers: H(staff), data: { preference: 'digital' } });
+  if (setDigital.status() !== 200) fail('CSR could not set digital-only: ' + setDigital.status());
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(dee), data: { productOrderItem: [{ action: 'add', productOffering: PLAN }] } });
+  let deeBill = null;
+  for (let i = 0; i < 30 && !deeBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(staff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(dee) })).json();
+    deeBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!deeBill) fail('no bill for the digital-only customer');
+  await sleep(6000); // give a wrong print job every chance to appear
+  const deeJobs = await (await ctx.get(`${DIST}/invoices?billNo=${deeBill.billNo}`)).json();
+  if (deeJobs.length) fail('digital-only was ignored — the bill reached the partner anyway');
+  console.log('OK DIGITAL-ONLY HONORED: genalpha prints by default, but this customer said'
+    + ' digital — their bill exists in-app (and as a PDF on demand) and NOTHING went to'
+    + ' the print house');
+
   console.log('\nALL BILL-DISTRIBUTION CHECKS PASSED — the bill is a PDF anyone can save, the'
     + ' agent sees and resends the same document (to the address on file only), and a'
     + ' finished bill leaves for the tenant\'s own partner: EHF to the access point for Norway,'

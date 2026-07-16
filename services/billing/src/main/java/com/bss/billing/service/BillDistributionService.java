@@ -43,14 +43,33 @@ public class BillDistributionService {
     }
 
     public void distribute(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines) {
+        distribute(tenantId, bill, lines, null);
+    }
+
+    /**
+     * With the CUSTOMER's delivery preference deciding the channel:
+     * 'paper' prints, 'einvoice' ships XML, 'digital' skips the partner
+     * entirely (in-app and email are the delivery), null takes the
+     * tenant's default. The partner, token and XML syntax stay tenant
+     * config — the customer picks the channel, never the plumbing.
+     */
+    public void distribute(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines,
+            String preference) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !"partner".equalsIgnoreCase(tenant.getBillDistributionProvider())
                 || tenant.getBillDistributionUrl() == null
                 || tenant.getBillDistributionUrl().isBlank()) {
             return;
         }
+        if ("digital".equalsIgnoreCase(preference)) {
+            log.info("bill {} not distributed: the customer chose digital-only delivery",
+                    bill.getBillNo());
+            return;
+        }
         String format = tenant.getBillDistributionFormat();
-        String channel = tenant.getBillDistributionChannel();
+        String channel = "paper".equalsIgnoreCase(preference) ? "print"
+                : "einvoice".equalsIgnoreCase(preference) ? "einvoice"
+                : tenant.getBillDistributionChannel();
         // render on the caller's thread (entities are session-bound); ship async
         String payload;
         String contentType;

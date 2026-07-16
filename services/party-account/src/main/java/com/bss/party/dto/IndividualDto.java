@@ -13,6 +13,8 @@ public class IndividualDto {
     @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     @com.fasterxml.jackson.annotation.JsonProperty("billingAnchorDay")
     private Integer billingAnchorDay;
+    @com.fasterxml.jackson.annotation.JsonProperty("billDelivery")
+    private String billDelivery;
 
     @JsonProperty("id")
     private String id;
@@ -105,4 +107,6 @@ public class IndividualDto {
 
     public Integer getBillingAnchorDay() { return billingAnchorDay; }
     public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
+    public String getBillDelivery() { return billDelivery; }
+    public void setBillDelivery(String v) { this.billDelivery = v; }
 }

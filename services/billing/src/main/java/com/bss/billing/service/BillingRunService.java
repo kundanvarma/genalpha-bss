@@ -450,8 +450,10 @@ public class BillingRunService {
             billRates.forEach(r -> r.setBillId(id));
             rates.saveAll(billRates);
             // the finished bill leaves for the tenant's distribution partner
-            // (Peppol/EHF e-invoice or print house) — fail-open, never blocking
-            distribution.distribute(tenantId, bill, billRates);
+            // (Peppol/EHF e-invoice or print house) — fail-open, never
+            // blocking; the CUSTOMER's preference picks the channel
+            distribution.distribute(tenantId, bill, billRates,
+                    orgs.billDeliveryOf(owner.getKey()).orElse(null));
             events.publish("CustomerBillCreateEvent", "customerBill", Map.of(
                     "id", id,
                     "billNo", bill.getBillNo(),

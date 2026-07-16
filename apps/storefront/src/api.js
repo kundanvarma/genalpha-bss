@@ -563,6 +563,14 @@ export async function setBillingDay(anchorDay) {
   }));
 }
 
+/** How your bill arrives: paper, einvoice, digital — or default. */
+export async function setBillDelivery(preference) {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/billDelivery`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ preference }),
+  }));
+}
+
 /** "This charge is wrong": open a dispute — collection pauses while we look. */
 export async function disputeBill(billId, reason) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}/dispute`, {
