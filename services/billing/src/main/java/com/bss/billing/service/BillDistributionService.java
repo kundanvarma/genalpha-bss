@@ -217,9 +217,100 @@ public class BillDistributionService {
             map.put("lastError", r.getLastError());
             map.put("createdAt", r.getCreatedAt().toString());
             map.put("sentAt", r.getSentAt() == null ? null : r.getSentAt().toString());
+            map.put("buyerStatus", r.getBuyerStatus());
+            map.put("buyerNote", r.getBuyerNote());
+            map.put("respondedAt", r.getRespondedAt() == null ? null : r.getRespondedAt().toString());
             map.put("@type", "BillDistribution");
             return (Map<String, Object>) map;
         }).toList();
+    }
+
+    /**
+     * THE BUYER ANSWERS: a Peppol Invoice Response (UBL ApplicationResponse,
+     * BIS 3 Invoice Response) arriving from the access point. The response
+     * code becomes the ledger row's buyer status, so one row tells the whole
+     * story: sent -> accepted -> paid, or rejected with the buyer's words.
+     * 'paid' here is the BUYER'S claim — the money is only real when the
+     * bank's remittance says so; the two paths stay separate on purpose.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> applyInvoiceResponse(String tenantId, String xml) {
+        Response response = parseInvoiceResponse(xml);
+        List<BillDistribution> rows = ledger.findByTenantIdAndBillNo(tenantId, response.billNo());
+        int updated = 0;
+        for (BillDistribution row : rows) {
+            if (!"einvoice".equalsIgnoreCase(row.getChannel())) {
+                continue; // print jobs have no buyer protocol
+            }
+            row.setBuyerStatus(response.status());
+            row.setBuyerNote(response.note());
+            row.setRespondedAt(OffsetDateTime.now());
+            row.setLastUpdate(OffsetDateTime.now());
+            ledger.save(row);
+            updated++;
+            log.info("invoice response: {} is now '{}' by the buyer{}", row.getBillNo(),
+                    response.status(), response.note() == null ? "" : " — " + response.note());
+        }
+        return Map.of("billNo", response.billNo(), "buyerStatus", response.status(),
+                "updated", updated);
+    }
+
+    record Response(String billNo, String status, String note) {
+    }
+
+    /** UBL ApplicationResponse — namespace-agnostic, XXE-hardened (this
+     * arrives from outside). The UNECE 4343 response codes become words. */
+    Response parseInvoiceResponse(String xml) {
+        try {
+            javax.xml.parsers.DocumentBuilderFactory factory =
+                    javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            org.w3c.dom.Document doc = factory.newDocumentBuilder().parse(
+                    new java.io.ByteArrayInputStream(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+            String code = firstText(doc, "ResponseCode");
+            String billNo = firstText(doc, "ID", "DocumentReference");
+            if (code == null || billNo == null) {
+                throw new com.bss.billing.exception.BadRequestException(
+                        "an invoice response needs a ResponseCode and a DocumentReference/ID");
+            }
+            String status = switch (code) {
+                case "AB" -> "acknowledged";
+                case "IP" -> "inProcess";
+                case "AP" -> "accepted";
+                case "RE" -> "rejected";
+                case "CA" -> "conditionallyAccepted";
+                case "UQ" -> "underQuery";
+                case "PD" -> "paid";
+                default -> throw new com.bss.billing.exception.BadRequestException(
+                        "unknown UNECE 4343 response code '" + code + "'");
+            };
+            return new Response(billNo, status, firstText(doc, "Description"));
+        } catch (com.bss.billing.exception.BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new com.bss.billing.exception.BadRequestException(
+                    "not a parseable ApplicationResponse: " + e.getMessage());
+        }
+    }
+
+    private static String firstText(org.w3c.dom.Document doc, String localName) {
+        org.w3c.dom.NodeList list = doc.getElementsByTagNameNS("*", localName);
+        return list.getLength() == 0 ? null : list.item(0).getTextContent().trim();
+    }
+
+    /** First <localName> that sits under a <parentLocalName> element. */
+    private static String firstText(org.w3c.dom.Document doc, String localName, String parentLocalName) {
+        org.w3c.dom.NodeList parents = doc.getElementsByTagNameNS("*", parentLocalName);
+        for (int i = 0; i < parents.getLength(); i++) {
+            org.w3c.dom.NodeList list = ((org.w3c.dom.Element) parents.item(i))
+                    .getElementsByTagNameNS("*", localName);
+            if (list.getLength() > 0) {
+                return list.item(0).getTextContent().trim();
+            }
+        }
+        return null;
     }
 
     /** An admin's second chance for a FAILED row — back to pending, due now. */

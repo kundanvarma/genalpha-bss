@@ -363,6 +363,67 @@ async function token(ctx, realm, user, pass) {
     + ` and the ledger tells the whole story — status sent after ${ledgerRow.attempts} attempts,`
     + ' exactly one copy delivered. A dead partner delays a bill; it never loses one');
 
+  /* ---------- THE BUYER ANSWERS: a Peppol Invoice Response lands on the ledger ---------- */
+  // the receiver of nova's EHF invoice replies through the access point:
+  // first "accepted", then "paid" — each answer updates the ledger row,
+  // so one row tells the document's whole story
+  const respond = (billNo, code, note) => ctx.post(
+    `${DIST}/invoices/${encodeURIComponent(billNo)}/respond`,
+    { headers: { 'Content-Type': 'application/json' }, data: { code, note } });
+  if ((await respond(novaBill.billNo, 'AP', 'Approved by accounts payable')).status() !== 202) {
+    fail('the access point could not forward the buyer response');
+  }
+  let responded = null;
+  for (let i = 0; i < 10 && (!responded || responded.buyerStatus !== 'accepted'); i++) {
+    await sleep(1500);
+    const rows = await (await ctx.get(`${BILLS}/billDistribution`, { headers: H(novaStaff) })).json();
+    responded = rows.find((r) => r.billNo === novaBill.billNo) || null;
+  }
+  if (!responded || responded.buyerStatus !== 'accepted'
+      || responded.buyerNote !== 'Approved by accounts payable') {
+    fail('the acceptance never reached the ledger: ' + JSON.stringify(responded && {
+      buyerStatus: responded.buyerStatus, buyerNote: responded.buyerNote }));
+  }
+  await respond(novaBill.billNo, 'PD');
+  let paid = null;
+  for (let i = 0; i < 10 && (!paid || paid.buyerStatus !== 'paid'); i++) {
+    await sleep(1500);
+    const rows = await (await ctx.get(`${BILLS}/billDistribution`, { headers: H(novaStaff) })).json();
+    paid = rows.find((r) => r.billNo === novaBill.billNo) || null;
+  }
+  if (!paid || paid.buyerStatus !== 'paid' || paid.status !== 'sent') {
+    fail('the paid status never landed: ' + JSON.stringify(paid && {
+      status: paid.status, buyerStatus: paid.buyerStatus }));
+  }
+  console.log('OK THE BUYER ANSWERED: the receiver\'s Peppol Invoice Response (accepted with'
+    + ' their note, then paid) came back through the access point and landed on the delivery'
+    + ' ledger — one row now tells the whole story: sent → accepted → paid. The buyer\'s'
+    + ' "paid" is their CLAIM; the money is only real when the bank\'s remittance says so');
+
+  // a rejection carries the buyer's words — the ops-visible reason
+  if ((await respond(markBill.billNo, 'RE', 'Wrong PO number')).status() !== 202) {
+    fail('the rejection could not be forwarded');
+  }
+  let rejected = null;
+  for (let i = 0; i < 10 && (!rejected || rejected.buyerStatus !== 'rejected'); i++) {
+    await sleep(1500);
+    const rows = await (await ctx.get(`${BILLS}/billDistribution`, { headers: H(novaStaff) })).json();
+    rejected = rows.find((r) => r.billNo === markBill.billNo) || null;
+  }
+  if (!rejected || rejected.buyerStatus !== 'rejected' || rejected.buyerNote !== 'Wrong PO number') {
+    fail('the rejection (with the buyer\'s words) never landed: ' + JSON.stringify(rejected && {
+      buyerStatus: rejected.buyerStatus, buyerNote: rejected.buyerNote }));
+  }
+  console.log('OK a REJECTION lands with the buyer\'s words ("Wrong PO number") — the ops'
+    + ' reason is on the row, not in someone\'s email');
+
+  /* the callback door is locked like every other */
+  const badResp = await ctx.post(`${API}/distribution/v1/response`, {
+    headers: { 'Content-Type': 'application/xml', 'X-Distribution-Token': 'not-a-partner' },
+    data: '<x/>' });
+  if (badResp.status() !== 401) fail('a stranger posted an invoice response: ' + badResp.status());
+  console.log('OK the response webhook refuses an unknown credential (401) — the token IS the tenant');
+
   /* the ledger is back-office: a customer may not read it */
   const ledgerProbe = await ctx.get(`${BILLS}/billDistribution`, { headers: H(retryCust) });
   if (ledgerProbe.status() !== 403) {

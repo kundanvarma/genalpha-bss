@@ -38,6 +38,12 @@ spring:
           uri: ${BILLING_URL:http://localhost:8088}
           predicates:
             - Path=/bank/v1/**
+        - id: distribution-response
+          # the distribution partner's callback (Peppol Invoice Response) —
+          # same pattern: per-tenant secret at the billing service
+          uri: ${BILLING_URL:http://localhost:8088}
+          predicates:
+            - Path=/distribution/v1/**
         - id: qualification
           uri: ${QUALIFICATION_URL:http://localhost:8089}
           predicates:
