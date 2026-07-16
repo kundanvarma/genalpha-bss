@@ -325,6 +325,84 @@ async function token(ctx, realm, user, pass) {
     + ' next e-invoice carried the change on the wire — the profile is data an admin owns,'
     + ' not a constant a release owns');
 
+  /* ---------- EDIFACT: the pre-XML lingua franca, by flipping a ROW ---------- */
+  // a legacy trading partner demands INVOIC segments: genalpha's admin flips
+  // the 'cii' profile row's syntax to edifact — no deploy, no code
+  await ctx.patch(`${PROFILES}/cii`, { headers: H(staff), data: { syntax: 'edifact' } });
+  const eEmail = `edi-${run}@example.com`;
+  const eLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: eEmail, givenName: 'Ed', familyName: `Ifact${run}` } })).json();
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
+    id: eLogin.id, givenName: 'Ed', familyName: `Ifact${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: eEmail } }] } });
+  const edi = await token(ctx, 'bss', eEmail, eLogin.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/party/v4/individual/${eLogin.id}/billDelivery`,
+    { headers: H(edi), data: { preference: 'einvoice' } });
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(edi), data: { productOrderItem: [{ action: 'add', productOffering: PLAN }] } });
+  let ediBill = null;
+  for (let i = 0; i < 30 && !ediBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(staff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(edi) })).json();
+    ediBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!ediBill) fail('no bill for the EDIFACT customer');
+  let ediDoc = null;
+  for (let i = 0; i < 15 && !ediDoc; i++) {
+    await sleep(1500);
+    const docs = await (await ctx.get(`${DIST}/invoices?billNo=${ediBill.billNo}`)).json();
+    ediDoc = docs.find((d) => d.format === 'edifact') || null;
+  }
+  // put the seeded row back before judging
+  await ctx.patch(`${PROFILES}/cii`, { headers: H(staff), data: { syntax: 'cii' } });
+  if (!ediDoc) fail('the EDIFACT invoice never reached the partner (mock validates UNH/BGM+380)');
+  if (!ediDoc.payload.includes('UNH+1+INVOIC:D:96A:UN')
+      || !ediDoc.payload.includes(`BGM+380+${ediBill.billNo}`)
+      || !ediDoc.payload.includes(`MOA+77:${ediBill.amountDue.value.toFixed(2)}`)
+      || ediDoc.contentType !== 'application/EDIFACT') {
+    fail('the EDIFACT document is missing its load-bearing segments: '
+      + ediDoc.payload.split('\n').slice(0, 4).join(' | '));
+  }
+  console.log('OK EDIFACT SPOKEN: the admin flipped one profile row and the next e-invoice left'
+    + ' as UN/EDIFACT INVOIC segments — UNH envelope, BGM+380 naming the bill, MOA+77 the'
+    + ' total — validated by the partner. The legacy trading partner is a ROW, not a release');
+
+  /* ---------- Factur-X: the hybrid — human PDF with the CII inside ---------- */
+  await ctx.patch(`${PROFILES}/ehf`, { headers: H(novaStaff), data: { syntax: 'facturx' } });
+  const fEmail = `facturx-${run}@nova.example`;
+  const fLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(novaStaff), data: { email: fEmail, givenName: 'Fa', familyName: `Ctur${run}` } })).json();
+  const fact = await token(ctx, 'nova', fEmail, fLogin.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(fact), data: { productOrderItem: [{ action: 'add',
+      productOffering: { id: novaPlan.id, name: novaPlan.name } }] } });
+  let factBill = null;
+  for (let i = 0; i < 30 && !factBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(novaStaff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(fact) })).json();
+    factBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!factBill) fail('no bill for the Factur-X customer');
+  let factDoc = null;
+  for (let i = 0; i < 15 && !factDoc; i++) {
+    await sleep(1500);
+    const docs = await (await ctx.get(`${DIST}/invoices?billNo=${factBill.billNo}`)).json();
+    factDoc = docs.find((d) => d.format === 'facturx') || null;
+  }
+  // restore EHF before judging
+  await ctx.patch(`${PROFILES}/ehf`, { headers: H(novaStaff), data: { syntax: 'ubl' } });
+  if (!factDoc) fail('the Factur-X hybrid never reached the partner (mock validates the embed)');
+  const hybrid = Buffer.from(factDoc.payload, 'base64');
+  if (!hybrid.slice(0, 4).toString().startsWith('%PDF')
+      || !hybrid.includes('factur-x.xml') || !hybrid.includes('CrossIndustryInvoice')) {
+    fail('the hybrid is not a PDF with the CII soul inside it');
+  }
+  console.log('OK FACTUR-X SPOKEN: one more row flip and nova\'s invoice left as the hybrid —'
+    + ' a real PDF a human reads, with factur-x.xml (the EN 16931 CII) embedded for the'
+    + ' machine. One file, two audiences, zero new pipelines');
+
   /* ---------- OUTBOX-BACKED DELIVERY: a dead partner delays a bill, never loses it ---------- */
   // knock the access point over for the next two ingestions, then cut a
   // bill — the ledger must show the misses AND the recovery

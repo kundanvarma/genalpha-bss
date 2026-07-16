@@ -70,6 +70,18 @@ const server = http.createServer((req, res) => {
         if (inv.format === 'ehf' && !String(inv.payload).includes('<cbc:PaymentID>')) {
           return json(422, { error: 'EHF (NO-R rules) wants a payment reference' });
         }
+        if (inv.format === 'edifact'
+            && !(String(inv.payload).includes('UNH+') && String(inv.payload).includes('INVOIC')
+                 && String(inv.payload).includes('BGM+380'))) {
+          return json(422, { error: 'an EDIFACT invoice needs a UNH INVOIC envelope and a BGM+380' });
+        }
+        if (inv.format === 'facturx') {
+          const pdf = Buffer.from(String(inv.payload), 'base64');
+          if (!pdf.slice(0, 4).toString().startsWith('%PDF')
+              || !pdf.includes('factur-x.xml') || !pdf.includes('CrossIndustryInvoice')) {
+            return json(422, { error: 'Factur-X must be a PDF with factur-x.xml (CII) embedded' });
+          }
+        }
         invoices.push({ ...inv, token: auth.slice('Bearer '.length),
           receivedAt: new Date().toISOString() });
         json(202, { accepted: inv.billNo });

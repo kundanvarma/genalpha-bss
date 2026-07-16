@@ -98,10 +98,29 @@ public class BillDocumentService {
 
     /** Also used by the distribution seam for the PRINT channel. */
     byte[] render(String tenant, CustomerBill bill, List<AppliedBillingRate> lines) {
+        return render(tenant, bill, lines, null);
+    }
+
+    /**
+     * With an optional machine-readable soul: Factur-X/ZUGFeRD embeds the
+     * EN 16931 CII XML inside the human-readable PDF as "factur-x.xml" —
+     * one file, two audiences. (Full Factur-X conformance also demands
+     * PDF/A-3 + XMP metadata; this carries the load-bearing part, the
+     * embedded structured invoice.)
+     */
+    byte[] render(String tenant, CustomerBill bill, List<AppliedBillingRate> lines,
+            byte[] facturXml) {
         try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Document doc = new Document(PageSize.A4, 48, 48, 56, 56);
-            PdfWriter.getInstance(doc, out);
+            PdfWriter writer = PdfWriter.getInstance(doc, out);
             doc.open();
+            if (facturXml != null) {
+                // uncompressed embed: the structured invoice stays readable
+                // to any byte-level inspector, not only full PDF parsers
+                writer.addFileAttachment("Factur-X invoice data (EN 16931 CII)",
+                        com.lowagie.text.pdf.PdfFileSpecification.fileEmbedded(
+                                writer, null, "factur-x.xml", facturXml, false));
+            }
 
             Font brand = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 20, new Color(20, 118, 115));
             Font h = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 10);

@@ -114,22 +114,46 @@ public class BillDistributionService {
         // exists; the relay does the actual sending, with retries
         String payload;
         String contentType;
+        String wireFormat;
         if ("print".equalsIgnoreCase(channel)) {
             payload = Base64.getEncoder().encodeToString(documents.render(tenantId, bill, lines));
             contentType = "application/pdf+base64";
+            wireFormat = "pdf";
         } else {
             Profile profile = profileOf(tenantId, format);
-            payload = "cii".equalsIgnoreCase(profile.syntax())
-                    ? ciiOf(bill, lines)
-                    : ublOf(tenantId, bill, lines, profile);
-            contentType = "application/xml";
+            switch (profile.syntax() == null ? "ubl" : profile.syntax().toLowerCase()) {
+                case "cii" -> {
+                    payload = ciiOf(bill, lines);
+                    contentType = "application/xml";
+                    wireFormat = format;
+                }
+                case "edifact" -> {
+                    // the pre-XML lingua franca: segments, not tags
+                    payload = edifactOf(tenantId, bill, lines);
+                    contentType = "application/EDIFACT";
+                    wireFormat = "edifact";
+                }
+                case "facturx" -> {
+                    // the hybrid: the human PDF with the CII inside it
+                    payload = Base64.getEncoder().encodeToString(documents.render(tenantId,
+                            bill, lines, ciiOf(bill, lines).getBytes(
+                                    java.nio.charset.StandardCharsets.UTF_8)));
+                    contentType = "application/pdf+base64";
+                    wireFormat = "facturx";
+                }
+                default -> {
+                    payload = ublOf(tenantId, bill, lines, profile);
+                    contentType = "application/xml";
+                    wireFormat = format;
+                }
+            }
         }
         BillDistribution row = new BillDistribution();
         row.setId(java.util.UUID.randomUUID().toString());
         row.setTenantId(tenantId);
         row.setBillId(bill.getId());
         row.setBillNo(bill.getBillNo());
-        row.setFormat("print".equalsIgnoreCase(channel) ? "pdf" : format);
+        row.setFormat(wireFormat);
         row.setChannel(channel);
         row.setRecipient(bill.getOwnerPartyId());
         row.setContentType(contentType);
@@ -372,6 +396,50 @@ public class BillDistributionService {
         }
         xml.append("</Invoice>\n");
         return xml.toString();
+    }
+
+    /**
+     * UN/EDIFACT INVOIC (D96A shape) — the segment format legacy B2B
+     * trading partners still exchange: UNB/UNH envelope, BGM+380 names
+     * the invoice, DTM+137 the issue date, one LIN/IMD/MOA+203 triple
+     * per line, MOA+77 the invoice total, UNT counts its own segments.
+     */
+    private String edifactOf(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines) {
+        String interchangeRef = bill.getBillNo().replaceAll("\\D", "");
+        StringBuilder e = new StringBuilder();
+        e.append("UNA:+.? '\n");
+        e.append("UNB+UNOC:3+").append(edifactEscape(tenantId.toUpperCase())).append("+")
+         .append(edifactEscape(bill.getOwnerPartyId())).append("+")
+         .append(bill.getPeriodEnd().format(DateTimeFormatter.ofPattern("yyMMdd")))
+         .append(":0000+").append(interchangeRef).append("'\n");
+        int segments = 0;
+        StringBuilder m = new StringBuilder();
+        m.append("UNH+1+INVOIC:D:96A:UN'\n"); segments++;
+        m.append("BGM+380+").append(edifactEscape(bill.getBillNo())).append("+9'\n"); segments++;
+        m.append("DTM+137:").append(bill.getPeriodEnd().format(DateTimeFormatter.BASIC_ISO_DATE))
+         .append(":102'\n"); segments++;
+        m.append("NAD+SU+++").append(edifactEscape(tenantId.toUpperCase())).append("'\n"); segments++;
+        m.append("NAD+BY+++").append(edifactEscape(bill.getOwnerPartyId())).append("'\n"); segments++;
+        m.append("CUX+2:").append(bill.getAmountDueUnit()).append(":4'\n"); segments++;
+        int lineNo = 1;
+        for (AppliedBillingRate line : lines) {
+            m.append("LIN+").append(lineNo++).append("'\n"); segments++;
+            m.append("IMD+F++:::").append(edifactEscape(line.getName())).append("'\n"); segments++;
+            m.append("MOA+203:").append(line.getAmountValue()).append("'\n"); segments++;
+        }
+        m.append("UNS+S'\n"); segments++;
+        m.append("MOA+77:").append(bill.getAmountDueValue()).append("'\n"); segments++;
+        segments++; // UNT counts itself
+        m.append("UNT+").append(segments).append("+1'\n");
+        e.append(m);
+        e.append("UNZ+1+").append(interchangeRef).append("'\n");
+        return e.toString();
+    }
+
+    /** EDIFACT release character: ? releases + : ' and itself. */
+    private static String edifactEscape(String s) {
+        return s == null ? "" : s.replace("?", "??").replace("+", "?+")
+                .replace(":", "?:").replace("'", "?'");
     }
 
     /** UN/CEFACT CII — EN 16931's other syntax, for the DACH/France half. */

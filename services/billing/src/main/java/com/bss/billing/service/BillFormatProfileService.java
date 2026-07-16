@@ -55,9 +55,10 @@ public class BillFormatProfileService {
         }
         if (dto.get("syntax") != null) {
             String syntax = String.valueOf(dto.get("syntax"));
-            if (!"ubl".equals(syntax) && !"cii".equals(syntax)) {
+            if (!java.util.Set.of("ubl", "cii", "edifact", "facturx").contains(syntax)) {
                 throw new com.bss.billing.exception.BadRequestException(
-                        "syntax is 'ubl' or 'cii' — the two EN 16931 syntaxes the renderer speaks");
+                        "syntax is one of: ubl, cii (the EN 16931 syntaxes), edifact"
+                        + " (INVOIC segments), facturx (CII embedded in the PDF)");
             }
             profile.setSyntax(syntax);
         }

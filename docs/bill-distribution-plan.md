@@ -121,5 +121,14 @@ config, not code.
   currency from the 02 header). Everything downstream — matching, the
   settle guarantee, unapplied cash, idempotency — is identical: a new
   bank dialect is a parser, not a new pipeline.
-- Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format.
+- **EDIFACT INVOIC + Factur-X — the last two named formats, shipped.**
+  Both are profile-row syntaxes: `edifact` renders INVOIC D96A segments
+  (UNB/UNH envelope, BGM+380, DTM+137, LIN/IMD/MOA per line, MOA+77
+  total, self-counting UNT — with the ? release character honored);
+  `facturx` renders the human PDF with the EN 16931 CII embedded
+  uncompressed as `factur-x.xml` (full conformance would add PDF/A-3 +
+  XMP — the load-bearing part, the machine-readable soul, is carried).
+  Proven live by ROW FLIPS: genalpha turned its e-invoice syntax to
+  EDIFACT by editing the `cii` row, nova turned EHF into Factur-X the
+  same way — validated by the mock partner, restored after. The
+  follow-up list of this plan is now EMPTY.
