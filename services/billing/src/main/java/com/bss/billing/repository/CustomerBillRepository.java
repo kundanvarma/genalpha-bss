@@ -12,4 +12,7 @@ public interface CustomerBillRepository extends JpaRepository<CustomerBill, Stri
 
     boolean existsByTenantIdAndOwnerPartyIdAndPeriodStart(String tenantId, String ownerPartyId,
             LocalDate periodStart);
+
+    java.util.Optional<com.bss.billing.entity.CustomerBill>
+            findFirstByTenantIdAndOwnerPartyIdOrderByPeriodEndDesc(String tenantId, String ownerPartyId);
 }

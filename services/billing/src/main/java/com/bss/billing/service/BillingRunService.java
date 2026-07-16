@@ -79,8 +79,9 @@ public class BillingRunService {
         // The run is triggered by an authenticated staff request, so the
         // caller's tenant scopes everything the run reads and creates.
         String tenantId = tenantScope.currentTenantId();
-        LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
-        LocalDate periodEnd = periodStart.plusMonths(1).minusDays(1);
+        LocalDate today = LocalDate.now();
+        LocalDate defaultStart = today.withDayOfMonth(1);
+        LocalDate defaultEnd = defaultStart.plusMonths(1).minusDays(1);
 
         // Owner -> their active products, owner derived from the customer related party.
         Map<String, List<Map<String, Object>>> byOwner = new LinkedHashMap<>();
@@ -190,6 +191,31 @@ public class BillingRunService {
         int created = 0;
         int skipped = 0;
         for (Map.Entry<String, List<Map<String, Object>>> owner : byAccount.entrySet()) {
+            // PAYDAY ALIGNMENT: the account holder's anchor day (1-28) makes
+            // their own period; the clamp below NEVER re-bills a covered day,
+            // so an anchor change simply takes effect from the next cycle —
+            // with a short stub period bridging the gap when one exists.
+            LocalDate periodStart = defaultStart;
+            LocalDate periodEnd = defaultEnd;
+            java.util.Optional<Integer> anchor = orgAccounts.contains(owner.getKey())
+                    ? java.util.Optional.empty() : orgs.billingAnchorDayOf(owner.getKey());
+            if (anchor.isPresent()) {
+                int day = anchor.get();
+                periodStart = today.getDayOfMonth() >= day
+                        ? today.withDayOfMonth(day)
+                        : today.minusMonths(1).withDayOfMonth(day);
+                periodEnd = periodStart.plusMonths(1).minusDays(1);
+            }
+            LocalDate lastEnd = bills
+                    .findFirstByTenantIdAndOwnerPartyIdOrderByPeriodEndDesc(tenantId, owner.getKey())
+                    .map(com.bss.billing.entity.CustomerBill::getPeriodEnd).orElse(null);
+            if (lastEnd != null && !lastEnd.isBefore(periodStart)) {
+                periodStart = lastEnd.plusDays(1); // the stub after an anchor change
+            }
+            if (periodStart.isAfter(periodEnd) || periodStart.isAfter(today)) {
+                skipped++; // their next cycle has not started — nothing to bill yet
+                continue;
+            }
             if (bills.existsByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, owner.getKey(), periodStart)) {
                 skipped++;
                 continue;
@@ -430,7 +456,7 @@ public class BillingRunService {
             created++;
         }
         return Map.of("billsCreated", created, "customersSkipped", skipped,
-                "billingPeriod", Map.of("startDateTime", periodStart.toString(), "endDateTime", periodEnd.toString()));
+                "billingPeriod", Map.of("startDateTime", defaultStart.toString(), "endDateTime", defaultEnd.toString()));
     }
 
     /** A redemption's value against this bill's recurring base, 0 if expired or nothing matches. */

@@ -10,6 +10,10 @@ import jakarta.validation.constraints.NotBlank;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class IndividualDto {
 
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonProperty("billingAnchorDay")
+    private Integer billingAnchorDay;
+
     @JsonProperty("id")
     private String id;
 
@@ -98,4 +102,7 @@ public class IndividualDto {
     public void setOrganization(Map<String, Object> organization) { this.organization = organization; }
     public Map<String, Object> getHouseholdPayer() { return householdPayer; }
     public void setHouseholdPayer(Map<String, Object> v) { this.householdPayer = v; }
+
+    public Integer getBillingAnchorDay() { return billingAnchorDay; }
+    public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
 }

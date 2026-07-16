@@ -46,6 +46,9 @@ public final class DownstreamClients {
     }
 
     public interface OrgClient {
+        /** The customer's billing anchor day (1-28); empty = calendar month. */
+        java.util.Optional<Integer> billingAnchorDayOf(String partyId);
+
         /**
          * The organization a party belongs to, or empty. Consolidated B2B
          * billing keys on this; outages fall back to per-person bills.
