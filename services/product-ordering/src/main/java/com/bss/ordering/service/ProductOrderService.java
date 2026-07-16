@@ -888,7 +888,11 @@ public class ProductOrderService {
                     && product.get("productCharacteristic") instanceof List<?> chars
                     ? (List<Map<String, Object>>) chars
                     : null;
-            String name = String.valueOf(offering.get("name") != null ? offering.get("name") : offering.get("id"));
+            // the product must carry the offering's REAL name (services do,
+            // and downstream correlates the two records by it) — an item
+            // naming only the id gets the name from the catalog
+            String name = offering.get("name") != null ? String.valueOf(offering.get("name"))
+                    : nameFromCatalog(String.valueOf(offering.get("id")));
             for (int unit = 0; unit < quantity; unit++) {
                 inventoryClient.createProduct(new InventoryClient.NewProduct(
                         name, "active", (Map<String, Object>) offering, billingAccount,
@@ -905,6 +909,17 @@ public class ProductOrderService {
                     : null;
             inventoryClient.createProduct(new InventoryClient.NewProduct(
                     name, "active", offering, billingAccount, dto.getRelatedParty(), null));
+        }
+    }
+
+    /** Fail-open naming: an unreachable catalog never blocks provisioning —
+     * the id stands in and correlation degrades instead of the order. */
+    private String nameFromCatalog(String offeringId) {
+        try {
+            return catalogClient.findOffering(offeringId)
+                    .map(CatalogClient.OfferingRef::name).orElse(offeringId);
+        } catch (Exception e) {
+            return offeringId;
         }
     }
 
