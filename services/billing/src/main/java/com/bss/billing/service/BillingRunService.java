@@ -47,6 +47,7 @@ public class BillingRunService {
     private final DownstreamClients.PromotionClient promotions;
     private final DownstreamClients.PricingClient pricing;
     private final DownstreamClients.OrgClient orgs;
+    private final BillDistributionService distribution;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
@@ -56,7 +57,8 @@ public class BillingRunService {
             DownstreamClients.UsageClient usage, DownstreamClients.PromotionClient promotions,
             DownstreamClients.PricingClient pricing, DownstreamClients.OrgClient orgs,
             DomainEventPublisher events, PartyScope partyScope,
-            TenantScope tenantScope) {
+            TenantScope tenantScope,
+            BillDistributionService distribution) {
         this.bills = bills;
         this.rates = rates;
         this.inventory = inventory;
@@ -65,6 +67,7 @@ public class BillingRunService {
         this.promotions = promotions;
         this.pricing = pricing;
         this.orgs = orgs;
+        this.distribution = distribution;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
@@ -446,6 +449,9 @@ public class BillingRunService {
             bills.save(bill);
             billRates.forEach(r -> r.setBillId(id));
             rates.saveAll(billRates);
+            // the finished bill leaves for the tenant's distribution partner
+            // (Peppol/EHF e-invoice or print house) — fail-open, never blocking
+            distribution.distribute(tenantId, bill, billRates);
             events.publish("CustomerBillCreateEvent", "customerBill", Map.of(
                     "id", id,
                     "billNo", bill.getBillNo(),
