@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, settleBill, splitBill } from '../api.js';
+import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillingDay, settleBill, splitBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -81,7 +81,20 @@ export default function Bills() {
 
   return (
     <>
-      <h1>My bills</h1>
+      <h1>My bills
+        <button className="ghost" data-testid="change-billing-day" style={{ marginLeft: 12, fontSize: 13 }}
+          onClick={async () => {
+            const day = window.prompt('Which day of the month should your billing cycle start? (1-28)');
+            if (!day) return;
+            try {
+              await setBillingDay(Number(day));
+              setError(null);
+              window.alert(`Done — your cycle starts on day ${day} from your next bill.`);
+            } catch (e) { setError(e.message); }
+          }}>
+          Change billing date
+        </button>
+      </h1>
       {error && <p className="error">{error}</p>}
       <div className="rows">
         {bills.map((bill) => (

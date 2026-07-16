@@ -24,6 +24,7 @@ public class IndividualMapper {
 
     public IndividualDto toDto(Individual entity) {
         IndividualDto dto = new IndividualDto();
+        dto.setBillingAnchorDay(entity.getBillingAnchorDay());
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setGivenName(entity.getGivenName());

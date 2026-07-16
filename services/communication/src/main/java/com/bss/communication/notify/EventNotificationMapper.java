@@ -96,6 +96,13 @@ public class EventNotificationMapper {
                                     + plan.getOrDefault("billNo", "") + ". Next payment of "
                                     + plan.getOrDefault("nextAmount", "?") + " due "
                                     + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "BillingCycleChangedEvent" -> one(resource(event, "billingCycle").flatMap(bc ->
+                    customer(bc).map(party -> new Notification(party,
+                            "Your billing date changed",
+                            "Your billing cycle now starts on day " + bc.getOrDefault("anchorDay", "?")
+                            + " of the month. It applies from your NEXT cycle — days already"
+                            + " billed are never billed twice; if there is a gap, one short"
+                            + " bridging bill covers exactly those days."))));
             case "HouseholdInviteEvent" -> one(resource(event, "householdInvite").flatMap(inv ->
                     customer(inv).map(party -> new Notification(party,
                             "You are invited to a family plan",

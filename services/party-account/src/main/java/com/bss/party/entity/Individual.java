@@ -49,6 +49,11 @@ public class Individual {
     @jakarta.persistence.Column(name = "household_role", length = 16)
     private String householdRole;
 
+    /** Payday alignment: the day (1-28) this customer's billing cycle
+     * starts; null = calendar month. */
+    @jakarta.persistence.Column(name = "billing_anchor_day")
+    private Integer billingAnchorDay;
+
     /** Monthly EUR budget the family funds for this member's top-ups
      * (ask-to-buy above it); NULL = no family funding. */
     @jakarta.persistence.Column(name = "topup_allowance_value")
@@ -117,4 +122,7 @@ public class Individual {
     public void setHouseholdRole(String v) { this.householdRole = v; }
     public java.math.BigDecimal getTopupAllowanceValue() { return topupAllowanceValue; }
     public void setTopupAllowanceValue(java.math.BigDecimal v) { this.topupAllowanceValue = v; }
+
+    public Integer getBillingAnchorDay() { return billingAnchorDay; }
+    public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
 }

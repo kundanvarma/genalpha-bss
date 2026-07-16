@@ -91,6 +91,15 @@ public class IndividualController {
                 body == null ? null : String.valueOf(body.get("payerEmail"))));
     }
 
+    /** Payday alignment: the day (1-28) this customer's cycle starts. */
+    @PostMapping("/{id}/billingCycle")
+    public ResponseEntity<IndividualDto> billingCycle(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        Integer day = body.get("anchorDay") == null ? null
+                : Integer.valueOf(String.valueOf(body.get("anchorDay")));
+        return ResponseEntity.ok(service.setBillingAnchor(id, day));
+    }
+
     /** The payer INVITES an existing customer (mirror consent flow). */
     @PostMapping("/{id}/householdInvite")
     public ResponseEntity<IndividualDto> inviteMember(@PathVariable String id,

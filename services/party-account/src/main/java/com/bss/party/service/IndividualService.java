@@ -313,6 +313,34 @@ public class IndividualService {
         return updated;
     }
 
+    /**
+     * PAYDAY ALIGNMENT: pick the day (1-28) your billing cycle starts.
+     * Self-scoped (or staff on the caller's behalf); days 29-31 are
+     * refused because February does not have them. The run never re-bills
+     * a covered day, so a change simply takes effect from the next cycle.
+     */
+    @Transactional
+    public IndividualDto setBillingAnchor(String id, Integer anchorDay) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(id)) {
+            throw NotFoundException.forResource("Individual", id);
+        }
+        if (anchorDay == null || anchorDay < 1 || anchorDay > 28) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "pick a day from 1 to 28 — the 29th to 31st do not exist in February");
+        }
+        Individual person = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", id));
+        person.setBillingAnchorDay(anchorDay);
+        IndividualDto updated = mapper.toDto(repository.save(person));
+        Map<String, Object> change = new java.util.LinkedHashMap<>();
+        change.put("anchorDay", anchorDay);
+        change.put("relatedParty", java.util.List.of(
+                java.util.Map.of("id", person.getId(), "role", "customer")));
+        events.publish("BillingCycleChangedEvent", "billingCycle", change);
+        return updated;
+    }
+
     /** Only the NAMED payer can accept — consent is theirs to give. */
     @Transactional
     public IndividualDto acceptHouseholdPayer(String dependentId) {

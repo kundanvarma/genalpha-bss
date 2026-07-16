@@ -158,6 +158,24 @@ public class RestDownstreamClients {
         return new DownstreamClients.OrgClient() {
             @Override
             @SuppressWarnings("unchecked")
+            public java.util.Optional<Integer> billingAnchorDayOf(String partyId) {
+                try {
+                    Map<String, Object> person = rest.get()
+                            .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                            .retrieve().body(Map.class);
+                    if (person != null && person.get("billingAnchorDay") != null) {
+                        return java.util.Optional.of(
+                                Integer.valueOf(String.valueOf(person.get("billingAnchorDay"))));
+                    }
+                    return java.util.Optional.empty();
+                } catch (RestClientException e) {
+                    // fail open: an unreachable party source means calendar months
+                    return java.util.Optional.empty();
+                }
+            }
+
+            @Override
+            @SuppressWarnings("unchecked")
             public java.util.Optional<String> organizationOf(String partyId) {
                 try {
                     Map<String, Object> person = rest.get()

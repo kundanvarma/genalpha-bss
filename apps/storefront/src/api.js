@@ -555,6 +555,14 @@ export async function payInstallment(billId, paymentRef) {
   }));
 }
 
+/** Payday alignment: pick the day (1-28) your billing cycle starts. */
+export async function setBillingDay(anchorDay) {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/billingCycle`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ anchorDay }),
+  }));
+}
+
 /** "This charge is wrong": open a dispute — collection pauses while we look. */
 export async function disputeBill(billId, reason) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}/dispute`, {
