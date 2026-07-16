@@ -45,6 +45,9 @@ public class ProductMapper {
         if (entity.getStartDate() != null) {
             dto.setStartDate(entity.getStartDate().toString());
         }
+        if (entity.getTerminationDate() != null) {
+            dto.setTerminationDate(entity.getTerminationDate().toString());
+        }
         dto.setType("Product");
         return dto;
     }
@@ -72,6 +75,13 @@ public class ProductMapper {
         }
         if (patch.getStatus() != null) {
             entity.setStatus(patch.getStatus());
+        }
+        if (patch.getTerminationDate() != null) {
+            try {
+                entity.setTerminationDate(java.time.OffsetDateTime.parse(patch.getTerminationDate()));
+            } catch (Exception e) {
+                // an unreadable date never corrupts the record
+            }
         }
         if (patch.getProductOffering() != null) {
             // a REPOINTED offering is a plan change: remember what it was

@@ -41,4 +41,8 @@ public interface ProductRepository extends JpaRepository<Product, String> {
 
     org.springframework.data.domain.Page<Product> findByTenantIdAndOwnerPartyId(
         String tenantId, String ownerPartyId, org.springframework.data.domain.Pageable pageable);
+
+    java.util.Optional<com.bss.inventory.entity.Product>
+            findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+                    String tenantId, String ownerPartyId, String name, String status);
 }
