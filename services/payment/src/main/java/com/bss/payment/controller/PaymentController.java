@@ -56,6 +56,14 @@ public class PaymentController {
                 .body(body);
     }
 
+    /** Money that arrived AT THE BANK (giro/credit transfer) — recorded by
+     * remittance ingestion, machine-to-machine. */
+    @PostMapping("/external")
+    public ResponseEntity<PaymentDto> recordExternal(@RequestBody Map<String, Object> dto) {
+        PaymentDto created = service.recordExternal(dto);
+        return ResponseEntity.created(URI.create(created.getHref())).body(created);
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<PaymentDto> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));

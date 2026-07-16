@@ -71,6 +71,13 @@ public final class DownstreamClients {
         /** Empty message means valid; otherwise the reason the ref is unusable. */
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);
 
+        /** Record money that arrived AT THE BANK (remittance): an external
+         * payment, authorized on the bank's word, idempotent on the
+         * correlator. Returns the payment id. Throws on refusal — money is
+         * fail-closed. */
+        String recordExternal(String ownerPartyId, BigDecimal amount, String unit,
+                String description, String reference, String correlatorId);
+
         void capture(String paymentId);
 
         /** Give money back on a captured payment. Throws on refusal. */

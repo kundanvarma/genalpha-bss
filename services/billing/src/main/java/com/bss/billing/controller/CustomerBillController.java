@@ -39,6 +39,7 @@ public class CustomerBillController {
     private final com.bss.billing.service.DisputeService disputeService;
     private final com.bss.billing.service.BillFormatProfileService formatProfileService;
     private final com.bss.billing.service.BillDistributionService distributionService;
+    private final com.bss.billing.service.RemittanceService remittanceService;
     private final com.bss.billing.service.BillDocumentService documentService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
@@ -47,6 +48,7 @@ public class CustomerBillController {
             com.bss.billing.service.DisputeService disputeService,
             com.bss.billing.service.BillFormatProfileService formatProfileService,
             com.bss.billing.service.BillDistributionService distributionService,
+            com.bss.billing.service.RemittanceService remittanceService,
             com.bss.billing.security.TenantScope tenantScope,
             com.bss.billing.service.BillDocumentService documentService) {
         this.service = service;
@@ -55,6 +57,7 @@ public class CustomerBillController {
         this.disputeService = disputeService;
         this.formatProfileService = formatProfileService;
         this.distributionService = distributionService;
+        this.remittanceService = remittanceService;
         this.documentService = documentService;
         this.tenantScope = tenantScope;
     }
@@ -188,6 +191,13 @@ public class CustomerBillController {
                 String.valueOf(dto.get("code")), dto);
         return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH
                 + "/billFormatProfile/" + created.get("code"))).body(created);
+    }
+
+    /** UNAPPLIED CASH: money the bank reported that no bill cleanly
+     * claims — the AR worklist a human resolves. */
+    @GetMapping("/remittance/unapplied")
+    public ResponseEntity<java.util.List<Map<String, Object>>> unappliedCash() {
+        return ResponseEntity.ok(remittanceService.unappliedView(tenantScope.currentTenantId()));
     }
 
     /** THE DELIVERY LEDGER: what left for the distribution partner, when,

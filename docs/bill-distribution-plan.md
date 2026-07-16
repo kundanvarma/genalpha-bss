@@ -97,7 +97,17 @@ config, not code.
   (billing:admin), `POST /billDistribution/{id}/retry` the second
   chance. Proven with a chaos switch on the mock: two 503s, recovery on
   attempt three, exactly one delivered copy.
+- **Remittance ingestion (the RETURN path)** — every bill carries its
+  payment reference (the KID); the bank's ISO 20022 camt.054 credit
+  notification lands on `/bank/v1/remittance` (per-tenant secret, the
+  token IS the tenant), a matched reference books a real TMF676 bank
+  payment and settles the bill through the card path's own guarantee,
+  and anything unclear — unknown reference, wrong amount, closed bill,
+  re-sent file — parks on the `/remittance/unapplied` worklist with its
+  reason. Suite #47 proves settle, thank-you, fail-closed underpayment
+  and idempotent re-delivery.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format; the RETURN
-  path — remittance ingestion (OCR/KID files, ISO 20022 camt.054, Peppol
-  Invoice Response) auto-settling bills by payment reference.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format; Peppol Invoice
+  Response (buyer accepted/paid status) updating the delivery ledger;
+  OCR fixed-width and BAI2 lockbox adapters in front of the same
+  ingestion.

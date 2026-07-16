@@ -872,6 +872,9 @@ services:
       # dev clocks: the distribution relay drains fast and retries in seconds
       BSS_BILLING_DISTRIBUTION_TICK_MS: "3000"
       BSS_BILLING_DISTRIBUTION_RETRY_SECONDS: "4"
+      # the bank's shared secret for the remittance webhook, per tenant
+      BANK_TOKEN: genalpha-bank-token
+      BANK_TOKEN_NOVA: nova-bank-token
       # bill distribution: genalpha's bills go to the PRINT house as CII-
       # era PDFs; nova's leave as EHF e-invoices — formats and channels
       # are config, never code

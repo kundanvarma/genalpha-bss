@@ -73,6 +73,7 @@ bss:
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN:}
         bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT:peppol}
         bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL:einvoice}
+        bank-token: ${BANK_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -84,3 +85,4 @@ bss:
         bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NOVA:}
         bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_NOVA:ehf}
         bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_NOVA:einvoice}
+        bank-token: ${BANK_TOKEN_NOVA:}

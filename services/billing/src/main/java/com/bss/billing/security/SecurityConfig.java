@@ -44,11 +44,15 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // the bank's webhook authenticates with its own per-tenant secret
+                        .requestMatchers(HttpMethod.POST, "/bank/v1/remittance").permitAll()
                         // deciding a dispute is BACK-OFFICE: a customer opens one, never closes one
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/dispute/**").hasAuthority("billing:admin")
                         // format profiles shape every outgoing e-invoice — tenant admin only
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
+                        // unapplied cash is back-office AR
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
                         // the delivery ledger is back-office: seeing and retrying sends
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution").hasAuthority("billing:admin")
