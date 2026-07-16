@@ -66,11 +66,31 @@ public class RemittanceService {
     public record CreditEntry(String reference, BigDecimal amount, String currency, String bankRef) {
     }
 
-    /** One bank notification in, one honest accounting out. Caller has
-     * already authenticated the bank and put us inside the tenant. */
-    public Map<String, Object> ingest(String tenantId, String xml) {
-        List<CreditEntry> entries = parseCamt054(xml);
-        String batchRef = batchRefOf(xml);
+    record ParsedFile(String batchRef, List<CreditEntry> entries) {
+    }
+
+    /** One bank file in, one honest accounting out — WHATEVER dialect the
+     * bank speaks. The format is detected from the content (camt.054 XML,
+     * Nets OCR giro fixed-width, BAI2 lockbox CSV); everything downstream —
+     * matching, the settle guarantee, unapplied cash — is identical.
+     * Caller has already authenticated the bank and put us inside the
+     * tenant. */
+    public Map<String, Object> ingest(String tenantId, String body) {
+        String content = body == null ? "" : body.trim();
+        ParsedFile file;
+        if (content.startsWith("<")) {
+            file = new ParsedFile(batchRefOf(content), parseCamt054(content));
+        } else if (content.startsWith("NY")) {
+            file = parseOcr(content);
+        } else if (content.startsWith("01,")) {
+            file = parseBai2(content);
+        } else {
+            throw new BadRequestException(
+                    "unrecognized remittance format — camt.054 XML, Nets OCR ('NY…')"
+                    + " and BAI2 lockbox ('01,…') are spoken here");
+        }
+        List<CreditEntry> entries = file.entries();
+        String batchRef = file.batchRef();
         int applied = 0;
         int parked = 0;
         for (CreditEntry entry : entries) {
@@ -210,6 +230,100 @@ public class RemittanceService {
         } catch (Exception e) {
             throw new BadRequestException("not a parseable camt.054 notification: " + e.getMessage());
         }
+    }
+
+    /**
+     * Nets OCR giro (Norway) — the fixed-width 80-char file that KID
+     * payments come home in. We read what AR needs from the spec's
+     * "amount item 1" record (NY, service 09, transaction types 10-21,
+     * record type 30): the amount in oere at positions 34-50 and the
+     * right-adjusted KID at positions 51-75. Domestic giro means NOK.
+     * The transmission start record (NY000010) names the batch.
+     */
+    ParsedFile parseOcr(String content) {
+        String batchRef = null;
+        List<CreditEntry> entries = new ArrayList<>();
+        for (String raw : content.split("\r?\n")) {
+            String line = raw.trim();
+            if (line.length() < 80 || !line.startsWith("NY")) {
+                continue;
+            }
+            if (line.startsWith("NY000010")) {
+                batchRef = "OCR-" + line.substring(16, 23).trim();
+                continue;
+            }
+            // amount item 1: service 09, transaction type 10-21, record 30
+            if (!"09".equals(line.substring(2, 4)) || !"30".equals(line.substring(6, 8))) {
+                continue;
+            }
+            int txType;
+            try {
+                txType = Integer.parseInt(line.substring(4, 6));
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (txType < 10 || txType > 21) {
+                continue;
+            }
+            String oere = line.substring(33, 50).trim();
+            String kid = line.substring(50, 75).trim();
+            if (oere.isEmpty() || kid.isEmpty()) {
+                continue;
+            }
+            entries.add(new CreditEntry(kid,
+                    new BigDecimal(oere).movePointLeft(2),
+                    "NOK",
+                    "ocr-" + line.substring(8, 15).trim()));
+        }
+        if (entries.isEmpty()) {
+            throw new BadRequestException("no OCR amount items (NY09xx30) in the file");
+        }
+        return new ParsedFile(batchRef, entries);
+    }
+
+    /**
+     * BAI2 lockbox — the US bank file: comma-separated records, amounts
+     * in minor units, no decimals. The 16 records are the transaction
+     * details: type code, amount, funds type, bank reference, customer
+     * reference (the remittance reference we match on). Currency rides
+     * the 02 group header; the 01 file header names the batch.
+     */
+    ParsedFile parseBai2(String content) {
+        String batchRef = null;
+        String currency = "USD";
+        List<CreditEntry> entries = new ArrayList<>();
+        for (String raw : content.split("\r?\n")) {
+            String line = raw.trim();
+            if (line.endsWith("/")) {
+                line = line.substring(0, line.length() - 1);
+            }
+            String[] f = line.split(",", -1);
+            if (f.length == 0) {
+                continue;
+            }
+            switch (f[0]) {
+                case "01" -> batchRef = "BAI2-" + (f.length > 5 ? f[3] + "-" + f[5] : "");
+                case "02" -> {
+                    if (f.length > 6 && !f[6].isBlank()) {
+                        currency = f[6].trim();
+                    }
+                }
+                case "16" -> {
+                    if (f.length < 6 || f[2].isBlank() || f[5].isBlank()) {
+                        continue;
+                    }
+                    entries.add(new CreditEntry(f[5].trim(),
+                            new BigDecimal(f[2].trim()).movePointLeft(2),
+                            currency,
+                            f.length > 4 && !f[4].isBlank() ? "bai2-" + f[4].trim() : null));
+                }
+                default -> { }
+            }
+        }
+        if (entries.isEmpty()) {
+            throw new BadRequestException("no BAI2 transaction details (16 records) in the file");
+        }
+        return new ParsedFile(batchRef, entries);
     }
 
     private String batchRefOf(String xml) {

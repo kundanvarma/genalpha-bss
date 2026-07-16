@@ -16,8 +16,8 @@ lead-to-opportunity sales funnel, the omnichannel TMF683 interaction record (eve
 system message logs itself; external systems write into the same timeline), the bill as a PDF and
 the per-tenant distribution seam (one tenant ships EHF/Peppol BIS 3.0 e-invoices to an access
 point, the other ships PDF print jobs — config, not code; outbox-backed with retries), remittance
-ingestion (the bank's camt.054 settles bills by KID through the card path's own guarantee;
-everything unclear parks as unapplied cash), the AI-slice
+ingestion (the bank's camt.054, Nets OCR giro or BAI2 lockbox file settles bills by KID through
+the card path's own guarantee; everything unclear parks as unapplied cash), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
