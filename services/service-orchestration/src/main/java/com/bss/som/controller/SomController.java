@@ -41,6 +41,7 @@ public class SomController {
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.client.PartyOrgClient partyOrg;
     private final com.bss.som.client.OcsProvisioningClient ocs;
+    private final com.bss.som.client.DiagnosticsClients diagnostics;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -52,7 +53,8 @@ public class SomController {
             com.bss.som.crypto.PukVault pukVault,
             com.bss.som.repository.NumberQuarantineRepository quarantine,
             com.bss.som.client.PartyOrgClient partyOrg,
-            com.bss.som.client.OcsProvisioningClient ocs) {
+            com.bss.som.client.OcsProvisioningClient ocs,
+            com.bss.som.client.DiagnosticsClients diagnostics) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -67,6 +69,7 @@ public class SomController {
         this.quarantine = quarantine;
         this.partyOrg = partyOrg;
         this.ocs = ocs;
+        this.diagnostics = diagnostics;
     }
 
     /**
@@ -343,6 +346,102 @@ public class SomController {
         Map<String, Object> response = new LinkedHashMap<>(event);
         response.put("@type", "ServiceTransfer");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * "MY INTERNET IS SLOW": triage before ticket, in the order a good
+     * tech-support agent thinks — is the line even on? is there a KNOWN
+     * outage on its path? are they simply OUT OF DATA (the classic)? Only
+     * an all-clear earns "raise a ticket and we will dig". Every check
+     * that cannot run says so; a diagnosis never invents an all-clear.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/diagnose")
+    public ResponseEntity<Map<String, Object>> diagnose(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        ServiceInstance instance = requireOwnService(id);
+        String tenant = tenantScope.currentTenantId();
+        List<Map<String, Object>> findings = new java.util.ArrayList<>();
+        String verdict = "allClear";
+
+        if (ServiceInstance.SUSPENDED.equals(instance.getState())) {
+            findings.add(Map.of("code", "paused", "severity", "cause",
+                    "message", "This line is PAUSED" + (instance.getResumeAt() != null
+                            ? " until " + instance.getResumeAt().toLocalDate() : "")
+                            + " — nothing flows while it sleeps. Resume it to get moving."));
+            verdict = "paused";
+        } else if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
+            findings.add(Map.of("code", "notActive", "severity", "cause",
+                    "message", "This service is " + instance.getState() + "."));
+            verdict = "notActive";
+        }
+
+        var problems = diagnostics.openProblems();
+        if (problems.isEmpty()) {
+            findings.add(Map.of("code", "assuranceUnreachable", "severity", "caution",
+                    "message", "Could not check for network outages right now."));
+        } else {
+            Map<String, Object> onPath = instance.getDeliveryPath() == null ? null
+                    : problems.get().stream()
+                            .filter(p -> instance.getDeliveryPath()
+                                    .equals(String.valueOf(p.get("affectedObject"))))
+                            .findFirst().orElse(null);
+            if (onPath != null) {
+                findings.add(Map.of("code", "outage", "severity", "cause",
+                        "message", "KNOWN OUTAGE on your line's path ("
+                                + onPath.get("affectedObject") + "): "
+                                + onPath.getOrDefault("description", "crews are on it")
+                                + ". No ticket needed — it is already being worked."));
+                if ("allClear".equals(verdict)) {
+                    verdict = "outage";
+                }
+            } else if (!problems.get().isEmpty()) {
+                findings.add(Map.of("code", "areaIncidents", "severity", "caution",
+                        "message", problems.get().size() + " network incident(s) are open in the"
+                                + " area — your line is not directly on an affected path, but"
+                                + " conditions may be degraded."));
+            }
+        }
+
+        diagnostics.bucketOf(tenant, id).ifPresent(bucket -> {
+            double used = asDouble(bucket.get("usedGB"));
+            double total = asDouble(bucket.get("totalGB")) + asDouble(bucket.get("rolloverGB"));
+            if (total > 0 && used >= total) {
+                findings.add(Map.of("code", "outOfData", "severity", "cause",
+                        "message", "You are OUT OF INCLUDED DATA (" + used + " of " + total
+                                + " GB used) — speed is reduced until the next cycle."
+                                + " A top-up restores full speed immediately."));
+            } else if (total > 0 && used / total >= 0.9) {
+                findings.add(Map.of("code", "nearDataCap", "severity", "caution",
+                        "message", String.format("%.0f%% of your data is used (%.1f of %.1f GB)"
+                                + " — speed drops when it runs out.", used / total * 100, used, total)));
+            }
+        });
+        if ("allClear".equals(verdict)
+                && findings.stream().anyMatch(f -> "outOfData".equals(f.get("code")))) {
+            verdict = "throttled";
+        }
+
+        if (findings.isEmpty()) {
+            findings.add(Map.of("code", "allClear", "severity", "info",
+                    "message", "No known fault from here: line active, no outage on your path,"
+                            + " data remaining. If it still feels slow, raise a ticket and we"
+                            + " will dig deeper."));
+        }
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("serviceId", id);
+        report.put("name", instance.getName());
+        report.put("verdict", verdict);
+        report.put("findings", findings);
+        report.put("@type", "ServiceDiagnosis");
+        return ResponseEntity.ok(report);
+    }
+
+    private static double asDouble(Object v) {
+        try {
+            return Double.parseDouble(String.valueOf(v));
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private ServiceInstance requireOwnService(String serviceId) {

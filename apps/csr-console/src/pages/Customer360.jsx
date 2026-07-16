@@ -6,7 +6,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
-  disputeBill, transferService, findCustomerByEmail } from '../api.js';
+  disputeBill, transferService, findCustomerByEmail, diagnoseService } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -32,6 +32,7 @@ export default function Customer360() {
   const [carts, setCarts] = useState([]);
   const [interactions, setInteractions] = useState([]);
   const [interactionsTotal, setInteractionsTotal] = useState(0);
+  const [diagnosis, setDiagnosis] = useState(null); // {serviceId, findings}
   const [usage, setUsage] = useState([]);
   const [agreements, setAgreements] = useState([]);
   const [activeServices, setActiveServices] = useState([]);
@@ -242,6 +243,20 @@ export default function Customer360() {
                           Reveal PUK
                         </button>
                   )}
+                  <button className="ghost" data-testid="csr-diagnose"
+                      title='"It feels slow" — outage on their path? out of data? paused?'
+                      onClick={() => act(async () => {
+                        const report = await diagnoseService(sv.id);
+                        setDiagnosis(report);
+                        await logInteraction({
+                          description: `Line check on ${sv.supportingResource[0].value}: `
+                            + report.findings.map((f) => f.code).join(', '),
+                          channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                          relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                        });
+                      })}>
+                    Diagnose
+                  </button>
                   {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-transfer-service"
                         title="Move this line to another person — number, SIM and usage go with it"
@@ -348,6 +363,16 @@ export default function Customer360() {
               </div>
             ))}
                       </div>
+
+          {diagnosis && (
+            <div className="rows" data-testid="csr-diagnosis">
+              {diagnosis.findings.map((f, i) => (
+                <p key={i} className={f.severity === 'cause' ? 'error' : 'dim small'}>
+                  {f.message}
+                </p>
+              ))}
+            </div>
+          )}
 
           <h2>Number porting{!portingOrders.length && <None />}</h2>
           <div className="rows" data-testid="porting-card">

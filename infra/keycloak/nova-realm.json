@@ -831,7 +831,8 @@
         "ordering:write",
         "porting:read",
         "catalog:read",
-        "party:read"
+        "party:read",
+        "assurance:read"
       ],
       "id": "1a01fd9b-0748-52ab-8ae0-8d170a5279c6"
     },

@@ -693,6 +693,7 @@ services:
       # the charging master: blank = no online charging in this deployment
       OCS_BASE_URL: http://mock-ocs:8080
       PARTY_BASE_URL: http://party-account:8080
+      ASSURANCE_BASE_URL: http://assurance:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -335,6 +335,7 @@ export default function Services() {
           {rowsOf(mobilePlans)}
           {number ? lines.map((sv) => (
             <div key={sv.id} data-testid="line-row">
+              <LineDoctor serviceId={sv.id} />
               <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{numberOf(sv)}</strong>
                 {sv.state === 'suspended' && <span className="state suspended" data-testid="line-paused"> {t('paused')}</span>}
                 {' '}
@@ -573,3 +574,31 @@ function GiftData({ hh, onDone }) {
   );
 }
 
+/** Triage before ticket: one button answers "why is it slow?" with the
+ * three usual suspects checked server-side — outage, out of data, paused. */
+function LineDoctor({ serviceId }) {
+  const [report, setReport] = useState(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div style={{ margin: '4px 0' }}>
+      <button className="ghost" data-testid="diagnose-line" disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try { setReport(await diagnoseMyService(serviceId)); } catch { setReport(null); }
+          setBusy(false);
+        }}>
+        {busy ? t('Checking your line…') : t('Having trouble? Check my line')}
+      </button>
+      {report && (
+        <ul className="small" data-testid="diagnosis">
+          {report.findings.map((f, i) => (
+            <li key={i} className={f.severity === 'cause' ? 'error' : 'dim'}
+                data-testid={`finding-${f.code}`}>
+              {f.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

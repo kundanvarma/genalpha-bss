@@ -52,6 +52,7 @@ bss:
     puk-key: ${BSS_SIM_PUK_KEY:}
   downstream:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
+    assurance-base-url: ${ASSURANCE_BASE_URL:}
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     ocs-base-url: ${OCS_BASE_URL:}
