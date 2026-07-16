@@ -869,6 +869,9 @@ services:
       # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
       BSS_BILLING_DUNNING_TICK_MS: "5000"
       BSS_BILLING_DUNNING_GRACE_MS: "20000"
+      # dev clocks: the distribution relay drains fast and retries in seconds
+      BSS_BILLING_DISTRIBUTION_TICK_MS: "3000"
+      BSS_BILLING_DISTRIBUTION_RETRY_SECONDS: "4"
       # bill distribution: genalpha's bills go to the PRINT house as CII-
       # era PDFs; nova's leave as EHF e-invoices — formats and channels
       # are config, never code

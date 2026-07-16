@@ -90,5 +90,14 @@ config, not code.
   (next to Disputes and Dunning): the seeded profiles render as a table,
   and a new country enters as a form — proven live by adding XRechnung
   (Germany) through the UI and reading it back from the API.
+- **Outbox-backed delivery** — cutting a bill writes a `bill_distribution`
+  ledger row in the same transaction (the outbox property); a relay
+  drains pending rows with exponential backoff and marks FAILED after
+  the last try. `GET /billDistribution` is the back-office ledger
+  (billing:admin), `POST /billDistribution/{id}/retry` the second
+  chance. Proven with a chaos switch on the mock: two 503s, recovery on
+  attempt three, exactly one delivered copy.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format; the RETURN
+  path — remittance ingestion (OCR/KID files, ISO 20022 camt.054, Peppol
+  Invoice Response) auto-settling bills by payment reference.
