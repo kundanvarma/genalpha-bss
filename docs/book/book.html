@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-one end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1973,6 +1973,60 @@
     <p class="pull edge">Hosting is the multitenancy thesis with a deadline. Two operators prove
     the walls; the third one, born in an afternoon and rebranded while serving, proves the
     business.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Three</div>
+    <h3>The channel the law designed</h3>
+    <div class="epi">"The call centers who sell subscriptions are generally outsourced partners
+    with their own dialling system… is our BSS catering to them too?" <span class="who">— the
+    operator, and the answer was "structurally, yes — legally, not yet"</span></div>
+
+    <p class="drop">Outbound telesales was the channel where the law wrote the architecture. A
+    call center is, structurally, a dealer with a phone — the same agreement row, the same
+    org-membership agents, the same machine credential for their dialer, the same commission
+    ledger — and all of that carried over untouched. What telesales ADDED was three things the
+    dealer channel never needed, and each one is a legal requirement wearing an API.</p>
+
+    <h2>The wash</h2>
+    <p>Norway keeps a reservation register: a citizen who says "do not call me" may not be
+    called, and certainly not sold to. So the wash runs FAIL-CLOSED before any offer exists — a
+    per-tenant seam to the register, and three refusals that each say why. A reserved number
+    refuses with the reason. An UNREACHABLE register refuses too, because "we couldn't check" is
+    not consent. And a tenant that never configured a register has no outbound channel at all:
+    the operator opts IN by configuring the wash, never out. The dial list inherits the same
+    honesty upstream — the dialer pulls its audience from the same consented segments campaigns
+    use, every number washed at export, and the reserved citizen is EXCLUDED AND COUNTED
+    ("1 reserved excluded", said out loud on the agent's screen), never listed.</p>
+
+    <h2>The offer that is not an order</h2>
+    <p>Under angrerettloven, a consumer agreement made on an outbound call binds only when the
+    customer confirms it IN WRITING afterwards. Most systems model that as an order with a flag.
+    This one models it as the law reads: the call's output is an OFFER — a confirmation code, an
+    expiry clock, and NOTHING else. No order. No service. No commission. The letter in the
+    customer's inbox says the honest thing — "Nothing is ordered yet" — and the confirmation is
+    an AUTHENTICATED act: the signed-in customer confirms their own offer, which is a stronger
+    "in writing" than any bare link, and it made the security fall out for free. A stranger with
+    a stolen code sees a 404. A re-click orders nothing twice. Silence expires on a clock, and
+    the partner's pipeline shows offered, confirmed, expired — three honest states.</p>
+
+    <h2>Identity is earned</h2>
+    <p>The cold prospect closed the loop with the arc's best design decision. Someone who is not
+    a customer yet cannot receive an inbox letter — so the code returns to the partner, whose
+    dialer's own SMS is the only channel that exists for this person. And identity is EARNED,
+    not invented: the prospect registers with the offered email — the registration is the
+    identity proof — signs in, and confirms. The offer binds to them at that moment. Order,
+    activation, commission: the same spine as the warm base, joined at the instant the law says
+    an agreement started existing. Commission too is born at confirmation, not at the phone
+    call — because a partner paid for calls optimizes calls, and a partner paid for confirmed
+    agreements optimizes honesty.</p>
+
+    <p class="pull edge">Three partner channels — the retail chain, the POS integration, the
+    call center — on one attribution-and-commission spine, each shaped by its own regulation:
+    the cash-register law stays in the certified till, the withdrawal law lives in the
+    confirm-after-call. A channel is a set of legal facts with a UI.</p>
   </section>
 
   <hr class="soft">

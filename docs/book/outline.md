@@ -440,3 +440,8 @@ makes the reader already know what a "TMF679" is before it's needed.
 - **Chapter 32 — The third operator in an afternoon.** Tenants as a file; the 125-second
   scripted onboard; operator-as-a-form (11s); white-label by hostname for free; live mutation
   with the identity boundary written down — and the "Hijacked" incident, kept in the book.
+- **Chapter 33 — The channel the law designed.** Telesales: the fail-closed DNC wash
+  (reserved refuses, unreachable refuses, unconfigured refuses), the offer-not-order under
+  angrerettloven with authenticated written confirmation, cold prospects whose identity is
+  earned at registration, consented+washed dial lists with exclusions said out loud, and the
+  desk in the dealer console. Commission born with the agreement, not the call.
