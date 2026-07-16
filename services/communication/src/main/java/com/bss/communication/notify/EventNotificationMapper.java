@@ -14,7 +14,11 @@ import java.util.Optional;
 @Component
 public class EventNotificationMapper {
 
-    public record Notification(String partyId, String subject, String content) {
+    public record Notification(String partyId, String subject, String content,
+            String attachmentName, String attachmentBase64) {
+        public Notification(String partyId, String subject, String content) {
+            this(partyId, subject, content, null, null);
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -178,6 +182,16 @@ public class EventNotificationMapper {
                             + " If this was not you, contact us immediately."))));
             case "ProductOrderStateChangeEvent" -> resource(event, "productOrder")
                     .map(this::orderStateChanged).orElse(List.of());
+            // a requested invoice copy: the in-app note says it went out,
+            // the EMAIL carries the actual PDF — to the address on file
+            case "CustomerBillResendEvent" -> one(resource(event, "billResend").flatMap(r ->
+                    customer(r).map(party -> new Notification(party,
+                            "Your invoice " + r.getOrDefault("billNo", ""),
+                            "As requested, here is a copy of invoice " + r.getOrDefault("billNo", "")
+                            + " (amount due " + r.getOrDefault("amountDue", "?") + ")."
+                            + " The PDF is attached to the email sent to your address on file.",
+                            r.getOrDefault("billNo", "invoice") + ".pdf",
+                            r.get("pdfBase64") == null ? null : String.valueOf(r.get("pdfBase64"))))));
             case "CustomerBillCreateEvent" -> one(resource(event, "customerBill").flatMap(bill ->
                     customer(bill).map(party -> new Notification(party,
                             "Your bill is ready",

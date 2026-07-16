@@ -37,13 +37,16 @@ public class BillDocumentService {
     private final AppliedBillingRateRepository rates;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
+    private final com.bss.billing.events.DomainEventPublisher events;
 
     public BillDocumentService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
-            TenantScope tenantScope, PartyScope partyScope) {
+            TenantScope tenantScope, PartyScope partyScope,
+            com.bss.billing.events.DomainEventPublisher events) {
         this.bills = bills;
         this.rates = rates;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
+        this.events = events;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +61,39 @@ public class BillDocumentService {
         });
         List<AppliedBillingRate> lines = rates.findByTenantIdAndBillId(tenant, billId);
         return render(tenant, bill, lines);
+    }
+
+    /**
+     * "Can you send me a copy of my invoice?" — the single most common
+     * billing request a care agent hears. This renders the SAME PDF the
+     * customer sees and hands it to the notification loop, which emails
+     * it to the address ON FILE — never one dictated over the phone
+     * (that door stays shut to social engineering). Owner-scoped like
+     * the PDF itself, so a customer can also self-serve it.
+     */
+    @Transactional
+    public java.util.Map<String, Object> resend(String billId) {
+        String tenant = tenantScope.currentTenantId();
+        CustomerBill bill = bills.findByIdAndTenantId(billId, tenant)
+                .orElseThrow(() -> NotFoundException.forResource("CustomerBill", billId));
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(bill.getOwnerPartyId())) {
+                throw NotFoundException.forResource("CustomerBill", billId);
+            }
+        });
+        List<AppliedBillingRate> lines = rates.findByTenantIdAndBillId(tenant, billId);
+        java.util.Map<String, Object> view = new java.util.LinkedHashMap<>();
+        view.put("id", billId);
+        view.put("billNo", bill.getBillNo());
+        view.put("amountDue", String.format("%.2f %s", bill.getAmountDueValue(),
+                bill.getAmountDueUnit()));
+        view.put("pdfBase64", java.util.Base64.getEncoder()
+                .encodeToString(render(tenant, bill, lines)));
+        view.put("relatedParty", List.of(java.util.Map.of(
+                "id", bill.getOwnerPartyId(), "role", "customer")));
+        view.put("@type", "BillResend");
+        events.publish("CustomerBillResendEvent", "billResend", view);
+        return java.util.Map.of("sent", bill.getBillNo());
     }
 
     /** Also used by the distribution seam for the PRINT channel. */

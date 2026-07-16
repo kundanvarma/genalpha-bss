@@ -77,7 +77,8 @@ public class CommunicationMessageService {
         // minted notifications are customer touchpoints too — downstream
         // (the TMF683 timeline) hears about EVERY message, not only ad-hoc
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", toMap(entity));
-        esp.forward(tenantId, id, n.partyId(), n.subject(), n.content());
+        esp.forward(tenantId, id, n.partyId(), n.subject(), n.content(),
+                n.attachmentName(), n.attachmentBase64());
     }
 
     @Transactional(readOnly = true)

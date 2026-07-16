@@ -41,6 +41,17 @@ export const myServices = () => soft(call('/tmf-api/serviceInventory/v4/service?
 export const myUsage = () => soft(call('/tmf-api/usageConsumption/v4/queryUsageConsumption')
   .then((r) => r.bucket || []), []);
 export const myBills = () => soft(call('/tmf-api/customerBillManagement/v4/customerBill?limit=20'), []);
+// the bill as a document — fetched with the token, opened as a blob (web)
+// or handed to the OS (native)
+export async function openBillPdf(billId) {
+  const res = await fetch(API_BASE + `/tmf-api/customerBillManagement/v4/customerBill/${billId}/document.pdf`, {
+    headers: { Authorization: 'Bearer ' + getToken() },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (typeof window !== 'undefined' && window.open) {
+    window.open(URL.createObjectURL(await res.blob()), '_blank');
+  }
+}
 export const billRates = (id) => soft(call(`/tmf-api/customerBillManagement/v4/customerBill/${id}/appliedCustomerBillingRate`), []);
 export const myAgreements = () => soft(call('/tmf-api/agreementManagement/v4/agreement?limit=20'), []);
 export const myMethods = () => soft(call('/tmf-api/paymentMethods/v4/paymentMethod'), []);
