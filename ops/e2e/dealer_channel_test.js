@@ -162,7 +162,63 @@ async function token(ctx, user, pass) {
   console.log('OK CLAWBACK: the customer used their angrerett inside the window and the'
     + ' pending 10 EUR went back — with the reason on the entry, not in an email thread');
 
-  /* ---------- 7. the dealer console shows the desk ---------- */
+  /* ---------- 7. the PARTNER API: the chain's own POS speaks machine-to-machine ---------- */
+  // PowerOn runs its own retail system — no clerk logins, no console: an
+  // OAuth2 client the agreement names. And PowerOn sells ITS OWN phones:
+  // the device rides the sale as CONTEXT; only the subscription bills here.
+  const posOrg = await (await ctx.post(`${API}/tmf-api/party/v4/organization`,
+    { headers: H(staff), data: { name: `PowerOn ${run}`, isLegalEntity: true } })).json();
+  await ctx.post(`${API}/dealer/v1/agreement`, { headers: H(staff),
+    data: { dealerOrgId: posOrg.id, name: `PowerOn ${run}`, clientId: 'pos-poweron',
+      commission: { value: 8, unit: 'EUR' } } });
+  const badTok = await ctx.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'client_credentials', client_id: 'pos-poweron',
+      client_secret: 'wrong-secret' } });
+  if (badTok.status() === 200) fail('a wrong POS secret minted a token');
+  const posTokRes = await (await ctx.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'client_credentials', client_id: 'pos-poweron',
+      client_secret: 'poweron-pos-secret' } })).json();
+  const pos = posTokRes.access_token;
+  if (!pos) fail('the POS client got no token');
+
+  const posKits = await (await ctx.post(`${API}/dealer/v1/kits/batch`,
+    { headers: H(pos), data: { count: 2, store: 'City Syd' } })).json();
+  if (!Array.isArray(posKits) || posKits.length !== 2) {
+    fail('the POS could not mint kits: ' + JSON.stringify(posKits).slice(0, 120));
+  }
+  const posBuyer = await mk('posbuyer');
+  const posSale = await (await ctx.post(`${API}/dealer/v1/sell`, { headers: H(pos),
+    data: { customerEmail: posBuyer.email, offeringId: PLAN.id, offeringName: PLAN.name,
+      store: 'City Syd', device: 'Samsung Galaxy S26 Ultra — PowerOn own stock' } })).json();
+  if (!posSale.productOrderId) fail('the POS sale placed no order: ' + JSON.stringify(posSale));
+  let posStatus = null;
+  for (let i = 0; i < 20 && !posStatus; i++) {
+    await sleep(2000);
+    const res = await ctx.get(`${API}/dealer/v1/orders/${posSale.productOrderId}`,
+      { headers: H(pos) });
+    if (res.status() === 200) posStatus = await res.json();
+  }
+  if (!posStatus || !posStatus.activated) fail('the POS never saw its order activate');
+  const posEntry = posStatus.commission[0];
+  if (Number(posEntry.amount.value) !== 8
+      || posEntry.device !== 'Samsung Galaxy S26 Ultra — PowerOn own stock') {
+    fail('the POS sale lost its money or its device context: ' + JSON.stringify(posEntry));
+  }
+  console.log('OK THE PARTNER API: PowerOn\'s own POS — a machine credential the agreement'
+    + ' names — minted kits, sold a subscription BUNDLED WITH THEIR OWN PHONE (the device is'
+    + ' context on the commission entry, never a billable item here), and polled the order:'
+    + ' activated, 8 EUR pending');
+
+  /* cross-partner isolation: Elektra's clerk cannot see PowerOn's order */
+  if ((await ctx.get(`${API}/dealer/v1/orders/${posSale.productOrderId}`,
+      { headers: H(clerk.tok) })).status() !== 404) {
+    fail("one chain read another chain's order");
+  }
+  console.log('OK chains are WALLS to each other: Elektra\'s clerk asking about PowerOn\'s'
+    + ' order gets a 404 — attribution is also isolation');
+
+  /* ---------- 8. the dealer console shows the desk ---------- */
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto(`${API}/dealer-app/`);

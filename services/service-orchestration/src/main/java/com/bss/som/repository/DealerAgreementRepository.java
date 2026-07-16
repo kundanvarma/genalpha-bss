@@ -8,5 +8,6 @@ import java.util.Optional;
 
 public interface DealerAgreementRepository extends JpaRepository<DealerAgreement, String> {
     Optional<DealerAgreement> findByTenantIdAndDealerOrgId(String tenantId, String dealerOrgId);
+    List<DealerAgreement> findByTenantIdAndClientId(String tenantId, String clientId);
     List<DealerAgreement> findByTenantIdOrderByName(String tenantId);
 }

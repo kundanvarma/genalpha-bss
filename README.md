@@ -20,7 +20,8 @@ ingestion (the bank's camt.054, Nets OCR giro or BAI2 lockbox file settles bills
 the card path's own guarantee; everything unclear parks as unapplied cash), the retail dealer channel
 (the network-wide/Elkjøp model: starter kits with attribution and the SIM baked into the box, counter
 sales, and commission that accrues pending, hardens after the withdrawal window and claws back
-honestly — with a dealer console for the chain's clerks), the AI-slice
+honestly — with a dealer console for the chain's clerks and a machine partner API for chains
+with their own POS, where the chain's own phone rides the sale as context, never a billable item), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677

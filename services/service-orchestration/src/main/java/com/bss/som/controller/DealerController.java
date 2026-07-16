@@ -55,6 +55,13 @@ public class DealerController {
         return ResponseEntity.ok(dealers.myCommission());
     }
 
+    /** The POS asks "did it activate, what did we earn". */
+    @GetMapping("/dealer/v1/orders/{productOrderId}")
+    public ResponseEntity<Map<String, Object>> orderStatus(
+            @org.springframework.web.bind.annotation.PathVariable("productOrderId") String id) {
+        return ResponseEntity.ok(dealers.orderStatus(id));
+    }
+
     /** The kit comes alive: the CUSTOMER types the code from the box. */
     @PostMapping("/dealer/v1/starterKit/activate")
     public ResponseEntity<Map<String, Object>> activate(@RequestBody Map<String, Object> dto) {

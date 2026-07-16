@@ -64,21 +64,55 @@ public class DealerService {
         this.partyScope = partyScope;
     }
 
-    /** The caller's dealer org — their party's organization, IF that org
-     * holds an agreement. Anyone else: 404-shaped nothing. */
+    /**
+     * The caller's dealer agreement, by whichever credential speaks:
+     * a CLERK is their org membership (checked live against party
+     * management); a chain's POS is the MACHINE client the agreement
+     * names. Anyone else: 404-shaped nothing.
+     */
     private DealerAgreement requireDealer() {
+        String tenant = tenantScope.currentTenantId();
+        // the MACHINE path first: an agreement that names this OAuth2
+        // client wins outright (no agreement ever names a human's client,
+        // and service accounts may carry the realm's default person roles)
+        String clientId = callerClientId();
+        if (clientId != null) {
+            List<DealerAgreement> byClient = agreements.findByTenantIdAndClientId(tenant, clientId);
+            if (!byClient.isEmpty()) {
+                return byClient.get(0);
+            }
+        }
         String caller = partyScope.scopedPartyId()
                 .orElseThrow(() -> NotFoundException.forResource("Dealer", "me"));
         String orgId = party.orgOf(caller)
                 .orElseThrow(() -> NotFoundException.forResource("Dealer", caller));
-        return agreements.findByTenantIdAndDealerOrgId(tenantScope.currentTenantId(), orgId)
+        return agreements.findByTenantIdAndDealerOrgId(tenant, orgId)
                 .orElseThrow(() -> NotFoundException.forResource("Dealer", orgId));
+    }
+
+    /** The OAuth2 client the token speaks for (Keycloak: azp). */
+    private String callerClientId() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth instanceof org.springframework.security.oauth2.server.resource.authentication
+                .JwtAuthenticationToken jwt) {
+            String azp = jwt.getToken().getClaimAsString("azp");
+            return azp != null ? azp : jwt.getToken().getClaimAsString("client_id");
+        }
+        return null;
+    }
+
+    private boolean callerHasAuthority(String authority) {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> authority.equals(a.getAuthority()));
     }
 
     /** Back office signs the chain: org + commission per activation. */
     @Transactional
     public Map<String, Object> createAgreement(Map<String, Object> dto) {
-        if (partyScope.scopedPartyId().isPresent()) {
+        if (partyScope.scopedPartyId().isPresent() || !callerHasAuthority("service:write")) {
             throw new BadRequestException("dealer agreements are a back-office operation");
         }
         String orgId = String.valueOf(dto.get("dealerOrgId"));
@@ -96,6 +130,19 @@ public class DealerService {
                     return fresh;
                 });
         agreement.setName(dto.get("name") == null ? orgId : String.valueOf(dto.get("name")));
+        if (dto.get("clientId") != null) {
+            String clientId = String.valueOf(dto.get("clientId"));
+            // one credential speaks for ONE dealer: signing a chain with a
+            // client takes that client from any previous holder
+            for (DealerAgreement holder : agreements.findByTenantIdAndClientId(tenant, clientId)) {
+                if (!holder.getId().equals(agreement.getId())) {
+                    holder.setClientId(null);
+                    holder.setLastUpdate(OffsetDateTime.now());
+                    agreements.save(holder);
+                }
+            }
+            agreement.setClientId(clientId);
+        }
         Map<String, Object> commission = dto.get("commission") instanceof Map<?, ?> c
                 ? (Map<String, Object>) c : Map.of();
         agreement.setCommissionValue(new BigDecimal(String.valueOf(
@@ -170,7 +217,8 @@ public class DealerService {
         String orderId = placeDealerOrder(dealer, String.valueOf(customer.get("id")),
                 dto.get("store") == null ? null : String.valueOf(dto.get("store")),
                 String.valueOf(dto.get("offeringId")),
-                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")));
+                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")),
+                dto.get("device") == null ? null : String.valueOf(dto.get("device")));
         return Map.of("productOrderId", orderId, "customerId", customer.get("id"));
     }
 
@@ -194,7 +242,8 @@ public class DealerService {
                 tenantScope.currentTenantId(), kit.getDealerOrgId()).orElse(null);
         String orderId = placeDealerOrder(dealer, caller, kit.getStore(),
                 String.valueOf(dto.get("offeringId")),
-                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")));
+                dto.get("offeringName") == null ? null : String.valueOf(dto.get("offeringName")),
+                null);
         kit.setStatus(StarterKit.ACTIVATED);
         kit.setProductOrderId(orderId);
         kit.setActivatedBy(caller);
@@ -207,7 +256,7 @@ public class DealerService {
     }
 
     private String placeDealerOrder(DealerAgreement dealer, String customerId, String store,
-            String offeringId, String offeringName) {
+            String offeringId, String offeringName, String device) {
         Map<String, Object> offering = new LinkedHashMap<>();
         offering.put("id", offeringId);
         if (offeringName != null) {
@@ -221,11 +270,37 @@ public class DealerService {
             stamp.put("role", "dealer");
             stamp.put("name", store == null ? dealer.getName() : store);
             stamp.put("@referredType", "Organization");
+            if (device != null) {
+                // the chain's OWN phone from THEIR stock: context for the
+                // commission entry and support — never a billable item here
+                stamp.put("device", device);
+            }
             parties.add(stamp);
         }
         return ordering.create(Map.of(
                 "productOrderItem", List.of(Map.of("action", "add", "productOffering", offering)),
                 "relatedParty", parties));
+    }
+
+    /**
+     * The POS asks "did it activate, what did we earn": the order's
+     * services and the commission entry, visible ONLY to the dealer the
+     * order credits (activation lands within seconds of a digital sale).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> orderStatus(String productOrderId) {
+        DealerAgreement dealer = requireDealer();
+        String tenant = tenantScope.currentTenantId();
+        List<CommissionEntry> mine = commissions
+                .findByTenantIdAndProductOrderId(tenant, productOrderId).stream()
+                .filter(e -> dealer.getDealerOrgId().equals(e.getDealerOrgId())).toList();
+        if (mine.isEmpty()) {
+            throw NotFoundException.forResource("ProductOrder", productOrderId);
+        }
+        return Map.of(
+                "productOrderId", productOrderId,
+                "activated", true,
+                "commission", mine.stream().map(this::commissionMap).toList());
     }
 
     /** The dealer's money page: entries newest first, plus honest totals. */
@@ -274,6 +349,7 @@ public class DealerService {
         map.put("id", e.getId());
         map.put("store", e.getStore());
         map.put("offeringName", e.getOfferingName());
+        map.put("device", e.getDeviceNote());
         map.put("amount", Map.of("value", e.getAmountValue(), "unit", e.getAmountUnit()));
         map.put("status", e.getStatus());
         map.put("reason", e.getReason());

@@ -32,6 +32,11 @@ public class DealerAgreement {
     @Column(name = "commission_unit", nullable = false)
     private String commissionUnit;
 
+    /** The chain's own POS speaks as this OAuth2 client (client
+     * credentials) — the credential IS the dealer, machine edition. */
+    @Column(name = "client_id")
+    private String clientId;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -50,6 +55,8 @@ public class DealerAgreement {
     public void setCommissionValue(BigDecimal v) { this.commissionValue = v; }
     public String getCommissionUnit() { return commissionUnit; }
     public void setCommissionUnit(String v) { this.commissionUnit = v; }
+    public String getClientId() { return clientId; }
+    public void setClientId(String v) { this.clientId = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

@@ -363,6 +363,8 @@ public class OrchestrationService {
         entry.setServiceId(serviceId);
         entry.setCustomerPartyId(customerId);
         entry.setOfferingName(offeringName);
+        entry.setDeviceNote(dealerRef.get("device") == null ? null
+                : String.valueOf(dealerRef.get("device")));
         entry.setAmountValue(agreement.getCommissionValue());
         entry.setAmountUnit(agreement.getCommissionUnit());
         entry.setStatus(com.bss.som.entity.CommissionEntry.PENDING);
