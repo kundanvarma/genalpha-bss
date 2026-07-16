@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 ApiConstants.INVENTORY_BASE + "/service/*/suspend",
                                 ApiConstants.INVENTORY_BASE + "/service/*/resume",
                                 ApiConstants.INVENTORY_BASE + "/service/*/terminate",
-                                ApiConstants.INVENTORY_BASE + "/service/*/transfer").authenticated()
+                                ApiConstants.INVENTORY_BASE + "/service/*/transfer",
+                                ApiConstants.INVENTORY_BASE + "/service/*/diagnose").authenticated()
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**",

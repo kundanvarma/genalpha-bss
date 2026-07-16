@@ -305,6 +305,13 @@ export async function resumeService(serviceId) {
   }));
 }
 
+/** Triage before ticket: outage on their path? out of data? paused? */
+export async function diagnoseService(serviceId) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/diagnose`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 /** TRANSFER a line to another person — number, SIM and usage move with
  * it; the payer stamp stays (a company-paid line keeps its payer). */
 export async function transferService(serviceId, toPartyId) {

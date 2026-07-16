@@ -259,6 +259,13 @@ export async function mySim(serviceId, reveal = false) {
   return res.json();
 }
 
+/** "It feels slow": triage before ticket — outage? out of data? paused? */
+export async function diagnoseMyService(serviceId) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/diagnose`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 /** Cancel the subscription — the number is released. Keeping it means
  * your NEW operator ports it first; cancel after, never before. */
 export async function cancelMyService(serviceId) {
