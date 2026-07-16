@@ -43,6 +43,7 @@ public class TelesalesService {
     private final TelesalesOfferRepository offers;
     private final DealerService dealers;
     private final com.bss.som.client.PartyOrgClient party;
+    private final com.bss.som.client.InsightClient insight;
     private final com.bss.som.events.DomainEventPublisher events;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
@@ -51,12 +52,14 @@ public class TelesalesService {
 
     public TelesalesService(TelesalesOfferRepository offers, DealerService dealers,
             com.bss.som.client.PartyOrgClient party,
+            com.bss.som.client.InsightClient insight,
             com.bss.som.events.DomainEventPublisher events,
             TenantRegistry tenants, TenantScope tenantScope, RestClient.Builder builder,
             @Value("${bss.som.telesales-expiry-ms:172800000}") long expiryMs) {
         this.offers = offers;
         this.dealers = dealers;
         this.party = party;
+        this.insight = insight;
         this.events = events;
         this.tenants = tenants;
         this.tenantScope = tenantScope;
@@ -77,9 +80,11 @@ public class TelesalesService {
         String phone = dto.get("phone") == null ? null : String.valueOf(dto.get("phone"));
         washOrRefuse(tenant, phone);
         String email = String.valueOf(dto.get("customerEmail"));
-        Map<String, Object> customer = party.individualByEmail(email)
-                .orElseThrow(() -> new BadRequestException(
-                        "no customer with that email — v1 telesales sells to the warm base"));
+        Map<String, Object> customer = party.individualByEmail(email).orElse(null);
+        if (customer == null && dto.get("prospectName") == null) {
+            throw new BadRequestException(
+                    "no customer with that email — for a COLD prospect, send prospectName too");
+        }
         SecureRandom random = new SecureRandom();
         StringBuilder token = new StringBuilder();
         for (int i = 0; i < 10; i++) {
@@ -91,7 +96,14 @@ public class TelesalesService {
         offer.setDealerOrgId(dealer.getDealerOrgId());
         offer.setStore(dto.get("campaign") == null ? dealer.getName()
                 : String.valueOf(dto.get("campaign")));
-        offer.setCustomerId(String.valueOf(customer.get("id")));
+        if (customer != null) {
+            offer.setCustomerId(String.valueOf(customer.get("id")));
+        } else {
+            // COLD: no identity yet — the offer remembers who was called;
+            // identity arrives when they register with this email
+            offer.setProspectEmail(email.toLowerCase());
+            offer.setProspectName(String.valueOf(dto.get("prospectName")));
+        }
         offer.setCustomerPhone(phone);
         offer.setOfferingId(String.valueOf(dto.get("offeringId")));
         offer.setOfferingName(dto.get("offeringName") == null ? null
@@ -104,19 +116,30 @@ public class TelesalesService {
         offers.save(offer);
         // the WRITTEN confirmation rides the notification loop: inbox
         // always, email where the tenant has an ESP
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("offeringName", offer.getOfferingName() == null ? "your new plan"
-                : offer.getOfferingName());
-        view.put("seller", offer.getStore());
-        view.put("confirmToken", offer.getConfirmToken());
-        view.put("expiresAt", offer.getExpiresAt().toString());
-        view.put("relatedParty", List.of(Map.of("id", offer.getCustomerId(), "role", "customer")));
-        view.put("@type", "TelesalesOffer");
-        events.publish("TelesalesOfferEvent", "telesalesOffer", view);
+        if (offer.getCustomerId() != null) {
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("offeringName", offer.getOfferingName() == null ? "your new plan"
+                    : offer.getOfferingName());
+            view.put("seller", offer.getStore());
+            view.put("confirmToken", offer.getConfirmToken());
+            view.put("expiresAt", offer.getExpiresAt().toString());
+            view.put("relatedParty", List.of(Map.of("id", offer.getCustomerId(), "role", "customer")));
+            view.put("@type", "TelesalesOffer");
+            events.publish("TelesalesOfferEvent", "telesalesOffer", view);
+        }
         log.info("telesales offer {} by {} to {} — NO order until the customer confirms",
                 offer.getId(), dealer.getName(), offer.getCustomerId());
-        return Map.of("offerId", offer.getId(), "status", offer.getStatus(),
-                "expiresAt", offer.getExpiresAt().toString());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("offerId", offer.getId());
+        out.put("status", offer.getStatus());
+        out.put("expiresAt", offer.getExpiresAt().toString());
+        if (offer.getCustomerId() == null) {
+            // the partner's own SMS carries the code to a cold prospect —
+            // there is no inbox to put it in yet
+            out.put("confirmToken", offer.getConfirmToken());
+            out.put("prospect", true);
+        }
+        return out;
     }
 
     /** The customer's WRITTEN yes: the token is the capability. Only now
@@ -126,7 +149,24 @@ public class TelesalesService {
         TelesalesOffer offer = offers.findByTenantIdAndConfirmToken(tenantId,
                         token == null ? "" : token.trim().toUpperCase())
                 .orElseThrow(() -> NotFoundException.forResource("TelesalesOffer", "token"));
-        if (callerPartyId == null || !callerPartyId.equals(offer.getCustomerId())) {
+        if (callerPartyId == null) {
+            throw NotFoundException.forResource("TelesalesOffer", "token");
+        }
+        if (offer.getCustomerId() == null) {
+            // COLD prospect: registering with the offered email IS the
+            // identity proof — the caller's party must carry that address
+            boolean isProspect = party.individualOf(callerPartyId)
+                    .map(p -> p.get("contactMedium") instanceof List<?> media
+                            && media.stream().anyMatch(m -> m instanceof Map<?, ?> med
+                                && med.get("characteristic") instanceof Map<?, ?> c
+                                && offer.getProspectEmail().equalsIgnoreCase(
+                                        String.valueOf(c.get("emailAddress")))))
+                    .orElse(false);
+            if (!isProspect) {
+                throw NotFoundException.forResource("TelesalesOffer", "token");
+            }
+            offer.setCustomerId(callerPartyId);
+        } else if (!callerPartyId.equals(offer.getCustomerId())) {
             // the offer is confirmed by ITS customer, signed in — that is
             // what "in writing" means here; anyone else sees nothing
             throw NotFoundException.forResource("TelesalesOffer", "token");
@@ -169,6 +209,98 @@ public class TelesalesService {
                 log.warn("telesales expiry tick failed for {}: {}", tenant.getId(), e.getMessage());
             }
         }
+    }
+
+    /**
+     * THE DIAL LIST: the partner's dialer pulls its audience from the
+     * SAME segments campaigns use — consent filtered at the source
+     * (insight returns only consented members), and every number WASHED
+     * against the reservation register before it appears. Reserved
+     * citizens are excluded and counted, never listed.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> dialList(String segment) {
+        dealers.requireDealerAgreement();
+        String tenant = tenantScope.currentTenantId();
+        List<Map<String, Object>> entries = new java.util.ArrayList<>();
+        int reserved = 0;
+        int unreachable = 0;
+        for (String partyId : insight.segmentMembers(segment)) {
+            Map<String, Object> person = party.individualOf(partyId).orElse(null);
+            if (person == null) {
+                continue;
+            }
+            String phone = phoneOf(person);
+            String email = emailOf(person);
+            if (phone == null) {
+                continue; // no number, no call
+            }
+            try {
+                if (isReserved(tenant, phone)) {
+                    reserved++;
+                    continue; // a reserved citizen is EXCLUDED, never listed
+                }
+            } catch (Exception e) {
+                unreachable++;
+                continue; // fail-closed per number: unwashed is uncallable
+            }
+            Map<String, Object> entry = new LinkedHashMap<>();
+            entry.put("partyId", partyId);
+            entry.put("name", (person.getOrDefault("givenName", "") + " "
+                    + person.getOrDefault("familyName", "")).trim());
+            entry.put("phone", phone);
+            entry.put("email", email);
+            entry.put("consent", "segment-consented, DNC-washed");
+            entries.add(entry);
+        }
+        log.info("dial list '{}': {} callable, {} reserved excluded, {} unwashed excluded",
+                segment, entries.size(), reserved, unreachable);
+        return Map.of("segment", segment, "entries", entries,
+                "reservedExcluded", reserved, "unwashedExcluded", unreachable);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String phoneOf(Map<String, Object> person) {
+        if (!(person.get("contactMedium") instanceof List<?> media)) {
+            return null;
+        }
+        for (Object m : media) {
+            if (m instanceof Map<?, ?> med && med.get("characteristic") instanceof Map<?, ?> c) {
+                Object number = c.get("phoneNumber") != null ? c.get("phoneNumber") : c.get("contactMedium");
+                String type = String.valueOf(med.get("mediumType"));
+                if (number != null && ("phone".equalsIgnoreCase(type) || "mobile".equalsIgnoreCase(type))) {
+                    return String.valueOf(number);
+                }
+            }
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String emailOf(Map<String, Object> person) {
+        if (!(person.get("contactMedium") instanceof List<?> media)) {
+            return null;
+        }
+        for (Object m : media) {
+            if (m instanceof Map<?, ?> med && "email".equalsIgnoreCase(String.valueOf(med.get("mediumType")))
+                    && med.get("characteristic") instanceof Map<?, ?> c && c.get("emailAddress") != null) {
+                return String.valueOf(c.get("emailAddress"));
+            }
+        }
+        return null;
+    }
+
+    /** One washed number; throws when the register cannot answer. */
+    private boolean isReserved(String tenantId, String phone) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || tenant.getDncUrl() == null || tenant.getDncUrl().isBlank()) {
+            throw new IllegalStateException("no register configured");
+        }
+        Map<String, Object> verdict = rest.get()
+                .uri(tenant.getDncUrl() + "/check?phone={p}", phone)
+                .header("Authorization", "Bearer " + tenant.getDncToken())
+                .retrieve().body(Map.class);
+        return verdict == null || Boolean.TRUE.equals(verdict.get("reserved"));
     }
 
     /** The partner's own offers — their pipeline view. */

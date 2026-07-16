@@ -784,6 +784,7 @@ services:
       BSS_SOM_COMMISSION_WINDOW_MS: "15000"
       BSS_SOM_COMMISSION_TICK_MS: "5000"
       # the do-not-call wash: genalpha checks the mock reservation register
+      INSIGHT_BASE_URL: http://insight:8080
       DNC_URL: http://mock-dnc:8080
       DNC_TOKEN: genalpha-dnc-token
       # dev clock: telesales offers expire fast enough for a suite to see it

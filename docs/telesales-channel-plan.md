@@ -45,6 +45,19 @@ AUTHENTICATED act — the signed-in customer confirms their own offer
 (stronger "in writing" than a bare link, and a stranger with the code
 sees a 404) — and a tenant with NO register configured refuses outbound
 entirely: the operator opts IN by configuring the wash, never out.
-Named follow-ups: cold-prospect identity creation at confirmation;
-segment → dial-list export with consent state; a telesales tab in the
-dealer console.
+Both named follow-ups shipped in the same suite:
+
+- **The dial list** (`GET /dealer/v1/telesales/dialList?segment=`): the
+  dialer pulls the SAME insight segments campaigns use — consent
+  filtered at the source (insight only returns consented members) —
+  and every number is washed against the register at export. Reserved
+  citizens are EXCLUDED AND COUNTED, never listed; an unwashable number
+  is likewise excluded (fail-closed per entry). bss-som gained
+  insight:read for it.
+- **Cold prospects**: an offer to a non-customer holds their contact;
+  the code returns to the partner (their dialer's own SMS carries it —
+  there is no inbox to put it in yet); and REGISTERING with the offered
+  email is the identity proof: the prospect signs up, signs in, and
+  confirms — a registered stranger with a stolen code sees a 404.
+
+Remaining follow-up: a telesales tab in the dealer console.

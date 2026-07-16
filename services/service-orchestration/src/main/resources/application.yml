@@ -51,6 +51,7 @@ bss:
     # empty falls back to a fixed dev key (loudly not for production)
     puk-key: ${BSS_SIM_PUK_KEY:}
   downstream:
+    insight-base-url: ${INSIGHT_BASE_URL:http://localhost:8117}
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
     assurance-base-url: ${ASSURANCE_BASE_URL:}
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
