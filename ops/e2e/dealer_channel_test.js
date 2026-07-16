@@ -218,7 +218,29 @@ async function token(ctx, user, pass) {
   console.log('OK chains are WALLS to each other: Elektra\'s clerk asking about PowerOn\'s'
     + ' order gets a 404 — attribution is also isolation');
 
-  /* ---------- 8. the dealer console shows the desk ---------- */
+  /* ---------- 8. a runaway POS is THROTTLED — per partner, at the edge ---------- */
+  // a retry storm on PowerOn's side must never crowd out Elektra's clerks:
+  // buckets are per OAuth2 client, refusals carry Retry-After, and the
+  // backend never even hears the refused knocks
+  await sleep(2500); // a fresh window
+  const storm = await Promise.all(Array.from({ length: 16 }, () =>
+    ctx.get(`${API}/dealer/v1/kits`, { headers: H(pos) })));
+  const refused = storm.filter((r) => r.status() === 429);
+  if (!refused.length) fail('16 rapid POS knocks and no 429 — the rate limit is decorative');
+  if (!refused[0].headers()['retry-after']) fail('the 429 carries no Retry-After');
+  const clerkDuring = await ctx.get(`${API}/dealer/v1/kits`, { headers: H(clerk.tok) });
+  if (clerkDuring.status() !== 200) {
+    fail("PowerOn's storm throttled Elektra's clerk: " + clerkDuring.status());
+  }
+  await sleep(2500);
+  if ((await ctx.get(`${API}/dealer/v1/kits`, { headers: H(pos) })).status() !== 200) {
+    fail('the window never forgave the POS');
+  }
+  console.log('OK THE STORM IS CONTAINED: 16 rapid POS knocks → 429s with Retry-After for'
+    + ' PowerOn ONLY — Elektra\'s clerk sailed through, and a fresh window forgave. Fairness'
+    + ' per credential, enforced at the edge before any backend hears it');
+
+  /* ---------- 9. the dealer console shows the desk ---------- */
   const browser = await chromium.launch();
   const page = await browser.newPage();
   await page.goto(`${API}/dealer-app/`);

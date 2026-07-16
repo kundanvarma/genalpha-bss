@@ -60,9 +60,16 @@ with a mobile subscription): only the subscription enters this BSS. The
 device rides the sale as `device` context on the dealer stamp and lands
 on the commission entry — attribution and support, never a billable item.
 
+**Per-partner rate limits (shipped):** a fixed-window limiter at the
+gateway, keyed on the bearer's azp claim (decode-only — fairness
+bucketing, never authorization; the services still validate every
+token). Only the `/dealer/v1` surface; 429 + Retry-After; one chain's
+retry storm never touches another chain or the backend. Dev clocks:
+`BSS_GATEWAY_PARTNER_RATE_CAPACITY` / `_WINDOW_MS`.
+
 ## Deliberately later (named follow-ups)
 
-Per-partner rate limits at the gateway, port-in from the console,
+Port-in from the console,
 per-store stock allocation in TMF687, chain → store → clerk org hierarchy,
 commission dispute worklist, marketing collateral in the dealer console.
 

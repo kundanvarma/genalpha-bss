@@ -1102,6 +1102,9 @@ services:
     container_name: bss-gateway
     restart: unless-stopped
     environment:
+      # dev clocks: partner rate window small enough for a suite to trip
+      BSS_GATEWAY_PARTNER_RATE_CAPACITY: "10"
+      BSS_GATEWAY_PARTNER_RATE_WINDOW_MS: "2000"
       CATALOG_URL: http://product-catalog:8080
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080
