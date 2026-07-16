@@ -651,6 +651,13 @@ services:
     container_name: bss-user-roles
     restart: unless-stopped
     environment:
+      # operator-as-a-form: master admin + template + writable registry file
+      BSS_ONBOARDING_KEYCLOAK_BASE: http://keycloak:8080
+      BSS_ONBOARDING_ADMIN_USER: admin
+      BSS_ONBOARDING_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      BSS_ONBOARDING_REALM_TEMPLATE: /realm-template/nova-realm.json
+      BSS_ONBOARDING_TENANTS_FILE: /config/tenants.yml
+      CATALOG_BASE_URL: http://product-catalog:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-user-admin
@@ -662,7 +669,8 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     volumes:
-      - ./infra/tenants:/config:ro
+      - ./infra/tenants:/config
+      - ./infra/keycloak/nova-realm.json:/realm-template/nova-realm.json:ro
     ports:
       - "8100:8080"
     depends_on:

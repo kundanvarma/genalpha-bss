@@ -69,6 +69,31 @@ customer activated with MSISDN + SIM and was billed a PRORATED 128.52
 DKK of the 249/mo plan — the newborn operator inherits honest billing —
 and the row-level walls hold in both directions against genalpha.
 
+## Operator-as-a-form + zero-restart + white-label (shipped)
+
+- **Zero-restart**: every registry-bearing service (31) carries a
+  generated `TenantFileRefresher` — its own daemon executor (no
+  @EnableScheduling needed), snakeyaml re-read of /config/tenants.yml,
+  ${ENV:default} resolution matching Spring's, reflection binding onto
+  whatever fields THIS service's TenantEntry knows. NEW tenants join the
+  running fleet within one interval; changes to existing tenants remain
+  restart-territory (deliberate). The lazy issuer resolvers make security
+  follow the registry for free.
+- **Operator-as-a-form**: POST /onboarding/v1/operator (user-roles, which
+  already owns identity admin) — master-admin realm clone from the
+  mounted nova template, tenant block appended to the WRITABLE registry
+  mount, own registry refreshed inline, and the seeder WAITS for the
+  fleet to honor the newborn's first token before seeding the catalog
+  (the race found live). Guarded twice: roles:admin + host-tenant-only.
+  Console: an Operators tab — five fields, one save.
+- **White-label**: free — the gateway serves /app/tenant-config.json by
+  Host from its own live registry, so shop.<id>.localhost wears the new
+  brand, locale, currency and color the moment the gateway refreshes.
+- Suite #50 (operator_form_test.js): nova's admin is REFUSED (only the
+  host mints); five form fields make "Aurora Tele" (sv/SEK); the fleet
+  honors aurora's first token with zero restarts; the manifest wears the
+  brand; Astrid buys the seeded plan and activates.
+
 ## Open questions to resolve while building
 
 - Which services read tenant config beyond the registry (channel manifest

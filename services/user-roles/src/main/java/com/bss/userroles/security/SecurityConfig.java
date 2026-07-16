@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // minting operators is the host admin's act alone
+                        .requestMatchers("/onboarding/v1/**").hasAuthority("roles:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("roles:admin")
                         // Login provisioning is the one write customer-side identities
                         // may perform: an org admin invites their people, a household

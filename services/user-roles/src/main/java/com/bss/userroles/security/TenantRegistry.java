@@ -65,6 +65,9 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        private String brandName;
+        private String locale;
+        private String currency;
 
         public String getId() {
             return id;
@@ -109,6 +112,12 @@ public class TenantRegistry {
         public String getMachineClientSecret() {
             return machineClientSecret;
         }
+        public String getBrandName() { return brandName; }
+        public void setBrandName(String v) { this.brandName = v; }
+        public String getLocale() { return locale; }
+        public void setLocale(String v) { this.locale = v; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String v) { this.currency = v; }
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;

@@ -122,6 +122,11 @@ spring:
           uri: ${USER_ROLES_URL:http://localhost:8100}
           predicates:
             - Path=/tmf-api/rolesAndPermissionsManagement/**
+        - id: operator-onboarding
+          # operator-as-a-form: the host admin mints operators from the console
+          uri: ${USER_ROLES_URL:http://localhost:8100}
+          predicates:
+            - Path=/onboarding/v1/**
         - id: geographic-address
           uri: ${ADDRESS_URL:http://localhost:8101}
           predicates:

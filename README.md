@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — forty-nine Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -24,7 +24,10 @@ honestly — with a dealer console for the chain's clerks and a machine partner 
 with their own POS, where the chain's own phone rides the sale as context, never a billable item), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
-bills its first customer in ~2 minutes, no image rebuilt), the AI-slice
+bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
+admin mints a new operator from five console fields, every service live-refreshes the shared
+registry with zero restarts, and `shop.<id>.localhost` wears the new brand the moment the
+gateway notices), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
