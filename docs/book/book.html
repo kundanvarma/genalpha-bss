@@ -108,7 +108,7 @@
     <div class="kicker">A Build Memoir</div>
     <h1>Verify<br>Everything</h1>
     <div class="sub">How one person and an AI built a complete telecom BSS — one proof at a time</div>
-    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty-one components, six channels, and a discipline</div>
+    <div class="by">Built with <b>Claude Fable 5</b> · genalpha-bss · thirty-three components, six channels, and a discipline</div>
   </div>
 </section>
 
@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and forty end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -1793,6 +1793,186 @@
     screenshot behind it.</p>
 
     <p style="text-align:center;color:var(--faint);font-family:-apple-system,sans-serif;font-size:0.9rem;margin-top:2.5rem">Verify everything.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Twenty-Nine</div>
+    <h3>What happens when the customer calls</h3>
+    <div class="epi">"What if the customer wants to…" <span class="who">— the operator, eleven
+    times in a row, and every time the honest first answer was "they can't, yet"</span></div>
+
+    <p class="drop">There is a genre of question that sorts real BSSs from demos, and the operator
+    asked it eleven different ways in one relentless stretch. What if the customer forgets their
+    PIN? Loses the SIM? Wants a new number? Wants to pause the subscription for a month abroad?
+    Can't pay the whole bill? Wants to upgrade mid-cycle — who pays for the half-used month? Wants
+    a refund? Wants to leave and take the number? Wants to hand the work line to a colleague? Says
+    the internet is slow? Wants their daughter on the plan? Wants the bill on payday instead of the
+    first? None of these are features a launch demo shows. All of them are Tuesday at a call
+    center.</p>
+
+    <h2>The gauntlet</h2>
+    <p>Each question became the same loop: research how real operators handle it, build the
+    lifecycle act, notify the customer, land it on the timeline, prove it in a suite. A changed
+    PIN is never silent — the owner hears about it, because a silent credential change is how
+    fraud reads. A lost SIM quarantines the old card before minting the new one. A paused
+    subscription pauses charging at the OCS and comes back by itself on the promised date. A
+    number change quarantines the old number with its story written down. And the security
+    posture inverted properly along the way: self-care endpoints stopped demanding staff powers
+    and started demanding OWNERSHIP — any authenticated customer may act on their own line, and a
+    foreign line answers 404, never 403, because even "forbidden" leaks that there is something to
+    forbid.</p>
+
+    <h2>Money got honest</h2>
+    <p>The billing half of the gauntlet turned the engine segment-based. A mid-month start pays
+    from its first day, labelled "(from the 16th, 15 days)". A mid-cycle plan change bills each
+    plan for exactly its own days. A cease bills to the end date and no further. Underneath them
+    all, one invariant the suites enforce from every direction: <em>no day is ever billed
+    twice</em> — every billing run clamps its period to the day after the last covered one. On top
+    of the honest bill came the honest hardship path: an unpaid bill splits into installments that
+    sum exactly; a missed one earns one reminder, then a grace, then the broken plan lands on a
+    dunning worklist with the remainder due through one visible door. A disputed charge pauses
+    collection while a human decides, and the decision — credit or uphold — is written to the
+    customer in either case. Payday alignment closed the arc: pick a day, the cycle follows it,
+    and the bridging stub bill covers exactly the gap days, because the no-double-billing
+    invariant holds even across a change of rhythm.</p>
+
+    <p class="pull edge">A demo sells the happy path. An operator lives in the other eleven. The
+    system is only real when "what if the customer wants to—" stops being a stump and starts
+    being a suite number.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty</div>
+    <h3>The bill leaves the building, and the money comes home</h3>
+    <div class="epi">"I see that bills don't open as PDF… and the format we support in Norway is
+    EHF, whereas I guess it's EDI in Europe. Check and make this a configurable option."
+    <span class="who">— the operator, half right, which is the useful kind of wrong</span></div>
+
+    <p class="drop">The research corrected the premise first, which is what research is for.
+    Europe's e-invoicing standard is not EDI: it is EN 16931, one semantic model with two
+    syntaxes — UBL 2.1 and UN/CEFACT CII — and Norway's EHF is a national profile of Peppol BIS
+    Billing 3.0 riding the UBL syntax, with one national demand that matters: a payment
+    reference, the KID, stamped into every invoice. EDIFACT, the operator's guess, is the
+    pre-XML legacy a trading partner might still demand — real, but a follow-up, not the
+    standard. That correction shaped everything built next.</p>
+
+    <h2>Formats became rows</h2>
+    <p>A format profile is policy, not logic: which syntax, which CustomizationID, whether a
+    payment reference is required. So profiles became database rows a tenant admin edits in the
+    console — and the suite proved the rows are load-bearing by editing one and watching the very
+    next e-invoice change on the wire. Australia arrived as a seeded row. Germany's XRechnung was
+    typed into a form. EDIFACT and Factur-X — the hybrid PDF with the machine-readable CII
+    embedded inside it — arrived as two more syntaxes behind the same rows, proven by flipping a
+    row and flipping it back. Adding a country stopped being a release and became an INSERT.</p>
+
+    <h2>Delivery grew a ledger, and the buyer answered</h2>
+    <p>Fire-and-forget was not how money documents travel, so cutting a bill began writing a
+    delivery ledger row in the same transaction — the outbox property: if the bill exists, the
+    intent to deliver it exists. A relay drains the ledger with backoff; the suite knocked the
+    access point over twice and watched the third attempt land, exactly once. Then the buyer's
+    answer joined the same row: a Peppol Invoice Response — accepted, rejected with the buyer's
+    words, paid — so one row tells the document's whole life. The buyer's "paid" is a claim,
+    though. Money is only real when the bank says so.</p>
+
+    <h2>And the money came home</h2>
+    <p>The bank says so in dialects. ISO 20022 camt.054 XML. Norway's Nets OCR giro file —
+    eighty-character fixed-width lines, amounts in øre, the KID right-adjusted in columns
+    fifty-one to seventy-five. America's BAI2 lockbox. All three land on one webhook that detects
+    the dialect from the first bytes, reduces it to credit entries, and matches each entry to a
+    bill by the payment reference the invoice carried out. A clean match books a real payment and
+    settles the bill through the same guarantee path a card uses — and the customer is thanked,
+    because a bill that closes itself silently reads as a glitch. Everything unclear — unknown
+    reference, wrong amount, a re-sent file — parks on the unapplied-cash worklist with its
+    reason. Money is fail-closed: never guessed, never dropped.</p>
+
+    <p class="pull edge">The bill is a conversation in three directions: the document out, the
+    buyer's answer back, the money home. A BSS that only prints the number has done a third of
+    the job.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-One</div>
+    <h3>Selling through someone else's store</h3>
+    <div class="epi">"In Norway, Elkjøp and Power sell CSP products." <span class="who">— the
+    operator, describing the entire physical distribution of a real MVNO in one sentence</span></div>
+
+    <p class="drop">Some CSPs closed their own stores years ago; electronics chains are its shelf. That
+    model has three shapes and the system grew all of them. The DEALER CONSOLE, a sixth channel,
+    where a clerk whose organization holds a dealer agreement sells at the counter. The STARTER
+    KIT, a SIM in a box with an activation code — and, decisively, the dealer attribution baked
+    into the kit itself, so a box sold like a chocolate bar still credits the store when the
+    customer self-activates on their sofa, no partner system ever involved. And the PARTNER API,
+    because Elkjøp and Power run their own tills: the agreement row names an OAuth2 client, the
+    credential IS the dealer, and a rate limiter at the edge keeps one chain's retry storm from
+    ever crowding out another.</p>
+
+    <p>Being a dealer is a row, not a role. A clerk's power is their org membership, checked
+    live; a foreign dealer sees 404-shaped nothing, because attribution is also isolation. And
+    the chains sell their OWN phones — their stock, their fiscal registers, their
+    kassasystemlova obligations — so the device rides the sale as context on the commission
+    entry, never as a billable item. The BSS is many things; a certified cash register is
+    deliberately not one of them.</p>
+
+    <h2>Commission moves like money</h2>
+    <p>The money-out ledger inherited the money-in discipline. Commission accrues PENDING at
+    activation, because Norway gives every customer fourteen days to change their mind. It
+    hardens to EARNED when the withdrawal window closes. And when a customer uses their
+    angrerett on day three, the pending entry claws back with the reason written on it — not in
+    an email thread, on the row. The suite runs the whole arc on dev clocks: sold, pending,
+    earned, and one honest clawback.</p>
+
+    <p class="pull edge">A dealer channel is attribution you can audit, money that can change its
+    mind, and walls between chains. Everything else is a login page.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Two</div>
+    <h3>The third operator in an afternoon</h3>
+    <div class="epi">"Can our BSS host an MVNO?" <span class="who">— the operator, asking the
+    question the architecture had been quietly answering all along</span></div>
+
+    <p class="drop">Two operators on one deployment had been the proof of multitenancy. The MVNO
+    question exposed the asterisk: both were baked into every service's configuration as build
+    artifacts. A third would have meant editing thirty-one files and rebuilding the world. So the
+    wall came down in three moves. The tenant fleet became a FILE — one shared registry, the
+    union of every service's per-tenant fields, mounted everywhere; adding an operator became
+    appending a block. Then a script did the afternoon: clone the template realm, append the
+    block, restart, seed — and suite forty-nine timed it at a hundred and twenty-five seconds
+    from nothing to a customer whose first bill was already correctly PRORATED in her own
+    currency, because a newborn operator inherits honest billing for free.</p>
+
+    <h2>Then the restart went away</h2>
+    <p>Every service grew a small refresher that re-reads the shared file on a timer, and the
+    security resolvers — which had always built their issuer trust lazily — honored a newborn
+    tenant's first token with no further work. That made the operator a FORM: five fields in the
+    admin console — id, brand, locale, currency, color — and the running fleet grows a tenant.
+    Eleven seconds from a blank form to a served customer, zero restarts, zero builds. The
+    white-label came free, because the gateway had always served each storefront's manifest from
+    the registry by hostname: the moment the refresher ticked, shop.aurora.localhost wore
+    Aurora's name and color.</p>
+
+    <h2>The boundary, written down — and the day it bit</h2>
+    <p>Live mutation followed: change a serving operator's brand or bank token in the file and
+    the fleet follows within one interval. But identity — the id, the issuer, the key endpoints —
+    stays restart-territory, enforced in code, because the security caches key by issuer and a
+    boundary you can name beats one you discover. The guard on the mutation endpoint exists
+    because its absence bit within the hour: a failed test run renamed Nova "Hijacked" through
+    the unguarded door, and the refreshers loyally carried the vandalism fleet-wide — then healed
+    it just as fast when the file was corrected. Live mutation cuts both ways. That is why seed
+    operators are protected, form-born operators are form-mutable, and the incident is in this
+    book instead of buried.</p>
+
+    <p class="pull edge">Hosting is the multitenancy thesis with a deadline. Two operators prove
+    the walls; the third one, born in an afternoon and rebranded while serving, proves the
+    business.</p>
   </section>
 
   <hr class="soft">
