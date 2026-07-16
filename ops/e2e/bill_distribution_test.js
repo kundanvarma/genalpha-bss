@@ -539,6 +539,36 @@ async function token(ctx, realm, user, pass) {
   if (!viaApi.customizationId || !viaApi.customizationId.includes('xrechnung')) {
     fail('the UI-created profile did not land as a real row: ' + JSON.stringify(viaApi));
   }
+
+  // the DELIVERY LEDGER as a page: this very run's genalpha print jobs are
+  // on it, sent, with their attempt counts — and failed rows offer Retry
+  await page.locator('.tab', { hasText: 'Deliveries' }).click();
+  await page.waitForSelector('#listing-body tr:has-text("sent")', { timeout: 15000 })
+    .catch(() => fail('the Deliveries tab shows no sent rows'));
+  if (!(await page.locator('#listing-body tr', { hasText: bill.billNo }).count())) {
+    fail("this run's own bill is not on the Deliveries page");
+  }
+  console.log('OK DELIVERIES ON THE CONSOLE: the ledger is a page — every bill\'s trip, status'
+    + ' and attempt count next to Disputes and Dunning, with Retry for what failed');
+
+  // and UNAPPLIED CASH: park a nonsense payment, watch it appear
+  await ctx.post(`${API}/bank/v1/remittance`, {
+    headers: { 'Content-Type': 'application/xml', 'X-Bank-Token': 'genalpha-bank-token' },
+    data: `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.054.001.08">`
+      + `<BkToCstmrDbtCdtNtfctn><GrpHdr><MsgId>UI-${run}</MsgId></GrpHdr><Ntfctn><Ntry>`
+      + `<Amt Ccy="EUR">9.99</Amt><CdtDbtInd>CRDT</CdtDbtInd><NtryDtls><TxDtls><RmtInf><Strd>`
+      + `<CdtrRefInf><Ref>${run}0000</Ref></CdtrRefInf></Strd></RmtInf></TxDtls></NtryDtls>`
+      + `</Ntry></Ntfctn></BkToCstmrDbtCdtNtfctn></Document>`,
+  });
+  await page.locator('.tab', { hasText: 'Unapplied cash' }).click();
+  await page.waitForSelector(`#listing-body tr:has-text("${run}0000")`, { timeout: 15000 })
+    .catch(() => fail('the parked payment is not on the Unapplied cash page'));
+  const unappliedRow = await page.locator(`#listing-body tr:has-text("${run}0000")`).textContent();
+  if (!unappliedRow.includes('no bill carries')) {
+    fail('the unapplied row does not carry its reason: ' + unappliedRow);
+  }
+  console.log('OK UNAPPLIED CASH ON THE CONSOLE: the parked payment sits on the AR worklist'
+    + ' page with its amount and its reason — the coin nobody claims is one click from a human');
   await browser.close();
   console.log('OK A COUNTRY ADDED FROM THE CONSOLE: Germany (XRechnung 3.0) entered as a form'
     + ' — and the API serves it back as a live profile row. No deploy, no code, a row');

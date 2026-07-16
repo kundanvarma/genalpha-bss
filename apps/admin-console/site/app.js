@@ -376,6 +376,38 @@ const RESOURCES = [
     columns: ['code', 'name', 'syntax', 'paymentReference', 'lastUpdate'],
   },
   {
+    path: 'billDistribution',
+    base: BILLING_BASE,
+    title: 'Deliveries',
+    // THE DELIVERY LEDGER: every bill's trip to the distribution partner
+    // — sent after how many tries, what the buyer answered (Peppol
+    // Invoice Response), and what FAILED and deserves a retry.
+    noEdit: true,
+    noDelete: true,
+    readOnly: true,
+    fields: [],
+    columns: ['billNo', 'format', 'channel', 'status', 'attempts', 'buyerStatus', 'lastError', 'sentAt'],
+    rowAction: {
+      label: (item) => (item.status === 'failed' ? 'Retry' : '—'),
+      apply: (item) => (item.status === 'failed'
+        ? authFetch(`${BILLING_BASE}/billDistribution/${item.id}/retry`, { method: 'POST' })
+        : Promise.resolve()),
+    },
+  },
+  {
+    path: 'remittance/unapplied',
+    base: BILLING_BASE,
+    title: 'Unapplied cash',
+    // Money the bank says arrived but no bill cleanly claims — unknown
+    // reference, wrong amount, an already-settled bill. The classic AR
+    // queue a human resolves; nothing is ever guessed at or dropped.
+    noEdit: true,
+    noDelete: true,
+    readOnly: true,
+    fields: [],
+    columns: ['reference', 'amount', 'reason', 'batchRef', 'receivedAt'],
+  },
+  {
     path: 'salesLead',
     base: SALES_BASE,
     title: 'Sales leads',
@@ -674,6 +706,8 @@ const COLUMN_LABELS = {
   otherOperator: 'Other operator', clearinghouse: 'Clearinghouse',
   scheduledCutover: 'Cutover', createdAt: 'When', useCase: 'Use case',
   customizationId: 'Customization', profileId: 'Profile', paymentReference: 'Payment ref',
+  buyerStatus: 'Buyer says', lastError: 'Last error', sentAt: 'Sent', batchRef: 'Batch',
+  receivedAt: 'Received',
 };
 const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.label]));
 
@@ -701,6 +735,8 @@ const TAB_ROLE = {
   dispute: 'billing:admin',
   dunning: 'billing:admin',
   billFormatProfile: 'billing:admin',
+  billDistribution: 'billing:admin',
+  'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   audiences: 'insight:read',
