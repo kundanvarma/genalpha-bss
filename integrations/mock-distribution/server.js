@@ -19,6 +19,9 @@ const EHF_CUSTOMIZATION = 'urn:cen.eu:en16931:2017#compliant#urn:fdc:peppol.eu:2
 
 /** [{billNo, format, channel, recipient, contentType, payload, token, receivedAt}] */
 const invoices = [];
+/** Chaos switch for the suites: fail the next N ingestions with a 503,
+ * the way a real access point has a bad afternoon. */
+let outage = 0;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -31,7 +34,21 @@ const server = http.createServer((req, res) => {
     return json(200, { status: 'UP' });
   }
 
+  if (req.method === 'POST' && url.pathname === '/outage') {
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      outage = Number((JSON.parse(body || '{}')).count) || 0;
+      json(200, { outage });
+    });
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/invoices') {
+    if (outage > 0) {
+      outage -= 1;
+      return json(503, { error: 'the access point is having a bad afternoon — try again' });
+    }
     const auth = req.headers.authorization || '';
     if (!auth.startsWith('Bearer ') || auth.length <= 'Bearer '.length) {
       return json(401, { error: 'access token required' });

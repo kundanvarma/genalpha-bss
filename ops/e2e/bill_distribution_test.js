@@ -325,6 +325,51 @@ async function token(ctx, realm, user, pass) {
     + ' next e-invoice carried the change on the wire — the profile is data an admin owns,'
     + ' not a constant a release owns');
 
+  /* ---------- OUTBOX-BACKED DELIVERY: a dead partner delays a bill, never loses it ---------- */
+  // knock the access point over for the next two ingestions, then cut a
+  // bill — the ledger must show the misses AND the recovery
+  await ctx.post(`${DIST}/outage`, { data: { count: 2 } });
+  const rEmail = `retry-${run}@example.com`;
+  const rLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: rEmail, givenName: 'Ret', familyName: `Ry${run}` } })).json();
+  const retryCust = await token(ctx, 'bss', rEmail, rLogin.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(retryCust), data: { productOrderItem: [{ action: 'add', productOffering: PLAN }] } });
+  let retryBill = null;
+  for (let i = 0; i < 30 && !retryBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(staff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(retryCust) })).json();
+    retryBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!retryBill) fail('no bill for the retry customer');
+  let ledgerRow = null;
+  for (let i = 0; i < 40 && (!ledgerRow || ledgerRow.status !== 'sent'); i++) {
+    await sleep(1500);
+    const ledger = await (await ctx.get(`${BILLS}/billDistribution`, { headers: H(staff) })).json();
+    ledgerRow = ledger.find((r) => r.billNo === retryBill.billNo) || ledgerRow;
+  }
+  if (!ledgerRow) fail('the delivery never entered the ledger');
+  if (ledgerRow.status !== 'sent') {
+    fail('the delivery never recovered from the outage: ' + JSON.stringify(ledgerRow));
+  }
+  if (ledgerRow.attempts < 3) {
+    fail('the outage should have cost at least two failed tries, ledger says: '
+      + ledgerRow.attempts);
+  }
+  const delivered = await (await ctx.get(`${DIST}/invoices?billNo=${retryBill.billNo}`)).json();
+  if (delivered.length !== 1) fail('expected exactly one delivered copy, got ' + delivered.length);
+  console.log(`OK OUTBOX-BACKED: the access point 503'd twice, the relay retried with backoff,`
+    + ` and the ledger tells the whole story — status sent after ${ledgerRow.attempts} attempts,`
+    + ' exactly one copy delivered. A dead partner delays a bill; it never loses one');
+
+  /* the ledger is back-office: a customer may not read it */
+  const ledgerProbe = await ctx.get(`${BILLS}/billDistribution`, { headers: H(retryCust) });
+  if (ledgerProbe.status() !== 403) {
+    fail('a customer read the delivery ledger: ' + ledgerProbe.status());
+  }
+  console.log('OK the ledger is billing:admin only — a customer asking gets a 403');
+
   /* ---------- the console page: profiles readable and a country ADDED through the UI ---------- */
   const browser = await chromium.launch();
   const page = await browser.newPage();

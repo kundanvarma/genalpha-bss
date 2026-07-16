@@ -1,18 +1,20 @@
 package com.bss.billing.service;
 
 import com.bss.billing.entity.AppliedBillingRate;
+import com.bss.billing.entity.BillDistribution;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.security.TenantRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * The DISTRIBUTION seam: a finished bill leaves for the tenant's own
@@ -20,8 +22,10 @@ import java.util.concurrent.CompletableFuture;
  * a PDF. Formats are the EUROPEAN ones: EHF (Norway's CIUS of Peppol BIS
  * Billing 3.0), generic Peppol BIS, or UN/CEFACT CII — the two EN 16931
  * syntaxes; EDIFACT stays a named follow-up for legacy trading partners.
- * Fire-and-forget and fail-open: distribution never blocks billing, and
- * the in-app bill is always the record.
+ * OUTBOX-BACKED: cutting a bill writes a ledger row in the same
+ * transaction; the relay drains it with exponential backoff, so a dead
+ * partner delays delivery but never loses it — and never blocks a
+ * billing run. The in-app bill is always the record.
  */
 @Service
 public class BillDistributionService {
@@ -34,7 +38,10 @@ public class BillDistributionService {
     private final TenantRegistry tenants;
     private final BillDocumentService documents;
     private final com.bss.billing.repository.BillFormatProfileRepository profiles;
+    private final com.bss.billing.repository.BillDistributionRepository ledger;
     private final RestClient restClient;
+    private final long retrySeconds;
+    private final int maxAttempts;
 
     /** What the renderer needs of a profile — a row, or the built-in
      * fallback when a tenant names a format it has no row for. */
@@ -44,11 +51,19 @@ public class BillDistributionService {
 
     public BillDistributionService(TenantRegistry tenants, BillDocumentService documents,
             com.bss.billing.repository.BillFormatProfileRepository profiles,
-            RestClient.Builder builder) {
+            com.bss.billing.repository.BillDistributionRepository ledger,
+            RestClient.Builder builder,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.billing.distribution-retry-seconds:60}") long retrySeconds,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.billing.distribution-max-attempts:8}") int maxAttempts) {
         this.tenants = tenants;
         this.documents = documents;
         this.profiles = profiles;
+        this.ledger = ledger;
         this.restClient = builder.build();
+        this.retrySeconds = retrySeconds;
+        this.maxAttempts = maxAttempts;
     }
 
     /** The profile is a CONFIG ROW: the tenant's format code picks it,
@@ -94,7 +109,9 @@ public class BillDistributionService {
                 : "einvoice".equalsIgnoreCase(preference) ? "einvoice"
                 : tenant.getBillDistributionChannel();
         // render on the caller's thread (entities and the profile row are
-        // session-bound); ship async
+        // session-bound) and write the LEDGER ROW in the same transaction
+        // that cuts the bill — if the bill exists, the delivery intent
+        // exists; the relay does the actual sending, with retries
         String payload;
         String contentType;
         if ("print".equalsIgnoreCase(channel)) {
@@ -107,28 +124,115 @@ public class BillDistributionService {
                     : ublOf(tenantId, bill, lines, profile);
             contentType = "application/xml";
         }
-        Map<String, Object> envelope = Map.of(
-                "billNo", bill.getBillNo(),
-                "format", "print".equalsIgnoreCase(channel) ? "pdf" : format,
-                "channel", channel,
-                "recipient", bill.getOwnerPartyId(),
-                "contentType", contentType,
-                "payload", payload);
-        CompletableFuture.runAsync(() -> {
+        BillDistribution row = new BillDistribution();
+        row.setId(java.util.UUID.randomUUID().toString());
+        row.setTenantId(tenantId);
+        row.setBillId(bill.getId());
+        row.setBillNo(bill.getBillNo());
+        row.setFormat("print".equalsIgnoreCase(channel) ? "pdf" : format);
+        row.setChannel(channel);
+        row.setRecipient(bill.getOwnerPartyId());
+        row.setContentType(contentType);
+        row.setPayload(payload);
+        row.setStatus(BillDistribution.PENDING);
+        row.setAttempts(0);
+        row.setNextAttemptAt(OffsetDateTime.now());
+        row.setCreatedAt(OffsetDateTime.now());
+        row.setLastUpdate(OffsetDateTime.now());
+        ledger.save(row);
+    }
+
+    /** The RELAY: drains pending ledger rows per tenant, exponential
+     * backoff between tries, FAILED after the last one — never lost,
+     * never blocking a billing run, always accountable. */
+    @Scheduled(fixedDelayString = "${bss.billing.distribution-tick-ms:30000}")
+    public void deliverTick() {
+        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+            try (var ignored = com.bss.billing.security.TenantContext.actAs(tenant.getId())) {
+                deliverTenant(tenant);
+            } catch (Exception e) {
+                log.warn("distribution relay failed for tenant {}: {}", tenant.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private void deliverTenant(TenantRegistry.TenantEntry tenant) {
+        List<BillDistribution> due = ledger
+                .findTop25ByTenantIdAndStatusAndNextAttemptAtBeforeOrderByNextAttemptAtAsc(
+                        tenant.getId(), BillDistribution.PENDING, OffsetDateTime.now());
+        for (BillDistribution row : due) {
+            row.setAttempts(row.getAttempts() + 1);
+            row.setLastUpdate(OffsetDateTime.now());
             try {
                 restClient.post().uri(tenant.getBillDistributionUrl() + "/invoices")
                         .header("Authorization", "Bearer " + tenant.getBillDistributionToken())
                         .header("Content-Type", "application/json")
-                        .body(envelope)
+                        .body(Map.of(
+                                "billNo", row.getBillNo(),
+                                "format", row.getFormat(),
+                                "channel", row.getChannel(),
+                                "recipient", row.getRecipient(),
+                                "contentType", row.getContentType(),
+                                "payload", row.getPayload()))
                         .retrieve().toBodilessEntity();
-                log.info("bill {} distributed: {} via {} ({})", bill.getBillNo(),
-                        format, channel, tenant.getBillDistributionUrl());
+                row.setStatus(BillDistribution.SENT);
+                row.setSentAt(OffsetDateTime.now());
+                row.setLastError(null);
+                log.info("bill {} distributed: {} via {} (attempt {})", row.getBillNo(),
+                        row.getFormat(), row.getChannel(), row.getAttempts());
             } catch (Exception e) {
-                // fail-open: the in-app bill is the record; ops reconciles
-                log.warn("bill {} distribution failed ({}) — reconcile later",
-                        bill.getBillNo(), e.getMessage());
+                String error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                row.setLastError(error.length() > 500 ? error.substring(0, 500) : error);
+                if (row.getAttempts() >= maxAttempts) {
+                    // the ops worklist — visible at /billDistribution, retryable
+                    row.setStatus(BillDistribution.FAILED);
+                    row.setNextAttemptAt(null);
+                    log.warn("bill {} distribution FAILED after {} attempts: {}",
+                            row.getBillNo(), row.getAttempts(), error);
+                } else {
+                    long backoff = retrySeconds * (1L << Math.min(row.getAttempts() - 1, 6));
+                    row.setNextAttemptAt(OffsetDateTime.now().plusSeconds(Math.min(backoff, 3600)));
+                    log.info("bill {} distribution attempt {} failed ({}) — retrying in {}s",
+                            row.getBillNo(), row.getAttempts(), error, Math.min(backoff, 3600));
+                }
             }
-        });
+            ledger.save(row);
+        }
+    }
+
+    /** The delivery ledger as a worklist (payloads stay out — they are
+     * large and the partner already has or will get them). */
+    public List<Map<String, Object>> ledgerView(String tenantId, String status) {
+        List<BillDistribution> rows = status == null
+                ? ledger.findTop100ByTenantIdOrderByCreatedAtDesc(tenantId)
+                : ledger.findTop100ByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status);
+        return rows.stream().map(r -> {
+            Map<String, Object> map = new java.util.LinkedHashMap<String, Object>();
+            map.put("id", r.getId());
+            map.put("billNo", r.getBillNo());
+            map.put("format", r.getFormat());
+            map.put("channel", r.getChannel());
+            map.put("status", r.getStatus());
+            map.put("attempts", r.getAttempts());
+            map.put("lastError", r.getLastError());
+            map.put("createdAt", r.getCreatedAt().toString());
+            map.put("sentAt", r.getSentAt() == null ? null : r.getSentAt().toString());
+            map.put("@type", "BillDistribution");
+            return (Map<String, Object>) map;
+        }).toList();
+    }
+
+    /** An admin's second chance for a FAILED row — back to pending, due now. */
+    public Map<String, Object> retry(String tenantId, String id) {
+        BillDistribution row = ledger.findById(id)
+                .filter(r -> tenantId.equals(r.getTenantId()))
+                .orElseThrow(() -> com.bss.billing.exception.NotFoundException
+                        .forResource("BillDistribution", id));
+        row.setStatus(BillDistribution.PENDING);
+        row.setNextAttemptAt(OffsetDateTime.now());
+        row.setLastUpdate(OffsetDateTime.now());
+        ledger.save(row);
+        return Map.of("status", "pending", "billNo", row.getBillNo());
     }
 
     /** UBL 2.1 Invoice — the EN 16931 core wearing whatever customization

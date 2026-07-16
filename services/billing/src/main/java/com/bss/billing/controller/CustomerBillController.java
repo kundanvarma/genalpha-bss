@@ -38,6 +38,7 @@ public class CustomerBillController {
     private final com.bss.billing.service.DunningService dunningService;
     private final com.bss.billing.service.DisputeService disputeService;
     private final com.bss.billing.service.BillFormatProfileService formatProfileService;
+    private final com.bss.billing.service.BillDistributionService distributionService;
     private final com.bss.billing.service.BillDocumentService documentService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
@@ -45,6 +46,7 @@ public class CustomerBillController {
             com.bss.billing.service.DunningService dunningService,
             com.bss.billing.service.DisputeService disputeService,
             com.bss.billing.service.BillFormatProfileService formatProfileService,
+            com.bss.billing.service.BillDistributionService distributionService,
             com.bss.billing.security.TenantScope tenantScope,
             com.bss.billing.service.BillDocumentService documentService) {
         this.service = service;
@@ -52,6 +54,7 @@ public class CustomerBillController {
         this.dunningService = dunningService;
         this.disputeService = disputeService;
         this.formatProfileService = formatProfileService;
+        this.distributionService = distributionService;
         this.documentService = documentService;
         this.tenantScope = tenantScope;
     }
@@ -185,6 +188,21 @@ public class CustomerBillController {
                 String.valueOf(dto.get("code")), dto);
         return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH
                 + "/billFormatProfile/" + created.get("code"))).body(created);
+    }
+
+    /** THE DELIVERY LEDGER: what left for the distribution partner, when,
+     * after how many tries — and what is still owed a retry. */
+    @GetMapping("/billDistribution")
+    public ResponseEntity<java.util.List<Map<String, Object>>> distributionLedger(
+            @RequestParam(name = "status", required = false) String status) {
+        return ResponseEntity.ok(distributionService.ledgerView(tenantScope.currentTenantId(), status));
+    }
+
+    /** An admin's second chance for a FAILED delivery. */
+    @PostMapping("/billDistribution/{id}/retry")
+    public ResponseEntity<Map<String, Object>> retryDistribution(@PathVariable("id") String id) {
+        return ResponseEntity.accepted()
+                .body(distributionService.retry(tenantScope.currentTenantId(), id));
     }
 
     /** The disputes worklist (staff). */
