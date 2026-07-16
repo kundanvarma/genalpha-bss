@@ -22,6 +22,21 @@ public class RestOrderingClient implements OrderingClient {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public String create(Map<String, Object> productOrder) {
+        try {
+            Map<String, Object> created = restClient.post()
+                    .uri("/tmf-api/productOrderingManagement/v4/productOrder")
+                    .header("Content-Type", "application/json")
+                    .body(productOrder)
+                    .retrieve().body(Map.class);
+            return String.valueOf(created.get("id"));
+        } catch (RestClientException e) {
+            throw new IllegalStateException("ordering refused the dealer sale", e);
+        }
+    }
+
+    @Override
     public void complete(String productOrderId) {
         try {
             restClient.patch().uri("/tmf-api/productOrderingManagement/v4/productOrder/{id}", productOrderId)

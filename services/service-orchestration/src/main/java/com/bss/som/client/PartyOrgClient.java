@@ -40,6 +40,27 @@ public class PartyOrgClient {
         }
     }
 
+    /** Find a customer by their email — the dealer counter's lookup key. */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> individualByEmail(String email) {
+        try {
+            java.util.List<Map<String, Object>> hits = restClient.get()
+                    .uri("/tmf-api/party/v4/individual?q={q}&limit=5", email)
+                    .retrieve().body(java.util.List.class);
+            if (hits == null) {
+                return Optional.empty();
+            }
+            return hits.stream().filter(p -> p.get("contactMedium") instanceof java.util.List<?> media
+                    && media.stream().anyMatch(m -> m instanceof Map<?, ?> med
+                        && med.get("characteristic") instanceof Map<?, ?> c
+                        && email.equalsIgnoreCase(String.valueOf(c.get("emailAddress")))))
+                    .findFirst();
+        } catch (Exception e) {
+            log.warn("party email lookup failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
     public Optional<String> orgOf(String partyId) {
         return individualOf(partyId)
                 .filter(p -> p.get("organization") instanceof Map<?, ?> org && ((Map<?, ?>) p.get("organization")).get("id") != null)

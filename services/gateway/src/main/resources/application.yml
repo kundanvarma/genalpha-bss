@@ -142,6 +142,11 @@ spring:
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
             - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**,/tmf-api/resourcePoolManagement/**,/tmf-api/intentManagement/**
+        - id: dealer-channel
+          # the retail dealer channel: kits, counter sales, commission
+          uri: ${SOM_URL:http://localhost:8104}
+          predicates:
+            - Path=/dealer/v1/**
         - id: assurance
           uri: ${ASSURANCE_URL:http://localhost:8105}
           predicates:
@@ -162,6 +167,12 @@ spring:
           uri: ${BIZ_URL:http://localhost:8094}
           predicates:
             - Path=/biz/**
+          filters:
+            - StripPrefix=1
+        - id: dealer-console
+          uri: ${DEALER_URL:http://localhost:8113}
+          predicates:
+            - Path=/dealer-app/**
           filters:
             - StripPrefix=1
         - id: storefront

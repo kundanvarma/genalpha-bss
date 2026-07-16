@@ -676,6 +676,9 @@ services:
     container_name: bss-som
     restart: unless-stopped
     environment:
+      # dev clocks: commission hardens in 15s (prod: 14 days), tick 5s
+      BSS_SOM_COMMISSION_WINDOW_MS: "15000"
+      BSS_SOM_COMMISSION_TICK_MS: "5000"
       PORTING_BASE_URL: http://porting:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
@@ -1105,6 +1108,7 @@ services:
       PARTY_URL: http://party-account:8080
       CONSOLE_URL: http://console:8080
       BIZ_URL: http://business-console:8080
+      DEALER_URL: http://dealer-console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
       PIM_URL: http://mock-pim:8080
@@ -1220,6 +1224,11 @@ services:
   business-console:
     build: ./apps/business-console
     container_name: bss-business-console
+    restart: unless-stopped
+
+  dealer-console:
+    build: ./apps/dealer-console
+    container_name: bss-dealer-console
     restart: unless-stopped
 
   mobile-app:
