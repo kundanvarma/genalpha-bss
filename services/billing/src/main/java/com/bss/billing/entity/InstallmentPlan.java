@@ -17,6 +17,7 @@ public class InstallmentPlan {
     public static final String ACTIVE = "active";
     public static final String COMPLETED = "completed";
     public static final String CANCELLED = "cancelled";
+    public static final String BROKEN = "broken";
 
     @Id
     private String id;
@@ -45,6 +46,10 @@ public class InstallmentPlan {
     @Column(name = "next_due_at")
     private OffsetDateTime nextDueAt;
 
+    /** When the ONE overdue reminder went out (null = not reminded). */
+    @Column(name = "reminded_at")
+    private OffsetDateTime remindedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -69,10 +74,17 @@ public class InstallmentPlan {
     public void setStatus(String v) { this.status = v; }
     public OffsetDateTime getNextDueAt() { return nextDueAt; }
     public void setNextDueAt(OffsetDateTime v) { this.nextDueAt = v; }
+    public OffsetDateTime getRemindedAt() { return remindedAt; }
+    public void setRemindedAt(OffsetDateTime v) { this.remindedAt = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
+
+    /** What is still owed: total minus the equal parts already paid. */
+    public BigDecimal remainingOf(BigDecimal total) {
+        return total.subtract(amountPer.multiply(BigDecimal.valueOf(paidCount)));
+    }
 
     /** What this particular part costs: the last one takes the remainder. */
     public BigDecimal amountOf(int index, BigDecimal total) {

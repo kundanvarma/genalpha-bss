@@ -123,7 +123,74 @@ async function token(ctx, user, pass) {
   console.log('OK parts 2 and 3 landed: the plan completed ITSELF, the bill is settled, and the'
     + ' final receipt says so');
 
+  /* ================= DUNNING: the plan nobody pays ================= */
+  const email2 = `ghost-${run}@example.com`;
+  const login2 = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(staff), data: { email: email2, givenName: 'Ghost', familyName: `Payer${run}` } })).json();
+  const ghost = await token(ctx, email2, login2.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(ghost), data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: PLAN_ID, name: 'GenAlpha Mobile 10 GB' } }] } });
+  let bill2 = null;
+  for (let i = 0; i < 30 && !bill2; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(staff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(ghost) })).json();
+    bill2 = list.find((b) => b.state === 'new' && b.amountDue.value > 0) || null;
+  }
+  if (!bill2) fail('no bill for the ghost payer');
+  await ctx.post(`${BILLS}/customerBill/${bill2.id}/installmentPlan`,
+    { headers: H(ghost), data: { installments: 3,
+      firstDueAt: new Date(Date.now() + 5000).toISOString() } });
+  console.log(`OK the ghost payer split ${bill2.billNo} — first part due in five seconds,`
+    + ' and nobody is going to pay it');
+
+  /* exactly ONE reminder */
+  const inboxOf2 = async () => (await (await ctx.get(
+    `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+    { headers: H(ghost) })).json());
+  let reminded = 0;
+  for (let i = 0; i < 20 && !reminded; i++) {
+    await sleep(2000);
+    reminded = (await inboxOf2()).filter((m) => (m.subject || '').includes('installment is overdue')).length;
+  }
+  if (reminded !== 1) fail('the overdue reminder never arrived');
+  await sleep(12000); // two more sweeps — the reminder must NOT repeat
+  reminded = (await inboxOf2()).filter((m) => (m.subject || '').includes('installment is overdue')).length;
+  if (reminded !== 1) fail(`the reminder repeated: ${reminded} (dunning is not spam)`);
+  console.log('OK ONE overdue reminder — with the grace period and the consequence spelled out,'
+    + ' and no spam on later sweeps');
+
+  /* the grace runs out: the plan breaks, the remainder falls due at once */
+  let broke = false;
+  for (let i = 0; i < 20 && !broke; i++) {
+    await sleep(2000);
+    broke = (await inboxOf2()).some((m) => (m.subject || '').includes('plan was cancelled'));
+  }
+  if (!broke) fail('the plan never broke after the grace period');
+  const cases = await (await ctx.get(`${BILLS}/dunning`, { headers: H(staff) })).json();
+  const mine = cases.find((c) => c.billNo === bill2.billNo);
+  if (!mine || mine.status !== 'broken') fail('the dunning view is missing the broken plan: '
+    + JSON.stringify(cases).slice(0, 300));
+  if (Math.abs(Number(mine.remaining) - bill2.amountDue.value) > 0.001) {
+    fail('the remaining balance is wrong: ' + JSON.stringify(mine));
+  }
+  console.log(`OK the plan BROKE: the dunning view shows ${mine.billNo} — ${mine.paidCount}/`
+    + `${mine.installments} paid, ${mine.remaining} ${mine.currency} due at once`);
+
+  /* collections: the broken plan reopens the settle door for the remainder */
+  const collect = await (await ctx.post(`${API}/tmf-api/paymentManagement/v4/payment`,
+    { headers: H(ghost), data: { description: `Collections ${bill2.billNo}`,
+      amount: { unit: bill2.amountDue.unit, value: Number(mine.remaining) },
+      paymentMethod: { '@type': 'bankCard', cardNumber: '4242 4242 4242 4242', expiry: '12/28', cvc: '123' } } })).json();
+  const settled = await ctx.patch(`${BILLS}/customerBill/${bill2.id}`,
+    { headers: H(ghost), data: { state: 'settled', payment: [{ id: collect.id }] } });
+  if (settled.status() !== 200) fail('the remainder could not be collected: ' + settled.status());
+  console.log('OK COLLECTED: the broken plan reopens the settle door for exactly the remainder —'
+    + ' and the bill is settled');
+
   console.log('\nALL INSTALLMENT CHECKS PASSED — an unpaid bill splits into parts that sum'
     + ' exactly, every part is a real captured payment, underpayment and side doors are'
-    + ' refused, and the last part settles the bill with a thank-you.');
+    + ' refused, the last part settles the bill with a thank-you — and when nobody pays:'
+    + ' one reminder, a broken plan, a dunning worklist, and a door for the remainder.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

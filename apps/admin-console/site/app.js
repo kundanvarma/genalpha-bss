@@ -315,6 +315,16 @@ const RESOURCES = [
     columns: ['maxMarketingMessages', 'perDays', 'capActive', 'quietStart', 'quietEnd', 'quietActive'],
   },
   {
+    path: 'dunning',
+    base: BILLING_BASE,
+    title: 'Dunning',
+    // Who is overdue, who broke their plan, what is still owed — the
+    // collections worklist, fed by the installment sweep.
+    readOnly: true,
+    fields: [],
+    columns: ['billNo', 'partyId', 'paidCount', 'installments', 'remaining', 'currency', 'status', 'nextDueAt'],
+  },
+  {
     path: 'salesLead',
     base: SALES_BASE,
     title: 'Sales leads',
@@ -636,6 +646,7 @@ const TAB_ROLE = {
   policyRule: 'policy:read',
   article: 'knowledge:write',
   settings: 'campaign:read',
+  dunning: 'billing:admin',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   audiences: 'insight:read',
