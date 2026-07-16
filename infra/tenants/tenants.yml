@@ -76,3 +76,39 @@ bss:
         ai-model: ${AI_MODEL_NOVA:}
         pim-base-url: ${PIM_BASE_URL_NOVA:}
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NOVA:}
+      - id: fjord
+        issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
+        jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_FJORD:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_FJORD:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_FJORD:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_FJORD:peppol}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_FJORD:einvoice}
+        bank-token: ${BANK_TOKEN_FJORD:}
+        social-api-url: ${SOCIAL_API_URL_FJORD:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_FJORD:}
+        delivery-provider: ${DELIVERY_PROVIDER_FJORD:internal}
+        esp-url: ${ESP_URL_FJORD:}
+        esp-api-key: ${ESP_API_KEY_FJORD:}
+        esp-from: ${ESP_FROM_FJORD:}
+        brand-name: Fjord Mobil
+        brand-color: "#1B6CA8"
+        locale: "da"
+        currency: DKK
+        hosts: [shop.fjord.localhost, csr.fjord.localhost, console.fjord.localhost, biz.fjord.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_FJORD:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_FJORD:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_FJORD:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_FJORD:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_FJORD:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_FJORD:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_FJORD:}
+        ai-provider: ${AI_PROVIDER_FJORD:}
+        ai-base-url: ${AI_BASE_URL_FJORD:}
+        ai-api-key: ${AI_API_KEY_FJORD:}
+        ai-model: ${AI_MODEL_FJORD:}
+        pim-base-url: ${PIM_BASE_URL_FJORD:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_FJORD:}
