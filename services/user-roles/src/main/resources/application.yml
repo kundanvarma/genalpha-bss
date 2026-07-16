@@ -18,6 +18,8 @@ management:
       application: ${spring.application.name}
 
 bss:
+  downstream:
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
   # Issuer-per-tenant, with each tenant's IdP admin credentials: the
   # bss-user-admin service account may manage exactly its own realm's users.
   tenants:

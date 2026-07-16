@@ -34,6 +34,7 @@ const POLICY_BASE = '/tmf-api/policyManagement/v4';
 const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
+const ONBOARDING_BASE = '/onboarding/v1';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -374,6 +375,24 @@ const RESOURCES = [
       { name: 'paymentReference', label: 'Payment reference required (Norway NO-R / KID)', kind: 'checkbox' },
     ],
     columns: ['code', 'name', 'syntax', 'paymentReference', 'lastUpdate'],
+  },
+  {
+    path: 'operator',
+    base: ONBOARDING_BASE,
+    title: 'Operators',
+    // OPERATOR-AS-A-FORM: the host admin mints a whole new operator —
+    // realm, registry entry, starter catalog — from this page. The fleet
+    // picks the newcomer up LIVE; nothing restarts, nothing rebuilds.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'id', label: 'Operator id (a-z, digits — becomes the realm & hostnames)', required: true },
+      { name: 'name', label: 'Brand name', required: true },
+      { name: 'locale', label: 'Locale (en, no, da, sv…)', placeholder: 'en' },
+      { name: 'currency', label: 'Currency', placeholder: 'EUR' },
+      { name: 'color', label: 'Brand color', placeholder: '#B85C38' },
+    ],
+    columns: ['id', 'name', 'locale', 'currency'],
   },
   {
     path: 'billDistribution',
@@ -735,6 +754,7 @@ const TAB_ROLE = {
   dispute: 'billing:admin',
   dunning: 'billing:admin',
   billFormatProfile: 'billing:admin',
+  operator: 'roles:admin',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
