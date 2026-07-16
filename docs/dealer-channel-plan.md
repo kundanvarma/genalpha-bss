@@ -46,9 +46,23 @@ system was ever involved.
 - Money: own store's sales and commission entries (pending/earned/clawed).
 - Every sale logs itself on the TMF683 timeline ("sold at <store>").
 
+## B — the Partner API (shipped after C + A)
+
+The chain's own POS is a MACHINE identity: the agreement row names an
+OAuth2 client (client credentials), and `requireDealer()` resolves the
+credential FIRST — one credential speaks for one dealer (signing a chain
+with a client takes it from any previous holder). Same endpoints as the
+console (`/dealer/v1/*`) plus `GET /dealer/v1/orders/{id}` for the POS's
+"did it activate, what did we earn" poll.
+
+**The chains sell their OWN phones** (Elkjøp/Power bundle their stock
+with a mobile subscription): only the subscription enters this BSS. The
+device rides the sale as `device` context on the dealer stamp and lands
+on the commission entry — attribution and support, never a billable item.
+
 ## Deliberately later (named follow-ups)
 
-Partner API hardening (per-partner rate limits), port-in from the console,
+Per-partner rate limits at the gateway, port-in from the console,
 per-store stock allocation in TMF687, chain → store → clerk org hierarchy,
 commission dispute worklist, marketing collateral in the dealer console.
 

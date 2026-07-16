@@ -42,6 +42,11 @@ public class CommissionEntry {
     @Column(name = "offering_name")
     private String offeringName;
 
+    /** The chain's own device sold alongside (their stock, their money) —
+     * context only, never a billable item here. */
+    @Column(name = "device_note")
+    private String deviceNote;
+
     @Column(name = "amount_value", nullable = false)
     private BigDecimal amountValue;
 
@@ -78,6 +83,8 @@ public class CommissionEntry {
     public void setCustomerPartyId(String v) { this.customerPartyId = v; }
     public String getOfferingName() { return offeringName; }
     public void setOfferingName(String v) { this.offeringName = v; }
+    public String getDeviceNote() { return deviceNote; }
+    public void setDeviceNote(String v) { this.deviceNote = v; }
     public BigDecimal getAmountValue() { return amountValue; }
     public void setAmountValue(BigDecimal v) { this.amountValue = v; }
     public String getAmountUnit() { return amountUnit; }
