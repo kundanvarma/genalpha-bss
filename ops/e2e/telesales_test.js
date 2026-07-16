@@ -12,7 +12,7 @@
  *    orders twice; a stranger's confirm sees nothing
  *  - the dialer's calls land on the TMF683 record like every channel
  */
-const { request } = require('playwright');
+const { chromium, request } = require('playwright');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
@@ -273,6 +273,37 @@ async function token(ctx, user, pass) {
     + ' contact, the partner\'s own SMS carried the code, and REGISTERING with the offered email'
     + ' was the identity proof: signed in, confirmed, ordered, activated. A registered stranger'
     + ' with the stolen code saw a 404');
+
+  /* ---------- 10. the telesales desk in the dealer console ---------- */
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.goto(`${API}/dealer-app/`);
+  await page.waitForSelector('input[name="username"]', { timeout: 15000 });
+  await page.fill('input[name="username"]', agentEmail);
+  await page.fill('input[name="password"]', agentLogin.temporaryPassword);
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
+  // the pipeline shows this run's offers with their honest states
+  await page.waitForSelector('[data-testid="ts-offer-row"]', { timeout: 15000 });
+  const states = await page.locator('[data-testid="ts-offer-row"] .state').allTextContents();
+  if (!states.includes('confirmed') || !states.includes('expired')) {
+    fail('the pipeline does not show the run\'s states: ' + states.join(','));
+  }
+  // the dial list pulls from the UI: two callable, the reserved one absent
+  await page.fill('[data-testid="dial-segment"]', SEG);
+  await page.click('[data-testid="dial-go"]');
+  await page.waitForSelector('[data-testid="dial-row"]', { timeout: 15000 });
+  if ((await page.locator('[data-testid="dial-row"]').count()) !== 2) {
+    fail('the console dial list is not the washed two');
+  }
+  const summary = await page.locator('#dial-summary').textContent();
+  if (!summary.includes('1 reserved excluded')) {
+    fail('the summary hides the exclusion: ' + summary);
+  }
+  await browser.close();
+  console.log('OK THE DESK: the agent\'s console shows the pipeline (confirmed AND expired,'
+    + ' honestly), and pulls the washed dial list — two callable, "1 reserved excluded" said'
+    + ' out loud');
 
   console.log('\nALL TELESALES CHECKS PASSED — the wash refuses the reserved and the unwashed,'
     + ' the call makes an offer and the CUSTOMER makes it an order, commission is born with the'
