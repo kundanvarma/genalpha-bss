@@ -30,6 +30,11 @@ public class CustomerBill {
     @Column(name = "bill_no")
     private String billNo;
 
+    /** The KID slot: the digits this bill's e-invoice and giro carry —
+     * remittance matches the bank's money back to the bill on it. */
+    @jakarta.persistence.Column(name = "payment_reference")
+    private String paymentReference;
+
     @Column(name = "state")
     private String state;
 
@@ -91,6 +96,9 @@ public class CustomerBill {
     public void setBillNo(String billNo) {
         this.billNo = billNo;
     }
+
+    public String getPaymentReference() { return paymentReference; }
+    public void setPaymentReference(String v) { this.paymentReference = v; }
 
     public String getState() {
         return state;

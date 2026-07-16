@@ -70,6 +70,7 @@ public class TenantRegistry {
         private String billDistributionProvider = "none";
         private String billDistributionUrl;
         private String billDistributionToken;
+        private String bankToken;
         /** ehf (Norway CIUS of Peppol BIS 3.0) | peppol | cii (EN 16931's
          * other syntax). */
         private String billDistributionFormat = "peppol";
@@ -129,6 +130,8 @@ public class TenantRegistry {
         public void setBillDistributionProvider(String v) { this.billDistributionProvider = v; }
         public String getBillDistributionUrl() { return billDistributionUrl; }
         public void setBillDistributionUrl(String v) { this.billDistributionUrl = v; }
+        public String getBankToken() { return bankToken; }
+        public void setBankToken(String v) { this.bankToken = v; }
         public String getBillDistributionToken() { return billDistributionToken; }
         public void setBillDistributionToken(String v) { this.billDistributionToken = v; }
         public String getBillDistributionFormat() { return billDistributionFormat; }

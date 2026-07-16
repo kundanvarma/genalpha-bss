@@ -56,7 +56,7 @@ class GatewayRoutingTest {
         List<String> ids = routeLocator.getRoutes().map(Route::getId).collectList().block();
         assertThat(ids).containsExactlyInAnyOrder(
                 "product-catalog", "product-ordering", "product-inventory", "party-account",
-                "product-stock", "payment", "billing", "qualification", "appointment",
+                "product-stock", "payment", "billing", "bank-remittance", "qualification", "appointment",
                 "trouble-ticket", "party-interaction", "communication", "shopping-cart",
                 "usage", "agreement", "promotion", "campaign", "intelligence", "quote", "sales", "flow", "porting", "user-roles", "geographic-address", "document", "recommendation", "payment-method", "service-orchestration", "assurance", "policy", "knowledge", "insight", "pim", "csr-console", "admin-console", "business-console", "storefront", "mobile-app");
     }

@@ -159,6 +159,57 @@ public class PaymentService {
         return created;
     }
 
+    /**
+     * A payment that ALREADY HAPPENED at the bank — remittance ingestion
+     * (OCR/KID, camt.054) recording money that arrived by giro or credit
+     * transfer. No PSP authorization: the bank's word is the event. It is
+     * recorded AUTHORIZED so the bill-settle path applies its one guarantee
+     * (validate owner + amount, capture atomically) exactly as for a card.
+     * Idempotent on correlatorId — a re-sent bank file never books twice.
+     */
+    @Transactional
+    public PaymentDto recordExternal(Map<String, Object> dto) {
+        Object amount = dto.get("amount");
+        if (!(amount instanceof Map<?, ?> amt) || amt.get("value") == null) {
+            throw new BadRequestException("amount {unit, value} is required");
+        }
+        java.math.BigDecimal value = new java.math.BigDecimal(String.valueOf(amt.get("value")));
+        if (value.signum() <= 0) {
+            throw new BadRequestException("amount must be positive");
+        }
+        String correlator = dto.get("correlatorId") == null ? null : String.valueOf(dto.get("correlatorId"));
+        if (correlator != null) {
+            Optional<Payment> prior = repository.findFirstByTenantIdAndCorrelatorId(
+                    tenantScope.currentTenantId(), correlator);
+            if (prior.isPresent()) {
+                return toDto(prior.get());
+            }
+        }
+        Payment entity = new Payment();
+        entity.setTenantId(tenantScope.currentTenantId());
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setHref(ApiConstants.BASE_PATH + "/payment/" + id);
+        entity.setDescription(dto.get("description") == null ? "Bank transfer"
+                : String.valueOf(dto.get("description")));
+        entity.setStatus(Payment.AUTHORIZED);
+        entity.setAmountValue(value);
+        entity.setAmountUnit(amt.get("unit") == null ? "EUR" : String.valueOf(amt.get("unit")));
+        entity.setMethodType("bankTransfer");
+        entity.setMethodLabel("Bank transfer");
+        entity.setAuthorizationCode(dto.get("reference") == null ? null
+                : String.valueOf(dto.get("reference")));
+        entity.setPspProvider("bank");
+        entity.setCorrelatorId(correlator);
+        entity.setOwnerPartyId(dto.get("ownerPartyId") == null ? null
+                : String.valueOf(dto.get("ownerPartyId")));
+        entity.setPaymentDate(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        PaymentDto created = toDto(repository.save(entity));
+        events.publish("PaymentCreateEvent", "payment", created);
+        return created;
+    }
+
     /** Status transitions (capture/void) and correlator linkage; nothing else changes after authorization. */
     @Transactional
     public PaymentDto patch(String id, PaymentDto patch) {

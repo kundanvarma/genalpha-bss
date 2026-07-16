@@ -107,6 +107,14 @@ public class EventNotificationMapper {
                             + " of the month. It applies from your NEXT cycle — days already"
                             + " billed are never billed twice; if there is a gap, one short"
                             + " bridging bill covers exactly those days."))));
+            // the bank said the money arrived and the bill closed itself —
+            // the customer hears it as a thank-you, not a mystery
+            case "RemittanceAppliedEvent" -> one(resource(event, "remittance").flatMap(r ->
+                    customer(r).map(party -> new Notification(party,
+                            "Payment received — thank you",
+                            "Your bank transfer of " + r.getOrDefault("amount", "?")
+                            + " arrived and bill " + r.getOrDefault("billNo", "")
+                            + " is settled. Nothing more to do."))));
             case "BillDeliveryChangedEvent" -> one(resource(event, "billDelivery").flatMap(bd ->
                     customer(bd).map(party -> new Notification(party,
                             "How you get your bill changed",

@@ -32,6 +32,12 @@ spring:
           uri: ${BILLING_URL:http://localhost:8088}
           predicates:
             - Path=/tmf-api/customerBillManagement/**
+        - id: bank-remittance
+          # the bank's webhook door — authenticated by its own per-tenant
+          # secret at the billing service, not by OIDC at the edge
+          uri: ${BILLING_URL:http://localhost:8088}
+          predicates:
+            - Path=/bank/v1/**
         - id: qualification
           uri: ${QUALIFICATION_URL:http://localhost:8089}
           predicates:

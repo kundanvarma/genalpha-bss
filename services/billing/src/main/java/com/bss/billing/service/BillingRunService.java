@@ -438,6 +438,7 @@ public class BillingRunService {
             bill.setHref(ApiConstants.BASE_PATH + "/customerBill/" + id);
             bill.setBillNo("BILL-" + periodStart.format(DateTimeFormatter.ofPattern("yyyyMM"))
                     + "-" + id.substring(0, 8).toUpperCase());
+            bill.setPaymentReference(bill.getBillNo().replaceAll("\\D", ""));
             bill.setState(CustomerBill.NEW);
             bill.setAmountDueValue(total);
             bill.setAmountDueUnit(unit);

@@ -236,6 +236,27 @@ public class RestDownstreamClients {
         return new DownstreamClients.PaymentClient() {
             @Override
             @SuppressWarnings("unchecked")
+            public String recordExternal(String ownerPartyId, BigDecimal amount, String unit,
+                    String description, String reference, String correlatorId) {
+                try {
+                    Map<String, Object> created = rest.post()
+                            .uri("/tmf-api/paymentManagement/v4/payment/external")
+                            .header("Content-Type", "application/json")
+                            .body(Map.of(
+                                    "amount", Map.of("unit", unit, "value", amount),
+                                    "ownerPartyId", ownerPartyId,
+                                    "description", description,
+                                    "reference", reference,
+                                    "correlatorId", correlatorId))
+                            .retrieve().body(Map.class);
+                    return String.valueOf(created.get("id"));
+                } catch (RestClientException e) {
+                    // money is fail-closed: no phantom payments on a flaky wire
+                    throw new DownstreamException("payment service refused the bank payment", e);
+                }
+            }
+
+            @Override
             public String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimum) {
                 Map<String, Object> payment;
                 try {
