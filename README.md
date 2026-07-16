@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty-one Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -21,7 +21,10 @@ the card path's own guarantee; everything unclear parks as unapplied cash), the 
 (the network-wide/Elkjøp model: starter kits with attribution and the SIM baked into the box, counter
 sales, and commission that accrues pending, hardens after the withdrawal window and claws back
 honestly — with a dealer console for the chain's clerks and a machine partner API for chains
-with their own POS, where the chain's own phone rides the sale as context, never a billable item), and
+with their own POS, where the chain's own phone rides the sale as context, never a billable item; plus the TELESALES
+channel — the do-not-call wash runs fail-closed before any offer exists, the call produces an
+offer that binds only on the customer's written confirmation (angrerettloven), commission is
+born with the agreement, and the partner's dialer logs every call onto the TMF683 record), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

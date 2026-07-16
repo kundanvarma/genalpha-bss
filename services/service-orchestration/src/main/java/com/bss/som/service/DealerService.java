@@ -303,6 +303,20 @@ public class DealerService {
                 "commission", mine.stream().map(this::commissionMap).toList());
     }
 
+    /** The telesales sibling needs the same two powers, seam-shaped. */
+    DealerAgreement requireDealerAgreement() {
+        return requireDealer();
+    }
+
+    /** The CONFIRMED telesales agreement becomes the dealer-stamped
+     * order — same attribution, same commission machinery. */
+    String placeTelesalesOrder(com.bss.som.entity.TelesalesOffer offer) {
+        DealerAgreement dealer = agreements.findByTenantIdAndDealerOrgId(
+                offer.getTenantId(), offer.getDealerOrgId()).orElse(null);
+        return placeDealerOrder(dealer, offer.getCustomerId(), offer.getStore(),
+                offer.getOfferingId(), offer.getOfferingName(), null);
+    }
+
     /** The dealer's money page: entries newest first, plus honest totals. */
     @Transactional(readOnly = true)
     public Map<String, Object> myCommission() {

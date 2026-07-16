@@ -66,6 +66,11 @@ public class TenantRegistry {
         private String machineClientId;
         private String machineClientSecret;
 
+        /** The do-not-call wash (Norway: Reservasjonsregisteret) — a
+         * lawful outbound channel checks BEFORE it sells. */
+        private String dncUrl;
+        private String dncToken;
+
         public String getId() {
             return id;
         }
@@ -109,6 +114,10 @@ public class TenantRegistry {
         public String getMachineClientSecret() {
             return machineClientSecret;
         }
+        public String getDncUrl() { return dncUrl; }
+        public void setDncUrl(String v) { this.dncUrl = v; }
+        public String getDncToken() { return dncToken; }
+        public void setDncToken(String v) { this.dncToken = v; }
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;

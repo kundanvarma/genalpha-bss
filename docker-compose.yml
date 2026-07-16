@@ -783,6 +783,12 @@ services:
       # dev clocks: commission hardens in 15s (prod: 14 days), tick 5s
       BSS_SOM_COMMISSION_WINDOW_MS: "15000"
       BSS_SOM_COMMISSION_TICK_MS: "5000"
+      # the do-not-call wash: genalpha checks the mock reservation register
+      DNC_URL: http://mock-dnc:8080
+      DNC_TOKEN: genalpha-dnc-token
+      # dev clock: telesales offers expire fast enough for a suite to see it
+      BSS_SOM_TELESALES_EXPIRY_MS: "15000"
+      BSS_SOM_TELESALES_TICK_MS: "5000"
       PORTING_BASE_URL: http://porting:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
@@ -1187,6 +1193,14 @@ services:
 
   # demo stand-in for the invoice distribution partner (Peppol access
   # point / print house): EHF & CII e-invoices in, print jobs in
+  # demo stand-in for the do-not-call reservation register
+  mock-dnc:
+    build: ./integrations/mock-dnc
+    container_name: bss-mock-dnc
+    restart: unless-stopped
+    ports:
+      - "8125:8080"
+
   mock-distribution:
     build: ./integrations/mock-distribution
     container_name: bss-mock-distribution
