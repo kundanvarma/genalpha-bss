@@ -33,13 +33,36 @@ public class BillDistributionService {
 
     private final TenantRegistry tenants;
     private final BillDocumentService documents;
+    private final com.bss.billing.repository.BillFormatProfileRepository profiles;
     private final RestClient restClient;
 
+    /** What the renderer needs of a profile — a row, or the built-in
+     * fallback when a tenant names a format it has no row for. */
+    record Profile(String syntax, String customizationId, String profileId,
+            boolean paymentReference) {
+    }
+
     public BillDistributionService(TenantRegistry tenants, BillDocumentService documents,
+            com.bss.billing.repository.BillFormatProfileRepository profiles,
             RestClient.Builder builder) {
         this.tenants = tenants;
         this.documents = documents;
+        this.profiles = profiles;
         this.restClient = builder.build();
+    }
+
+    /** The profile is a CONFIG ROW: the tenant's format code picks it,
+     * an admin edits it live, and a new country is an INSERT. The
+     * built-in EHF/CII shapes remain the fail-open fallback so a
+     * missing row never blocks a billing run. */
+    private Profile profileOf(String tenantId, String format) {
+        return profiles.findByTenantIdAndCode(tenantId, format)
+                .map(p -> new Profile(p.getSyntax(), p.getCustomizationId(),
+                        p.getProfileId(), p.isPaymentReference()))
+                .orElseGet(() -> "cii".equalsIgnoreCase(format)
+                        ? new Profile("cii", null, null, false)
+                        : new Profile("ubl", EHF_CUSTOMIZATION, PEPPOL_PROFILE,
+                                "ehf".equalsIgnoreCase(format)));
     }
 
     public void distribute(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines) {
@@ -70,17 +93,18 @@ public class BillDistributionService {
         String channel = "paper".equalsIgnoreCase(preference) ? "print"
                 : "einvoice".equalsIgnoreCase(preference) ? "einvoice"
                 : tenant.getBillDistributionChannel();
-        // render on the caller's thread (entities are session-bound); ship async
+        // render on the caller's thread (entities and the profile row are
+        // session-bound); ship async
         String payload;
         String contentType;
         if ("print".equalsIgnoreCase(channel)) {
             payload = Base64.getEncoder().encodeToString(documents.render(tenantId, bill, lines));
             contentType = "application/pdf+base64";
-        } else if ("cii".equalsIgnoreCase(format)) {
-            payload = ciiOf(bill, lines);
-            contentType = "application/xml";
         } else {
-            payload = ublOf(tenantId, bill, lines, "ehf".equalsIgnoreCase(format));
+            Profile profile = profileOf(tenantId, format);
+            payload = "cii".equalsIgnoreCase(profile.syntax())
+                    ? ciiOf(bill, lines)
+                    : ublOf(tenantId, bill, lines, profile);
             contentType = "application/xml";
         }
         Map<String, Object> envelope = Map.of(
@@ -107,24 +131,29 @@ public class BillDistributionService {
         });
     }
 
-    /** UBL 2.1 Invoice — the EN 16931 core in Peppol BIS 3.0 clothing;
-     * EHF is the same document with Norway's customization declared and
-     * the payment reference (the KID slot) carried. */
+    /** UBL 2.1 Invoice — the EN 16931 core wearing whatever customization
+     * the PROFILE ROW declares; EHF, generic Peppol BIS and A-NZ are the
+     * same skeleton with different rows. */
     private String ublOf(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines,
-            boolean ehf) {
+            Profile profile) {
         StringBuilder xml = new StringBuilder();
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         xml.append("<Invoice xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"\n")
            .append("         xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n")
            .append("         xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n");
-        xml.append("  <cbc:CustomizationID>").append(EHF_CUSTOMIZATION).append("</cbc:CustomizationID>\n");
-        xml.append("  <cbc:ProfileID>").append(PEPPOL_PROFILE).append("</cbc:ProfileID>\n");
+        if (profile.customizationId() != null) {
+            xml.append("  <cbc:CustomizationID>").append(profile.customizationId())
+               .append("</cbc:CustomizationID>\n");
+        }
+        if (profile.profileId() != null) {
+            xml.append("  <cbc:ProfileID>").append(profile.profileId()).append("</cbc:ProfileID>\n");
+        }
         xml.append("  <cbc:ID>").append(bill.getBillNo()).append("</cbc:ID>\n");
         xml.append("  <cbc:IssueDate>").append(bill.getPeriodEnd()).append("</cbc:IssueDate>\n");
         xml.append("  <cbc:DueDate>").append(bill.getPeriodEnd().plusDays(14)).append("</cbc:DueDate>\n");
         xml.append("  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>\n");
         xml.append("  <cbc:DocumentCurrencyCode>").append(bill.getAmountDueUnit()).append("</cbc:DocumentCurrencyCode>\n");
-        if (ehf) {
+        if (profile.paymentReference()) {
             // Norway's NO-R rules want a payment reference — the KID slot
             xml.append("  <cac:PaymentMeans><cbc:PaymentID>")
                .append(bill.getBillNo().replaceAll("\\D", ""))

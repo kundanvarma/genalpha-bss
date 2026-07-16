@@ -270,6 +270,61 @@ async function token(ctx, realm, user, pass) {
     + ' digital — their bill exists in-app (and as a PDF on demand) and NOTHING went to'
     + ' the print house');
 
+  /* ---------- FORMAT PROFILES ARE CONFIG ROWS, and the rows are load-bearing ---------- */
+  const PROFILES = `${BILLS}/billFormatProfile`;
+  const profileList = await (await ctx.get(PROFILES, { headers: H(novaStaff) })).json();
+  const aunz = profileList.find((p) => p.code === 'aunz');
+  if (!aunz || !aunz.customizationId.includes('aunz') || aunz.syntax !== 'ubl') {
+    fail('the A-NZ profile row is missing: ' + JSON.stringify(profileList.map((p) => p.code)));
+  }
+  console.log('OK A COUNTRY IS A ROW: Australia/New Zealand ships as a seeded profile row —'
+    + ' same UBL skeleton, its own customization — no renderer change needed to adopt it');
+
+  const custEdit = await ctx.patch(`${PROFILES}/ehf`, { headers: H(pia),
+    data: { profileId: 'urn:mischief' } });
+  if (custEdit.status() !== 403) {
+    fail('a customer edited an e-invoice profile: ' + custEdit.status());
+  }
+  console.log('OK profiles shape every outgoing invoice, so editing them is tenant-admin only'
+    + ' (a customer gets 403)');
+
+  // edit the live row, watch the next invoice change — data, not code
+  const marker = `urn:e2e:profile:${run}`;
+  const edit = await ctx.patch(`${PROFILES}/ehf`, { headers: H(novaStaff),
+    data: { profileId: marker } });
+  if (edit.status() !== 200) fail('the admin could not edit the profile row: ' + edit.status());
+  const mEmail = `marker-${run}@nova.example`;
+  const mLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H(novaStaff), data: { email: mEmail, givenName: 'Ma', familyName: `Rker${run}` } })).json();
+  const mark = await token(ctx, 'nova', mEmail, mLogin.temporaryPassword);
+  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: H(mark), data: { productOrderItem: [{ action: 'add',
+      productOffering: { id: novaPlan.id, name: novaPlan.name } }] } });
+  let markBill = null;
+  for (let i = 0; i < 30 && !markBill; i++) {
+    await sleep(2000);
+    await ctx.post(`${BILLS}/billingRun`, { headers: H(novaStaff) });
+    const list = await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(mark) })).json();
+    markBill = list.find((b) => b.state === 'new') || null;
+  }
+  if (!markBill) fail('no bill for the profile-edit customer');
+  let markDoc = null;
+  for (let i = 0; i < 15 && !markDoc; i++) {
+    await sleep(1500);
+    const docs = await (await ctx.get(`${DIST}/invoices?billNo=${markBill.billNo}`)).json();
+    markDoc = docs.find((d) => d.channel === 'einvoice') || null;
+  }
+  // put the seeded row back before judging, so a failure never leaves a mark
+  await ctx.patch(`${PROFILES}/ehf`, { headers: H(novaStaff),
+    data: { profileId: 'urn:fdc:peppol.eu:2017:poacc:billing:01:1.0' } });
+  if (!markDoc) fail('the profile-edited e-invoice never reached the access point');
+  if (!markDoc.payload.includes(`<cbc:ProfileID>${marker}</cbc:ProfileID>`)) {
+    fail('the edited profile row did not shape the invoice — the renderer is not reading rows');
+  }
+  console.log('OK THE ROW IS LOAD-BEARING: the admin edited the EHF profile row and the very'
+    + ' next e-invoice carried the change on the wire — the profile is data an admin owns,'
+    + ' not a constant a release owns');
+
   console.log('\nALL BILL-DISTRIBUTION CHECKS PASSED — the bill is a PDF anyone can save, the'
     + ' agent sees and resends the same document (to the address on file only), and a'
     + ' finished bill leaves for the tenant\'s own partner: EHF to the access point for Norway,'

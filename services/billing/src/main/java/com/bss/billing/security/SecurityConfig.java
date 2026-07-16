@@ -46,6 +46,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // deciding a dispute is BACK-OFFICE: a customer opens one, never closes one
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/dispute/**").hasAuthority("billing:admin")
+                        // format profiles shape every outgoing e-invoice — tenant admin only
+                        .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
