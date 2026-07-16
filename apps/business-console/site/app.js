@@ -40,6 +40,10 @@ async function loadMembers() {
   picker.replaceChildren();
   const swapPicker = el('swap-member');
   swapPicker.replaceChildren(new Option(t('Who…'), ''));
+  const reassignFrom = el('reassign-member');
+  const reassignTo = el('reassign-to');
+  reassignFrom.replaceChildren(new Option(t('From whom…'), ''));
+  reassignTo.replaceChildren(new Option(t('To whom…'), ''));
   for (const m of members) {
     const row = document.createElement('div');
     row.className = 'memberrow';
@@ -56,6 +60,8 @@ async function loadMembers() {
     box.append(row);
     const label = `${m.givenName || ''} ${m.familyName || ''}`.trim() || m.id;
     picker.append(new Option(label, m.id));
+    reassignFrom.append(new Option(label, m.id));
+    reassignTo.append(new Option(label, m.id));
     swapPicker.append(new Option(label, m.id));
     // live lines, fail-soft
     authFetch(`${SERVICE_INV}/service?relatedPartyId=${m.id}`)
@@ -219,6 +225,37 @@ async function loadSwapLines() {
     opt.dataset.planName = sv.name;
     lines.append(opt);
   }
+}
+
+/* ---------- reassign a line: the employee left, the number stays ---------- */
+async function loadReassignLines() {
+  const member = el('reassign-member').value;
+  const lines = el('reassign-line');
+  lines.replaceChildren(new Option(t('Their line…'), ''));
+  if (!member) return;
+  const svcs = await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${member}`))
+    .catch(() => []);
+  for (const sv of (svcs || []).filter((s) => s.state === 'active')) {
+    const num = (sv.supportingResource || []).map((r) => r.value).filter(Boolean).join(' ');
+    lines.append(new Option(`${sv.name}${num ? ' · ' + num : ''}`, sv.id));
+  }
+}
+
+async function reassignLine() {
+  const serviceId = el('reassign-line').value;
+  const to = el('reassign-to').value;
+  const status = el('reassign-status');
+  if (!serviceId || !to) return;
+  status.className = ''; status.textContent = t('moving…');
+  try {
+    await json(await authFetch(`${SERVICE_INV}/service/${serviceId}/transfer`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ toPartyId: to }),
+    }));
+    status.className = 'ok';
+    status.textContent = t('done — the line, number and SIM now belong to them');
+    loadReassignLines();
+  } catch (e) { status.className = 'err'; status.textContent = e.message; }
 }
 
 async function swapPlan() {
@@ -451,6 +488,8 @@ async function main() {
   el('add-member').addEventListener('click', addMember);
   el('place-order').addEventListener('click', placeOrder);
   el('swap-member').addEventListener('change', loadSwapLines);
+  el('reassign-member').addEventListener('change', loadReassignLines);
+  el('reassign-go').addEventListener('click', reassignLine);
   el('swap-plan').addEventListener('click', swapPlan);
   el('save-policy').addEventListener('click', savePolicy);
   loadPolicy(org);

@@ -195,6 +195,65 @@ public class ProductService {
     }
 
     /**
+     * The line changed hands; the product record follows its new owner.
+     * The CUSTOMER related party moves; a PAYER stamp stays — the company
+     * that pays for the line keeps paying when the next employee takes it.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public void transferForService(String tenantId, String fromPartyId, String toPartyId,
+            String serviceName) {
+        repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+                tenantId, fromPartyId, serviceName, "active").ifPresent(entity -> {
+            entity.setOwnerPartyId(toPartyId);
+            Object parties = readJson(entity.getRelatedPartyJson());
+            java.util.List<java.util.Map<String, Object>> updated = new java.util.ArrayList<>();
+            boolean replaced = false;
+            if (parties instanceof java.util.List<?> list) {
+                for (Object p : list) {
+                    if (p instanceof java.util.Map<?, ?> ref
+                            && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
+                        updated.add(java.util.Map.of("id", toPartyId, "role", "customer",
+                                "@referredType", "Individual"));
+                        replaced = true;
+                    } else if (p instanceof java.util.Map<?, ?> ref) {
+                        updated.add((java.util.Map<String, Object>) ref);
+                    }
+                }
+            }
+            if (!replaced) {
+                updated.add(java.util.Map.of("id", toPartyId, "role", "customer",
+                        "@referredType", "Individual"));
+            }
+            entity.setRelatedPartyJson(writeJson(updated));
+            ProductDto moved = mapper.toDto(repository.save(entity));
+            events.publish("ProductAttributeValueChangeEvent", "product", moved);
+        });
+    }
+
+    private final com.fasterxml.jackson.databind.ObjectMapper json =
+            new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private Object readJson(String s) {
+        if (s == null || s.isBlank()) {
+            return java.util.List.of();
+        }
+        try {
+            return json.readValue(s, Object.class);
+        } catch (Exception e) {
+            return java.util.List.of();
+        }
+    }
+
+    private String writeJson(Object o) {
+        try {
+            return json.writeValueAsString(o);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
      * Scoped tokens address only their own products; anything else is a 404,
      * not a 403, so foreign ids do not leak existence.
      */

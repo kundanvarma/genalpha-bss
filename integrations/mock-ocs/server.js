@@ -99,6 +99,12 @@ const server = http.createServer((req, res) => {
       }
       // plan change: swap the rate plan, keep earned rollover
       if (req.method === 'PATCH' && !m[2]) {
+        // ownership transfer: the subscriber follows its new owner,
+        // buckets untouched (they belong to the SERVICE)
+        if (body.partyId && !body.ratePlanId) {
+          sub.partyId = body.partyId;
+          return send(200, sub);
+        }
         const plan = RATE_PLANS[body.ratePlanId];
         if (!plan) return send(404, { error: `unknown rate plan '${body.ratePlanId}'` });
         const carried = sub.buckets[0]?.rolloverGB || 0;

@@ -96,6 +96,20 @@ public class EventNotificationMapper {
                                     + plan.getOrDefault("billNo", "") + ". Next payment of "
                                     + plan.getOrDefault("nextAmount", "?") + " due "
                                     + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "ServiceTransferredEvent" -> resource(event, "serviceTransfer").map(t -> {
+                String line = t.getOrDefault("name", "A line") + (t.get("number") != null
+                        ? " (" + t.get("number") + ")" : "");
+                List<Notification> out = new java.util.ArrayList<>();
+                partyWithRole(t, "receiver").ifPresent(to -> out.add(new Notification(to,
+                        "A line was transferred to you",
+                        line + " is now yours. The SIM in the device keeps working; its PUK"
+                        + " and PIN controls are in your shop. Welcome aboard.")));
+                partyWithRole(t, "giver").ifPresent(from -> out.add(new Notification(from,
+                        "Your line was transferred",
+                        line + " now belongs to its new owner. You will not be billed for it"
+                        + " from the next period.")));
+                return out;
+            }).orElse(List.of());
             case "ServiceTerminatedEvent" -> one(resource(event, "service").flatMap(svc ->
                     customer(svc).map(party -> {
                         String reason = String.valueOf(svc.getOrDefault("reason", ""));
@@ -252,6 +266,18 @@ public class EventNotificationMapper {
             for (Object p : parties) {
                 if (p instanceof Map<?, ?> ref && "payer".equalsIgnoreCase(String.valueOf(ref.get("role")))
                         && ref.get("id") != null) {
+                    return Optional.of(String.valueOf(ref.get("id")));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    private Optional<String> partyWithRole(Map<String, Object> resource, String role) {
+        if (resource.get("relatedParty") instanceof List<?> parties) {
+            for (Object p : parties) {
+                if (p instanceof Map<?, ?> ref && ref.get("id") != null
+                        && role.equalsIgnoreCase(String.valueOf(ref.get("role")))) {
                     return Optional.of(String.valueOf(ref.get("id")));
                 }
             }
