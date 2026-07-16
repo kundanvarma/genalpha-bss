@@ -50,7 +50,7 @@ bss:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
   notify:
     consumer-enabled: ${NOTIFY_CONSUMER_ENABLED:true}
-    topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events,bss.usage.events,bss.som.events}
+    topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events,bss.usage.events,bss.som.events,bss.payment.events}
   events:
     topic: bss.communication.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

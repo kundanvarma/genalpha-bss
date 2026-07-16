@@ -45,16 +45,19 @@ public class CustomerBillService {
 
     private final com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository;
     private final com.bss.billing.repository.InstallmentPlanRepository plans;
+    private final com.bss.billing.repository.BillDisputeRepository disputeChips;
 
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
             com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository,
             DownstreamClients.PaymentClient paymentClient, DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper,
-            com.bss.billing.repository.InstallmentPlanRepository plans) {
+            com.bss.billing.repository.InstallmentPlanRepository plans,
+            com.bss.billing.repository.BillDisputeRepository disputeChips) {
         this.repository = repository;
         this.rateRepository = rateRepository;
         this.onDemandRepository = onDemandRepository;
         this.plans = plans;
+        this.disputeChips = disputeChips;
         this.paymentClient = paymentClient;
         this.events = events;
         this.partyScope = partyScope;
@@ -365,6 +368,10 @@ public class CustomerBillService {
         CustomerBillDto dto = new CustomerBillDto();
         dto.setInstallmentPlan(planOf(entity.getTenantId(), entity.getId(),
                 entity.getAmountDueValue(), entity.getAmountDueUnit()));
+        disputeChips.findFirstByTenantIdAndBillIdOrderByCreatedAtDesc(
+                entity.getTenantId(), entity.getId()).ifPresent(d ->
+                dto.setDispute(java.util.Map.of("id", d.getId(), "status", d.getStatus(),
+                        "reason", d.getReason())));
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setBillNo(entity.getBillNo());

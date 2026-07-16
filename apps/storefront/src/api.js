@@ -524,6 +524,14 @@ export async function payInstallment(billId, paymentRef) {
   }));
 }
 
+/** "This charge is wrong": open a dispute — collection pauses while we look. */
+export async function disputeBill(billId, reason) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/dispute`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  }));
+}
+
 export async function settleBill(billId, paymentRef) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}`, {
     method: 'PATCH',

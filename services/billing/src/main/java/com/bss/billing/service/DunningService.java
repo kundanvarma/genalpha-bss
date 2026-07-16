@@ -37,15 +37,18 @@ public class DunningService {
     private final CustomerBillRepository bills;
     private final DomainEventPublisher events;
     private final TenantRegistry tenants;
+    private final DisputeService disputeService;
     private final Duration grace;
 
     public DunningService(InstallmentPlanRepository plans, CustomerBillRepository bills,
             DomainEventPublisher events, TenantRegistry tenants,
+            DisputeService disputeService,
             @Value("${bss.billing.dunning-grace-ms:604800000}") long graceMs) {
         this.plans = plans;
         this.bills = bills;
         this.events = events;
         this.tenants = tenants;
+        this.disputeService = disputeService;
         this.grace = Duration.ofMillis(graceMs);
     }
 
@@ -66,6 +69,10 @@ public class DunningService {
                 tenantId, InstallmentPlan.ACTIVE, OffsetDateTime.now())) {
             CustomerBill bill = bills.findByIdAndTenantId(plan.getBillId(), tenantId).orElse(null);
             if (bill == null) {
+                continue;
+            }
+            // collection never chases contested money
+            if (disputeService.hasOpenDispute(tenantId, bill.getId())) {
                 continue;
             }
             if (plan.getRemindedAt() == null) {

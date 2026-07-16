@@ -325,6 +325,34 @@ const RESOURCES = [
     columns: ['billNo', 'partyId', 'paidCount', 'installments', 'remaining', 'currency', 'status', 'nextDueAt'],
   },
   {
+    path: 'dispute',
+    base: BILLING_BASE,
+    title: 'Disputes',
+    // Contested charges: credit them (money off, or a refund on a settled
+    // bill) or uphold them — either way the customer is told.
+    noEdit: true,
+    noDelete: true,
+    readOnly: true,
+    fields: [],
+    columns: ['billNo', 'partyId', 'reason', 'status', 'creditAmount', 'createdAt'],
+    rowAction: {
+      label: (item) => (item.status === 'open' ? 'Resolve…' : '—'),
+      apply: (item) => {
+        if (item.status !== 'open') return Promise.resolve();
+        const answer = window.prompt(
+          `Dispute on ${item.billNo}: "${item.reason}"\nType an amount to CREDIT (e.g. 5.75), or "uphold: <why>"`);
+        if (!answer) return Promise.resolve();
+        const body = answer.trim().toLowerCase().startsWith('uphold')
+          ? { outcome: 'uphold', note: answer.replace(/^uphold:?\s*/i, '') }
+          : { outcome: 'credit', amount: Number(answer.trim()) };
+        return authFetch(`${BILLING_BASE}/dispute/${item.id}/resolve`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      },
+    },
+  },
+  {
     path: 'salesLead',
     base: SALES_BASE,
     title: 'Sales leads',
@@ -646,6 +674,7 @@ const TAB_ROLE = {
   policyRule: 'policy:read',
   article: 'knowledge:write',
   settings: 'campaign:read',
+  dispute: 'billing:admin',
   dunning: 'billing:admin',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',

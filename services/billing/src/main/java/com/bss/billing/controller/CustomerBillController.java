@@ -36,14 +36,17 @@ public class CustomerBillController {
     private final CustomerBillService service;
     private final FieldSelector fieldSelector;
     private final com.bss.billing.service.DunningService dunningService;
+    private final com.bss.billing.service.DisputeService disputeService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
     public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
             com.bss.billing.service.DunningService dunningService,
+            com.bss.billing.service.DisputeService disputeService,
             com.bss.billing.security.TenantScope tenantScope) {
         this.service = service;
         this.fieldSelector = fieldSelector;
         this.dunningService = dunningService;
+        this.disputeService = disputeService;
         this.tenantScope = tenantScope;
     }
 
@@ -120,6 +123,26 @@ public class CustomerBillController {
     public ResponseEntity<CustomerBillDto> settle(@PathVariable("id") String id,
                                                   @RequestBody CustomerBillDto patch) {
         return ResponseEntity.ok(service.settle(id, patch));
+    }
+
+    /** "This charge is wrong": open a dispute (customer or agent). */
+    @PostMapping("/customerBill/{id}/dispute")
+    public ResponseEntity<Map<String, Object>> dispute(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(disputeService.open(id, dto));
+    }
+
+    /** The disputes worklist (staff). */
+    @GetMapping("/dispute")
+    public ResponseEntity<List<Map<String, Object>>> disputes() {
+        return ResponseEntity.ok(disputeService.list());
+    }
+
+    /** The decision: credit an amount, or uphold with the reason. */
+    @PostMapping("/dispute/{id}/resolve")
+    public ResponseEntity<Map<String, Object>> resolve(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(disputeService.resolve(id, dto));
     }
 
     /** The DUNNING window: who is overdue, who broke, what is still owed. */

@@ -35,6 +35,10 @@ public class CustomerBillDto {
     @JsonProperty("installmentPlan")
     private java.util.Map<String, Object> installmentPlan;
 
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @JsonProperty("dispute")
+    private java.util.Map<String, Object> dispute;
+
     @JsonProperty("billingPeriod")
     private Map<String, Object> billingPeriod;
 
@@ -152,4 +156,6 @@ public class CustomerBillDto {
 
     public java.util.Map<String, Object> getInstallmentPlan() { return installmentPlan; }
     public void setInstallmentPlan(java.util.Map<String, Object> v) { this.installmentPlan = v; }
+    public java.util.Map<String, Object> getDispute() { return dispute; }
+    public void setDispute(java.util.Map<String, Object> v) { this.dispute = v; }
 }

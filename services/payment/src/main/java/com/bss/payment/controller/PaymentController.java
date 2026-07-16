@@ -74,4 +74,12 @@ public class PaymentController {
                                             @RequestBody PaymentDto patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
+
+    /** Money BACK, partial or full — the PSP confirms before the record moves. */
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<java.util.Map<String, Object>> refund(
+            @PathVariable("id") String id,
+            @RequestBody(required = false) java.util.Map<String, Object> dto) {
+        return ResponseEntity.ok(service.refund(id, dto == null ? java.util.Map.of() : dto));
+    }
 }
