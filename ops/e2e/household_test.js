@@ -274,8 +274,80 @@ async function token(request, client, user, pass) {
   console.log('OK the kid signed into the APP: own My page, own line, banner says'
     + ' "paid for by Paula" — one person, many payers, pocket edition');
 
+  // --- THE MIRROR FLOW: the payer INVITES an existing customer. Rita has
+  // her own account already ("create their account" would be wrong for
+  // her) — Paula invites, RITA consents, and only then does anything
+  // bill anywhere. Adding family is a handshake, whichever hand opens.
+  const rita = await mkPerson('Rita', `Aunt${run}`, `rita-${run}@family.example`);
+  const ritaTok = await token(ctx.request, 'bss-biz', rita.email, rita.password);
+  const RH = { Authorization: 'Bearer ' + ritaTok, 'Content-Type': 'application/json' };
+  // the suite has been running a while — mint Paula a FRESH token for this act
+  const paulaTok2 = await token(ctx.request, 'bss-biz', paula.email, paula.password);
+  const PH2 = { Authorization: 'Bearer ' + paulaTok2, 'Content-Type': 'application/json' };
+  const staff2 = await token(ctx.request, 'bss-demo', 'demo', 'demo');
+  const H2b = { Authorization: 'Bearer ' + staff2, 'Content-Type': 'application/json' };
+
+  // a wrong email fails with a clear answer, not a silent nothing
+  const typo = await ctx.request.post(`${API}/tmf-api/party/v4/individual/${paula.id}/householdInvite`,
+    { headers: PH2, data: { memberEmail: `nobody-${run}@family.example` } });
+  if (typo.status() !== 404) fail('a typo email should be a clear 404: ' + typo.status());
+
+  const invited = await (await ctx.request.post(
+    `${API}/tmf-api/party/v4/individual/${paula.id}/householdInvite`,
+    { headers: PH2, data: { memberEmail: rita.email } })).json();
+  if (invited.householdPayer?.status !== 'invited') fail('invite did not land: ' + JSON.stringify(invited));
+
+  // only RITA can accept — Paula pushing her own invite through is a 400/404
+  const pushy = await ctx.request.post(
+    `${API}/tmf-api/party/v4/individual/${rita.id}/householdInvite/accept`, { headers: PH2 });
+  if (pushy.status() === 200) fail('the payer accepted on the member\'s behalf — consent broken');
+
+  // Rita is told, and nothing bills until she says yes
+  let told = false;
+  for (let i = 0; i < 15 && !told; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inbox = await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: RH })).json();
+    told = (inbox || []).some?.((m) => (m.subject || '').includes('invited to a family plan'));
+  }
+  if (!told) fail('Rita was never told about the invitation');
+  console.log('OK INVITED: Paula asked, Rita was told, and only Rita can say yes');
+
+  const joined = await (await ctx.request.post(
+    `${API}/tmf-api/party/v4/individual/${rita.id}/householdInvite/accept`,
+    { headers: RH })).json();
+  if (joined.householdPayer?.status !== 'active') fail('accept did not activate: ' + JSON.stringify(joined));
+  let paulaTold = false;
+  for (let i = 0; i < 15 && !paulaTold; i++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inbox = await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: PH2 })).json();
+    paulaTold = (inbox || []).some?.((m) => (m.subject || '').includes('joined your family'));
+  }
+  if (!paulaTold) fail('Paula never heard that Rita joined');
+
+  // and the point of it all: Paula orders Rita a plan, payer-stamped PAULA
+  const ritaOrderRes = await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: PH2, data: {
+      productOrderItem: [{ action: 'add', productOffering: { id: netflix.id, name: netflix.name } }],
+      relatedParty: [{ id: rita.id, role: 'customer' }] } });
+  if (ritaOrderRes.status() !== 201) {
+    fail('ordering for Rita failed: ' + ritaOrderRes.status() + ' ' + await ritaOrderRes.text());
+  }
+  const ritaOrder = await ritaOrderRes.json();
+  const parties = ritaOrder.relatedParty || [];
+  if (!parties.some((p) => p.role === 'customer' && p.id === rita.id)
+      || !parties.some((p) => p.role === 'payer' && p.id === paula.id)) {
+    fail('Rita\'s plan is not hers-paid-by-Paula: ' + JSON.stringify(parties));
+  }
+  console.log('OK JOINED: Rita accepted, Paula was told, and the first family order for Rita'
+    + ' is payer-stamped PAULA — the handshake works from either hand');
+
   await browser.close();
   console.log('\nALL HOUSEHOLD CHECKS PASSED — consent-gated person-payer, family bill with'
     + ' attribution, own purchases stay personal, strangers get nothing, either side can'
-    + ' leave; child accounts hand the kid their own app.');
+    + ' leave; child accounts hand the kid their own app; and the payer can INVITE an'
+    + ' existing customer — with the member\'s consent, never without.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

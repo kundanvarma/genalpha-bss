@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { acceptDependent, addFamilyMember, decideApproval, endHouseholdLink, familyApprovals,
+import { acceptDependent, acceptFamilyInvite, addFamilyMember, decideApproval, endHouseholdLink, familyApprovals, inviteFamilyMember,
   listOfferings, memberProducts, memberUsage, myHousehold, orderForDependent, priceIndex,
   requestHouseholdPayer, setAllowance, setFamilyRole } from '../api.js';
 import { tokenClaims } from '../auth.js';
@@ -72,6 +72,12 @@ export default function Family() {
               ? <>{t('Paid for by')} <b>{payer.name || payer.id}</b>
                   {myRole && <span className="state active" data-testid="my-role" style={{ marginLeft: 8 }}>{roleName(myRole)}</span>}
                   {' — '}{t('company-style: their bill, your name on the lines')}.</>
+              : payer.status === 'invited'
+              ? <><b>{payer.name || payer.id}</b> {t('invites you to their family plan — they would pay for your subscriptions.')}
+                  <button className="primary" style={{ marginLeft: 10 }} data-testid="hh-accept-invite"
+                    onClick={() => act(() => acceptFamilyInvite(), t('welcome to the family'))}>
+                    {t('Accept')}
+                  </button></>
               : <>{t('Waiting for')} <b>{payer.name || payer.id}</b> {t('to accept your request')}…</>}
             <button className="ghost" style={{ marginLeft: 10 }} data-testid="hh-leave"
               onClick={() => act(() => endHouseholdLink(me), t('left the household'))}>
@@ -329,6 +335,8 @@ function AddFamilyMember({ onAdded }) {
     );
   }
   return (
+    <>
+    <InviteExisting />
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
       <input placeholder={t('First name')} value={given} data-testid="hh-add-given"
         onChange={(e) => setGiven(e.target.value)} style={{ width: 120 }} />
@@ -342,6 +350,37 @@ function AddFamilyMember({ onAdded }) {
       <button className="ghost" data-testid="hh-add" disabled={!given.trim() || !email.trim()}
         onClick={add}>{t('Create their account')}</button>
       {err && <span className="error" style={{ fontSize: 12.5 }}>{err}</span>}
+    </div>
+    </>
+  );
+}
+
+/** Already a customer? Invite them — THEY accept from their Family page. */
+function InviteExisting() {
+  const [email, setEmail] = useState('');
+  const [note, setNote] = useState(null);
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+      <input placeholder={t('Already a customer? Their email')} value={email}
+        data-testid="hh-invite-email" style={{ flex: 1, minWidth: 220 }}
+        onChange={(e) => setEmail(e.target.value)} />
+      <button className="ghost" data-testid="hh-invite" disabled={!email.trim()}
+        onClick={async () => {
+          setNote(null);
+          try {
+            await inviteFamilyMember(email.trim());
+            setNote({ ok: true, text: t('invited — nothing changes until they accept') });
+            setEmail('');
+          } catch (e) {
+            setNote({ ok: false, text: e.message.includes('404') || e.message.includes('not found')
+              ? t('no account with that email — create their account below instead')
+              : e.message });
+          }
+        }}>
+        {t('Invite to family')}
+      </button>
+      {note && <span className={note.ok ? 'dim' : 'error'} style={{ fontSize: 12.5 }}
+        data-testid="hh-invite-note">{note.text}</span>}
     </div>
   );
 }
