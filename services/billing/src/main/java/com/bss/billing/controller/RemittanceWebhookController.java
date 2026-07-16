@@ -30,15 +30,18 @@ public class RemittanceWebhookController {
         this.remittance = remittance;
     }
 
-    @PostMapping(value = "/bank/v1/remittance", consumes = {"application/xml", "text/xml"})
-    public ResponseEntity<Map<String, Object>> ingest(@RequestBody String xml,
+    /** camt.054 XML, Nets OCR fixed-width, or BAI2 lockbox — the format is
+     * detected from the content, the accounting is identical. */
+    @PostMapping(value = "/bank/v1/remittance",
+            consumes = {"application/xml", "text/xml", "text/plain", "application/octet-stream"})
+    public ResponseEntity<Map<String, Object>> ingest(@RequestBody String body,
             @RequestHeader(value = "X-Bank-Token", required = false) String token) {
         TenantRegistry.TenantEntry tenant = tenantOf(token);
         if (tenant == null) {
             return ResponseEntity.status(401).body(Map.of("error", "unknown bank credential"));
         }
         try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
-            return ResponseEntity.ok(remittance.ingest(tenant.getId(), xml));
+            return ResponseEntity.ok(remittance.ingest(tenant.getId(), body));
         }
     }
 

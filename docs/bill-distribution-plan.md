@@ -114,6 +114,12 @@ config, not code.
   ledger row — one row tells the document's whole story: sent →
   accepted → paid, or rejected with the buyer's words. The buyer's
   "paid" is a claim; money is only real when remittance says so.
+- **OCR + BAI2 adapters** — the remittance door detects its dialect
+  from the content: camt.054 XML, Nets OCR giro (fixed-width, oere
+  amounts, right-adjusted KID at 51-75, NOK) and BAI2 lockbox
+  (comma-separated, minor units, customer reference on the 16 record,
+  currency from the 02 header). Everything downstream — matching, the
+  settle guarantee, unapplied cash, idempotency — is identical: a new
+  bank dialect is a parser, not a new pipeline.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format; OCR
-  fixed-width and BAI2 lockbox adapters in front of the same ingestion.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format.
