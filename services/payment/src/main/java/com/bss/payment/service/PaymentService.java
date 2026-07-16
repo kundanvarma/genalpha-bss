@@ -202,6 +202,53 @@ public class PaymentService {
     }
 
     /**
+     * REFUND, partial or full: the PSP must confirm the movement before the
+     * record changes; refunds accumulate and can never exceed what was
+     * captured. A fully refunded payment says so in its status.
+     */
+    @Transactional
+    public Map<String, Object> refund(String id, Map<String, Object> dto) {
+        Payment entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        requireOwn(entity);
+        if (!Payment.CAPTURED.equals(entity.getStatus()) && !Payment.REFUNDED.equals(entity.getStatus())) {
+            throw new ConflictException("only captured money can be refunded (status: "
+                    + entity.getStatus() + ")");
+        }
+        java.math.BigDecimal amount = dto.get("amount") instanceof Map<?, ?> m && m.get("value") != null
+                ? new java.math.BigDecimal(String.valueOf(m.get("value")))
+                : entity.getAmountValue().subtract(entity.getRefundedAmount());
+        java.math.BigDecimal refundable = entity.getAmountValue().subtract(entity.getRefundedAmount());
+        if (amount.signum() <= 0 || amount.compareTo(refundable) > 0) {
+            throw new ConflictException("refundable is " + refundable + " " + entity.getAmountUnit()
+                    + "; asked for " + amount);
+        }
+        PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(),
+                amount, entity.getAmountUnit());
+        if (!refund.refunded()) {
+            throw new ConflictException("refund failed: " + refund.failureReason());
+        }
+        entity.setRefundedAmount(entity.getRefundedAmount().add(amount));
+        if (entity.getRefundedAmount().compareTo(entity.getAmountValue()) >= 0) {
+            entity.setStatus(Payment.REFUNDED);
+        }
+        entity.setLastUpdate(OffsetDateTime.now());
+        repository.save(entity);
+        Map<String, Object> receipt = new java.util.LinkedHashMap<>();
+        receipt.put("paymentId", entity.getId());
+        receipt.put("amount", Map.of("value", amount, "unit", entity.getAmountUnit()));
+        receipt.put("refundRef", refund.refundRef());
+        receipt.put("refundedTotal", entity.getRefundedAmount());
+        receipt.put("status", entity.getStatus());
+        receipt.put("reason", dto.get("reason") == null ? null : String.valueOf(dto.get("reason")));
+        receipt.put("relatedParty", java.util.List.of(
+                Map.of("id", entity.getOwnerPartyId(), "role", "customer")));
+        receipt.put("@type", "Refund");
+        events.publish("PaymentRefundEvent", "refund", receipt);
+        return receipt;
+    }
+
+    /**
      * Scoped tokens address only their own payments; anything else is a 404,
      * not a 403, so foreign ids do not leak existence.
      */
@@ -225,6 +272,9 @@ public class PaymentService {
         }
         dto.setAuthorizationCode(entity.getAuthorizationCode());
         dto.setSettlementRef(entity.getSettlementRef());
+        if (entity.getRefundedAmount() != null && entity.getRefundedAmount().signum() > 0) {
+            dto.setRefundedAmount(entity.getRefundedAmount());
+        }
         dto.setPspProvider(entity.getPspProvider());
         dto.setCorrelatorId(entity.getCorrelatorId());
         if (entity.getOwnerPartyId() != null) {

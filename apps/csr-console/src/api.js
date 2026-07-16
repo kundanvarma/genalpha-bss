@@ -297,6 +297,14 @@ export async function resumeService(serviceId) {
   }));
 }
 
+/** "This charge is wrong": open a dispute for the caller. */
+export async function disputeBill(billId, reason) {
+  return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/dispute`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  }));
+}
+
 /** Hardship/retention: split an unpaid bill into monthly installments. */
 export async function splitBill(billId, installments) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/installmentPlan`, {

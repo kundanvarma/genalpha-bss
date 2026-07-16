@@ -5,7 +5,8 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
-  simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill } from '../api.js';
+  simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
+  disputeBill } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -384,6 +385,24 @@ export default function Customer360() {
                     <span className="dim small">{b.installmentPlan.paidCount}/{b.installmentPlan.installments} paid</span>
                   )}
                   <span className={`state ${b.state}`}>{b.state}</span>
+                  {(!b.dispute || b.dispute.status !== 'open') && (
+                    <button className="ghost" data-testid="csr-dispute-bill"
+                        title="Open a dispute for the caller — collection pauses while it is investigated"
+                        onClick={() => {
+                          const reason = window.prompt('What does the caller say is wrong?');
+                          if (!reason) return;
+                          act(async () => {
+                            await disputeBill(b.id, reason);
+                            await logInteraction({
+                              description: `Dispute opened on ${b.billNo}: ${reason}`,
+                              channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Dispute
+                    </button>
+                  )}
                   {b.state === 'new' && !b.installmentPlan && (
                     <button className="ghost" data-testid="csr-split-bill"
                         title="Split into monthly installments — the customer pays each part in the shop"

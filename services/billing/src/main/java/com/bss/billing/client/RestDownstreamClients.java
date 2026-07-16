@@ -239,6 +239,15 @@ public class RestDownstreamClients {
                     throw new DownstreamException("payment service rejected the capture", e);
                 }
             }
+
+            @Override
+            public void refund(String paymentId, java.math.BigDecimal amount, String reason) {
+                rest.post().uri("/tmf-api/paymentManagement/v4/payment/" + paymentId + "/refund")
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("amount", Map.of("value", amount),
+                                "reason", reason == null ? "dispute credit" : reason))
+                        .retrieve().toBodilessEntity();
+            }
         };
     }
 }

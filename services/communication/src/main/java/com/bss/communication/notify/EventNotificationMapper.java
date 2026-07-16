@@ -39,6 +39,34 @@ public class EventNotificationMapper {
                             + plan.getOrDefault("amountPer", "?") + " " + plan.getOrDefault("currency", "")
                             + " (last " + plan.getOrDefault("lastAmount", "?") + "). First due "
                             + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "DisputeOpenedEvent" -> one(resource(event, "dispute").flatMap(d ->
+                    customer(d).map(party -> new Notification(party,
+                            "We are looking into your dispute",
+                            "You disputed a charge on bill " + d.getOrDefault("billNo", "")
+                            + " (\"" + d.getOrDefault("reason", "") + "\"). Collection is paused"
+                            + " while we investigate — we will come back with a decision."))));
+            case "DisputeResolvedEvent" -> one(resource(event, "dispute").flatMap(d ->
+                    customer(d).map(party -> new Notification(party,
+                            "Your dispute was resolved",
+                            "credited".equals(d.get("status"))
+                                ? ("settled".equals(d.get("billState"))
+                                    ? "We refunded " + d.getOrDefault("creditAmount", "?")
+                                        + " to your card for bill " + d.getOrDefault("billNo", "")
+                                        + ". Thank you for flagging it."
+                                    : "We credited " + d.getOrDefault("creditAmount", "?")
+                                        + " on bill " + d.getOrDefault("billNo", "")
+                                        + " — the amount due is reduced. Thank you for flagging it.")
+                                : "We reviewed bill " + d.getOrDefault("billNo", "")
+                                    + " and the charge stands"
+                                    + (d.get("resolutionNote") != null
+                                        ? ": " + d.get("resolutionNote") : ".")
+                                    + " Call us if anything is still unclear."))));
+            case "PaymentRefundEvent" -> one(resource(event, "refund").flatMap(r ->
+                    customer(r).map(party -> new Notification(party,
+                            "Money on its way back",
+                            "A refund of " + amountOf(r) + " was issued to your original"
+                            + " payment method" + (r.get("reason") != null
+                                ? " (" + r.get("reason") + ")" : "") + "."))));
             case "InstallmentOverdueEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
                     customer(plan).map(party -> new Notification(party,
                             "An installment is overdue",
@@ -232,6 +260,14 @@ public class EventNotificationMapper {
     }
 
     @SuppressWarnings("unchecked")
+    private static String amountOf(Object refund) {
+        if (refund instanceof Map<?, ?> r && r.get("amount") instanceof Map<?, ?> a) {
+            Object unit = a.get("unit");
+            return a.get("value") + " " + (unit == null ? "" : unit);
+        }
+        return "?";
+    }
+
     private static int asInt(Object v) {
         try {
             return Integer.parseInt(String.valueOf(v));

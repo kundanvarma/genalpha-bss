@@ -41,6 +41,10 @@ public class PaymentDto {
     @JsonProperty("settlementRef")
     private String settlementRef;
 
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonProperty("refundedAmount")
+    private java.math.BigDecimal refundedAmount;
+
     @JsonProperty("pspProvider")
     private String pspProvider;
 
@@ -173,4 +177,7 @@ public class PaymentDto {
     public void setType(String type) {
         this.type = type;
     }
+
+    public java.math.BigDecimal getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(java.math.BigDecimal v) { this.refundedAmount = v; }
 }

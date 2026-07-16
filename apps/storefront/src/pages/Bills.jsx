@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, settleBill, splitBill } from '../api.js';
+import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, settleBill, splitBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -100,6 +100,22 @@ export default function Bills() {
               <div className="rowend">
                 <span className="linetotal">{bill.amountDue.value.toFixed(2)} {bill.amountDue.unit}</span>
                 <span className={`state ${bill.state}`}>{bill.state}</span>
+                {bill.dispute && (
+                  <span className={`state ${bill.dispute.status === 'open' ? 'onHold' : bill.dispute.status}`}
+                        data-testid="dispute-chip" title={bill.dispute.reason}>
+                    dispute {bill.dispute.status}
+                  </span>
+                )}
+                {(!bill.dispute || bill.dispute.status !== 'open') && (
+                  <button className="ghost" data-testid="dispute-bill"
+                    onClick={async () => {
+                      const reason = window.prompt('What looks wrong on this bill?');
+                      if (!reason) return;
+                      try { await disputeBill(bill.id, reason); load(); } catch (e) { setError(e.message); }
+                    }}>
+                    Dispute
+                  </button>
+                )}
                 {bill.installmentPlan && bill.installmentPlan.status !== 'cancelled' && (
                   <span className="dim small" data-testid="plan-chip">
                     {bill.installmentPlan.paidCount}/{bill.installmentPlan.installments} paid

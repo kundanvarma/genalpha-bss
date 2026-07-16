@@ -15,6 +15,7 @@ public class Payment {
     public static final String AUTHORIZED = "authorized";
     public static final String CAPTURED = "captured";
     public static final String VOIDED = "voided";
+    public static final String REFUNDED = "refunded";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
@@ -44,6 +45,10 @@ public class Payment {
 
     @Column(name = "settlement_ref", length = 64)
     private String settlementRef;
+
+    /** Running total already given back (partial refunds accumulate). */
+    @Column(name = "refunded_amount", nullable = false, precision = 12, scale = 2)
+    private java.math.BigDecimal refundedAmount = java.math.BigDecimal.ZERO;
 
     @Column(name = "psp_provider", length = 32)
     private String pspProvider;
@@ -188,4 +193,7 @@ public class Payment {
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    public java.math.BigDecimal getRefundedAmount() { return refundedAmount; }
+    public void setRefundedAmount(java.math.BigDecimal v) { this.refundedAmount = v; }
 }

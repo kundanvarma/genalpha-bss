@@ -65,5 +65,8 @@ public final class DownstreamClients {
         String validateAuthorized(String paymentId, String expectedOwnerPartyId, BigDecimal minimumAmount);
 
         void capture(String paymentId);
+
+        /** Give money back on a captured payment. Throws on refusal. */
+        void refund(String paymentId, java.math.BigDecimal amount, String reason);
     }
 }
