@@ -66,6 +66,18 @@ public class BillDistribution {
     @Column(name = "sent_at")
     private OffsetDateTime sentAt;
 
+    /** The buyer's business reply (Peppol Invoice Response): acknowledged,
+     * inProcess, accepted, rejected, conditionallyAccepted, underQuery,
+     * paid — the receiver's word, distinct from our transport status. */
+    @Column(name = "buyer_status")
+    private String buyerStatus;
+
+    @Column(name = "buyer_note")
+    private String buyerNote;
+
+    @Column(name = "responded_at")
+    private OffsetDateTime respondedAt;
+
     @Column(name = "last_update", nullable = false)
     private OffsetDateTime lastUpdate;
 
@@ -99,6 +111,12 @@ public class BillDistribution {
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getSentAt() { return sentAt; }
     public void setSentAt(OffsetDateTime sentAt) { this.sentAt = sentAt; }
+    public String getBuyerStatus() { return buyerStatus; }
+    public void setBuyerStatus(String buyerStatus) { this.buyerStatus = buyerStatus; }
+    public String getBuyerNote() { return buyerNote; }
+    public void setBuyerNote(String buyerNote) { this.buyerNote = buyerNote; }
+    public OffsetDateTime getRespondedAt() { return respondedAt; }
+    public void setRespondedAt(OffsetDateTime respondedAt) { this.respondedAt = respondedAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime lastUpdate) { this.lastUpdate = lastUpdate; }
 }

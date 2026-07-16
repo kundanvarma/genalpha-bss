@@ -106,8 +106,14 @@ config, not code.
   re-sent file — parks on the `/remittance/unapplied` worklist with its
   reason. Suite #47 proves settle, thank-you, fail-closed underpayment
   and idempotent re-delivery.
+- **Peppol Invoice Response** — the buyer's business reply (UBL
+  ApplicationResponse, UNECE 4343 codes: acknowledged / inProcess /
+  accepted / rejected / conditionallyAccepted / underQuery / paid)
+  arrives from the access point on `/distribution/v1/response`, keyed by
+  the same per-tenant distribution token, and lands on the delivery
+  ledger row — one row tells the document's whole story: sent →
+  accepted → paid, or rejected with the buyer's words. The buyer's
+  "paid" is a claim; money is only real when remittance says so.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format; Peppol Invoice
-  Response (buyer accepted/paid status) updating the delivery ledger;
-  OCR fixed-width and BAI2 lockbox adapters in front of the same
-  ingestion.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format; OCR
+  fixed-width and BAI2 lockbox adapters in front of the same ingestion.

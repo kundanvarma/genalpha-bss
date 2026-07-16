@@ -1038,6 +1038,9 @@ services:
     build: ./integrations/mock-distribution
     container_name: bss-mock-distribution
     restart: unless-stopped
+    environment:
+      # where the buyer's Peppol Invoice Response is forwarded
+      RESPONSE_WEBHOOK_URL: http://billing:8080/distribution/v1/response
     ports:
       - "8124:8080"
 
