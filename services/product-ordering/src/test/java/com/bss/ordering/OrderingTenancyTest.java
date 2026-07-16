@@ -31,6 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class OrderingTenancyTest {
 
+    @org.springframework.boot.test.mock.mockito.MockBean
+    private com.bss.ordering.client.PartyClient partyClient;
+
     private static final String BASE = "/tmf-api/productOrderingManagement/v4/productOrder";
     private static final String ISSUER_A = "https://idp.tenant-a.test/realms/bss";
     private static final String ISSUER_B = "https://idp.tenant-b.test/realms/bss";

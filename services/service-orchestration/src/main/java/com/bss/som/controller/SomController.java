@@ -369,12 +369,14 @@ public class SomController {
         return ResponseEntity.ok(serviceMap(instance));
     }
 
-    /** Cease a service (disconnect) — staff/machine; releases the number. */
+    /** Cease a service (disconnect) — staff, machine, or the OWNER
+     * cancelling their own subscription; releases the number. */
     @org.springframework.web.bind.annotation.PostMapping(
             ApiConstants.INVENTORY_BASE + "/service/{id}/terminate")
     public ResponseEntity<Map<String, Object>> terminate(
             @org.springframework.web.bind.annotation.PathVariable String id,
             @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        requireOwnService(id); // scoped tokens cancel only their own line
         String reason = body == null || body.get("reason") == null ? "cease" : String.valueOf(body.get("reason"));
         return ResponseEntity.ok(orchestration.terminateService(id, reason));
     }

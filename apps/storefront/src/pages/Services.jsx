@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -353,6 +353,15 @@ export default function Services() {
                     {t('Resume now')}
                   </button>
                 )}
+                {' '}
+                <button className="ghost danger" data-testid="cancel-line"
+                  onClick={async () => {
+                    if (!window.confirm(t('Cancel this subscription? Your number is released and the line stops working.')
+                        + '\n\n' + t('WANT TO KEEP YOUR NUMBER? Do NOT cancel — order with your new operator first; they move the number, and this subscription ends by itself.'))) return;
+                    try { await cancelMyService(sv.id); refresh(); } catch { /* stays on */ }
+                  }}>
+                  {t('Cancel subscription')}
+                </button>
               </p>
               {sv.state === 'active' && <SimCard serviceId={sv.id} />}
             </div>

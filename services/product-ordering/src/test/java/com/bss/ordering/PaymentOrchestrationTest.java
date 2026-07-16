@@ -61,6 +61,11 @@ class PaymentOrchestrationTest {
     @MockBean
     private InventoryClient inventoryClient;
 
+    // household/payer lookups came later than this test; empty answers =
+    // a plain self-order, which is what these scenarios are
+    @MockBean
+    private com.bss.ordering.client.PartyClient partyClient;
+
     private static RequestPostProcessor customer(String sub) {
         return jwt().jwt(j -> j.subject(sub)).authorities(
                 new SimpleGrantedAuthority("customer"),

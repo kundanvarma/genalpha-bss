@@ -96,6 +96,23 @@ public class EventNotificationMapper {
                                     + plan.getOrDefault("billNo", "") + ". Next payment of "
                                     + plan.getOrDefault("nextAmount", "?") + " due "
                                     + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "ServiceTerminatedEvent" -> one(resource(event, "service").flatMap(svc ->
+                    customer(svc).map(party -> {
+                        String reason = String.valueOf(svc.getOrDefault("reason", ""));
+                        boolean ported = reason.toLowerCase().contains("port");
+                        return new Notification(party,
+                                ported ? "Your number has moved" : "Your subscription has ended",
+                                (ported
+                                    ? "Your number " + svc.getOrDefault("releasedNumber", "")
+                                        + " now lives with your new operator. "
+                                    : svc.getOrDefault("name", "Your service")
+                                        + " is cancelled"
+                                        + (svc.get("releasedNumber") != null
+                                            ? " and the number " + svc.get("releasedNumber")
+                                                + " has been released. " : ". "))
+                                + "Your final bill will cover only the days you used."
+                                + " Sorry to see you go — the door stays open.");
+                    })));
             case "ServiceSuspendedEvent" -> one(resource(event, "service").flatMap(svc ->
                     customer(svc).map(party -> new Notification(party,
                             "Your line is paused",

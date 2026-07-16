@@ -17,6 +17,7 @@ public class RestCatalogClient implements CatalogClient {
     /** Offerings don't change category mid-flight; cache per id, forever. */
     private final Map<String, Optional<String>> cache = new ConcurrentHashMap<>();
     private final Map<String, Optional<String>> chargingCache = new ConcurrentHashMap<>();
+    private final Map<String, Optional<String>> nameCache = new ConcurrentHashMap<>();
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String baseUrl) {
@@ -39,6 +40,25 @@ public class RestCatalogClient implements CatalogClient {
                     return Optional.of(String.valueOf(c.get("name")));
                 }
                 return Optional.empty();
+            } catch (RestClientException e) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Optional<String> nameOf(String offeringId) {
+        if (offeringId == null) {
+            return Optional.empty();
+        }
+        return nameCache.computeIfAbsent(offeringId, id -> {
+            try {
+                Map<String, Object> offering = restClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .retrieve().body(Map.class);
+                return offering == null || offering.get("name") == null
+                        ? Optional.empty() : Optional.of(String.valueOf(offering.get("name")));
             } catch (RestClientException e) {
                 return Optional.empty();
             }

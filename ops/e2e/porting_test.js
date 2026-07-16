@@ -111,7 +111,13 @@ async function staffToken(request) {
 
   // 7. Port-OUT: a customer takes their number to another operator. The number
   // must be one we hold — so port it in first, then out (the full lifecycle).
-  const outParty = `portout-${Date.now()}`;
+  const outEmail = `portout-${Date.now()}@example.com`;
+  const outUser = await (await ctx.request.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H, data: { email: outEmail, givenName: 'Olle', familyName: `Utport${Date.now()}` } })).json();
+  const outParty = outUser.id;
+  const outTokRes = await ctx.request.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: outEmail, password: outUser.temporaryPassword } });
+  const outTok = (await outTokRes.json()).access_token;
   const outNum = '+4790' + String(Date.now()).slice(-6);
   const pin = await (await ctx.request.post(`${PORT}/numberPortingOrder`, {
     headers: H, data: { direction: 'portIn', phoneNumber: outNum, country: 'NO',
@@ -160,6 +166,86 @@ async function staffToken(request) {
   }
   if (!recorded) fail('port-out was not recorded as a churn outcome');
   console.log('OK the port-out was recorded as a churn outcome — a real departure the model learns from');
+
+  // 8. THE COMPOSED GOODBYE: the cutover did not just flip a state — the
+  // product record closed (no ghost line for billing), the final bill
+  // covers only the days used, and the customer was TOLD their number
+  // moved. Leaving is a journey, not a row update.
+  const OH = { Authorization: 'Bearer ' + outTok, 'Content-Type': 'application/json' };
+  let closedProduct = null;
+  for (let attempt = 0; attempt < 15 && !closedProduct; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const prods = await (await ctx.request.get(
+      `${API}/tmf-api/productInventory/v4/product?relatedPartyId=${outParty}&limit=20`,
+      { headers: H })).json();
+    closedProduct = (prods || []).find((p) => p.status === 'cancelled' && p.terminationDate) || null;
+  }
+  if (!closedProduct) fail('the port-out left a ghost product behind');
+  let toldMoved = false;
+  for (let attempt = 0; attempt < 15 && !toldMoved; attempt++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inbox = await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: OH })).json();
+    toldMoved = (inbox || []).some?.((m) => (m.subject || '').includes('number has moved')
+      && (m.content || '').includes(outNum));
+  }
+  if (!toldMoved) fail('the customer was never told their number moved');
+  await ctx.request.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: H });
+  const finalBills = await (await ctx.request.get(
+    `${API}/tmf-api/customerBillManagement/v4/customerBill?limit=50`, { headers: OH })).json();
+  const finalBill = (finalBills || []).find((b) => b.state === 'new');
+  if (!finalBill) fail('no final bill for the leaver');
+  const rates = await (await ctx.request.get(
+    `${API}/tmf-api/customerBillManagement/v4/customerBill/${finalBill.id}/appliedCustomerBillingRate`,
+    { headers: OH })).json();
+  if (!rates.some((r) => /\(.*(to|until).*days\)|\(from .* days\)/.test(r.name || ''))) {
+    fail('the final bill does not show its dated window: ' + rates.map((r) => r.name).join(' | '));
+  }
+  console.log(`OK the COMPOSED GOODBYE: product closed, the customer was told "your number has`
+    + ` moved", and the final bill (${finalBill.amountDue.value} ${finalBill.amountDue.unit})`
+    + ' names the days it covers');
+
+  // 8b. SELF-SERVICE CANCEL: a customer ends their own subscription from
+  // the shop — owner-scoped (a stranger's line is a 404), number released
+  // to the quarantine ledger, and the goodbye is said.
+  const byeEmail = `bye-${Date.now()}@example.com`;
+  const byeUser = await (await ctx.request.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H, data: { email: byeEmail, givenName: 'Bye', familyName: `Now${Date.now()}` } })).json();
+  const byeTokRes = await ctx.request.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: byeEmail, password: byeUser.temporaryPassword } });
+  const byeTok = (await byeTokRes.json()).access_token;
+  const BH = { Authorization: 'Bearer ' + byeTok, 'Content-Type': 'application/json' };
+  await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+    headers: BH, data: { productOrderItem: [{ action: 'add', productOffering: { id: plan2.id } }] } });
+  let byeSvc = null;
+  for (let attempt = 0; attempt < 25 && !byeSvc; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const svcs = await (await ctx.request.get(
+      `${API}/tmf-api/serviceInventory/v4/service`, { headers: BH })).json();
+    byeSvc = (svcs || []).find((sv) => sv.state === 'active') || null;
+  }
+  if (!byeSvc) fail('the self-cancel customer never activated');
+  // a stranger's line is a 404, never a 403
+  const foreign = await ctx.request.post(
+    `${API}/tmf-api/serviceInventory/v4/service/${byeSvc.id}/terminate`,
+    { headers: OH, data: { reason: 'not mine' } });
+  if (foreign.status() !== 404) fail("a stranger cancelled someone else's line: " + foreign.status());
+  const selfCancel = await ctx.request.post(
+    `${API}/tmf-api/serviceInventory/v4/service/${byeSvc.id}/terminate`,
+    { headers: BH, data: { reason: 'cancelled by customer' } });
+  if (selfCancel.status() !== 200) fail('self-cancel failed: ' + selfCancel.status());
+  let saidBye = false;
+  for (let attempt = 0; attempt < 15 && !saidBye; attempt++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inbox = await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: BH })).json();
+    saidBye = (inbox || []).some?.((m) => (m.subject || '').includes('subscription has ended'));
+  }
+  if (!saidBye) fail('the self-cancel goodbye never arrived');
+  console.log('OK SELF-SERVICE CANCEL: owner-scoped (foreign line = 404), the line ended, and'
+    + ' the goodbye was said — "your final bill will cover only the days you used"');
 
   // 9. The agent side: the CSR console shows the customer's porting orders and
   // can cease a service (releasing its number) — the assisted-channel half of

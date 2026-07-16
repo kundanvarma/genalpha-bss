@@ -259,6 +259,15 @@ export async function mySim(serviceId, reveal = false) {
   return res.json();
 }
 
+/** Cancel the subscription — the number is released. Keeping it means
+ * your NEW operator ports it first; cancel after, never before. */
+export async function cancelMyService(serviceId) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/terminate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: 'cancelled by customer' }),
+  }));
+}
+
 /** Going away? Pause the line — your number and SIM stay yours, and the
  * hold lifts itself on the day you pick. */
 export async function pauseMyService(serviceId, days) {

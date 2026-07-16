@@ -13,6 +13,10 @@ public interface CatalogClient {
 
     Optional<String> categoryOf(String offeringId);
 
+    /** The offering's display name — the service and the product must agree
+     * on it, or nothing downstream can correlate them. */
+    Optional<String> nameOf(String offeringId);
+
     /**
      * The offering's charging reference (spec characteristic chargingSpecId):
      * the rate-plan/counter template that lives in the OPERATOR'S OCS. Empty

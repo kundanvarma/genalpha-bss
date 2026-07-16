@@ -52,6 +52,7 @@ public class OrchestrationService {
     private final TenantScope tenantScope;
     private final com.bss.som.client.OcsProvisioningClient ocs;
     private final com.bss.som.security.TenantRegistry tenants;
+    private final com.bss.som.repository.NumberQuarantineRepository quarantine;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -61,7 +62,8 @@ public class OrchestrationService {
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
-            com.bss.som.security.TenantRegistry tenants) {
+            com.bss.som.security.TenantRegistry tenants,
+            com.bss.som.repository.NumberQuarantineRepository quarantine) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -71,6 +73,7 @@ public class OrchestrationService {
         this.catalog = catalog;
         this.ocs = ocs;
         this.tenants = tenants;
+        this.quarantine = quarantine;
         this.pukVault = pukVault;
         this.partners = partners;
         this.ordering = ordering;
@@ -125,8 +128,14 @@ public class OrchestrationService {
         }
         for (Map<String, Object> item : items) {
             Map<String, Object> offering = (Map<String, Object>) item.get("productOffering");
+            // the SERVICE must carry the offering's real name (the product
+            // record does, and downstream correlates the two by it) — an
+            // order item that names only the id gets the name from the catalog
             String name = offering != null && offering.get("name") != null
-                    ? String.valueOf(offering.get("name")) : "service";
+                    ? String.valueOf(offering.get("name"))
+                    : offering != null && offering.get("id") != null
+                            ? catalog.nameOf(String.valueOf(offering.get("id"))).orElse("service")
+                            : "service";
             // The catalog category decides FULFILMENT, not just placement:
             // insurance is billing-only (no service at all), partner services
             // activate with the partner, security toggles a feature. Anything
@@ -446,12 +455,22 @@ public class OrchestrationService {
         instance.setState(ServiceInstance.TERMINATED);
         instance.setLastUpdate(OffsetDateTime.now());
         services.save(instance);
-        // Release the assigned number (a ported-out number leaves for good).
+        // Release the assigned number — onto the QUARANTINE ledger with its
+        // story (a ported-out number now lives with the rival; a cancelled
+        // one ages on the shelf; either way the departure is auditable).
         String releasedNumber = null;
         for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(
                 instance.getTenantId(), instance.getId())) {
             releasedNumber = a.getValue();
             assignments.delete(a);
+            com.bss.som.entity.NumberQuarantine shelf = new com.bss.som.entity.NumberQuarantine();
+            shelf.setId(UUID.randomUUID().toString());
+            shelf.setTenantId(instance.getTenantId());
+            shelf.setNumber(a.getValue());
+            shelf.setServiceId(instance.getId());
+            shelf.setReason(reason != null && reason.length() > 32 ? reason.substring(0, 32) : reason);
+            shelf.setReleasedAt(OffsetDateTime.now());
+            quarantine.save(shelf);
         }
         Map<String, Object> event = new LinkedHashMap<>();
         event.put("id", instance.getId());
