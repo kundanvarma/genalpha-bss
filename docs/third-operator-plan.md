@@ -53,6 +53,22 @@ editing ~30 yml files and rebuilding. That is the wall this arc removes.
 - `infra/tenants/tenants.yml` drafted (billing-shaped; needs the union
   of esp/bank/distribution/pim fields from communication, catalog et al).
 
+## Shipped
+
+`ops/onboard-tenant.sh <id> "<Name>" <locale> <currency> [#color]` does
+the afternoon: (1) clones nova's realm shape — 21 clients, all roles and
+machine service accounts, personas dropped, object UUIDs stripped so the
+clone mints its own; (2) appends the tenant block to the shared registry
+(idempotent; backchannel jwks/token URIs pinned to keycloak:8080 — the
+empty-placeholder default tried browser-host discovery from inside the
+containers, found the hard way); (3) restarts the Java fleet (config
+only); (4) seeds a staff-token catalog in the operator's currency.
+Suite #49 (third_operator_test.js) proves it: operator "fjord" (Fjord
+Mobil, da/DKK) went realm→registry→catalog in ~2 minutes, its first
+customer activated with MSISDN + SIM and was billed a PRORATED 128.52
+DKK of the 249/mo plan — the newborn operator inherits honest billing —
+and the row-level walls hold in both directions against genalpha.
+
 ## Open questions to resolve while building
 
 - Which services read tenant config beyond the registry (channel manifest
