@@ -173,6 +173,20 @@ public class CustomerBillController {
         return ResponseEntity.ok(formatProfileService.upsert(code, dto));
     }
 
+    /** Adding a country IS a create here — a row, not a deploy. */
+    @PostMapping("/billFormatProfile")
+    public ResponseEntity<Map<String, Object>> createFormatProfile(
+            @RequestBody Map<String, Object> dto) {
+        if (dto.get("code") == null || String.valueOf(dto.get("code")).isBlank()) {
+            throw new com.bss.billing.exception.BadRequestException(
+                    "a profile needs a code — the key the tenant's distribution format points at");
+        }
+        Map<String, Object> created = formatProfileService.upsert(
+                String.valueOf(dto.get("code")), dto);
+        return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH
+                + "/billFormatProfile/" + created.get("code"))).body(created);
+    }
+
     /** The disputes worklist (staff). */
     @GetMapping("/dispute")
     public ResponseEntity<List<Map<String, Object>>> disputes() {

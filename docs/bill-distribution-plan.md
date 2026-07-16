@@ -86,6 +86,9 @@ config, not code.
   the row; built-in shapes remain the fail-open fallback. Adding a
   country is an INSERT, not a deploy — proven live: an admin edit to the
   EHF row changed the next e-invoice on the wire.
+- **Console page over the rows** — Bill formats in the operator console
+  (next to Disputes and Dunning): the seeded profiles render as a table,
+  and a new country enters as a form — proven live by adding XRechnung
+  (Germany) through the UI and reading it back from the API.
 - Still named follow-ups: EDIFACT INVOIC for legacy trading partners;
-  Factur-X (CII embedded in PDF/A-3) as a hybrid format; a business-
-  console page over `/billFormatProfile`.
+  Factur-X (CII embedded in PDF/A-3) as a hybrid format.
