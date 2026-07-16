@@ -102,8 +102,16 @@ export async function workTicket(id, patch) {
   }));
 }
 
-export async function interactionsOf(customerId) {
-  return json(await authFetch(`${INTERACTION}/partyInteraction?limit=100&relatedPartyId=${customerId}`));
+/** One PAGE of the timeline (newest first) + the total, so the 360 shows
+ * a handful and fetches more on demand instead of hauling the history. */
+export async function interactionsPage(customerId, offset = 0, limit = 5) {
+  const res = await authFetch(
+    `${INTERACTION}/partyInteraction?offset=${offset}&limit=${limit}&relatedPartyId=${customerId}`);
+  if (!res.ok) throw new Error(`interactions: ${res.status}`);
+  return {
+    items: await res.json(),
+    total: Number(res.headers.get('X-Total-Count') || 0),
+  };
 }
 
 export async function logInteraction(body) {
