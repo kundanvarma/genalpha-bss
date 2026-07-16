@@ -96,6 +96,18 @@ public class EventNotificationMapper {
                                     + plan.getOrDefault("billNo", "") + ". Next payment of "
                                     + plan.getOrDefault("nextAmount", "?") + " due "
                                     + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "HouseholdInviteEvent" -> one(resource(event, "householdInvite").flatMap(inv ->
+                    customer(inv).map(party -> new Notification(party,
+                            "You are invited to a family plan",
+                            inv.getOrDefault("payerName", "Someone") + " wants to add you to their"
+                            + " family — they would pay for your subscriptions. Accept or decline"
+                            + " on your Family page; nothing changes until you do."))));
+            case "HouseholdJoinedEvent" -> one(resource(event, "householdJoined").flatMap(j ->
+                    customer(j).map(party -> new Notification(party,
+                            j.getOrDefault("memberName", "Your new family member") + " joined your family",
+                            "They accepted your invitation. You can now order plans for them from"
+                            + " your Family hub — everything they order through the family bills"
+                            + " to you, itemized per person."))));
             case "ServiceTransferredEvent" -> resource(event, "serviceTransfer").map(t -> {
                 String line = t.getOrDefault("name", "A line") + (t.get("number") != null
                         ? " (" + t.get("number") + ")" : "");

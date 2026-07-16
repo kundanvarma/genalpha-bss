@@ -97,6 +97,21 @@ export async function requestHouseholdPayer(payerEmail) {
   }));
 }
 
+/** The payer invites an EXISTING customer into the family — the member
+ * accepts (or not) from their own Family page. Consent, mirrored. */
+export async function inviteFamilyMember(memberEmail) {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/householdInvite`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ memberEmail }),
+  }));
+}
+
+export async function acceptFamilyInvite() {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/householdInvite/accept`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 export async function acceptDependent(dependentId) {
   return json(await authFetch(`${PARTY}/individual/${dependentId}/householdPayer/accept`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',

@@ -91,6 +91,20 @@ public class IndividualController {
                 body == null ? null : String.valueOf(body.get("payerEmail"))));
     }
 
+    /** The payer INVITES an existing customer (mirror consent flow). */
+    @PostMapping("/{id}/householdInvite")
+    public ResponseEntity<IndividualDto> inviteMember(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(service.inviteHouseholdMember(id,
+                body.get("memberEmail") == null ? null : String.valueOf(body.get("memberEmail"))));
+    }
+
+    /** The invited member accepts — joining is their call. */
+    @PostMapping("/{id}/householdInvite/accept")
+    public ResponseEntity<IndividualDto> acceptInvite(@PathVariable String id) {
+        return ResponseEntity.ok(service.acceptHouseholdInvite(id));
+    }
+
     @PostMapping("/{id}/householdPayer/accept")
     public ResponseEntity<IndividualDto> acceptHouseholdPayer(@PathVariable String id) {
         return ResponseEntity.ok(service.acceptHouseholdPayer(id));

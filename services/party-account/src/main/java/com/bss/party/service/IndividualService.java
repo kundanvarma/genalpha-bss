@@ -245,6 +245,74 @@ public class IndividualService {
         return updated;
     }
 
+    /**
+     * The MIRROR flow: the payer INVITES an existing customer into their
+     * family ("add my wife — she already has an account"). Same two-step
+     * consent, other direction: this only creates an INVITED link; nothing
+     * bills anywhere until the MEMBER accepts. You can only invite people
+     * into your own household.
+     */
+    @Transactional
+    public IndividualDto inviteHouseholdMember(String payerId, String memberEmail) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(payerId)) {
+            throw NotFoundException.forResource("Individual", payerId);
+        }
+        if (memberEmail == null || memberEmail.isBlank()) {
+            throw new com.bss.party.exception.BadRequestException("memberEmail is required");
+        }
+        Individual payer = repository.findByIdAndTenantId(payerId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", payerId));
+        Individual member = repository.findByTenantIdAndContactMediumJsonContaining(
+                        tenantScope.currentTenantId(), memberEmail).stream()
+                .filter(p -> !p.getId().equals(payerId))
+                .findFirst()
+                .orElseThrow(() -> NotFoundException.forResource("Individual", memberEmail));
+        if ("active".equals(member.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "they are already in a household — they must leave it first");
+        }
+        member.setHouseholdPayerId(payer.getId());
+        member.setHouseholdStatus("invited");
+        member.setHouseholdRole("member");
+        IndividualDto updated = mapper.toDto(repository.save(member));
+        Map<String, Object> invite = new java.util.LinkedHashMap<>();
+        invite.put("payerName", (payer.getGivenName() + " " + payer.getFamilyName()).trim());
+        invite.put("memberName", (member.getGivenName() + " " + member.getFamilyName()).trim());
+        invite.put("relatedParty", java.util.List.of(
+                java.util.Map.of("id", member.getId(), "role", "customer")));
+        events.publish("HouseholdInviteEvent", "householdInvite", invite);
+        return updated;
+    }
+
+    /** Only the INVITED member can accept — joining is their call. */
+    @Transactional
+    public IndividualDto acceptHouseholdInvite(String memberId) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(memberId)) {
+            throw NotFoundException.forResource("Individual", memberId);
+        }
+        Individual member = repository.findByIdAndTenantId(memberId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", memberId));
+        if (!"invited".equals(member.getHouseholdStatus())) {
+            throw new com.bss.party.exception.BadRequestException("no pending family invitation");
+        }
+        member.setHouseholdStatus("active");
+        IndividualDto updated = mapper.toDto(repository.save(member));
+        Individual payer = member.getHouseholdPayerId() == null ? null
+                : repository.findByIdAndTenantId(member.getHouseholdPayerId(),
+                        tenantScope.currentTenantId()).orElse(null);
+        if (payer != null) {
+            Map<String, Object> joined = new java.util.LinkedHashMap<>();
+            joined.put("memberName", (member.getGivenName() + " " + member.getFamilyName()).trim());
+            joined.put("relatedParty", java.util.List.of(
+                    java.util.Map.of("id", payer.getId(), "role", "customer")));
+            events.publish("HouseholdJoinedEvent", "householdJoined", joined);
+        }
+        events.publish("IndividualAttributeValueChangeEvent", "individual", updated);
+        return updated;
+    }
+
     /** Only the NAMED payer can accept — consent is theirs to give. */
     @Transactional
     public IndividualDto acceptHouseholdPayer(String dependentId) {
