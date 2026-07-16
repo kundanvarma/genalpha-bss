@@ -22,4 +22,8 @@ public interface OcsProvisioningClient {
     void suspend(String tenantId, String serviceId);
 
     void resume(String tenantId, String serviceId);
+
+    /** The line changed hands: the OCS subscriber follows its new owner
+     * (buckets and rollover stay with the SERVICE). Fail-open. */
+    void transfer(String tenantId, String serviceId, String newPartyId);
 }

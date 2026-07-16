@@ -297,6 +297,19 @@ export async function resumeService(serviceId) {
   }));
 }
 
+/** TRANSFER a line to another person — number, SIM and usage move with
+ * it; the payer stamp stays (a company-paid line keeps its payer). */
+export async function transferService(serviceId, toPartyId) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/transfer`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ toPartyId }),
+  }));
+}
+
+export async function findCustomerByEmail(q) {
+  return json(await authFetch(`/tmf-api/party/v4/individual?q=${encodeURIComponent(q)}&limit=5`));
+}
+
 /** "This charge is wrong": open a dispute for the caller. */
 export async function disputeBill(billId, reason) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/dispute`, {

@@ -6,7 +6,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
-  disputeBill } from '../api.js';
+  disputeBill, transferService, findCustomerByEmail } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -237,6 +237,28 @@ export default function Customer360() {
                           })}>
                           Reveal PUK
                         </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-transfer-service"
+                        title="Move this line to another person — number, SIM and usage go with it"
+                        onClick={() => {
+                          const q = window.prompt('Transfer this line to whom? (name or email)');
+                          if (!q) return;
+                          act(async () => {
+                            const hits = await findCustomerByEmail(q.trim());
+                            if (!hits.length) throw new Error(`No customer matches "${q}".`);
+                            const target = hits[0];
+                            if (!window.confirm(`Transfer ${sv.supportingResource[0].value} to ${target.givenName} ${target.familyName}?`)) return;
+                            await transferService(sv.id, target.id);
+                            await logInteraction({
+                              description: `Line ${sv.supportingResource[0].value} transferred to ${target.givenName} ${target.familyName}`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Transfer
+                    </button>
                   )}
                   {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-pause-service"

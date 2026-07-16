@@ -41,26 +41,50 @@ public class ServiceStreamListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"ServiceTerminatedEvent".equals(envelope.get("eventType"))) {
-                return;
-            }
+            String type = String.valueOf(envelope.get("eventType"));
             String tenantId = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
-            Map<String, Object> service = event.get("service") instanceof Map<?, ?> m
-                    ? castMap(m) : Map.of();
-            String owner = partyOf(service);
-            if (owner == null || service.get("name") == null) {
-                return;
-            }
-            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                products.closeForTerminatedService(tenantId, owner,
-                        String.valueOf(service.get("name")));
+            if ("ServiceTerminatedEvent".equals(type)) {
+                Map<String, Object> service = event.get("service") instanceof Map<?, ?> m
+                        ? castMap(m) : Map.of();
+                String owner = partyOf(service);
+                if (owner == null || service.get("name") == null) {
+                    return;
+                }
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    products.closeForTerminatedService(tenantId, owner,
+                            String.valueOf(service.get("name")));
+                }
+            } else if ("ServiceTransferredEvent".equals(type)) {
+                Map<String, Object> transfer = event.get("serviceTransfer") instanceof Map<?, ?> m
+                        ? castMap(m) : Map.of();
+                String from = roleOf(transfer, "giver");
+                String to = roleOf(transfer, "receiver");
+                if (from == null || to == null || transfer.get("name") == null) {
+                    return;
+                }
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    products.transferForService(tenantId, from, to,
+                            String.valueOf(transfer.get("name")));
+                }
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable service event: {}", e.getMessage());
         }
+    }
+
+    private String roleOf(Map<String, Object> resource, String role) {
+        if (resource.get("relatedParty") instanceof List<?> parties) {
+            for (Object p : parties) {
+                if (p instanceof Map<?, ?> ref && ref.get("id") != null
+                        && role.equalsIgnoreCase(String.valueOf(ref.get("role")))) {
+                    return String.valueOf(ref.get("id"));
+                }
+            }
+        }
+        return null;
     }
 
     private String partyOf(Map<String, Object> service) {

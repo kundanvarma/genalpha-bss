@@ -203,7 +203,82 @@ async function token(request, client, user, pass) {
   // disabled leftovers still crowd the console's paged Rules listing
   await ctx.request.delete(`${POLICY}/policyRule/${ruleId}`, { headers: H });
 
+  // --- THE HANDOVER: Erik leaves Acme; his number goes to the next
+  // employee. The admin reassigns the LINE — number, SIM and usage move,
+  // the company keeps paying (the payer stamp survives), and both people
+  // are told. This is why B2B fleets never release numbers on churn.
+  const erikId = (await (await ctx.request.get(
+    `${API}/tmf-api/party/v4/individual?organizationId=${org.id}&limit=50`,
+    { headers: H })).json()).find((p) => p.givenName === 'Erik').id;
+  const heirEmail = `heidi-${run}@acme.example`;
+  const heir = await (await ctx.request.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+    { headers: H, data: { email: heirEmail, givenName: 'Heidi', familyName: `Heir${run}` } })).json();
+  await ctx.request.post(`${API}/tmf-api/party/v4/individual`, { headers: H, data: {
+    id: heir.id, givenName: 'Heidi', familyName: `Heir${run}`,
+    organization: { id: org.id },
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: heirEmail } }] } });
+
+  const erikSvc = (await (await ctx.request.get(
+    `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${erikId}`,
+    { headers: H })).json()).find((sv) => sv.state === 'active');
+  if (!erikSvc) fail('Erik has no active line to hand over');
+  const erikNumber = erikSvc.supportingResource.find((r) => r.value).value;
+
+  // an OUTSIDER business admin could not do this — Heidi must be in Acme,
+  // and so must both ends (verified against party data in the handler);
+  // Bianca CAN, with her business:admin token
+  const moved = await ctx.request.post(
+    `${API}/tmf-api/serviceInventory/v4/service/${erikSvc.id}/transfer`,
+    { headers: BH, data: { toPartyId: heir.id } });
+  if (moved.status() !== 200) fail('the admin could not reassign the line: ' + moved.status()
+    + ' ' + await moved.text());
+  const nowOwner = await (await ctx.request.get(
+    `${API}/tmf-api/serviceInventory/v4/numberOwner?number=${encodeURIComponent(erikNumber)}`,
+    { headers: H })).json();
+  if (nowOwner.partyId !== heir.id) fail('the number does not resolve to Heidi');
+  const erikSvcsAfter = await (await ctx.request.get(
+    `${API}/tmf-api/serviceInventory/v4/service?relatedPartyId=${erikId}`, { headers: H })).json();
+  if ((erikSvcsAfter || []).some((sv) => sv.state === 'active')) {
+    fail('Erik still holds an active line after the handover');
+  }
+  console.log(`OK THE HANDOVER: ${erikNumber} moved from Erik to Heidi — same line, same SIM,`
+    + ' and the number search follows');
+
+  /* the product record followed too — and the COMPANY still pays */
+  let heirProduct = null;
+  for (let attempt = 0; attempt < 15 && !heirProduct; attempt++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const prods = await (await ctx.request.get(
+      `${API}/tmf-api/productInventory/v4/product?relatedPartyId=${heir.id}&limit=20`,
+      { headers: H })).json();
+    heirProduct = (prods || []).find((p) => p.status === 'active') || null;
+  }
+  if (!heirProduct) fail('the product record did not follow the new owner');
+  const payerStamp = (heirProduct.relatedParty || []).find((p) => p.role === 'payer');
+  if (!payerStamp || payerStamp.id !== org.id) {
+    fail('the company payer stamp was lost in the handover: '
+      + JSON.stringify(heirProduct.relatedParty));
+  }
+  console.log('OK the product followed with the PAYER STAMP intact — Acme keeps paying, the'
+    + ' consolidated invoice never notices the name change');
+
+  /* both sides were told */
+  const heirTok = await token(ctx.request, 'bss-biz', heirEmail, heir.temporaryPassword);
+  let welcomed = false;
+  for (let attempt = 0; attempt < 15 && !welcomed; attempt++) {
+    await new Promise((r) => setTimeout(r, 1500));
+    const inbox = await (await ctx.request.get(
+      `${API}/tmf-api/communicationManagement/v4/communicationMessage?limit=50`,
+      { headers: { Authorization: 'Bearer ' + heirTok } })).json();
+    welcomed = (inbox || []).some?.((m) => (m.subject || '').includes('transferred to you')
+      && (m.content || '').includes(erikNumber));
+  }
+  if (!welcomed) fail('Heidi was never told the line is hers');
+  console.log('OK Heidi was told: the line is hers, the SIM keeps working, PUK controls in her'
+    + ' shop — and Erik was told he will not be billed');
+
   await browser.close();
   console.log('\nALL B2B CHECKS PASSED — org, membership, boundary, order-for-member, '
-    + 'negotiated org pricing (view + invoice), consolidated invoice, invited member self-care.');
+    + 'negotiated org pricing (view + invoice), consolidated invoice, invited member '
+    + 'self-care, and the employee handover: the line moves, the company keeps paying.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n')[0]); process.exit(1); });

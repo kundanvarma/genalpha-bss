@@ -39,6 +39,8 @@ public class SomController {
     private final com.bss.som.client.SimPlatformClient simPlatform;
     private final com.bss.som.crypto.PukVault pukVault;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
+    private final com.bss.som.client.PartyOrgClient partyOrg;
+    private final com.bss.som.client.OcsProvisioningClient ocs;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -48,7 +50,9 @@ public class SomController {
             com.bss.som.repository.SimCardRepository sims,
             com.bss.som.client.SimPlatformClient simPlatform,
             com.bss.som.crypto.PukVault pukVault,
-            com.bss.som.repository.NumberQuarantineRepository quarantine) {
+            com.bss.som.repository.NumberQuarantineRepository quarantine,
+            com.bss.som.client.PartyOrgClient partyOrg,
+            com.bss.som.client.OcsProvisioningClient ocs) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.pools = pools;
@@ -61,6 +65,8 @@ public class SomController {
         this.simPlatform = simPlatform;
         this.pukVault = pukVault;
         this.quarantine = quarantine;
+        this.partyOrg = partyOrg;
+        this.ocs = ocs;
     }
 
     /**
@@ -264,6 +270,79 @@ public class SomController {
     public ResponseEntity<Map<String, Object>> resume(
             @org.springframework.web.bind.annotation.PathVariable String id) {
         return ResponseEntity.ok(orchestration.resume(requireOwnService(id), "request"));
+    }
+
+    /**
+     * TRANSFER: the subscription changes hands — the B2B classic (an
+     * employee leaves, the company gives the number to the next one) and
+     * the B2C give-away. The line, its number, its SIM and its usage stay
+     * exactly as they are; only the OWNER moves. Who may do it:
+     * unscoped staff/machines, the current owner (giving their own line
+     * away), or a business admin moving a line INSIDE their own company —
+     * verified against party data, never against the request.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/transfer")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<Map<String, Object>> transfer(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        String to = body.get("toPartyId") == null ? null : String.valueOf(body.get("toPartyId"));
+        if (to == null || to.isBlank()) {
+            throw new com.bss.som.exception.BadRequestException("toPartyId is required — who gets the line?");
+        }
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+        if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "only an active line can be transferred (state: " + instance.getState() + ")");
+        }
+        String from = instance.getOwnerPartyId();
+        if (to.equals(from)) {
+            throw new com.bss.som.exception.BadRequestException("the line already belongs to them");
+        }
+        // the target must be REAL — a typo must not orphan a line
+        if (partyOrg.individualOf(to).isEmpty()) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "the receiving person is not on record — check the id");
+        }
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        boolean isBusinessAdmin = auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> "business:admin".equals(a.getAuthority()));
+        java.util.Optional<String> scoped = partyScope.scopedPartyId();
+        if (isBusinessAdmin) {
+            // inside the SAME company only — all three org facts from party data
+            String adminOrg = partyOrg.orgOf(auth.getName()).orElse(null);
+            if (adminOrg == null
+                    || !adminOrg.equals(partyOrg.orgOf(from).orElse(null))
+                    || !adminOrg.equals(partyOrg.orgOf(to).orElse(null))) {
+                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+            }
+        } else if (scoped.isPresent() && !scoped.get().equals(from)) {
+            throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+        }
+        instance.setOwnerPartyId(to);
+        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        services.save(instance);
+        String number = null;
+        for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(tenant, id)) {
+            number = a.getValue();
+            a.setOwnerPartyId(to);
+            assignments.save(a);
+        }
+        ocs.transfer(tenant, id, to);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("serviceId", id);
+        event.put("name", instance.getName());
+        if (number != null) event.put("number", number);
+        event.put("relatedParty", List.of(
+                Map.of("id", from, "role", "giver"),
+                Map.of("id", to, "role", "receiver")));
+        events.publish("ServiceTransferredEvent", "serviceTransfer", event);
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("@type", "ServiceTransfer");
+        return ResponseEntity.ok(response);
     }
 
     private ServiceInstance requireOwnService(String serviceId) {

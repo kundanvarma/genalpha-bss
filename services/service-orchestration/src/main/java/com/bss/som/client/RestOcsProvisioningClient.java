@@ -86,6 +86,34 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
         setChargingState(tenantId, serviceId, "resume");
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public void transfer(String tenantId, String serviceId, String newPartyId) {
+        if (!enabled) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> subs = restClient.get()
+                    .uri("/subscribers?tenantId={t}", tenantId)
+                    .retrieve().body(List.class);
+            Map<String, Object> sub = subs == null ? null : subs.stream()
+                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
+                    .findFirst().orElse(null);
+            if (sub == null) {
+                log.warn("OCS: no subscriber for service {} — transfer not mirrored", serviceId);
+                return;
+            }
+            restClient.patch().uri("/subscribers/{id}", String.valueOf(sub.get("id")))
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("partyId", newPartyId))
+                    .retrieve().toBodilessEntity();
+            log.info("OCS: service {} now charges to party {}", serviceId, newPartyId);
+        } catch (RuntimeException e) {
+            log.warn("OCS transfer failed for service {} ({}) — reconcile later",
+                    serviceId, e.getMessage());
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void setChargingState(String tenantId, String serviceId, String action) {
         if (!enabled) {
