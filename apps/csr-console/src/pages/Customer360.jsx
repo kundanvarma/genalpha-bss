@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getCustomer,
-  interactionsOf, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
+  interactionsPage, logInteraction, ordersOf, patchOrder, productsOf, ticketsOf, workTicket,
   activeServicesOf, agreementsOf, ceaseService, completeCutover, paymentMethodsOf,
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
@@ -31,6 +31,7 @@ export default function Customer360() {
   const [tickets, setTickets] = useState([]);
   const [carts, setCarts] = useState([]);
   const [interactions, setInteractions] = useState([]);
+  const [interactionsTotal, setInteractionsTotal] = useState(0);
   const [usage, setUsage] = useState([]);
   const [agreements, setAgreements] = useState([]);
   const [activeServices, setActiveServices] = useState([]);
@@ -77,7 +78,10 @@ export default function Customer360() {
     appointmentsOf(id).then(setAppointments).catch(() => {});
     ticketsOf(id).then(setTickets).catch(() => {});
     cartsOf(id).then(setCarts).catch(() => {});
-    interactionsOf(id).then(setInteractions).catch(() => {});
+    interactionsPage(id, 0).then(({ items, total }) => {
+      setInteractions(items);
+      setInteractionsTotal(total);
+    }).catch(() => {});
     usageOf(id).then(setUsage);
     agreementsOf(id).then(setAgreements);
     activeServicesOf(id).then(setActiveServices);
@@ -548,7 +552,8 @@ export default function Customer360() {
             <button className="ghost" type="submit">Raise ticket</button>
           </form>
 
-          <h2>Interactions</h2>
+          <h2>Interactions{interactionsTotal > 0
+            && <span className="dim small"> — {interactions.length} of {interactionsTotal}</span>}</h2>
           <div className="rows">
             {interactions.map((ix) => (
               <div className="row" key={ix.id}>
@@ -559,6 +564,22 @@ export default function Customer360() {
               </div>
             ))}
             {!interactions.length && <p className="dim small">No interactions logged.</p>}
+            {interactions.length < interactionsTotal && (
+              <button className="ghost" data-testid="more-interactions"
+                onClick={() => interactionsPage(id, interactions.length)
+                  .then(({ items, total }) => {
+                    setInteractions((prev) => [...prev, ...items]);
+                    setInteractionsTotal(total);
+                  }).catch(() => {})}>
+                Show more ({interactionsTotal - interactions.length} older) ↓
+              </button>
+            )}
+            {interactions.length > 5 && (
+              <button className="ghost" data-testid="fewer-interactions"
+                onClick={() => setInteractions((prev) => prev.slice(0, 5))}>
+                Show less ↑
+              </button>
+            )}
           </div>
           <form className="stack" onSubmit={(e) => {
             e.preventDefault();

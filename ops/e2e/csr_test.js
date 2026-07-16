@@ -118,6 +118,29 @@ async function agentLogin(page, username) {
   await a.locator('.row', { hasText: 'Called customer back' }).waitFor({ timeout: 15000 });
   console.log('OK interaction logged on the customer');
 
+  // --- the timeline PAGES: a long history shows a handful, fetches more
+  // on demand — the 360 never hauls (or renders) the whole archive
+  const annaTokRes = await a.context().request.post(
+    'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'bss-demo', username: 'agent-anna', password: 'agent' } });
+  const annaTok = (await annaTokRes.json()).access_token;
+  for (let i = 1; i <= 7; i++) {
+    await a.context().request.post('http://localhost:8080/tmf-api/partyInteraction/v4/partyInteraction',
+      { headers: { Authorization: 'Bearer ' + annaTok, 'Content-Type': 'application/json' },
+        data: { description: `Archive call #${i} (${run})`, channel: 'phone', direction: 'inbound',
+          relatedParty: [{ id: customerId, role: 'customer', '@referredType': 'Individual' }] } });
+  }
+  await a.reload();
+  await a.locator('.row', { hasText: 'Archive call #7' }).waitFor({ timeout: 15000 });
+  const visibleBefore = await a.locator('.rows .row', { hasText: 'Archive call' }).count();
+  if (visibleBefore > 5) fail(`the timeline rendered ${visibleBefore} archive rows up front (page is 5)`);
+  const more = a.locator('[data-testid="more-interactions"]');
+  await more.waitFor({ timeout: 10000 });
+  await more.click();
+  await a.locator('.row', { hasText: 'Archive call #1' }).waitFor({ timeout: 10000 });
+  console.log('OK the timeline pages: 5 newest up front, "Show more" fetched the older rows on'
+    + ' demand — no full-history hauls');
+
   // --- UPSELL FROM THE 360: the agent ACTS on a suggestion — orders on the
   // customer's behalf, and sends a personal offer that rides the whole
   // omnichannel loop (inbox + interaction timeline).
