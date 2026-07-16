@@ -40,6 +40,8 @@ bss:
         analytics-data-token: ${ANALYTICS_DATA_TOKEN:}
         pim-base-url: ${PIM_BASE_URL:}
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID:}
+        dnc-url: ${DNC_URL:}
+        dnc-token: ${DNC_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -76,6 +78,8 @@ bss:
         ai-model: ${AI_MODEL_NOVA:}
         pim-base-url: ${PIM_BASE_URL_NOVA:}
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NOVA:}
+        dnc-url: ${DNC_URL_NOVA:}
+        dnc-token: ${DNC_TOKEN_NOVA:}
       - id: fjord
         issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
         jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
@@ -112,6 +116,8 @@ bss:
         ai-model: ${AI_MODEL_FJORD:}
         pim-base-url: ${PIM_BASE_URL_FJORD:}
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_FJORD:}
+        dnc-url: ${DNC_URL_FJORD:}
+        dnc-token: ${DNC_TOKEN_FJORD:}
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
@@ -148,3 +154,5 @@ bss:
         ai-model: ${AI_MODEL_AURORA:}
         pim-base-url: ${PIM_BASE_URL_AURORA:}
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_AURORA:}
+        dnc-url: ${DNC_URL_AURORA:}
+        dnc-token: ${DNC_TOKEN_AURORA:}

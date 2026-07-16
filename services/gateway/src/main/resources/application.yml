@@ -152,6 +152,11 @@ spring:
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
             - Path=/dealer/v1/**
+        - id: telesales-confirm
+          # the customer's written yes to a telesales offer
+          uri: ${SOM_URL:http://localhost:8104}
+          predicates:
+            - Path=/telesales/v1/**
         - id: assurance
           uri: ${ASSURANCE_URL:http://localhost:8105}
           predicates:

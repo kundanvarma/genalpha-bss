@@ -115,6 +115,18 @@ public class EventNotificationMapper {
                             "Your bank transfer of " + r.getOrDefault("amount", "?")
                             + " arrived and bill " + r.getOrDefault("billNo", "")
                             + " is settled. Nothing more to do."))));
+            // the telesales agreement binds ONLY on written confirmation —
+            // this message IS the writing: the token is the customer's yes
+            case "TelesalesOfferEvent" -> one(resource(event, "telesalesOffer").flatMap(o ->
+                    customer(o).map(party -> new Notification(party,
+                            "Confirm your new plan from today's call",
+                            "You spoke with " + o.getOrDefault("seller", "our partner")
+                            + " about " + o.getOrDefault("offeringName", "a new plan")
+                            + ". Nothing is ordered yet — a phone agreement only counts once"
+                            + " you confirm it in writing. To accept, confirm with code "
+                            + o.getOrDefault("confirmToken", "?") + " in the app before "
+                            + String.valueOf(o.getOrDefault("expiresAt", "")).substring(0, 10)
+                            + ". If you did not agree to anything, simply ignore this."))));
             case "BillDeliveryChangedEvent" -> one(resource(event, "billDelivery").flatMap(bd ->
                     customer(bd).map(party -> new Notification(party,
                             "How you get your bill changed",

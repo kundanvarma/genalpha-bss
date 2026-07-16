@@ -20,9 +20,16 @@ import java.util.Map;
 public class DealerController {
 
     private final DealerService dealers;
+    private final com.bss.som.service.TelesalesService telesales;
+    private final com.bss.som.security.TenantScope tenantScope;
+    private final com.bss.som.security.PartyScope partyScope;
 
-    public DealerController(DealerService dealers) {
+    public DealerController(DealerService dealers, com.bss.som.service.TelesalesService telesales,
+            com.bss.som.security.TenantScope tenantScope, com.bss.som.security.PartyScope partyScope) {
         this.dealers = dealers;
+        this.telesales = telesales;
+        this.tenantScope = tenantScope;
+        this.partyScope = partyScope;
     }
 
     /** Back office signs a chain: org + commission per activation. */
@@ -60,6 +67,27 @@ public class DealerController {
     public ResponseEntity<Map<String, Object>> orderStatus(
             @org.springframework.web.bind.annotation.PathVariable("productOrderId") String id) {
         return ResponseEntity.ok(dealers.orderStatus(id));
+    }
+
+    /** TELESALES: the call's output is an OFFER — washed against the
+     * do-not-call register (fail-closed), binding only on confirmation. */
+    @PostMapping("/dealer/v1/telesales/offer")
+    public ResponseEntity<Map<String, Object>> telesalesOffer(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(telesales.offer(dto));
+    }
+
+    /** The partner's pipeline: their own offers, whatever became of them. */
+    @GetMapping("/dealer/v1/telesales/offers")
+    public ResponseEntity<List<Map<String, Object>>> telesalesOffers() {
+        return ResponseEntity.ok(telesales.myOffers());
+    }
+
+    /** The customer's WRITTEN yes, signed in — only now is the order born. */
+    @PostMapping("/telesales/v1/confirm")
+    public ResponseEntity<Map<String, Object>> telesalesConfirm(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(telesales.confirm(tenantScope.currentTenantId(),
+                partyScope.scopedPartyId().orElse(null),
+                dto.get("token") == null ? null : String.valueOf(dto.get("token"))));
     }
 
     /** The kit comes alive: the CUSTOMER types the code from the box. */

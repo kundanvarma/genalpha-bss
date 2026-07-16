@@ -75,9 +75,13 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-som}
         machine-client-secret: ${OIDC_CLIENT_SECRET:som-secret}
+        dnc-url: ${DNC_URL:}
+        dnc-token: ${DNC_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-som}
         machine-client-secret: ${OIDC_CLIENT_SECRET:som-secret}
+        dnc-url: ${DNC_URL_NOVA:}
+        dnc-token: ${DNC_TOKEN_NOVA:}

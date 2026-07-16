@@ -35,3 +35,16 @@ confirms from their own inbox token; confirmation orders + activates +
 accrues pending commission to the call center with the campaign as the
 store; an expired offer refuses; the dialer's call log shows on the
 timeline.
+
+
+## Shipped
+
+Everything above, proven by suite #51 (telesales_test.js, eight checks).
+Two design decisions sharpened during the build: confirmation is an
+AUTHENTICATED act — the signed-in customer confirms their own offer
+(stronger "in writing" than a bare link, and a stranger with the code
+sees a 404) — and a tenant with NO register configured refuses outbound
+entirely: the operator opts IN by configuring the wash, never out.
+Named follow-ups: cold-prospect identity creation at confirmation;
+segment → dial-list export with consent state; a telesales tab in the
+dealer console.
