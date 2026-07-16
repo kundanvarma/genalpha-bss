@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillingDay, settleBill, splitBill } from '../api.js';
+import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -94,6 +94,23 @@ export default function Bills() {
           }}>
           Change billing date
         </button>
+        <select className="ghost" data-testid="bill-delivery" defaultValue=""
+          title="How your bill reaches you — the in-app bill always stays"
+          style={{ marginLeft: 8, fontSize: 13 }}
+          onChange={async (e) => {
+            if (!e.target.value) return;
+            try {
+              await setBillDelivery(e.target.value === 'default' ? null : e.target.value);
+              setError(null);
+              window.alert('Done — your bill delivery preference is saved.');
+            } catch (err) { setError(err.message); }
+          }}>
+          <option value="" disabled>Bill delivery…</option>
+          <option value="digital">Digital only (in-app / email)</option>
+          <option value="einvoice">E-invoice</option>
+          <option value="paper">Paper by post</option>
+          <option value="default">Operator default</option>
+        </select>
       </h1>
       {error && <p className="error">{error}</p>}
       <div className="rows">

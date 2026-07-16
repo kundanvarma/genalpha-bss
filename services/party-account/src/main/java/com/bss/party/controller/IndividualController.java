@@ -91,6 +91,16 @@ public class IndividualController {
                 body == null ? null : String.valueOf(body.get("payerEmail"))));
     }
 
+    /** How the bill arrives: paper, einvoice or digital — the customer's
+     * choice overrides the operator's default channel. */
+    @PostMapping("/{id}/billDelivery")
+    public ResponseEntity<IndividualDto> billDelivery(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        Object p = body.get("preference");
+        return ResponseEntity.ok(service.setBillDelivery(id,
+                p == null || "default".equals(p) ? null : String.valueOf(p)));
+    }
+
     /** Payday alignment: the day (1-28) this customer's cycle starts. */
     @PostMapping("/{id}/billingCycle")
     public ResponseEntity<IndividualDto> billingCycle(@PathVariable String id,

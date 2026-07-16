@@ -341,6 +341,36 @@ public class IndividualService {
         return updated;
     }
 
+    /**
+     * HOW THE BILL ARRIVES, the customer's call: 'paper' (a print job to
+     * the operator's distribution partner), 'einvoice' (structured XML to
+     * the partner's access point), or 'digital' (in-app and email only).
+     * Null resets to the tenant's default. Self-scoped, or staff on the
+     * caller's behalf — and never silent: the change lands in the inbox
+     * and on the timeline like everything else.
+     */
+    @Transactional
+    public IndividualDto setBillDelivery(String id, String preference) {
+        String caller = partyScope.scopedPartyId().orElse(null);
+        if (caller != null && !caller.equals(id)) {
+            throw NotFoundException.forResource("Individual", id);
+        }
+        if (preference != null && !java.util.Set.of("paper", "einvoice", "digital").contains(preference)) {
+            throw new com.bss.party.exception.BadRequestException(
+                    "bill delivery is one of: paper, einvoice, digital (or null for the operator default)");
+        }
+        Individual person = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Individual", id));
+        person.setBillDelivery(preference);
+        IndividualDto updated = mapper.toDto(repository.save(person));
+        Map<String, Object> change = new java.util.LinkedHashMap<>();
+        change.put("preference", preference == null ? "default" : preference);
+        change.put("relatedParty", java.util.List.of(
+                java.util.Map.of("id", person.getId(), "role", "customer")));
+        events.publish("BillDeliveryChangedEvent", "billDelivery", change);
+        return updated;
+    }
+
     /** Only the NAMED payer can accept — consent is theirs to give. */
     @Transactional
     public IndividualDto acceptHouseholdPayer(String dependentId) {

@@ -49,6 +49,10 @@ public final class DownstreamClients {
         /** The customer's billing anchor day (1-28); empty = calendar month. */
         java.util.Optional<Integer> billingAnchorDayOf(String partyId);
 
+        /** How this customer wants the bill delivered (paper | einvoice |
+         * digital); empty = the tenant's default channel. */
+        java.util.Optional<String> billDeliveryOf(String partyId);
+
         /**
          * The organization a party belongs to, or empty. Consolidated B2B
          * billing keys on this; outages fall back to per-person bills.

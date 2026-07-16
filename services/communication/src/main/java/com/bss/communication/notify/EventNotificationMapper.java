@@ -107,6 +107,19 @@ public class EventNotificationMapper {
                             + " of the month. It applies from your NEXT cycle — days already"
                             + " billed are never billed twice; if there is a gap, one short"
                             + " bridging bill covers exactly those days."))));
+            case "BillDeliveryChangedEvent" -> one(resource(event, "billDelivery").flatMap(bd ->
+                    customer(bd).map(party -> new Notification(party,
+                            "How you get your bill changed",
+                            switch (String.valueOf(bd.getOrDefault("preference", "default"))) {
+                                case "paper" -> "Your bills will now also arrive by post as a"
+                                        + " printed invoice. The in-app bill stays, always.";
+                                case "einvoice" -> "Your bills will now also be delivered as an"
+                                        + " e-invoice through our distribution partner.";
+                                case "digital" -> "Your bills are now digital-only: in-app"
+                                        + " (and email where configured). Nothing by post.";
+                                default -> "Your bill delivery is back to the standard"
+                                        + " arrangement for your operator.";
+                            } + " If you did not request this, contact us."))));
             case "HouseholdInviteEvent" -> one(resource(event, "householdInvite").flatMap(inv ->
                     customer(inv).map(party -> new Notification(party,
                             "You are invited to a family plan",

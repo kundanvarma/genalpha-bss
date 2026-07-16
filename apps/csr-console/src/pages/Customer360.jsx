@@ -7,7 +7,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
   disputeBill, transferService, findCustomerByEmail, diagnoseService,
-  openBillPdf, resendBill } from '../api.js';
+  openBillPdf, resendBill, setBillDeliveryFor } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -426,7 +426,29 @@ export default function Customer360() {
             ))}
                       </div>
 
-          <h2>Bills{!bills.length && <None />}</h2>
+          <h2>Bills{!bills.length && <None />}
+            <select className="ghost" data-testid="csr-bill-delivery" defaultValue=""
+              title="How this customer's bill is delivered — their choice overrides the operator default"
+              style={{ marginLeft: 10, fontSize: 13 }}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                act(async () => {
+                  await setBillDeliveryFor(id, v === 'default' ? null : v);
+                  await logInteraction({
+                    description: `Bill delivery preference set to ${v} on request`,
+                    channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                    relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                  });
+                });
+              }}>
+              <option value="" disabled>Bill delivery…</option>
+              <option value="digital">Digital only</option>
+              <option value="einvoice">E-invoice</option>
+              <option value="paper">Paper by post</option>
+              <option value="default">Operator default</option>
+            </select>
+          </h2>
           <div className="rows">
             {bills.map((b) => (
               <div className="row" key={b.id}>

@@ -54,6 +54,11 @@ public class Individual {
     @jakarta.persistence.Column(name = "billing_anchor_day")
     private Integer billingAnchorDay;
 
+    /** How the bill reaches this customer: paper | einvoice | digital;
+     * null = the tenant's default channel. */
+    @jakarta.persistence.Column(name = "bill_delivery")
+    private String billDelivery;
+
     /** Monthly EUR budget the family funds for this member's top-ups
      * (ask-to-buy above it); NULL = no family funding. */
     @jakarta.persistence.Column(name = "topup_allowance_value")
@@ -125,4 +130,6 @@ public class Individual {
 
     public Integer getBillingAnchorDay() { return billingAnchorDay; }
     public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
+    public String getBillDelivery() { return billDelivery; }
+    public void setBillDelivery(String v) { this.billDelivery = v; }
 }
