@@ -10,4 +10,10 @@ import java.util.Optional;
 public interface InstallmentPlanRepository extends JpaRepository<InstallmentPlan, String> {
 
     Optional<InstallmentPlan> findByTenantIdAndBillId(String tenantId, String billId);
+
+    java.util.List<InstallmentPlan> findTop100ByTenantIdAndStatusAndNextDueAtBefore(
+            String tenantId, String status, java.time.OffsetDateTime cutoff);
+
+    java.util.List<InstallmentPlan> findByTenantIdAndStatusIn(
+            String tenantId, java.util.Collection<String> statuses);
 }

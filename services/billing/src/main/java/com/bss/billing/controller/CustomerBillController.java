@@ -35,10 +35,16 @@ public class CustomerBillController {
 
     private final CustomerBillService service;
     private final FieldSelector fieldSelector;
+    private final com.bss.billing.service.DunningService dunningService;
+    private final com.bss.billing.security.TenantScope tenantScope;
 
-    public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector) {
+    public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
+            com.bss.billing.service.DunningService dunningService,
+            com.bss.billing.security.TenantScope tenantScope) {
         this.service = service;
         this.fieldSelector = fieldSelector;
+        this.dunningService = dunningService;
+        this.tenantScope = tenantScope;
     }
 
     @GetMapping("/customerBill")
@@ -114,6 +120,12 @@ public class CustomerBillController {
     public ResponseEntity<CustomerBillDto> settle(@PathVariable("id") String id,
                                                   @RequestBody CustomerBillDto patch) {
         return ResponseEntity.ok(service.settle(id, patch));
+    }
+
+    /** The DUNNING window: who is overdue, who broke, what is still owed. */
+    @GetMapping("/dunning")
+    public ResponseEntity<List<Map<String, Object>>> dunning() {
+        return ResponseEntity.ok(dunningService.dunningView(tenantScope.currentTenantId()));
     }
 
     /** PAY IN PARTS: split an unpaid bill into 2-12 monthly installments. */

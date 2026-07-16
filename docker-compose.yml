@@ -864,6 +864,9 @@ services:
     container_name: bss-billing
     restart: unless-stopped
     environment:
+      # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
+      BSS_BILLING_DUNNING_TICK_MS: "5000"
+      BSS_BILLING_DUNNING_GRACE_MS: "20000"
       DB_URL: jdbc:postgresql://postgres:5432/billing
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: billing_app

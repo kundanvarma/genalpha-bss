@@ -184,7 +184,15 @@ public class CustomerBillService {
             events.publish("CustomerBillAttributeValueChangeEvent", "customerBill", updated);
             return updated;
         }
-        if (!CustomerBill.NEW.equals(entity.getState())) {
+        // a bill mid-plan settles ONLY through the plan — unless the plan
+        // BROKE, in which case the remaining balance is due at once and this
+        // is exactly the door it comes through
+        com.bss.billing.entity.InstallmentPlan plan = plans
+                .findByTenantIdAndBillId(entity.getTenantId(), entity.getId()).orElse(null);
+        boolean brokenPlan = plan != null
+                && com.bss.billing.entity.InstallmentPlan.BROKEN.equals(plan.getStatus());
+        if (!CustomerBill.NEW.equals(entity.getState())
+                && !(CustomerBill.PARTIALLY_PAID.equals(entity.getState()) && brokenPlan)) {
             throw new ConflictException("bill is '" + entity.getState() + "' and cannot be settled again");
         }
         Object paymentId = patch.getPayment() == null || patch.getPayment().isEmpty()
@@ -192,8 +200,10 @@ public class CustomerBillService {
         if (paymentId == null) {
             throw new BadRequestException("settling a bill requires a payment reference");
         }
+        java.math.BigDecimal owed = brokenPlan
+                ? plan.remainingOf(entity.getAmountDueValue()) : entity.getAmountDueValue();
         String problem = paymentClient.validateAuthorized(String.valueOf(paymentId),
-                entity.getOwnerPartyId(), entity.getAmountDueValue());
+                entity.getOwnerPartyId(), owed);
         if (!problem.isEmpty()) {
             throw new ConflictException(problem);
         }
@@ -238,7 +248,19 @@ public class CustomerBillService {
         plan.setCurrency(bill.getAmountDueUnit());
         plan.setPaidCount(0);
         plan.setStatus(com.bss.billing.entity.InstallmentPlan.ACTIVE);
-        plan.setNextDueAt(OffsetDateTime.now().plusMonths(1));
+        // operators align the first part to payday; default one month out
+        OffsetDateTime firstDue = OffsetDateTime.now().plusMonths(1);
+        if (dto.get("firstDueAt") != null) {
+            try {
+                firstDue = OffsetDateTime.parse(String.valueOf(dto.get("firstDueAt")));
+            } catch (Exception e) {
+                throw new BadRequestException("firstDueAt must be an ISO date-time");
+            }
+            if (firstDue.isAfter(OffsetDateTime.now().plusMonths(2))) {
+                throw new BadRequestException("the first part must be due within two months");
+            }
+        }
+        plan.setNextDueAt(firstDue);
         plan.setCreatedAt(OffsetDateTime.now());
         plan.setLastUpdate(OffsetDateTime.now());
         plans.save(plan);
@@ -274,6 +296,7 @@ public class CustomerBillService {
         }
         paymentClient.capture(String.valueOf(paymentId));
         plan.setPaidCount(plan.getPaidCount() + 1);
+        plan.setRemindedAt(null); // a payment resets the dunning clock
         boolean done = plan.getPaidCount() >= plan.getInstallments();
         plan.setStatus(done ? com.bss.billing.entity.InstallmentPlan.COMPLETED
                 : com.bss.billing.entity.InstallmentPlan.ACTIVE);

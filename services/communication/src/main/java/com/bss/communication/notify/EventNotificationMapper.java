@@ -39,6 +39,23 @@ public class EventNotificationMapper {
                             + plan.getOrDefault("amountPer", "?") + " " + plan.getOrDefault("currency", "")
                             + " (last " + plan.getOrDefault("lastAmount", "?") + "). First due "
                             + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            case "InstallmentOverdueEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
+                    customer(plan).map(party -> new Notification(party,
+                            "An installment is overdue",
+                            "Installment " + (asInt(plan.get("paidCount")) + 1) + " of "
+                            + plan.getOrDefault("installments", "?") + " for bill "
+                            + plan.getOrDefault("billNo", "") + " is overdue. Please pay within "
+                            + plan.getOrDefault("graceDays", "?") + " day(s) or the plan is"
+                            + " cancelled and the remaining " + plan.getOrDefault("remaining", "?")
+                            + " " + plan.getOrDefault("currency", "") + " falls due at once."))));
+            case "InstallmentPlanBrokenEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
+                    customer(plan).map(party -> new Notification(party,
+                            "Your installment plan was cancelled",
+                            "The plan for bill " + plan.getOrDefault("billNo", "")
+                            + " was cancelled after the missed payment. The remaining "
+                            + plan.getOrDefault("remaining", "?") + " "
+                            + plan.getOrDefault("currency", "") + " is now due in one payment."
+                            + " If you need help, call us — there is always a way."))));
             case "InstallmentPaidEvent" -> one(resource(event, "installmentPlan").flatMap(plan ->
                     customer(plan).map(party -> new Notification(party,
                             "Installment " + plan.getOrDefault("paidCount", "?") + " of "
@@ -215,6 +232,14 @@ public class EventNotificationMapper {
     }
 
     @SuppressWarnings("unchecked")
+    private static int asInt(Object v) {
+        try {
+            return Integer.parseInt(String.valueOf(v));
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private Optional<String> customer(Map<String, Object> resource) {
         if (resource.get("relatedParty") instanceof List<?> parties) {
             for (Object p : parties) {
