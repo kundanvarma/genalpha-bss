@@ -420,3 +420,23 @@ makes the reader already know what a "TMF679" is before it's needed.
 - **The thin-stand-in ethic.** Whenever the book describes a mocked seam (SOM, PSP, NRDB), it says
   so plainly and then says exactly what a real deployment plugs in. That honesty *is* the argument.
 - **Chapters are ~15–25 pages.** Twenty chapters + three appendices ≈ a 350–400 page book.
+
+
+---
+
+### Chapters 29–32 (added as the system grew past the original arc)
+
+- **Chapter 29 — What happens when the customer calls.** The eleven-question lifecycle
+  gauntlet (PIN/SIM/number/pause/installments/dunning/proration/disputes/port-out/transfer/
+  diagnostics/family/payday) and the two disciplines it forced: ownership-not-role security
+  (foreign = 404) and the no-day-billed-twice invariant.
+- **Chapter 30 — The bill leaves the building, and the money comes home.** EN 16931 vs the
+  EDI guess; formats as load-bearing rows (EHF/Peppol/CII/A-NZ/XRechnung/EDIFACT/Factur-X);
+  the outbox delivery ledger + buyer Invoice Responses; remittance in three dialects
+  (camt.054/OCR/BAI2) settling bills by KID; unapplied cash.
+- **Chapter 31 — Selling through someone else's store.** The CSP/Elkjøp model: dealer console,
+  starter kits with attribution baked in, the partner API where the credential IS the dealer,
+  per-partner rate limits, and commission that accrues pending, hardens, and claws back.
+- **Chapter 32 — The third operator in an afternoon.** Tenants as a file; the 125-second
+  scripted onboard; operator-as-a-form (11s); white-label by hostname for free; live mutation
+  with the identity boundary written down — and the "Hijacked" incident, kept in the book.
