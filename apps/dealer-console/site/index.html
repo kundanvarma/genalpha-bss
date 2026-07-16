@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dealer console</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  header { display: flex; align-items: center; gap: 12px; }
+  .dealhead { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 18px; }
+  .dealhead h1 { margin: 0; font-size: 22px; }
+  .dealhead .orgname { color: var(--teal); font-weight: 700; }
+  section.card { background: var(--card, #fff); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 18px; }
+  section.card h2 { margin: 0 0 10px; font-size: 15px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+    border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .row .code { font-family: ui-monospace, Menlo, monospace; color: var(--teal); }
+  .row .dim { color: var(--dim, #8a979c); font-size: 12px; }
+  .row .end { margin-left: auto; font-family: ui-monospace, Menlo, monospace; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .addrow input, .addrow select { flex: 1; min-width: 140px; }
+  .totals { display: flex; gap: 18px; font-size: 13.5px; margin-bottom: 8px; }
+  .totals b { font-family: ui-monospace, Menlo, monospace; }
+  .ok { color: var(--teal); font-size: 12.5px; }
+  .err { color: #b64a3a; font-size: 12.5px; }
+  .gate { max-width: 520px; margin: 16vh auto; text-align: center; color: var(--dim, #8a979c); }
+  .state { font-size: 11.5px; padding: 2px 8px; border-radius: 9px; background: #eef3f3; }
+  .state.available { color: #1a7a6d; }
+  .state.activated { color: #8a979c; }
+  .state.pending { color: #a07a1a; }
+  .state.earned { color: #1a7a6d; }
+  .state.clawedBack { color: #b64a3a; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">DEALER</span></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <span id="username" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></span>
+    <button id="logout" class="ghost" hidden>Sign out</button>
+  </div>
+</header>
+<div id="signin" class="gate" hidden>
+  <p>Signing you in…</p>
+</div>
+<div id="nogate" class="gate" hidden>
+  <p>This console is for the operator's retail partners. Your account does not
+  belong to a dealer organization.</p>
+</div>
+<main id="main" hidden>
+  <div class="dealhead"><h1>Dealer desk</h1><span class="orgname" id="org-name"></span></div>
+
+  <section class="card">
+    <h2>Sell at the counter</h2>
+    <p class="dim" style="font-size:12.5px;margin:0 0 8px">The customer registers in the
+    operator's app first; you sell against their email — the sale carries your store's name.</p>
+    <div class="addrow">
+      <input id="sell-email" placeholder="customer@email" data-testid="sell-email">
+      <select id="sell-offering" data-testid="sell-offering"></select>
+      <input id="sell-store" placeholder="Store (e.g. Lade)" data-testid="sell-store">
+      <button id="sell-go" data-testid="sell-go">Sell</button>
+    </div>
+    <p id="sell-msg" class="ok" hidden></p>
+    <p id="sell-err" class="err" hidden></p>
+  </section>
+
+  <section class="card">
+    <h2>Starter kits</h2>
+    <div class="addrow">
+      <input id="batch-count" type="number" value="5" min="1" max="50" style="max-width:90px">
+      <input id="batch-store" placeholder="Store" data-testid="batch-store">
+      <button id="batch-go" data-testid="batch-go">Mint kits</button>
+    </div>
+    <div id="kits"></div>
+  </section>
+
+  <section class="card">
+    <h2>Commission</h2>
+    <div class="totals" id="commission-totals"></div>
+    <div id="commission"></div>
+  </section>
+</main>
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

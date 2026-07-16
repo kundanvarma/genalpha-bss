@@ -46,6 +46,10 @@ public class OrchestrationService {
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.CatalogClient catalog;
     private final com.bss.som.crypto.PukVault pukVault;
+    private final com.bss.som.repository.StarterKitRepository starterKits;
+    private final com.bss.som.repository.DealerAgreementRepository dealerAgreements;
+    private final com.bss.som.repository.CommissionEntryRepository commissionEntries;
+    private final long commissionWindowMs;
     private final com.bss.som.client.PartnerEntitlementClient partners;
     private final OrderingClient ordering;
     private final DomainEventPublisher events;
@@ -59,6 +63,11 @@ public class OrchestrationService {
             com.bss.som.repository.SimCardRepository sims,
             com.bss.som.client.CatalogClient catalog,
             com.bss.som.crypto.PukVault pukVault,
+            com.bss.som.repository.StarterKitRepository starterKits,
+            com.bss.som.repository.DealerAgreementRepository dealerAgreements,
+            com.bss.som.repository.CommissionEntryRepository commissionEntries,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.som.commission-window-ms:1209600000}") long commissionWindowMs,
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
@@ -75,6 +84,10 @@ public class OrchestrationService {
         this.tenants = tenants;
         this.quarantine = quarantine;
         this.pukVault = pukVault;
+        this.starterKits = starterKits;
+        this.dealerAgreements = dealerAgreements;
+        this.commissionEntries = commissionEntries;
+        this.commissionWindowMs = commissionWindowMs;
         this.partners = partners;
         this.ordering = ordering;
         this.events = events;
@@ -242,7 +255,8 @@ public class OrchestrationService {
             // Every numbered line rides a SIM: minted operator-side with its
             // PUK. The PIN lives on the card — set via the SIM-platform seam.
             if (numbered) {
-                mintSim(tenant, serviceId);
+                attachKitSimOrMint(tenant, serviceId, productOrderId);
+                accrueCommission(tenant, productOrder, productOrderId, serviceId, name);
                 // charging lifecycle: the catalog references the OCS rate
                 // plan (chargingSpecId); the subscriber and its counters are
                 // provisioned THERE — the OCS stays the charging master
@@ -284,6 +298,117 @@ public class OrchestrationService {
         sim.setCreatedAt(OffsetDateTime.now());
         sim.setLastUpdate(OffsetDateTime.now());
         return sims.save(sim);
+    }
+
+    /** A KIT order rides the SIM from the box; anything else mints fresh.
+     * The kit was stamped with the product order at activation time. */
+    private void attachKitSimOrMint(String tenant, String serviceId, String productOrderId) {
+        com.bss.som.entity.StarterKit kit = starterKits
+                .findFirstByTenantIdAndProductOrderId(tenant, productOrderId).orElse(null);
+        if (kit == null) {
+            mintSim(tenant, serviceId);
+            return;
+        }
+        com.bss.som.entity.SimCard sim = new com.bss.som.entity.SimCard();
+        sim.setIccid(kit.getIccid());
+        sim.setTenantId(tenant);
+        sim.setServiceId(serviceId);
+        sim.setPuk(kit.getPukCiphertext());
+        sim.setCreatedAt(OffsetDateTime.now());
+        sim.setLastUpdate(OffsetDateTime.now());
+        sims.save(sim);
+        log.info("starter kit SIM {} attached to service {} (kit {})",
+                kit.getIccid(), serviceId, kit.getActivationCode());
+    }
+
+    /**
+     * A dealer-stamped activation EARNS the store its commission — but
+     * PENDING first: Norway's 14-day angrerett means the money only
+     * hardens after the withdrawal window, and an early leave claws it
+     * back. Idempotency rides orchestrate()'s own once-per-order guard.
+     */
+    private void accrueCommission(String tenant, Map<String, Object> productOrder,
+            String productOrderId, String serviceId, String offeringName) {
+        if (!(productOrder.get("relatedParty") instanceof List<?> parties)) {
+            return;
+        }
+        Map<String, Object> dealerRef = null;
+        String customerId = null;
+        for (Object p : parties) {
+            if (p instanceof Map<?, ?> ref) {
+                if ("dealer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
+                    dealerRef = (Map<String, Object>) ref;
+                } else if ("customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
+                    customerId = String.valueOf(ref.get("id"));
+                }
+            }
+        }
+        if (dealerRef == null) {
+            return;
+        }
+        com.bss.som.entity.DealerAgreement agreement = dealerAgreements
+                .findByTenantIdAndDealerOrgId(tenant, String.valueOf(dealerRef.get("id")))
+                .orElse(null);
+        if (agreement == null) {
+            log.warn("order {} names dealer {} but no agreement exists — no commission",
+                    productOrderId, dealerRef.get("id"));
+            return;
+        }
+        com.bss.som.entity.CommissionEntry entry = new com.bss.som.entity.CommissionEntry();
+        entry.setId(UUID.randomUUID().toString());
+        entry.setTenantId(tenant);
+        entry.setDealerOrgId(agreement.getDealerOrgId());
+        entry.setStore(dealerRef.get("name") == null ? null : String.valueOf(dealerRef.get("name")));
+        entry.setProductOrderId(productOrderId);
+        entry.setServiceId(serviceId);
+        entry.setCustomerPartyId(customerId);
+        entry.setOfferingName(offeringName);
+        entry.setAmountValue(agreement.getCommissionValue());
+        entry.setAmountUnit(agreement.getCommissionUnit());
+        entry.setStatus(com.bss.som.entity.CommissionEntry.PENDING);
+        entry.setAccruedAt(OffsetDateTime.now());
+        entry.setHardensAt(OffsetDateTime.now().plus(
+                java.time.Duration.ofMillis(commissionWindowMs)));
+        entry.setLastUpdate(OffsetDateTime.now());
+        commissionEntries.save(entry);
+        log.info("commission accrued (pending): {} {} to {} for activation {}",
+                entry.getAmountValue(), entry.getAmountUnit(), agreement.getName(), serviceId);
+    }
+
+    /** After the withdrawal window, pending money HARDENS. */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${bss.som.commission-tick-ms:3600000}")
+    public void hardenCommissionTick() {
+        for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+            try (var ignored = com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                for (com.bss.som.entity.CommissionEntry entry : commissionEntries
+                        .findTop100ByTenantIdAndStatusAndHardensAtBefore(tenant.getId(),
+                                com.bss.som.entity.CommissionEntry.PENDING, OffsetDateTime.now())) {
+                    entry.setStatus(com.bss.som.entity.CommissionEntry.EARNED);
+                    entry.setLastUpdate(OffsetDateTime.now());
+                    commissionEntries.save(entry);
+                    log.info("commission earned: {} {} to {} ({})", entry.getAmountValue(),
+                            entry.getAmountUnit(), entry.getDealerOrgId(), entry.getServiceId());
+                }
+            } catch (Exception e) {
+                log.warn("commission harden tick failed for {}: {}", tenant.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /** The customer left inside the window: the pending money goes back. */
+    private void clawBackCommission(String tenant, String serviceId) {
+        for (com.bss.som.entity.CommissionEntry entry
+                : commissionEntries.findByTenantIdAndServiceId(tenant, serviceId)) {
+            if (com.bss.som.entity.CommissionEntry.PENDING.equals(entry.getStatus())) {
+                entry.setStatus(com.bss.som.entity.CommissionEntry.CLAWED_BACK);
+                entry.setReason("service terminated inside the withdrawal window");
+                entry.setLastUpdate(OffsetDateTime.now());
+                commissionEntries.save(entry);
+                log.info("commission clawed back: {} {} from {} — the customer left inside the window",
+                        entry.getAmountValue(), entry.getAmountUnit(), entry.getDealerOrgId());
+            }
+        }
     }
 
     /**
@@ -481,6 +606,7 @@ public class OrchestrationService {
         if (instance.getOwnerPartyId() != null) {
             event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
         }
+        clawBackCommission(instance.getTenantId(), instance.getId());
         events.publish("ServiceTerminatedEvent", "service", event);
         log.info("terminated service {} for {} ({})", instance.getName(), instance.getOwnerPartyId(), reason);
         return event;

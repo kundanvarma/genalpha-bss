@@ -1,12 +1,12 @@
 # genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
 
 A vendor-neutral telecom **Business Support System** built as **33 composable ODA components**
-(Spring Boot microservices exposing TMF Open APIs) plus **five channels** (four web, one mobile), behind one API
+(Spring Boot microservices exposing TMF Open APIs) plus **six channels** (five web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — forty-seven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — forty-eight Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -17,7 +17,10 @@ system message logs itself; external systems write into the same timeline), the 
 the per-tenant distribution seam (one tenant ships EHF/Peppol BIS 3.0 e-invoices to an access
 point, the other ships PDF print jobs — config, not code; outbox-backed with retries), remittance
 ingestion (the bank's camt.054, Nets OCR giro or BAI2 lockbox file settles bills by KID through
-the card path's own guarantee; everything unclear parks as unapplied cash), the AI-slice
+the card path's own guarantee; everything unclear parks as unapplied cash), the retail dealer channel
+(the network-wide/Elkjøp model: starter kits with attribution and the SIM baked into the box, counter
+sales, and commission that accrues pending, hardens after the withdrawal window and claws back
+honestly — with a dealer console for the chain's clerks), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
 **Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677

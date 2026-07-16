@@ -52,6 +52,13 @@ Partner API hardening (per-partner rate limits), port-in from the console,
 per-store stock allocation in TMF687, chain → store → clerk org hierarchy,
 commission dispute worklist, marketing collateral in the dealer console.
 
+## Shipped
+
+Everything in the build section above shipped and is proven by suite #48
+(eight checks, green first full run — one fix: the SIM endpoint masks
+ICCIDs, the suite matches the visible tail). The dealer console is
+channel app #6 at /dealer-app/ (bss-biz OIDC client, PKCE).
+
 ## Proof (suite #48, dealer_channel_test.js)
 
 A dealer admin mints kits for their store; a clerk sells at the counter
