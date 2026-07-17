@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty-two Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty-three Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -30,7 +30,9 @@ the offered email), commission is born with the agreement — not the call — a
 dialer logs every call onto the TMF683 record), the **Product advisor**
 (receipts before advice: top-up attach counted from inventory, market price gaps from a per-tenant
 market-intelligence feed seam, the tenant's LLM narrating but never inventing numbers — and every
-suggestion becomes at most an "In study" DRAFT a product owner must promote), and
+suggestion becomes at most an "In study" DRAFT a product owner must promote — with **tiered
+model routing**: the task class lives at the call site, so copywriting rides the cheap model while
+product judgment rides the careful one, both at once, per tenant, as config), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

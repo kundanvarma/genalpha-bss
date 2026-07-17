@@ -54,7 +54,7 @@ public class NextBestOfferService {
                 + " short sentences an agent can say to the customer — grounded in the HOLDING and"
                 + " INTEREST lines only. Answer as JSON: {\"offerName\": ..., \"offerId\": ...,"
                 + " \"reason\": ...}. Never invent an offer that is not a CANDIDATE.";
-        String answer = llm.complete(system, user.toString());
+        String answer = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, user.toString());
         Map<String, Object> parsed = parse(answer);
         Map<String, Object> first = candidates.get(0).get("offering") instanceof Map<?, ?> off
                 ? Map.of("id", String.valueOf(off.get("id")), "name", String.valueOf(off.get("name")))

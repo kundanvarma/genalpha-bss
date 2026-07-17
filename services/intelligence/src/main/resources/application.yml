@@ -90,6 +90,8 @@ bss:
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
         market-feed-url: ${MARKET_FEED_URL:}
         market-feed-token: ${MARKET_FEED_TOKEN:}
+        ai-model-fast: ${AI_MODEL_FAST:}
+        ai-model-smart: ${AI_MODEL_SMART:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -98,6 +100,8 @@ bss:
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
         market-feed-url: ${MARKET_FEED_URL_NOVA:}
         market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
+        ai-model-fast: ${AI_MODEL_FAST_NOVA:}
+        ai-model-smart: ${AI_MODEL_SMART_NOVA:}
         # Per-tenant AI stack (optional): unset falls back to bss.intelligence.*
         ai-provider: ${AI_PROVIDER_NOVA:}
         ai-base-url: ${AI_BASE_URL_NOVA:}

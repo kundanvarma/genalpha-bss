@@ -157,6 +157,16 @@ public class TenantRegistry {
         public String getMarketFeedToken() { return marketFeedToken; }
         public void setMarketFeedToken(String v) { this.marketFeedToken = v; }
 
+        /** Tiered models: cheap for volume work, careful for judgment —
+         * both live at once; blank falls back to ai-model. */
+        private String aiModelFast;
+        private String aiModelSmart;
+
+        public String getAiModelFast() { return aiModelFast; }
+        public void setAiModelFast(String v) { this.aiModelFast = v; }
+        public String getAiModelSmart() { return aiModelSmart; }
+        public void setAiModelSmart(String v) { this.aiModelSmart = v; }
+
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }

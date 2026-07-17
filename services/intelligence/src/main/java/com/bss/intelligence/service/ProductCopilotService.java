@@ -133,7 +133,7 @@ public class ProductCopilotService {
             conversation.append(redactor.redact(String.valueOf(turn.getOrDefault("content", "")))).append("\n");
         }
 
-        String raw = llm.complete(system, conversation.toString());
+        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, conversation.toString());
         Map<String, Object> parsed = parse(raw);
         if (parsed == null) {
             recordAudit(raw, conversation.toString(), "product-copilot-contract-miss");

@@ -439,6 +439,14 @@ services:
       BILLING_BASE_URL: http://billing:8080
       MARKET_FEED_URL: http://mock-market:8080
       MARKET_FEED_TOKEN: genalpha-market-token
+      # aurora runs TIERED models on the mock LLM: cheap for volume,
+      # careful for judgment — both at once (genalpha stays on the stub)
+      AI_PROVIDER_AURORA: openai-compatible
+      AI_BASE_URL_AURORA: http://mock-llm:8080
+      AI_API_KEY_AURORA: aurora-llm-key
+      AI_MODEL_AURORA: frontier-x
+      AI_MODEL_FAST_AURORA: swift-mini
+      AI_MODEL_SMART_AURORA: frontier-x
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-intelligence
@@ -1207,6 +1215,14 @@ services:
     restart: unless-stopped
     ports:
       - "8126:8080"
+
+  # demo stand-in for an OpenAI-compatible LLM endpoint (tiered routing proof)
+  mock-llm:
+    build: ./integrations/mock-llm
+    container_name: bss-mock-llm
+    restart: unless-stopped
+    ports:
+      - "8127:8080"
 
   mock-dnc:
     build: ./integrations/mock-dnc

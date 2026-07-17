@@ -185,10 +185,10 @@ public class CopilotService {
     }
 
     private String completeWithRetry(String system, String user, String useCase) {
-        String raw = llm.complete(system, user);
+        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user);
         if (looksUnlabeled(raw)) {
             recordAudit(raw, user, system, useCase + "-contract-miss");
-            raw = llm.complete(system, user
+            raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again using"
                     + " ONLY the labeled lines from the instructions.");
         }

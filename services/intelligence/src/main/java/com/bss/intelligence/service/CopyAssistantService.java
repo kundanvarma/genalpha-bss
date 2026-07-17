@@ -69,12 +69,12 @@ public class CopyAssistantService {
         // Small models drift from the contract; one corrective retry fixes
         // most of it, and EVERY attempt lands in the ledger — failed calls
         // are the ones an operator most wants to see.
-        String raw = llm.complete(system, user.toString());
+        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user.toString());
         String subject = lineAfter(raw, "SUBJECT:");
         String body = lineAfter(raw, "BODY:");
         if (subject == null || body == null) {
             recordAudit(raw, user.toString(), system, "contract-miss");
-            raw = llm.complete(system, user
+            raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again with"
                     + " ONLY the two lines, starting with 'SUBJECT:' and 'BODY:'.");
             subject = lineAfter(raw, "SUBJECT:");
