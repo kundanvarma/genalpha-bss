@@ -24,7 +24,15 @@ const run = Date.now();
 
   // 2. Offerings table shows the bundle with isBundle=yes
   await page.waitForSelector('#listing-body tr');
-  const bundleRow = page.locator('#listing-body tr', { hasText: 'GenAlpha One Home & Mobile' });
+  // the catalog accumulates run-unique offerings from other suites — the
+  // bundle may live pages deep; walk the pager to it
+  let bundleRow = page.locator('#listing-body tr', { hasText: 'GenAlpha One Home & Mobile' });
+  for (let hop = 0; hop < 30 && !(await bundleRow.count()); hop++) {
+    if (await page.locator('#next').isDisabled()) break;
+    await page.click('#next');
+    await page.waitForTimeout(400);
+    bundleRow = page.locator('#listing-body tr', { hasText: 'GenAlpha One Home & Mobile' });
+  }
   if (!(await bundleRow.count())) fail('bundle row not visible in Product Offerings');
   const cells = await bundleRow.locator('td').allTextContents();
   if (cells[2] !== 'yes') fail(`isBundle column expected "yes", got "${cells[2]}"`);

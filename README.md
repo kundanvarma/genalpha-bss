@@ -32,7 +32,9 @@ dialer logs every call onto the TMF683 record), the **Product advisor**
 market-intelligence feed seam, the tenant's LLM narrating but never inventing numbers — and every
 suggestion becomes at most an "In study" DRAFT a product owner must promote — with **tiered
 model routing**: the task class lives at the call site, so copywriting rides the cheap model while
-product judgment rides the careful one, both at once, per tenant, as config), and
+product judgment rides the careful one — down to **different providers per tier**: a local
+openai-compatible endpoint for volume, a frontier Anthropic-dialect API for judgment, both at
+once, per tenant, as config), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
