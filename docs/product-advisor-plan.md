@@ -30,3 +30,16 @@ market carries a cheaper rival; findings name both WITH their numbers;
 a customer token is refused; adopting the market finding births a real
 "In study" draft in the catalog; the console tab shows the findings and
 adopts from a row.
+
+
+## Shipped
+
+Suite #52 (product_advisor_test.js, six checks) proves the plan, plus
+three build findings worth keeping: top-ups never appear as billing
+rates (they are one-time) — the honest attach source is the PRODUCT
+INVENTORY, paged (TMF lists cap limit at 100 and the newest rows live
+on the last page); the first market mock was TOO GENTLE — the rival
+inside the 10% materiality threshold produced no finding, which was
+the advisor being right; and the majority threshold needs a run-unique
+cohort to test honestly (2 seeded buyers cannot move a 338-customer
+plan, nor should they).

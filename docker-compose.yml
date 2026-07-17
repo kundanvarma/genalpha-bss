@@ -434,6 +434,11 @@ services:
     container_name: bss-intelligence
     restart: unless-stopped
     environment:
+      # the product advisor's sources
+      CATALOG_BASE_URL: http://product-catalog:8080
+      BILLING_BASE_URL: http://billing:8080
+      MARKET_FEED_URL: http://mock-market:8080
+      MARKET_FEED_TOKEN: genalpha-market-token
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-intelligence
@@ -1195,6 +1200,14 @@ services:
   # demo stand-in for the invoice distribution partner (Peppol access
   # point / print house): EHF & CII e-invoices in, print jobs in
   # demo stand-in for the do-not-call reservation register
+  # demo stand-in for the market-intelligence (tariff comparison) feed
+  mock-market:
+    build: ./integrations/mock-market
+    container_name: bss-mock-market
+    restart: unless-stopped
+    ports:
+      - "8126:8080"
+
   mock-dnc:
     build: ./integrations/mock-dnc
     container_name: bss-mock-dnc

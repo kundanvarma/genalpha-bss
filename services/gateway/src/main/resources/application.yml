@@ -88,6 +88,11 @@ spring:
           uri: ${INTELLIGENCE_URL:http://localhost:8109}
           predicates:
             - Path=/ai/**
+        - id: product-advisor
+          # findings with receipts; adopt births a draft
+          uri: ${INTELLIGENCE_URL:http://localhost:8109}
+          predicates:
+            - Path=/advisor/v1/**
         - id: quote
           uri: ${QUOTE_URL:http://localhost:8110}
           predicates:

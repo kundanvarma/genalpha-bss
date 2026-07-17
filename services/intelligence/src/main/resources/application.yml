@@ -49,6 +49,8 @@ bss:
   events:
     topic: bss.intelligence.events
   downstream:
+    catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
+    billing-base-url: ${BILLING_BASE_URL:http://localhost:8088}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
     ticket-base-url: ${TICKET_BASE_URL:http://localhost:8092}
@@ -86,12 +88,16 @@ bss:
         token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-intelligence}
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
+        market-feed-url: ${MARKET_FEED_URL:}
+        market-feed-token: ${MARKET_FEED_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-intelligence}
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
+        market-feed-url: ${MARKET_FEED_URL_NOVA:}
+        market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
         # Per-tenant AI stack (optional): unset falls back to bss.intelligence.*
         ai-provider: ${AI_PROVIDER_NOVA:}
         ai-base-url: ${AI_BASE_URL_NOVA:}

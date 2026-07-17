@@ -147,6 +147,16 @@ public class TenantRegistry {
             return machineClientSecret;
         }
 
+        /** The market-intelligence subscription (tariff comparison) —
+         * a per-tenant seam; the advisor's market half reads it. */
+        private String marketFeedUrl;
+        private String marketFeedToken;
+
+        public String getMarketFeedUrl() { return marketFeedUrl; }
+        public void setMarketFeedUrl(String v) { this.marketFeedUrl = v; }
+        public String getMarketFeedToken() { return marketFeedToken; }
+        public void setMarketFeedToken(String v) { this.marketFeedToken = v; }
+
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }

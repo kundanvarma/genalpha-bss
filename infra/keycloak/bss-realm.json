@@ -861,7 +861,10 @@
         "assurance:read",
         "recommendation:read",
         "insight:read",
-        "inventory:read"
+        "inventory:read",
+        "catalog:read",
+        "catalog:write",
+        "billing:read"
       ]
     },
     {
