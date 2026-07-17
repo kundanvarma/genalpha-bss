@@ -447,6 +447,10 @@ services:
       AI_MODEL_AURORA: frontier-x
       AI_MODEL_FAST_AURORA: swift-mini
       AI_MODEL_SMART_AURORA: frontier-x
+      # ...and the SMART tier rides a DIFFERENT provider protocol entirely
+      AI_PROVIDER_SMART_AURORA: anthropic
+      AI_BASE_URL_SMART_AURORA: http://mock-llm:8080
+      AI_API_KEY_SMART_AURORA: aurora-anthropic-key
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-intelligence

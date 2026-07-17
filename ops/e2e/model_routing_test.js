@@ -53,8 +53,17 @@ async function token(ctx, realm, user, pass) {
   }
   const misrouted = ledger.find((r) => r.task.includes('product copilot') && r.model !== 'frontier-x');
   if (misrouted) fail('a copilot prompt hit the wrong model: ' + JSON.stringify(misrouted));
-  console.log('OK ON THE WIRE: the mock LLM\'s ledger shows both models serving their own task'
-    + ' classes — ' + [...models].join(' and ') + ' — one tenant, two models, at once');
+  // and DIFFERENT PROVIDER PROTOCOLS: FAST rode the openai dialect,
+  // SMART rode the anthropic dialect — one tenant, two providers, at once
+  const fastApi = ledger.find((r) => r.model === 'swift-mini');
+  const smartApi = ledger.find((r) => r.model === 'frontier-x');
+  if (!fastApi || fastApi.api !== 'openai' || !smartApi || smartApi.api !== 'anthropic') {
+    fail('the provider dialects are wrong: ' + JSON.stringify({
+      fast: fastApi && fastApi.api, smart: smartApi && smartApi.api }));
+  }
+  console.log('OK ON THE WIRE: the ledger shows both models AND both provider dialects —'
+    + ' swift-mini over openai, frontier-x over anthropic — one tenant, two providers, two'
+    + ' models, at once');
 
   /* ---------- 4. no tiers, no change ---------- */
   const gaStaff = await token(ctx, 'bss', 'demo', 'demo');
