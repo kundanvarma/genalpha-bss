@@ -168,7 +168,7 @@ public class ProductAdvisorService {
         /* ---- 3. the tenant's LLM narrates what the arithmetic found ---- */
         if (!out.isEmpty()) {
             try {
-                String summary = llm.complete(
+                String summary = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST,
                         "You are a telecom product analyst. One tight paragraph, plain language,"
                                 + " no invented numbers.",
                         "Summarize these product findings for a product owner: " + out);

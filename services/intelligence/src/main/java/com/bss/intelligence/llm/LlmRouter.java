@@ -37,17 +37,26 @@ public class LlmRouter implements LlmAdapter {
     }
 
     private LlmAdapter resolve() {
+        return resolve(Tier.SMART); // unclassified work gets the careful model
+    }
+
+    /** One tenant, several models AT ONCE: the tier picks the model
+     * (falling back to the single ai-model when tiers are not set), and
+     * each (tenant, model) pair gets its own cached adapter. */
+    private LlmAdapter resolve(Tier tier) {
         String tenantId = tenantScope.currentTenantId();
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || tenant.getAiProvider() == null || tenant.getAiProvider().isBlank()) {
             return defaultAdapter;
         }
-        return cache.computeIfAbsent(tenantId, id -> build(tenant));
+        return cache.computeIfAbsent(tenantId + ":" + tier, id -> build(tenant, tier));
     }
 
-    private LlmAdapter build(TenantRegistry.TenantEntry tenant) {
+    private LlmAdapter build(TenantRegistry.TenantEntry tenant, Tier tier) {
         String apiKey = tenant.getAiApiKey() == null ? "" : tenant.getAiApiKey();
-        String model = tenant.getAiModel() == null ? "" : tenant.getAiModel();
+        String tiered = tier == Tier.FAST ? tenant.getAiModelFast() : tenant.getAiModelSmart();
+        String model = tiered != null && !tiered.isBlank() ? tiered
+                : tenant.getAiModel() == null ? "" : tenant.getAiModel();
         return switch (tenant.getAiProvider()) {
             case "stub" -> new StubAdapter();
             case "openai-compatible" -> {
@@ -67,6 +76,11 @@ public class LlmRouter implements LlmAdapter {
     @Override
     public String complete(String system, String user) {
         return resolve().complete(system, user);
+    }
+
+    @Override
+    public String complete(Tier tier, String system, String user) {
+        return resolve(tier).complete(system, user);
     }
 
     @Override

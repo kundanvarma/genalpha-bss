@@ -52,7 +52,7 @@ public class KnowledgeAskService {
                 + " article title you drew from. If the articles do not cover it, say so"
                 + " plainly and suggest raising a ticket. Never invent policies or prices.\n\n"
                 + "ARTICLES:\n" + context;
-        String answer = llm.complete(system, question);
+        String answer = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, question);
         out.put("answer", answer);
         out.put("sources", sources);
         out.put("provider", llm.provider());
