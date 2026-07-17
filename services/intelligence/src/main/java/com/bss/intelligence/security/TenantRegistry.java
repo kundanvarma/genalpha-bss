@@ -167,6 +167,29 @@ public class TenantRegistry {
         public String getAiModelSmart() { return aiModelSmart; }
         public void setAiModelSmart(String v) { this.aiModelSmart = v; }
 
+        /** Whole-provider overrides per tier: a local cheap endpoint for
+         * FAST, a frontier API for SMART — blank falls back to the shared
+         * ai-provider/base-url/api-key. */
+        private String aiProviderFast;
+        private String aiBaseUrlFast;
+        private String aiApiKeyFast;
+        private String aiProviderSmart;
+        private String aiBaseUrlSmart;
+        private String aiApiKeySmart;
+
+        public String getAiProviderFast() { return aiProviderFast; }
+        public void setAiProviderFast(String v) { this.aiProviderFast = v; }
+        public String getAiBaseUrlFast() { return aiBaseUrlFast; }
+        public void setAiBaseUrlFast(String v) { this.aiBaseUrlFast = v; }
+        public String getAiApiKeyFast() { return aiApiKeyFast; }
+        public void setAiApiKeyFast(String v) { this.aiApiKeyFast = v; }
+        public String getAiProviderSmart() { return aiProviderSmart; }
+        public void setAiProviderSmart(String v) { this.aiProviderSmart = v; }
+        public String getAiBaseUrlSmart() { return aiBaseUrlSmart; }
+        public void setAiBaseUrlSmart(String v) { this.aiBaseUrlSmart = v; }
+        public String getAiApiKeySmart() { return aiApiKeySmart; }
+        public void setAiApiKeySmart(String v) { this.aiApiKeySmart = v; }
+
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }

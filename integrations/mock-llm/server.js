@@ -20,6 +20,32 @@ http.createServer((req, res) => {
   };
   if (req.method === 'GET' && url.pathname === '/health') return json(200, { status: 'UP' });
   if (req.method === 'GET' && url.pathname === '/requests') return json(200, requests);
+  if (req.method === 'POST' && url.pathname === '/v1/messages') {
+    // the ANTHROPIC dialect — a different provider protocol on the same box
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      try {
+        const chat = JSON.parse(body || '{}');
+        const model = chat.model || 'unknown';
+        const system = String(chat.system || '');
+        requests.push({ model, api: 'anthropic', task: system.slice(0, 60), at: new Date().toISOString() });
+        let text;
+        if (system.includes('product copilot')) {
+          text = JSON.stringify({ kind: 'question',
+            message: `[${model}] A streaming service fits Partner services — what should it cost per month?`,
+            proposal: null });
+        } else {
+          text = `SUBJECT: [${model}] An offer picked for you\nBODY: [${model}] Answered over the anthropic dialect.`;
+        }
+        json(200, { content: [{ type: 'text', text }] });
+      } catch {
+        json(400, { error: 'unparseable' });
+      }
+    });
+    return;
+  }
+
   if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
     let body = '';
     req.on('data', (c) => { body += c; });
@@ -28,7 +54,7 @@ http.createServer((req, res) => {
         const chat = JSON.parse(body || '{}');
         const model = chat.model || 'unknown';
         const system = (chat.messages || []).find((m) => m.role === 'system')?.content || '';
-        requests.push({ model, task: system.slice(0, 60), at: new Date().toISOString() });
+        requests.push({ model, api: 'openai', task: system.slice(0, 60), at: new Date().toISOString() });
         let content;
         if (system.includes('product copilot')) {
           content = JSON.stringify({ kind: 'question',

@@ -92,6 +92,12 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN:}
         ai-model-fast: ${AI_MODEL_FAST:}
         ai-model-smart: ${AI_MODEL_SMART:}
+        ai-provider-fast: ${AI_PROVIDER_FAST:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST:}
+        ai-api-key-fast: ${AI_API_KEY_FAST:}
+        ai-provider-smart: ${AI_PROVIDER_SMART:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART:}
+        ai-api-key-smart: ${AI_API_KEY_SMART:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -102,6 +108,12 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
         ai-model-fast: ${AI_MODEL_FAST_NOVA:}
         ai-model-smart: ${AI_MODEL_SMART_NOVA:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_NOVA:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_NOVA:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_NOVA:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_NOVA:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_NOVA:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_NOVA:}
         # Per-tenant AI stack (optional): unset falls back to bss.intelligence.*
         ai-provider: ${AI_PROVIDER_NOVA:}
         ai-base-url: ${AI_BASE_URL_NOVA:}

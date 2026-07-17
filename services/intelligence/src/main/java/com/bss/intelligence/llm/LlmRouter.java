@@ -52,24 +52,35 @@ public class LlmRouter implements LlmAdapter {
         return cache.computeIfAbsent(tenantId + ":" + tier, id -> build(tenant, tier));
     }
 
+    private static String coalesce(String tiered, String shared) {
+        return tiered != null && !tiered.isBlank() ? tiered : shared == null ? "" : shared;
+    }
+
     private LlmAdapter build(TenantRegistry.TenantEntry tenant, Tier tier) {
-        String apiKey = tenant.getAiApiKey() == null ? "" : tenant.getAiApiKey();
-        String tiered = tier == Tier.FAST ? tenant.getAiModelFast() : tenant.getAiModelSmart();
-        String model = tiered != null && !tiered.isBlank() ? tiered
-                : tenant.getAiModel() == null ? "" : tenant.getAiModel();
-        return switch (tenant.getAiProvider()) {
+        // WHOLE-PROVIDER tiers: each value resolves tier-first, shared
+        // second — a local cheap endpoint for FAST and a frontier API for
+        // SMART can serve the same tenant at once
+        boolean fast = tier == Tier.FAST;
+        String provider = coalesce(fast ? tenant.getAiProviderFast() : tenant.getAiProviderSmart(),
+                tenant.getAiProvider());
+        String baseUrl = coalesce(fast ? tenant.getAiBaseUrlFast() : tenant.getAiBaseUrlSmart(),
+                tenant.getAiBaseUrl());
+        String apiKey = coalesce(fast ? tenant.getAiApiKeyFast() : tenant.getAiApiKeySmart(),
+                tenant.getAiApiKey());
+        String model = coalesce(fast ? tenant.getAiModelFast() : tenant.getAiModelSmart(),
+                tenant.getAiModel());
+        return switch (provider) {
             case "stub" -> new StubAdapter();
             case "openai-compatible" -> {
-                if (tenant.getAiBaseUrl() == null || model.isBlank()) {
+                if (baseUrl.isBlank() || model.isBlank()) {
                     throw new IllegalStateException("tenant '" + tenant.getId()
                             + "': openai-compatible needs ai-base-url and ai-model");
                 }
-                yield new OpenAiCompatibleAdapter(builder, tenant.getAiBaseUrl(), apiKey, model);
+                yield new OpenAiCompatibleAdapter(builder, baseUrl, apiKey, model);
             }
-            case "anthropic" -> new AnthropicAdapter(builder,
-                    tenant.getAiBaseUrl() == null ? "" : tenant.getAiBaseUrl(), apiKey, model);
+            case "anthropic" -> new AnthropicAdapter(builder, baseUrl, apiKey, model);
             default -> throw new IllegalStateException("tenant '" + tenant.getId()
-                    + "': unknown ai-provider '" + tenant.getAiProvider() + "'");
+                    + "': unknown ai-provider '" + provider + "'");
         };
     }
 

@@ -46,6 +46,12 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN:}
         ai-model-fast: ${AI_MODEL_FAST:}
         ai-model-smart: ${AI_MODEL_SMART:}
+        ai-provider-fast: ${AI_PROVIDER_FAST:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST:}
+        ai-api-key-fast: ${AI_API_KEY_FAST:}
+        ai-provider-smart: ${AI_PROVIDER_SMART:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART:}
+        ai-api-key-smart: ${AI_API_KEY_SMART:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -88,6 +94,12 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
         ai-model-fast: ${AI_MODEL_FAST_NOVA:}
         ai-model-smart: ${AI_MODEL_SMART_NOVA:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_NOVA:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_NOVA:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_NOVA:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_NOVA:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_NOVA:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_NOVA:}
       - id: fjord
         issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
         jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
@@ -130,6 +142,12 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN_FJORD:}
         ai-model-fast: ${AI_MODEL_FAST_FJORD:}
         ai-model-smart: ${AI_MODEL_SMART_FJORD:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_FJORD:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_FJORD:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_FJORD:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_FJORD:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_FJORD:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_FJORD:}
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
@@ -172,3 +190,9 @@ bss:
         market-feed-token: ${MARKET_FEED_TOKEN_AURORA:}
         ai-model-fast: ${AI_MODEL_FAST_AURORA:}
         ai-model-smart: ${AI_MODEL_SMART_AURORA:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_AURORA:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_AURORA:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_AURORA:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_AURORA:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_AURORA:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_AURORA:}
