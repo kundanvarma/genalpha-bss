@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-one end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-three end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2027,6 +2027,87 @@
     call center — on one attribution-and-commission spine, each shaped by its own regulation:
     the cash-register law stays in the certified till, the withdrawal law lives in the
     confirm-after-call. A channel is a set of legal facts with a UI.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Four</div>
+    <h3>Advice with receipts</h3>
+    <div class="epi">"Is it possible to add some feature on the product side that recommends
+    enhancements… can also do market analysis and suggest new products and prices?"
+    <span class="who">— the operator, asking for the most dangerous feature in the book</span></div>
+
+    <p class="drop">Dangerous, because an AI that suggests products and prices is one careless
+    design away from an AI that invents them. The Product Advisor was built on the opposite
+    premise: it COUNTS before it speaks. The top-up attach finding is arithmetic — customers
+    holding both a plan and a top-up in the product inventory are the receipt that the plan's
+    allowance is priced below their appetite — and the finding carries its numbers ("2 of 2
+    customers on this plan also bought top-ups") next to a ready proposal. The market half reads
+    a per-tenant FEED SEAM, the same pattern as the banks and the ESPs: a mock tariff-comparison
+    subscription in the demo, a real market-intelligence provider in production, the same hole.
+    A rival meaningfully cheaper on the same data bucket becomes a finding with both prices on
+    it. The tenant's LLM gets exactly one job: narrate what the arithmetic found. The numbers
+    never come from the model.</p>
+
+    <h2>The advisor that refused to find</h2>
+    <p>The build's best moment was a failure that wasn't. The first mock rival sold ten
+    gigabytes at 14.50 against our 15.00 — and the advisor said NOTHING, because a three-percent
+    gap is inside the ten-percent materiality threshold, and an advisor that cries about noise
+    teaches its owner to stop reading it. The mock was sharpened to 11.90 and the finding fired
+    with the numbers on it. Two more receipts came out of the build: top-ups never appear as
+    billing rates (they are one-time — the honest source is the inventory), and TMF lists cap at
+    a hundred rows with the newest on the last page, so an advisor that doesn't paginate is an
+    advisor that can't see recent history.</p>
+
+    <p>And every suggestion is a PROPOSAL, never an action: adopting a finding births a draft
+    offering — lifecycleStatus "In study" — visible on the product owner's console, provably
+    absent from the shop until a human promotes it. The Copilot's governance pattern, reused:
+    the machine drafts, the person decides, the suite checks the draft did NOT leak into the
+    active catalog.</p>
+
+    <p class="pull edge">An advisor earns trust the way an accountant does: by showing the
+    arithmetic, by refusing to speak when the numbers are noise, and by never having the pen
+    that signs.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Five</div>
+    <h3>The right-sized mind</h3>
+    <div class="epi">"Is it possible to use different AI models for different tasks AT THE SAME
+    TIME… summarizing and email writing with a cheaper model, tough tasks by a high-end model?"
+    <span class="who">— the operator, describing AI economics in one sentence</span></div>
+
+    <p class="drop">Summarizing an email and designing a product are not the same kind of
+    thinking, and should not cost the same. The answer took one enum and a cache key — and THAT
+    is the chapter's real lesson. Every AI feature in the system already spoke through one
+    seam, the per-tenant LLM router; no call site had ever talked to a model directly. So
+    "different models simultaneously" was not a rewrite: the router learned to resolve
+    (tenant, tier) instead of (tenant), and the fleet of features sorted itself.</p>
+
+    <h2>The task class lives at the call site</h2>
+    <p>The design decision that matters is WHERE the classification lives. Not guessed from the
+    prompt — declared in the code, by the developer who knows the stakes: campaign copywriting,
+    knowledge answers, the CSR's 360 summary and the advisor's narrative are FAST; the product
+    copilot's proposals and the next-best-offer judgment are SMART. Unclassified work defaults
+    to SMART, because "when in doubt, spend" is the only safe default for a machine that speaks
+    to customers and product owners. And the tiers go all the way down: not just the model but
+    the WHOLE PROVIDER resolves per tier — provider, endpoint, key, model, each value
+    tier-first, shared-second — so a local cheap endpoint can do the volume work while a
+    frontier API does the judgment, for the same tenant, in the same minute.</p>
+
+    <p>The proof is on the wire, because routing that is merely configured is routing that is
+    assumed. The mock LLM names the model in every answer and keeps a ledger of which API
+    dialect served which prompt; the suite reads copywriting answered by the cheap model over
+    the OpenAI dialect and the copilot by the frontier model over the Anthropic dialect —
+    one tenant, two providers, two models, at once — while the tierless tenant on the stub is
+    untouched, because tiering is per-tenant data, not a global rewire.</p>
+
+    <p class="pull edge">The seam discipline paid its dividend here: a feature that sounds like
+    an architecture project — "multiple AI providers per tenant per task" — cost an enum,
+    because for two years nothing was ever allowed to call a model directly.</p>
   </section>
 
   <hr class="soft">
