@@ -445,3 +445,11 @@ makes the reader already know what a "TMF679" is before it's needed.
   angrerettloven with authenticated written confirmation, cold prospects whose identity is
   earned at registration, consented+washed dial lists with exclusions said out loud, and the
   desk in the dealer console. Commission born with the agreement, not the call.
+- **Chapter 34 — Advice with receipts.** The Product Advisor: counted findings (top-up
+  attach from paged inventory), the market feed as a per-tenant seam, the materiality
+  threshold that refused a 3% gap, the LLM as narrator only, and adopt-as-draft ("In study")
+  — the machine drafts, the person decides.
+- **Chapter 35 — The right-sized mind.** Tiered model routing: task class at the call site,
+  default-to-SMART, whole-provider-per-tier (openai dialect for volume, anthropic dialect for
+  judgment, one tenant, at once), proven by a model-naming mock with a wire ledger — and the
+  seam-discipline dividend: it cost one enum and a cache key.
