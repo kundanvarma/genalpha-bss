@@ -42,6 +42,8 @@ bss:
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID:}
         dnc-url: ${DNC_URL:}
         dnc-token: ${DNC_TOKEN:}
+        market-feed-url: ${MARKET_FEED_URL:}
+        market-feed-token: ${MARKET_FEED_TOKEN:}
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -80,6 +82,8 @@ bss:
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NOVA:}
         dnc-url: ${DNC_URL_NOVA:}
         dnc-token: ${DNC_TOKEN_NOVA:}
+        market-feed-url: ${MARKET_FEED_URL_NOVA:}
+        market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
       - id: fjord
         issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
         jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
@@ -118,6 +122,8 @@ bss:
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_FJORD:}
         dnc-url: ${DNC_URL_FJORD:}
         dnc-token: ${DNC_TOKEN_FJORD:}
+        market-feed-url: ${MARKET_FEED_URL_FJORD:}
+        market-feed-token: ${MARKET_FEED_TOKEN_FJORD:}
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
@@ -156,3 +162,5 @@ bss:
         social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_AURORA:}
         dnc-url: ${DNC_URL_AURORA:}
         dnc-token: ${DNC_TOKEN_AURORA:}
+        market-feed-url: ${MARKET_FEED_URL_AURORA:}
+        market-feed-token: ${MARKET_FEED_TOKEN_AURORA:}

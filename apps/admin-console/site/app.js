@@ -35,6 +35,7 @@ const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
 const ONBOARDING_BASE = '/onboarding/v1';
+const ADVISOR_BASE = '/advisor/v1';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -375,6 +376,27 @@ const RESOURCES = [
       { name: 'paymentReference', label: 'Payment reference required (Norway NO-R / KID)', kind: 'checkbox' },
     ],
     columns: ['code', 'name', 'syntax', 'paymentReference', 'lastUpdate'],
+  },
+  {
+    path: 'findings',
+    base: ADVISOR_BASE,
+    title: 'Product advisor',
+    // RECEIPTS, then advice: the advisor counts (top-up attach, market
+    // price gaps from the tenant's feed), the LLM only narrates, and
+    // Adopt births a DRAFT offering ("In study") — humans decide.
+    noEdit: true,
+    noDelete: true,
+    readOnly: true,
+    fields: [],
+    columns: ['kind', 'offering', 'insight', 'suggestion'],
+    rowAction: {
+      label: (item) => (item.proposal ? 'Adopt as draft…' : '—'),
+      apply: (item) => (item.proposal
+        ? authFetch(`${ADVISOR_BASE}/adopt`, { method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item.proposal) })
+        : Promise.resolve()),
+    },
   },
   {
     path: 'operator',
@@ -754,6 +776,7 @@ const TAB_ROLE = {
   dispute: 'billing:admin',
   dunning: 'billing:admin',
   billFormatProfile: 'billing:admin',
+  findings: 'catalog:write',
   operator: 'roles:admin',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',

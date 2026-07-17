@@ -42,6 +42,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // the product advisor is the PRODUCT OWNER\u2019s tool
+                        .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
