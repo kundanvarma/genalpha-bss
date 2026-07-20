@@ -66,6 +66,9 @@ public class TenantRegistry {
         private String machineClientId;
         private String machineClientSecret;
 
+        /** The tenant's language — picks the full-text stemmer. */
+        private String locale;
+
         public String getId() {
             return id;
         }
@@ -93,6 +96,8 @@ public class TenantRegistry {
         public String getTokenUri() {
             return tokenUri;
         }
+        public String getLocale() { return locale; }
+        public void setLocale(String v) { this.locale = v; }
 
         public void setTokenUri(String tokenUri) {
             this.tokenUri = tokenUri;

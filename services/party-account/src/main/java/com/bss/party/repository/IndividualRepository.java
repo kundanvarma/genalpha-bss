@@ -9,6 +9,16 @@ import java.util.Optional;
 @Repository
 public interface IndividualRepository extends JpaRepository<Individual, String> {
 
+    /** Trigram similarity over the full name — the typo net under the
+     * strict search. Postgres-only (pg_trgm); callers catch and shrug. */
+    @org.springframework.data.jpa.repository.Query(value =
+        "SELECT * FROM individual i WHERE i.tenant_id = :tenantId"
+        + " AND similarity(lower(coalesce(i.given_name,'') || ' ' || coalesce(i.family_name,'')), lower(:q)) > 0.3"
+        + " ORDER BY similarity(lower(coalesce(i.given_name,'') || ' ' || coalesce(i.family_name,'')), lower(:q)) DESC"
+        + " LIMIT 10", nativeQuery = true)
+    java.util.List<Individual> searchFuzzy(@org.springframework.data.repository.query.Param("tenantId") String tenantId,
+            @org.springframework.data.repository.query.Param("q") String q);
+
     Optional<Individual> findByIdAndTenantId(String id, String tenantId);
 
     java.util.List<Individual> findByTenantIdAndHouseholdPayerId(String tenantId, String payerId);

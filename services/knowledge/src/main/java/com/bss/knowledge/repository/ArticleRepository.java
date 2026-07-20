@@ -20,12 +20,15 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
      * Postgres full-text search over title+body+tags, ILIKE as the safety
      * net for word fragments FTS stems away. Ranked: best match first.
      */
+    /** cfg is the tenant's stemmer ('english', 'norwegian', …) — the
+     * expression matches the language GIN indexes exactly. */
     @Query(value = "SELECT * FROM article a WHERE a.tenant_id = :tenantId AND ("
-            + " to_tsvector('english', a.title || ' ' || a.body || ' ' || coalesce(a.tags, ''))"
-            + "   @@ plainto_tsquery('english', :q)"
+            + " to_tsvector(CAST(:cfg AS regconfig), a.title || ' ' || a.body || ' ' || coalesce(a.tags, ''))"
+            + "   @@ plainto_tsquery(CAST(:cfg AS regconfig), :q)"
             + " OR a.title ILIKE '%' || :q || '%' OR a.tags ILIKE '%' || :q || '%')"
-            + " ORDER BY ts_rank(to_tsvector('english', a.title || ' ' || a.body || ' '"
-            + "   || coalesce(a.tags, '')), plainto_tsquery('english', :q)) DESC",
+            + " ORDER BY ts_rank(to_tsvector(CAST(:cfg AS regconfig), a.title || ' ' || a.body || ' '"
+            + "   || coalesce(a.tags, '')), plainto_tsquery(CAST(:cfg AS regconfig), :q)) DESC",
             nativeQuery = true)
-    List<Article> search(@Param("tenantId") String tenantId, @Param("q") String q);
+    List<Article> search(@Param("tenantId") String tenantId, @Param("q") String q,
+            @Param("cfg") String cfg);
 }
