@@ -1,4 +1,4 @@
-// Render book.html → Verify-Everything.pdf using Playwright's bundled Chromium.
+// Render book.html → The-Honest-Machine.pdf using Playwright's bundled Chromium.
 // Run from ops/e2e (where playwright is installed):
 //   node docs/book/make-pdf.mjs
 import { chromium } from 'playwright';
@@ -7,7 +7,7 @@ import path from 'path';
 
 const root = path.resolve(process.argv[2] || '.');
 const htmlPath = path.join(root, 'docs/book/book.html');
-const outPath = path.join(root, 'docs/book/Verify-Everything.pdf');
+const outPath = path.join(root, 'docs/book/The-Honest-Machine.pdf');
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -23,7 +23,7 @@ await page.pdf({
   headerTemplate: '<span></span>',
   footerTemplate:
     '<div style="width:100%;font-family:-apple-system,sans-serif;font-size:8px;color:#9aa3a7;padding:0 14mm;display:flex;justify-content:space-between;">'
-    + '<span>Verify Everything — A Build Memoir</span>'
+    + '<span>The Honest Machine — A Build Memoir</span>'
     + '<span class="pageNumber"></span></div>',
 });
 await browser.close();

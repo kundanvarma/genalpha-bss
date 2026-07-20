@@ -1,4 +1,6 @@
-# Verify Everything
+# The Honest Machine
+
+*(kicker: “A build memoir · verify everything”)*
 ### A Build Memoir — how one person and an AI built a complete telecom BSS, one proof at a time
 
 > Working title. Alternates: *The Composable Machine* · *One Deployment, Two Operators* ·
