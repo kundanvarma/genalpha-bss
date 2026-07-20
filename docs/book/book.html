@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-four end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-five end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2154,6 +2154,49 @@
 
     <p class="pull edge">"Any cloud" was a claim on the README for months. Now it is a database
     row that says NULL where the bytes used to be — in two dialects.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Seven</div>
+    <h3>The rungs before the ladder</h3>
+    <div class="epi">"When to upgrade search with Elastic?" <span class="who">— the operator,
+    asking the question whose best answer is a date far in the future</span></div>
+
+    <p class="drop">Some upgrades are won by refusing them. The search question had an obvious
+    expensive answer — an OpenSearch cluster, RAM-hungry, operated forever — and a boring
+    correct one: Postgres has rungs, and the system had climbed none of them. So the decision
+    became a framework instead of a purchase. Elastic earns its place when someone asks for the
+    OMNIBOX — one field searching parties, tickets, orders and articles together, ranked — or
+    when search traffic deserves its own scaling axis. Until then, the rungs: and when that day
+    does come, the event backbone is already the indexing pipeline, because every party, ticket
+    and article publishes to Kafka — the hard part of an Elastic adoption, built years early for
+    other reasons.</p>
+
+    <h2>A net that only speaks when strict is silent</h2>
+    <p>The first rung was the typo net. The CSR search — multi-word, term-AND, name-ranked, the
+    shape a real bug report once forged — stayed byte-identical BY CONSTRUCTION: trigram
+    similarity only runs when the strict search returns nothing. A query that finds people
+    answers exactly as yesterday; "solvieg fjelheim", two misspellings deep, now finds Solveig
+    instead of an empty list. And it fails open — on a database without the extension, the empty
+    answer simply stands. The upgrade's safety was not tested into it; it was designed into the
+    control flow, and then tested anyway: the suite proves the four behaviors, and seven
+    regression suites — including the dealer and telesales channels, which look customers up
+    through the same path — prove nothing else moved.</p>
+
+    <h2>Each tenant searches in its own tongue</h2>
+    <p>The second rung fixed a bug that had been invisible in English. The knowledge base's
+    full-text search was hardcoded to the English stemmer — so nova's Norwegian articles were
+    being stemmed by rules for the wrong language, wrong by construction, unnoticed because the
+    demos searched in English. The tenant's locale now picks the stemmer, with an index per
+    language: "regning" finds "regningene" and "regninger", which no amount of English
+    morphology could do. Multitenancy turned out to reach all the way down into linguistics —
+    the registry field that picks the storefront's currency now also picks how words break.</p>
+
+    <p class="pull edge">Cost of the upgrade: one trusted extension, three indexes, zero new
+    containers. Cost of the road not taken: a cluster, forever. The best architecture decisions
+    are sometimes the ones that end with Postgres doing one more thing.</p>
   </section>
 
   <hr class="soft">
