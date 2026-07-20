@@ -884,6 +884,10 @@ services:
     container_name: bss-document
     restart: unless-stopped
     environment:
+      # the content seam: in-row (default) | s3 (MinIO/AWS/R2) | azure-blob
+      CONTENT_STORE: ${CONTENT_STORE:-in-row}
+      S3_ENDPOINT: http://minio:9000
+      AZURE_BLOB_ENDPOINT: http://azurite:10000/devstoreaccount1
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/document
@@ -1221,6 +1225,27 @@ services:
       - "8126:8080"
 
   # demo stand-in for an OpenAI-compatible LLM endpoint (tiered routing proof)
+  # object storage for the content seam: the S3 protocol (MinIO)...
+  minio:
+    image: minio/minio:latest
+    container_name: bss-minio
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: bss-minio
+      MINIO_ROOT_PASSWORD: bss-minio-secret
+    ports:
+      - "9000:9000"
+
+  # ...and the Azure Blob dialect (Azurite, Microsoft's own emulator)
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: bss-azurite
+    restart: unless-stopped
+    command: azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck
+    ports:
+      - "10000:10000"
+
   mock-llm:
     build: ./integrations/mock-llm
     container_name: bss-mock-llm
