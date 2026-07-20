@@ -153,8 +153,7 @@ sequenceDiagram
     C->>ORD: productOrder (items, promo code, payment ref)
     ORD->>STOCK: reserve devices
 
-    Note over ORD: completion — the SOM auto-completes digital orders
-(via ProductOrderCreateEvent); staff/fulfilment completes physical ones
+    Note over ORD: completion — the SOM auto-completes digital orders<br/>(via ProductOrderCreateEvent) — staff/fulfilment completes physical ones
     ORD->>INV: provision products per item
     ORD->>STOCK: consume reservation
     ORD->>PAY: capture payment
