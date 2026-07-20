@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — The Operator's Manual</title>
+<style>
+  :root { --teal:#147673; --ink:#20262b; --dim:#6b7680; --line:#e3e8ea; --bg:#fff; --card:#f7f9f9; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.65 Georgia, 'Times New Roman', serif; color:var(--ink); background:var(--bg); }
+  .page { max-width:54rem; margin:0 auto; padding:2rem 1.4rem 6rem; }
+  h1 { font-size:2.1rem; margin:.2rem 0 .4rem; }
+  h2 { font-size:1.35rem; margin:2.6rem 0 .6rem; color:var(--teal); border-bottom:1px solid var(--line); padding-bottom:.3rem; }
+  h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+  .sub { color:var(--dim); font-style:italic; }
+  .kicker { font-family:-apple-system,sans-serif; font-size:.72rem; letter-spacing:.16em; color:var(--teal); text-transform:uppercase; }
+  code, pre { font-family:ui-monospace, Menlo, monospace; font-size:.86em; }
+  code { background:var(--card); padding:.08em .35em; border-radius:4px; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:8px; padding: .8rem 1rem; overflow-x:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0 1rem; font-size:.92em; }
+  th, td { text-align:left; padding:.42rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-family:-apple-system,sans-serif; font-size:.78rem; letter-spacing:.04em; color:var(--dim); text-transform:uppercase; }
+  .rule { background:var(--card); border-left:3px solid var(--teal); padding:.6rem 1rem; margin:.9rem 0; }
+  .toc { columns:2; column-gap:2.4rem; font-family:-apple-system,sans-serif; font-size:.92rem; }
+  .toc a { color:var(--ink); text-decoration:none; }
+  .toc a:hover { color:var(--teal); }
+  a { color:var(--teal); }
+  .dim { color:var(--dim); }
+  @media print { .page { max-width:none; } h2 { break-after:avoid; } table, pre, .rule { break-inside:avoid; } }
+  @page { size:A4; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="kicker">Reference · genalpha-bss</div>
+<h1>The Operator's Manual</h1>
+<p class="sub">How to run, configure and operate the BSS — by role and by task. The companion
+volume, <em>Verify Everything</em>, tells how it was built and why; this book tells you which
+button, which endpoint, which environment variable. Everything here is proven by the suite named
+beside it.</p>
+
+<h2 id="toc">Contents</h2>
+<div class="toc">
+<p>
+1. <a href="#start">Getting started</a><br>
+2. <a href="#surfaces">Surfaces &amp; sign-ins</a><br>
+3. <a href="#product">The product owner</a><br>
+4. <a href="#csr">The CSR</a><br>
+5. <a href="#billing">Billing &amp; money operations</a><br>
+6. <a href="#partners">Partner channels</a><br>
+7. <a href="#host">The host administrator</a><br>
+8. <a href="#ai">AI configuration</a><br>
+9. <a href="#seams">The seam catalog</a><br>
+10. <a href="#envs">Environment reference</a><br>
+11. <a href="#apis">Extension API reference</a><br>
+12. <a href="#mocks">The mock integrations</a><br>
+</p>
+</div>
+
+<h2 id="start">1 · Getting started</h2>
+<pre><code>docker compose up -d          # ~90 containers; first build takes a while
+open http://localhost:8080/shop/   # the storefront (guest browsing works)
+</code></pre>
+<p>The gateway is <code>:8080</code>; Keycloak is <code>:8085</code> (admin/admin). Two seed
+operators run side by side: <b>genalpha</b> (EN/EUR, realm <code>bss</code>) and <b>nova</b>
+(NO/NOK, realm <code>nova</code>) — plus any operator you mint (§7). Demo card
+<code>4242 4242 4242 4242</code> pays; anything ending <code>0002</code> declines. Promo code
+<code>WELCOME10</code>. Serviceable fiber postcodes start <code>111</code>/<code>222</code>/<code>333</code>.</p>
+<div class="rule"><b>The one discipline:</b> every feature in this manual has an end-to-end
+Playwright suite in <code>ops/e2e/</code>. When in doubt about how something behaves, the suite
+is the specification: <code>node ops/e2e/&lt;name&gt;_test.js</code> runs it against the live stack.</div>
+
+<h2 id="surfaces">2 · Surfaces &amp; sign-ins</h2>
+<table>
+<tr><th>URL</th><th>Who</th><th>Demo sign-in</th></tr>
+<tr><td><code>/shop/</code></td><td>Customers (self-register or guest)</td><td><code>kai@bss.local</code> / <code>kai</code></td></tr>
+<tr><td><code>/app/</code></td><td>Customers on mobile (Expo web)</td><td><code>emil@acme.example</code> / <code>emil</code></td></tr>
+<tr><td><code>/biz/</code></td><td>B2B org admins + invited members</td><td><code>bianca@acme.example</code> / <code>bianca</code></td></tr>
+<tr><td><code>/csr/</code></td><td>Agents (role-scoped powers)</td><td><code>agent-anna</code> / <code>agent</code>; junior: <code>jo@bss.local</code> / <code>jo</code></td></tr>
+<tr><td><code>/console/</code></td><td>Back office (role-scoped tabs)</td><td><code>demo</code> / <code>demo</code>; product-only: <code>pat@bss.local</code> / <code>pat</code></td></tr>
+<tr><td><code>/dealer-app/</code></td><td>Retail-partner clerks &amp; telesales agents</td><td>any account whose org holds a dealer agreement</td></tr>
+<tr><td><code>shop.nova.localhost:8080/shop/</code></td><td>Nova's white-label storefront</td><td><code>nils@nova.local</code> / <code>nils</code></td></tr>
+<tr><td><code>biz.nova.localhost:8080/biz/</code></td><td>Nova's B2B console (Norwegian)</td><td><code>birgit@fjellheim.no</code> / <code>birgit</code></td></tr>
+</table>
+<p class="dim">White-labeling is hostname-driven: <code>shop.&lt;tenant&gt;.localhost</code> serves
+that operator's brand, locale and currency from the live registry (§7).</p>
+
+<h2 id="product">3 · The product owner</h2>
+<h3>Catalog (console → Product Offerings / Specifications / Prices)</h3>
+<p>Offerings are TMF620 data: hard and soft bundles (<code>bundledProductOfferingOption</code>
+cardinality, pick-N-of-M choice groups), characteristic-conditioned prices ("+2.00/mo when
+colour = Titanium"), commitment terms, categories that drive placement <em>and</em> fulfilment
+(Top-ups and Insurance are billing-only; Partner services mint entitlement codes; everything
+else draws an MSISDN + SIM). Artwork rides the offering's attachments — internal store or the
+tenant's own PIM.</p>
+<h3>Rules &amp; pricing as data (console → Rules)</h3>
+<p>Order rules and dynamic pricing are JSON-logic rows with a dry-run panel. A price change is a
+rule, not a release. See <code>docs/product-rules.md</code> for the authoring guide.</p>
+<h3>Product Copilot (console → Copilot)</h3>
+<p>Chat a product into the catalog: the model proposes specs/prices/offerings as TMF620
+payloads, the console shows a human card, and a deterministic executor applies it with
+<em>your</em> token on confirmation. The model never writes.</p>
+<h3>Product Advisor (console → Product advisor) — suite #52</h3>
+<p>Findings with receipts: top-up attach counted from inventory ("2 of 2 customers on this plan
+also bought top-ups"), market price gaps from the tenant's market feed (10% materiality
+threshold — small gaps are deliberately silent), an LLM narrative that never invents a number.
+<b>Adopt as draft…</b> births an <code>In study</code> offering; nothing reaches the shop until
+you promote it.</p>
+<h3>Campaigns &amp; growth (console → Campaigns / Journeys / Audiences)</h3>
+<p>Segments form from consented shop behavior; campaigns prove lift against real holdouts;
+journeys read the customer before speaking; A/B arms split deterministically; guardrails
+(frequency caps, quiet hours) are settings. Every message lands on the TMF683 timeline.</p>
+
+<h2 id="csr">4 · The CSR</h2>
+<p>Search the 360 (multi-word, name-ranked), then act — every action logs itself on the
+customer's timeline:</p>
+<table>
+<tr><th>The customer asks</th><th>The button / act</th></tr>
+<tr><td>"What's my PUK?" / "reset my PIN"</td><td>Reveal PUK · Reset PIN (owner notified — a silent credential change reads as fraud)</td></tr>
+<tr><td>"I lost my SIM"</td><td>Replace SIM (old card quarantined first)</td></tr>
+<tr><td>"new number, please"</td><td>Change number (old number quarantined with its story)</td></tr>
+<tr><td>"pause my subscription"</td><td>Pause / Resume (charging pauses at the OCS; auto-resumes on the promised date)</td></tr>
+<tr><td>"I can't pay all of it"</td><td>Installments (parts sum exactly; miss one → reminder → grace → dunning)</td></tr>
+<tr><td>"this charge is wrong"</td><td>Dispute (collection pauses; resolution credits or upholds, in writing)</td></tr>
+<tr><td>"send me my invoice"</td><td>PDF (the exact document) · Email bill (to the address on file, never one dictated on the phone)</td></tr>
+<tr><td>"my internet is slow"</td><td>Diagnose (triage across usage/assurance/network facts)</td></tr>
+<tr><td>"give my number to my colleague"</td><td>Transfer (three-way authorization; B2B handover keeps the company paying)</td></tr>
+</table>
+<p class="dim">Self-care mirrors most of these in the shop and app — customers act on their OWN
+line (ownership-checked; a foreign line answers 404, never 403).</p>
+
+<h2 id="billing">5 · Billing &amp; money operations</h2>
+<h3>The billing run</h3>
+<p><code>POST /tmf-api/customerBillManagement/v4/billingRun</code> (staff). Segment-based and
+per-account: mid-month starts, mid-cycle plan changes and ceases each bill exactly their own
+days, labelled ("from the 16th, 15 days"). Payday alignment per customer
+(<code>POST /individual/{id}/billingCycle</code>, day 1–28). The invariant the suites enforce
+from every direction: <b>no day is ever billed twice</b>.</p>
+<h3>The bill as a document — suite #46</h3>
+<p><code>GET /customerBill/{id}/document.pdf</code> (owner-scoped);
+<code>POST /customerBill/{id}/resend</code> emails it to the address on file. Delivery preference
+per customer: <code>paper | einvoice | digital</code>
+(<code>POST /individual/{id}/billDelivery</code>) — the customer picks the channel; the tenant
+keeps the plumbing.</p>
+<h3>E-invoice formats are rows (console → Bill formats)</h3>
+<table>
+<tr><th>Code</th><th>Standard</th><th>Syntax</th></tr>
+<tr><td><code>ehf</code></td><td>EHF Billing 3.0 (Norway; carries the KID)</td><td>UBL 2.1</td></tr>
+<tr><td><code>peppol</code></td><td>Peppol BIS Billing 3.0</td><td>UBL 2.1</td></tr>
+<tr><td><code>cii</code></td><td>EN 16931</td><td>UN/CEFACT CII</td></tr>
+<tr><td><code>aunz</code></td><td>A-NZ Peppol BIS 3.0</td><td>UBL 2.1</td></tr>
+<tr><td><code>edifact</code></td><td>UN/EDIFACT INVOIC D96A</td><td>segments</td></tr>
+<tr><td><code>facturx</code></td><td>Factur-X / ZUGFeRD</td><td>PDF + embedded CII</td></tr>
+</table>
+<p>Adding a country is an INSERT (the suite added XRechnung through the form). The tenant's
+<code>BILL_DISTRIBUTION_FORMAT</code> picks a row by code; the renderer follows the row.</p>
+<h3>Delivery, status, and the money coming home — suites #46/#47</h3>
+<p><b>Deliveries</b> (console tab): the outbox-backed ledger — every bill's trip, attempts,
+the buyer's Peppol Invoice Response (accepted / rejected with their words / paid), one-click
+Retry on failures. <b>Remittance</b>: the bank posts camt.054, Nets OCR or BAI2 to
+<code>POST /bank/v1/remittance</code> (per-tenant <code>BANK_TOKEN</code>); a matched KID settles
+the bill through the card path's own guarantee; everything unclear parks on <b>Unapplied cash</b>
+(console tab) with its reason. Money is fail-closed: never guessed, never dropped.</p>
+<h3>Dunning (console → Dunning)</h3>
+<p>The collections worklist: overdue installments, broken plans, what is still owed.</p>
+
+<h2 id="partners">6 · Partner channels — suites #48/#51</h2>
+<div class="rule"><b>Being a dealer is a row.</b> Sign a chain:
+<code>POST /dealer/v1/agreement</code> (staff) with the org, commission per activation, and —
+for a chain with its own POS — the OAuth2 <code>clientId</code> that speaks for them. Clerks are
+org membership; foreign dealers see 404-shaped nothing.</div>
+<h3>Retail (the CSP + external-retail model — think Elkjøp/Power)</h3>
+<p><b>Counter sale</b>: sell against the customer's email; the order carries the dealer stamp.
+<b>Starter kits</b>: mint batches (code + SIM + attribution in the box); the customer
+self-activates (<code>POST /dealer/v1/starterKit/activate</code>) and the line rides the SIM from
+the box. <b>POS API</b>: same endpoints, machine credential, per-partner rate limits at the edge
+(429 + Retry-After); the chain's own phone rides the sale as <code>device</code> context — never
+a billable item. <b>Commission</b>: pending → earned after the angrerett window → clawed back
+with the reason if the customer leaves inside it.</p>
+<h3>Telesales (outbound, shaped by the law)</h3>
+<p><b>Dial list</b>: <code>GET /dealer/v1/telesales/dialList?segment=</code> — consented at the
+source (insight segments), every number DNC-washed, reserved citizens excluded <em>and
+counted</em>. <b>The call makes an OFFER</b>
+(<code>POST /dealer/v1/telesales/offer</code>): washed fail-closed (reserved refuses, unreachable
+register refuses, unconfigured tenant refuses); no order exists yet. <b>The customer confirms in
+writing</b> (<code>POST /telesales/v1/confirm</code>, signed in, code from their inbox — or, for
+a cold prospect, after registering with the offered email); only then the order, the activation
+and the commission are born. Silence expires on a clock. Every dialer call logs to TMF683.</p>
+
+<h2 id="host">7 · The host administrator</h2>
+<h3>The tenant fleet is a file</h3>
+<p><code>infra/tenants/tenants.yml</code> is the shared registry (mounted into all 31 services);
+every service live-refreshes it. NEW operators join the running fleet within one refresh
+interval; changes to a serving operator's seams/brand/hosts apply live; identity fields
+(<code>id</code>, <code>issuer</code>, key endpoints) require a restart — by design.</p>
+<h3>Minting an operator — suites #49/#50</h3>
+<pre><code># the script (~2 minutes to a billed customer):
+ops/onboard-tenant.sh fjord "Fjord Mobil" da DKK "#1B6CA8"
+
+# or the form: console → Operators → five fields → Save
+#   (host-tenant admins only; realm clone + registry block + seeded catalog;
+#    shop.&lt;id&gt;.localhost wears the brand the moment the gateway refreshes)
+# live rebrand of a form-born operator:
+PATCH /onboarding/v1/operator/{id}   {"name","color","locale","currency"}
+</code></pre>
+<p class="dim">Seed operators (genalpha, nova) are protected from the form — their config is env.</p>
+<h3>Staff &amp; roles (console → Staff)</h3>
+<p>Grant/revoke whole areas per operator over the tenant's own IdP (TMF672) — no Keycloak
+console needed for daily administration.</p>
+
+<h2 id="ai">8 · AI configuration — suite #53</h2>
+<p>Per tenant, all data: <code>ai-provider</code> (<code>stub</code> — keyless CI default —
+<code>openai-compatible</code>, <code>anthropic</code>), <code>ai-base-url</code>,
+<code>ai-api-key</code>, <code>ai-model</code>. <b>Tiered routing</b>: the task class lives at
+the call site — FAST (copywriting, summaries, narratives) vs SMART (product proposals,
+next-best-offer; the default when unclassified). Every value resolves tier-first:</p>
+<pre><code>AI_MODEL_FAST=swift-mini            # cheap model for volume work
+AI_MODEL_SMART=frontier-x           # careful model for judgment
+AI_PROVIDER_SMART=anthropic         # tiers go down to the PROVIDER:
+AI_BASE_URL_SMART=https://api...    # a local endpoint for volume,
+AI_API_KEY_SMART=...                # a frontier API for judgment — at once
+</code></pre>
+
+<h2 id="seams">9 · The seam catalog</h2>
+<p>Every external system is a per-tenant seam: configure it and the feature lights up; leave it
+blank and the feature degrades honestly (fail-open for enrichment, fail-closed for money,
+identity and consent).</p>
+<table>
+<tr><th>Seam</th><th>Tenant fields (env)</th><th>Behavior when blank</th></tr>
+<tr><td>Email provider (ESP)</td><td><code>DELIVERY_PROVIDER, ESP_URL, ESP_API_KEY, ESP_FROM</code></td><td>in-app inbox only</td></tr>
+<tr><td>Bill distribution partner</td><td><code>BILL_DISTRIBUTION_{PROVIDER,URL,TOKEN,FORMAT,CHANNEL}</code></td><td>bills stay in-app/PDF</td></tr>
+<tr><td>Bank (remittance)</td><td><code>BANK_TOKEN</code></td><td>webhook refuses (money: fail-closed)</td></tr>
+<tr><td>Do-not-call register</td><td><code>DNC_URL, DNC_TOKEN</code></td><td>outbound telesales refuses (opt-IN by configuring)</td></tr>
+<tr><td>Market-intelligence feed</td><td><code>MARKET_FEED_URL, MARKET_FEED_TOKEN</code></td><td>advisor's market findings absent; own-data findings stand</td></tr>
+<tr><td>LLM</td><td><code>AI_*</code> (§8)</td><td>keyless stub answers</td></tr>
+<tr><td>PIM (product imagery)</td><td><code>PIM_BASE_URL</code></td><td>internal TMF667 store</td></tr>
+<tr><td>Web analytics (GA4)</td><td><code>ANALYTICS_*</code></td><td>internal insight only</td></tr>
+<tr><td>Social platform</td><td><code>SOCIAL_API_URL, SOCIAL_ACCESS_TOKEN</code></td><td>no audience push / lead import</td></tr>
+</table>
+<p class="dim">Per-tenant variants ride suffixes: <code>_NOVA</code>, <code>_FJORD</code>, … matching
+the placeholders in <code>tenants.yml</code>.</p>
+
+<h2 id="envs">10 · Environment reference (dev clocks)</h2>
+<table>
+<tr><th>Variable</th><th>Meaning</th><th>Dev / prod default</th></tr>
+<tr><td><code>BSS_BILLING_DUNNING_TICK_MS / _GRACE_MS</code></td><td>collections sweep / grace</td><td>5s &amp; 20s / 60s &amp; 7d</td></tr>
+<tr><td><code>BSS_BILLING_DISTRIBUTION_TICK_MS / _RETRY_SECONDS</code></td><td>delivery relay / backoff base</td><td>3s &amp; 4s / 30s &amp; 60s</td></tr>
+<tr><td><code>BSS_SOM_COMMISSION_WINDOW_MS / _TICK_MS</code></td><td>angrerett window / harden tick</td><td>15s &amp; 5s / 14d &amp; 1h</td></tr>
+<tr><td><code>BSS_SOM_TELESALES_EXPIRY_MS / _TICK_MS</code></td><td>offer expiry / sweep</td><td>15s &amp; 5s / 48h &amp; 1h</td></tr>
+<tr><td><code>BSS_TENANTS_REFRESH_MS</code></td><td>live registry refresh</td><td>15s</td></tr>
+<tr><td><code>BSS_GATEWAY_PARTNER_RATE_CAPACITY / _WINDOW_MS</code></td><td>per-partner rate limit</td><td>10 per 2s / 60 per 60s</td></tr>
+</table>
+
+<h2 id="apis">11 · Extension API reference (beyond the TMF standard surfaces)</h2>
+<table>
+<tr><th>Endpoint</th><th>Who</th><th>Does</th></tr>
+<tr><td><code>GET /customerBill/{id}/document.pdf</code></td><td>owner/staff</td><td>the bill as a PDF</td></tr>
+<tr><td><code>POST /customerBill/{id}/resend</code></td><td>owner/staff</td><td>email the invoice to the address on file</td></tr>
+<tr><td><code>POST /customerBill/{id}/dispute · /installmentPlan</code></td><td>owner/agent</td><td>contest / split a bill</td></tr>
+<tr><td><code>GET/PATCH/POST /billFormatProfile[/{code}]</code></td><td>read: billing · write: billing:admin</td><td>e-invoice profiles as rows</td></tr>
+<tr><td><code>GET /billDistribution · POST /billDistribution/{id}/retry</code></td><td>billing:admin</td><td>the delivery ledger</td></tr>
+<tr><td><code>POST /bank/v1/remittance</code></td><td>the bank (X-Bank-Token)</td><td>camt.054 / OCR / BAI2 in</td></tr>
+<tr><td><code>POST /distribution/v1/response</code></td><td>the partner (X-Distribution-Token)</td><td>Peppol Invoice Response onto the ledger</td></tr>
+<tr><td><code>GET /remittance/unapplied</code></td><td>billing:admin</td><td>unapplied cash worklist</td></tr>
+<tr><td><code>POST /individual/{id}/billingCycle · /billDelivery</code></td><td>self/staff</td><td>payday alignment · delivery preference</td></tr>
+<tr><td><code>/dealer/v1/*</code> (agreement, kits, sell, commission, orders/{id}, telesales/*)</td><td>staff / dealer / partner POS</td><td>the whole dealer &amp; telesales channel</td></tr>
+<tr><td><code>POST /telesales/v1/confirm</code></td><td>the customer, signed in</td><td>the written yes that births the order</td></tr>
+<tr><td><code>GET /advisor/v1/findings · POST /advisor/v1/adopt</code></td><td>catalog:write</td><td>product advisor · adopt-as-draft</td></tr>
+<tr><td><code>GET/POST /onboarding/v1/operator · PATCH …/{id}</code></td><td>host roles:admin</td><td>mint / live-mutate an operator</td></tr>
+<tr><td><code>GET /app/tenant-config.json</code></td><td>public, by Host</td><td>the white-label manifest</td></tr>
+</table>
+
+<h2 id="mocks">12 · The mock integrations (dev stand-ins)</h2>
+<table>
+<tr><th>Container</th><th>Port</th><th>Stands in for</th><th>Chaos / inspection</th></tr>
+<tr><td>mock-esp</td><td>8121</td><td>SendGrid-shaped email provider</td><td><code>GET /mails</code>, webhook receipts</td></tr>
+<tr><td>mock-social</td><td>8122</td><td>Meta-shaped audiences/leads</td><td>—</td></tr>
+<tr><td>mock-distribution</td><td>8124</td><td>Peppol access point / print house (validates EHF/EDIFACT/Factur-X!)</td><td><code>GET /invoices</code>, <code>POST /outage</code>, <code>POST /invoices/{billNo}/respond</code></td></tr>
+<tr><td>mock-dnc</td><td>8125</td><td>reservation register</td><td>numbers ending 9999 are reserved; <code>POST /outage</code></td></tr>
+<tr><td>mock-market</td><td>8126</td><td>tariff-comparison feed</td><td><code>GET /offers</code></td></tr>
+<tr><td>mock-llm</td><td>8127</td><td>OpenAI- and Anthropic-dialect LLM</td><td>names the model in answers; <code>GET /requests</code></td></tr>
+</table>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-three suites, eleven CTKs at zero
+failures · the build story is <em>Verify Everything</em> (docs/book) · the TMF vocabulary is
+docs/book/tmf-reference.md</p>
+
+</div>
+</body>
+</html>
