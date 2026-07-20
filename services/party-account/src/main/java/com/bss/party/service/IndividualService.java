@@ -74,6 +74,21 @@ public class IndividualService {
                     .limit(limit)
                     .map(mapper::toDto)
                     .toList();
+            if (hits.isEmpty()) {
+                // the TYPO NET: trigram similarity speaks only when the
+                // strict search found nothing — existing behavior is
+                // untouched by construction. Fail-open: no pg_trgm
+                // (H2, exotic Postgres) means the empty result stands.
+                try {
+                    hits = repository.searchFuzzy(tenantScope.currentTenantId(), q.trim()).stream()
+                            .filter(i -> org == null || org.equals(i.getOrganizationId()))
+                            .limit(limit)
+                            .map(mapper::toDto)
+                            .toList();
+                } catch (Exception fuzzyUnavailable) {
+                    // the strict (empty) answer stands
+                }
+            }
             return new PagedResult<>(hits, hits.size());
         }
         Individual probe = probeFor(filters);

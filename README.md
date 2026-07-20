@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty-four Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty-five Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -37,7 +37,10 @@ openai-compatible endpoint for volume, a frontier Anthropic-dialect API for judg
 once, per tenant, as config)), the **content seam over object storage** (one TMF667 surface,
 three homes for the bytes: in-row Postgres by default, the S3 protocol — AWS/MinIO/R2 — or
 Azure Blob's own SharedKey dialect, because "any cloud" is only true if Azure is a first-class
-citizen; the database receipt proves where the bytes live), and
+citizen; the database receipt proves where the bytes live), **search upgraded in place** (a pg_trgm typo
+net under the strict customer search — it only speaks when strict finds nothing — and
+language-aware full-text where each tenant's knowledge base stems in its own tongue: "regning"
+finds "regningene"; all Postgres-native, zero new infrastructure), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

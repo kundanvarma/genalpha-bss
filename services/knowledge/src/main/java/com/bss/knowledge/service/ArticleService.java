@@ -35,12 +35,15 @@ public class ArticleService {
 
     private final ArticleRepository repository;
     private final TenantScope tenantScope;
+    private final com.bss.knowledge.security.TenantRegistry tenants;
     private final DomainEventPublisher events;
 
     public ArticleService(ArticleRepository repository, TenantScope tenantScope,
-            DomainEventPublisher events) {
+            DomainEventPublisher events,
+            com.bss.knowledge.security.TenantRegistry tenants) {
         this.repository = repository;
         this.tenantScope = tenantScope;
+        this.tenants = tenants;
         this.events = events;
     }
 
@@ -49,7 +52,7 @@ public class ArticleService {
         String tenantId = tenantScope.currentTenantId();
         List<Article> hits = (q == null || q.isBlank())
                 ? repository.findByTenantIdOrderByLastUpdateDesc(tenantId)
-                : repository.search(tenantId, q.trim());
+                : repository.search(tenantId, q.trim(), stemmerOf(tenantId));
         Set<String> readable = readableAudiences();
         boolean author = isAuthor();
         return hits.stream()
@@ -187,5 +190,20 @@ public class ArticleService {
         m.put("lastUpdate", a.getLastUpdate());
         m.put("@type", "Article");
         return m;
+    }
+
+    /** The tenant's language picks the stemmer — Norwegian articles are
+     * searched in Norwegian ("regning" finds "regningene"). */
+    private String stemmerOf(String tenantId) {
+        com.bss.knowledge.security.TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        String locale = tenant == null || tenant.getLocale() == null ? "en" : tenant.getLocale();
+        return switch (locale.toLowerCase().split("[-_]")[0]) {
+            case "no", "nb", "nn" -> "norwegian";
+            case "da" -> "danish";
+            case "sv" -> "swedish";
+            case "de" -> "german";
+            case "fr" -> "french";
+            default -> "english";
+        };
     }
 }
