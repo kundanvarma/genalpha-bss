@@ -2194,9 +2194,23 @@
     morphology could do. Multitenancy turned out to reach all the way down into linguistics —
     the registry field that picks the storefront's currency now also picks how words break.</p>
 
-    <p class="pull edge">Cost of the upgrade: one trusted extension, three indexes, zero new
-    containers. Cost of the road not taken: a cluster, forever. The best architecture decisions
-    are sometimes the ones that end with Postgres doing one more thing.</p>
+    <h2>Meaning finds what words cannot</h2>
+    <p>The third rung came days later, and kept the family shape: a net that only speaks when
+    the layer above is silent. pgvector put an embedding beside every article — a vector column
+    the JPA entity never maps, so the unit tests never knew — and when full-text finds nothing,
+    cosine neighbours answer under a strict ceiling. The suite's proof pair says everything:
+    "why is my internet so slow" finds the fair-use article that contains NEITHER word, because
+    throttling and slowness are neighbours in meaning-space — and "purple elephant orchestra"
+    finds nothing at all, because a net that invents relevance teaches its readers to ignore it.
+    The embeddings themselves are a seam, of course: a deterministic keyless stub (hashed words
+    folded through a curated telecom synonym table, English and Norwegian both) for CI and
+    air-gapped demos, any OpenAI-compatible model when an operator wants learned semantics.
+    Three nets now stand in a row — trigram under strict, stemmer per tongue, meaning under
+    keywords — each honest about when it speaks, and honest about when it stays silent.</p>
+
+    <p class="pull edge">Cost of the three rungs: one image tag, two trusted extensions, four
+    indexes, zero new containers. Cost of the road not taken: a cluster, forever. The best
+    architecture decisions are sometimes the ones that end with Postgres doing one more thing.</p>
   </section>
 
   <hr class="soft">

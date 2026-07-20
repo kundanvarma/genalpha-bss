@@ -461,7 +461,9 @@ makes the reader already know what a "TMF679" is before it's needed.
   url-or-inline attachment pattern blessing the move, and the database receipt —
   content IS NULL beside an s3:/azure: key, API unchanged.
 - **Chapter 37 — The rungs before the ladder.** The Elastic question answered with a
-  framework (the omnibox trigger, the Kafka backbone as the ready pipeline) and two Postgres
+  framework (the omnibox trigger, the Kafka backbone as the ready pipeline) and three Postgres
   rungs: the trigram typo net that only speaks when strict is silent (safety by control flow,
-  then seven regression suites), and per-tenant stemmers — the English-hardcoded FTS bug that
-  was invisible until Norwegian looked.
+  then seven regression suites), per-tenant stemmers — the English-hardcoded FTS bug invisible
+  until Norwegian looked — and the pgvector semantic net: meaning finds what words cannot,
+  under a ceiling that returns nothing for nonsense; embeddings behind a keyless-stub /
+  openai-compatible seam.
