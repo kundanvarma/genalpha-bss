@@ -252,6 +252,7 @@ identity and consent).</p>
 <tr><td>LLM</td><td><code>AI_*</code> (§8)</td><td>keyless stub answers</td></tr>
 <tr><td>PIM (product imagery)</td><td><code>PIM_BASE_URL</code></td><td>internal TMF667 store</td></tr>
 <tr><td>Content store (deployment-level)</td><td><code>CONTENT_STORE</code> = <code>in-row | s3 | azure-blob</code> (+ <code>S3_*</code> / <code>AZURE_*</code>)</td><td>bytes in the document row (dev-simple)</td></tr>
+<tr><td>Embeddings (deployment-level)</td><td><code>bss.knowledge.embeddings</code> = <code>stub | openai-compatible</code> (+ <code>embeddings-url/key/model</code>)</td><td>deterministic keyless stub — the semantic net still works, with curated synonyms instead of a model</td></tr>
 <tr><td>Web analytics (GA4)</td><td><code>ANALYTICS_*</code></td><td>internal insight only</td></tr>
 <tr><td>Social platform</td><td><code>SOCIAL_API_URL, SOCIAL_ACCESS_TOKEN</code></td><td>no audience push / lead import</td></tr>
 </table>
