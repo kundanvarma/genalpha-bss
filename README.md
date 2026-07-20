@@ -49,14 +49,14 @@ intentional hardened gaps (payment, communication) — in
 [docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with [ops/ctk](ops/ctk/README.md).
 
 - 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
-- 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](docs/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
-- 📄 **[Product overview](docs/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
+- 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](https://kundanvarma.github.io/genalpha-bss/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
+- 📄 **[Product overview](https://kundanvarma.github.io/genalpha-bss/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max
 - 🧾 **[Bill distribution & remittance](docs/bill-distribution.md)** — the bill both ways: PDF, seven e-invoice formats as config rows (EHF, Peppol BIS, CII, A-NZ, XRechnung, EDIFACT, Factur-X), print & e-invoice channels with per-customer preference, the outbox-backed delivery ledger with buyer Invoice Responses, and money home by camt.054 / Nets OCR / BAI2 with an unapplied-cash worklist
 - 📏 **[Product rules — how to use them](docs/product-rules.md)** — author order rules and dynamic pricing as data: console walkthrough, dry-run, customer experience, JSON-logic context reference, API examples
 - 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
-- 🧩 **[ODA Composer](docs/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
+- 🧩 **[ODA Composer](https://kundanvarma.github.io/genalpha-bss/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override
 
 ## A look at it
 
@@ -138,7 +138,7 @@ mobile app recomposes around what the customer owns:
 | party-account | TMF632 / TMF666 / TMF669 | 8084 | Individuals, organizations, accounts, party roles. **Household billing**: a PERSON can be another person's payer — consent-gated (the dependent requests by email, only the named payer accepts, either side can leave); the payer then orders onto the dependent's line from My page and it bills to the payer with per-person attribution — one family bill, the same payer machinery as B2B, zero org semantics. **Child accounts**: the payer creates a kid's own login (TMF672, customer role only — consent implicit when the payer is the creator), hands over the once-shown credentials, and the kid signs into **their own mobile app** — own My page, own line, honestly bannered "paid for by …" |
 | gateway | ODA exposure | 8080 | Single entry point; white-label host → tenant routing |
 
-**Optional components** (leave any out via the [composer](docs/composer.html) — channels adapt)
+**Optional components** (leave any out via the [composer](https://kundanvarma.github.io/genalpha-bss/composer.html) — channels adapt)
 
 | Component | TMF API | Port | What it does |
 |---|---|---|---|
@@ -276,7 +276,7 @@ and promo discount → pay the bill with the vaulted card → notifications — 
 ## Deploying
 
 `deploy/helm/genalpha-bss` carries the whole stack (both realms, per-service RLS roles, the
-second tenant's issuers). Choose modules with the [composer](docs/composer.html):
+second tenant's issuers). Choose modules with the [composer](https://kundanvarma.github.io/genalpha-bss/composer.html):
 
 ```bash
 helm install genalpha-bss deploy/helm/genalpha-bss -f my-modules.yaml
