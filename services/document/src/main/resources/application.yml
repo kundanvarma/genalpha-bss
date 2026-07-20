@@ -46,6 +46,19 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  content:
+    store: ${CONTENT_STORE:in-row}
+    s3:
+      endpoint: ${S3_ENDPOINT:http://localhost:9000}
+      bucket: ${S3_BUCKET:bss-content}
+      region: ${S3_REGION:us-east-1}
+      access-key: ${S3_ACCESS_KEY:bss-minio}
+      secret-key: ${S3_SECRET_KEY:bss-minio-secret}
+    azure:
+      endpoint: ${AZURE_BLOB_ENDPOINT:http://localhost:10000/devstoreaccount1}
+      account: ${AZURE_ACCOUNT:devstoreaccount1}
+      key: ${AZURE_KEY:Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==}
+      container: ${AZURE_CONTAINER:bss-content}
   events:
     topic: bss.document.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

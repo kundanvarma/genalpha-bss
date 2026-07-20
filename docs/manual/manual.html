@@ -238,6 +238,7 @@ identity and consent).</p>
 <tr><td>Market-intelligence feed</td><td><code>MARKET_FEED_URL, MARKET_FEED_TOKEN</code></td><td>advisor's market findings absent; own-data findings stand</td></tr>
 <tr><td>LLM</td><td><code>AI_*</code> (§8)</td><td>keyless stub answers</td></tr>
 <tr><td>PIM (product imagery)</td><td><code>PIM_BASE_URL</code></td><td>internal TMF667 store</td></tr>
+<tr><td>Content store (deployment-level)</td><td><code>CONTENT_STORE</code> = <code>in-row | s3 | azure-blob</code> (+ <code>S3_*</code> / <code>AZURE_*</code>)</td><td>bytes in the document row (dev-simple)</td></tr>
 <tr><td>Web analytics (GA4)</td><td><code>ANALYTICS_*</code></td><td>internal insight only</td></tr>
 <tr><td>Social platform</td><td><code>SOCIAL_API_URL, SOCIAL_ACCESS_TOKEN</code></td><td>no audience push / lead import</td></tr>
 </table>
@@ -282,6 +283,8 @@ the placeholders in <code>tenants.yml</code>.</p>
 <tr><td>mock-distribution</td><td>8124</td><td>Peppol access point / print house (validates EHF/EDIFACT/Factur-X!)</td><td><code>GET /invoices</code>, <code>POST /outage</code>, <code>POST /invoices/{billNo}/respond</code></td></tr>
 <tr><td>mock-dnc</td><td>8125</td><td>reservation register</td><td>numbers ending 9999 are reserved; <code>POST /outage</code></td></tr>
 <tr><td>mock-market</td><td>8126</td><td>tariff-comparison feed</td><td><code>GET /offers</code></td></tr>
+<tr><td>minio</td><td>9000</td><td>S3-protocol object store (AWS/R2/on-prem)</td><td>—</td></tr>
+<tr><td>azurite</td><td>10000</td><td>Azure Blob Storage (Microsoft's emulator)</td><td>—</td></tr>
 <tr><td>mock-llm</td><td>8127</td><td>OpenAI- and Anthropic-dialect LLM</td><td>names the model in answers; <code>GET /requests</code></td></tr>
 </table>
 

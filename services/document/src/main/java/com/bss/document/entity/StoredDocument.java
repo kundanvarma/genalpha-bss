@@ -30,8 +30,13 @@ public class StoredDocument {
     @Column(name = "content_type", nullable = false, length = 64)
     private String contentType;
 
-    @Column(name = "content", nullable = false)
+    @Column(name = "content")
     private byte[] content;
+
+    /** Set when the bytes live in an EXTERNAL store (s3:/azure: keys);
+     * null means in-row, the dev-simple default. */
+    @Column(name = "storage_key")
+    private String storageKey;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -53,6 +58,8 @@ public class StoredDocument {
     public void setContentType(String contentType) { this.contentType = contentType; }
     public byte[] getContent() { return content; }
     public void setContent(byte[] content) { this.content = content; }
+    public String getStorageKey() { return storageKey; }
+    public void setStorageKey(String storageKey) { this.storageKey = storageKey; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

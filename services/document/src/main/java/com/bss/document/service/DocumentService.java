@@ -69,8 +69,13 @@ public class DocumentService {
         entity.setName(String.valueOf(dto.get("name")));
         entity.setCategory(dto.get("category") == null ? null : String.valueOf(dto.get("category")));
         entity.setContentType(mimeType);
-        entity.setContent(bytes);
-        contentStore.put(entity.getTenantId(), id, mimeType, bytes);
+        String storageKey = contentStore.put(entity.getTenantId(), id, mimeType, bytes);
+        if (storageKey.startsWith("row:")) {
+            entity.setContent(bytes);
+        } else {
+            // the bytes live in the object store; the row keeps the key
+            entity.setStorageKey(storageKey);
+        }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(repository.save(entity));
@@ -88,15 +93,24 @@ public class DocumentService {
     /** Stable brand asset: the newest 'brand' document of the request's tenant. */
     @Transactional(readOnly = true)
     public StoredDocument brandLogo() {
-        return repository.findByTenantIdAndCategory(tenantScope.currentTenantId(), "brand").stream()
-                .reduce((a, b) -> b)
-                .orElseThrow(() -> NotFoundException.forResource("Document", "brand-logo"));
+        return hydrate(repository.findByTenantIdAndCategory(tenantScope.currentTenantId(), "brand")
+                .stream().reduce((a, b) -> b)
+                .orElseThrow(() -> NotFoundException.forResource("Document", "brand-logo")));
     }
 
     @Transactional(readOnly = true)
     public StoredDocument content(String id) {
-        return repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
-                .orElseThrow(() -> NotFoundException.forResource("Document", id));
+        return hydrate(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Document", id)));
+    }
+
+    /** Externally-stored bytes are fetched on read; in-row rows already
+     * carry them. The caller never knows the difference. */
+    private StoredDocument hydrate(StoredDocument entity) {
+        if (entity.getContent() == null && entity.getStorageKey() != null) {
+            entity.setContent(contentStore.get(entity.getTenantId(), entity.getStorageKey()));
+        }
+        return entity;
     }
 
     private Map<String, Object> toMap(StoredDocument d) {
