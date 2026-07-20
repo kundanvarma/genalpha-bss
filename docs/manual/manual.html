@@ -96,7 +96,8 @@ cardinality, pick-N-of-M choice groups), characteristic-conditioned prices ("+2.
 colour = Titanium"), commitment terms, categories that drive placement <em>and</em> fulfilment
 (Top-ups and Insurance are billing-only; Partner services mint entitlement codes; everything
 else draws an MSISDN + SIM). Artwork rides the offering's attachments — internal store or the
-tenant's own PIM.</p>
+tenant's own PIM; the internal store's bytes live in-row by default or in S3-protocol /
+Azure Blob object storage (deployment config, §9 — suite #54 proves all three).</p>
 <h3>Rules &amp; pricing as data (console → Rules)</h3>
 <p>Order rules and dynamic pricing are JSON-logic rows with a dry-run panel. A price change is a
 rule, not a release. See <code>docs/product-rules.md</code> for the authoring guide.</p>

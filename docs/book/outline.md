@@ -455,3 +455,8 @@ makes the reader already know what a "TMF679" is before it's needed.
   default-to-SMART, whole-provider-per-tier (openai dialect for volume, anthropic dialect for
   judgment, one tenant, at once), proven by a model-naming mock with a wire ledger — and the
   seam-discipline dividend: it cost one enum and a cache key.
+- **Chapter 36 — Three homes for the bytes.** Object storage behind the pre-built
+  ContentStore seam: the Azure question that turned one adapter into two (S3 protocol +
+  SharedKey dialect, no SDKs), the Azurite double-account signing detail, TMF's
+  url-or-inline attachment pattern blessing the move, and the database receipt —
+  content IS NULL beside an s3:/azure: key, API unchanged.
