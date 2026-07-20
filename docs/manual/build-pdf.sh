@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Rebuild Operators-Manual.pdf from manual.html.
+# Playwright's Chromium lives in ops/e2e/node_modules, so we run the renderer there.
+set -euo pipefail
+export PATH=/opt/homebrew/bin:$PATH
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT/ops/e2e"
+cp "$ROOT/docs/manual/make-pdf.mjs" ./_make-pdf.mjs
+trap 'rm -f ./_make-pdf.mjs' EXIT
+node ./_make-pdf.mjs "$ROOT"
+echo "PDF: $ROOT/docs/manual/Operators-Manual.pdf"
