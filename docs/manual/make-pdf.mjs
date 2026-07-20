@@ -23,7 +23,7 @@ await page.pdf({
   headerTemplate: '<span></span>',
   footerTemplate:
     '<div style="width:100%;font-family:-apple-system,sans-serif;font-size:8px;color:#9aa3a7;padding:0 14mm;display:flex;justify-content:space-between;">'
-    + '<span>Verify Everything — A Build Memoir</span>'
+    + '<span>The Operator’s Manual — genalpha-bss</span>'
     + '<span class="pageNumber"></span></div>',
 });
 await browser.close();
