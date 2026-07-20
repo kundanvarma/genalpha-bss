@@ -134,6 +134,13 @@ customer's timeline:</p>
 </table>
 <p class="dim">Self-care mirrors most of these in the shop and app — customers act on their OWN
 line (ownership-checked; a foreign line answers 404, never 403).</p>
+<h3>The knowledge base at the desk</h3>
+<p>Articles are audience-shelved (customer / CSR / sales / product owner) and the CSR's
+ask-with-sources grounds its answers in them. Search is full-text, ranked, and stems in
+<b>the tenant's own language</b> — the locale that picks the storefront's currency also picks
+the stemmer, so on nova "regning" finds "regningene" (suite #55). Typos in customer search are
+caught by a trigram net that only speaks when strict matching finds nothing — strict results
+are byte-identical to before.</p>
 
 <h2 id="billing">5 · Billing &amp; money operations</h2>
 <h3>The billing run</h3>
