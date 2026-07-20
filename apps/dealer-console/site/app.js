@@ -1,5 +1,5 @@
 /*
- * Dealer console: the retail partner's desk (the CSP/Elkjøp/Power model).
+ * Dealer console: the retail partner's desk (the CSP + external-retail model (think Elkjøp/Power)).
  * A clerk whose org holds a dealer agreement sells at the counter, mints
  * starter kits for their store, and watches commission accrue — pending
  * through the withdrawal window, earned after it, clawed back when a

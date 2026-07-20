@@ -4,7 +4,7 @@ Status: **Phases 1–2 delivered** (family hub + roles, suite #29; allowances/as
 
 The household feature today is plumbing-first: consent links, payer stamps,
 correct bills. It is honest but it is not an *experience*. This plan starts
-from how the operators people actually live with — Jio, Orange, Nordic CSPs,
+from how the operators people actually live with — Jio, Orange, Nordic CSPs (Telenor and peers),
 Verizon, T-Mobile — present a family, and lands on a design for genalpha-bss.
 
 ---
@@ -162,7 +162,7 @@ household guardrails; one-cycle capped rollover at month close.
 | Paula (family payer/owner) | `paula@family.example` / `paula` | localhost:8080/shop | 2× 30GB lines (`+46701000616/617`), 4.2 GB used, funds Sonny |
 | Wilma (wife, family admin) | `wilma@family.example` / `wilma` | localhost:8080/shop | admin of Paula's family, no own line |
 | Sonny (adult member) | `sonny@family.example` / `sonny` | localhost:8080/shop | 10GB line `+46701000619`, 3.1 GB used |
-| Nils (network-wide-model tenant) | `nils@nova.example` / `nils` | shop.nova.localhost:8080/shop | Nova Smart 15 GB, line `+46731000041` |
+| Nils (Nordic-CSP-model tenant) | `nils@nova.example` / `nils` | shop.nova.localhost:8080/shop | Nova Smart 15 GB, line `+46731000041` |
 | Norah (stranger to Nils) | `norah@nova.example` / `norah` | shop.nova.localhost:8080/shop | Nova Smart 15 GB, line `+46731000042` |
 
 Gift walk-through: Paula → My page → 🎁 gift to Sonny (dropdown) or type
@@ -179,7 +179,7 @@ nova's plan spec carries `giftScope=tenant`. Month close (staff):
   quota per member, auto-applied each cycle) and a ONE-TIME transfer up to
   50 %; transfer counts are capped per cycle (5 per member, 15 total). Coarse,
   legible chunks.
-- **One Nordic CSP**: unused data **rolls over automatically**; rollover data
+- **A Norwegian CSP**: unused data **rolls over automatically**; rollover data
   can be **gifted** to anyone on the network from the app — personal
   subscriptions only.
 - **T-Mobile Data Stash**: rollover capped (20 GB), 12-month expiry, and the
@@ -194,9 +194,9 @@ lapses if unused. Plan data burns first. Native implementation in the usage
 component (a cycle-close endpoint the demo can trigger); when the OCS seam is
 live the rate plans in OCS own this and usage merely projects it.
 
-**Gifting (the network-wide move, inside our consent boundary):** a member may gift
+**Gifting (the Norwegian-CSP move, inside our consent boundary):** a member may gift
 whole-GB chunks of their remaining data to any ACTIVE member of the same
-household — the household link is the trust boundary (some CSPs gift network-wide;
+household — the household link is the trust boundary (that CSP gifts network-wide;
 we start family-wide). Guardrails: max 50 % of the plan allowance gifted per
 cycle (Jio's cap), and a **child cannot gift** (their data is family-funded),
 only receive. The gift lands as a *Gifted data* bucket on the receiver, named
@@ -215,7 +215,7 @@ order (suite #31 `family_config_test.js` proves all of it on one binary):
 | `rolloverCapGB` | plan spec characteristic | one month's allowance |
 | any veto (size, segment, "personal subs only"…) | policy rule, domain `gifting`, authored as data in the console | none |
 
-The **nova** tenant runs the network-wide model (any customer gifts to any customer) by
+The **nova** tenant runs the network-wide gifting model (any customer gifts to any customer) by
 carrying `giftScope=tenant` on its plan spec — a catalog edit. A child's
 inability to gift stays code: it is a safety invariant, not a product choice.
 The usage component reads levers through a 30-second cache, so an operator's

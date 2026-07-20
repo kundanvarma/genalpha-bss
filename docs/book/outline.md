@@ -434,7 +434,7 @@ makes the reader already know what a "TMF679" is before it's needed.
   EDI guess; formats as load-bearing rows (EHF/Peppol/CII/A-NZ/XRechnung/EDIFACT/Factur-X);
   the outbox delivery ledger + buyer Invoice Responses; remittance in three dialects
   (camt.054/OCR/BAI2) settling bills by KID; unapplied cash.
-- **Chapter 31 — Selling through someone else's store.** The CSP/Elkjøp model: dealer console,
+- **Chapter 31 — Selling through someone else's store.** The CSP + external-retail model (Elkjøp/Power as the example): dealer console,
   starter kits with attribution baked in, the partner API where the credential IS the dealer,
   per-partner rate limits, and commission that accrues pending, hardens, and claws back.
 - **Chapter 32 — The third operator in an afternoon.** Tenants as a file; the 125-second
