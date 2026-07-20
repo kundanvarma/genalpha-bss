@@ -140,7 +140,11 @@ ask-with-sources grounds its answers in them. Search is full-text, ranked, and s
 <b>the tenant's own language</b> — the locale that picks the storefront's currency also picks
 the stemmer, so on nova "regning" finds "regningene" (suite #55). Typos in customer search are
 caught by a trigram net that only speaks when strict matching finds nothing — strict results
-are byte-identical to before.</p>
+are byte-identical to before. Beneath the keyword search sits the <b>semantic net</b>
+(pgvector): "why is my internet so slow" finds the fair-use article that contains neither word,
+and nonsense finds nothing — the cosine ceiling keeps the net honest. Embeddings are a seam:
+<code>bss.knowledge.embeddings</code> = <code>stub</code> (deterministic, keyless) or
+<code>openai-compatible</code> (any real model).</p>
 
 <h2 id="billing">5 · Billing &amp; money operations</h2>
 <h3>The billing run</h3>

@@ -40,7 +40,10 @@ Azure Blob's own SharedKey dialect, because "any cloud" is only true if Azure is
 citizen; the database receipt proves where the bytes live), **search upgraded in place** (a pg_trgm typo
 net under the strict customer search — it only speaks when strict finds nothing — and
 language-aware full-text where each tenant's knowledge base stems in its own tongue: "regning"
-finds "regningene"; all Postgres-native, zero new infrastructure), and
+finds "regningene" — and a **pgvector semantic net**: "why is my internet so slow" finds the
+fair-use article that contains neither word, cosine neighbours speaking only when keyword search
+is silent, under an honest distance ceiling that returns nothing for nonsense; embeddings ride a
+provider seam — deterministic keyless stub or any openai-compatible model; all Postgres-native), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

@@ -36,14 +36,17 @@ public class ArticleService {
     private final ArticleRepository repository;
     private final TenantScope tenantScope;
     private final com.bss.knowledge.security.TenantRegistry tenants;
+    private final com.bss.knowledge.embed.EmbeddingProvider embeddings;
     private final DomainEventPublisher events;
 
     public ArticleService(ArticleRepository repository, TenantScope tenantScope,
             DomainEventPublisher events,
-            com.bss.knowledge.security.TenantRegistry tenants) {
+            com.bss.knowledge.security.TenantRegistry tenants,
+            com.bss.knowledge.embed.EmbeddingProvider embeddings) {
         this.repository = repository;
         this.tenantScope = tenantScope;
         this.tenants = tenants;
+        this.embeddings = embeddings;
         this.events = events;
     }
 
@@ -53,6 +56,17 @@ public class ArticleService {
         List<Article> hits = (q == null || q.isBlank())
                 ? repository.findByTenantIdOrderByLastUpdateDesc(tenantId)
                 : repository.search(tenantId, q.trim(), stemmerOf(tenantId));
+        if (hits.isEmpty() && q != null && !q.isBlank()) {
+            // THE SEMANTIC NET: cosine neighbours speak only when keyword
+            // search is silent — FTS behavior is untouched by construction.
+            // Fail-open: no pgvector (H2, bare Postgres) → silence stands.
+            try {
+                hits = repository.searchSemantic(tenantId,
+                        vectorLiteral(embeddings.embed(q)), embeddings.ceiling());
+            } catch (Exception semanticUnavailable) {
+                // the keyword (empty) answer stands
+            }
+        }
         Set<String> readable = readableAudiences();
         boolean author = isAuthor();
         return hits.stream()
@@ -97,6 +111,7 @@ public class ArticleService {
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = toMap(repository.save(a));
+        embedQuietly(a);
         events.publish("ArticleCreateEvent", "article", created);
         return created;
     }
@@ -108,6 +123,7 @@ public class ArticleService {
         apply(dto, a);
         a.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> updated = toMap(repository.save(a));
+        embedQuietly(a);
         events.publish("ArticleAttributeValueChangeEvent", "article", updated);
         return updated;
     }
@@ -205,5 +221,29 @@ public class ArticleService {
             case "fr" -> "french";
             default -> "english";
         };
+    }
+
+    /** Embed on save, quietly: a failed embedding never blocks an
+     * article — it just will not be found semantically until re-saved. */
+    private void embedQuietly(Article a) {
+        try {
+            String text = a.getTitle() + " " + a.getBody()
+                    + (a.getTags() == null ? "" : " " + a.getTags());
+            repository.storeEmbedding(a.getTenantId(), a.getId(),
+                    vectorLiteral(embeddings.embed(text)));
+        } catch (Exception embeddingUnavailable) {
+            // fail-open: the article stands, unembedded
+        }
+    }
+
+    private static String vectorLiteral(float[] v) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < v.length; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append(v[i]);
+        }
+        return sb.append(']').toString();
     }
 }

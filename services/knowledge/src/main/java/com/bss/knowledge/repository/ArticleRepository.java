@@ -31,4 +31,21 @@ public interface ArticleRepository extends JpaRepository<Article, String> {
             nativeQuery = true)
     List<Article> search(@Param("tenantId") String tenantId, @Param("q") String q,
             @Param("cfg") String cfg);
+
+    /** The vector lives OUTSIDE the entity (H2 unit tests never see it);
+     * writes and reads are native, Postgres-only, caller-caught. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query(value = "UPDATE article SET embedding = CAST(:vec AS vector)"
+            + " WHERE id = :id AND tenant_id = :tenantId", nativeQuery = true)
+    int storeEmbedding(@Param("tenantId") String tenantId, @Param("id") String id,
+            @Param("vec") String vec);
+
+    /** Cosine nearest neighbours under a ceiling — the SEMANTIC NET. */
+    @Query(value = "SELECT * FROM article a WHERE a.tenant_id = :tenantId"
+            + " AND a.embedding IS NOT NULL"
+            + " AND (a.embedding <=> CAST(:vec AS vector)) < :ceiling"
+            + " ORDER BY a.embedding <=> CAST(:vec AS vector) LIMIT 5", nativeQuery = true)
+    List<Article> searchSemantic(@Param("tenantId") String tenantId,
+            @Param("vec") String vec, @Param("ceiling") double ceiling);
 }

@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # pgvector/pgvector = official postgres + the vector extension (same
+    # PG16 major, data volume compatible) — the semantic-search rung needs it
+    image: pgvector/pgvector:pg16
     container_name: bss-postgres
     restart: unless-stopped
     command: ["postgres", "-c", "max_connections=300"]
