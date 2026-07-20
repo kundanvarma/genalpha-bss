@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-three end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-four end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2108,6 +2108,52 @@
     <p class="pull edge">The seam discipline paid its dividend here: a feature that sounds like
     an architecture project — "multiple AI providers per tenant per task" — cost an enum,
     because for two years nothing was ever allowed to call a model directly.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Six</div>
+    <h3>Three homes for the bytes</h3>
+    <div class="epi">"Before going ahead with S3, I also want to know if this will run on
+    Azure." <span class="who">— the operator, asking the question that saved the design</span></div>
+
+    <p class="drop">The product media had always lived in the honest-but-humble place: a BYTEA
+    column in Postgres, with a comment in the migration admitting the ceiling. But when the
+    object-storage work was finally scheduled, the codebase had a surprise waiting — past-us had
+    already built the seam. A <code>ContentStore</code> interface, an in-row default, and a
+    comment predicting this exact chapter: "pointing an operator's S3 at the same API is one
+    adapter class." The architectural decision had been made months earlier; only the adapters
+    were missing. That is what a seam discipline buys: future features arrive as fillings, not
+    surgeries.</p>
+
+    <h2>The question that shaped the build</h2>
+    <p>The operator's gating question — will it run on Azure? — turned a one-adapter task into
+    the right two-adapter design, because the honest answer was NO, not automatically. AWS,
+    MinIO, Cloudflare R2 and Google's interop mode all speak the S3 protocol; Azure Blob speaks
+    its own dialect, SharedKey signatures and all, and the once-standard gateway shims are
+    discontinued. A BSS whose front page says "vendor-neutral" and whose Terraform ships an AKS
+    stack cannot treat Azure as an S3 pretender. So the seam grew two thin adapters — the whole
+    SigV4 ceremony and the whole SharedKey ceremony, each in ~150 lines of plain HTTP, no SDKs —
+    and the storage choice became one environment variable. The build's one bug was a spec
+    detail worth keeping: against Azurite, Microsoft's own emulator, the canonicalized resource
+    carries the account name TWICE — path-style addressing puts it in the URL, the signing rules
+    demand it again in front — by the spec, not by accident.</p>
+
+    <h2>The standard agreed all along</h2>
+    <p>TM Forum, it turns out, had blessed the move before it was made. The Attachment pattern
+    that runs through every TMF API is url-OR-inline by design — an attachment is canonically a
+    reference to content that lives elsewhere, with inline bytes as the convenience case. And
+    TMF667 is a document MANAGEMENT api: metadata, categories, lifecycle, over content whose
+    physical home was always meant to be someone else's problem. Fronting Postgres BYTEA was the
+    unusual arrangement; fronting an object store is the typical one. The suite proved it the
+    house way: the same upload-and-serve loop against all three stores, with the DATABASE giving
+    the receipt each time — in-row shows the bytes in the row; the cloud stores show content IS
+    NULL beside an s3: or azure: key. The bytes provably moved; the API and every attachment URL
+    never changed by a byte.</p>
+
+    <p class="pull edge">"Any cloud" was a claim on the README for months. Now it is a database
+    row that says NULL where the bytes used to be — in two dialects.</p>
   </section>
 
   <hr class="soft">
