@@ -1,4 +1,4 @@
-/* The dealer channel — retail chains sell our activations (CSP/Elkjøp/Power).
+/* The dealer channel — retail chains sell our activations (CSP + external retail (Elkjøp/Power)).
  *
  *  - being a dealer IS an agreement row; the clerk's power is their org
  *    membership, checked live — strangers get 404-shaped nothing

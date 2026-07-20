@@ -1,6 +1,7 @@
 # Dealer channel — starter kits + dealer console (plan)
 
-The CSP/Elkjøp/Power model: an operator with no own stores sells through
+The CSP + external-retail model: a communication service provider without
+own stores sells through
 electronics chains. The chain sells a **SIM starter kit** like a chocolate
 bar, or a clerk signs the customer up at the counter. Attribution and
 commission must work in BOTH flows — including the one where no partner
@@ -8,8 +9,9 @@ system was ever involved.
 
 ## Research (summary)
 
-- a CSP's physical distribution can BE Elkjøp + Power; kits
-  self-activate with BankID; some CSPs' terms bill even unactivated signed
+- A Norwegian CSP's physical distribution can BE the electronics chains
+  (Elkjøp, Power); kits self-activate with BankID; typical CSP terms bill
+  even unactivated signed
   agreements — agreement and activation are separate facts.
 - Industry dealer portals (Cerillion et al.) converge on: on-behalf sign-up
   and activation, serialized SIM stock per store, expected commission,

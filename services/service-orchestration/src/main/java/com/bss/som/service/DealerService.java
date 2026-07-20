@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * THE DEALER CHANNEL (the CSP/Elkjøp/Power model): retail chains sell our
+ * THE DEALER CHANNEL (the CSP + external-retail model (think Elkjøp/Power)): retail chains sell our
  * activations. Being a dealer IS an agreement row; the clerk's power comes
  * from their org membership, checked live against party management —
  * foreign dealers see NOTHING (404-shaped, never 403). Two ways to sell:
