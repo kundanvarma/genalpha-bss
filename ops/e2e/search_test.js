@@ -78,7 +78,36 @@ async function token(ctx, realm, user, pass) {
   console.log('OK NORWEGIAN FTS: nova\'s article searched with nova\'s stemmer — "regning"'
     + ' finds "regningene" and "regninger", which the english config never could');
 
-  console.log('\nALL SEARCH CHECKS PASSED — strict behavior byte-identical, typos caught only'
-    + ' when strict is silent, and full-text stems in each tenant\'s own language. Zero new'
-    + ' infrastructure: one extension, three indexes, all Postgres.');
+  /* ---------- 5. THE SEMANTIC NET: meaning finds what words cannot ---------- */
+  const fair = await (await ctx.post(`${API}/tmf-api/knowledgeManagement/v4/article`,
+    { headers: H(staff), data: { title: `Fair use policy ${run}`,
+      body: 'After the monthly allowance is used, speeds are reduced until the next cycle.'
+        + ' Data throttling protects the network for everyone.',
+      audience: 'customer', tags: 'fair-use' } })).json();
+  if (!fair.id) fail('fair-use article create failed');
+  // no lexical overlap: "internet", "slow" appear NOWHERE in the article —
+  // keyword search is silent, the semantic net speaks
+  const semantic = await (await ctx.get(
+    `${API}/tmf-api/knowledgeManagement/v4/article?q=${encodeURIComponent('why is my internet so slow')}`,
+    { headers: H(staff) })).json();
+  if (!semantic.find((a) => a.id === fair.id)) {
+    fail('the semantic net missed slow→throttling: ' + JSON.stringify(semantic.map((a) => a.title)));
+  }
+  console.log('OK THE SEMANTIC NET: "why is my internet so slow" found the fair-use article —'
+    + ' which contains NEITHER word. pgvector cosine neighbours, speaking only because keyword'
+    + ' search was silent');
+
+  /* ---------- 6. and the net knows when to stay silent ---------- */
+  const gibberish = await (await ctx.get(
+    `${API}/tmf-api/knowledgeManagement/v4/article?q=${encodeURIComponent('purple elephant orchestra ' + run)}`,
+    { headers: H(staff) })).json();
+  if (gibberish.length !== 0) {
+    fail('the net matched nonsense: ' + JSON.stringify(gibberish.map((a) => a.title)));
+  }
+  console.log('OK HONEST SILENCE: nonsense with no semantic relation returns NOTHING — the'
+    + ' cosine ceiling keeps the net from inventing relevance');
+
+  console.log('\nALL SEARCH CHECKS PASSED — strict byte-identical, typos caught only when'
+    + ' strict is silent, full-text stems in each tenant\'s own language, and MEANING finds'
+    + ' what words cannot — under an honest ceiling. All rungs, all Postgres.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });
