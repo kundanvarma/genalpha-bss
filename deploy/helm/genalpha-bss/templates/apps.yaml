@@ -9,7 +9,9 @@ metadata:
     app.kubernetes.io/name: {{ $name }}
     app.kubernetes.io/part-of: genalpha-bss
 spec:
-  replicas: {{ $.Values.replicas }}
+  # per-service override first (the P0 tick locks make >1 safe), then the
+  # chart-wide default
+  replicas: {{ $svc.replicas | default $.Values.replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ $name }}
