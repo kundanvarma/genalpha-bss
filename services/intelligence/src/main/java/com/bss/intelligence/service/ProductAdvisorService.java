@@ -44,12 +44,14 @@ public class ProductAdvisorService {
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final LlmRouter llm;
+    private final com.bss.intelligence.llm.AiGovernor governor;
 
     public ProductAdvisorService(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
             @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBase,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBase,
-            TenantRegistry tenants, TenantScope tenantScope, LlmRouter llm) {
+            TenantRegistry tenants, TenantScope tenantScope, LlmRouter llm,
+            com.bss.intelligence.llm.AiGovernor governor) {
         this.catalog = builder.baseUrl(catalogBase).requestInterceptor(tokenInterceptor).build();
         this.billing = builder.baseUrl(billingBase).requestInterceptor(tokenInterceptor).build();
         this.inventory = builder.baseUrl(inventoryBase).requestInterceptor(tokenInterceptor).build();
@@ -57,6 +59,7 @@ public class ProductAdvisorService {
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.llm = llm;
+        this.governor = governor;
     }
 
     @SuppressWarnings("unchecked")
@@ -168,7 +171,8 @@ public class ProductAdvisorService {
         /* ---- 3. the tenant's LLM narrates what the arithmetic found ---- */
         if (!out.isEmpty()) {
             try {
-                String summary = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST,
+                String summary = governor.complete("advisor-narrative",
+                        com.bss.intelligence.llm.LlmAdapter.Tier.FAST,
                         "You are a telecom product analyst. One tight paragraph, plain language,"
                                 + " no invented numbers.",
                         "Summarize these product findings for a product owner: " + out);
@@ -217,6 +221,10 @@ public class ProductAdvisorService {
                 .retrieve().body(Map.class);
         log.info("advisor proposal adopted as DRAFT offering {} ('{}', In study)",
                 draft.get("id"), proposal.get("name"));
+        // the AGENT ACTION on the governance ledger: which AI wrote what,
+        // to which resource — not just what it said
+        governor.recordAction("advisor-adopt", "catalog.createDraftOffering",
+                String.valueOf(draft.get("id")), "ok");
         return Map.of("offeringId", draft.get("id"), "lifecycleStatus", "In study");
     }
 

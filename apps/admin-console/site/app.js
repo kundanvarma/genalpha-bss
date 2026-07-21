@@ -731,7 +731,9 @@ const RESOURCES = [
     title: 'AI Audit',
     readOnly: true,
     fields: [],
-    columns: ['createdAt', 'useCase', 'provider', 'model', 'prompt', 'response'],
+    // the control-plane columns: what each turn COST and how it ended
+    // (refused-budget / refused-disabled rows are the governor speaking)
+    columns: ['createdAt', 'useCase', 'model', 'tokens', 'costMicros', 'outcome', 'action', 'prompt', 'response'],
   },
 ];
 

@@ -1,10 +1,7 @@
 package com.bss.intelligence.service;
 
-import com.bss.intelligence.audit.AiAudit;
-import com.bss.intelligence.audit.AiAuditRepository;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
-import com.bss.intelligence.security.TenantScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,16 +26,14 @@ public class CopilotService {
 
     private final LlmAdapter llm;
     private final Redactor redactor;
-    private final AiAuditRepository audits;
-    private final TenantScope tenantScope;
+    private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
 
-    public CopilotService(LlmAdapter llm, Redactor redactor, AiAuditRepository audits,
-            TenantScope tenantScope, ObjectMapper objectMapper) {
+    public CopilotService(LlmAdapter llm, Redactor redactor,
+            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
         this.llm = llm;
         this.redactor = redactor;
-        this.audits = audits;
-        this.tenantScope = tenantScope;
+        this.governor = governor;
         this.objectMapper = objectMapper;
     }
 
@@ -185,14 +180,15 @@ public class CopilotService {
     }
 
     private String completeWithRetry(String system, String user, String useCase) {
-        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user);
+        // through the governor: metered, budgeted, audited in one place
+        String raw = governor.complete(useCase,
+                com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user);
         if (looksUnlabeled(raw)) {
-            recordAudit(raw, user, system, useCase + "-contract-miss");
-            raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
+            raw = governor.complete(useCase + "-retry",
+                    com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again using"
                     + " ONLY the labeled lines from the instructions.");
         }
-        recordAudit(raw, user, system, useCase);
         return raw;
     }
 
@@ -209,18 +205,6 @@ public class CopilotService {
         return true;
     }
 
-    private void recordAudit(String raw, String user, String system, String useCase) {
-        AiAudit audit = new AiAudit();
-        audit.setId(UUID.randomUUID().toString());
-        audit.setTenantId(tenantScope.currentTenantId());
-        audit.setUseCase(useCase);
-        audit.setProvider(llm.provider());
-        audit.setModel(llm.model());
-        audit.setPrompt(truncate(system + "\n---\n" + user));
-        audit.setResponse(truncate(raw));
-        audit.setCreatedAt(OffsetDateTime.now());
-        audits.save(audit);
-    }
 
     private static String lineAfter(String raw, String label) {
         for (String line : raw.split("\\R")) {
@@ -243,7 +227,4 @@ public class CopilotService {
         return null;
     }
 
-    private static String truncate(String s) {
-        return s.length() <= 4000 ? s : s.substring(0, 4000);
-    }
 }

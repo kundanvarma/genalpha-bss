@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty-eight Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty-nine Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -66,7 +66,13 @@ bookkeeping categories are retained WITH their named legal basis, the profile an
 place, the login dies scrubbed at the IdP, and every erasure leaves an immutable audit row;
 retention as TickGuard-guarded clocks; PCI scope verified-then-claimed — the vault holds
 `pspToken/lastFour`, never a PAN; suite #58, the whole story in
-[docs/privacy.md](docs/privacy.md)), and
+[docs/privacy.md](docs/privacy.md)), the **AI control plane** (every LLM turn authenticated,
+METERED — tokens and cost on the audit ledger — and governed: per-tenant spend ceilings that
+refuse fail-closed with an honest 429 when crossed, an operator kill-switch, and agent ACTIONS
+on the same ledger as the words — the advisor's draft-adoption lands as
+`catalog.createDraftOffering → <offering-id>`, so the trail answers *which AI touched which
+resource*, tenant-walled by RLS like everything else; the refusals audit themselves too, in
+their own transactions, because a rollback must never erase its own evidence — suite #59), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

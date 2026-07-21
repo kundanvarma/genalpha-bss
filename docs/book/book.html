@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-eight end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-nine end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2431,6 +2431,43 @@
     two runs; every single difference had lived in Terraform and two Helm flags. That is the
     whole argument for vendor-neutrality, made twice in one day, in two companies' invoices. The
     seams held. "Any cloud" is no longer a sentence in a README — it is a Tuesday.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Forty-Two</div>
+    <h3>The governed machine</h3>
+    <div class="epi">"does it make sense to have a control plane that authenticates, budgets and
+    audits all LLMs, tools and agent calls?" <span class="who">— the operator, asking the
+    question every AI-native product will eventually be asked in a procurement meeting</span></div>
+
+    <p class="drop">The honest inventory said two-thirds yes: the intelligence service already
+    authenticated every AI call, held the keys, routed per tenant and per tier, redacted PII and
+    kept a ledger. What it could not answer was the procurement meeting's second question — what
+    does it COST, and what stops it? — and its third: when the AI *does* something rather than
+    says something, where is that written? So the router became a governor. One door: kill-switch,
+    then budget, then the model, then the meter, then the ledger. Every turn now carries its
+    token count and its cost in micros; a tenant's spend sums against a ceiling an operator sets,
+    and the ceiling refuses FAIL-CLOSED — the same law the rate limiter and the do-not-call wash
+    already obeyed, applied to the newest metered resource. The kill-switch turns a tenant's AI
+    off in one flip. And agent actions — the advisor adopting a draft into the catalog — land on
+    the same ledger as the conversations, naming the resource they touched.</p>
+
+    <p>The suite's second failure taught the arc its best lesson. The budget refusal worked —
+    the 429 arrived — but the refusal's own audit row had vanished: the governor wrote the
+    evidence and then threw, and the caller's rolling-back transaction erased the record of why
+    it rolled back. A refusal that erases its own evidence is not governance; it is amnesia with
+    good intentions. The fix was the billing run's lesson reapplied — ledger rows commit in
+    their own transactions, because the ledger records what HAPPENED, regardless of what the
+    caller's transaction later decides. Three failures had now taught the same principle in
+    three costumes: the audit outlives the erased, the superseded run keeps its verdict, and
+    the refusal keeps its receipt.</p>
+
+    <p class="pull edge">Fifty-nine suites. The AI was always authenticated; now it is metered,
+    budgeted, killable and accountable — per tenant, behind the same RLS wall as the money.
+    When the EU AI Act auditor asks "show me every automated decision and what it cost," the
+    answer is a table, not a meeting.</p>
   </section>
 
   <hr class="soft">

@@ -47,6 +47,12 @@ public class AuditController {
         map.put("prompt", preview(a.getPrompt()));
         map.put("response", preview(a.getResponse()));
         map.put("createdAt", a.getCreatedAt().toString());
+        // the control-plane columns: what it cost, how it ended, what it did
+        map.put("tokens", (a.getPromptTokens() == null ? 0 : a.getPromptTokens())
+                + (a.getCompletionTokens() == null ? 0 : a.getCompletionTokens()));
+        map.put("costMicros", a.getCostMicros() == null ? 0 : a.getCostMicros());
+        map.put("outcome", a.getOutcome());
+        map.put("action", a.getAction());
         return map;
     }
 
