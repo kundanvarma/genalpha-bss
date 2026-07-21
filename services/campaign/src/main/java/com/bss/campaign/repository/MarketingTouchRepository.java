@@ -10,4 +10,6 @@ import java.time.OffsetDateTime;
 public interface MarketingTouchRepository extends JpaRepository<MarketingTouch, String> {
 
     long countByTenantIdAndPartyIdAndSentAtAfter(String tenantId, String partyId, OffsetDateTime after);
+
+    java.util.List<MarketingTouch> findByTenantIdAndPartyId(String tenantId, String partyId);
 }

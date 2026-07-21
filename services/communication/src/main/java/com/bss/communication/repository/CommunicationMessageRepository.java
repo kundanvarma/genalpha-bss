@@ -10,4 +10,6 @@ public interface CommunicationMessageRepository extends JpaRepository<Communicat
     Optional<CommunicationMessage> findByIdAndTenantId(String id, String tenantId);
 
     boolean existsByTenantIdAndSourceEventId(String tenantId, String sourceEventId);
+
+    java.util.List<CommunicationMessage> findByTenantIdAndReceiverPartyId(String tenantId, String receiverPartyId);
 }

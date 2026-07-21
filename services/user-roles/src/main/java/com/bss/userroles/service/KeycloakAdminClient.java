@@ -167,4 +167,24 @@ public class KeycloakAdminClient implements IdpAdminClient {
         }
         return tenant;
     }
+
+    @Override
+    public void eraseUser(String tenantId, String userId) {
+        // disable + scrub in one representation update: the login dies,
+        // the personal fields go, the id (the audit's party reference)
+        // stays. Keycloak treats absent fields as unchanged, so every
+        // scrubbed field is set EXPLICITLY.
+        Map<String, Object> scrubbed = new java.util.HashMap<>();
+        scrubbed.put("enabled", false);
+        scrubbed.put("firstName", "Erased");
+        scrubbed.put("lastName", "Erased");
+        scrubbed.put("email", "erased-" + userId.substring(0, 8) + "@invalid.example");
+        scrubbed.put("username", "erased-" + userId.substring(0, 8) + "@invalid.example");
+        scrubbed.put("emailVerified", false);
+        rest.put().uri(adminBase(tenantId) + "/users/" + userId)
+                .header("Authorization", "Bearer " + tokenFor(tenantId))
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(scrubbed)
+                .retrieve().toBodilessEntity();
+    }
 }

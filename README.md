@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty-seven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — fifty-eight Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -58,7 +58,15 @@ checkpoint; rate-limit buckets moved to Redis so a restarted gateway still refus
 same window and N replicas enforce ONE exact ceiling; a plain-Node load harness gives throughput
 its first honest numbers — ~680 req/s catalog browse at p95 39 ms on one laptop running all 30
 JVMs, [docs/perf-baselines.md](docs/perf-baselines.md) — with a smoke-SLO tripwire in the suite;
-and Prometheus now evaluates alert rules over the whole fleet, 32 scrape targets up from 5), and
+and Prometheus now evaluates alert rules over the whole fleet, 32 scrape targets up from 5),
+**P2: the subscriber's rights as features** (the GDPR data passport — a customer exports
+THEMSELVES, the fan-out riding their own token across every service so the right of access needs
+no new authority; erasure honest in both directions — an active subscriber refuses with 409,
+bookkeeping categories are retained WITH their named legal basis, the profile anonymizes in
+place, the login dies scrubbed at the IdP, and every erasure leaves an immutable audit row;
+retention as TickGuard-guarded clocks; PCI scope verified-then-claimed — the vault holds
+`pspToken/lastFour`, never a PAN; suite #58, the whole story in
+[docs/privacy.md](docs/privacy.md)), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
@@ -74,13 +82,14 @@ intentional hardened gaps (payment, communication) — in
 
 - 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](https://kundanvarma.github.io/genalpha-bss/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
-- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Thirty-nine chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
+- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
 - 📕 **[The Operator's Manual](https://kundanvarma.github.io/genalpha-bss/manual/manual.html)** — the reference companion, by role and by task: surfaces & sign-ins, the product owner's console, the CSR's acts, billing & money operations, partner channels, tenant minting, AI tiers, the seam catalog, env reference, extension APIs, the mocks ([PDF](docs/manual/Operators-Manual.pdf))
 - 📄 **[Product overview](https://kundanvarma.github.io/genalpha-bss/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max
 - 🧾 **[Bill distribution & remittance](docs/bill-distribution.md)** — the bill both ways: PDF, seven e-invoice formats as config rows (EHF, Peppol BIS, CII, A-NZ, XRechnung, EDIFACT, Factur-X), print & e-invoice channels with per-customer preference, the outbox-backed delivery ledger with buyer Invoice Responses, and money home by camt.054 / Nets OCR / BAI2 with an unapplied-cash worklist
 - 📏 **[Product rules — how to use them](docs/product-rules.md)** — author order rules and dynamic pricing as data: console walkthrough, dry-run, customer experience, JSON-logic context reference, API examples
 - 🛡️ **[Production hardening](docs/hardening.md)** — what is done and proven (tick locks under two live replicas, a crash-resumable billing run with its own ledger, Redis-backed rate ceilings that survive restarts, a backup that provably restores, fleet-wide alert rules, the secret gate) and the honest list a real deployment still owes: managed HA Postgres/Kafka, TLS in transit, GDPR/PCI
+- 🔏 **[Privacy & compliance](docs/privacy.md)** — the GDPR data passport and eraser (self-service export on the caller's own token, erasure with the law's own exceptions, retention clocks, the audit that outlives the erased), verified PCI scope, and the honest boundary statements for lawful intercept and regional DR
 - 📊 **[Performance baselines](docs/perf-baselines.md)** — throughput's first honest numbers from `ops/load/loadtest.js` (one laptop, all 30 JVMs: ~680 req/s catalog at p95 39 ms, ~450 req/s authenticated reads through JWT+RLS), the caveats stated, and the smoke-SLO tripwire suite #57 arms
 - 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone

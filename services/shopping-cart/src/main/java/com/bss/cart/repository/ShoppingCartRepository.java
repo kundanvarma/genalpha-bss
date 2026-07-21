@@ -15,4 +15,6 @@ public interface ShoppingCartRepository extends JpaRepository<ShoppingCart, Stri
     // that spans every tenant's carts.
     List<ShoppingCart> findByStatusAndOwnerPartyIdNotNullAndLastUpdateBefore(
             String status, OffsetDateTime cutoff);
+
+    java.util.List<ShoppingCart> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 }

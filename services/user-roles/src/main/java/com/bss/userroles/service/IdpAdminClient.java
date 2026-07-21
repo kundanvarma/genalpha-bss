@@ -31,4 +31,12 @@ public interface IdpAdminClient {
     void grant(String tenantId, String userId, String roleName);
 
     void revoke(String tenantId, String userId, String roleName);
+
+    /**
+     * GDPR erasure's identity half: disable the login and scrub the
+     * profile's personal fields at the IdP. The account id remains (it
+     * is the party reference the audit keeps); the person can no longer
+     * authenticate and their name/email are gone from the realm.
+     */
+    void eraseUser(String tenantId, String userId);
 }
