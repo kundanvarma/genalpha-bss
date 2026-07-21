@@ -2393,6 +2393,21 @@
 
     <p class="pull edge">The chart is no longer a promise with a lint pass. It has run — small,
     honest, and observed — and the three things it got wrong are now three things it says.</p>
+
+    <h2>And then, the real cloud — the same afternoon</h2>
+    <p>Hours later the bigger sibling ran on actual AWS: a fresh account, a ten-dollar budget
+    alarm armed before anything billable existed, Terraform raising a VPC, an EKS cluster and an
+    RDS Postgres in Frankfurt. The first live cloud run caught three more truths at about a
+    dollar each: the EKS module's newest major quietly stopped granting its creator access to
+    the cluster it builds; ARCHITECTURE is part of the image contract — Apple-Silicon images are
+    arm64, and the stack's x86 nodes refused every one of them until Graviton nodes (cheaper,
+    natively arm64) replaced them; and the pinned Kubernetes version had aged into extended
+    support at six times the control-plane price. Then twenty-two pods came Ready, the smoke
+    passed against a managed database, the tick locks held their one-speaker rule inside RDS,
+    and the operator browsed their own storefront — served from a cloud region, added a plan to
+    a cart, and found the scope's edge as an honest 500 where the cart service wasn't deployed.
+    One helm flag later it was. Ten minutes, zero new restarts. "Any cloud" now has its first
+    receipt with a real invoice behind it.</p>
   </section>
 
   <hr class="soft">

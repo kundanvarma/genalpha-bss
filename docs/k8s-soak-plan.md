@@ -102,3 +102,39 @@ baseline, every pod 1/1 throughout the window.
 
 **Restored**: helm uninstall, k3s stopped, compose restarted, regression
 green — the soak left no trace on the demo fleet.
+
+## The cloud run — EKS, same day
+
+The k3s soak's bigger sibling ran hours later on real AWS
+(`ops/k8s-soak/eks-run.sh`: Terraform apply → ECR push → RDS database
+init → Helm install → smoke → destroy). Account bootstrapped with a $10
+budget alert BEFORE anything billable existed; total session cost ≈ a
+few dollars against sign-up credits.
+
+**What the first live cloud run caught** (three more stack truths no
+template could):
+- **EKS module v20 grants the creator no cluster access by default** —
+  the apply succeeded and `kubectl` was locked out;
+  `enable_cluster_creator_admin_permissions = true` is now in the stack.
+- **Architecture is part of the image contract**: Apple-Silicon-built
+  images are arm64; the stack's t3.large nodes were x86 —
+  ImagePullBackOff with "no match for platform". The stack now runs
+  **Graviton (t4g.large, `AL2023_ARM_64_STANDARD`)** — native arm64 and
+  ~30% cheaper than the t3 it replaced.
+- **EKS 1.31 had aged into extended support** (6× control-plane price);
+  the default is now 1.33 with a comment explaining the trap.
+
+**What ran and held**: 22 pods Ready (core commerce + billing×2 +
+storefront + admin console) on 2× t4g.large; the smoke green through a
+port-forwarded gateway — token, authored offering, acknowledged order —
+against **RDS** this time; `tick_lock` in RDS showing both billing ticks
+leased by ONE replica id; the storefront and admin console browsable
+from a laptop, served from Frankfurt; and the same stability standard:
+**10 minutes, zero new restarts** across all baseline pods (one pod —
+shopping-cart — deliberately added mid-window after the storefront's
+add-to-cart found the scope's edge: an honest 500, not a bug).
+
+**Teardown**: `eks-run.sh down` (terraform destroy + ECR cleanup) ends
+the session — nothing billable may outlive it; verify in Cost Explorer
+the next day that nothing lingers. The AKS twin of this run remains on
+the ledger, waiting on Azure credits.
