@@ -1,13 +1,44 @@
 global:
   scrape_interval: 10s
 
+rule_files:
+  - /etc/prometheus/alert-rules.yml
+
 scrape_configs:
   - job_name: bss
     metrics_path: /actuator/prometheus
     static_configs:
+      # the WHOLE fleet: an unscraped service is an unalertable service
       - targets:
           - gateway:8080
           - product-catalog:8080
           - product-ordering:8080
           - product-inventory:8080
           - party-account:8080
+          - trouble-ticket:8080
+          - party-interaction:8080
+          - shopping-cart:8080
+          - usage:8080
+          - agreement:8080
+          - promotion:8080
+          - campaign:8080
+          - intelligence:8080
+          - quote:8080
+          - porting:8080
+          - policy:8080
+          - knowledge:8080
+          - user-roles:8080
+          - geographic-address:8080
+          - recommendation:8080
+          - payment-method:8080
+          - service-orchestration:8080
+          - assurance:8080
+          - document:8080
+          - communication:8080
+          - qualification:8080
+          - appointment:8080
+          - billing:8080
+          - payment:8080
+          - product-stock:8080
+          - insight:8080
+          - flow:8080

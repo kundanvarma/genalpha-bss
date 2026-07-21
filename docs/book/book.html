@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-six end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-seven end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2257,6 +2257,59 @@
     <p class="pull edge">What remains is written down where claims go to be audited —
     docs/hardening.md: managed HA databases, TLS inside the cluster, load tests, the compliance
     ledger. Production-ready is not a feeling; it is a list, with the unticked boxes showing.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Nine</div>
+    <h3>The run that survives its own death</h3>
+    <div class="epi">"go ahead with P1 hardening" <span class="who">— the operator, four words,
+    the morning after P0 shipped</span></div>
+
+    <p class="drop">The billing run had a secret it shared with most young systems: it was one
+    transaction. Every customer's bill, one commit, all or nothing — which reads as integrity
+    until you do the arithmetic. At a thousand customers it is a long transaction; at a million
+    it is a transaction that never commits, and one bad account rolls back everyone's bill at
+    minute fifty-nine. The fix inverted the shape: the GATHER phase reads, then each account's
+    bill commits alone. And the resume logic cost nothing, because it already existed — the
+    idempotency check that stopped double-billing a customer within a period became, unchanged,
+    the checkpoint of a crashed run.</p>
+
+    <p>The suite's FIRST run failed — and the failure was the best find of the arc. The ledger
+    showed what no code review had: a thousand and seventeen accounts accumulated by months of
+    suite runs, a paced pass that outlived the client's patience, and the retry loop quietly
+    starting a SECOND run while the first one's orphaned thread kept walking — two runs racing
+    the same period, saved from double-billing by timing alone. Luck is not a guarantee, so two
+    fixes followed the diagnosis: the run now takes the same row-lease the ticks take — a second
+    trigger gets an honest <em>busy</em>, and the lease HEARTBEATS per account so a crashed run
+    frees it in two minutes, not a run-length — and the database itself gained a unique index:
+    one bill per account per period, as a constraint rather than a convention. Then the suite
+    passed the way it was meant to: twelve customers, a kill mid-flight, a resume to exactly
+    twelve bills, a ledger showing one run <em>superseded</em> beside one <em>completed</em>.
+    The run has a face now; even its deaths are rows.</p>
+
+    <h2>The ceiling that outlives its gateway</h2>
+    <p>P0's rate limits had a caveat written beside them the day they shipped: the buckets lived
+    in memory, so N gateways meant N× the ceiling and every restart was an amnesty. P1 moved the
+    buckets behind a seam — in-memory for a laptop, Redis when replicas must agree — and the
+    proof was a resurrection: trip the ceiling, kill the gateway, and the FRESH process refused
+    the very first knock. A window that survives its enforcer is a window replicas can share.</p>
+
+    <h2>Numbers, at last — with their caveats stapled on</h2>
+    <p>Fifty-six suites had proven the system correct and none had ever timed it. A plain-Node
+    load driver fixed that in an afternoon: on one laptop carrying all thirty JVMs, catalog
+    browse answered six hundred and seventy-eight times a second at thirty-nine milliseconds
+    p95; authenticated bill reads — every request paying the full JWT-plus-row-level-security
+    toll — four hundred and fifty-one. Floor numbers, the baselines document says plainly, not
+    capacity claims; their job is to make regressions loud, and the suite's smoke SLO stands
+    tripwire duty at ten times the baseline. The load test's first victim, satisfyingly, was
+    the wide ring itself — the harness got throttled by P0's ceiling and had to ask for it to
+    be lifted. The guardrails guard even the auditors.</p>
+
+    <p class="pull edge">And alerts exist now — ServiceDown, a stalled outbox, a 5xx front door,
+    evaluated over thirty-two scrape targets where five had been. A dashboard nobody watches is
+    documentation; an alert is a promise that silence means something.</p>
   </section>
 
   <hr class="soft">

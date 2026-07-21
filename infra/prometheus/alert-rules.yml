@@ -1,0 +1,37 @@
+# ALERTS EXIST: a dead service or a failing outbox must interrupt a
+# human, not wait on a dashboard nobody is watching. These rules fire in
+# Prometheus; routing them to a pager (Alertmanager) is a deployment
+# concern — docs/hardening.md says where.
+groups:
+  - name: bss-availability
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.instance }} is not answering its scrape"
+          description: "The component has been unreachable for 2 minutes — check `docker logs` / pod state."
+
+  - name: bss-delivery
+    rules:
+      - alert: OutboxPublishFailures
+        expr: increase(bss_events_failed_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.instance }} cannot publish domain events"
+          description: "The outbox relay has failed publishes for 10 minutes — events are queuing, not lost (at-least-once), but the backbone is stalled. Check Kafka."
+
+      - alert: GatewayServerErrors
+        expr: >
+          sum(rate(http_server_requests_seconds_count{job="bss",instance="gateway:8080",status=~"5.."}[5m]))
+          / sum(rate(http_server_requests_seconds_count{job="bss",instance="gateway:8080"}[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gateway 5xx ratio above 5%"
+          description: "More than one in twenty requests through the front door is failing."

@@ -1036,6 +1036,9 @@ services:
       # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
       BSS_BILLING_DUNNING_TICK_MS: "5000"
       BSS_BILLING_DUNNING_GRACE_MS: "20000"
+      # run pacing: 0 in production; a suite sets it to hold a run open
+      # long enough to kill it mid-flight (crash-resume proof)
+      BSS_BILLING_RUN_ACCOUNT_DELAY_MS: ${RUN_ACCOUNT_DELAY_MS:-0}
       # dev clocks: the distribution relay drains fast and retries in seconds
       BSS_BILLING_DISTRIBUTION_TICK_MS: "3000"
       BSS_BILLING_DISTRIBUTION_RETRY_SECONDS: "4"
@@ -1228,6 +1231,13 @@ services:
 
   # demo stand-in for an OpenAI-compatible LLM endpoint (tiered routing proof)
   # object storage for the content seam: the S3 protocol (MinIO)...
+  # shared rate-limit buckets: gateway replicas count in ONE place, and a
+  # restarted gateway forgets no window (suite #57 proves the survival)
+  redis:
+    image: redis:7-alpine
+    container_name: bss-redis
+    restart: unless-stopped
+
   minio:
     image: minio/minio:latest
     container_name: bss-minio
@@ -1342,6 +1352,8 @@ services:
       # swappable so a suite can trip it (GLOBAL_RATE_CAPACITY=15 ... up -d gateway)
       BSS_GATEWAY_GLOBAL_RATE_CAPACITY: ${GLOBAL_RATE_CAPACITY:-1200}
       BSS_GATEWAY_GLOBAL_RATE_WINDOW_MS: ${GLOBAL_RATE_WINDOW_MS:-60000}
+      # buckets live in Redis: replicas share one ceiling, restarts forget nothing
+      BSS_GATEWAY_REDIS_URL: ${GATEWAY_REDIS_URL:-redis://redis:6379}
       CATALOG_URL: http://product-catalog:8080
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080
@@ -1494,6 +1506,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
     ports:
       - "9090:9090"
 

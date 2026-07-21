@@ -3,17 +3,18 @@ package com.bss.billing.service;
 import com.bss.billing.api.ApiConstants;
 import com.bss.billing.client.DownstreamClients;
 import com.bss.billing.entity.AppliedBillingRate;
+import com.bss.billing.entity.BillingRunRecord;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.events.DomainEventPublisher;
 import com.bss.billing.exception.BadRequestException;
 import com.bss.billing.repository.AppliedBillingRateRepository;
+import com.bss.billing.repository.BillingRunRecordRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -51,6 +52,10 @@ public class BillingRunService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
+    private final BillingRunRecordRepository runs;
+    private final com.bss.billing.tick.TickGuard tickGuard;
+    private final org.springframework.transaction.support.TransactionTemplate newTx;
+    private final long accountDelayMs;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
@@ -58,7 +63,12 @@ public class BillingRunService {
             DownstreamClients.PricingClient pricing, DownstreamClients.OrgClient orgs,
             DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope,
-            BillDistributionService distribution) {
+            BillDistributionService distribution,
+            BillingRunRecordRepository runs,
+            com.bss.billing.tick.TickGuard tickGuard,
+            org.springframework.transaction.PlatformTransactionManager transactionManager,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.billing.run-account-delay-ms:0}") long accountDelayMs) {
         this.bills = bills;
         this.rates = rates;
         this.inventory = inventory;
@@ -71,14 +81,47 @@ public class BillingRunService {
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
+        this.runs = runs;
+        this.tickGuard = tickGuard;
+        // each account commits ON ITS OWN: a failure loses one bill, not
+        // the run — and a crash leaves every finished bill standing
+        this.newTx = new org.springframework.transaction.support.TransactionTemplate(
+                transactionManager);
+        this.newTx.setPropagationBehavior(
+                org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.accountDelayMs = accountDelayMs;
     }
 
-    @Transactional
+    /**
+     * NOT one big transaction any more: the gather phase reads, then each
+     * account's bill commits in its OWN transaction. A crash mid-run loses
+     * nothing already committed, and the re-triggered run RESUMES by
+     * construction — every billed account skips on its period check. The
+     * run itself is a ledger row anyone can read.
+     */
     @SuppressWarnings("unchecked")
     public Map<String, Object> run() {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("billing runs are a back-office operation");
         }
+        // ONE RUN SPEAKS AT A TIME: a second trigger while a run is in
+        // flight gets an honest "busy", never a racing twin (suite #57
+        // caught two orphaned runs walking the same period concurrently).
+        // The lease is SHORT and heartbeated per account below, so a
+        // crashed run frees it in minutes, not a run-length.
+        if (!tickGuard.claim("billing-run", java.time.Duration.ofMinutes(2))) {
+            return Map.of("busy", true,
+                    "note", "a billing run is already in progress — its ledger row shows the progress");
+        }
+        try {
+            return doRun();
+        } finally {
+            tickGuard.release("billing-run");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> doRun() {
         // The run is triggered by an authenticated staff request, so the
         // caller's tenant scopes everything the run reads and creates.
         String tenantId = tenantScope.currentTenantId();
@@ -191,9 +234,120 @@ public class BillingRunService {
             byAccount.computeIfAbsent(deviceOwner, k -> new ArrayList<>());
             membersOf.computeIfAbsent(deviceOwner, k -> new java.util.LinkedHashSet<>()).add(deviceOwner);
         }
+        // the run's face: a crashed predecessor's RUNNING row becomes
+        // superseded evidence; this run gets its own row, committed NOW so
+        // even a crash one account in leaves a trace
+        String runId = UUID.randomUUID().toString();
+        newTx.executeWithoutResult(tx -> {
+            for (BillingRunRecord stale : runs.findByTenantIdAndStatus(tenantId, BillingRunRecord.RUNNING)) {
+                stale.setStatus(BillingRunRecord.SUPERSEDED);
+                stale.setFinishedAt(OffsetDateTime.now());
+                runs.save(stale);
+            }
+            BillingRunRecord record = new BillingRunRecord();
+            record.setId(runId);
+            record.setTenantId(tenantId);
+            record.setStatus(BillingRunRecord.RUNNING);
+            record.setStartedAt(OffsetDateTime.now());
+            record.setAccountsTotal(byAccount.size());
+            runs.save(record);
+        });
+
         int created = 0;
         int skipped = 0;
+        int failed = 0;
+        String lastError = null;
         for (Map.Entry<String, List<Map<String, Object>>> owner : byAccount.entrySet()) {
+            Outcome outcome;
+            try {
+                outcome = newTx.execute(tx -> billAccount(tenantId, today, defaultStart, defaultEnd,
+                        owner, orgAccounts, membersOf, primaryAccountOf, personalExcess,
+                        companyShareOf, priceCache, unitCache));
+            } catch (RuntimeException oneAccountDown) {
+                // this account's bill rolled back alone; the run walks on
+                failed++;
+                lastError = owner.getKey() + ": " + oneAccountDown.getMessage();
+                log.warn("billing run {}: account {} failed — {}", runId, owner.getKey(),
+                        oneAccountDown.getMessage());
+                continue;
+            }
+            if (outcome == Outcome.CREATED) {
+                created++;
+            } else if (outcome == Outcome.SKIPPED) {
+                skipped++;
+            }
+            progress(runId, created, skipped, failed, lastError, false);
+            tickGuard.extend("billing-run", java.time.Duration.ofMinutes(2)); // heartbeat
+            if (accountDelayMs > 0) {
+                try {
+                    Thread.sleep(accountDelayMs); // dev pacing knob, 0 in production
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        progress(runId, created, skipped, failed, lastError, true);
+        return Map.of("billsCreated", created, "customersSkipped", skipped,
+                "accountsFailed", failed, "runId", runId,
+                "billingPeriod", Map.of("startDateTime", defaultStart.toString(),
+                        "endDateTime", defaultEnd.toString()));
+    }
+
+    private enum Outcome { CREATED, SKIPPED, EMPTY }
+
+    /** The ledger row keeps up with the run — and closes it at the end.
+     * A run someone marked SUPERSEDED stays superseded: an orphaned
+     * thread limping to its own finish line must not rewrite history. */
+    private void progress(String runId, int created, int skipped, int failed,
+            String lastError, boolean done) {
+        newTx.executeWithoutResult(tx -> runs.findById(runId).ifPresent(record -> {
+            record.setBillsCreated(created);
+            record.setSkipped(skipped);
+            record.setFailed(failed);
+            record.setLastError(lastError);
+            if (done && BillingRunRecord.RUNNING.equals(record.getStatus())) {
+                record.setStatus(BillingRunRecord.COMPLETED);
+                record.setFinishedAt(OffsetDateTime.now());
+            }
+            runs.save(record);
+        }));
+    }
+
+    /** Everything recent runs did, newest first — the operator's view. */
+    public List<Map<String, Object>> recentRuns() {
+        if (partyScope.scopedPartyId().isPresent()) {
+            throw new BadRequestException("billing runs are a back-office operation");
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (BillingRunRecord r : runs.findTop20ByTenantIdOrderByStartedAtDesc(
+                tenantScope.currentTenantId())) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r.getId());
+            m.put("status", r.getStatus());
+            m.put("startedAt", r.getStartedAt());
+            m.put("finishedAt", r.getFinishedAt());
+            m.put("accountsTotal", r.getAccountsTotal());
+            m.put("billsCreated", r.getBillsCreated());
+            m.put("customersSkipped", r.getSkipped());
+            m.put("accountsFailed", r.getFailed());
+            m.put("lastError", r.getLastError());
+            out.add(m);
+        }
+        return out;
+    }
+
+    /** One account's bill, in the caller's (fresh) transaction. */
+    @SuppressWarnings("unchecked")
+    private Outcome billAccount(String tenantId, LocalDate today,
+            LocalDate defaultStart, LocalDate defaultEnd,
+            Map.Entry<String, List<Map<String, Object>>> owner,
+            java.util.Set<String> orgAccounts,
+            Map<String, java.util.Set<String>> membersOf,
+            Map<String, String> primaryAccountOf,
+            Map<String, List<AppliedBillingRate>> personalExcess,
+            Map<String, BigDecimal> companyShareOf,
+            Map<String, BigDecimal> priceCache,
+            Map<String, String> unitCache) {
             // PAYDAY ALIGNMENT: the account holder's anchor day (1-28) makes
             // their own period; the clamp below NEVER re-bills a covered day,
             // so an anchor change simply takes effect from the next cycle —
@@ -216,12 +370,12 @@ public class BillingRunService {
                 periodStart = lastEnd.plusDays(1); // the stub after an anchor change
             }
             if (periodStart.isAfter(periodEnd) || periodStart.isAfter(today)) {
-                skipped++; // their next cycle has not started — nothing to bill yet
-                continue;
+                return Outcome.SKIPPED; // their next cycle has not started yet
             }
             if (bills.existsByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, owner.getKey(), periodStart)) {
-                skipped++;
-                continue;
+                // ALSO the resume marker: a re-triggered run lands here for
+                // every account the crashed run already billed
+                return Outcome.SKIPPED;
             }
             List<AppliedBillingRate> billRates = new ArrayList<>();
             BigDecimal total = BigDecimal.ZERO;
@@ -421,7 +575,7 @@ public class BillingRunService {
                 }
             }
             if (billRates.isEmpty()) {
-                continue;
+                return Outcome.EMPTY;
             }
             java.util.Set<String> units = billRates.stream()
                     .map(AppliedBillingRate::getAmountUnit).collect(java.util.stream.Collectors.toSet());
@@ -462,10 +616,7 @@ public class BillingRunService {
                     "relatedParty", List.of(Map.of(
                             "id", owner.getKey(), "role", "customer",
                             "@referredType", orgAccounts.contains(owner.getKey()) ? "Organization" : "Individual"))));
-            created++;
-        }
-        return Map.of("billsCreated", created, "customersSkipped", skipped,
-                "billingPeriod", Map.of("startDateTime", defaultStart.toString(), "endDateTime", defaultEnd.toString()));
+            return Outcome.CREATED;
     }
 
     /** A redemption's value against this bill's recurring base, 0 if expired or nothing matches. */

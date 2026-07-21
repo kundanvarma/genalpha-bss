@@ -60,4 +60,12 @@ public class TickGuard {
         jdbc.update("UPDATE tick_lock SET locked_until = ? WHERE name = ? AND locked_by = ?",
                 OffsetDateTime.now(), tick, replica);
     }
+
+    /** A long tick HEARTBEATS: extend the lease while genuinely working,
+     * so a crash frees it in one short lease, not one long one. */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void extend(String tick, Duration lease) {
+        jdbc.update("UPDATE tick_lock SET locked_until = ? WHERE name = ? AND locked_by = ?",
+                OffsetDateTime.now().plus(lease), tick, replica);
+    }
 }
