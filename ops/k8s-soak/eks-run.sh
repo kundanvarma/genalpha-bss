@@ -20,7 +20,8 @@ DB_PASSWORD="${EKS_DB_PASSWORD:?set EKS_DB_PASSWORD (never committed; used for R
 # the same core-commerce scope the k3s soak proved, billing at 2 replicas
 IMAGES=(billing flow gateway insight knowledge mock-analytics mock-esp mock-ocs
         mock-pim mock-social party-account policy porting product-catalog
-        product-inventory product-ordering product-stock storefront console)
+        product-inventory product-ordering product-stock storefront console
+        shopping-cart)
 
 account() { aws sts get-caller-identity --query Account --output text; }
 registry() { echo "$(account).dkr.ecr.$REGION.amazonaws.com"; }

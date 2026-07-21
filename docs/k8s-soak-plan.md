@@ -134,7 +134,21 @@ from a laptop, served from Frankfurt; and the same stability standard:
 shopping-cart — deliberately added mid-window after the storefront's
 add-to-cart found the scope's edge: an honest 500, not a bug).
 
-**Teardown**: `eks-run.sh down` (terraform destroy + ECR cleanup) ends
-the session — nothing billable may outlive it; verify in Cost Explorer
-the next day that nothing lingers. The AKS twin of this run remains on
-the ledger, waiting on Azure credits.
+**Torn down, verified**: `eks-run.sh down` destroyed all 57 Terraform
+resources; the post-destroy sweep across eu-central-1 answered zero on
+every billable axis — EKS clusters 0, EC2 instances 0, RDS instances
+AND snapshots 0, NAT gateways 0, elastic IPs 0, load balancers 0, EBS
+volumes 0, custom VPCs 0, ECR repositories 0 (one repo — shopping-cart,
+added mid-session for the storefront's cart — survived the scripted
+cleanup and was deleted by hand; the script's list now includes it).
+The $10 budget alarm stays armed for free as the watchdog; Cost
+Explorer the next day is the closing receipt. Total session cost: a few
+dollars against sign-up credits.
+
+Also from this session: a `terraform.tfstate` (which stores sensitive
+variables in cleartext) briefly reached a public commit — remediated
+within minutes by a history rewrite, an immediate RDS password rotation
+and a release roll; the secret gate now refuses the file CLASS
+(`*.tfstate`, `.terraform/`) outright, because a scanner that only
+knows shapes misses containers. The AKS twin of this run remains on the
+ledger, waiting on Azure credits.
