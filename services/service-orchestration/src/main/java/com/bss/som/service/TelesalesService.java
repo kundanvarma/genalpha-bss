@@ -48,6 +48,7 @@ public class TelesalesService {
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
     private final RestClient rest;
+    private final com.bss.som.tick.TickGuard tickGuard;
     private final long expiryMs;
 
     public TelesalesService(TelesalesOfferRepository offers, DealerService dealers,
@@ -55,6 +56,7 @@ public class TelesalesService {
             com.bss.som.client.InsightClient insight,
             com.bss.som.events.DomainEventPublisher events,
             TenantRegistry tenants, TenantScope tenantScope, RestClient.Builder builder,
+            com.bss.som.tick.TickGuard tickGuard,
             @Value("${bss.som.telesales-expiry-ms:172800000}") long expiryMs) {
         this.offers = offers;
         this.dealers = dealers;
@@ -64,6 +66,7 @@ public class TelesalesService {
         this.tenants = tenants;
         this.tenantScope = tenantScope;
         this.rest = builder.build();
+        this.tickGuard = tickGuard;
         this.expiryMs = expiryMs;
     }
 
@@ -195,19 +198,26 @@ public class TelesalesService {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${bss.som.telesales-tick-ms:3600000}")
     public void expiryTick() {
-        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (var ignored = TenantContext.actAs(tenant.getId())) {
-                for (TelesalesOffer offer : offers.findTop100ByTenantIdAndStatusAndExpiresAtBefore(
-                        tenant.getId(), TelesalesOffer.OFFERED, OffsetDateTime.now())) {
-                    offer.setStatus(TelesalesOffer.EXPIRED);
-                    offer.setLastUpdate(OffsetDateTime.now());
-                    offers.save(offer);
-                    log.info("telesales offer {} expired unconfirmed — no agreement ever existed",
-                            offer.getId());
+        if (!tickGuard.claim("telesales-expiry", java.time.Duration.ofSeconds(60))) {
+            return; // another replica expires the offers
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (var ignored = TenantContext.actAs(tenant.getId())) {
+                    for (TelesalesOffer offer : offers.findTop100ByTenantIdAndStatusAndExpiresAtBefore(
+                            tenant.getId(), TelesalesOffer.OFFERED, OffsetDateTime.now())) {
+                        offer.setStatus(TelesalesOffer.EXPIRED);
+                        offer.setLastUpdate(OffsetDateTime.now());
+                        offers.save(offer);
+                        log.info("telesales offer {} expired unconfirmed — no agreement ever existed",
+                                offer.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("telesales expiry tick failed for {}: {}", tenant.getId(), e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("telesales expiry tick failed for {}: {}", tenant.getId(), e.getMessage());
             }
+        } finally {
+            tickGuard.release("telesales-expiry");
         }
     }
 

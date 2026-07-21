@@ -40,6 +40,7 @@ public class BillDistributionService {
     private final com.bss.billing.repository.BillFormatProfileRepository profiles;
     private final com.bss.billing.repository.BillDistributionRepository ledger;
     private final RestClient restClient;
+    private final com.bss.billing.tick.TickGuard tickGuard;
     private final long retrySeconds;
     private final int maxAttempts;
 
@@ -52,7 +53,7 @@ public class BillDistributionService {
     public BillDistributionService(TenantRegistry tenants, BillDocumentService documents,
             com.bss.billing.repository.BillFormatProfileRepository profiles,
             com.bss.billing.repository.BillDistributionRepository ledger,
-            RestClient.Builder builder,
+            RestClient.Builder builder, com.bss.billing.tick.TickGuard tickGuard,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.billing.distribution-retry-seconds:60}") long retrySeconds,
             @org.springframework.beans.factory.annotation.Value(
@@ -62,6 +63,7 @@ public class BillDistributionService {
         this.profiles = profiles;
         this.ledger = ledger;
         this.restClient = builder.build();
+        this.tickGuard = tickGuard;
         this.retrySeconds = retrySeconds;
         this.maxAttempts = maxAttempts;
     }
@@ -171,12 +173,19 @@ public class BillDistributionService {
      * never blocking a billing run, always accountable. */
     @Scheduled(fixedDelayString = "${bss.billing.distribution-tick-ms:30000}")
     public void deliverTick() {
-        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (var ignored = com.bss.billing.security.TenantContext.actAs(tenant.getId())) {
-                deliverTenant(tenant);
-            } catch (Exception e) {
-                log.warn("distribution relay failed for tenant {}: {}", tenant.getId(), e.getMessage());
+        if (!tickGuard.claim("bill-distribution", java.time.Duration.ofSeconds(60))) {
+            return; // another replica is delivering — one paper bill, never two
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (var ignored = com.bss.billing.security.TenantContext.actAs(tenant.getId())) {
+                    deliverTenant(tenant);
+                } catch (Exception e) {
+                    log.warn("distribution relay failed for tenant {}: {}", tenant.getId(), e.getMessage());
+                }
             }
+        } finally {
+            tickGuard.release("bill-distribution");
         }
     }
 

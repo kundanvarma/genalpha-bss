@@ -30,14 +30,16 @@ public class PortingCutover {
     private final PortingOrderRepository orders;
     private final DomainEventPublisher events;
     private final TenantRegistry tenants;
+    private final com.bss.porting.tick.TickGuard tickGuard;
     private final int afterSeconds;
 
     public PortingCutover(PortingOrderRepository orders, DomainEventPublisher events,
-            TenantRegistry tenants,
+            TenantRegistry tenants, com.bss.porting.tick.TickGuard tickGuard,
             @Value("${bss.porting.auto-complete-seconds:0}") int afterSeconds) {
         this.orders = orders;
         this.events = events;
         this.tenants = tenants;
+        this.tickGuard = tickGuard;
         this.afterSeconds = afterSeconds;
     }
 
@@ -46,12 +48,19 @@ public class PortingCutover {
         if (afterSeconds <= 0) {
             return; // disabled — cutover is triggered explicitly (production / tests)
         }
-        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
-                completeDue(tenant.getId());
-            } catch (Exception e) {
-                log.warn("cutover sweep skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+        if (!tickGuard.claim("porting-cutover", java.time.Duration.ofSeconds(60))) {
+            return; // another replica is cutting over — a number ports once
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
+                    completeDue(tenant.getId());
+                } catch (Exception e) {
+                    log.warn("cutover sweep skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+                }
             }
+        } finally {
+            tickGuard.release("porting-cutover");
         }
     }
 

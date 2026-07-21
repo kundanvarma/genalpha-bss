@@ -30,3 +30,6 @@ dist/
 # Claude Code local settings (per-developer permissions)
 .claude/
 ops/e2e/recordings/
+
+# database dumps (ops/backup.sh) — never in git
+backups/

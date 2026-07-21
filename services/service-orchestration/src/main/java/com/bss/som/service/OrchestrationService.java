@@ -57,6 +57,7 @@ public class OrchestrationService {
     private final com.bss.som.client.OcsProvisioningClient ocs;
     private final com.bss.som.security.TenantRegistry tenants;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
+    private final com.bss.som.tick.TickGuard tickGuard;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -72,7 +73,8 @@ public class OrchestrationService {
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.security.TenantRegistry tenants,
-            com.bss.som.repository.NumberQuarantineRepository quarantine) {
+            com.bss.som.repository.NumberQuarantineRepository quarantine,
+            com.bss.som.tick.TickGuard tickGuard) {
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -92,6 +94,7 @@ public class OrchestrationService {
         this.ordering = ordering;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.tickGuard = tickGuard;
     }
 
     /**
@@ -381,20 +384,27 @@ public class OrchestrationService {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${bss.som.commission-tick-ms:3600000}")
     public void hardenCommissionTick() {
-        for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (var ignored = com.bss.som.security.TenantContext.actAs(tenant.getId())) {
-                for (com.bss.som.entity.CommissionEntry entry : commissionEntries
-                        .findTop100ByTenantIdAndStatusAndHardensAtBefore(tenant.getId(),
-                                com.bss.som.entity.CommissionEntry.PENDING, OffsetDateTime.now())) {
-                    entry.setStatus(com.bss.som.entity.CommissionEntry.EARNED);
-                    entry.setLastUpdate(OffsetDateTime.now());
-                    commissionEntries.save(entry);
-                    log.info("commission earned: {} {} to {} ({})", entry.getAmountValue(),
-                            entry.getAmountUnit(), entry.getDealerOrgId(), entry.getServiceId());
+        if (!tickGuard.claim("commission-harden", java.time.Duration.ofSeconds(60))) {
+            return; // another replica hardens the money — once
+        }
+        try {
+            for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (var ignored = com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                    for (com.bss.som.entity.CommissionEntry entry : commissionEntries
+                            .findTop100ByTenantIdAndStatusAndHardensAtBefore(tenant.getId(),
+                                    com.bss.som.entity.CommissionEntry.PENDING, OffsetDateTime.now())) {
+                        entry.setStatus(com.bss.som.entity.CommissionEntry.EARNED);
+                        entry.setLastUpdate(OffsetDateTime.now());
+                        commissionEntries.save(entry);
+                        log.info("commission earned: {} {} to {} ({})", entry.getAmountValue(),
+                                entry.getAmountUnit(), entry.getDealerOrgId(), entry.getServiceId());
+                    }
+                } catch (Exception e) {
+                    log.warn("commission harden tick failed for {}: {}", tenant.getId(), e.getMessage());
                 }
-            } catch (Exception e) {
-                log.warn("commission harden tick failed for {}: {}", tenant.getId(), e.getMessage());
             }
+        } finally {
+            tickGuard.release("commission-harden");
         }
     }
 
@@ -534,18 +544,25 @@ public class OrchestrationService {
     @org.springframework.scheduling.annotation.Scheduled(
             fixedDelayString = "${bss.som.resume-tick-ms:5000}")
     public void resumeDueTick() {
-        for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (com.bss.som.security.TenantContext ignored =
-                    com.bss.som.security.TenantContext.actAs(tenant.getId())) {
-                for (ServiceInstance due : services.findTop100ByTenantIdAndStateAndResumeAtBefore(
-                        tenant.getId(), ServiceInstance.SUSPENDED, OffsetDateTime.now())) {
-                    try {
-                        resume(due, "schedule");
-                    } catch (Exception e) {
-                        log.warn("auto-resume failed for {}: {}", due.getId(), e.getMessage());
+        if (!tickGuard.claim("resume-due", java.time.Duration.ofSeconds(60))) {
+            return; // another replica lifts the holds
+        }
+        try {
+            for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (com.bss.som.security.TenantContext ignored =
+                        com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                    for (ServiceInstance due : services.findTop100ByTenantIdAndStateAndResumeAtBefore(
+                            tenant.getId(), ServiceInstance.SUSPENDED, OffsetDateTime.now())) {
+                        try {
+                            resume(due, "schedule");
+                        } catch (Exception e) {
+                            log.warn("auto-resume failed for {}: {}", due.getId(), e.getMessage());
+                        }
                     }
                 }
             }
+        } finally {
+            tickGuard.release("resume-due");
         }
     }
 

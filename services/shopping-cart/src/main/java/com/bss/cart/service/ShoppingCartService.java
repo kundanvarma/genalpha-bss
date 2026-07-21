@@ -51,16 +51,19 @@ public class ShoppingCartService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
+    private final com.bss.cart.tick.TickGuard tickGuard;
     private final long abandonMinutes;
 
     public ShoppingCartService(ShoppingCartRepository repository, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper,
+            com.bss.cart.tick.TickGuard tickGuard,
             @Value("${bss.cart.abandon-minutes:1440}") long abandonMinutes) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+        this.tickGuard = tickGuard;
         this.abandonMinutes = abandonMinutes;
     }
 
@@ -159,6 +162,17 @@ public class ShoppingCartService {
     @Scheduled(fixedDelayString = "${bss.cart.sweep-interval-ms:60000}")
     @Transactional
     public int sweepAbandoned() {
+        if (!tickGuard.claim("cart-sweep", java.time.Duration.ofSeconds(60))) {
+            return 0; // another replica sweeps — one abandonment event per cart
+        }
+        try {
+            return doSweepAbandoned();
+        } finally {
+            tickGuard.release("cart-sweep");
+        }
+    }
+
+    private int doSweepAbandoned() {
         // System job, deliberately tenant-spanning: it sweeps every tenant's
         // idle carts in one pass. The SYSTEM context opens the row-level
         // security escape hatch; each event still carries its row's tenant.
