@@ -53,6 +53,11 @@ spec:
               value: {{ $.Values.config.kafkaBootstrapServers | quote }}
             - name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
               value: "5"
+            # idle pools shrink to one connection — managed Postgres
+            # tiers meter connections; a fleet must not hold 5x13 slots
+            # while idle (learned live on Azure B1ms's ~50-slot cap)
+            - name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE
+              value: "1"
             {{- end }}
             {{- if and (eq $name "service-orchestration") $.Values.pukKey }}
             - name: BSS_SIM_PUK_KEY

@@ -358,12 +358,22 @@ answering <code>429 + Retry-After</code> when tripped. Dials in §10. The bucket
 restarted gateway still refuses inside the same window, and an unreachable Redis fails open —
 fairness, never authorization.</p>
 
-<h3>The live k8s soak (on demand)</h3>
-<p>The Helm chart has run on a live cluster — 21 pods, billing at 2 replicas with ONE set of
-tick leases, requests served through the in-cluster gateway. The sequence (compose must stop
-first; one laptop, two worlds) and the receipts:
-<a href="../k8s-soak-plan.md">docs/k8s-soak-plan.md</a>; the smoke is
+<h3>The live k8s soak (on demand) — local, AWS, and Azure</h3>
+<p>The Helm chart has run on three live clusters: local k3s, AWS EKS, and Azure AKS — each with
+billing at 2 replicas holding ONE set of tick leases, requests served through the in-cluster
+gateway. The cloud runs are one command each: <code>ops/k8s-soak/eks-run.sh up|smoke|down</code>
+and <code>ops/k8s-soak/aks-run.sh up|smoke|down</code> (compose must stop first — one laptop,
+two worlds). Both wrap Terraform + registry push + managed-Postgres + Helm + smoke + teardown.
+The cloud-by-cloud differences (all absorbed by seams — the app never changed) are tabulated in
+<a href="../architecture.md">architecture.md §5</a>; the receipts and the live-run truths each
+cloud taught are in <a href="../k8s-soak-plan.md">k8s-soak-plan.md</a>. Smoke:
 <code>ops/k8s-soak/smoke.js</code> against port-forwarded gateway/keycloak.</p>
+<p><b>Managed-Postgres note</b>: point <code>config.dbHost</code> at the managed server and set
+<code>local.postgres.enabled=false</code>. Some tiers cap connections low (Azure B1ms ≈ 50) — the
+chart now holds only one idle connection per pool; raise the server's <code>max_connections</code>
+for headroom. Managed Postgres may also gate extensions (Azure needs pg_trgm/vector allow-listed)
+and demand TLS (add <code>sslmode=require</code> to the datasource URL, or relax on the server for
+a soak).</p>
 
 <h3>The secret gate</h3>
 <p><code>ops/install-hooks.sh</code> wires <code>ops/scan-secrets.sh</code> as a pre-commit
