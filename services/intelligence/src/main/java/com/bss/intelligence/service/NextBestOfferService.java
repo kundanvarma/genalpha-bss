@@ -21,9 +21,13 @@ public class NextBestOfferService {
     private final BssApiClient bss;
     private final LlmAdapter llm;
 
-    public NextBestOfferService(BssApiClient bss, LlmAdapter llm) {
+    private final com.bss.intelligence.llm.AiGovernor governor;
+
+    public NextBestOfferService(BssApiClient bss, LlmAdapter llm,
+            com.bss.intelligence.llm.AiGovernor governor) {
         this.bss = bss;
         this.llm = llm;
+        this.governor = governor;
     }
 
     public Map<String, Object> nextBestOffer(String partyId) {
@@ -54,7 +58,8 @@ public class NextBestOfferService {
                 + " short sentences an agent can say to the customer — grounded in the HOLDING and"
                 + " INTEREST lines only. Answer as JSON: {\"offerName\": ..., \"offerId\": ...,"
                 + " \"reason\": ...}. Never invent an offer that is not a CANDIDATE.";
-        String answer = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, user.toString());
+        String answer = governor.complete("next-best-offer",
+                com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, user.toString());
         Map<String, Object> parsed = parse(answer);
         Map<String, Object> first = candidates.get(0).get("offering") instanceof Map<?, ?> off
                 ? Map.of("id", String.valueOf(off.get("id")), "name", String.valueOf(off.get("name")))

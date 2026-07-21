@@ -1,10 +1,7 @@
 package com.bss.intelligence.service;
 
-import com.bss.intelligence.audit.AiAudit;
-import com.bss.intelligence.audit.AiAuditRepository;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
-import com.bss.intelligence.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -34,16 +31,14 @@ public class ProductCopilotService {
 
     private final LlmAdapter llm;
     private final Redactor redactor;
-    private final AiAuditRepository audits;
-    private final TenantScope tenantScope;
+    private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
 
-    public ProductCopilotService(LlmAdapter llm, Redactor redactor, AiAuditRepository audits,
-            TenantScope tenantScope, ObjectMapper objectMapper) {
+    public ProductCopilotService(LlmAdapter llm, Redactor redactor,
+            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
         this.llm = llm;
         this.redactor = redactor;
-        this.audits = audits;
-        this.tenantScope = tenantScope;
+        this.governor = governor;
         this.objectMapper = objectMapper;
     }
 
@@ -133,16 +128,16 @@ public class ProductCopilotService {
             conversation.append(redactor.redact(String.valueOf(turn.getOrDefault("content", "")))).append("\n");
         }
 
-        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, conversation.toString());
+        String raw = governor.complete("product-copilot",
+                com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, conversation.toString());
         Map<String, Object> parsed = parse(raw);
         if (parsed == null) {
-            recordAudit(raw, conversation.toString(), "product-copilot-contract-miss");
-            raw = llm.complete(system, conversation
+            raw = governor.complete("product-copilot-retry",
+                    com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, conversation
                     + "\nYour previous answer was not the required bare JSON object. Respond again"
                     + " with ONLY the JSON object described in the instructions.");
             parsed = parse(raw);
         }
-        recordAudit(raw, conversation.toString(), "product-copilot");
         if (parsed == null) {
             throw new BadRequestException("the model did not follow the copilot JSON contract");
         }
@@ -202,20 +197,4 @@ public class ProductCopilotService {
         return s.length() <= CONTEXT_CHARS ? s : s.substring(0, CONTEXT_CHARS);
     }
 
-    private void recordAudit(String raw, String prompt, String useCase) {
-        AiAudit audit = new AiAudit();
-        audit.setId(UUID.randomUUID().toString());
-        audit.setTenantId(tenantScope.currentTenantId());
-        audit.setUseCase(useCase);
-        audit.setProvider(llm.provider());
-        audit.setModel(llm.model());
-        audit.setPrompt(truncate(prompt));
-        audit.setResponse(truncate(raw == null ? "" : raw));
-        audit.setCreatedAt(OffsetDateTime.now());
-        audits.save(audit);
-    }
-
-    private static String truncate(String s) {
-        return s.length() <= 4000 ? s : s.substring(0, 4000);
-    }
 }

@@ -1,17 +1,12 @@
 package com.bss.intelligence.service;
 
-import com.bss.intelligence.audit.AiAudit;
-import com.bss.intelligence.audit.AiAuditRepository;
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
-import com.bss.intelligence.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.UUID;
 
 /**
  * First AI feature: draft a campaign message from a one-line brief. The
@@ -25,15 +20,13 @@ public class CopyAssistantService {
 
     private final LlmAdapter llm;
     private final Redactor redactor;
-    private final AiAuditRepository audits;
-    private final TenantScope tenantScope;
+    private final com.bss.intelligence.llm.AiGovernor governor;
 
     public CopyAssistantService(LlmAdapter llm, Redactor redactor,
-            AiAuditRepository audits, TenantScope tenantScope) {
+            com.bss.intelligence.llm.AiGovernor governor) {
         this.llm = llm;
         this.redactor = redactor;
-        this.audits = audits;
-        this.tenantScope = tenantScope;
+        this.governor = governor;
     }
 
     @Transactional
@@ -67,21 +60,21 @@ public class CopyAssistantService {
         }
 
         // Small models drift from the contract; one corrective retry fixes
-        // most of it, and EVERY attempt lands in the ledger — failed calls
-        // are the ones an operator most wants to see.
-        String raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user.toString());
+        // most of it. Every attempt rides the governor — metered, budgeted
+        // and audited in one place (a retry lands as its own ledger row).
+        String raw = governor.complete("campaign-copy",
+                com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user.toString());
         String subject = lineAfter(raw, "SUBJECT:");
         String body = lineAfter(raw, "BODY:");
         if (subject == null || body == null) {
-            recordAudit(raw, user.toString(), system, "contract-miss");
-            raw = llm.complete(com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
+            raw = governor.complete("campaign-copy-retry",
+                    com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, user
                     + "\nYour previous answer did not follow the format. Respond again with"
                     + " ONLY the two lines, starting with 'SUBJECT:' and 'BODY:'.");
             subject = lineAfter(raw, "SUBJECT:");
             body = lineAfter(raw, "BODY:");
         }
         if (subject == null || body == null) {
-            recordAudit(raw, user.toString(), system, "contract-miss");
             throw new BadRequestException("the model did not follow the SUBJECT/BODY contract");
         }
         // The engine substitutes {code}; a promo campaign whose draft lost the
@@ -90,27 +83,12 @@ public class CopyAssistantService {
             body = body + " Use code {code}.";
         }
 
-        recordAudit(raw, user.toString(), system, "campaign-copy");
-
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("subject", subject);
         result.put("content", body);
         result.put("provider", llm.provider());
         result.put("model", llm.model());
         return result;
-    }
-
-    private void recordAudit(String raw, String user, String system, String useCase) {
-        AiAudit audit = new AiAudit();
-        audit.setId(UUID.randomUUID().toString());
-        audit.setTenantId(tenantScope.currentTenantId());
-        audit.setUseCase(useCase);
-        audit.setProvider(llm.provider());
-        audit.setModel(llm.model());
-        audit.setPrompt(truncate(system + "\n---\n" + user));
-        audit.setResponse(truncate(raw));
-        audit.setCreatedAt(OffsetDateTime.now());
-        audits.save(audit);
     }
 
     /** Tolerant of markdown-happy models: "**SUBJECT:** hi" still parses. */
@@ -128,7 +106,4 @@ public class CopyAssistantService {
         return null;
     }
 
-    private static String truncate(String s) {
-        return s.length() <= 4000 ? s : s.substring(0, 4000);
-    }
 }
