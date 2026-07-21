@@ -304,7 +304,7 @@ the placeholders in <code>tenants.yml</code>.</p>
 <tr><td>mock-llm</td><td>8127</td><td>OpenAI- and Anthropic-dialect LLM</td><td>names the model in answers; <code>GET /requests</code></td></tr>
 </table>
 
-<h2 id="prodops">13 · Production operations — suite #56</h2>
+<h2 id="prodops">13 · Production operations — suites #56/#57</h2>
 
 <h3>Ticks that never double-fire</h3>
 <p>Every mutating scheduled job — dunning, bill delivery, campaign journeys, churn sweeps,
@@ -315,6 +315,33 @@ expires on its own. Inspect a service's leases with
 <code>psql -d billing -c "SELECT * FROM tick_lock"</code>. Suite #56 proves it by running TWO
 billing replicas and counting exactly one delivered bill at the receiving partner.</p>
 
+<h3>The billing run — partitioned, resumable, and on a ledger</h3>
+<p>Each account's bill commits in its <em>own</em> transaction; a failed account is recorded
+and skipped, never the run. A crashed run RESUMES on the next trigger — every bill already cut
+is its own checkpoint — and every run is a row: <code>GET
+/tmf-api/customerBillManagement/v4/billingRun</code> lists recent runs (status
+running/completed/superseded, accounts, bills, failures, last error). One run speaks at a time:
+a trigger during a live run answers <code>{"busy": true}</code> (the lease heartbeats per
+account, so a crashed run frees it within ~2 minutes), and the database enforces one bill per
+account per period with a unique index — constraint, not convention. Suite #57 kills billing
+mid-run and proves exactly-one-bill-per-customer after the resume.
+<code>BSS_BILLING_RUN_ACCOUNT_DELAY_MS</code> (default 0) is the dev pacing knob the suite uses
+to hold a run open.</p>
+
+<h3>Load numbers and the smoke SLO</h3>
+<p><code>node ops/load/loadtest.js --seconds 15 --workers 10</code> — plain-Node closed-loop
+driver, three scenarios (anonymous catalog, storefront page, authenticated bill reads),
+reporting req/s and p50/p95/p99. LIFT THE WIDE RING FIRST
+(<code>GLOBAL_RATE_CAPACITY=1000000 docker compose up -d gateway</code>) or the P0 ceiling will
+throttle the harness — that is it working. Baselines and their caveats:
+<a href="../perf-baselines.md">docs/perf-baselines.md</a>.</p>
+
+<h3>Alerts</h3>
+<p><code>infra/prometheus/alert-rules.yml</code>: ServiceDown (2&nbsp;min unscraped),
+OutboxPublishFailures (events queuing, not lost), GatewayServerErrors (5xx&nbsp;&gt;&nbsp;5%).
+The whole fleet is scraped (32 targets). View at <code>:9090/alerts</code>; a deployment routes
+them to a pager via Alertmanager.</p>
+
 <h3>Backup and the restore drill</h3>
 <p><code>ops/backup.sh</code> dumps every database and role to <code>backups/</code>
 (git-ignored, newest 14 kept). <code>ops/restore-drill.sh</code> restores the newest dump into
@@ -322,10 +349,13 @@ a throwaway container, verifies databases and rows, optionally proves a sentinel
 (<code>--expect &lt;db&gt; "&lt;sql&gt;"</code>), and removes the container. Run the drill on a
 schedule — an untested backup is a hope, not a backup.</p>
 
-<h3>Rate limits, two rings</h3>
+<h3>Rate limits, two rings — buckets in Redis</h3>
 <p>The dealer surface keeps strict per-partner buckets; every other path passes a generous
 fleet-wide ceiling (per subject for people, per client for machines, per IP for anonymous),
-answering <code>429 + Retry-After</code> when tripped. Dials in §10.</p>
+answering <code>429 + Retry-After</code> when tripped. Dials in §10. The buckets live in Redis
+(<code>BSS_GATEWAY_REDIS_URL</code>; blank = in-memory): replicas share ONE exact ceiling, a
+restarted gateway still refuses inside the same window, and an unreachable Redis fails open —
+fairness, never authorization.</p>
 
 <h3>The secret gate</h3>
 <p><code>ops/install-hooks.sh</code> wires <code>ops/scan-secrets.sh</code> as a pre-commit
@@ -335,7 +365,7 @@ private-key blocks) refuses to commit. Injectable values are listed in
 secrets, TLS in transit, managed HA Postgres/Kafka — is the runbook,
 <a href="../hardening.md">docs/hardening.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-six suites, eleven CTKs at zero
+<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-seven suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

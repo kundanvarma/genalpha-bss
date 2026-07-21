@@ -16,7 +16,6 @@ import reactor.core.publisher.Mono;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * RATE LIMITS, two rings. The strict ring: per-partner buckets on the
@@ -38,20 +37,27 @@ public class PartnerRateLimitFilter implements GlobalFilter, Ordered {
     private final long windowMs;
     private final int globalCapacity;
     private final long globalWindowMs;
-    private final Map<String, Window> windows = new ConcurrentHashMap<>();
-
-    record Window(long startedAt, int count) {
-    }
+    private final com.bss.gateway.ratelimit.RateLimitStore store;
 
     public PartnerRateLimitFilter(
             @Value("${bss.gateway.partner-rate.capacity:60}") int capacity,
             @Value("${bss.gateway.partner-rate.window-ms:60000}") long windowMs,
             @Value("${bss.gateway.global-rate.capacity:1200}") int globalCapacity,
-            @Value("${bss.gateway.global-rate.window-ms:60000}") long globalWindowMs) {
+            @Value("${bss.gateway.global-rate.window-ms:60000}") long globalWindowMs,
+            @Value("${bss.gateway.redis-url:}") String redisUrl) {
         this.capacity = capacity;
         this.windowMs = windowMs;
         this.globalCapacity = globalCapacity;
         this.globalWindowMs = globalWindowMs;
+        // the seam: one gateway keeps its buckets in memory; replicas (or
+        // anyone who wants restart-surviving windows) point REDIS_URL at
+        // a shared store and every replica enforces the SAME ceiling
+        if (redisUrl == null || redisUrl.isBlank()) {
+            this.store = new com.bss.gateway.ratelimit.InMemoryRateLimitStore();
+        } else {
+            this.store = new com.bss.gateway.ratelimit.RedisRateLimitStore(redisUrl);
+            log.info("rate-limit buckets in Redis at {} — shared across replicas", redisUrl);
+        }
     }
 
     @Override
@@ -82,18 +88,8 @@ public class PartnerRateLimitFilter implements GlobalFilter, Ordered {
     }
 
     /** 0 = admitted; otherwise seconds until the window resets. */
-    synchronized long tryAcquire(String key, int bucketCapacity, long bucketWindowMs) {
-        long now = System.currentTimeMillis();
-        Window window = windows.get(key);
-        if (window == null || now - window.startedAt() >= bucketWindowMs) {
-            windows.put(key, new Window(now, 1));
-            return 0;
-        }
-        if (window.count() < bucketCapacity) {
-            windows.put(key, new Window(window.startedAt(), window.count() + 1));
-            return 0;
-        }
-        return Math.max(1, (window.startedAt() + bucketWindowMs - now + 999) / 1000);
+    long tryAcquire(String key, int bucketCapacity, long bucketWindowMs) {
+        return store.tryAcquire(key, bucketCapacity, bucketWindowMs);
     }
 
     /** The OAuth2 client from the bearer's azp claim — decode-only, no

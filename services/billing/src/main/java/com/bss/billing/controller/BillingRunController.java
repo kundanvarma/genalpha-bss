@@ -24,4 +24,10 @@ public class BillingRunController {
     public ResponseEntity<Map<String, Object>> run() {
         return ResponseEntity.ok(service.run());
     }
+
+    /** The run ledger: every recent run's face, newest first. */
+    @org.springframework.web.bind.annotation.GetMapping("/billingRun")
+    public ResponseEntity<java.util.List<Map<String, Object>>> recent() {
+        return ResponseEntity.ok(service.recentRuns());
+    }
 }

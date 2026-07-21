@@ -28,11 +28,13 @@ machines, per IP for anonymous knocks — decode-only, fairness not authz.
 Dials: `GLOBAL_RATE_CAPACITY` (default 1200/window) and
 `GLOBAL_RATE_WINDOW_MS` (default 60s).
 
-**Caveat for scale-out**: the buckets are in-memory per gateway replica.
-N gateway replicas ⇒ the effective ceiling is N× the dial. That is still
-a real DoS net (each replica defends itself), but for an exact global
-ceiling move the buckets to Redis (Spring Cloud Gateway's
-`RequestRateLimiter` + Redis is the drop-in) — a P1 item.
+**Scale-out (closed in P1)**: the buckets now live behind a
+`RateLimitStore` seam — in-memory with no configuration, shared Redis
+buckets when `BSS_GATEWAY_REDIS_URL` is set (the compose default). N
+replicas enforce ONE exact ceiling, a restarted gateway still refuses
+inside the same window (suite #57 proves the resurrection), and an
+unreachable Redis fails OPEN — rate limiting is fairness, never
+authorization.
 
 ### Backups with a tested restore
 `ops/backup.sh` dumps every database and role; `ops/restore-drill.sh`
@@ -80,16 +82,32 @@ works but costs a cert-distribution story the mesh gives you free.
 - **Keycloak**: 2+ replicas behind the LB with its own HA Postgres.
 
 ### Scale-out, in order
-1. Stateless services: replicas ≥2 via the Helm values — safe NOW
-   because of the tick locks (this arc's point).
-2. Gateway replicas ≥2 (see the Redis caveat above).
-3. The billing run: still a single sweep per tick — fine to ~10⁵
-   customers, then partition by customer range (P1, designed not built).
-4. Load-test before believing any of it: the 56 suites prove
-   correctness, none of them prove throughput (P1).
+1. Stateless services: replicas ≥2 via the Helm values — safe because of
+   the tick locks (P0's point).
+2. Gateway replicas ≥2 — buckets shared in Redis since P1, ceilings stay
+   exact.
+3. The billing run partitions by ACCOUNT since P1: each bill commits
+   alone, a crashed run resumes by construction (the bill is the
+   checkpoint), and every run is a ledger row (`GET /billingRun`). One
+   run speaks at a time — a concurrent trigger gets `{"busy": true}`
+   (row-lease with per-account heartbeat; a crash frees it in ~2 min)
+   and a unique index makes a double bill impossible at the database.
+   What remains for true telco scale is running partitions CONCURRENTLY
+   (worker pools over account ranges) — the per-account isolation and
+   the constraint this arc built are the prerequisites.
+4. Throughput has numbers now — `ops/load/loadtest.js`, baselines with
+   stated caveats in [perf-baselines.md](perf-baselines.md), and suite
+   #57's smoke SLO as the regression tripwire. Re-baseline on real
+   hardware before capacity planning.
 
-### Still P1/P2 — do not mistake P0-done for production-done
+### Alerts (P1) and what still pages nobody
+`infra/prometheus/alert-rules.yml` evaluates ServiceDown, outbox publish
+failures and gateway 5xx over the whole fleet (32 scrape targets).
+Prometheus FIRING is not a page: a deployment adds Alertmanager and a
+route to a pager/Slack — until then alerts are visible at :9090/alerts.
+
+### Still open — do not mistake P1-done for production-done
 | | |
 |---|---|
-| P1 | load tests + baselines; billing-run partitioning; live multi-replica k8s soak; Redis rate-limit buckets; alerting/SLOs; OpenTelemetry tracing |
+| P1.5 | live multi-replica k8s soak (needs the compose stack stopped); OpenTelemetry tracing (agent + collector cost RAM the demo VM lacks); concurrent billing partitions; Alertmanager routing |
 | P2 | GDPR erasure + export flows; retention as policy rules; PCI assessment; DR drills across regions; penetration test; lawful-intercept interfaces |
