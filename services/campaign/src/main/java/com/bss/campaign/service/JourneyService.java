@@ -52,11 +52,13 @@ public class JourneyService {
     private final ObjectMapper objectMapper;
     private final FrequencyGuard frequency;
     private final com.bss.campaign.client.CatalogClient catalog;
+    private final com.bss.campaign.tick.TickGuard tickGuard;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
             TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper,
-            FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog) {
+            FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog,
+            com.bss.campaign.tick.TickGuard tickGuard) {
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -66,6 +68,7 @@ public class JourneyService {
         this.objectMapper = objectMapper;
         this.frequency = frequency;
         this.catalog = catalog;
+        this.tickGuard = tickGuard;
     }
 
     // ---------------- authoring ----------------
@@ -254,12 +257,19 @@ public class JourneyService {
     /** Walk everyone whose next step is due — per tenant, RLS-honest. */
     @Scheduled(fixedDelayString = "${bss.campaign.journey-tick-ms:5000}")
     public void tick() {
-        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
-                tickTenant(tenant.getId());
-            } catch (Exception e) {
-                log.warn("journey tick skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+        if (!tickGuard.claim("journey", java.time.Duration.ofSeconds(60))) {
+            return; // another replica is walking the journeys — one send, never two
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
+                    tickTenant(tenant.getId());
+                } catch (Exception e) {
+                    log.warn("journey tick skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+                }
             }
+        } finally {
+            tickGuard.release("journey");
         }
     }
 

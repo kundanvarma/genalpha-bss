@@ -38,28 +38,37 @@ public class DunningService {
     private final DomainEventPublisher events;
     private final TenantRegistry tenants;
     private final DisputeService disputeService;
+    private final com.bss.billing.tick.TickGuard tickGuard;
     private final Duration grace;
 
     public DunningService(InstallmentPlanRepository plans, CustomerBillRepository bills,
             DomainEventPublisher events, TenantRegistry tenants,
-            DisputeService disputeService,
+            DisputeService disputeService, com.bss.billing.tick.TickGuard tickGuard,
             @Value("${bss.billing.dunning-grace-ms:604800000}") long graceMs) {
         this.plans = plans;
         this.bills = bills;
         this.events = events;
         this.tenants = tenants;
         this.disputeService = disputeService;
+        this.tickGuard = tickGuard;
         this.grace = Duration.ofMillis(graceMs);
     }
 
     @Scheduled(fixedDelayString = "${bss.billing.dunning-tick-ms:60000}")
     public void sweep() {
-        for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
-            try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
-                sweepTenant(tenant.getId());
-            } catch (Exception e) {
-                log.warn("dunning sweep failed for tenant {}: {}", tenant.getId(), e.getMessage());
+        if (!tickGuard.claim("dunning", Duration.ofSeconds(60))) {
+            return; // another replica is dunning — one reminder, never two
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
+                    sweepTenant(tenant.getId());
+                } catch (Exception e) {
+                    log.warn("dunning sweep failed for tenant {}: {}", tenant.getId(), e.getMessage());
+                }
             }
+        } finally {
+            tickGuard.release("dunning");
         }
     }
 

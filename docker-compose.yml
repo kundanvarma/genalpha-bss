@@ -1338,6 +1338,10 @@ services:
       # dev clocks: partner rate window small enough for a suite to trip
       BSS_GATEWAY_PARTNER_RATE_CAPACITY: "10"
       BSS_GATEWAY_PARTNER_RATE_WINDOW_MS: "2000"
+      # the wide ring: EVERY path has a ceiling — generous by default,
+      # swappable so a suite can trip it (GLOBAL_RATE_CAPACITY=15 ... up -d gateway)
+      BSS_GATEWAY_GLOBAL_RATE_CAPACITY: ${GLOBAL_RATE_CAPACITY:-1200}
+      BSS_GATEWAY_GLOBAL_RATE_WINDOW_MS: ${GLOBAL_RATE_WINDOW_MS:-60000}
       CATALOG_URL: http://product-catalog:8080
       ORDERING_URL: http://product-ordering:8080
       INVENTORY_URL: http://product-inventory:8080

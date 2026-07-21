@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-five end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-six end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2211,6 +2211,52 @@
     <p class="pull edge">Cost of the three rungs: one image tag, two trusted extensions, four
     indexes, zero new containers. Cost of the road not taken: a cluster, forever. The best
     architecture decisions are sometimes the ones that end with Postgres doing one more thing.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Thirty-Eight</div>
+    <h3>The boring engineering</h3>
+    <div class="epi">"Do you think our BSS is production ready? Can it scale, does it have
+    redundancy and failover — is it secured?" <span class="who">— the operator, asking the only
+    question that matters after fifty-five suites</span></div>
+
+    <p class="drop">The honest answer was uncomfortable and useful: the architecture was right
+    and the operations were not. Fifty-five suites proved the system CORRECT; none of them
+    proved it SURVIVABLE. And the first thing that would have failed in production was not
+    exotic — it was arithmetic. Nine scheduled ticks move money and send mail: dunning notices,
+    paper bills to the print house, campaign sends, commission hardening. Run any of those
+    services twice — the very first thing a Kubernetes deployment does — and every tick fires
+    twice. Two dunning letters. Two paper bills. The feature that makes a system scalable is,
+    embarrassingly often, the feature that stops it doing everything twice.</p>
+
+    <h2>The lock is a row</h2>
+    <p>The fix kept the house style: no coordinator, no new dependency. A <code>tick_lock</code>
+    table in each service's own database and seventy lines that play the ShedLock algorithm
+    straight — claim a lease with an atomic UPDATE-then-INSERT, release when done, expire on
+    crash so a dead replica never wedges the fleet. The claim runs in its own transaction, so a
+    lost race can never poison the tick's real work. And the proof was the receiver's, not the
+    sender's: the suite raised a SECOND billing replica against the same database — two
+    schedulers racing every three seconds — cut a bill, and asked the mock print house how many
+    copies it held. One. The twenty-seven outbox relays were left deliberately unguarded, and
+    the reason is the point: at-least-once delivery with dedup at every consumer was designed in
+    from the first event, so a duplicate relay is waste, never harm. Where the contract already
+    absorbs duplication you leave it alone; where it moves money, you lock the row.</p>
+
+    <h2>A ceiling on every door, and a backup that is not a hope</h2>
+    <p>The dealer surface had rate limits because partners get retry storms; every other door
+    was unmetered. Now the gateway runs two rings — the strict per-partner buckets it always
+    had, and a wide generous ceiling on everything else, counted per person, per machine, per
+    address, so one caller's flood never becomes everyone's outage. And the backup learned the
+    book's oldest lesson: nothing exists until a suite has seen it. <code>backup.sh</code> dumps
+    the fleet; <code>restore-drill.sh</code> restores it into a THROWAWAY container and goes
+    looking for a sentinel customer created minutes earlier. The suite found her in the copy.
+    An untested backup is a hope. This one is a fact with a timestamp.</p>
+
+    <p class="pull edge">What remains is written down where claims go to be audited —
+    docs/hardening.md: managed HA databases, TLS inside the cluster, load tests, the compliance
+    ledger. Production-ready is not a feeling; it is a list, with the unticked boxes showing.</p>
   </section>
 
   <hr class="soft">

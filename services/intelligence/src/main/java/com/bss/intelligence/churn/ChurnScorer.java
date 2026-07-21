@@ -46,6 +46,7 @@ public class ChurnScorer {
     private final DomainEventPublisher events;
     private final TenantRegistry tenants;
     private final TransactionTemplate transaction;
+    private final com.bss.intelligence.tick.TickGuard tickGuard;
     private final int agreementDays;
     private final double usageThreshold;
     private final int ticketThreshold;
@@ -54,6 +55,7 @@ public class ChurnScorer {
     public ChurnScorer(BssApiClient bss, ChurnAlertRepository alerts,
             ChurnFeatureSnapshotRepository snapshots, ChurnModelService modelService,
             DomainEventPublisher events, TenantRegistry tenants, TransactionTemplate transaction,
+            com.bss.intelligence.tick.TickGuard tickGuard,
             @Value("${bss.intelligence.churn.agreement-days:30}") int agreementDays,
             @Value("${bss.intelligence.churn.usage-threshold:0.9}") double usageThreshold,
             @Value("${bss.intelligence.churn.ticket-threshold:2}") int ticketThreshold,
@@ -65,6 +67,7 @@ public class ChurnScorer {
         this.events = events;
         this.tenants = tenants;
         this.transaction = transaction;
+        this.tickGuard = tickGuard;
         this.agreementDays = agreementDays;
         this.usageThreshold = usageThreshold;
         this.ticketThreshold = ticketThreshold;
@@ -74,10 +77,16 @@ public class ChurnScorer {
     @Scheduled(initialDelayString = "${bss.intelligence.churn.initial-delay-ms:60000}",
             fixedDelayString = "${bss.intelligence.churn.interval-ms:300000}")
     public void scheduledSweep() {
+        // the sweep can run for minutes across tenants: a generous lease
+        if (!tickGuard.claim("churn-sweep", java.time.Duration.ofMinutes(10))) {
+            return; // another replica is scoring — one alert per signal, never two
+        }
         try {
             sweepAllTenants();
         } catch (Exception e) {
             log.warn("scheduled churn sweep failed: {}", e.getMessage());
+        } finally {
+            tickGuard.release("churn-sweep");
         }
     }
 

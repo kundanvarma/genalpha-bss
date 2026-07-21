@@ -58,6 +58,7 @@ beside it.</p>
 10. <a href="#envs">Environment reference</a><br>
 11. <a href="#apis">Extension API reference</a><br>
 12. <a href="#mocks">The mock integrations</a><br>
+13. <a href="#prodops">Production operations</a><br>
 </p>
 </div>
 
@@ -267,7 +268,8 @@ the placeholders in <code>tenants.yml</code>.</p>
 <tr><td><code>BSS_SOM_COMMISSION_WINDOW_MS / _TICK_MS</code></td><td>angrerett window / harden tick</td><td>15s &amp; 5s / 14d &amp; 1h</td></tr>
 <tr><td><code>BSS_SOM_TELESALES_EXPIRY_MS / _TICK_MS</code></td><td>offer expiry / sweep</td><td>15s &amp; 5s / 48h &amp; 1h</td></tr>
 <tr><td><code>BSS_TENANTS_REFRESH_MS</code></td><td>live registry refresh</td><td>15s</td></tr>
-<tr><td><code>BSS_GATEWAY_PARTNER_RATE_CAPACITY / _WINDOW_MS</code></td><td>per-partner rate limit</td><td>10 per 2s / 60 per 60s</td></tr>
+<tr><td><code>BSS_GATEWAY_PARTNER_RATE_CAPACITY / _WINDOW_MS</code></td><td>per-partner rate limit (dealer surface)</td><td>10 per 2s / 60 per 60s</td></tr>
+<tr><td><code>GLOBAL_RATE_CAPACITY / GLOBAL_RATE_WINDOW_MS</code></td><td>the wide ring — a ceiling on EVERY path, per subject/client/IP</td><td>1200 per 60s</td></tr>
 </table>
 
 <h2 id="apis">11 · Extension API reference (beyond the TMF standard surfaces)</h2>
@@ -302,7 +304,38 @@ the placeholders in <code>tenants.yml</code>.</p>
 <tr><td>mock-llm</td><td>8127</td><td>OpenAI- and Anthropic-dialect LLM</td><td>names the model in answers; <code>GET /requests</code></td></tr>
 </table>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-three suites, eleven CTKs at zero
+<h2 id="prodops">13 · Production operations — suite #56</h2>
+
+<h3>Ticks that never double-fire</h3>
+<p>Every mutating scheduled job — dunning, bill delivery, campaign journeys, churn sweeps,
+porting cutover, commission hardening, order resume, telesales expiry, cart abandonment —
+claims a row-lease (<code>tick_lock</code> table in the service's own database) before it runs.
+Scale any service to N replicas and each tick still fires once; a crashed holder's lease
+expires on its own. Inspect a service's leases with
+<code>psql -d billing -c "SELECT * FROM tick_lock"</code>. Suite #56 proves it by running TWO
+billing replicas and counting exactly one delivered bill at the receiving partner.</p>
+
+<h3>Backup and the restore drill</h3>
+<p><code>ops/backup.sh</code> dumps every database and role to <code>backups/</code>
+(git-ignored, newest 14 kept). <code>ops/restore-drill.sh</code> restores the newest dump into
+a throwaway container, verifies databases and rows, optionally proves a sentinel
+(<code>--expect &lt;db&gt; "&lt;sql&gt;"</code>), and removes the container. Run the drill on a
+schedule — an untested backup is a hope, not a backup.</p>
+
+<h3>Rate limits, two rings</h3>
+<p>The dealer surface keeps strict per-partner buckets; every other path passes a generous
+fleet-wide ceiling (per subject for people, per client for machines, per IP for anonymous),
+answering <code>429 + Retry-After</code> when tripped. Dials in §10.</p>
+
+<h3>The secret gate</h3>
+<p><code>ops/install-hooks.sh</code> wires <code>ops/scan-secrets.sh</code> as a pre-commit
+hook: any staged diff carrying a real-secret shape (Anthropic/OpenAI/AWS/GitHub/Slack keys,
+private-key blocks) refuses to commit. Injectable values are listed in
+<code>.env.example</code>; what a real deployment must add beyond this stack — external
+secrets, TLS in transit, managed HA Postgres/Kafka — is the runbook,
+<a href="../hardening.md">docs/hardening.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-six suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
