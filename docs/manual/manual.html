@@ -358,6 +358,13 @@ answering <code>429 + Retry-After</code> when tripped. Dials in §10. The bucket
 restarted gateway still refuses inside the same window, and an unreachable Redis fails open —
 fairness, never authorization.</p>
 
+<h3>The live k8s soak (on demand)</h3>
+<p>The Helm chart has run on a live cluster — 21 pods, billing at 2 replicas with ONE set of
+tick leases, requests served through the in-cluster gateway. The sequence (compose must stop
+first; one laptop, two worlds) and the receipts:
+<a href="../k8s-soak-plan.md">docs/k8s-soak-plan.md</a>; the smoke is
+<code>ops/k8s-soak/smoke.js</code> against port-forwarded gateway/keycloak.</p>
+
 <h3>The secret gate</h3>
 <p><code>ops/install-hooks.sh</code> wires <code>ops/scan-secrets.sh</code> as a pre-commit
 hook: any staged diff carrying a real-secret shape (Anthropic/OpenAI/AWS/GitHub/Slack keys,

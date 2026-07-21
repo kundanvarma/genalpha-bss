@@ -120,5 +120,5 @@ half (warrant-gated disclosure) is shaped, not built. Suite #58.
 ### Still open — the honest remainder
 | | |
 |---|---|
-| P1.5 | live multi-replica k8s soak (needs the compose stack stopped); OpenTelemetry tracing (agent + collector cost RAM the demo VM lacks); concurrent billing partitions; Alertmanager routing |
+| P1.5 | ~~live multi-replica k8s soak~~ **DONE 2026-07-21** — the Helm chart ran on live k3s: 21 pods Ready, billing at 2 replicas with ONE set of tick leases, requests served through the in-cluster gateway ([k8s-soak-plan.md](k8s-soak-plan.md) has the receipts and the three drifts the soak caught); OpenTelemetry tracing (agent + collector cost RAM the demo VM lacks); concurrent billing partitions; Alertmanager routing |
 | P2.5 | third-party penetration test; regional DR drill on real topology; Art. 30 processing register + DPIA (operator documents); per-tenant retention dials in the registry; warrant-disclosure endpoint when a national format names it |

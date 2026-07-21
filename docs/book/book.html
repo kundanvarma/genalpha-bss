@@ -2363,6 +2363,40 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Forty-One</div>
+    <h3>One laptop, two worlds</h3>
+    <div class="epi">"go ahead with the live k8s soak" <span class="who">— the operator, naming
+    the oldest unticked box in the backlog</span></div>
+
+    <p class="drop">The Helm chart had been template-verified since the day it shipped and never
+    once run, because one laptop cannot carry fifty-five compose containers and a Kubernetes
+    cluster at the same time. So the two worlds traded places: compose stopped, and k3s — parked
+    inside the same VM, deliberately stopped since a crashlooping leftover had starved it —
+    started factory-fresh. The dreaded step never happened: this k3s shares Docker's own runtime,
+    so every image the fleet had ever built was already visible, and the import script died
+    unwritten. The setup found three drifts no template render could have caught — the chart's
+    postgres lacked the pgvector the knowledge service now migrates against, both realm files had
+    drifted from the source of truth, and the prepared core-commerce scoping had quietly excluded
+    product-stock, which ordering turns out to REQUIRE: the first live order came back 502 and
+    taught the values file a fact. That is what a soak is FOR.</p>
+
+    <p>Twenty-one pods came Ready the Kubernetes way — no depends_on, just crash-until-postgres-
+    answers, twice each, then stable. The smoke proved requests, not readiness: a token from the
+    in-cluster Keycloak, an offering authored THROUGH the gateway into the cluster's own
+    database, an order accepted. And the receipt the whole exercise existed for: billing ran as
+    TWO replicas — the per-service dial added that morning — and the tick_lock table showed both
+    ticks leased by a single replica id. The locks built in P0 for a scale-out that was then
+    hypothetical held on the first real one. Ten minutes of soak, zero new restarts; then the
+    worlds traded back, compose resumed, and a regression confirmed the demo fleet never noticed
+    it had been away.</p>
+
+    <p class="pull edge">The chart is no longer a promise with a lint pass. It has run — small,
+    honest, and observed — and the three things it got wrong are now three things it says.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>

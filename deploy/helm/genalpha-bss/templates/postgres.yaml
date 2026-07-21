@@ -39,7 +39,10 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:16-alpine
+          # pgvector = official postgres + the vector extension — the
+          # knowledge service's semantic migration needs it (same image
+          # as compose; drift caught preparing the live soak)
+          image: pgvector/pgvector:pg16
           args: ["-c", "max_connections=300"]
           env:
             - name: POSTGRES_USER

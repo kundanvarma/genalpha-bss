@@ -1,5 +1,8 @@
 # Core-commerce soak: prove the chart runs on real k8s within 16GB.
 # Everything outside core is disabled via the composability flag.
+# LIVE-SOAK LESSONS (2026-07-21): product-stock stays ENABLED (ordering
+# hard-depends on it — the first live order answered 502 without it);
+# billing runs at TWO replicas to prove the tick locks on real k8s.
 services:
   console:
     enabled: false
@@ -9,12 +12,11 @@ services:
     enabled: false
   mobile-app:
     enabled: false
-  product-stock:
-    enabled: false
   payment:
     enabled: false
   billing:
-    enabled: false
+    enabled: true
+    replicas: 2
   qualification:
     enabled: false
   appointment:

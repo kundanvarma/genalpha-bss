@@ -185,7 +185,7 @@
       },
       {
         "name": "policy:evaluate",
-        "description": "policy:evaluate — machine scope for the order pipeline"
+        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -569,7 +569,9 @@
       "directAccessGrantsEnabled": true,
       "redirectUris": [
         "http://localhost:8080/biz/*",
-        "http://biz.nova.localhost:8080/biz/*"
+        "http://biz.nova.localhost:8080/biz/*",
+        "http://localhost:8080/dealer-app/*",
+        "http://biz.nova.localhost:8080/dealer-app/*"
       ],
       "webOrigins": [
         "http://localhost:8080",
@@ -830,7 +832,10 @@
         "ordering:read",
         "ordering:write",
         "porting:read",
-        "catalog:read"
+        "catalog:read",
+        "party:read",
+        "assurance:read",
+        "insight:read"
       ],
       "id": "1a01fd9b-0748-52ab-8ae0-8d170a5279c6"
     },
@@ -856,7 +861,10 @@
         "assurance:read",
         "recommendation:read",
         "insight:read",
-        "inventory:read"
+        "inventory:read",
+        "catalog:read",
+        "catalog:write",
+        "billing:read"
       ]
     },
     {
