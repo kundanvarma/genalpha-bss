@@ -21,6 +21,17 @@ cd "$REPO"
 
 PATTERNS='sk-ant-[A-Za-z0-9_-]{8,}|sk-[A-Za-z0-9]{48,}|AKIA[0-9A-Z]{16}|gh[pos]_[A-Za-z0-9]{30,}|xox[bap]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----'
 
+# STRUCTURAL refusals: some FILES are secret containers no matter what
+# shapes they hold — terraform state stores every sensitive variable in
+# cleartext (learned the hard way: a tfstate with the RDS password
+# reached a public commit and forced a history rewrite + rotation).
+STATE_FILES="$(git diff --cached --name-only | grep -E '\.tfstate(\.backup)?$|(^|/)\.terraform/' || true)"
+if [ -n "$STATE_FILES" ]; then
+  echo "scan-secrets: REFUSED — terraform state must never be committed:" >&2
+  echo "$STATE_FILES" >&2
+  exit 1
+fi
+
 if [ "${1:-}" = "--all" ]; then
   HITS="$(git grep -nE "$PATTERNS" -- . 2>/dev/null || true)"
   WHERE="the working tree"
