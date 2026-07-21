@@ -162,6 +162,12 @@ spring:
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
             - Path=/telesales/v1/**
+        - id: privacy
+          # GDPR front door: export (your own data, your own token) and
+          # erasure (DPO) — party-account orchestrates the fleet fan-out
+          uri: ${PARTY_URL:http://localhost:8084}
+          predicates:
+            - Path=/privacy/v1/**
         - id: assurance
           uri: ${ASSURANCE_URL:http://localhost:8105}
           predicates:

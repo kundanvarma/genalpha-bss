@@ -59,6 +59,7 @@ beside it.</p>
 11. <a href="#apis">Extension API reference</a><br>
 12. <a href="#mocks">The mock integrations</a><br>
 13. <a href="#prodops">Production operations</a><br>
+14. <a href="#privacy">Privacy &amp; GDPR operations</a><br>
 </p>
 </div>
 
@@ -365,7 +366,36 @@ private-key blocks) refuses to commit. Injectable values are listed in
 secrets, TLS in transit, managed HA Postgres/Kafka — is the runbook,
 <a href="../hardening.md">docs/hardening.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-seven suites, eleven CTKs at zero
+<h2 id="privacy">14 · Privacy &amp; GDPR operations — suite #58</h2>
+
+<h3>The data passport (right of access)</h3>
+<p><code>GET /privacy/v1/export</code> — a customer exports THEMSELVES with their own sign-in
+(no role needed; the fan-out rides their token to every service). The DPO — any user with
+<code>roles:admin</code> — adds <code>?partyId=</code> to export another person. The JSON names
+its categories and also the legal-hold categories it cannot delete.</p>
+
+<h3>Erasure (right to be forgotten)</h3>
+<p><code>POST /privacy/v1/erase {"partyId": "..."}</code> (DPO only). Refuses 409 while the
+person holds ACTIVE services — terminate first. Deletes interactions, messages, marketing,
+carts, tickets, appointments, behavioural data; anonymizes the profile in place; disables and
+scrubs the login at the IdP. Bills/payments/orders/usage/agreements are retained with their
+legal basis named in the report. A partial fan-out answers
+<code>"status": "partial — re-run required"</code> — re-run until <code>completed</code>.
+<code>GET /privacy/v1/erasure</code> lists the audit trail.</p>
+
+<h3>Retention clocks</h3>
+<p><code>BSS_RETENTION_INTERACTIONS_SECONDS</code> (party-interaction) and
+<code>BSS_RETENTION_TICKETS_SECONDS</code> (trouble-ticket, settled tickets only) — 0 = keep
+forever (default). Production sets day-scale values (e.g. 63072000 = 2 years);
+<code>BSS_RETENTION_SWEEP_MS</code> paces the sweep. TickGuard-guarded: replicas never
+double-sweep.</p>
+
+<h3>PCI &amp; lawful intercept, honestly</h3>
+<p>Card data never enters the BSS — the vault stores <code>pspToken/brand/lastFour/expiry</code>
+(SAQ-A-shaped; a QSA attests the rest). Lawful intercept: the BSS half is warrant-gated
+subscriber disclosure — shaped, not built; see <a href="../privacy.md">docs/privacy.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-eight suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

@@ -15,4 +15,6 @@ public interface AppointmentRepository extends JpaRepository<Appointment, String
     @Query("select count(a) from Appointment a where a.startAt = :start and a.status = 'confirmed'"
             + " and a.tenantId = :tenantId")
     long confirmedAt(@Param("start") OffsetDateTime start, @Param("tenantId") String tenantId);
+
+    java.util.List<Appointment> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 }

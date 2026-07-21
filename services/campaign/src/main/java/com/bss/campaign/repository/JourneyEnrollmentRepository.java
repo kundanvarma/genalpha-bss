@@ -21,4 +21,6 @@ public interface JourneyEnrollmentRepository extends JpaRepository<JourneyEnroll
      * (the tick acts as each tenant in turn, so RLS stays honest). */
     List<JourneyEnrollment> findTop200ByTenantIdAndStatusAndNextActionAtBefore(
             String tenantId, String status, OffsetDateTime cutoff);
+
+    java.util.List<JourneyEnrollment> findByTenantIdAndPartyId(String tenantId, String partyId);
 }

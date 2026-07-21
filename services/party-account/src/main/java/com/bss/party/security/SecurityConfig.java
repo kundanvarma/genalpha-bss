@@ -55,7 +55,8 @@ public class SecurityConfig {
                                 ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.PARTY_BASE + "/**",
                                 ApiConstants.ACCOUNT_BASE + "/**", "/tmf-api/partyRoleManagement/v4/**").hasAuthority(WRITE)
-                        .anyRequest().authenticated())
+                        .requestMatchers("/privacy/v1/**").authenticated()
+                .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
         return http.build();

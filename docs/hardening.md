@@ -106,8 +106,19 @@ failures and gateway 5xx over the whole fleet (32 scrape targets).
 Prometheus FIRING is not a page: a deployment adds Alertmanager and a
 route to a pager/Slack — until then alerts are visible at :9090/alerts.
 
-### Still open — do not mistake P1-done for production-done
+### Compliance (P2) — built and proven where a laptop can
+GDPR is features now, not intentions — see [privacy.md](privacy.md):
+the data passport (`GET /privacy/v1/export`, the caller's own token
+doing all the reading), erasure with the law's own exceptions (active
+contracts refuse 409; bookkeeping categories retained WITH their basis;
+profile anonymized in place; login scrubbed at the IdP; immutable
+audit rows), and retention as TickGuard-guarded clocks. PCI scope is
+verified-then-claimed (token vault, no PAN — SAQ-A-shaped, a QSA
+attests the rest). Lawful intercept is stated as a boundary: the BSS
+half (warrant-gated disclosure) is shaped, not built. Suite #58.
+
+### Still open — the honest remainder
 | | |
 |---|---|
 | P1.5 | live multi-replica k8s soak (needs the compose stack stopped); OpenTelemetry tracing (agent + collector cost RAM the demo VM lacks); concurrent billing partitions; Alertmanager routing |
-| P2 | GDPR erasure + export flows; retention as policy rules; PCI assessment; DR drills across regions; penetration test; lawful-intercept interfaces |
+| P2.5 | third-party penetration test; regional DR drill on real topology; Art. 30 processing register + DPIA (operator documents); per-tenant retention dials in the registry; warrant-disclosure endpoint when a national format names it |

@@ -198,6 +198,9 @@ services:
       DB_PASSWORD: ticket_app
       DB_MIGRATION_USERNAME: postgres
       DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # retention: 0 = keep forever (dev default); the privacy suite dials seconds
+      BSS_RETENTION_TICKETS_SECONDS: ${RETENTION_TICKETS_SECONDS:-0}
+      BSS_RETENTION_SWEEP_MS: ${RETENTION_SWEEP_MS:-60000}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -230,6 +233,9 @@ services:
       DB_PASSWORD: interaction_app
       DB_MIGRATION_USERNAME: postgres
       DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # retention: 0 = keep forever (dev default); the privacy suite dials seconds
+      BSS_RETENTION_INTERACTIONS_SECONDS: ${RETENTION_INTERACTIONS_SECONDS:-0}
+      BSS_RETENTION_SWEEP_MS: ${RETENTION_SWEEP_MS:-60000}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
@@ -1176,6 +1182,16 @@ services:
     environment:
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      # the GDPR fan-out: export/erasure ride the CALLER's token to these
+      BSS_PRIVACY_INTERACTION_URL: http://party-interaction:8080
+      BSS_PRIVACY_COMMUNICATION_URL: http://communication:8080
+      BSS_PRIVACY_CAMPAIGN_URL: http://campaign:8080
+      BSS_PRIVACY_CART_URL: http://shopping-cart:8080
+      BSS_PRIVACY_TICKET_URL: http://trouble-ticket:8080
+      BSS_PRIVACY_APPOINTMENT_URL: http://appointment:8080
+      BSS_PRIVACY_INSIGHT_URL: http://insight:8080
+      BSS_PRIVACY_USER_ROLES_URL: http://user-roles:8080
+      BSS_PRIVACY_INVENTORY_URL: http://product-inventory:8080
       DB_URL: jdbc:postgresql://postgres:5432/party_account
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: party_app

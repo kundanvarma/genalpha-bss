@@ -55,7 +55,8 @@ public class SecurityConfig {
                                 ApiConstants.BASE_PATH + "/partyProfile",
                                 ApiConstants.BASE_PATH + "/segmentMembers",
                                 ApiConstants.BASE_PATH + "/audiences").hasAuthority("insight:read")
-                        .anyRequest().authenticated())
+                        .requestMatchers("/privacy/v1/**").authenticated()
+                .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));
         return http.build();

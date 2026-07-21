@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and fifty-seven end-to-end test suites that all pass
+    composable components, six customer surfaces, and fifty-eight end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2310,6 +2310,55 @@
     <p class="pull edge">And alerts exist now — ServiceDown, a stalled outbox, a 5xx front door,
     evaluated over thirty-two scrape targets where five had been. A dashboard nobody watches is
     documentation; an alert is a promise that silence means something.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Forty</div>
+    <h3>The right to be forgotten, with receipts</h3>
+    <div class="epi">"go ahead with P2 hardening" <span class="who">— the operator, and the last
+    unticked boxes were the ones the law owns</span></div>
+
+    <p class="drop">A European subscriber holds rights the way they hold a phone number: legally,
+    specifically, and with someone obliged to answer. The right of access got the build's most
+    satisfying privilege design: the data passport rides the CALLER'S OWN TOKEN. When a customer
+    exports themselves, party-account walks every service that holds a piece of them —
+    interactions, messages, marketing touches, carts, tickets, appointments, behavioural
+    profiles — presenting the customer's own credentials at each door. Every service returns
+    exactly what that token could already read, which means the right of access required no new
+    authority anywhere: it is what the person could always see, finally gathered into one
+    portable document. The DPO — the user-administrator wearing a second hat, honestly
+    documented — may name another party. Nobody else can, and the refusal is a 404, never
+    a 403.</p>
+
+    <h2>Erasure that knows the law both ways</h2>
+    <p>The eraser refuses twice, and both refusals are the feature. A subscriber with an ACTIVE
+    plan cannot be erased — 409, terminate first, because erasure never breaks a running
+    contract; and the check FAILS CLOSED, refusing when it cannot prove the inventory empty
+    rather than guessing. And the bookkeeping categories — bills, payments, orders, usage,
+    agreements — are retained with their legal basis NAMED in the report, because a tax
+    authority's five-year claim on an invoice outranks a deletion request, and pretending
+    otherwise would be theatre. What the law does not hold, goes: seven services delete their
+    slices, the profile anonymizes IN PLACE — "Erased", no contact media, the id surviving as
+    the pseudonymous peg the retained records hang on — and the login dies at the identity
+    provider, name and email scrubbed from the realm. The report of all of it becomes an
+    immutable audit row. The suite's favourite assertion is the quietest: after erasure, the
+    person's own password simply stops working.</p>
+
+    <h2>Clocks, card numbers, and honest boundaries</h2>
+    <p>Retention became a clock — interaction records and settled tickets deleted on schedule
+    by the same guarded ticks that stopped double-firing in P0; open tickets are never touched,
+    and the dev default is "keep forever" so no suite loses its timeline. The PCI question got
+    the verify-then-claim treatment: the payment vault's columns are token, brand, last-four,
+    expiry — no card number has anywhere to live — an SAQ-A-shaped posture claimed only as far
+    as a README may claim it, a QSA attesting the rest. And lawful intercept was answered the
+    NRDB way: shaped, not connected — the BSS half is warrant-gated disclosure, and it ships
+    when an operator with a legal obligation names its national format.</p>
+
+    <p class="pull edge">Fifty-eight suites. The last one proves a person can leave — completely,
+    audibly, and with the paperwork the law demands on BOTH sides of the deletion. A system that
+    can forget you on purpose is a system that was honest about remembering you.</p>
   </section>
 
   <hr class="soft">

@@ -10,4 +10,8 @@ public interface PartyInteractionRepository extends JpaRepository<PartyInteracti
     Optional<PartyInteraction> findByIdAndTenantId(String id, String tenantId);
 
     boolean existsByTenantIdAndSourceRef(String tenantId, String sourceRef);
+
+    java.util.List<PartyInteraction> findByTenantIdAndCustomerPartyId(String tenantId, String customerPartyId);
+
+    java.util.List<PartyInteraction> findByLastUpdateBefore(java.time.OffsetDateTime cutoff);
 }
