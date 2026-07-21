@@ -88,7 +88,7 @@ intentional hardened gaps (payment, communication) — in
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max
 - 🧾 **[Bill distribution & remittance](docs/bill-distribution.md)** — the bill both ways: PDF, seven e-invoice formats as config rows (EHF, Peppol BIS, CII, A-NZ, XRechnung, EDIFACT, Factur-X), print & e-invoice channels with per-customer preference, the outbox-backed delivery ledger with buyer Invoice Responses, and money home by camt.054 / Nets OCR / BAI2 with an unapplied-cash worklist
 - 📏 **[Product rules — how to use them](docs/product-rules.md)** — author order rules and dynamic pricing as data: console walkthrough, dry-run, customer experience, JSON-logic context reference, API examples
-- 🛡️ **[Production hardening](docs/hardening.md)** — what is done and proven (tick locks under two live replicas, a crash-resumable billing run with its own ledger, Redis-backed rate ceilings that survive restarts, a backup that provably restores, fleet-wide alert rules, the secret gate, GDPR as endpoints — and the **Helm chart run live on k8s**: 21 pods, billing at 2 replicas, one set of tick leases, [receipts](docs/k8s-soak-plan.md)) and the honest list a real deployment still owes: managed HA Postgres/Kafka, TLS in transit, a third-party pen test
+- 🛡️ **[Production hardening](docs/hardening.md)** — what is done and proven (tick locks under two live replicas, a crash-resumable billing run with its own ledger, Redis-backed rate ceilings that survive restarts, a backup that provably restores, fleet-wide alert rules, the secret gate, GDPR as endpoints — and the **Helm chart run live on three clouds** — local k3s, AWS EKS, Azure AKS — billing at 2 replicas with one set of tick leases against a managed database each time, [receipts](docs/k8s-soak-plan.md)) and the honest list a real deployment still owes: managed HA Postgres/Kafka, TLS in transit, a third-party pen test
 - 🔏 **[Privacy & compliance](docs/privacy.md)** — the GDPR data passport and eraser (self-service export on the caller's own token, erasure with the law's own exceptions, retention clocks, the audit that outlives the erased), verified PCI scope, and the honest boundary statements for lawful intercept and regional DR
 - 📊 **[Performance baselines](docs/perf-baselines.md)** — throughput's first honest numbers from `ops/load/loadtest.js` (one laptop, all 30 JVMs: ~680 req/s catalog at p95 39 ms, ~450 req/s authenticated reads through JWT+RLS), the caveats stated, and the smoke-SLO tripwire suite #57 arms
 - 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
@@ -320,6 +320,19 @@ helm install genalpha-bss deploy/helm/genalpha-bss -f my-modules.yaml
 ```
 
 Terraform stacks for EKS and AKS live under `deploy/terraform`.
+
+**The chart is not template-verified — it has run, on three live clusters.** Local k3s, then
+**AWS EKS** (Graviton nodes, RDS), then **Azure AKS** (Flexible Server, ACR) — each with the
+same images, the same in-cluster Kafka/Keycloak, the same smoke, and billing at **two replicas**
+holding a single set of tick leases (the P0 scale-out safety, proven live against a managed
+database on both clouds). Each run is one command — `ops/k8s-soak/eks-run.sh up|smoke|down` and
+`ops/k8s-soak/aks-run.sh up|smoke|down` — wrapping Terraform, the registry push, managed
+Postgres, Helm, the smoke and a verified teardown. **Not one line of application code differs
+between the clouds** — every difference (node architecture, VM/region gating, connection caps,
+extension allow-lists, TLS) lives in Terraform and two Helm `--set`s, absorbed by the same seams
+the app already had. The nine live-run truths each cloud taught — and the cloud-by-cloud
+difference table — are in [architecture.md §5](docs/architecture.md) and
+[docs/k8s-soak-plan.md](docs/k8s-soak-plan.md). "Any cloud" is now two invoices, not a claim.
 
 ## Stack
 
