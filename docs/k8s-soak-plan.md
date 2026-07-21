@@ -150,5 +150,46 @@ variables in cleartext) briefly reached a public commit — remediated
 within minutes by a history rewrite, an immediate RDS password rotation
 and a release roll; the secret gate now refuses the file CLASS
 (`*.tfstate`, `.terraform/`) outright, because a scanner that only
-knows shapes misses containers. The AKS twin of this run remains on the
-ledger, waiting on Azure credits.
+knows shapes misses containers.
+
+## The third cloud — Azure AKS, same day
+
+Hours after EKS, on Microsoft for Startups (Founders Hub) credits, the
+AKS twin ran (`ops/k8s-soak/aks-run.sh`). Where EKS taught three truths,
+AKS argued about nearly everything — its own kind of proof that the
+seams, not the app, carry the cloud differences. The full cloud-by-cloud
+table lives in [architecture.md §5](architecture.md); the truths this
+run caught, each now fixed and commented in the Azure stack:
+
+- **New subscriptions are region-gated**: westeurope refused outright
+  ("not accepting new customers"); swedencentral had no AKS capacity;
+  northeurope took it.
+- **VM sizes are gated TWICE**: the offered catalog (`az vm list-skus`)
+  AND per-family vCPU quota (`az vm list-usage`) — a size can be listed
+  with zero quota (DC2ads_v6 was). Settled on `EC2as_v5`.
+- **The sponsorship tier offers no ARM sizes** — the inverse of EKS's
+  Graviton lesson. Images cross-build amd64 with buildx (jars are
+  arch-independent, so cheap), but **vite/esbuild is unstable under
+  QEMU** — the storefront gained a host-prebuilt image path
+  (`Dockerfile.prebuilt`: build `dist/` on the host, package only).
+- **Flexible Server** demands TLS by default (relaxed for the soak),
+  refuses `CREATE EXTENSION` unless allow-listed (`azure.extensions =
+  PG_TRGM,VECTOR`), and its `B1ms` caps ~50 connections — the fleet
+  drained it, so the CHART now holds one idle connection per pool
+  (kinder to every managed Postgres) and the server raises
+  `max_connections` to 85.
+- **Terraform-on-abort leaves orphans**: after failed applies the ACR,
+  firewall rule, server configs and several databases had to be
+  `terraform import`-ed back into state before the run could continue.
+
+**What ran and held**: 23 pods Ready on 2× EC2as_v5 in northeurope, the
+smoke green against Flexible Server, `tick_lock` showing both billing
+ticks under one replica id, storefront and console browsed from Ireland,
+and **10 minutes, zero new restarts** across all 23 pods. Not one line
+of application code differed from the EKS run — every difference lived
+in Terraform and two Helm `--set`s.
+
+**Torn down, verified**: `aks-run.sh down` — the resource group takes
+everything with it; `az group list` shows no `genalpha-bss-rg`. Cost
+Management the next day is the closing signature. The AKS twin is no
+longer on the ledger; it has run.

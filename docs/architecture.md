@@ -207,3 +207,69 @@ the acting tenant's machine identity.
 - **Composability is real**: cross-component calls go through conditional clients with Noop
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).
+
+## 5. Cloud deployment view — proven on both AWS and Azure
+
+The same Helm chart deploys the whole fleet; only the *substrate* differs, and it slots in
+behind seams the application never sees. Both stacks ran live (single-node soak scope: core
+commerce + billing×2 + the consoles), each proving the P0 tick-locks under two billing
+replicas against a **managed** database.
+
+```
+        laptop (build) ──push──▶ registry ──pull──▶ managed k8s ──▶ managed Postgres
+  AWS:   docker images           ECR                 EKS (Graviton)    RDS (single-AZ)
+  Azure: docker images           ACR                 AKS (x86)         Flexible Server
+```
+
+What stays identical across clouds: the chart, the images, the in-cluster Kafka + Keycloak,
+the seed realms, the smoke (`ops/k8s-soak/smoke.js`), and the security model. What the seams
+absorb: the database is `local.postgres.enabled=false` + a managed host; the registry is one
+`image.prefix`; the ingress/port-forward story is unchanged.
+
+### Differences observed between the two clouds (live-run truths)
+
+| Dimension | AWS EKS | Azure AKS |
+|---|---|---|
+| **Cluster access** | EKS module v20 grants the creator NO access by default — needs `enable_cluster_creator_admin_permissions` | AKS grants the creating principal admin automatically |
+| **Node architecture** | Graviton (`t4g`, ARM) native + ~30% cheaper — matched the arm64 images directly | Sponsorship tier offered **no ARM sizes at all**; forced x86 (`EC2as_v5`) + cross-building images amd64 with buildx |
+| **VM availability** | One instance family, available on ask | Gated **twice** — the offered catalog (`az vm list-skus`) AND per-family vCPU quota (`az vm list-usage`); a size can be listed with zero quota |
+| **Region eligibility** | Any region in the account | New subscriptions **refused** westeurope outright; swedencentral had no AKS capacity — landed in northeurope |
+| **Registry auth** | `aws ecr get-login-password` per session | Managed-identity `AcrPull` role — nodes pull with no password |
+| **Database connections** | RDS `db.t4g.small` ≈ ample for 13 pools of 5 | Flexible Server `B1ms` caps ~50 — the fleet exhausted it; raised `max_connections` + shrank Hikari idle pools to 1 |
+| **Postgres extensions** | pg_trgm / vector available on the image | Flexible Server refuses `CREATE EXTENSION` unless allow-listed via `azure.extensions` first |
+| **TLS** | RDS accepts plaintext in-VPC | Flexible Server demands TLS by default — turned off for the soak (production keeps it, adds `sslmode=require`) |
+| **Database creation** | psql init job over the fleet's `init-databases.sql` | 28 databases as Terraform resources — no init step |
+| **Provisioning time** | ~20 min (EKS control plane dominates) | ~8 min cluster, but the sponsorship-tier gauntlet made the *session* longer |
+
+The through-line: **the application code never changed** — every difference lived in Terraform
+and two Helm `--set`s. The tenancy model, the RLS second lock, the tick-locks, the outbox, the
+GDPR endpoints all behaved identically on both clouds. "Any cloud" is now two invoices, not a
+claim. The AKS run also hardened the chart for *any* managed Postgres (bounded idle pools) and
+gave the storefront a host-prebuilt image path (`Dockerfile.prebuilt`) for when
+vite-under-emulation misbehaves.
+
+## 5. Cloud substrates — the same chart on AWS and Azure, live
+
+Both clouds have now run the fleet for real (2026-07-21, same chart, same
+smoke, receipts in [k8s-soak-plan.md](k8s-soak-plan.md)). The mapping:
+
+| Concern | AWS (proven) | Azure (proven) |
+|---|---|---|
+| Kubernetes | EKS 1.33 | AKS (default channel) |
+| Nodes | 2× t4g.large — **Graviton arm64** | 2× EC2as_v5 — **x86 AMD** |
+| Database | RDS PostgreSQL 16 | Flexible Server PG16 |
+| Registry | ECR (per-repo) | ACR (one registry) |
+| DB networking | private subnets, in-VPC only | public endpoint + firewall sentinel |
+| Databases created by | `psql` init from a pod | Terraform `for_each` resources |
+| Image architecture | arm64 as built on Apple Silicon | **amd64 cross-built** (no ARM SKUs on the subscription tier) |
+
+**Differences that only running taught** — the same chart, two clouds,
+opposite answers:
+
+- **Architecture flips per cloud, not per chart**: AWS's fix for
+  arm64 images was Graviton nodes; Azure's sponsorship-tier VM catalog
+  has NO ARM sizes, so the fix was amd64 images instead (host-built
+  artifacts + buildx make that cheap; vite/esbuild refuses to run under
+  QEMU, hence the Dockerfile.prebuilt escape hatch).
+- **Azure gates VM sizes twice**: an offered SKU (restrictions) can
+  still have ZERO family vCPU quota —

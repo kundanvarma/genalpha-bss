@@ -10,3 +10,8 @@ output "postgres_fqdn" {
   description = "Set config.dbHost to this in the Helm values"
   value       = azurerm_postgresql_flexible_server.bss.fqdn
 }
+
+output "registry_login_server" {
+  description = "Prefix images as <this>/bss-java-<service>:latest"
+  value       = azurerm_container_registry.bss.login_server
+}

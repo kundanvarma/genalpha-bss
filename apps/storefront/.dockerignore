@@ -1,2 +1,4 @@
 node_modules
-dist
+# dist stays OUT for the in-container vite build (./Dockerfile) but the
+# cross-build path (Dockerfile.prebuilt) packages the HOST-built dist —
+# buildx sends it; the in-container build never COPIES it, so no conflict
