@@ -33,3 +33,8 @@ ops/e2e/recordings/
 
 # database dumps (ops/backup.sh) — never in git
 backups/
+
+# terraform state holds secrets in cleartext — NEVER in git
+*.tfstate
+*.tfstate.backup
+.terraform/

@@ -50,12 +50,20 @@ module "eks" {
 
   cluster_endpoint_public_access = true
 
+  # module v20 stopped granting the creator k8s access by default — without
+  # this the applying principal builds a cluster it cannot talk to
+  # (caught by the first live EKS run)
+  enable_cluster_creator_admin_permissions = true
+
   eks_managed_node_groups = {
     default = {
       instance_types = [var.node_instance_type]
-      min_size       = 2
-      max_size       = 4
-      desired_size   = 2
+      # keep in step with the instance arch: ARM_64 for t4g/Graviton,
+      # x86_64 for t3/m5 classes
+      ami_type     = "AL2023_ARM_64_STANDARD"
+      min_size     = 2
+      max_size     = 4
+      desired_size = 2
     }
   }
 }
