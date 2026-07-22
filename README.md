@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — fifty-nine Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -72,7 +72,13 @@ refuse fail-closed with an honest 429 when crossed, an operator kill-switch, and
 on the same ledger as the words — the advisor's draft-adoption lands as
 `catalog.createDraftOffering → <offering-id>`, so the trail answers *which AI touched which
 resource*, tenant-walled by RLS like everything else; the refusals audit themselves too, in
-their own transactions, because a rollback must never erase its own evidence — suite #59), and
+their own transactions, because a rollback must never erase its own evidence — suite #59),
+**the individualized shop** (a signed-in customer's "For you" rail that is genuinely THEIRS:
+consented browsing stitches into interests, TMF680 supplies the ranked candidates, an open
+churn-risk alert adds a loyalty flag, and the governed LLM writes one caption grounded only in
+that customer's own trail — "Picked for you after your look at devices" — metered and budgeted
+by the AI control plane, cached per party so a browsing session costs ONE model call, and
+none of it exists for the customer who declined consent; suite #60), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
@@ -88,7 +94,7 @@ intentional hardened gaps (payment, communication) — in
 
 - 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](https://kundanvarma.github.io/genalpha-bss/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
-- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-one chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
+- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-three chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
 - 📕 **[The Operator's Manual](https://kundanvarma.github.io/genalpha-bss/manual/manual.html)** — the reference companion, by role and by task: surfaces & sign-ins, the product owner's console, the CSR's acts, billing & money operations, partner channels, tenant minting, AI tiers, the seam catalog, env reference, extension APIs, the mocks ([PDF](docs/manual/Operators-Manual.pdf))
 - 📄 **[Product overview](https://kundanvarma.github.io/genalpha-bss/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max

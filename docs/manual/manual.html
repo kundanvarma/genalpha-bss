@@ -229,6 +229,13 @@ console needed for daily administration.</p>
 
 <h2 id="ai">8 · AI configuration &amp; governance — suites #53/#59</h2>
 
+<h3>The individualized shop (suite #60)</h3>
+<p><code>GET /ai/v1/forYou</code> — the signed-in customer's own rail (self-scoped: party =
+token subject, no parameter to probe). TMF680 candidates + consented interests + churn-risk
+loyalty flag; ONE governed FAST caption per 5-minute cache window ("Picked for you after your
+look at devices"). No personalization consent → zero interests, generic caption. The storefront
+renders it as the "Recommended for you" shelf.</p>
+
 <h3>The control plane (suite #59)</h3>
 <p>Every LLM turn is <b>metered</b> (token counts + cost land on the AI Audit ledger — the
 console's AI Audit tab shows tokens, cost and outcome per turn) and <b>governed</b> per tenant:
@@ -425,7 +432,7 @@ double-sweep.</p>
 (SAQ-A-shaped; a QSA attests the rest). Lawful intercept: the BSS half is warrant-gated
 subscriber disclosure — shaped, not built; see <a href="../privacy.md">docs/privacy.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · fifty-nine suites, eleven CTKs at zero
+<p class="dim" style="margin-top:3rem">genalpha-bss · sixty suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

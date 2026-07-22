@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { beacon, consentChoice, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
+import { beacon, consentChoice, forYou, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -9,6 +9,7 @@ export default function Shop() {
   const [offerings, setOfferings] = useState(null);
   const [prices, setPrices] = useState({});
   const [recommended, setRecommended] = useState([]);
+  const [personal, setPersonal] = useState(null);
   const [experience, setExperience] = useState(null);
   const [error, setError] = useState(null);
 
@@ -18,11 +19,18 @@ export default function Shop() {
       .catch((e) => setError(e.message));
     // the insight question is additive too: no consent, default page
     myExperience().then(setExperience).catch(() => {});
-    // TMF680 is additive: the shop renders fine without it.
+    // the individualized rail is additive: without it (or without the
+    // intelligence component) the raw TMF680 picks still render
     if (isSignedIn()) {
-      myRecommendations()
-        .then((recs) => setRecommended(recs[0]?.recommendationItem?.map((i) => i.offering.id) || []))
-        .catch(() => {});
+      forYou().then((fy) => {
+        if (fy && fy.items?.length) {
+          setPersonal(fy);
+          setRecommended(fy.items.map((i) => i.id));
+        } else {
+          return myRecommendations()
+            .then((recs) => setRecommended(recs[0]?.recommendationItem?.map((i) => i.offering.id) || []));
+        }
+      }).catch(() => {});
     }
   }, []);
 
@@ -63,7 +71,17 @@ export default function Shop() {
       )}
       {picks.length > 0 && (
         <>
-          <h1>Recommended for you</h1>
+          <h1>{t('Recommended for you')}</h1>
+          {personal?.caption && (
+            <p className="dim" data-testid="foryou-caption" style={{ margin: '4px 0' }}>
+              ✨ {personal.caption}
+            </p>
+          )}
+          {personal?.retentionFlag && (
+            <p className="dim" data-testid="retention-banner" style={{ margin: '4px 0' }}>
+              💙 {t('Thanks for being with us — this shelf includes our best loyalty picks.')}
+            </p>
+          )}
           <div className="cards" data-testid="recommended">
             {picks.map((o) => <OfferingCard key={'rec-' + o.id} offering={o} prices={prices} />)}
           </div>

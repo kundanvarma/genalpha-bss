@@ -420,6 +420,13 @@ export async function myRecommendations() {
   return json(await authFetch(`${RECOMMENDATION}/recommendation`));
 }
 
+/** The individualized shop: MY rail — ranked, captioned, churn-aware.
+ * Self-scoped server-side (party = my token), fail-soft to nothing. */
+export async function forYou() {
+  const res = await authFetch('/ai/v1/forYou');
+  return res.ok ? res.json() : null;
+}
+
 export async function myAgreements() {
   return json(await authFetch(`${AGREEMENT}/agreement?limit=100`));
 }

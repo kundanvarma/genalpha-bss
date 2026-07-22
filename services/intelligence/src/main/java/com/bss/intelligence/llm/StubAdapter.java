@@ -41,6 +41,27 @@ public class StubAdapter implements LlmAdapter {
             return "{\"offerName\": \"" + name + "\", \"offerId\": \"" + id
                     + "\", \"reason\": \"" + reason + "\"}";
         }
+        if (system.contains("caption of a personalized shop rail")) {
+            // deterministic: name the first interest (or holding) so the
+            // suite can assert the caption is grounded in THIS customer
+            String interest = null;
+            String holding = null;
+            for (String line : user.split("\\R")) {
+                if (line.startsWith("INTEREST: ") && interest == null) {
+                    interest = line.substring(10);
+                }
+                if (line.startsWith("HOLDING: ") && holding == null) {
+                    holding = line.substring(9);
+                }
+            }
+            if (interest != null) {
+                return "CAPTION: Picked for you after your look at " + interest.toLowerCase() + ".";
+            }
+            if (holding != null) {
+                return "CAPTION: Chosen to go well with your " + holding + ".";
+            }
+            return "CAPTION: A shelf picked for you.";
+        }
         if (system.contains("knowledge assistant")) {
             // grounded even in the stub: quote the top retrieved article back
             String title = "the knowledge base";
