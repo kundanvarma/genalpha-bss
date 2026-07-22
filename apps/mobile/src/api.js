@@ -59,6 +59,10 @@ export const myNotifications = () => soft(call('/tmf-api/communicationManagement
 export const myTickets = () => soft(call('/tmf-api/troubleTicket/v4/troubleTicket?limit=30'), []);
 export const myRecommendations = () => soft(call('/tmf-api/recommendationManagement/v4/recommendation')
   .then((r) => r[0]?.recommendationItem || []), []);
+/** The individualized rail (self-scoped server-side, governed caption);
+ * null when the intelligence component is absent — the app falls back
+ * to raw TMF680, composability as usual. */
+export const forYou = () => soft(call('/ai/v1/forYou'), null);
 export const openProblems = () => soft(call('/tmf-api/serviceProblemManagement/v4/serviceProblem?status=open'), []);
 export const listOfferings = () => soft(call('/tmf-api/productCatalogManagement/v4/productOffering?limit=100'), []);
 export const priceIndex = () => soft(call('/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100')
