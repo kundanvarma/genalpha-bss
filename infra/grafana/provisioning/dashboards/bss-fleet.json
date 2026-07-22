@@ -1,0 +1,28 @@
+{
+  "title": "BSS Fleet",
+  "uid": "bss-fleet",
+  "tags": ["bss"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Services up",
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 0 },
+      "targets": [{ "expr": "count(up == 1)", "legendFormat": "up" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "red", "value": null }, { "color": "yellow", "value": 25 },
+        { "color": "green", "value": 32 } ] } } }
+    },
+    {
+      "id": 2, "type": "stat", "title": "Services DOWN",
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 0 },
+      "targets": [{ "expr": "count(up == 0) OR on() vector(0)", "legendFormat": "down" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
+        { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } } }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Outbox publish failures (1h)",
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 0 },
+      "targets": [{ "expr": "sum(increase(bss_events_failed_total[1h])) OR on() vector(0)" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [
