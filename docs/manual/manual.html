@@ -106,7 +106,10 @@ rule, not a release. See <code>docs/product-rules.md</code> for the authoring gu
 <h3>Product Copilot (console → Copilot)</h3>
 <p>Chat a product into the catalog: the model proposes specs/prices/offerings as TMF620
 payloads, the console shows a human card, and a deterministic executor applies it with
-<em>your</em> token on confirmation. The model never writes.</p>
+<em>your</em> token on confirmation. The model never writes. The copilot also authors
+<b>pricing rules</b> ("10% off the phone with this plan") and — suite #61 —
+<b>personalization experience rules</b> ("device browsers see this banner and this pin"):
+both become policy rows you can disable in Rules.</p>
 <h3>Product Advisor (console → Product advisor) — suite #52</h3>
 <p>Findings with receipts: top-up attach counted from inventory ("2 of 2 customers on this plan
 also bought top-ups"), market price gaps from the tenant's market feed (10% materiality
@@ -433,7 +436,7 @@ double-sweep.</p>
 (SAQ-A-shaped; a QSA attests the rest). Lawful intercept: the BSS half is warrant-gated
 subscriber disclosure — shaped, not built; see <a href="../privacy.md">docs/privacy.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · sixty suites, eleven CTKs at zero
+<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-one suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

@@ -131,6 +131,18 @@ public class StubAdapter implements LlmAdapter {
             int end = convo.indexOf("copilot:", idx);
             lastOwner = end > idx ? convo.substring(idx, end) : convo.substring(idx);
         }
+        boolean asksExperience = lastOwner.contains("banner") || lastOwner.contains("personalize")
+                || lastOwner.contains("guests");
+        if (asksExperience) {
+            return "{\"kind\":\"proposal\",\"message\":\"A personalization rule changes what a"
+                    + " consenting guest SEES — the banner and a pinned offering — never a price."
+                    + " It applies the moment you confirm and can be disabled in Rules.\","
+                    + "\"proposal\":{"
+                    + "\"experienceRules\":[{\"name\":\"Device browsers welcome\","
+                    + "\"whenInterest\":\"Devices\","
+                    + "\"banner\":\"Phone week: trade-in bonus in every store.\","
+                    + "\"pinOffering\":\"GenAlpha Mobile 60 GB 5G\"}]}}";
+        }
         boolean asksWatch = lastOwner.contains("smartwatch") || lastOwner.contains("kids watch");
         boolean asksPlanWithDiscount = (lastOwner.contains("50 gb") || lastOwner.contains("50gb"))
                 && (lastOwner.contains("discount") || lastOwner.contains("samsung"));

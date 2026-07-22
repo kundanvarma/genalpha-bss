@@ -1609,7 +1609,20 @@ function copilotValidate(proposal, context) {
   const problems = [];
   const offerings = proposal.offerings || [];
   const rules = proposal.pricingRules || [];
-  if (!offerings.length && !rules.length) problems.push('the proposal creates no offerings');
+  const expRules = proposal.experienceRules || [];
+  if (!offerings.length && !rules.length && !expRules.length) {
+    problems.push('the proposal creates no offerings');
+  }
+  for (const er of expRules) {
+    if (!er.banner || !String(er.banner).trim()) problems.push(`experience rule "${er.name}" has no banner copy`);
+    if (!er.whenInterest || !String(er.whenInterest).trim()) {
+      problems.push(`experience rule "${er.name}" names no browsing interest`);
+    }
+    if (er.pinOffering && !(proposal.offerings || []).some((x) => x.ref === er.pinOffering)
+        && !context.offerings.some((x) => x.name === er.pinOffering)) {
+      problems.push(`experience rule "${er.name}" pins "${er.pinOffering}", not in this proposal or the catalog`);
+    }
+  }
   const priceRefs = new Set((proposal.prices || []).map((x) => x.ref));
   const specRefs = new Set((proposal.specs || []).map((x) => x.ref));
   const offeringRefs = new Set(offerings.map((x) => x.ref));
@@ -1754,6 +1767,32 @@ async function copilotExecute(proposal) {
       }), `pricing rule "${rule.name}"`);
       created.push({ kind: 'policyRule', id: madeRule.id, base: POLICY_BASE });
     }
+    // chatted personalization: what a consenting guest SEES becomes a
+    // policy row (domain 'personalization') — the same rules the insight
+    // experience endpoint already reads, disabled/deleted in Rules
+    for (const er of proposal.experienceRules || []) {
+      let pinId = null;
+      if (er.pinOffering) {
+        if (offerings[er.pinOffering]) {
+          pinId = offerings[er.pinOffering].id;
+        } else {
+          const found = await (await authFetch(
+            `${API_BASE}/productOffering?name=${encodeURIComponent(er.pinOffering)}`)).json().catch(() => []);
+          pinId = found[0]?.id || null;
+        }
+      }
+      const madeExp = await jsonOf(await authFetch(`${POLICY_BASE}/policyRule`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: er.name, domain: 'personalization', effect: 'experience',
+          priority: 10, enabled: true,
+          condition: JSON.stringify({ in: [er.whenInterest, { var: 'interests' }] }),
+          message: er.banner,
+          experience: pinId ? { teaserOfferingId: pinId } : {},
+        }),
+      }), `experience rule "${er.name}"`);
+      created.push({ kind: 'policyRule', id: madeExp.id, base: POLICY_BASE });
+    }
     return Object.values(offerings);
   } catch (e) {
     // roll back what was made, newest first — a half-created product family
@@ -1790,6 +1829,10 @@ function copilotProposalCard(reply, context, log) {
     rows.push(`pricing rule · ${rule.name} — ${rule.adjustmentValue}`
       + (rule.adjustmentType === 'amount' ? '' : '%')
       + ` when the cart has ${(rule.whenCartHas || []).join(' + ')}${scope}`);
+  }
+  for (const er of proposal.experienceRules || []) {
+    rows.push(`experience rule · ${er.name} — banner "${er.banner}" for guests browsing`
+      + ` ${er.whenInterest}${er.pinOffering ? ` (pins ${er.pinOffering})` : ''}`);
   }
   const problems = copilotValidate(proposal, context);
   const hardProblems = problems.filter((x) => !x.includes('is new'));

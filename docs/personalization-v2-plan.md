@@ -64,3 +64,17 @@ Landed: ForYouService + self-scoped controller + security carve-out
 (authenticated, not ai:use — customers carry no staff roles), the stub's
 deterministic CAPTION branch, the storefront rail with i18n (nb-NO), and
 a churn-alert-by-party finder for the retention flag.
+
+## Third wave — copilot-authored experience rules (same day)
+
+Suite #61 (`ops/e2e/copilot_experience_test.js`) green: the owner CHATS
+the rule ("what should device-browsing guests see"), the proposal card
+shows it beside specs/prices, one click makes it a policy row (domain
+`personalization`, owner's token, model never writes), a brand-new
+consenting guest is greeted by the chatted banner over the chatted pin,
+and the rule deletes as data. Landed: `experienceRules` in the copilot
+contract + stub scenario, console validator/card/executor (mirrors the
+pricingRules pattern, rollback included). Suite lesson: a `fail()` that
+calls `process.exit` skips cleanup — throw instead, so the finally-side
+cleanup always runs. Regressions green: copilot, personalization.
+Remaining idea on this shelf: next-hit/session-decay.

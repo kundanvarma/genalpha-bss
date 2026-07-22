@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-one Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -79,7 +79,12 @@ churn-risk alert adds a loyalty flag, and the governed LLM writes one caption gr
 that customer's own trail — "Picked for you after your look at devices" — metered and budgeted
 by the AI control plane, cached per party so a browsing session costs ONE model call, none of
 it exists for the customer who declined consent, and the same rail follows the customer onto
-the MOBILE APP — one governed rail, every channel; suite #60), and
+the MOBILE APP — one governed rail, every channel; suite #60), **personalization you can
+CHAT into existence** (the product owner tells the copilot what device-browsing guests should
+see — banner and pinned offering — and the proposal becomes a policy row (domain
+'personalization') on one click, applied with the owner's own token, never the model's; the
+next consenting guest is greeted by the chatted shop, and the rule disables in Rules like any
+other data; suite #61), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
