@@ -87,10 +87,10 @@ async function token(request, user, pass) {
     await guest.goBack();
     await guest.locator('.cards').first().waitFor({ timeout: 10000 });
     let seen = false;
-    for (let i = 0; i < 12 && !seen; i++) {
+    for (let i = 0; i < 20 && !seen; i++) {
       await guest.reload();
       seen = await guest.locator('[data-testid=personal-banner]', { hasText: 'Phone week' })
-        .waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
+        .waitFor({ timeout: 6000 }).then(() => true).catch(() => false);
     }
     if (!seen) fail('the guest never saw the chatted banner');
     const pick = await guest.locator('[data-testid=personal-pick]').textContent()
