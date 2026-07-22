@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { TextInput } from 'react-native';
-import { changePlan, listOfferings, myBills, myParty, myProducts, myRecommendations,
+import { changePlan, forYou, listOfferings, myBills, myParty, myProducts, myRecommendations,
   myServices, mySim, myUsage, openProblems, orgName, priceIndex, quickOrder, resetSimPin,
   myHousehold, acceptDependent, endHouseholdLink, orderForDependent, addFamilyMember,
   memberProducts, setAllowance, familyApprovals, decideApproval, giftData } from '../api.js';
@@ -89,6 +89,7 @@ export default function Home({ navigation }) {
   const [bills, setBills] = useState([]);
   const [problems, setProblems] = useState([]);
   const [recs, setRecs] = useState([]);
+  const [personal, setPersonal] = useState(null);
   const [offerings, setOfferings] = useState([]);
   const [prices, setPrices] = useState({});
   const [toppedUp, setToppedUp] = useState(false);
@@ -103,7 +104,16 @@ export default function Home({ navigation }) {
     myUsage().then(setUsage);
     myBills().then(setBills);
     openProblems().then(setProblems);
-    myRecommendations().then(setRecs);
+    // the individualized rail first (governed caption, self-scoped);
+    // raw TMF680 when the intelligence component is absent
+    forYou().then((fy) => {
+      if (fy && fy.items?.length) {
+        setPersonal(fy);
+        setRecs(fy.items.map((i) => ({ offering: i })));
+      } else {
+        myRecommendations().then(setRecs);
+      }
+    });
     listOfferings().then(setOfferings);
     priceIndex().then(setPrices);
     // B2B member? the company pays — the app recomposes around that
@@ -221,6 +231,13 @@ export default function Home({ navigation }) {
 
       {recs.length > 0 && (
         <Card title={products.length ? 'Complete your home' : 'For you'} testID="recs-card">
+          {personal?.caption && (
+            <Row testID="app-foryou-caption" left={`✨ ${personal.caption}`} />
+          )}
+          {personal?.retentionFlag && (
+            <Row testID="app-retention-banner"
+                 left="💙 Thanks for being with us — loyalty picks included." />
+          )}
           {recs.slice(0, 3).map((it) => (
             <Row key={it.offering.id} left={`➕ ${it.offering.name}`}
                  right={<Button ghost label="View" onPress={() => navigation.navigate('Shop')} />} />

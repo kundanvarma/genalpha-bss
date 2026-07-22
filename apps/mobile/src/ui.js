@@ -18,9 +18,9 @@ export function Card({ title, children, testID }) {
   );
 }
 
-export function Row({ left, right }) {
+export function Row({ left, right, testID }) {
   return (
-    <View style={styles.row}>
+    <View style={styles.row} testID={testID}>
       <View style={{ flexShrink: 1 }}>{typeof left === 'string' ? <Text>{left}</Text> : left}</View>
       <View>{typeof right === 'string' ? <Text style={{ color: palette().dim }}>{right}</Text> : right}</View>
     </View>

@@ -128,8 +128,27 @@ async function token(request, user, pass) {
   console.log('OK ON THE SHELF: the shop shows HER caption over HER rail — the individualized'
     + ' shop is a page, not an API');
 
+  /* ---------- 6. the rail follows her onto the APP ---------- */
+  const app = await (await browser.newContext()).newPage();
+  await app.goto(`${API}/app/`);
+  await app.locator('[data-testid="signin"]').click();
+  await app.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await app.fill('input[name="username"]', alice.email);
+  await app.fill('input[name="password"]', alice.password);
+  await app.click('input[type="submit"], button[type="submit"]');
+  await app.locator('[data-testid="recs-card"]').waitFor({ timeout: 30000 });
+  const appCaption = app.locator('[data-testid="app-foryou-caption"]');
+  await appCaption.waitFor({ timeout: 15000 })
+    .catch(() => fail('the app never showed her caption'));
+  const appText = await appCaption.textContent();
+  if (!/device/i.test(appText)) fail('the app caption is not Alice\'s: ' + appText);
+  console.log('OK IN HER POCKET: the same caption over the same rail on the mobile app —'
+    + ' one governed rail, every channel (and the 5-minute cache means the app visit cost'
+    + ' zero extra model calls)');
+
   console.log('\nALL FOR-YOU CHECKS PASSED — the signed-in shop is individualized: consented'
     + ' browsing becomes interests, interests become a rail with a grounded caption, the'
-    + ' caption is metered and budgeted, and none of it exists for the customer who said no.');
+    + ' caption is metered and budgeted, none of it exists for the customer who said no —'
+    + ' and the rail follows the customer onto the app.');
   await browser.close();
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

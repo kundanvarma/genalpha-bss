@@ -77,8 +77,9 @@ their own transactions, because a rollback must never erase its own evidence —
 consented browsing stitches into interests, TMF680 supplies the ranked candidates, an open
 churn-risk alert adds a loyalty flag, and the governed LLM writes one caption grounded only in
 that customer's own trail — "Picked for you after your look at devices" — metered and budgeted
-by the AI control plane, cached per party so a browsing session costs ONE model call, and
-none of it exists for the customer who declined consent; suite #60), and
+by the AI control plane, cached per party so a browsing session costs ONE model call, none of
+it exists for the customer who declined consent, and the same rail follows the customer onto
+the MOBILE APP — one governed rail, every channel; suite #60), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
