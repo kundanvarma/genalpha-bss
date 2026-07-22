@@ -1,0 +1,109 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "time": { "from": "now-30m", "to": "now" },
+  "refresh": "10s",
+  "title": "genalpha-bss · Fleet health",
+  "uid": "bss-fleet",
+  "tags": ["genalpha-bss"],
+  "schemaVersion": 39,
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Services up",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": { "mode": "absolute",
+            "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 30 } ] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value_and_name" },
+      "targets": [ { "expr": "count(up == 1)", "legendFormat": "up", "refId": "A" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Services DOWN",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": { "mode": "absolute",
+            "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] }
+        }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "targets": [ { "expr": "count(up == 0) or vector(0)", "legendFormat": "down", "refId": "A" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Gateway req/s",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1 } },
+      "options": { "colorMode": "value", "graphMode": "area", "textMode": "value" },
+      "targets": [ { "expr": "sum(rate(http_server_requests_seconds_count{instance=\"gateway:8080\"}[5m]))", "refId": "A" } ]
+    },
+    {
+      "type": "stat",
+      "title": "Event publish failures (10m)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "none",
+          "thresholds": { "mode": "absolute",
+            "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }
+      },
+      "options": { "colorMode": "background", "graphMode": "none", "textMode": "value" },
+      "targets": [ { "expr": "sum(increase(bss_events_failed_total[10m]))", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Gateway requests by status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "reqps",
+        "custom": { "drawStyle": "line", "fillOpacity": 20, "stacking": { "mode": "normal" } } } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean", "max"] } },
+      "targets": [ { "expr": "sum by (status) (rate(http_server_requests_seconds_count{instance=\"gateway:8080\"}[5m]))", "legendFormat": "{{status}}", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Domain events published /s (the backbone pulse)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "cps",
+        "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["mean"] } },
+      "targets": [ { "expr": "sum by (event_type) (rate(bss_events_published_total[5m]))", "legendFormat": "{{event_type}}", "refId": "A" } ]
+    },
+    {
+      "type": "timeseries",
+      "title": "DB connections — active & pending (per service)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "none",
+        "custom": { "drawStyle": "line", "fillOpacity": 10 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        { "expr": "sum(hikaricp_connections_active)", "legendFormat": "active (fleet)", "refId": "A" },
+        { "expr": "sum(hikaricp_connections_pending)", "legendFormat": "PENDING (starved)", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "JVM heap used (per service — a leak ratchets up)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "bss-prometheus" },
+      "fieldConfig": { "defaults": { "unit": "bytes",
+        "custom": { "drawStyle": "line", "fillOpacity": 0 } } },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [ { "expr": "sum by (job) (jvm_memory_used_bytes{area=\"heap\"})", "legendFormat": "{{job}}", "refId": "A" } ]
+    }
+  ]
+}

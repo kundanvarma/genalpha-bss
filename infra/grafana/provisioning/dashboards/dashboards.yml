@@ -1,0 +1,13 @@
+apiVersion: 1
+
+# Load every dashboard JSON dropped in the files directory — no clicking,
+# no manual import; the dashboard ships with the repo like everything else.
+providers:
+  - name: bss
+    orgId: 1
+    folder: genalpha-bss
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/files
