@@ -112,6 +112,9 @@ const NO = {
   'activation code:': 'aktiveringskode:',
   'manage with the partner': 'administreres hos partneren',
   'protecting every line on this account': 'beskytter alle linjer på kontoen',
+  'Recommended for you': 'Anbefalt for deg',
+  'Thanks for being with us — this shelf includes our best loyalty picks.':
+    'Takk for at du er hos oss — denne hyllen inneholder våre beste lojalitetstilbud.',
 };
 
 const BUNDLES = { no: NO };
