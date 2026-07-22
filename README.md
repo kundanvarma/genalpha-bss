@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty-two Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-three Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -87,7 +87,12 @@ next consenting guest is greeted by the chatted shop, and the rule disables in R
 other data; suite #61), **next-hit session personalization** (what you look at on page N shapes
 page N+1: the last offering you viewed leads the next page — recency beats the all-time
 favourite — and a "Pick up where you left off" rail hands back the very offerings you just
-saw, most-recent first, consent-gated and tenant-walled; suite #62), and
+saw, most-recent first, consent-gated and tenant-walled; suite #62), **"customers who bought this also bought"**
+(item-to-item market-basket affinity on every product page — computed from what the tenant's
+customers actually own together, ranked by co-ownership, minimum-support floored so a single
+basket can never be read back; public and aggregate like Amazon's, tenant-walled; the demo
+data shows it working — Samsung buyers overwhelmingly also take the flagship home bundle;
+suite #63), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
@@ -103,7 +108,7 @@ intentional hardened gaps (payment, communication) — in
 
 - 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](https://kundanvarma.github.io/genalpha-bss/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
-- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-three chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
+- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-four chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
 - 📕 **[The Operator's Manual](https://kundanvarma.github.io/genalpha-bss/manual/manual.html)** — the reference companion, by role and by task: surfaces & sign-ins, the product owner's console, the CSR's acts, billing & money operations, partner channels, tenant minting, AI tiers, the seam catalog, env reference, extension APIs, the mocks ([PDF](docs/manual/Operators-Manual.pdf))
 - 📄 **[Product overview](https://kundanvarma.github.io/genalpha-bss/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max

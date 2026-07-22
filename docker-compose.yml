@@ -751,6 +751,9 @@ services:
       CATALOG_BASE_URL: http://product-catalog:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
       INSIGHT_BASE_URL: http://insight:8080
+      # dev clock: the "also bought" basket cache refreshes fast so a
+      # suite (and a demo) sees fresh co-ownership quickly (prod: 60s)
+      BSS_RECOMMENDATION_AFFINITY_TTL_SECONDS: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     volumes:
       - ./infra/tenants:/config:ro

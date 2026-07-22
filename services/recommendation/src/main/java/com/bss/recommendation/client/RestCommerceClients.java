@@ -76,11 +76,26 @@ public class RestCommerceClients {
 
             @Override
             public List<Map<String, Object>> allProducts() {
+                // PAGE THROUGH ALL of them: a single page silently caps the
+                // adoption/affinity signal to a sample (a busy tenant has
+                // thousands). TMF caps limit at 100, so walk offsets until a
+                // short page. Cached by the callers, so this runs on a miss.
                 try {
-                    return rest.get()
-                            .uri("/tmf-api/productInventory/v4/product?limit=500")
-                            .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
-                            });
+                    List<Map<String, Object>> all = new java.util.ArrayList<>();
+                    for (int offset = 0; offset < 100_000; offset += 100) {
+                        List<Map<String, Object>> page = rest.get()
+                                .uri("/tmf-api/productInventory/v4/product?limit=100&offset={o}", offset)
+                                .retrieve().body(new ParameterizedTypeReference<List<Map<String, Object>>>() {
+                                });
+                        if (page == null || page.isEmpty()) {
+                            break;
+                        }
+                        all.addAll(page);
+                        if (page.size() < 100) {
+                            break;
+                        }
+                    }
+                    return all;
                 } catch (RestClientException e) {
                     throw new IllegalStateException("product-inventory is unreachable", e);
                 }

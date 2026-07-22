@@ -427,6 +427,13 @@ export async function forYou() {
   return res.ok ? res.json() : null;
 }
 
+/** "Customers who bought this also bought" — item-to-item affinity,
+ * PUBLIC (guests see it on the product page), fail-soft to []. */
+export async function alsoBought(offeringId) {
+  const res = await publicFetch(`${RECOMMENDATION}/affinity?forOfferingId=${offeringId}`);
+  return res.ok ? res.json() : [];
+}
+
 export async function myAgreements() {
   return json(await authFetch(`${AGREEMENT}/agreement?limit=100`));
 }

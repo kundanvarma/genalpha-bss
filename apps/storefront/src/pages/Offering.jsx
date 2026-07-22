@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { alsoBought, availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
 import { addToCart, ensureInCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -20,6 +20,7 @@ export default function Offering() {
   const [extras, setExtras] = useState({});                   // optional component id -> added?
   const [shot, setShot] = useState(0);                        // gallery index
   const [teasers, setTeasers] = useState([]);                 // deals that mention this offering
+  const [alsoBoughtItems, setAlsoBoughtItems] = useState([]); // market-basket affinity
   const [error, setError] = useState(null);
 
   // TMF620 cardinality: a bundled component with lower limit 0 is optional
@@ -37,6 +38,8 @@ export default function Offering() {
         setPrices(p);
         // a consented breadcrumb: this visitor looked at this category
         beacon('view', ((o.category || [])[0] || {}).name || null, o.id);
+        // "customers who bought this also bought" — aggregate, fail-soft
+        alsoBought(o.id).then(setAlsoBoughtItems).catch(() => {});
         // deals that mention this offering are its shop window — fail-soft
         fetch(`/tmf-api/policyManagement/v4/price/teaser?offeringId=${o.id}`)
           .then((r) => (r.ok ? r.json() : []))
@@ -411,6 +414,21 @@ export default function Offering() {
       <button className="primary big" onClick={add} disabled={outOfStock || Boolean(unmetChoice)}>
         {outOfStock ? t('Out of stock') : t('Add to cart')}
       </button>
+
+      {alsoBoughtItems.length > 0 && (
+        <section data-testid="also-bought" style={{ marginTop: 28 }}>
+          <h2>{t('Customers who bought this also bought')}</h2>
+          <div className="cards">
+            {alsoBoughtItems.map((it) => (
+              <Link key={it.offering.id} to={`/offering/${it.offering.id}`}
+                    className="card" data-testid="also-bought-item"
+                    style={{ textDecoration: 'none' }}>
+                <b>{it.offering.name}</b>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
