@@ -51,6 +51,11 @@ export default function Shop() {
   const pinned = experience?.teaserOfferingId
     ? offerings.find((o) => o.id === experience.teaserOfferingId) : null;
 
+  // NEXT-HIT: the offerings they just looked at, most recent first —
+  // "pick up where you left off", the immediate-session rail
+  const recent = (experience?.recentOfferings || [])
+    .map((id) => offerings.find((o) => o.id === id)).filter(Boolean);
+
   const brand = window.BSS_STOREFRONT_CONFIG || {};
   return (
     <>
@@ -68,6 +73,14 @@ export default function Shop() {
         <div className="cards" data-testid="personal-pick">
           <OfferingCard key={'pin-' + pinned.id} offering={pinned} prices={prices} />
         </div>
+      )}
+      {recent.length > 0 && (
+        <>
+          <h1>{t('Pick up where you left off')}</h1>
+          <div className="cards" data-testid="recently-viewed">
+            {recent.map((o) => <OfferingCard key={'recent-' + o.id} offering={o} prices={prices} />)}
+          </div>
+        </>
       )}
       {picks.length > 0 && (
         <>

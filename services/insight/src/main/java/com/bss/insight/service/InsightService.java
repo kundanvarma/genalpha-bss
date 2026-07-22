@@ -32,15 +32,26 @@ public class InsightService {
     private final PolicyClient policy;
     private final TenantScope tenantScope;
     private final com.bss.insight.client.AnalyticsForwarder analytics;
+    /** The session decay window: a view older than this no longer leads
+     * the next page. Default 30 min; a suite dials it to prove decay. */
+    private final long sessionSeconds;
 
     public InsightService(VisitorProfileRepository profiles, VisitorEventRepository events,
             PolicyClient policy, TenantScope tenantScope,
-            com.bss.insight.client.AnalyticsForwarder analytics) {
+            com.bss.insight.client.AnalyticsForwarder analytics,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.insight.session-seconds:1800}") long sessionSeconds) {
         this.profiles = profiles;
         this.events = events;
         this.policy = policy;
         this.tenantScope = tenantScope;
         this.analytics = analytics;
+        this.sessionSeconds = sessionSeconds;
+    }
+
+    /** Order-preserving dedup: keep the first (most-recent) occurrence. */
+    private static List<String> distinct(List<String> ordered) {
+        return ordered.stream().distinct().toList();
     }
 
     /** The consent choice — the only write allowed for an unknown visitor.
@@ -141,6 +152,15 @@ public class InsightService {
                 .map(row -> String.valueOf(row[0]))
                 .limit(5)
                 .toList();
+        // NEXT-HIT: what they looked at IN THIS SESSION, most recent first.
+        // Recency beats the all-time favourite — the last look leads the
+        // next page, and the offerings they just viewed come back as a
+        // "pick up where you left off" rail. Session = a decay window.
+        java.time.OffsetDateTime since = java.time.OffsetDateTime.now().minusSeconds(sessionSeconds);
+        List<String> recentCategories = distinct(events.recentCategoryViews(tenantId, visitorId, since));
+        List<String> recentOfferings = distinct(events.recentOfferingViews(tenantId, visitorId, since))
+                .stream().limit(4).toList();
+        String sessionHero = recentCategories.isEmpty() ? null : recentCategories.get(0);
         // segments the tenant's own analytics computed (the seam, inbound)
         List<String> segments = analytics.audiencesOf(tenantId, visitorId);
         String channel = channelOf(p.getUtmSource());
@@ -158,8 +178,15 @@ public class InsightService {
         if (!segments.isEmpty()) {
             out.put("segments", segments);
         }
-        if (!interests.isEmpty()) {
+        // NEXT-HIT: the session's most-recent category leads; the all-time
+        // favourite is the fallback when the session has no fresh view.
+        if (sessionHero != null) {
+            out.put("heroCategory", sessionHero);
+        } else if (!interests.isEmpty()) {
             out.put("heroCategory", interests.get(0));
+        }
+        if (!recentOfferings.isEmpty()) {
+            out.put("recentOfferings", recentOfferings);
         }
         if (decision != null) {
             if (decision.get("banner") != null) {

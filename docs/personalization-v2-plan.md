@@ -78,3 +78,19 @@ pricingRules pattern, rollback included). Suite lesson: a `fail()` that
 calls `process.exit` skips cleanup — throw instead, so the finally-side
 cleanup always runs. Regressions green: copilot, personalization.
 Remaining idea on this shelf: next-hit/session-decay.
+
+## Fourth wave — next-hit / session personalization (same day)
+
+Suite #62 (`ops/e2e/next_hit_test.js`) green: page N shapes page N+1.
+The event stream already carried timestamped offering views; the fix was
+to read them by RECENCY, not frequency. insight `experience()` now
+computes a session window (`bss.insight.session-seconds`, default 1800),
+returns the most-recent category as `heroCategory` (recency overrides the
+all-time favourite) and the last ~4 distinct offerings as
+`recentOfferings`; the storefront renders a "Pick up where you left off"
+rail (nb-NO: "Fortsett der du slapp"). Proof is a reversal — phones
+viewed twice, a plan once last, and the next page leads with the plan.
+Consent-gated, tenant-walled. Regressions green: personalization,
+for_you, copilot_experience. THE PERSONALIZATION SHELF IS NOW EMPTY —
+individualized shop (web+app), chat-authored rules, and next-hit all
+shipped.
