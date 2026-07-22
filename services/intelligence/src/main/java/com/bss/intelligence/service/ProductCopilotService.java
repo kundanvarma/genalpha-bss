@@ -89,12 +89,19 @@ public class ProductCopilotService {
                 "bundledChildren"?: [{"offeringRef" or "existingName", "optional": true|false}]}], \
                 "pricingRules": [{"name", "message", "adjustmentType": "percent"|"amount", \
                 "adjustmentValue": -10, "whenCartHas": ["o1", "Samsung Galaxy S26"], \
-                "audience": "all"|"consumer"|"business"}]}
+                "audience": "all"|"consumer"|"business"}], \
+                "experienceRules": [{"name", "whenInterest": "<catalog category the guest \
+                browsed>", "banner": "<what the shop says to them>", \
+                "pinOffering"?: "o1" or the exact name of an existing offering}]}
                 audience "consumer" limits a discount to private customers (it will not \
                 apply to company purchases or consolidated business invoices).
+                PERSONALIZATION (experienceRules) changes what a CONSENTING guest SEES — \
+                banner copy and one pinned offering when their browsing interest matches a \
+                category — never a price; discounts stay in pricingRules.
                 A proposal MUST contain at least one offering — specs and prices alone sell \
-                nothing (a proposal that only adds pricingRules to EXISTING offerings is the \
-                one exception). Every price needs an offering whose priceRefs uses it. \
+                nothing (proposals that only add pricingRules or experienceRules to \
+                EXISTING offerings are the exceptions). Every price needs an offering whose \
+                priceRefs uses it. \
                 Example of a complete minimal proposal: {"kind":"proposal","message":"...", \
                 "proposal":{"specs":[{"ref":"s1","name":"City Plan","productSpecCharacteristic":[]}], \
                 "prices":[{"ref":"p1","name":"City Plan Monthly","priceType":"recurring", \
@@ -169,7 +176,8 @@ public class ProductCopilotService {
                 // mechanical repair for a common small-model miss: the
                 // proposal's parts emitted at the TOP level with proposal null
                 Map<String, Object> lifted = new java.util.LinkedHashMap<>();
-                for (String key : List.of("specs", "prices", "offerings", "pricingRules")) {
+                for (String key : List.of("specs", "prices", "offerings", "pricingRules",
+                        "experienceRules")) {
                     if (parsed.get(key) instanceof List<?> list && !list.isEmpty()) {
                         lifted.put(key, list);
                     }
