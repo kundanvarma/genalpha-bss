@@ -17,12 +17,13 @@ flowchart TB
         CSR["csr-console /csr"]
         ADMIN["admin-console /console"]
         APP["mobile-app /app\n(Expo RN: web + iOS/Android)"]
+        DEALER["dealer-app /dealer-app\n(retail + telesales)"]
     end
 
-    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\nper-channel tenant-config.js"]
+    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nper-channel tenant-config.js"]
 
     subgraph Party["Party management"]
-        PARTY["party-account\nTMF632/666/669"]
+        PARTY["party-account\nTMF632/666/669 · GDPR export/erase"]
         ROLES["user-roles TMF672\n(over the tenant's IdP)"]
     end
 
@@ -38,54 +39,68 @@ flowchart TB
         AGR["agreement TMF651"]
         PROMO["promotion TMF671"]
         REC["recommendation TMF680"]
-        DOC["document TMF667\n(brand + offering content)"]
+        DOC["document TMF667\n(content seam: in-row / S3 / Azure Blob)"]
+        QUOTE["quote TMF648 + TMF699\n(B2B quotes + sales leads)"]
+        PORT["porting\n(MNP, per-country gateway)"]
     end
 
     subgraph Revenue["Revenue"]
         PAY["payment TMF676"]
         VAULT["payment-method TMF670"]
-        BILL["billing TMF678"]
+        BILL["billing TMF678\n(crash-resumable run + ledger)"]
         USAGE["usage TMF635/677"]
     end
 
     subgraph Production["Production (OSS, thin)"]
         SOM["service-orchestration
-TMF641/638/640/685"]
+TMF641/638/640/685 · dealer + telesales"]
         ASSUR["assurance
 TMF642/656"]
     end
 
-    subgraph Care["Customer care"]
+    subgraph Decisioning["Decisioning & knowledge — rules as data, AI as a governed seam"]
+        POLICY["policy\norder rules · dynamic pricing · personalization\n(JSON-logic, no redeploy)"]
+        KNOW["knowledge\nFTS + pgvector semantic search"]
+        INSIGHT["insight\nconsent spine · web/GA seam\nnext-hit session personalization"]
+        AI["intelligence — the AI control plane\ncopilots · advisor · churn · For-you\nmeter + budget + kill-switch + audit"]
+    end
+
+    subgraph Care["Customer care & martech"]
         TICKET["trouble-ticket TMF621"]
         INTER["party-interaction TMF683"]
         COMM["communication TMF681"]
-        CAMP["campaign (martech)\nevent-triggered journeys"]
-        AI["intelligence (AI)\nany-LLM seam + audit"]
+        CAMP["campaign (martech)\nevent-triggered journeys · A/B · lift"]
     end
 
+    FLOW["flow — Live Flow\n(read-only event observability)"]
     KAFKA[("Kafka\nbss.*.events\ntransactional outbox")]
     IDP[("OIDC IdPs\none issuer per tenant\n(Keycloak realms in dev)")]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
-    SHOP & BIZ & CSR & ADMIN & APP --> GW
-    GW --> Party & Core & Revenue & Care
+    SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
+    GW --> Party & Core & Revenue & Decisioning & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
-    BILL -.-> INV & CAT & PAY & USAGE & PROMO
+    ORD -.->|policy check / price| POLICY
+    BILL -.-> INV & CAT & PAY & USAGE & PROMO & POLICY
     PAY -.-> VAULT
     REC -.-> CAT & INV
+    QUOTE -.-> CAT & AI
+    SOM -.-> PORT
     CAMP -.->|"delivers via\nmachine identity"| COMM
-    AI -.->|"drafts campaign copy\n(stub/Ollama/OpenAI/Anthropic)"| CAMP
-    CSR -.->|"copilot: 360 summary,\nticket reply drafts"| AI
-    AI -.->|"churn engine: rules + learned model\n(snapshots -> outcomes -> train)\nChurnRiskDetectedEvent"| KAFKA
+    SHOP & APP -.->|"consent + beacons\n· For-you rail"| INSIGHT & AI
+    INSIGHT -.->|experience rules| POLICY
+    AI -.->|"campaign copy · product copilot\n· advisor · caption (governed)"| CAMP & CAT & KNOW
+    CSR -.->|"copilot: 360 summary,\nNBO, ticket reply"| AI
+    AI -.->|"churn engine → ChurnRiskDetectedEvent"| KAFKA
     ROLES -.-> IDP
 
-    Core & Revenue & Care -->|events| KAFKA
-    KAFKA -->|"tenant-tagged envelopes"| COMM
+    Core & Revenue & Care & Decisioning -->|events| KAFKA
+    KAFKA -->|"tenant-tagged envelopes"| COMM & INTER & FLOW
     KAFKA -->|"ProductOrderCreateEvent"| SOM
     SOM -.->|"completes digital orders
 (acting tenant's identity)"| ORD
-    Party & Core & Revenue & Care --- PG
+    Party & Core & Revenue & Care & Decisioning --- PG
 ```
 
 ## 2. Tenancy view (pool model with two locks)
@@ -247,29 +262,3 @@ GDPR endpoints all behaved identically on both clouds. "Any cloud" is now two in
 claim. The AKS run also hardened the chart for *any* managed Postgres (bounded idle pools) and
 gave the storefront a host-prebuilt image path (`Dockerfile.prebuilt`) for when
 vite-under-emulation misbehaves.
-
-## 5. Cloud substrates — the same chart on AWS and Azure, live
-
-Both clouds have now run the fleet for real (2026-07-21, same chart, same
-smoke, receipts in [k8s-soak-plan.md](k8s-soak-plan.md)). The mapping:
-
-| Concern | AWS (proven) | Azure (proven) |
-|---|---|---|
-| Kubernetes | EKS 1.33 | AKS (default channel) |
-| Nodes | 2× t4g.large — **Graviton arm64** | 2× EC2as_v5 — **x86 AMD** |
-| Database | RDS PostgreSQL 16 | Flexible Server PG16 |
-| Registry | ECR (per-repo) | ACR (one registry) |
-| DB networking | private subnets, in-VPC only | public endpoint + firewall sentinel |
-| Databases created by | `psql` init from a pod | Terraform `for_each` resources |
-| Image architecture | arm64 as built on Apple Silicon | **amd64 cross-built** (no ARM SKUs on the subscription tier) |
-
-**Differences that only running taught** — the same chart, two clouds,
-opposite answers:
-
-- **Architecture flips per cloud, not per chart**: AWS's fix for
-  arm64 images was Graviton nodes; Azure's sponsorship-tier VM catalog
-  has NO ARM sizes, so the fix was amd64 images instead (host-built
-  artifacts + buildx make that cheap; vite/esbuild refuses to run under
-  QEMU, hence the Dockerfile.prebuilt escape hatch).
-- **Azure gates VM sizes twice**: an offered SKU (restrictions) can
-  still have ZERO family vCPU quota —
