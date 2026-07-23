@@ -60,6 +60,7 @@ public class GovernanceController {
         out.put("spentMicros", spent);
         out.put("remainingMicros", ceiling <= 0 ? -1 : Math.max(0, ceiling - spent));
         out.put("unlimited", ceiling <= 0);
+        out.put("maxWorkers", budget == null ? 0 : budget.getMaxWorkers());
         out.put("actions", audits
                 .findTop50ByTenantIdAndActionIsNotNullOrderByCreatedAtDesc(tenant)
                 .stream().map(this::actionRow).toList());
@@ -80,6 +81,10 @@ public class GovernanceController {
         }
         if (body.get("enabled") != null) {
             budget.setEnabled(Boolean.parseBoolean(String.valueOf(body.get("enabled"))));
+        }
+        if (body.get("maxWorkers") != null) {
+            // the crew ceiling: surge staffing never grows past it (0 = unlimited)
+            budget.setMaxWorkers(Integer.parseInt(String.valueOf(body.get("maxWorkers"))));
         }
         budget.setLastUpdate(OffsetDateTime.now());
         budgets.save(budget);

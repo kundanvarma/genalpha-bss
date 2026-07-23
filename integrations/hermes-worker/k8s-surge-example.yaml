@@ -1,0 +1,55 @@
+# SURGE STAFFING on Kubernetes — an EXAMPLE, not wired into the Helm chart.
+#
+# The BSS publishes the staffing truth as Prometheus gauges
+# (bss_workforce_backlog_depth / _active_workers / _surge, tagged by
+# tenant); KEDA scales worker replicas on it. The crew ceiling
+# (governance maxWorkers) caps whatever the scaler does — a scaled-up
+# worker that exceeds the ceiling is refused at claim time with a 429,
+# so the operator's number always wins over the autoscaler's enthusiasm.
+#
+# Prereqs: KEDA installed; each replica needs its own badge credentials
+# (hire N bench badges with hire-worker.sh and mount them as a secret
+# per ordinal, or share one badge — claims are leases, sharing is safe,
+# but per-replica badges keep the crew view honest).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: hermes-worker }
+  template:
+    metadata:
+      labels: { app: hermes-worker }
+    spec:
+      containers:
+        - name: worker
+          # Hermes ships via its official installer (no official image as of
+          # July 2026) — this example assumes an image YOU build that runs
+          # `hermes` headless with /root/.hermes/config.yaml mounted.
+          image: your-registry/hermes-worker:latest
+          envFrom:
+            - secretRef: { name: hermes-worker-badge }   # BSS_WORKER_USERNAME/PASSWORD
+          volumeMounts:
+            - { name: hermes-config, mountPath: /root/.hermes }
+      volumes:
+        - name: hermes-config
+          configMap: { name: hermes-worker-config }      # config.snippet.yaml + skills
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: hermes-worker-surge
+spec:
+  scaleTargetRef: { name: hermes-worker }
+  minReplicaCount: 1
+  maxReplicaCount: 5        # keep <= the tenant's governance maxWorkers
+  cooldownPeriod: 300
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:9090
+        # scale so that backlog per replica stays under the surge threshold
+        query: sum(bss_workforce_backlog_depth{tenant="genalpha"})
+        threshold: "10"     # one replica per 10 open tasks

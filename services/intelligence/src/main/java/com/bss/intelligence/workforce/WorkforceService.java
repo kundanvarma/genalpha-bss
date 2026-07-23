@@ -58,6 +58,13 @@ public class WorkforceService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> openTasks() {
         requireEnabled();
+        return deriveOpen();
+    }
+
+    /** The derivation without the kill-switch guard — the staffing signal
+     * and the scoreboard read backlog even while the workforce is stopped. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> deriveOpen() {
         String tenant = tenantScope.currentTenantId();
         List<Map<String, Object>> open = new ArrayList<>();
         for (Map<String, Object> candidate : derive()) {
@@ -69,6 +76,20 @@ public class WorkforceService {
             }
         }
         return open;
+    }
+
+    /** DISTINCT workers holding a live lease right now — the crew that is
+     * actually on the floor, and the number the ceiling caps. */
+    @Transactional(readOnly = true)
+    public java.util.Set<String> activeWorkers() {
+        java.util.Set<String> active = new java.util.TreeSet<>();
+        for (WorkforceTask t : tasks.findByTenantIdAndStatus(
+                tenantScope.currentTenantId(), WorkforceTask.CLAIMED)) {
+            if (leaseActive(t) && t.getClaimedBy() != null) {
+                active.add(t.getClaimedBy());
+            }
+        }
+        return active;
     }
 
     @Transactional
@@ -88,6 +109,19 @@ public class WorkforceService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "task is claimed by another worker until " + row.getLeaseUntil());
         }
+        // THE CREW CEILING: a new worker joining the floor must fit under the
+        // operator's max — surge staffing grows the crew with the queue, but
+        // never past the ceiling. Workers already holding a lease keep working.
+        AiBudget budget = budgets.findByTenantId(tenant).orElse(null);
+        int maxWorkers = budget == null ? 0 : budget.getMaxWorkers();
+        if (maxWorkers > 0) {
+            java.util.Set<String> active = activeWorkers();
+            if (!active.contains(caller) && active.size() >= maxWorkers) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "the crew is at its ceiling (" + maxWorkers + " worker"
+                                + (maxWorkers == 1 ? "" : "s") + ") — set by the operator");
+            }
+        }
         row.setId(taskId);
         row.setTenantId(tenant);
         row.setKind(String.valueOf(candidate.get("kind")));
@@ -95,6 +129,7 @@ public class WorkforceService {
         row.setSummary(String.valueOf(candidate.get("summary")));
         row.setStatus(WorkforceTask.CLAIMED);
         row.setClaimedBy(caller);
+        row.setClaimedByName(callerName());
         row.setClaimedAt(OffsetDateTime.now());
         row.setLeaseUntil(OffsetDateTime.now().plusSeconds(leaseSeconds));
         row.setLastUpdate(OffsetDateTime.now());
@@ -248,6 +283,7 @@ public class WorkforceService {
         map.put("summary", row.getSummary());
         map.put("status", row.getStatus());
         map.put("claimedBy", row.getClaimedBy());
+        map.put("claimedByName", row.getClaimedByName());
         map.put("claimedAt", row.getClaimedAt());
         map.put("leaseUntil", row.getLeaseUntil());
         if (row.getOutcome() != null) {
@@ -270,6 +306,23 @@ public class WorkforceService {
 
     private String callerId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth == null ? "unknown" : auth.getName();
+    }
+
+    /** The username the token presented — what humans read; the subject id
+     * stays the stable key underneath. */
+    static String callerName() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof org.springframework.security.oauth2.server.resource.authentication
+                .JwtAuthenticationToken jwt) {
+            String name = jwt.getToken().getClaimAsString("preferred_username");
+            if (name == null) {
+                name = jwt.getToken().getClaimAsString("email");
+            }
+            if (name != null) {
+                return name;
+            }
+        }
         return auth == null ? "unknown" : auth.getName();
     }
 

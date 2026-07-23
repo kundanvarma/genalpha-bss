@@ -30,6 +30,9 @@ public class WorkforceApproval {
     @Column(name = "requested_by", nullable = false)
     private String requestedBy;
 
+    @Column(name = "requested_by_name")
+    private String requestedByName;
+
     @Column(nullable = false)
     private String action;
 
@@ -49,6 +52,9 @@ public class WorkforceApproval {
 
     @Column(name = "decided_by")
     private String decidedBy;
+
+    @Column(name = "decided_by_name")
+    private String decidedByName;
 
     @Column(name = "decision_note")
     private String decisionNote;
@@ -84,6 +90,22 @@ public class WorkforceApproval {
 
     public void setRequestedBy(String requestedBy) {
         this.requestedBy = requestedBy;
+    }
+
+    public String getRequestedByName() {
+        return requestedByName;
+    }
+
+    public void setRequestedByName(String requestedByName) {
+        this.requestedByName = requestedByName;
+    }
+
+    public String getDecidedByName() {
+        return decidedByName;
+    }
+
+    public void setDecidedByName(String decidedByName) {
+        this.decidedByName = decidedByName;
     }
 
     public String getAction() {

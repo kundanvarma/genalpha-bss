@@ -232,10 +232,13 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     fail('human-minutes-saved must be LABELED an estimate');
   }
   if (!kpis.reopen || kpis.reopen.definition == null) fail('the reopen (honesty) metric is missing');
-  const wRow = kpis.workers.find((w) => w.completed >= 1)
-    || fail('no worker row on the scoreboard');
-  // THE CREW: each worker carries an OBSERVED type + its own numbers, and
-  // the type rollup answers "how many of each kind of worker"
+  // THE CREW: find THIS RUN'S worker by its human-readable name — the crew
+  // list shows usernames, not subject UUIDs (old rows keep their UUID,
+  // honestly: the name is captured at claim time, never invented later)
+  const wRow = kpis.workers.find((w) => w.workerName === workerEmail)
+    || fail('this run\'s worker is not on the crew list by NAME: '
+        + JSON.stringify(kpis.workers.map((w) => w.workerName)));
+  if (wRow.completed < 1) fail('our worker shows no completed work');
   if (!wRow.type || !Array.isArray(wRow.kinds) || wRow.workingNow === undefined) {
     fail('worker rows must carry type/kinds/workingNow: ' + JSON.stringify(wRow));
   }
@@ -254,6 +257,52 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     + ` ~${kpis.humanMinutesSaved.minutes} human-minutes saved (LABELED estimate, baselines`
     + ` ${JSON.stringify(kpis.humanMinutesSaved.baselineMinutes)}), worker ${wRow.worker.slice(0, 8)}…`
     + ' on the board — every number from the ledger, every estimate labeled');
+
+  /* ---------- 5d. surge staffing: the signal and the ceiling ---------- */
+  // the SIGNAL's semantics hold whatever leases linger from earlier runs:
+  // surge = backlog with no workers, or backlog beyond threshold × workers
+  const s0 = kpis.staffing || fail('the staffing signal is missing from the KPIs');
+  if (s0.backlogDepth < 1) fail('staffing sees no backlog despite open tasks');
+  const expectSurge = s0.activeWorkers === 0 ? s0.backlogDepth > 0
+    : s0.backlogDepth > s0.surgeThresholdOpenPerWorker * s0.activeWorkers;
+  if (s0.surge !== expectSurge) {
+    fail(`surge flag disagrees with its own rule: ${JSON.stringify(s0)}`);
+  }
+
+  // the ceiling: cap the crew at CURRENT occupancy + 1, put worker A on the
+  // floor (filling the last seat), and prove a SECOND new worker cannot
+  // join — then lift the cap and watch it join
+  const cap = s0.activeWorkers + 1;
+  const capSet = await call('POST', '/ai/v1/governance/budget', staff, { maxWorkers: cap });
+  if (capSet.status >= 300) fail(`set maxWorkers: ${capSet.status}`);
+  const openNow = (await call('GET', '/ai/v1/workforce/tasks', worker)).body;
+  if (openNow.length < 2) fail('need at least two open tasks for the ceiling proof');
+  const claimA = await call('POST',
+    `/ai/v1/workforce/tasks/${encodeURIComponent(openNow[0].id)}/claim`, worker);
+  if (claimA.status !== 200) fail(`worker A claim under the cap: ${claimA.status}`);
+
+  const bMint = await call('POST', '/tmf-api/rolesAndPermissionsManagement/v4/user', staff,
+    { email: `worker-surge-${run}@bss.local`, givenName: 'Surge', familyName: 'Worker' });
+  await call('POST', '/tmf-api/rolesAndPermissionsManagement/v4/permission', staff,
+    { user: { id: bMint.body.id }, userRole: { name: 'digital-worker' } });
+  const workerB = await token('bss', `worker-surge-${run}@bss.local`, bMint.body.temporaryPassword);
+  const blocked = await call('POST',
+    `/ai/v1/workforce/tasks/${encodeURIComponent(openNow[1].id)}/claim`, workerB);
+  if (blocked.status !== 429) fail(`the ceiling must refuse worker B with 429: ${blocked.status}`);
+
+  await call('POST', '/ai/v1/governance/budget', staff, { maxWorkers: 0 }); // lift the cap
+  const joined = await call('POST',
+    `/ai/v1/workforce/tasks/${encodeURIComponent(openNow[1].id)}/claim`, workerB);
+  if (joined.status !== 200) fail(`cap lifted, worker B should join: ${joined.status}`);
+  const staffed = (await call('GET', '/ai/v1/workforce/kpis', staff)).body.staffing;
+  if (staffed.activeWorkers < cap + 1) {
+    fail(`after joining, activeWorkers should exceed the old cap: ${staffed.activeWorkers} <= ${cap}`);
+  }
+  console.log(`OK SURGE & CEILING: the surge flag obeys its own rule (threshold`
+    + ` ${s0.surgeThresholdOpenPerWorker} open/worker); with the crew capped at ${cap},`
+    + ' a new worker was refused with 429 — the operator\'s ceiling beats any autoscaler —'
+    + ` and with the cap lifted it joined: ${staffed.activeWorkers} on the floor, backlog`
+    + ` ${staffed.backlogDepth}. The crew grows with the queue, never past the ceiling.`);
 
   // one more pending approval for the DASHBOARD to decide
   const p3 = await mkPayment('p3');
@@ -304,6 +353,9 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     if (Number(completedCard) < 1) fail('the dashboard shows no completed work');
     // the crew renders: type cards ("N × care / back-office / generalist")
     // and one row per worker with its own record
+    if (!(await page.locator('[data-testid=wf-kpi-backlog]').count())) {
+      fail('the dashboard shows no backlog/surge card');
+    }
     if (!(await page.locator('[data-testid=wf-type-card]').count())) {
       fail('the dashboard shows no worker-type cards');
     }

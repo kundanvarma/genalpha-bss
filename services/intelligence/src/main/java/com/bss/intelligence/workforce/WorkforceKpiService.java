@@ -32,21 +32,29 @@ public class WorkforceKpiService {
 
     private final WorkforceTaskRepository tasks;
     private final WorkforceApprovalRepository approvals;
+    private final WorkforceService workforce;
+    private final com.bss.intelligence.audit.AiBudgetRepository budgets;
     private final BssApiClient bss;
     private final TenantScope tenantScope;
     private final long baselineTicketMinutes;
     private final long baselineCashMinutes;
+    private final long surgeOpenPerWorker;
 
     public WorkforceKpiService(WorkforceTaskRepository tasks, WorkforceApprovalRepository approvals,
+            WorkforceService workforce, com.bss.intelligence.audit.AiBudgetRepository budgets,
             BssApiClient bss, TenantScope tenantScope,
             @Value("${bss.workforce.baseline-minutes-ticket:12}") long baselineTicketMinutes,
-            @Value("${bss.workforce.baseline-minutes-cash:8}") long baselineCashMinutes) {
+            @Value("${bss.workforce.baseline-minutes-cash:8}") long baselineCashMinutes,
+            @Value("${bss.workforce.surge-open-per-worker:10}") long surgeOpenPerWorker) {
         this.tasks = tasks;
         this.approvals = approvals;
+        this.workforce = workforce;
+        this.budgets = budgets;
         this.bss = bss;
         this.tenantScope = tenantScope;
         this.baselineTicketMinutes = baselineTicketMinutes;
         this.baselineCashMinutes = baselineCashMinutes;
+        this.surgeOpenPerWorker = surgeOpenPerWorker;
     }
 
     @Transactional(readOnly = true)
@@ -69,9 +77,13 @@ public class WorkforceKpiService {
         long ticketReopened = 0;
         OffsetDateTime now = OffsetDateTime.now();
 
+        Map<String, String> workerNames = new TreeMap<>();
         for (WorkforceTask t : all) {
             String who = t.getClaimedBy() == null ? "?" : t.getClaimedBy();
             // every row counts toward WHO the worker is and WHEN it last moved
+            if (t.getClaimedByName() != null) {
+                workerNames.putIfAbsent(who, t.getClaimedByName());
+            }
             workerKinds.computeIfAbsent(who, x -> new java.util.TreeSet<>()).add(t.getKind());
             if (t.getLastUpdate() != null) {
                 workerLastActive.merge(who, t.getLastUpdate(),
@@ -175,6 +187,7 @@ public class WorkforceKpiService {
             String type = typeOf(workerKinds.get(who));
             Map<String, Object> w = new LinkedHashMap<>();
             w.put("worker", who);
+            w.put("workerName", workerNames.getOrDefault(who, who));
             w.put("type", type);
             w.put("kinds", workerKinds.get(who));
             w.put("workingNow", workerOnTask.getOrDefault(who, false));
@@ -211,7 +224,36 @@ public class WorkforceKpiService {
         out.put("approvals", Map.of(
                 "pending", pending, "approved", approved, "refused", refused,
                 "avgDecisionSeconds", decisionCount == 0 ? 0 : decisionSecondsSum / decisionCount));
+        out.put("staffing", staffing());
         return out;
+    }
+
+    /**
+     * THE STAFFING SIGNAL: is the crew keeping up? Backlog depth over
+     * active workers, against the operator's surge threshold — the number
+     * an autoscaler (KEDA on the Prometheus gauge, or surge.sh in dev)
+     * scales worker replicas on. The ceiling rides along so a scaler can
+     * never aim past what the operator allowed.
+     */
+    public Map<String, Object> staffing() {
+        long backlog = workforce.deriveOpen().size();
+        long active = workforce.activeWorkers().size();
+        var budget = budgets.findByTenantId(tenantScope.currentTenantId()).orElse(null);
+        int maxWorkers = budget == null ? 0 : budget.getMaxWorkers();
+        Double openPerWorker = active == 0 ? null
+                : Math.round(10.0 * backlog / active) / 10.0;
+        boolean surge = active == 0 ? backlog > 0
+                : backlog > surgeOpenPerWorker * active;
+        Map<String, Object> s = new LinkedHashMap<>();
+        s.put("backlogDepth", backlog);
+        s.put("activeWorkers", active);
+        s.put("openPerActiveWorker", openPerWorker);
+        s.put("surge", surge);
+        s.put("surgeThresholdOpenPerWorker", surgeOpenPerWorker);
+        s.put("maxWorkers", maxWorkers);
+        s.put("definition", "surge = backlog exceeds threshold × active workers"
+                + " (or any backlog with zero workers); the ceiling caps the crew regardless");
+        return s;
     }
 
     /** A worker's type is what it WORKS, from the ledger: tickets → care,

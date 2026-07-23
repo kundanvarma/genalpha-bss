@@ -72,6 +72,7 @@ public class WorkforceApprovalService {
         row.setId("apr_" + UUID.randomUUID());
         row.setTenantId(tenantScope.currentTenantId());
         row.setRequestedBy(callerId());
+        row.setRequestedByName(WorkforceService.callerName());
         row.setAction(action);
         row.setMethod(method);
         row.setPath(path);
@@ -122,6 +123,7 @@ public class WorkforceApprovalService {
         }
         row.setStatus(WorkforceApproval.APPROVED);
         row.setDecidedBy(callerId());
+        row.setDecidedByName(WorkforceService.callerName());
         row.setDecisionNote(body == null ? null : str(body.get("note")));
         row.setResultJson(result == null ? null
                 : result.length() > 1900 ? result.substring(0, 1900) : result);
@@ -134,6 +136,7 @@ public class WorkforceApprovalService {
         WorkforceApproval row = pending(id);
         row.setStatus(WorkforceApproval.REFUSED);
         row.setDecidedBy(callerId());
+        row.setDecidedByName(WorkforceService.callerName());
         row.setDecisionNote(body == null ? null : str(body.get("note")));
         row.setDecidedAt(OffsetDateTime.now());
         return view(approvals.save(row));
@@ -162,9 +165,11 @@ public class WorkforceApprovalService {
         map.put("reason", row.getReason());
         map.put("status", row.getStatus());
         map.put("requestedBy", row.getRequestedBy());
+        map.put("requestedByName", row.getRequestedByName());
         map.put("createdAt", row.getCreatedAt());
         if (row.getDecidedBy() != null) {
             map.put("decidedBy", row.getDecidedBy());
+            map.put("decidedByName", row.getDecidedByName());
             map.put("decidedAt", row.getDecidedAt());
         }
         if (row.getDecisionNote() != null) {
