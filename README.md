@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty-three Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-four Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -99,7 +99,21 @@ saw, most-recent first, consent-gated and tenant-walled; suite #62), **"customer
 customers actually own together, ranked by co-ownership, minimum-support floored so a single
 basket can never be read back; public and aggregate like Amazon's, tenant-walled; the demo
 data shows it working — Samsung buyers overwhelmingly also take the flagship home bundle;
-suite #63), and
+suite #63), **agentic commerce — the catalog discoverable and BUYABLE by AI agents**
+(an **Agentic Commerce Protocol** merchant surface — the open standard ChatGPT Instant Checkout
+and Perplexity drive — implemented to spec `2026-04-17`: a public product feed projected from
+TMF620 and the full `checkout_sessions` lifecycle riding TMF663 cart + TMF622 order underneath,
+plus the same surface worn as **MCP tools** so Claude and any MCP agent can search, compare and
+buy; checkout runs on a **delegated token** — the shopper's credential exchanged (RFC 8693,
+Keycloak standard token exchange) through a commerce-only client, so the agent's token can order
+and pay and *provably nothing else* — the suite decodes it: 25 authorities down to 5; complete is
+idempotent — the same Idempotency-Key returns the SAME order, a fresh key on a completed session
+is refused — and every agent order is channel-marked `agenticCommerce` with the buyer bound as
+relatedParty, readable by the customer's own token; and the part an operator will ask about
+first: a **per-tenant switch** `agent-commerce: off | discovery | full` in the shared registry,
+gateway-enforced, live-refreshed, DEFAULT OFF — a tenant is dark to agents until it opts in,
+and `discovery` lists the catalog while keeping checkout human; suite #64, the research and
+design in [docs/agentic-commerce-plan.md](docs/agentic-commerce-plan.md)), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host

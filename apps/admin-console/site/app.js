@@ -413,8 +413,11 @@ const RESOURCES = [
       { name: 'locale', label: 'Locale (en, no, da, sv…)', placeholder: 'en' },
       { name: 'currency', label: 'Currency', placeholder: 'EUR' },
       { name: 'color', label: 'Brand color', placeholder: '#B85C38' },
+      // Agentic commerce: how much of this operator AI shopping agents see.
+      // New operators are born 'off' — being shopped by agents is opt-in.
+      { name: 'agentCommerce', label: 'Agent commerce (off | discovery | full)', placeholder: 'off' },
     ],
-    columns: ['id', 'name', 'locale', 'currency'],
+    columns: ['id', 'name', 'locale', 'currency', 'agentCommerce'],
   },
   {
     path: 'billDistribution',

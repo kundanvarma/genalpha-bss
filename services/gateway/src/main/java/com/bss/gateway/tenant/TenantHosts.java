@@ -56,6 +56,12 @@ public class TenantHosts {
         private String currency;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
         private String logoUrl;
+        /**
+         * Agentic-commerce exposure: "off" (dark to AI shopping agents),
+         * "discovery" (findable — feed only, no agent checkout), or "full".
+         * Defaults to off: being shopped by agents is opt-in, never assumed.
+         */
+        private String agentCommerce = "off";
         private List<String> hosts = new ArrayList<>();
 
         public String getId() {
@@ -112,6 +118,14 @@ public class TenantHosts {
 
         public void setLogoUrl(String logoUrl) {
             this.logoUrl = logoUrl;
+        }
+
+        public String getAgentCommerce() {
+            return agentCommerce;
+        }
+
+        public void setAgentCommerce(String agentCommerce) {
+            this.agentCommerce = agentCommerce;
         }
 
         public List<String> getHosts() {

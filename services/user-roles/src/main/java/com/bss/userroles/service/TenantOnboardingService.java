@@ -79,6 +79,7 @@ public class TenantOnboardingService {
             map.put("name", t.getBrandName() == null ? t.getId() : t.getBrandName());
             map.put("locale", t.getLocale());
             map.put("currency", t.getCurrency());
+            map.put("agentCommerce", t.getAgentCommerce());
             map.put("issuer", t.getIssuer());
             map.put("@type", "Operator");
             return map;
@@ -161,6 +162,17 @@ public class TenantOnboardingService {
         if (dto.get("currency") != null) {
             block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
         }
+        if (dto.get("agentCommerce") != null) {
+            // The agentic-commerce switch: how much of this operator AI
+            // shopping agents may see. Flipping it here live-refreshes the
+            // gateway's gate — reversible in one refresh interval.
+            String mode = String.valueOf(dto.get("agentCommerce"));
+            if (!java.util.Set.of("off", "discovery", "full").contains(mode)) {
+                throw new com.bss.userroles.exception.BadRequestException(
+                        "agentCommerce must be off, discovery or full");
+            }
+            block = block.replaceAll("agent-commerce: .*", "agent-commerce: \"" + mode + "\"");
+        }
         Files.writeString(Path.of(tenantsFile), yml.replace(m.group(1), block));
         refresher.refresh();
         log.info("operator '{}' mutated LIVE — the fleet follows within one refresh interval", id);
@@ -237,7 +249,10 @@ public class TenantOnboardingService {
                 .replaceAll("locale: .*", "locale: \"" + locale + "\"")
                 .replaceAll("currency: .*", "currency: " + currency)
                 .replaceAll("hosts: .*", "hosts: [shop." + id + ".localhost, csr." + id
-                        + ".localhost, console." + id + ".localhost, biz." + id + ".localhost]");
+                        + ".localhost, console." + id + ".localhost, biz." + id + ".localhost]")
+                // a newborn operator is DARK to AI shopping agents until it
+                // opts in — being shopped by agents is a choice, not a default
+                .replaceAll("agent-commerce: .*", "agent-commerce: \"off\"");
         Files.writeString(Path.of(tenantsFile), yml + block);
         log.info("tenant block '{}' appended to {}", id, tenantsFile);
     }

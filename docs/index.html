@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>genalpha-bss — a composable, multi-tenant telecom BSS on TM Forum ODA</title>
-<meta name="description" content="An open-source, vendor-neutral Business Support System for telecom operators and MVNOs: 33 composable TM Forum ODA components, 11 conformance kits at zero failures, 63 end-to-end proof suites, run live on AWS and Azure.">
+<meta name="description" content="An open-source, vendor-neutral Business Support System for telecom operators and MVNOs: 33 composable TM Forum ODA components, 11 conformance kits at zero failures, 64 end-to-end proof suites, agentic-commerce (ACP) ready, run live on AWS and Azure.">
 <style>
   :root {
     --teal:#147673; --ink:#20262b; --dim:#6b7680;
@@ -77,7 +77,7 @@
 
     <div class="stats">
       <div class="stat"><b>33</b><span>ODA components (TMF Open APIs)</span></div>
-      <div class="stat"><b>63</b><span>end-to-end browser suites</span></div>
+      <div class="stat"><b>64</b><span>end-to-end browser suites</span></div>
       <div class="stat"><b>11</b><span>conformance kits at zero failures</span></div>
       <div class="stat"><b>2</b><span>clouds run live (AWS + Azure)</span></div>
       <div class="stat"><b>6</b><span>customer channels</span></div>
@@ -109,6 +109,11 @@
       <li><b>AI, governed:</b> an <b>AI control plane</b> — every LLM turn metered, budgeted,
         kill-switchable and audited — under product/CSR copilots, a churn-prediction engine, and
         AI-authored personalization rules an operator can chat into existence.</li>
+      <li><b>Agentic commerce, switchable:</b> an <b>Agentic Commerce Protocol</b> merchant
+        surface — the open standard behind ChatGPT Instant Checkout — plus the same catalog and
+        checkout as MCP tools, so AI shopping agents can find, compare and <i>buy</i>. Checkout
+        runs on a delegated, provably commerce-only token; every operator holds a
+        per-tenant switch: <code>off</code>, <code>discovery</code>, or <code>full</code>.</li>
       <li><b>Post-quantum ready</b> (not "quantum-proof"): crypto-agile by construction — identity,
         transport and payment crypto behind seams, so migration is a swap, not a rewrite.
         AES-256-GCM at rest, PKCE&nbsp;S256, a hybrid <b>X25519MLKEM768</b> TLS key exchange against
@@ -145,12 +150,31 @@
 
   <section>
     <h2>Proven, not promised</h2>
-    <p class="body">Sixty-three Playwright suites drive real browsers across every surface;
+    <p class="body">Sixty-four Playwright suites drive real browsers across every surface;
       eleven official TM Forum Conformance Test Kits pass with zero failures; three production
       hardening waves are backed by live proofs (tick locks under two replicas, a backup that
       provably restores, GDPR rights as working endpoints); and the same Helm chart has run on
       local Kubernetes, AWS EKS and Azure AKS — the same application, every cloud difference
       absorbed by a seam. The honest gaps are written down, not hidden.</p>
+  </section>
+
+  <section>
+    <h2>Ready for the agentic storefront</h2>
+    <p class="body">Commerce is moving into AI assistants: ChatGPT, Perplexity and their peers now
+      shop <i>for</i> the customer, and the merchants they can see are the merchants that get
+      bought from. genalpha-bss ships an <b>Agentic Commerce Protocol (ACP)</b> merchant surface —
+      the OpenAI/Stripe open standard behind Instant Checkout, implemented to spec
+      <code>2026-04-17</code>: a public product feed projected straight from the TMF620 catalog,
+      and the full <code>checkout_sessions</code> lifecycle (create, update, complete, cancel)
+      riding the same cart and order components every human channel uses. The identical surface is
+      exposed as <b>MCP tools</b>, so Claude-class agents buy through the same door. The details a
+      CSP will actually ask about are answered: checkout uses a <b>delegated token</b> (OAuth
+      token exchange) that can order and pay and provably nothing else — the proof suite decodes
+      it; completion is idempotent, so an agent retry can never buy twice; every agent order is
+      channel-marked and tenant-walled; and each operator controls its own exposure with one
+      live-refreshed switch — <code>off</code> (dark to agents), <code>discovery</code> (findable,
+      checkout stays human), or <code>full</code>. Default off: being shopped by AI is a choice
+      the operator makes, not a default it discovers.</p>
   </section>
 
   <section>
