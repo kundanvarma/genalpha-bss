@@ -34,6 +34,11 @@ const SHOPPER_USERNAME = process.env.BSS_SHOPPER_USERNAME || 'paula@family.examp
 const SHOPPER_PASSWORD = process.env.BSS_SHOPPER_PASSWORD || 'paula';
 const AGENT_CLIENT_ID = process.env.BSS_AGENT_CLIENT_ID || 'bss-agent';
 const AGENT_CLIENT_SECRET = process.env.BSS_AGENT_CLIENT_SECRET || 'agent-secret';
+// The digital-worker BADGE: a per-tenant staff identity the operator mints
+// (and can revoke) on the console. No badge, no workforce — the badge IS
+// the opt-in. Set these when deploying a worker (e.g. the Hermes package).
+const WORKER_USERNAME = process.env.BSS_WORKER_USERNAME;
+const WORKER_PASSWORD = process.env.BSS_WORKER_PASSWORD;
 
 let cached = null;
 async function token() {
@@ -87,6 +92,44 @@ async function commerceToken() {
     expiresAt: Date.now() + exchanged.expires_in * 1000,
   };
   return cachedCommerce.value;
+}
+
+/** The worker's badge token — a password grant for the minted staff
+ * identity. Refuses loudly when no badge is configured: employment is the
+ * operator's explicit act, never a default. */
+let cachedWorker = null;
+async function workerToken() {
+  if (!WORKER_USERNAME || !WORKER_PASSWORD) {
+    throw new Error('no digital-worker badge configured (BSS_WORKER_USERNAME/BSS_WORKER_PASSWORD)'
+      + ' — the operator mints one on the console (Staff → grant digital-worker)');
+  }
+  if (cachedWorker && cachedWorker.expiresAt > Date.now() + 30000) return cachedWorker.value;
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'password', client_id: CLIENT_ID,
+      username: WORKER_USERNAME, password: WORKER_PASSWORD,
+    }),
+  });
+  if (!res.ok) throw new Error(`worker badge token: ${res.status} ${await res.text()}`);
+  const body = await res.json();
+  cachedWorker = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+  return cachedWorker.value;
+}
+
+async function workerApi(method, path, payload) {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${await workerToken()}`,
+      ...(payload ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : {};
 }
 
 /** Anonymous call — the ACP feed and open checkout sessions are public,
@@ -278,6 +321,110 @@ const TOOLS = [
         Authorization: `Bearer ${await commerceToken()}`,
         'Idempotency-Key': `mcp-${a.sessionId}`,
       }),
+  },
+  /* ---- the digital workforce: back-office & care, on the worker's badge ---- */
+  {
+    name: 'workforce_list_tasks',
+    description: 'The open work queue for this operator: unassigned trouble tickets and unapplied '
+      + 'payments, derived live from the real backlogs. Requires the digital-worker badge.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => workerApi('GET', '/ai/v1/workforce/tasks'),
+  },
+  {
+    name: 'workforce_claim',
+    description: 'Claim a task from the queue (a 15-minute lease — a crashed worker\'s task frees '
+      + 'itself). Two workers can never hold the same task.',
+    inputSchema: {
+      type: 'object',
+      properties: { taskId: { type: 'string' } },
+      required: ['taskId'],
+    },
+    run: (a) => workerApi('POST', `/ai/v1/workforce/tasks/${encodeURIComponent(a.taskId)}/claim`),
+  },
+  {
+    name: 'workforce_complete',
+    description: 'Complete a claimed task. Completion is VERIFIED: a ticket task completes only '
+      + 'when the ticket is actually resolved; a cash task only when the payment left the '
+      + 'worklist. Optionally self-report model usage for the operator\'s dashboard.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId: { type: 'string' },
+        outcome: { type: 'string', description: 'One sentence: what was done' },
+        selfReported: {
+          type: 'object',
+          properties: {
+            tokens: { type: 'number' }, costMicros: { type: 'number' }, model: { type: 'string' },
+          },
+        },
+      },
+      required: ['taskId', 'outcome'],
+    },
+    run: (a) => workerApi('POST', `/ai/v1/workforce/tasks/${encodeURIComponent(a.taskId)}/complete`,
+      { outcome: a.outcome, selfReported: a.selfReported }),
+  },
+  {
+    name: 'workforce_escalate',
+    description: 'Hand a claimed task to a human, with the reason. Escalating honestly beats '
+      + 'completing wrongly — escalations are counted, not punished.',
+    inputSchema: {
+      type: 'object',
+      properties: { taskId: { type: 'string' }, reason: { type: 'string' } },
+      required: ['taskId', 'reason'],
+    },
+    run: (a) => workerApi('POST', `/ai/v1/workforce/tasks/${encodeURIComponent(a.taskId)}/escalate`,
+      { reason: a.reason }),
+  },
+  {
+    name: 'care_ticket_get',
+    description: 'Read one trouble ticket in full (TMF621) — the context before the work.',
+    inputSchema: {
+      type: 'object',
+      properties: { ticketId: { type: 'string' } },
+      required: ['ticketId'],
+    },
+    run: (a) => workerApi('GET', `/tmf-api/troubleTicket/v4/troubleTicket/${a.ticketId}`),
+  },
+  {
+    name: 'care_ticket_resolve',
+    description: 'Resolve a trouble ticket with a note explaining the fix — the same TMF621 '
+      + 'transition a human CSR makes, attributed to the worker\'s badge.',
+    inputSchema: {
+      type: 'object',
+      properties: { ticketId: { type: 'string' }, note: { type: 'string' } },
+      required: ['ticketId', 'note'],
+    },
+    run: (a) => workerApi('PATCH', `/tmf-api/troubleTicket/v4/troubleTicket/${a.ticketId}`,
+      { status: 'resolved', note: [{ text: a.note }] }),
+  },
+  {
+    name: 'backoffice_unapplied_cash',
+    description: 'The AR worklist: bank payments no bill cleanly claims, each with its reason.',
+    inputSchema: { type: 'object', properties: {} },
+    run: () => workerApi('GET', '/tmf-api/customerBillManagement/v4/remittance/unapplied'),
+  },
+  {
+    name: 'backoffice_list_bills',
+    description: 'Open customer bills (TMF678) — to find the bill an unapplied payment belongs to.',
+    inputSchema: {
+      type: 'object',
+      properties: { state: { type: 'string', description: 'Filter, e.g. "new" for open bills' } },
+    },
+    run: (a) => workerApi('GET', `/tmf-api/customerBillManagement/v4/customerBill?limit=100${a.state ? `&state=${encodeURIComponent(a.state)}` : ''}`),
+  },
+  {
+    name: 'backoffice_apply_payment',
+    description: 'Resolve ONE unapplied payment to the bill it belongs to. Money stays honest: '
+      + 'the bill must be open and the amount must match to the cent — a mismatch is refused, '
+      + 'never forced.',
+    inputSchema: {
+      type: 'object',
+      properties: { unappliedId: { type: 'string' }, billId: { type: 'string' } },
+      required: ['unappliedId', 'billId'],
+    },
+    run: (a) => workerApi('POST',
+      `/tmf-api/customerBillManagement/v4/remittance/unapplied/${a.unappliedId}/apply`,
+      { billId: a.billId }),
   },
 ];
 

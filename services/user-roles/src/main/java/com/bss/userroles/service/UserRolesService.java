@@ -115,7 +115,19 @@ public class UserRolesService {
         if (isInternal(roleName)) {
             throw new BadRequestException("role '" + roleName + "' is not grantable");
         }
-        idp.grant(tenantScope.currentTenantId(), userId, roleName);
+        String tenantId = tenantScope.currentTenantId();
+        idp.grant(tenantId, userId, roleName);
+        if ("digital-worker".equals(roleName)) {
+            // HIRING: a digital worker is STAFF. Every login is born with the
+            // realm's walk-in defaults (the customer persona), and customer
+            // party-scoping would confine the worker to an empty world of its
+            // own — so the hire sheds those defaults. Firing (revoking the
+            // badge) does NOT restore them: an ex-worker keeps no persona.
+            idp.userRoles(tenantId, userId).stream()
+                    .map(r -> String.valueOf(r.get("name")))
+                    .filter(n -> n.startsWith("default-roles-") || "customer".equals(n))
+                    .forEach(n -> idp.revoke(tenantId, userId, n));
+        }
         return permissionMap(userId, roleName);
     }
 
