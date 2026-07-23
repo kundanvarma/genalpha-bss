@@ -502,11 +502,24 @@ Workforce tab and the stored action runs under <em>the approver's own token</em>
 keeps its receipt too. Filing is <code>workforce:use</code>; deciding is <code>ai:use</code> —
 a worker can never approve its own ask.</p>
 
-<h3>The scoreboard</h3>
+<h3>The scoreboard — and the controls</h3>
 <p>Console → <b>Workforce</b>: completed / escalated / deflection, average handle time,
-<b>reopen rate</b> (completed tickets re-checked live — the honesty metric), approvals queue,
-shift ledger, self-reported cost (labeled), and human-minutes saved — an estimate that SAYS so,
-computed from operator-set baselines (<code>BSS_WORKFORCE_BASELINE_MINUTES_TICKET/-CASH</code>).</p>
+<b>reopen rate</b> (completed tickets re-checked live — the honesty metric), the crew by name
+and observed type, approvals queue, shift ledger, self-reported cost (labeled), and
+human-minutes saved — an estimate that SAYS so, computed from operator-set baselines
+(<code>BSS_WORKFORCE_BASELINE_MINUTES_TICKET/-CASH</code>). The tab also holds the operator's
+two levers: <b>Crew ceiling</b> (governance <code>maxWorkers</code>; a new worker past it is
+refused at claim time — surge staffing never outgrows it) and <b>Hire a worker</b> (pick a job
+— care / back-office / generalist — the badge is minted and the credentials shown ONCE with the
+matching job card to run; activating is the runtime's act, firing is the Staff-tab revoke).</p>
+
+<h3>Surge staffing</h3>
+<p>The staffing signal — <code>staffing</code> in the KPIs, Prometheus gauges
+(<code>bss_workforce_backlog_depth / _active_workers / _surge</code>, per tenant) and
+<code>WorkforceSurgeEvent</code> on the boundary — tells an autoscaler when the crew is behind.
+Scale with KEDA (<code>integrations/hermes-worker/k8s-surge-example.yaml</code>) or the dev
+watcher (<code>surge.sh</code>); the ceiling caps whatever the scaler does. The BSS signals and
+refuses; it never spawns worker processes itself.</p>
 
 <h3>The Hermes package (day 1)</h3>
 <p><code>integrations/hermes-worker/</code>: <code>hire-worker.sh</code> (the badge, shown

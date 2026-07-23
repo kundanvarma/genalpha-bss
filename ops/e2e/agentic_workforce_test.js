@@ -376,6 +376,39 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     console.log(`OK DASHBOARD: the console's Workforce tab showed ${completedCard} completed task(s),`
       + ` ${rows} pending approval(s) and the shift ledger; one Approve CLICK refunded the payment`
       + ' under the signed-in human\'s own token — the scoreboard is also the control room.');
+
+    /* ---------- 9. the controls: ceiling + hiring, from the UI ---------- */
+    await page.fill('[data-testid=wf-ceiling-input]', '7');
+    await page.click('[data-testid=wf-ceiling-save]');
+    let ceiling = 0;
+    for (let i = 0; i < 15 && ceiling !== 7; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      ceiling = (await call('GET', '/ai/v1/governance', staff)).body.maxWorkers;
+    }
+    if (ceiling !== 7) fail(`the UI ceiling save did not land: ${ceiling}`);
+    await call('POST', '/ai/v1/governance/budget', staff, { maxWorkers: 0 }); // restore
+
+    await page.waitForSelector('[data-testid=wf-hire-name]');
+    await page.fill('[data-testid=wf-hire-name]', 'ui-demo');
+    await page.selectOption('[data-testid=wf-hire-job]', 'care');
+    await page.click('[data-testid=wf-hire-go]');
+    await page.waitForSelector('[data-testid=wf-hired-creds]', { timeout: 15000 });
+    const credsText = await page.locator('[data-testid=wf-hired-creds]').textContent();
+    const uiUser = credsText.match(/BSS_WORKER_USERNAME=(\S+)/)[1];
+    const uiPass = credsText.match(/BSS_WORKER_PASSWORD=(\S+)/)[1];
+    if (!uiUser.startsWith('worker-care-ui-demo')) fail('hired username is off: ' + uiUser);
+    // the credentials are REAL: the badge opens the workforce door
+    const uiWorker = await token('bss', uiUser, uiPass);
+    const uiDoor = await call('GET', '/ai/v1/workforce/tasks', uiWorker);
+    if (uiDoor.status !== 200) fail(`the UI-hired worker's badge does not work: ${uiDoor.status}`);
+    // tidy the roster: fire the demo hire
+    const uiUserId = await page.locator('[data-testid=wf-hired-creds]').getAttribute('data-userid');
+    await call('DELETE', `/tmf-api/rolesAndPermissionsManagement/v4/permission/${
+      Buffer.from(`${uiUserId}~digital-worker`).toString('base64url')}`, staff);
+    console.log('OK CONTROLS: the crew ceiling was set from the dashboard (verified in governance,'
+      + ' then restored), and a CARE worker was hired from the dashboard — its once-shown'
+      + ' credentials opened the workforce door for real, and it was fired after the proof.'
+      + ' Hiring is a form; activating is the runtime running the shown job card.');
   } finally {
     await browser.close();
   }
