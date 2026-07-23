@@ -51,6 +51,46 @@ anything bigger**, and reports its shifts — all visible on the console's
 | Big actions | Workforce tab → approvals: the human's click IS the write, under the human's token |
 | The scoreboard | Workforce tab: completed, escalated, deflection, handle time, **reopen rate**, minutes saved (labeled estimate), self-reported cost (labeled) |
 
+## Field notes from the first live run (2026-07-23, Hermes v0.19.0)
+
+- **`--yolo` is required for headless runs**: in one-shot mode
+  (`hermes -z "…"`) MCP tools need interactive approval and are otherwise
+  withheld — the model then *narrates* instead of acting. `hermes --yolo
+  -t bss -z "…"` makes the tools callable.
+- **The model needs a ≥64K context window** (Hermes refuses smaller) —
+  and it needs to be a competent tool-caller. In our live test, local
+  3B/8B models hallucinated entire shifts (invented tool names, fabricated
+  task ids, announced success); **the BSS caught every fabrication** —
+  verified completion left the ticket open and the ledger clean. The same
+  shift on `claude-haiku-4-5` ran flawlessly first try: queue → claim →
+  ticket resolved with a customer-readable note → verified completion,
+  ~850 tokens. The guarantees don't depend on the agent being good; a good
+  agent shines on them.
+- Colima/dev gotcha: pulling models can fill the docker disk —
+  `docker builder prune -af` frees it.
+
+### The working cron recipe (proven live)
+
+```bash
+cp -r skills/care-triage skills/cash-matching ~/.hermes/skills/
+hermes cron create "15m" \
+  "Work the care queue as the badged digital worker: use the bss MCP tools \
+exactly as the care-triage skill describes. At most 3 tickets this run. If \
+the queue has no ticket tasks, reply QUEUE EMPTY and stop." \
+  --name care-queue --skill care-triage --deliver local
+hermes gateway install     # the scheduler daemon (launchd/systemd) — cron
+                           # jobs won't fire without it
+hermes cron runs           # the execution history; the BSS ledger stays the truth
+hermes cron pause care-queue   # the off switch (or revoke the badge — harder)
+```
+
+First live cron tick (claude-haiku-4-5): the worker autonomously claimed
+and resolved three backlog tickets — including two the ASSURANCE
+component's self-heal had auto-raised — each with a customer-readable
+note, each verified-complete on the ledger. Positional order matters:
+`hermes cron create SCHEDULE "PROMPT" --flags` (flags before the prompt
+eat it).
+
 ## Honest notes
 
 - The worker brings its **own LLM** — its model costs do not pass through
