@@ -34,6 +34,13 @@ bss:
         # (findable, no agent checkout) | full. New tenants default OFF —
         # being shopped by AI agents is opt-in, never assumed.
         agent-commerce: ${AGENT_COMMERCE:full}
+        # The digital workforce's BRAIN — live config, no restart: change
+        # any of these and the worker-controller ROLLS the workers onto
+        # the new model/key (leases free themselves, so rolling is safe).
+        worker-ai-provider: ${WORKER_AI_PROVIDER:anthropic}
+        worker-ai-base-url: ${WORKER_AI_BASE_URL:}
+        worker-ai-api-key: ${WORKER_AI_API_KEY:}
+        worker-ai-model: ${WORKER_AI_MODEL:claude-haiku-4-5-20251001}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
