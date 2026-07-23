@@ -48,10 +48,16 @@ public class SecurityConfig {
                         // (party = token subject), so plain authentication is
                         // the right gate — customers carry no staff AI roles
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/forYou").authenticated()
-                        // the digital workforce: gated by its OWN authority,
-                        // granted only inside the digital-worker role bundle —
-                        // the badge is the opt-in switch
-                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/**").hasAuthority("workforce:use")
+                        // the digital workforce: the worker's endpoints ride
+                        // workforce:use (granted only inside the digital-worker
+                        // bundle — the badge is the opt-in switch); the ledger
+                        // is readable by staff too; filing an approval is the
+                        // WORKER's act, deciding one is STAFF's — and the KPI
+                        // scoreboard is the operations manager's view (ai:use)
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/tasks/**").hasAuthority("workforce:use")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/ledger").hasAnyAuthority("workforce:use", "ai:use")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/workforce/approvals").hasAuthority("workforce:use")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")

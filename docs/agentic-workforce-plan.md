@@ -236,5 +236,34 @@ defaults in the TMF672 grant itself** (a hired worker is staff; firing
 does not restore the persona). Regressions green: roles, csr,
 ai_control_plane #59, agentic_commerce #64.
 
-*(Phases 2–3 — approvals + the Workforce dashboard, then the turnkey
-Hermes compose profile — next.)*
+**Phase 2 — 2026-07-23.** Suite #65 extended and green end to end,
+including a real browser leg on the dashboard:
+
+- **The T3 gate** (`workforce_approval` V12+V13, `/ai/v1/workforce/
+  approvals` file/list/approve/refuse): a worker FILES a high-blast-radius
+  action as data (method + `/tmf-api/` path + body + reason — no other
+  paths accepted); nothing executes; approving forwards the stored request
+  through the gateway with the APPROVER'S own Authorization — a downstream
+  refusal leaves the approval pending with the error surfaced. Proven: the
+  filed refund moved no money; the worker could not approve its own ask
+  (403 — filing is workforce:use, deciding is ai:use); the human's
+  approval executed the refund; the refused ask left the money untouched.
+- **The scoreboard** (`GET /ai/v1/workforce/kpis` + the console
+  **Workforce tab**): completed/escalated/deflection, avg handle time,
+  the REOPEN honesty metric (checked live against the ticket source,
+  capped at 25), self-reported cost labeled as the workers' own word,
+  human-minutes-saved carrying `estimate: true` + the operator-set
+  baselines (`bss.workforce.baseline-minutes-ticket/-cash`), per-worker
+  rows, approval stats. The dashboard is also the control room: the suite
+  signs into the console, reads the KPI cards, and one Approve CLICK
+  refunds a payment under the signed-in human's token.
+- **MCP**: `request_approval` tool ("a filed approval is a good shift,
+  not a failed one").
+- **Real bug fixed en route**: `PaymentService.refund` NPE'd building the
+  receipt for owner-less payments (staff/remittance-created) —
+  `Map.of(null,…)`; refunds of back-office payments worked for the first
+  time here.
+
+Regressions green: storefront, remittance, console, ai_control_plane.
+
+*(Phase 3 — the turnkey Hermes compose profile + docs/marketing — next.)*

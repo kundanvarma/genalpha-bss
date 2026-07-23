@@ -12,6 +12,8 @@
  *  - FIRING works: revoke the badge → the next shift never starts.
  *  - The tenant wall: nova's queue carries none of genalpha's backlog.
  */
+const { chromium } = require('playwright');
+
 const API = 'http://localhost:8080';
 const KC = 'http://localhost:8085/realms';
 const run = Date.now();
@@ -171,6 +173,79 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   console.log('OK KILL-SWITCH: the tenant\'s one AI lever stopped the workforce mid-shift — the'
     + ' same switch that stops the copilots, restored after the proof');
 
+  /* ---------- 5b. the T3 gate: propose, never perform ---------- */
+  const mkPayment = async (label) => {
+    const p = await call('POST', '/tmf-api/paymentManagement/v4/payment', staff, {
+      description: `WF refund subject ${label} ${run}`,
+      amount: { unit: 'EUR', value: 9.99 },
+      paymentMethod: { '@type': 'bankCard', token: `spt-wf-${label}-${run}`, lastFourDigits: '4242' },
+    });
+    if (p.status >= 300) fail(`payment ${label}: ${p.status} ${p.text.slice(0, 200)}`);
+    const cap = await call('PATCH', `/tmf-api/paymentManagement/v4/payment/${p.body.id}`, staff,
+      { status: 'captured' });
+    if (cap.status >= 300) fail(`capture ${label}: ${cap.status}`);
+    return p.body.id;
+  };
+  const paymentStatus = async (id) => (await call('GET',
+    `/tmf-api/paymentManagement/v4/payment/${id}`, staff)).body.status;
+
+  const p1 = await mkPayment('p1');
+  const fileRefund = (paymentId, why) => call('POST', '/ai/v1/workforce/approvals', worker, {
+    action: 'payment.refund', method: 'POST',
+    path: `/tmf-api/paymentManagement/v4/payment/${paymentId}/refund`,
+    body: { amount: { unit: 'EUR', value: 9.99 }, reason: why },
+    reason: why,
+  });
+  const a1 = await fileRefund(p1, 'Customer was double-charged after the outage — goodwill refund.');
+  if (a1.status >= 300) fail(`file approval: ${a1.status} ${a1.text.slice(0, 200)}`);
+  if (await paymentStatus(p1) !== 'captured') fail('filing an approval MOVED MONEY — it must not');
+
+  const selfApprove = await call('POST',
+    `/ai/v1/workforce/approvals/${a1.body.id}/approve`, worker);
+  if (selfApprove.status !== 403) fail(`a worker approving its own ask must 403: ${selfApprove.status}`);
+
+  const pendings = (await call('GET', '/ai/v1/workforce/approvals?status=pending', staff)).body;
+  if (!pendings.some((a) => a.id === a1.body.id)) fail('the filed approval is not in the pending queue');
+  const approved = await call('POST',
+    `/ai/v1/workforce/approvals/${a1.body.id}/approve`, staff);
+  if (approved.status !== 200) fail(`approve: ${approved.status} ${approved.text.slice(0, 300)}`);
+  if (await paymentStatus(p1) !== 'refunded') fail('approval approved but the refund never happened');
+
+  const p2 = await mkPayment('p2');
+  const a2 = await fileRefund(p2, 'Second proposed refund — to be refused.');
+  const refused = await call('POST', `/ai/v1/workforce/approvals/${a2.body.id}/refuse`, staff,
+    { note: 'Not warranted: the charge is correct.' });
+  if (refused.status !== 200) fail(`refuse: ${refused.status}`);
+  if (await paymentStatus(p2) !== 'captured') fail('a REFUSED approval moved money');
+  console.log('OK T3 GATE: the worker FILED a refund — no money moved; it could not approve its'
+    + ' own ask (403); a human approved and the refund executed under the HUMAN\'S token; a second'
+    + ' ask was refused with a note and the money stayed put. Proposals, never performances.');
+
+  /* ---------- 5c. the scoreboard ---------- */
+  const kpis = (await call('GET', '/ai/v1/workforce/kpis', staff)).body;
+  if (!kpis || kpis.completed < 1) fail('KPIs show no completed work');
+  if (kpis.escalated < 1) fail('KPIs show no escalation');
+  if (kpis.approvals.approved < 1 || kpis.approvals.refused < 1) {
+    fail('KPIs miss the approval outcomes: ' + JSON.stringify(kpis.approvals));
+  }
+  if (kpis.humanMinutesSaved.estimate !== true) {
+    fail('human-minutes-saved must be LABELED an estimate');
+  }
+  if (!kpis.reopen || kpis.reopen.definition == null) fail('the reopen (honesty) metric is missing');
+  const wRow = kpis.workers.find((w) => w.completed >= 1)
+    || fail('no worker row on the scoreboard');
+  console.log(`OK SCOREBOARD: ${kpis.completed} completed / ${kpis.escalated} escalated`
+    + ` (deflection ${Math.round((kpis.deflectionRate || 0) * 100)}%), reopen rate`
+    + ` ${Math.round(kpis.reopen.rate * 100)}% of ${kpis.reopen.checked} checked,`
+    + ` ~${kpis.humanMinutesSaved.minutes} human-minutes saved (LABELED estimate, baselines`
+    + ` ${JSON.stringify(kpis.humanMinutesSaved.baselineMinutes)}), worker ${wRow.worker.slice(0, 8)}…`
+    + ' on the board — every number from the ledger, every estimate labeled');
+
+  // one more pending approval for the DASHBOARD to decide
+  const p3 = await mkPayment('p3');
+  const a3 = await fileRefund(p3, 'Third proposed refund — for the dashboard click.');
+  if (a3.status >= 300) fail(`file a3: ${a3.status}`);
+
   /* ---------- 6. firing: revoke the badge ---------- */
   const permissionId = Buffer.from(`${workerId}~digital-worker`).toString('base64url');
   const fired = await call('DELETE',
@@ -197,8 +272,43 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   console.log('OK TENANT WALL: nova hired its own worker on its own realm — its queue carries'
     + ' none of genalpha\'s tickets or cash. Every operator\'s workforce works only its own floor.');
 
+  /* ---------- 8. the dashboard: see the shift, click the decision ---------- */
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage();
+    await page.goto(`${API}/console/`);
+    await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
+    if (await page.locator('input[name="username"]').count()) {
+      await page.fill('input[name="username"]', 'demo');
+      await page.fill('input[name="password"]', 'demo');
+      await page.click('input[type="submit"], button[type="submit"]');
+    }
+    await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
+    await page.locator('.tab', { hasText: 'Workforce' }).click();
+    await page.waitForSelector('[data-testid=wf-kpi-completed]', { timeout: 15000 });
+    const completedCard = await page.locator('[data-testid=wf-kpi-completed] b').textContent();
+    if (Number(completedCard) < 1) fail('the dashboard shows no completed work');
+    await page.waitForSelector('[data-testid=wf-approval-row]', { timeout: 10000 });
+    const rows = await page.locator('[data-testid=wf-approval-row]').count();
+    await page.locator('[data-testid=wf-approve]').first().click();
+    // the click IS the write: the refund executes under the signed-in human
+    for (let i = 0; i < 20 && await paymentStatus(p3) !== 'refunded'; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    if (await paymentStatus(p3) !== 'refunded') fail('the dashboard Approve click did not refund');
+    if (!(await page.locator('[data-testid=wf-ledger-row]').count())) {
+      fail('the shift ledger is empty on the dashboard');
+    }
+    console.log(`OK DASHBOARD: the console's Workforce tab showed ${completedCard} completed task(s),`
+      + ` ${rows} pending approval(s) and the shift ledger; one Approve CLICK refunded the payment`
+      + ' under the signed-in human\'s own token — the scoreboard is also the control room.');
+  } finally {
+    await browser.close();
+  }
+
   console.log('\nALL WORKFORCE CHECKS PASSED — an AI worker was hired with a revocable badge,'
     + ' worked a real shift through the same doors humans use, could not fake a completion,'
-    + ' escalated honestly, obeyed the kill-switch, and was fired cleanly. The queue derives from'
-    + ' real backlogs; the ledger tells the operator exactly what its digital workforce did.');
+    + ' escalated honestly, proposed the refund it was never allowed to perform, obeyed the'
+    + ' kill-switch, and was fired cleanly — while the operator watched all of it, with KPIs'
+    + ' whose estimates say they are estimates, on the Workforce dashboard.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

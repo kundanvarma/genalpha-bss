@@ -450,6 +450,9 @@ services:
       # the product advisor's sources
       CATALOG_BASE_URL: http://product-catalog:8080
       BILLING_BASE_URL: http://billing:8080
+      # workforce approvals execute the stored action THROUGH the gateway
+      # with the approver's own token
+      BSS_WORKFORCE_GATEWAY_BASE_URL: http://gateway:8080
       MARKET_FEED_URL: http://mock-market:8080
       MARKET_FEED_TOKEN: genalpha-market-token
       # aurora runs TIERED models on the mock LLM: cheap for volume,
