@@ -266,6 +266,16 @@ including a real browser leg on the dashboard:
 
 Regressions green: storefront, remittance, console, ai_control_plane.
 
+**Phase 2b — the crew view (2026-07-23, on Kundan's review):** the
+scoreboard alone hid WHO was working. The KPI payload and the Workforce
+tab now carry **The crew**: per-worker rows (observed type, working-now
+lease indicator, completed/escalated, avg handle, self-reported cost,
+last active) and a **worker-type rollup** ("N × care / back-office /
+generalist" with per-type deflection). Type is OBSERVED from the ledger —
+what a worker actually works — never self-declared; "working now" = holds
+a live task lease. Suite #65 asserts both the payload shape and the
+rendered crew section.
+
 **Phase 3 — 2026-07-23.** The package: `integrations/hermes-worker/` —
 `hire-worker.sh` (the badge bootstrap, smoke-tested against the live
 stack: mint → grant → .env.worker shown once), `config.snippet.yaml`

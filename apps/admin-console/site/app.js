@@ -2046,6 +2046,7 @@ async function renderWorkforce() {
   cards.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.7rem;margin:0.6rem 0 1.2rem';
   const mins = kpis.humanMinutesSaved || {};
   cards.append(
+    card('Working now', kpis.workingNow, 'workers holding a live task lease', 'wf-kpi-working'),
     card('Tasks completed', kpis.completed, null, 'wf-kpi-completed'),
     card('Escalated to humans', kpis.escalated, 'escalations are counted, not punished', 'wf-kpi-escalated'),
     card('Deflection', kpis.deflectionRate == null ? '—' : Math.round(kpis.deflectionRate * 100) + '%',
@@ -2065,6 +2066,54 @@ async function renderWorkforce() {
     el2.style.cssText = 'margin:1.2rem 0 0.5rem';
     return el2;
   };
+
+  // THE CREW: how many of each type of worker, then each worker's own
+  // record. Type is OBSERVED from the ledger (what it actually works —
+  // care / back-office / generalist), never self-declared.
+  const crewBox = document.createElement('div');
+  const types = kpis.workerTypes || {};
+  const typeCards = document.createElement('div');
+  typeCards.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.7rem;margin-bottom:0.8rem';
+  for (const [type, t] of Object.entries(types)) {
+    const div = document.createElement('div');
+    div.dataset.testid = 'wf-type-card';
+    div.style.cssText = 'flex:1 1 12rem;min-width:12rem;padding:0.7rem 1rem;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fafafa)';
+    const head = document.createElement('b');
+    head.textContent = `${t.workers} × ${type}`;
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:0.82rem;color:var(--dim,#777)';
+    sub.textContent = `${t.workingNow} working now · ${t.completed} done · ${t.escalated} escalated`
+      + (t.deflectionRate != null ? ` · deflection ${Math.round(t.deflectionRate * 100)}%` : '');
+    div.append(head, sub);
+    typeCards.append(div);
+  }
+  crewBox.append(typeCards);
+  for (const w of (kpis.workers || [])) {
+    const row = document.createElement('div');
+    row.dataset.testid = 'wf-worker-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:0.7rem;padding:0.45rem 0.8rem;border-bottom:1px solid var(--line,#eee);font-size:0.9rem';
+    const dot = document.createElement('span');
+    dot.textContent = w.workingNow ? '●' : '○';
+    dot.title = w.workingNow ? 'holding a live task lease right now' : 'idle';
+    dot.style.color = w.workingNow ? '#2e9e5b' : 'var(--dim,#999)';
+    const who = document.createElement('span');
+    who.style.flex = '1';
+    who.textContent = `${w.worker} — ${w.type}`;
+    const nums = document.createElement('span');
+    nums.style.cssText = 'color:var(--dim,#777)';
+    nums.textContent = `${w.completed} done · ${w.escalated} esc`
+      + (w.avgHandleSeconds != null ? ` · ${w.avgHandleSeconds}s avg` : '')
+      + ` · ${((w.selfReportedCostMicros || 0) / 1e6).toFixed(4)} € (self-rep.)`
+      + (w.lastActiveAt ? ` · last ${new Date(w.lastActiveAt).toLocaleTimeString()}` : '');
+    row.append(dot, who, nums);
+    crewBox.append(row);
+  }
+  if (!(kpis.workers || []).length) {
+    const none = document.createElement('p');
+    none.textContent = 'No workers have worked yet — hire one (Staff → grant digital-worker).';
+    none.style.color = 'var(--dim,#777)';
+    crewBox.append(none);
+  }
 
   const approvalsBox = document.createElement('div');
   if (!pendings.length) {
@@ -2128,7 +2177,8 @@ async function renderWorkforce() {
     ledgerBox.style.color = 'var(--dim,#777)';
   }
 
-  panel.append(cards, h('Waiting for a human'), approvalsBox, h('The shift ledger'), ledgerBox);
+  panel.append(cards, h('The crew'), crewBox,
+    h('Waiting for a human'), approvalsBox, h('The shift ledger'), ledgerBox);
 }
 
 async function renderStaff() {
