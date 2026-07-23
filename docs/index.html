@@ -148,6 +148,19 @@
       absorbed by a seam. The honest gaps are written down, not hidden.</p>
   </section>
 
+  <section>
+    <h2>Post-quantum ready (not "quantum-proof")</h2>
+    <p class="body">The BSS is <b>crypto-agile by construction</b> — identity, transport and
+      payment crypto all live behind seams, so migrating to post-quantum is swapping what a seam
+      points at, not a rewrite. Today: SIM secrets are AES-256-GCM at rest, PKCE is SHA-256, and
+      a hybrid <b>X25519MLKEM768</b> TLS key exchange (ML-KEM-768, FIPS&nbsp;203) guards recorded
+      traffic against <i>harvest-now-decrypt-later</i>. The one classically vulnerable primitive —
+      RSA token signatures at the identity provider — is <b>named honestly</b> and swaps to ML-DSA
+      at the identity seam when the OIDC ecosystem lands it. We say <b>post-quantum <i>ready</i>,
+      receipts in the repo</b> — never "quantum-proof," because a claim you can't back is the one
+      thing this project won't make. <a href="pqc-readiness.md">The full crypto inventory →</a></p>
+  </section>
+
   <footer class="wrap">
     genalpha-bss · Apache 2.0 · built in public by one engineer and Claude ·
     <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a>
