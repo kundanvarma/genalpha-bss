@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — a composable, multi-tenant telecom BSS on TM Forum ODA</title>
+<meta name="description" content="An open-source, vendor-neutral Business Support System for telecom operators and MVNOs: 33 composable TM Forum ODA components, 11 conformance kits at zero failures, 63 end-to-end proof suites, run live on AWS and Azure.">
+<style>
+  :root {
+    --teal:#147673; --ink:#20262b; --dim:#6b7680;
+    --line:#e3e8ea; --bg:#ffffff; --card:#f7f9f9; --accent:#1B6CA8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e8edee; --dim:#9aa6ad; --line:#2a3238; --bg:#14181b; --card:#1b2125;
+            --teal:#3aa39f; --accent:#5aa6d8; }
+  }
+  :root[data-theme="dark"] { --ink:#e8edee; --dim:#9aa6ad; --line:#2a3238; --bg:#14181b;
+    --card:#1b2125; --teal:#3aa39f; --accent:#5aa6d8; }
+  :root[data-theme="light"] { --ink:#20262b; --dim:#6b7680; --line:#e3e8ea; --bg:#ffffff;
+    --card:#f7f9f9; --teal:#147673; --accent:#1B6CA8; }
+  * { box-sizing:border-box; }
+  body { margin:0; color:var(--ink); background:var(--bg);
+    font:16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  .wrap { max-width:60rem; margin:0 auto; padding:0 1.3rem; }
+  a { color:var(--teal); }
+  .kicker { font-size:.74rem; letter-spacing:.18em; text-transform:uppercase; color:var(--teal);
+    font-weight:600; }
+  header.hero { padding:4.5rem 0 2.6rem; border-bottom:1px solid var(--line); }
+  h1 { font-size:2.7rem; line-height:1.1; margin:.5rem 0 .6rem; letter-spacing:-.02em;
+    text-wrap:balance; }
+  .lede { font-size:1.22rem; color:var(--dim); max-width:42rem; text-wrap:pretty; }
+  .cta { margin-top:1.8rem; display:flex; flex-wrap:wrap; gap:.7rem; }
+  .btn { display:inline-block; padding:.6rem 1.1rem; border-radius:8px; text-decoration:none;
+    font-weight:600; font-size:.95rem; border:1px solid var(--line); color:var(--ink);
+    background:var(--card); }
+  .btn.primary { background:var(--teal); border-color:var(--teal); color:#fff; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit, minmax(9rem, 1fr));
+    gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px;
+    overflow:hidden; margin:2.4rem 0; }
+  .stat { background:var(--bg); padding:1.15rem 1.1rem; }
+  .stat b { display:block; font-size:1.8rem; line-height:1.1; letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums; }
+  .stat span { font-size:.82rem; color:var(--dim); }
+  section { padding:2.4rem 0; border-bottom:1px solid var(--line); }
+  h2 { font-size:1.25rem; color:var(--teal); margin:0 0 1rem; }
+  p.body { max-width:44rem; }
+  .links { display:grid; grid-template-columns:repeat(auto-fit, minmax(15rem, 1fr)); gap:.9rem;
+    margin-top:.4rem; }
+  .link { display:block; padding:1rem 1.1rem; border:1px solid var(--line); border-radius:10px;
+    text-decoration:none; color:var(--ink); background:var(--card); transition:border-color .15s; }
+  .link:hover { border-color:var(--teal); }
+  .link b { display:block; color:var(--teal); margin-bottom:.15rem; }
+  .link span { font-size:.9rem; color:var(--dim); }
+  ul.feat { max-width:44rem; padding-left:1.1rem; }
+  ul.feat li { margin:.35rem 0; }
+  footer { padding:2.4rem 0 4rem; color:var(--dim); font-size:.9rem; }
+  code { font-family:ui-monospace, Menlo, monospace; font-size:.86em; background:var(--card);
+    padding:.08em .35em; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">Open source · TM Forum ODA · Apache 2.0</div>
+    <h1>A composable, multi-tenant telecom BSS</h1>
+    <p class="lede">genalpha-bss is a vendor-neutral <b>Business Support System</b> for telecom
+      operators and MVNOs — catalog to cash to campaigns to AI copilots — built as
+      <b>33 composable TM Forum ODA components</b>. It is proven, not promised: every feature
+      is verified end to end, every standard is conformance-checked, and it has run live on both
+      major clouds.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/kundanvarma/genalpha-bss">View the code on GitHub</a>
+      <a class="btn" href="overview.html">Product overview</a>
+      <a class="btn" href="book/book.html">Read the build memoir</a>
+    </div>
+
+    <div class="stats">
+      <div class="stat"><b>33</b><span>ODA components (TMF Open APIs)</span></div>
+      <div class="stat"><b>63</b><span>end-to-end browser suites</span></div>
+      <div class="stat"><b>11</b><span>conformance kits at zero failures</span></div>
+      <div class="stat"><b>2</b><span>clouds run live (AWS + Azure)</span></div>
+      <div class="stat"><b>6</b><span>customer channels</span></div>
+    </div>
+  </header>
+
+  <section>
+    <h2>What it is</h2>
+    <p class="body">A working telecom BSS assembled from small, standards-conformant services —
+      each exposing a TM Forum Open API, each owning its own database, all behind one gateway.
+      Nothing is operator-specific: any OIDC identity provider, any PostgreSQL, any Kafka-protocol
+      broker. Two demo operators (one English/EUR, one Norwegian/NOK) run side by side on a single
+      deployment to prove the multi-tenancy.</p>
+    <ul class="feat">
+      <li><b>Commerce:</b> TMF620 catalog, ordering, inventory, cart, qualification, appointments,
+        stock, agreements, promotions — soft bundles, configured pricing, no SKU explosion.</li>
+      <li><b>Money:</b> a crash-resumable billing run, seven e-invoice formats as config,
+        remittance by camt.054 / OCR giro / BAI2, a tokenized payment vault.</li>
+      <li><b>Growth &amp; AI:</b> event-triggered campaigns with holdout-measured lift, an
+        <b>AI control plane</b> (every LLM turn metered, budgeted, kill-switchable and audited),
+        copilots, churn prediction, and personalization from consent to next-hit reaction.</li>
+      <li><b>Care &amp; production:</b> trouble tickets, an omnichannel interaction record, thin
+        service orchestration and assurance, number porting.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Read more</h2>
+    <div class="links">
+      <a class="link" href="book/book.html">
+        <b>The Honest Machine →</b>
+        <span>The build memoir — how one person and an AI built the whole suite, with receipts. 44 chapters.</span></a>
+      <a class="link" href="manual/manual.html">
+        <b>The Operator's Manual →</b>
+        <span>The reference companion, by role and by task: which button, which endpoint, which env var.</span></a>
+      <a class="link" href="overview.html">
+        <b>Product overview →</b>
+        <span>The whole system as a single readable page — the fastest way to see the scope.</span></a>
+      <a class="link" href="architecture.md">
+        <b>Architecture views →</b>
+        <span>Component map, tenancy model, order-to-bill flow, event backbone, cloud substrates.</span></a>
+      <a class="link" href="composer.html">
+        <b>ODA Composer →</b>
+        <span>Pick the modules a deployment needs; dependencies enforced; output is a Helm values override.</span></a>
+      <a class="link" href="poc-ai-slice.html">
+        <b>Autonomy Accelerated (5G AI slice PoC) →</b>
+        <span>The full lead-to-assure loop with autonomous self-heal, drivable by an AI agent over MCP.</span></a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Proven, not promised</h2>
+    <p class="body">Sixty-three Playwright suites drive real browsers across every surface;
+      eleven official TM Forum Conformance Test Kits pass with zero failures; three production
+      hardening waves are backed by live proofs (tick locks under two replicas, a backup that
+      provably restores, GDPR rights as working endpoints); and the same Helm chart has run on
+      local Kubernetes, AWS EKS and Azure AKS — the same application, every cloud difference
+      absorbed by a seam. The honest gaps are written down, not hidden.</p>
+  </section>
+
+  <footer class="wrap">
+    genalpha-bss · Apache 2.0 · built in public by one engineer and Claude ·
+    <a href="https://github.com/kundanvarma/genalpha-bss">github.com/kundanvarma/genalpha-bss</a>
+  </footer>
+
+</div>
+</body>
+</html>
