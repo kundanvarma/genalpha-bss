@@ -7,7 +7,10 @@ a bill, and how events move. All diagrams are Mermaid and render natively on Git
 
 Channels talk to one gateway; the gateway routes TMF paths to components; components talk to
 each other machine-to-machine (client credentials of the acting tenant) and publish domain
-events to Kafka. Every component owns its own database.
+events to Kafka. Every component owns its own database. AI shopping agents (ChatGPT-class over
+ACP, Claude-class over MCP) enter through the same gateway, behind a per-tenant
+`agent-commerce: off | discovery | full` gate — dark by default, and checkout only ever on a
+delegated, commerce-scoped token.
 
 ```mermaid
 flowchart TB
@@ -20,7 +23,9 @@ flowchart TB
         DEALER["dealer-app /dealer-app\n(retail + telesales)"]
     end
 
-    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nper-channel tenant-config.js"]
+    AGENTS(["AI shopping agents\nChatGPT/Perplexity (ACP) · Claude (MCP)\nfeed + delegated checkout"])
+
+    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nagent-commerce gate (off|discovery|full)\nper-channel tenant-config.js"]
 
     subgraph Party["Party management"]
         PARTY["party-account\nTMF632/666/669 · GDPR export/erase"]
@@ -28,10 +33,10 @@ flowchart TB
     end
 
     subgraph Core["Core commerce"]
-        CAT["product-catalog TMF620"]
+        CAT["product-catalog TMF620\n+ ACP product feed"]
         ORD["product-ordering TMF622"]
         INV["product-inventory TMF637"]
-        CART["shopping-cart TMF663"]
+        CART["shopping-cart TMF663\n+ ACP checkout_sessions"]
         QUAL["qualification TMF679"]
         ADDR["geographic-address TMF673"]
         APPT["appointment TMF646"]
@@ -78,9 +83,11 @@ TMF642/656"]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
     SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
+    AGENTS -->|"/acp/* — per-tenant gate\noff → 404 · discovery → feed only"| GW
     GW --> Party & Core & Revenue & Decisioning & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
+    CART -.->|"ACP complete: pricing from the feed,\norder + payment on the CALLER'S\ndelegated token (RFC 8693)"| CAT & ORD & PAY
     ORD -.->|policy check / price| POLICY
     BILL -.-> INV & CAT & PAY & USAGE & PROMO & POLICY
     PAY -.-> VAULT
@@ -212,6 +219,13 @@ the acting tenant's machine identity.
 
 ## Boundary notes
 
+- **The agent channel is gated, not assumed.** AI shopping agents reach only `/acp/*` (the
+  product feed and the checkout-session lifecycle), behind the gateway's per-tenant
+  `agent-commerce` switch: `off` → 404 (dark), `discovery` → feed only, `full` → delegated
+  checkout. Newborn tenants are born `off`. Checkout never uses a machine identity — the
+  shopper's token is exchanged (RFC 8693, Keycloak standard token exchange) through the
+  `bss-agent` client into a credential scoped to exactly catalog-read + order + pay; the cart
+  service forwards that token downstream and never lends its own.
 - **The Production seam is now real (thin).** service-orchestration consumes order events,
   decomposes digital orders into TMF641 service orders, mock-activates (TMF640's stand-in),
   records TMF638 services and completes the product order machine-side. Physical/install
