@@ -180,10 +180,18 @@ MCP workforce + care toolset; suite #65 legs 1–2, 5–6.
 order-fallout + porting queues; console Workforce tab with the KPI set +
 baselines config; suite legs 3–4.
 
-**Phase 3 — the package**: `integrations/hermes-worker/` (README, SKILL.md
-job cards, cron examples); manual §16 "The digital workforce"; landing page
-+ README selling section ("agents that buy from you — and agents that work
-for you"), honestly framed with the reopen-rate and estimate labels.
+**Phase 3 — the package, TURNKEY** (decision 2026-07-23: ship Hermes as an
+optional package so an opted-in operator has working agents from DAY 1):
+`integrations/hermes-worker/` becomes a **compose profile** — the same
+opt-in pattern as `--profile ai` (ollama): `docker compose --profile
+workforce up -d hermes-worker` starts a containerized Hermes pre-wired to
+the BSS MCP server, with the SKILL.md job cards preloaded, the cron
+schedule set ("work the care queue every 15 min"), and a bootstrap step
+that mints the badge (or refuses loudly if the operator hasn't granted
+one — the badge stays the consent). Plus manual §16 "The digital
+workforce"; landing page + README selling section ("agents that buy from
+you — and agents that work for you"), honestly framed with the
+reopen-rate and estimate labels.
 
 ## Open questions to settle during build
 
@@ -199,4 +207,34 @@ for you"), honestly framed with the reopen-rate and estimate labels.
 
 ## Shipped
 
-*(pending — this document is the plan; build begins on approval, Phase 1 first.)*
+**Phase 1 — 2026-07-23.** Suite #65 (`ops/e2e/agentic_workforce_test.js`)
+green: hired (badge minted + granted on TMF672; before the badge 403,
+after it the queue answers), a real shift (queue derived live from a
+seeded unassigned ticket + a parked camt.054 payment; claim leased; a
+rival claim refused; completing an unresolved ticket refused 409; the
+ticket resolved through the same TMF621 door a human uses; completion
+with self-reported model usage on the ledger), honest escalation (the
+unmatched cash could not be force-completed — escalated with a reason,
+counted), the kill-switch (the tenant's one AI lever stops the workforce
+mid-shift), fired (badge revoked → next shift never starts), and the
+tenant wall (nova's own worker sees none of genalpha's backlog).
+
+Landed: workforce API on intelligence (`/ai/v1/workforce/tasks` +
+claim/complete/escalate/ledger; `workforce_task` V10 + RLS V11; lease
+default 900s `bss.workforce.lease-seconds`; queue derived live from
+`unworkedTickets()` + `unappliedCash()` — never copied); `workforce:use`
+leaf + `digital-worker` composite in both realm files (intelligence SA
+gained `billing:admin` for the worklist read); billing gained the missing
+back-office act `POST /remittance/unapplied/{id}/apply` (open bill, exact
+amount, same settle door, deterministic correlator — a mismatch is never
+applied); 9 MCP workforce/care/back-office tools on the worker's badge
+(`BSS_WORKER_USERNAME/PASSWORD`, refuses loudly when unbadged); and a
+DESIGN FIX the suite forced: every minted login is born with the realm's
+walk-in `customer` default, which party-scopes a worker into an empty
+world of its own — so **granting `digital-worker` now sheds the walk-in
+defaults in the TMF672 grant itself** (a hired worker is staff; firing
+does not restore the persona). Regressions green: roles, csr,
+ai_control_plane #59, agentic_commerce #64.
+
+*(Phases 2–3 — approvals + the Workforce dashboard, then the turnkey
+Hermes compose profile — next.)*

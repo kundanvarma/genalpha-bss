@@ -292,6 +292,28 @@
       {
         "name": "insight:read",
         "description": "Read visitor insight profiles (back office)"
+      },
+      {
+        "name": "workforce:use",
+        "description": "digital-worker task queue access"
+      },
+      {
+        "name": "digital-worker",
+        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs \u2014 nothing more",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "workforce:use",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "interaction:write",
+            "party:read",
+            "ordering:read",
+            "billing:read",
+            "billing:admin"
+          ]
+        }
       }
     ]
   },
@@ -892,7 +914,8 @@
         "inventory:read",
         "catalog:read",
         "catalog:write",
-        "billing:read"
+        "billing:read",
+        "billing:admin"
       ]
     },
     {

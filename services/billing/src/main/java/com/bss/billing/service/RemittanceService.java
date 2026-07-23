@@ -170,6 +170,61 @@ public class RemittanceService {
         return false;
     }
 
+    /**
+     * BACK-OFFICE RESOLUTION: a human — or a badged digital worker — matches
+     * one parked row to the bill it belongs to. Same guarantees as the
+     * automatic path: the bill must be open, the amount must match to the
+     * cent, the money is recorded as a TMF676 payment and settled through
+     * the same door — and the same refusal to guess: a mismatch stays
+     * parked with its reason.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Map<String, Object> applyUnapplied(String tenantId, String unappliedId, String billId) {
+        UnappliedRemittance row = unapplied.findById(unappliedId)
+                .filter(r -> tenantId.equals(r.getTenantId()))
+                .orElseThrow(() -> com.bss.billing.exception.NotFoundException
+                        .forResource("UnappliedRemittance", unappliedId));
+        if (billId == null || billId.isBlank() || "null".equals(billId)) {
+            throw new com.bss.billing.exception.BadRequestException("billId is required");
+        }
+        CustomerBill bill = bills.findById(billId)
+                .filter(b -> tenantId.equals(b.getTenantId()))
+                .orElseThrow(() -> com.bss.billing.exception.NotFoundException
+                        .forResource("CustomerBill", billId));
+        if (!CustomerBill.NEW.equals(bill.getState())) {
+            throw new com.bss.billing.exception.ConflictException(
+                    "bill " + bill.getBillNo() + " is '" + bill.getState() + "', not open");
+        }
+        if (bill.getAmountDueValue() == null
+                || row.getAmountValue().compareTo(bill.getAmountDueValue()) != 0) {
+            throw new com.bss.billing.exception.ConflictException(
+                    "amount " + row.getAmountValue() + " " + row.getAmountUnit()
+                            + " does not match " + bill.getAmountDueValue()
+                            + " due on " + bill.getBillNo() + " — a mismatch is never applied");
+        }
+        // deterministic correlator from the parked row: re-applying the same
+        // row resolves to the SAME payment, so it can never book twice
+        String correlator = UUID.nameUUIDFromBytes(("unapplied|" + row.getId())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        String paymentId = payments.recordExternal(bill.getOwnerPartyId(), row.getAmountValue(),
+                row.getAmountUnit(), "Bank transfer for " + bill.getBillNo()
+                        + " (resolved from unapplied cash)",
+                row.getReference(), correlator);
+        CustomerBillDto patch = new CustomerBillDto();
+        patch.setState(CustomerBill.SETTLED);
+        patch.setPayment(List.of(Map.of("id", paymentId, "@referredType", "Payment")));
+        billService.settle(bill.getId(), patch);
+        unapplied.delete(row);
+        Map<String, Object> view = new LinkedHashMap<>();
+        view.put("billNo", bill.getBillNo());
+        view.put("amount", row.getAmountValue() + " " + row.getAmountUnit());
+        view.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
+        view.put("@type", "RemittanceApplied");
+        events.publish("RemittanceAppliedEvent", "remittance", view);
+        log.info("unapplied cash {} resolved to {} by back-office", unappliedId, bill.getBillNo());
+        return view;
+    }
+
     /** The unapplied-cash worklist — the AR queue a human resolves. */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public List<Map<String, Object>> unappliedView(String tenantId) {

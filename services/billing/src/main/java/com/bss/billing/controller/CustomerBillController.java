@@ -200,6 +200,15 @@ public class CustomerBillController {
         return ResponseEntity.ok(remittanceService.unappliedView(tenantScope.currentTenantId()));
     }
 
+    /** Resolve ONE parked row to the bill it belongs to — back-office (or a
+     * badged digital worker); the automatic path's guarantees apply. */
+    @PostMapping("/remittance/unapplied/{id}/apply")
+    public ResponseEntity<Map<String, Object>> applyUnapplied(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(remittanceService.applyUnapplied(
+                tenantScope.currentTenantId(), id, String.valueOf(body.get("billId"))));
+    }
+
     /** THE DELIVERY LEDGER: what left for the distribution partner, when,
      * after how many tries — and what is still owed a retry. */
     @GetMapping("/billDistribution")

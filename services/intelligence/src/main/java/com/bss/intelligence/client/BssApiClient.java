@@ -28,6 +28,7 @@ public class BssApiClient {
     private final RestClient usageClient;
     private final RestClient ticketClient;
     private final RestClient assuranceClient;
+    private final RestClient billingClient;
     private final ObjectMapper objectMapper;
 
     public BssApiClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
@@ -38,8 +39,11 @@ public class BssApiClient {
             @Value("${bss.downstream.assurance-base-url:http://localhost:8105}") String assuranceBaseUrl,
             @Value("${bss.downstream.recommendation-base-url:http://localhost:8102}") String recommendationBaseUrl,
             @Value("${bss.downstream.insight-base-url:http://localhost:8119}") String insightBaseUrl,
-            @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBaseUrl) {
+            @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBaseUrl,
+            @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBaseUrl) {
         this.agreementClient = builder.baseUrl(agreementBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
+        this.billingClient = builder.baseUrl(billingBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.usageClient = builder.baseUrl(usageBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
@@ -59,6 +63,37 @@ public class BssApiClient {
     public List<Map<String, Object>> ticketsOf(String partyId) {
         String body = ticketClient.get()
                 .uri("/tmf-api/troubleTicket/v4/troubleTicket?relatedPartyId=" + partyId + "&limit=50")
+                .retrieve().body(String.class);
+        return parse(body);
+    }
+
+    /** The care backlog: acknowledged tickets nobody has started yet —
+     * the workforce queue's ticket source. */
+    public List<Map<String, Object>> unworkedTickets() {
+        String body = ticketClient.get()
+                .uri("/tmf-api/troubleTicket/v4/troubleTicket?status=acknowledged&limit=100")
+                .retrieve().body(String.class);
+        return parse(body);
+    }
+
+    /** One ticket, for completion VERIFICATION: a workforce task closes only
+     * when the work behind it actually happened. Null when it is gone. */
+    public Map<String, Object> ticketById(String ticketId) {
+        try {
+            String body = ticketClient.get()
+                    .uri("/tmf-api/troubleTicket/v4/troubleTicket/" + ticketId)
+                    .retrieve().body(String.class);
+            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** The AR backlog: unapplied cash — the workforce queue's money source. */
+    public List<Map<String, Object>> unappliedCash() {
+        String body = billingClient.get()
+                .uri("/tmf-api/customerBillManagement/v4/remittance/unapplied")
                 .retrieve().body(String.class);
         return parse(body);
     }

@@ -53,8 +53,10 @@ public class SecurityConfig {
                         // format profiles shape every outgoing e-invoice — tenant admin only
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
-                        // unapplied cash is back-office AR
+                        // unapplied cash is back-office AR (reading the worklist
+                        // AND resolving a row to its bill)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
                         // the delivery ledger is back-office: seeing and retrying sends
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution").hasAuthority("billing:admin")

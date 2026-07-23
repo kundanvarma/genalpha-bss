@@ -48,6 +48,10 @@ public class SecurityConfig {
                         // (party = token subject), so plain authentication is
                         // the right gate — customers carry no staff AI roles
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/forYou").authenticated()
+                        // the digital workforce: gated by its OWN authority,
+                        // granted only inside the digital-worker role bundle —
+                        // the badge is the opt-in switch
+                        .requestMatchers(ApiConstants.BASE_PATH + "/workforce/**").hasAuthority("workforce:use")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
