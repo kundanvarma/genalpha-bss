@@ -2135,8 +2135,9 @@ async function renderWorkforce() {
   hireGo.dataset.testid = 'wf-hire-go';
   const hireOut = document.createElement('div');
   hireOut.style.cssText = 'font-size:0.85rem;margin-top:0.5rem';
-  hireOut.textContent = 'Mints a login + grants the digital-worker badge (revoke on Staff to fire). '
-    + 'The badge is the hire; the worker STARTS when its runtime runs the matching job card.';
+  hireOut.textContent = 'With the workforce package deployed, Hire mints the badge AND starts the '
+    + 'worker container — no credentials to handle. Without it: badge + once-shown credentials, '
+    + 'and the worker starts when its runtime runs the matching job card.';
   hireOut.style.color = 'var(--dim,#777)';
   const JOB_CARDS = {
     care: 'skills/care-triage — schedule "Work the care queue" every 15 min',
@@ -2146,6 +2147,29 @@ async function renderWorkforce() {
   hireGo.addEventListener('click', async () => {
     const name = (hireName.value || 'worker').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     hireGo.disabled = true;
+    // THE CLOSED LOOP: when the workforce package's controller is deployed,
+    // Hire = badge minted + worker container STARTED, credentials never
+    // shown to anyone. Without it, fall back to the credentials flow.
+    try {
+      const ctl = await authFetch('/workforce-runtime/workers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, job: hireJob.value }),
+      });
+      if (ctl.ok) {
+        const started = await ctl.json();
+        hireGo.disabled = false;
+        hireOut.replaceChildren();
+        hireOut.style.color = 'inherit';
+        const done = document.createElement('div');
+        done.dataset.testid = 'wf-hired-started';
+        done.textContent = `Hired AND started: ${started.badge} (container ${started.container}, `
+          + `${started.job}). It will appear on the crew after its first claim. Fire = the ✖ on its row.`;
+        hireOut.append(done);
+        setTimeout(renderWorkforce, 4000);
+        return;
+      }
+    } catch { /* controller not deployed — fall through */ }
     const minted = await authFetch('/tmf-api/rolesAndPermissionsManagement/v4/user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
