@@ -10,7 +10,10 @@ each other machine-to-machine (client credentials of the acting tenant) and publ
 events to Kafka. Every component owns its own database. AI shopping agents (ChatGPT-class over
 ACP, Claude-class over MCP) enter through the same gateway, behind a per-tenant
 `agent-commerce: off | discovery | full` gate — dark by default, and checkout only ever on a
-delegated, commerce-scoped token.
+delegated, commerce-scoped token. AI **digital workers** (Hermes-class, any MCP runtime) enter
+the same way but as badge-hired STAFF: a revocable `digital-worker` grant, a task queue derived
+from real backlogs on the intelligence component, verified completion, and approvals a human
+executes with their own token.
 
 ```mermaid
 flowchart TB
@@ -24,6 +27,8 @@ flowchart TB
     end
 
     AGENTS(["AI shopping agents\nChatGPT/Perplexity (ACP) · Claude (MCP)\nfeed + delegated checkout"])
+
+    WORKERS(["AI digital workers\nHermes / any MCP runtime\nbadge-hired staff: tickets ·\nunapplied cash · approvals"])
 
     GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nagent-commerce gate (off|discovery|full)\nper-channel tenant-config.js"]
 
@@ -67,7 +72,7 @@ TMF642/656"]
         POLICY["policy\norder rules · dynamic pricing · personalization\n(JSON-logic, no redeploy)"]
         KNOW["knowledge\nFTS + pgvector semantic search"]
         INSIGHT["insight\nconsent spine · web/GA seam\nnext-hit session personalization"]
-        AI["intelligence — the AI control plane\ncopilots · advisor · churn · For-you\nmeter + budget + kill-switch + audit"]
+        AI["intelligence — the AI control plane\ncopilots · advisor · churn · For-you\nworkforce queue + approvals + KPIs\nmeter + budget + kill-switch + audit"]
     end
 
     subgraph Care["Customer care & martech"]
@@ -84,6 +89,7 @@ TMF642/656"]
 
     SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
     AGENTS -->|"/acp/* — per-tenant gate\noff → 404 · discovery → feed only"| GW
+    WORKERS -->|"digital-worker badge (revocable)\nworkforce queue + TMF doors;\nrefunds/cease only as approvals"| GW
     GW --> Party & Core & Revenue & Decisioning & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
@@ -100,6 +106,7 @@ TMF642/656"]
     AI -.->|"campaign copy · product copilot\n· advisor · caption (governed)"| CAMP & CAT & KNOW
     CSR -.->|"copilot: 360 summary,\nNBO, ticket reply"| AI
     AI -.->|"churn engine → ChurnRiskDetectedEvent"| KAFKA
+    AI -.->|"workforce queue DERIVES from\nreal backlogs (never copied)"| TICKET & BILL
     ROLES -.-> IDP
 
     Core & Revenue & Care & Decisioning -->|events| KAFKA
@@ -226,6 +233,14 @@ the acting tenant's machine identity.
   shopper's token is exchanged (RFC 8693, Keycloak standard token exchange) through the
   `bss-agent` client into a credential scoped to exactly catalog-read + order + pay; the cart
   service forwards that token downstream and never lends its own.
+- **The digital workforce is employed, not installed.** A worker (Hermes or any MCP runtime)
+  holds a revocable `digital-worker` staff badge minted on TMF672 — the grant sheds the walk-in
+  customer defaults, the revoke is the firing. Its task queue on the intelligence component
+  derives LIVE from real backlogs (unassigned tickets, unapplied cash); claims are leases;
+  completion is VERIFIED against the source system; refunds/cease/erasure only ever become
+  approval rows a human executes with their own token; the tenant's one AI kill-switch stops
+  workers and copilots alike; and the console's Workforce tab is the scoreboard (deflection,
+  handle time, reopen rate, minutes-saved labeled as the estimate it is).
 - **The Production seam is now real (thin).** service-orchestration consumes order events,
   decomposes digital orders into TMF641 service orders, mock-activates (TMF640's stand-in),
   records TMF638 services and completes the product order machine-side. Physical/install
