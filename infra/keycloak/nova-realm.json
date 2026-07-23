@@ -365,7 +365,20 @@
       "protocol": "openid-connect",
       "publicClient": true,
       "directAccessGrantsEnabled": true,
-      "standardFlowEnabled": false
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "agent-delegation-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "bss-agent",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "bss-csr",
@@ -624,6 +637,21 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-agent",
+      "name": "agentic-commerce delegation client (OAuth token exchange, commerce scope only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "agent-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
     }
   ],
   "users": [
@@ -1095,5 +1123,17 @@
     "en",
     "no"
   ],
-  "defaultLocale": "no"
+  "defaultLocale": "no",
+  "scopeMappings": [
+    {
+      "client": "bss-agent",
+      "roles": [
+        "catalog:read",
+        "ordering:read",
+        "ordering:write",
+        "payment:read",
+        "payment:write"
+      ]
+    }
+  ]
 }

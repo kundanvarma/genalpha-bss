@@ -185,4 +185,51 @@ Regressions: `storefront`, `csr`, `affinity` (#63), `ai_control_plane` (#59),
 
 ## Shipped
 
-*(pending — this document is the plan; build begins on approval, Phase 1 first.)*
+*2026-07-23. All three phases, one arc.* Suite #64
+(`ops/e2e/agentic_commerce_test.js`) green end to end, plus an MCP stdio
+smoke that searched, read also-bought, opened a session and placed a real
+order through the actual MCP server.
+
+**What landed, against the design above:**
+
+- **ACP surface**: `GET /acp/product_feed` (catalog service — a TMF620
+  projection, public, priced by the storefront's own rules: unconditioned
+  prices only, one-time preferred) and the `checkout_sessions` lifecycle
+  (cart service — `POST /`, `GET|POST /{id}`, `POST /{id}/complete`,
+  `POST /{id}/cancel`, `API-Version: 2026-04-17`, `Idempotency-Key`
+  honored). A session IS a TMF663 cart underneath — agent baskets sit in
+  the same funnel and abandonment analytics as human ones — and complete
+  IS a payment + TMF622 order created with the CALLER'S token, never the
+  service's.
+- **MCP dressing**: five retail tools (`search_offerings`, `get_offering`
+  with also-bought, `start_checkout`, `update_checkout`,
+  `complete_checkout`) in `integrations/mcp-server` — thin wrappers over
+  the ACP surface, one core, two transports, one gate.
+- **Delegated checkout (the design decision)**: Keycloak bumped 26.0→26.3
+  for standard token exchange (V2); a confidential `bss-agent` client with
+  `fullScopeAllowed:false` scope-mapped to exactly
+  `catalog:read, ordering:read/write, payment:read/write`; the shopper
+  client carries an audience mapper naming `bss-agent` (the realm grants
+  the delegation path explicitly — the exchange is refused without it).
+  The suite DECODES the exchanged token: paula's 25 authorities become 5,
+  same subject. The ACP `payment_data.token` maps onto the PSP-token seam
+  (the vault-token path the mock PSP already honors).
+- **The switch**: `agent-commerce: off | discovery | full` in tenants.yml,
+  bound in the gateway's registry, enforced by `AgentCommerceGateFilter`
+  at order -60 (off → 404, discovery → feed only, checkout 403), checked
+  again in catalog + cart (defense in depth), surfaced on the
+  operator-as-a-form console with live mutation, and FORCED to `off` for
+  every newborn tenant in `appendTenantBlock`. Demo fleet: genalpha full,
+  nova discovery, fjord/aurora off — all three states proven by the suite
+  via their hostnames.
+- **Fixed along the way**: payment's `correlator_id` is varchar(36) — the
+  session correlator is the session's bare UUID, which also makes the
+  payment idempotent per session by construction.
+
+**Phase 3 honestly stated**: the surface is implemented and proven; being
+listed INSIDE ChatGPT/Perplexity additionally requires each operator's
+business onboarding with those platforms (feed registration, PSP
+delegated-payment agreement). That is an operator act, not a code gap —
+the endpoints they would register are the ones suite #64 exercises.
+
+Regressions green: storefront, affinity (#63).

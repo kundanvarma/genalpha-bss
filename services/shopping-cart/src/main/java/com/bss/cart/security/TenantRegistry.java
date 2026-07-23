@@ -65,6 +65,17 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Agentic-commerce exposure (off|discovery|full) — the gateway is
+         * the authoritative gate; this copy is defense in depth. */
+        private String agentCommerce = "off";
+
+        public String getAgentCommerce() {
+            return agentCommerce;
+        }
+
+        public void setAgentCommerce(String agentCommerce) {
+            this.agentCommerce = agentCommerce;
+        }
 
         public String getId() {
             return id;

@@ -25,6 +25,15 @@ const CLIENT_ID = process.env.BSS_CLIENT_ID || 'bss-demo';
 const CLIENT_SECRET = process.env.BSS_CLIENT_SECRET; // set for client_credentials
 const USERNAME = process.env.BSS_USERNAME || 'demo';
 const PASSWORD = process.env.BSS_PASSWORD || 'demo';
+// Retail commerce tools act FOR a shopper, never as the machine: the
+// shopper's own credential is exchanged (RFC 8693 / OAuth token exchange)
+// through the bss-agent client for a token scoped to commerce alone —
+// it can order and pay; it cannot read bills, edit the profile or open
+// tickets, which the shopper's own token can.
+const SHOPPER_USERNAME = process.env.BSS_SHOPPER_USERNAME || 'paula@family.example';
+const SHOPPER_PASSWORD = process.env.BSS_SHOPPER_PASSWORD || 'paula';
+const AGENT_CLIENT_ID = process.env.BSS_AGENT_CLIENT_ID || 'bss-agent';
+const AGENT_CLIENT_SECRET = process.env.BSS_AGENT_CLIENT_SECRET || 'agent-secret';
 
 let cached = null;
 async function token() {
@@ -41,6 +50,56 @@ async function token() {
   const body = await res.json();
   cached = { value: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
   return cached.value;
+}
+
+/**
+ * The delegated commerce token: password-grant the shopper (dev stand-in for
+ * their real session), then EXCHANGE it via the confidential bss-agent
+ * client. Keycloak intersects the shopper's roles with the client's commerce
+ * scope, so what comes back can order and pay — nothing else.
+ */
+let cachedCommerce = null;
+async function commerceToken() {
+  if (cachedCommerce && cachedCommerce.expiresAt > Date.now() + 30000) return cachedCommerce.value;
+  const post = async (form) => {
+    const res = await fetch(TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(form),
+    });
+    if (!res.ok) throw new Error(`token: ${res.status} ${await res.text()}`);
+    return res.json();
+  };
+  const shopper = await post({
+    grant_type: 'password', client_id: CLIENT_ID,
+    username: SHOPPER_USERNAME, password: SHOPPER_PASSWORD,
+  });
+  const exchanged = await post({
+    grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
+    client_id: AGENT_CLIENT_ID,
+    client_secret: AGENT_CLIENT_SECRET,
+    subject_token: shopper.access_token,
+    subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+    requested_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+  });
+  cachedCommerce = {
+    value: exchanged.access_token,
+    expiresAt: Date.now() + exchanged.expires_in * 1000,
+  };
+  return cachedCommerce.value;
+}
+
+/** Anonymous call — the ACP feed and open checkout sessions are public,
+ * exactly as public as the storefront pages they mirror. */
+async function anonApi(method, path, payload, headers = {}) {
+  const res = await fetch(`${GATEWAY}${path}`, {
+    method,
+    headers: { ...(payload ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : {};
 }
 
 async function api(method, path, payload) {
@@ -123,6 +182,102 @@ const TOOLS = [
     description: 'List the current tenant\'s quotes and their states.',
     inputSchema: { type: 'object', properties: {} },
     run: () => api('GET', '/tmf-api/quoteManagement/v4/quote'),
+  },
+  /* ---- retail agentic commerce: the ACP surface worn as MCP tools ---- */
+  {
+    name: 'search_offerings',
+    description: 'Search the operator\'s retail catalog (phones, plans, accessories, bundles) via '
+      + 'the ACP product feed. Returns priced, in-stock offerings an agent can buy.',
+    inputSchema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'Free-text filter on title/description/category' } },
+    },
+    run: async (a) => {
+      const feed = await anonApi('GET', '/acp/product_feed');
+      const q = (a.query || '').toLowerCase();
+      const hits = feed.products.filter((p) => !q
+        || `${p.title} ${p.description || ''} ${p.item_category || ''}`.toLowerCase().includes(q));
+      return hits.slice(0, 10);
+    },
+  },
+  {
+    name: 'get_offering',
+    description: 'One offering in detail, plus "customers who bought this also bought" — the '
+      + 'operator\'s real co-purchase signal, aggregate only.',
+    inputSchema: {
+      type: 'object',
+      properties: { offeringId: { type: 'string' } },
+      required: ['offeringId'],
+    },
+    run: async (a) => {
+      const feed = await anonApi('GET', `/acp/product_feed?id=${encodeURIComponent(a.offeringId)}`);
+      if (!feed.products.length) throw new Error(`offering ${a.offeringId} is not in the feed`);
+      const alsoBought = await anonApi('GET',
+        `/tmf-api/recommendationManagement/v4/affinity?forOfferingId=${encodeURIComponent(a.offeringId)}`)
+        .catch(() => []);
+      return { ...feed.products[0], also_bought: alsoBought };
+    },
+  },
+  {
+    name: 'start_checkout',
+    description: 'Open an ACP checkout session from items [{id, quantity}]. Returns the session '
+      + 'with honest totals: one-time charges due now; recurring prices bill on the first invoice.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, quantity: { type: 'number' } },
+            required: ['id'],
+          },
+        },
+      },
+      required: ['items'],
+    },
+    run: (a) => anonApi('POST', '/acp/checkout_sessions', { items: a.items }),
+  },
+  {
+    name: 'update_checkout',
+    description: 'Change an open checkout session\'s items; totals are re-priced from the feed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, quantity: { type: 'number' } },
+            required: ['id'],
+          },
+        },
+      },
+      required: ['sessionId', 'items'],
+    },
+    run: (a) => anonApi('POST', `/acp/checkout_sessions/${a.sessionId}`, { items: a.items }),
+  },
+  {
+    name: 'complete_checkout',
+    description: 'Complete the checkout: charge the delegated payment token for the due-now total '
+      + 'and place the real product order — under a token-exchange credential scoped to commerce '
+      + 'alone (it can order and pay; it cannot touch the rest of the customer\'s account). '
+      + 'Idempotent: retrying with the same session returns the same order.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: { type: 'string' },
+        paymentToken: { type: 'string', description: 'The delegated payment token (ACP SharedPaymentToken)' },
+      },
+      required: ['sessionId', 'paymentToken'],
+    },
+    run: async (a) => anonApi('POST', `/acp/checkout_sessions/${a.sessionId}/complete`,
+      { payment_data: { token: a.paymentToken } },
+      {
+        Authorization: `Bearer ${await commerceToken()}`,
+        'Idempotency-Key': `mcp-${a.sessionId}`,
+      }),
   },
 ];
 

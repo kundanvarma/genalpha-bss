@@ -68,6 +68,9 @@ public class TenantRegistry {
         private String brandName;
         private String locale;
         private String currency;
+        /** Agentic-commerce exposure (off|discovery|full) — surfaced on the
+         * operator form; the gateway enforces it. */
+        private String agentCommerce = "off";
 
         public String getId() {
             return id;
@@ -118,6 +121,8 @@ public class TenantRegistry {
         public void setLocale(String v) { this.locale = v; }
         public String getCurrency() { return currency; }
         public void setCurrency(String v) { this.currency = v; }
+        public String getAgentCommerce() { return agentCommerce; }
+        public void setAgentCommerce(String v) { this.agentCommerce = v; }
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;

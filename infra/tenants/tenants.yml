@@ -30,6 +30,10 @@ bss:
         brand-color: "#0E7C7B"
         locale: en
         currency: EUR
+        # Agentic commerce exposure: off (dark to agents) | discovery
+        # (findable, no agent checkout) | full. New tenants default OFF —
+        # being shopped by AI agents is opt-in, never assumed.
+        agent-commerce: ${AGENT_COMMERCE:full}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
@@ -74,6 +78,7 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
+        agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_NOVA:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_NOVA:https://www.google-analytics.com}
@@ -122,6 +127,7 @@ bss:
         brand-color: "#1B6CA8"
         locale: "da"
         currency: DKK
+        agent-commerce: ${AGENT_COMMERCE_FJORD:off}
         hosts: [shop.fjord.localhost, csr.fjord.localhost, console.fjord.localhost, biz.fjord.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_FJORD:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_FJORD:https://www.google-analytics.com}
@@ -170,6 +176,7 @@ bss:
         brand-color: "#AA3366"
         locale: "sv"
         currency: SEK
+        agent-commerce: ${AGENT_COMMERCE_AURORA:off}
         hosts: [shop.aurora.localhost, csr.aurora.localhost, console.aurora.localhost, biz.aurora.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_AURORA:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_AURORA:https://www.google-analytics.com}

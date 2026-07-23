@@ -41,7 +41,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.3
     container_name: bss-keycloak
     restart: unless-stopped
     command: ["start-dev", "--import-realm"]
@@ -272,6 +272,11 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # ACP checkout rides the spine: pricing from the catalog's public feed,
+      # the order and payment created with the CALLER'S delegated token.
+      BSS_DOWNSTREAM_CATALOG_BASE_URL: http://product-catalog:8080
+      BSS_DOWNSTREAM_ORDERING_BASE_URL: http://product-ordering:8080
+      BSS_DOWNSTREAM_PAYMENT_BASE_URL: http://payment:8080
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"

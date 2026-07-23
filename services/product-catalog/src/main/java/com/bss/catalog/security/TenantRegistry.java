@@ -68,6 +68,9 @@ public class TenantRegistry {
         /** This tenant's external PIM (product content) endpoint; empty means
          * the catalog's own document store carries the imagery. */
         private String pimBaseUrl;
+        /** Agentic-commerce exposure (off|discovery|full) — the gateway is
+         * the authoritative gate; this copy is defense in depth. */
+        private String agentCommerce = "off";
 
         public String getId() {
             return id;
@@ -123,6 +126,14 @@ public class TenantRegistry {
 
         public void setPimBaseUrl(String pimBaseUrl) {
             this.pimBaseUrl = pimBaseUrl;
+        }
+
+        public String getAgentCommerce() {
+            return agentCommerce;
+        }
+
+        public void setAgentCommerce(String agentCommerce) {
+            this.agentCommerce = agentCommerce;
         }
     }
 }

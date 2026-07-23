@@ -4,6 +4,17 @@ spring:
   cloud:
     gateway:
       routes:
+        # Agentic commerce (ACP): the feed lives with the catalog, the
+        # checkout-session lifecycle with the cart. AgentCommerceGateFilter
+        # holds the per-tenant off|discovery|full switch in front of both.
+        - id: acp-product-feed
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/acp/product_feed
+        - id: acp-checkout
+          uri: ${CART_URL:http://localhost:8096}
+          predicates:
+            - Path=/acp/checkout_sessions/**,/acp/checkout_sessions
         - id: product-catalog
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
@@ -235,6 +246,7 @@ bss:
         brand-color: "#0E7C7B"
         locale: en
         currency: EUR
+        agent-commerce: ${AGENT_COMMERCE:full}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
@@ -242,6 +254,7 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
+        agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
 
 management:

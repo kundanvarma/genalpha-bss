@@ -43,6 +43,11 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(ApiConstants.BASE_PATH + "/**").permitAll()
+                        // ACP checkout sessions: open like guest carts (the
+                        // session id is the bearer secret); complete enforces
+                        // the buyer's delegated token in the service layer,
+                        // and the gateway's per-tenant switch gates it all.
+                        .requestMatchers("/acp/checkout_sessions/**", "/acp/checkout_sessions").permitAll()
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
