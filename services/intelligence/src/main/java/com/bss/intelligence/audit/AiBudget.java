@@ -32,6 +32,11 @@ public class AiBudget {
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
+    /** Crew ceiling: max DISTINCT workers holding live task leases at once
+     * (0 = unlimited). Surge staffing never grows past this. */
+    @Column(name = "max_workers", nullable = false)
+    private int maxWorkers;
+
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
@@ -43,6 +48,8 @@ public class AiBudget {
     public void setWindowHours(int v) { this.windowHours = v; }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public int getMaxWorkers() { return maxWorkers; }
+    public void setMaxWorkers(int v) { this.maxWorkers = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
 }

@@ -276,6 +276,28 @@ what a worker actually works — never self-declared; "working now" = holds
 a live task lease. Suite #65 asserts both the payload shape and the
 rendered crew section.
 
+**Surge staffing — 2026-07-23 (on Kundan's ask: "can the crew scale up
+when workload is max?").** The elastic half was already built — claims
+are leases, so N workers never collide. What landed on top: **the
+staffing signal** (`staffing` block in the KPIs: backlogDepth,
+activeWorkers, openPerActiveWorker, surge flag with its rule stated,
+threshold `bss.workforce.surge-open-per-worker` default 10) — live in the
+payload, as Prometheus gauges (`bss_workforce_backlog_depth` /
+`_active_workers` / `_surge`, tenant-tagged, TickGuard-swept every 60s),
+and as WorkforceSurgeEvent / SurgeRelievedEvent on the surge boundary;
+**the crew ceiling** — governance `maxWorkers` (ai_budget V14, 0 =
+unlimited): a NEW worker joining past the ceiling is refused at claim
+time with 429, so the operator's number beats any autoscaler; **the
+scalers** — `k8s-surge-example.yaml` (KEDA on the Prometheus gauge, an
+example not chart-wired) and `surge.sh` (dev watcher that starts/stops
+worker processes on the signal, capped by ceiling ∧ SURGE_MAX). The crew
+list also became HUMAN-readable on review: claimed_by_name /
+requested_by_name / decided_by_name captured from the JWT at claim/file
+time (V15) — usernames on the dashboard, subject UUID on hover; old rows
+keep their UUID honestly (names are captured, never invented). Suite #65
+asserts the surge rule against its own definition, the 429 at the
+ceiling, the join after the cap lifts, and the crew-by-name row.
+
 **Phase 3 — 2026-07-23.** The package: `integrations/hermes-worker/` —
 `hire-worker.sh` (the badge bootstrap, smoke-tested against the live
 stack: mint → grant → .env.worker shown once), `config.snippet.yaml`

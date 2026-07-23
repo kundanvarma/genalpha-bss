@@ -42,6 +42,10 @@ public class WorkforceTask {
     @Column(name = "claimed_by")
     private String claimedBy;
 
+    /** The username behind the subject id — what humans read on the crew list. */
+    @Column(name = "claimed_by_name")
+    private String claimedByName;
+
     @Column(name = "claimed_at")
     private OffsetDateTime claimedAt;
 
@@ -119,6 +123,14 @@ public class WorkforceTask {
 
     public void setClaimedBy(String claimedBy) {
         this.claimedBy = claimedBy;
+    }
+
+    public String getClaimedByName() {
+        return claimedByName;
+    }
+
+    public void setClaimedByName(String claimedByName) {
+        this.claimedByName = claimedByName;
     }
 
     public OffsetDateTime getClaimedAt() {
