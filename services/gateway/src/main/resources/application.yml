@@ -15,6 +15,14 @@ spring:
           uri: ${CART_URL:http://localhost:8096}
           predicates:
             - Path=/acp/checkout_sessions/**,/acp/checkout_sessions
+        # The workforce package's controller (opt-in profile): hire-and-start,
+        # fire, list — the controller re-checks the caller against the BSS.
+        - id: workforce-runtime
+          uri: ${WORKER_CONTROLLER_URL:http://localhost:8129}
+          predicates:
+            - Path=/workforce-runtime/**
+          filters:
+            - StripPrefix=1
         - id: product-catalog
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:

@@ -1393,6 +1393,7 @@ services:
       PIM_URL: http://mock-pim:8080
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
+      WORKER_CONTROLLER_URL: http://worker-controller:8080
       BILLING_URL: http://billing:8080
       QUALIFICATION_URL: http://qualification:8080
       APPOINTMENT_URL: http://appointment:8080
@@ -1550,6 +1551,28 @@ services:
     depends_on:
       prometheus:
         condition: service_started
+
+  # THE WORKFORCE PACKAGE (opt-in): docker compose --profile workforce up -d
+  # The controller holds the scoped spawn-rights the core BSS never has:
+  # hire = badge minted + worker container started with it injected;
+  # fire = badge revoked + container stopped; the brain (worker-ai-*) is
+  # live registry config — change it and the workers roll onto it.
+  worker-controller:
+    profiles: ["workforce"]
+    build: ./integrations/worker-controller
+    container_name: bss-worker-controller
+    restart: unless-stopped
+    environment:
+      BSS_GATEWAY_URL: http://gateway:8080
+      BSS_TOKEN_URL: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      WORKER_IMAGE: bss-hermes-worker:dev
+      WORKER_NETWORK: bss-java_default
+      WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8129:8080"
 
 volumes:
   ollama-models:
