@@ -738,6 +738,15 @@ const RESOURCES = [
     // (refused-budget / refused-disabled rows are the governor speaking)
     columns: ['createdAt', 'useCase', 'model', 'tokens', 'costMicros', 'outcome', 'action', 'prompt', 'response'],
   },
+  {
+    path: 'workforce',
+    base: '/ai/v1',
+    title: 'Workforce',
+    workforce: true,    // custom panel: the digital-workforce scoreboard
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
 ];
 
 // Presentation names for raw TMF field keys (fallback: the key itself).
@@ -793,6 +802,7 @@ const TAB_ROLE = {
   copilot: 'catalog:write',
   staff: 'roles:admin',
   audit: 'ai:use',
+  workforce: 'ai:use',
 };
 let visible = RESOURCES;
 function computeVisible() {
@@ -1995,6 +2005,132 @@ function staffPanel() {
   return panel;
 }
 
+// THE WORKFORCE SCOREBOARD: what the digital workers did, what it saved
+// (labeled as the estimate it is), the honesty metric (reopen rate), and
+// the approvals queue — where a human's click IS the write.
+async function renderWorkforce() {
+  let panel = document.getElementById('workforce-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'workforce-panel';
+    document.querySelector('.table-wrap').after(panel);
+  }
+  panel.hidden = false;
+  panel.replaceChildren();
+
+  const [kpiRes, pendRes, ledgerRes] = await Promise.all([
+    authFetch('/ai/v1/workforce/kpis'),
+    authFetch('/ai/v1/workforce/approvals?status=pending'),
+    authFetch('/ai/v1/workforce/ledger'),
+  ]);
+  if (!kpiRes.ok) { panel.textContent = 'Workforce data unavailable.'; return; }
+  const kpis = await kpiRes.json();
+  const pendings = pendRes.ok ? await pendRes.json() : [];
+  const ledger = ledgerRes.ok ? await ledgerRes.json() : [];
+
+  const card = (label, value, hint, testid) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'flex:1 1 9rem;min-width:9rem;padding:0.8rem 1rem;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fafafa)';
+    if (testid) div.dataset.testid = testid;
+    const b = document.createElement('b');
+    b.style.cssText = 'display:block;font-size:1.5rem';
+    b.textContent = value == null ? '—' : String(value);
+    const s = document.createElement('span');
+    s.style.cssText = 'font-size:0.8rem;color:var(--dim,#777)';
+    s.textContent = label;
+    div.append(b, s);
+    if (hint) { div.title = hint; }
+    return div;
+  };
+  const cards = document.createElement('div');
+  cards.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.7rem;margin:0.6rem 0 1.2rem';
+  const mins = kpis.humanMinutesSaved || {};
+  cards.append(
+    card('Tasks completed', kpis.completed, null, 'wf-kpi-completed'),
+    card('Escalated to humans', kpis.escalated, 'escalations are counted, not punished', 'wf-kpi-escalated'),
+    card('Deflection', kpis.deflectionRate == null ? '—' : Math.round(kpis.deflectionRate * 100) + '%',
+      'completed / (completed + escalated)'),
+    card('Avg handle time', kpis.avgHandleSeconds == null ? '—' : kpis.avgHandleSeconds + 's'),
+    card('Reopen rate', kpis.reopen ? Math.round(kpis.reopen.rate * 100) + '%' : '—',
+      kpis.reopen && kpis.reopen.definition, 'wf-kpi-reopen'),
+    card('Minutes saved (est.)', mins.minutes, mins.definition, 'wf-kpi-saved'),
+    card('Self-reported cost', ((kpis.selfReportedCostMicros || 0) / 1e6).toFixed(4) + ' €',
+      kpis.selfReportedCostLabel),
+    card('Approvals pending', kpis.approvals ? kpis.approvals.pending : 0, null, 'wf-kpi-pending'),
+  );
+
+  const h = (text) => {
+    const el2 = document.createElement('h3');
+    el2.textContent = text;
+    el2.style.cssText = 'margin:1.2rem 0 0.5rem';
+    return el2;
+  };
+
+  const approvalsBox = document.createElement('div');
+  if (!pendings.length) {
+    const none = document.createElement('p');
+    none.textContent = 'Nothing waits for a human — the queue is clear.';
+    none.style.color = 'var(--dim,#777)';
+    approvalsBox.append(none);
+  }
+  for (const a of pendings) {
+    const row = document.createElement('div');
+    row.dataset.testid = 'wf-approval-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:0.8rem;padding:0.6rem 0.8rem;border:1px solid var(--line,#ddd);border-radius:8px;margin-bottom:0.5rem';
+    const info = document.createElement('div');
+    info.style.flex = '1';
+    const title = document.createElement('b');
+    title.textContent = `${a.action} — ${a.method} ${a.path}`;
+    const why = document.createElement('div');
+    why.style.cssText = 'font-size:0.85rem;color:var(--dim,#777)';
+    why.textContent = `${a.reason} · asked by ${a.requestedBy}`;
+    info.append(title, why);
+    const ok = document.createElement('button');
+    ok.textContent = 'Approve';
+    ok.dataset.testid = 'wf-approve';
+    ok.addEventListener('click', async () => {
+      ok.disabled = true;
+      const res = await authFetch(`/ai/v1/workforce/approvals/${a.id}/approve`, { method: 'POST' });
+      if (!res.ok) {
+        ok.disabled = false;
+        why.textContent = 'Refused downstream: ' + (await res.text()).slice(0, 160);
+        return;
+      }
+      renderWorkforce();
+    });
+    const no = document.createElement('button');
+    no.textContent = 'Refuse';
+    no.dataset.testid = 'wf-refuse';
+    no.addEventListener('click', async () => {
+      const note = prompt('Why refuse?') || '';
+      await authFetch(`/ai/v1/workforce/approvals/${a.id}/refuse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note }),
+      });
+      renderWorkforce();
+    });
+    row.append(info, ok, no);
+    approvalsBox.append(row);
+  }
+
+  const ledgerBox = document.createElement('div');
+  for (const t of ledger.slice(0, 20)) {
+    const row = document.createElement('div');
+    row.dataset.testid = 'wf-ledger-row';
+    row.style.cssText = 'padding:0.45rem 0.8rem;border-bottom:1px solid var(--line,#eee);font-size:0.9rem';
+    row.textContent = `[${t.status}] ${t.kind} · ${t.summary || t.subjectRef} · ${t.claimedBy || ''}`
+      + (t.outcome ? ` → ${t.outcome}` : '');
+    ledgerBox.append(row);
+  }
+  if (!ledger.length) {
+    ledgerBox.textContent = 'No shifts worked yet — hire a worker (Staff → grant digital-worker).';
+    ledgerBox.style.color = 'var(--dim,#777)';
+  }
+
+  panel.append(cards, h('Waiting for a human'), approvalsBox, h('The shift ledger'), ledgerBox);
+}
+
 async function renderStaff() {
   const panel = staffPanel();
   panel.replaceChildren();
@@ -2148,6 +2284,7 @@ async function loadList() {
   el('resource-title').textContent = active.title;
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
+  document.getElementById('workforce-panel')?.setAttribute('hidden', '');
   document.querySelector('.pager')?.removeAttribute('hidden');
   if (active.copilot) {
     el('editor').hidden = true;
@@ -2165,6 +2302,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderStaff();
+    return;
+  }
+  if (active.workforce) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderWorkforce();
     return;
   }
   renderEditor();

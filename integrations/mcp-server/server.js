@@ -413,6 +413,26 @@ const TOOLS = [
     run: (a) => workerApi('GET', `/tmf-api/customerBillManagement/v4/customerBill?limit=100${a.state ? `&state=${encodeURIComponent(a.state)}` : ''}`),
   },
   {
+    name: 'request_approval',
+    description: 'File a HIGH-BLAST-RADIUS action (refund, cease, erasure, credit) for human '
+      + 'approval. Nothing executes now: the action is stored as data, a human approves it on '
+      + 'the Workforce dashboard, and it runs under THEIR token. Always prefer this over '
+      + 'guessing — a filed approval is a good shift, not a failed one.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', description: 'Short name, e.g. payment.refund' },
+        method: { type: 'string', enum: ['POST', 'PATCH', 'DELETE'] },
+        path: { type: 'string', description: 'The /tmf-api/... path the approved action will call' },
+        body: { type: 'object', description: 'The request body the approved action will send' },
+        reason: { type: 'string', description: 'Why — the human decides on this sentence' },
+      },
+      required: ['action', 'method', 'path', 'reason'],
+    },
+    run: (a) => workerApi('POST', '/ai/v1/workforce/approvals',
+      { action: a.action, method: a.method, path: a.path, body: a.body, reason: a.reason }),
+  },
+  {
     name: 'backoffice_apply_payment',
     description: 'Resolve ONE unapplied payment to the bill it belongs to. Money stays honest: '
       + 'the bill must be open and the amount must match to the cent — a mismatch is refused, '

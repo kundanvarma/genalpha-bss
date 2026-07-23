@@ -29,9 +29,14 @@ import java.util.Map;
 public class WorkforceController {
 
     private final WorkforceService service;
+    private final WorkforceApprovalService approvalService;
+    private final WorkforceKpiService kpiService;
 
-    public WorkforceController(WorkforceService service) {
+    public WorkforceController(WorkforceService service,
+            WorkforceApprovalService approvalService, WorkforceKpiService kpiService) {
         this.service = service;
+        this.approvalService = approvalService;
+        this.kpiService = kpiService;
     }
 
     @GetMapping("/tasks")
@@ -59,5 +64,41 @@ public class WorkforceController {
     @GetMapping("/ledger")
     public List<Map<String, Object>> ledger() {
         return service.ledger();
+    }
+
+    /* ---- the T3 gate: workers FILE, humans DECIDE ---- */
+
+    @PostMapping("/approvals")
+    public Map<String, Object> fileApproval(@RequestBody Map<String, Object> body) {
+        return approvalService.file(body);
+    }
+
+    @GetMapping("/approvals")
+    public List<Map<String, Object>> approvals(
+            @org.springframework.web.bind.annotation.RequestParam(name = "status", required = false)
+            String status) {
+        return approvalService.list(status);
+    }
+
+    /** The approver's OWN token executes the stored action. */
+    @PostMapping("/approvals/{id}/approve")
+    public Map<String, Object> approve(@PathVariable("id") String id,
+            @org.springframework.web.bind.annotation.RequestHeader(name = "Authorization",
+                    required = false) String authorization,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return approvalService.approve(id, authorization, body);
+    }
+
+    @PostMapping("/approvals/{id}/refuse")
+    public Map<String, Object> refuse(@PathVariable("id") String id,
+            @RequestBody(required = false) Map<String, Object> body) {
+        return approvalService.refuse(id, body);
+    }
+
+    /* ---- the scoreboard ---- */
+
+    @GetMapping("/kpis")
+    public Map<String, Object> kpis() {
+        return kpiService.kpis();
     }
 }

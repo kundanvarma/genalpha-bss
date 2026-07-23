@@ -292,8 +292,12 @@ public class PaymentService {
         receipt.put("refundedTotal", entity.getRefundedAmount());
         receipt.put("status", entity.getStatus());
         receipt.put("reason", dto.get("reason") == null ? null : String.valueOf(dto.get("reason")));
-        receipt.put("relatedParty", java.util.List.of(
-                Map.of("id", entity.getOwnerPartyId(), "role", "customer")));
+        // a payment created by an unscoped caller (back-office, remittance)
+        // has no owner party — the receipt simply omits the reference
+        if (entity.getOwnerPartyId() != null) {
+            receipt.put("relatedParty", java.util.List.of(
+                    Map.of("id", entity.getOwnerPartyId(), "role", "customer")));
+        }
         receipt.put("@type", "Refund");
         events.publish("PaymentRefundEvent", "refund", receipt);
         return receipt;
