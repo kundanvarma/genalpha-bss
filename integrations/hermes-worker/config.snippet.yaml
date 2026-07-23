@@ -1,0 +1,26 @@
+# Merge into ~/.hermes/config.yaml — connects Hermes Agent to the BSS as a
+# badged digital worker. The badge env comes from hire-worker.sh
+# (.env.worker); the tool whitelist keeps the worker's hands exactly as
+# wide as its job: the workforce lifecycle, care, back-office AR, and the
+# approval door for anything bigger. Commerce/B2B tools stay out.
+mcp_servers:
+  genalpha-bss:
+    command: "node"
+    args: ["/absolute/path/to/genalpha-bss/integrations/mcp-server/server.js"]
+    env:
+      BSS_GATEWAY_URL: "http://localhost:8080"
+      BSS_TOKEN_URL: "http://localhost:8085/realms/bss/protocol/openid-connect/token"
+      BSS_WORKER_USERNAME: "worker-hermes-…@bss.local"   # from .env.worker
+      BSS_WORKER_PASSWORD: "…"                            # from .env.worker
+    tools:
+      include:
+        - workforce_list_tasks
+        - workforce_claim
+        - workforce_complete
+        - workforce_escalate
+        - care_ticket_get
+        - care_ticket_resolve
+        - backoffice_unapplied_cash
+        - backoffice_list_bills
+        - backoffice_apply_payment
+        - request_approval

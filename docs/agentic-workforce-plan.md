@@ -266,4 +266,17 @@ including a real browser leg on the dashboard:
 
 Regressions green: storefront, remittance, console, ai_control_plane.
 
-*(Phase 3 — the turnkey Hermes compose profile + docs/marketing — next.)*
+**Phase 3 — 2026-07-23.** The package: `integrations/hermes-worker/` —
+`hire-worker.sh` (the badge bootstrap, smoke-tested against the live
+stack: mint → grant → .env.worker shown once), `config.snippet.yaml`
+(Hermes `~/.hermes/config.yaml` mcp_servers block with the tool whitelist
+— the worker's hands exactly as wide as its job), and SKILL.md job cards
+(care-triage every 15 min, cash-matching daily) encoding the floor rules
+("do not argue with a 409; finish the work", "a near-match is a NO").
+HONEST DEVIATION from the plan: Hermes ships via its official installer,
+NOT a published Docker image (verified against their docs, July 2026) —
+so day-1 is four documented commands rather than a compose profile; the
+README says so and the profile lands the day Nous ships an image.
+Docs/marketing: manual §16 "The digital workforce", memoir ch46 "The
+hired hand", README capability clause + landing-page bullet and section
+("agents that work FOR the operator"), counts at 65 suites / 46 chapters.

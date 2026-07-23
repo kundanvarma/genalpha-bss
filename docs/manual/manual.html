@@ -61,6 +61,7 @@ beside it.</p>
 13. <a href="#prodops">Production operations</a><br>
 14. <a href="#privacy">Privacy &amp; GDPR operations</a><br>
 15. <a href="#agents">The agent channel (agentic commerce)</a><br>
+16. <a href="#workforce">The digital workforce</a><br>
 </p>
 </div>
 
@@ -478,7 +479,43 @@ Shopper env: <code>BSS_SHOPPER_USERNAME/PASSWORD</code>; exchange client:
 with those platforms (feed registration, PSP delegated-payment agreement) — an operator act,
 not a code gap. The endpoints they register are the ones suite #64 exercises.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-four suites, eleven CTKs at zero
+<h2 id="workforce">16 · The digital workforce — suite #65</h2>
+<div class="rule"><b>The badge is the opt-in.</b> An AI worker is hired like staff: mint a login,
+grant the <code>digital-worker</code> bundle (console → Staff, or
+<code>integrations/hermes-worker/hire-worker.sh</code>). The grant sheds the walk-in customer
+defaults — a worker is staff. Revoke the badge to fire; the tenant's AI kill-switch stops the
+whole workforce mid-shift.</div>
+
+<h3>The job</h3>
+<p><code>GET /ai/v1/workforce/tasks</code> — the open queue, derived LIVE from real backlogs
+(unassigned TMF621 tickets, unapplied cash). <code>POST …/tasks/{id}/claim</code> (15-min lease,
+<code>BSS_WORKFORCE_LEASE_SECONDS</code>), <code>…/complete</code> (VERIFIED: a ticket task
+completes only when the ticket is actually resolved), <code>…/escalate</code> (a reason
+required — escalations are counted, not punished). <code>GET …/ledger</code> is the shift
+record, including the worker's self-reported model usage (labeled: its own word — the worker
+brings its own LLM).</p>
+
+<h3>Approvals (the T3 gate)</h3>
+<p>Refunds, cease, erasure: the worker FILES (<code>POST …/approvals</code> — method +
+<code>/tmf-api/</code> path + body + reason); nothing executes. A human approves on the
+Workforce tab and the stored action runs under <em>the approver's own token</em>; refusing
+keeps its receipt too. Filing is <code>workforce:use</code>; deciding is <code>ai:use</code> —
+a worker can never approve its own ask.</p>
+
+<h3>The scoreboard</h3>
+<p>Console → <b>Workforce</b>: completed / escalated / deflection, average handle time,
+<b>reopen rate</b> (completed tickets re-checked live — the honesty metric), approvals queue,
+shift ledger, self-reported cost (labeled), and human-minutes saved — an estimate that SAYS so,
+computed from operator-set baselines (<code>BSS_WORKFORCE_BASELINE_MINUTES_TICKET/-CASH</code>).</p>
+
+<h3>The Hermes package (day 1)</h3>
+<p><code>integrations/hermes-worker/</code>: <code>hire-worker.sh</code> (the badge, shown
+once), <code>config.snippet.yaml</code> (Hermes <code>~/.hermes/config.yaml</code> MCP block
+with the tool whitelist), and SKILL.md job cards (care-triage every 15 min, cash-matching
+daily). Runtime-neutral by construction — any MCP-speaking agent hires into the same job,
+badge and audit.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-five suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

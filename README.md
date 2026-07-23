@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty-four Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-five Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -113,7 +113,23 @@ relatedParty, readable by the customer's own token; and the part an operator wil
 first: a **per-tenant switch** `agent-commerce: off | discovery | full` in the shared registry,
 gateway-enforced, live-refreshed, DEFAULT OFF — a tenant is dark to agents until it opts in,
 and `discovery` lists the catalog while keeping checkout human; suite #64, the research and
-design in [docs/agentic-commerce-plan.md](docs/agentic-commerce-plan.md)), and
+design in [docs/agentic-commerce-plan.md](docs/agentic-commerce-plan.md)), **the digital
+workforce — AI agents that WORK for the operator** (an extension package where an autonomous
+agent — **Hermes Agent is the documented reference runtime**, but the interfaces are MCP + OIDC
+so any agent hires in — is EMPLOYED on back-office and care queues: the task queue derives LIVE
+from real backlogs (unassigned tickets, unapplied cash), claims are leases, completion is
+**verified** — a worker cannot mark done what is not done — and escalations carry a reason and
+are counted, not punished; **the badge is the opt-in**: a `digital-worker` staff grant on the
+same TMF672 surface as any human, revoke = fired, and the tenant's one AI kill-switch stops
+workers and copilots alike; refunds/cease/erasure only ever become **approval requests** a
+human executes with their own token — the worker can never approve its own ask; and the
+**Workforce dashboard** shows the shift honestly: deflection, handle time, the REOPEN RATE
+(the metric a vendor would hide), minutes-saved labeled `estimate: true` beside its baselines,
+and self-reported model cost labeled as the worker's own word; suite #65 proves the whole
+employment — hire, shift, refusal to fake, the gate, the firing — plus a browser leg where one
+dashboard click refunds under the human's token; day-1 package in
+[integrations/hermes-worker](integrations/hermes-worker/README.md), design in
+[docs/agentic-workforce-plan.md](docs/agentic-workforce-plan.md)), and
 **MVNO onboarding in an afternoon** (`ops/onboard-tenant.sh`: the tenant fleet is a shared config
 file, a new operator is a realm clone + a tenant block + a restart — suite #49 stands one up and
 bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a-form**: the host
@@ -129,7 +145,7 @@ intentional hardened gaps (payment, communication) — in
 
 - 🎬 **Guided demo** — open `http://localhost:8080/flow/demo.html`, sign in as `demo`, press ▶: five narrated acts drive the LIVE system (order-to-activation, a rule born without a deploy, a reacting price, keep-your-number, leave-and-teach-the-AI) while Live Flow lights up beside them. Nothing on that page is mocked.
 - 🛰️ **[Autonomy Accelerated — the 5G AI Slice PoC](https://kundanvarma.github.io/genalpha-bss/poc-ai-slice.html)** — the full lead-to-assure loop (AI intent → feasibility + edge upsell → token-priced quote → order → autonomous fibre-cut self-heal), drivable by an AI agent over MCP
-- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-five chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
+- 📖 **[The Honest Machine](https://kundanvarma.github.io/genalpha-bss/book/book.html)** — *a build memoir · verify everything*: how one person and an AI built a complete telecom suite — from catalog to cash to campaigns to copilots — and proved every piece of it. Forty-six chapters, the receipts included ([PDF](docs/book/The-Honest-Machine.pdf))
 - 📕 **[The Operator's Manual](https://kundanvarma.github.io/genalpha-bss/manual/manual.html)** — the reference companion, by role and by task: surfaces & sign-ins, the product owner's console, the CSR's acts, billing & money operations, partner channels, tenant minting, AI tiers, the seam catalog, env reference, extension APIs, the mocks ([PDF](docs/manual/Operators-Manual.pdf))
 - 📄 **[Product overview](https://kundanvarma.github.io/genalpha-bss/overview.html)** — the whole system as a readable webpage (browser Print → PDF for a shareable document)
 - 🧩 **[Product modeling — build a complicated bundle](docs/product-modeling.md)** — fixed components, pick-N-of-M choice groups, configurable variants, terms and mixed pricing, all as TMF620 data; worked example: GenAlpha Family Max
