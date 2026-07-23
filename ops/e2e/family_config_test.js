@@ -1,7 +1,7 @@
 /* Configurability: gifting and rollover are PRODUCT DATA, not code.
  *
  * The same binary serves three different operators' choices:
- *  - NOVA flips to the network-wide model — ANY customer gifts to ANY customer — by
+ *  - NOVA flips to the NETWORK-WIDE model — ANY customer gifts to ANY customer — by
  *    adding giftScope=tenant to the plan's spec characteristics. Pure
  *    catalog configuration; not one line rebuilt.
  *  - GENALPHA keeps the coded default: gifts stay inside the household.
@@ -68,7 +68,7 @@ async function token(ctx, realm, client, user, pass) {
   const flip = await ctx.patch(`${NOVA}/tmf-api/productCatalogManagement/v4/productOffering/${novaPlan.id}`,
     { headers: H(staff.nova), data: { productSpecification: { id: novaSpec.id, name: novaSpec.name } } });
   if (flip.status() !== 200) fail('nova config flip failed: ' + await flip.text());
-  console.log('OK NOVA configured its product network-wide: giftScope=tenant on the plan spec —'
+  console.log('OK NOVA configured network-wide gifting: giftScope=tenant on the plan spec —'
     + ' a catalog edit, zero code');
 
   const nils = await mkPerson(NOVA, staff.nova, 'nova', 'Nils');
