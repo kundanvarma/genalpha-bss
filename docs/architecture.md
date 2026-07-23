@@ -13,7 +13,11 @@ ACP, Claude-class over MCP) enter through the same gateway, behind a per-tenant
 delegated, commerce-scoped token. AI **digital workers** (Hermes-class, any MCP runtime) enter
 the same way but as badge-hired STAFF: a revocable `digital-worker` grant, a task queue derived
 from real backlogs on the intelligence component, verified completion, and approvals a human
-executes with their own token.
+executes with their own token. With the opt-in **workforce package** deployed, the loop CLOSES:
+its `worker-controller` (the only holder of spawn-rights — never the core BSS) makes hire = a
+running container with the badge injected, fire = revoke + stop, and the worker's BRAIN
+(`worker-ai-*` in the live registry) hot-swappable by config — the controller rolls the workers,
+free because claims are self-expiring leases.
 
 ```mermaid
 flowchart TB
@@ -29,6 +33,8 @@ flowchart TB
     AGENTS(["AI shopping agents\nChatGPT/Perplexity (ACP) · Claude (MCP)\nfeed + delegated checkout"])
 
     WORKERS(["AI digital workers\nHermes / any MCP runtime\nbadge-hired staff: tickets ·\nunapplied cash · approvals"])
+
+    WCTL["worker-controller\n(opt-in workforce package —\nthe ONLY holder of spawn-rights)"]
 
     GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nagent-commerce gate (off|discovery|full)\nper-channel tenant-config.js"]
 
@@ -90,6 +96,8 @@ TMF642/656"]
     SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
     AGENTS -->|"/acp/* — per-tenant gate\noff → 404 · discovery → feed only"| GW
     WORKERS -->|"digital-worker badge (revocable)\nworkforce queue + TMF doors;\nrefunds/cease only as approvals"| GW
+    GW -->|"/workforce-runtime/*\n(caller staff-verified by the BSS)"| WCTL
+    WCTL -.->|"hire = start · fire = stop\nrolls workers on worker-ai-* change\nsurge scaling ≤ governance maxWorkers"| WORKERS
     GW --> Party & Core & Revenue & Decisioning & Care
 
     ORD -.->|"machine calls\n(acting tenant's identity)"| CAT & PARTY & INV & STOCK & PAY & AGR & PROMO
@@ -241,6 +249,13 @@ the acting tenant's machine identity.
   approval rows a human executes with their own token; the tenant's one AI kill-switch stops
   workers and copilots alike; and the console's Workforce tab is the scoreboard (deflection,
   handle time, reopen rate, minutes-saved labeled as the estimate it is).
+- **The loop closes only by opt-in.** The workforce package's `worker-controller` is the sole
+  holder of container spawn-rights (docker.sock / a scoped ServiceAccount — deployed via
+  `--profile workforce`, never by default): one dashboard click hires a RUNNING worker with the
+  badge injected (credentials touch no human), one click fires it (badge revoked AND container
+  stopped), and the worker's LLM (`worker-ai-provider/base-url/api-key/model` in tenants.yml,
+  live-refreshed) hot-swaps by config — the controller rolls the containers, safely, because
+  claims are self-expiring leases. Suite #66 proves all of it, including the live brain swap.
 - **The Production seam is now real (thin).** service-orchestration consumes order events,
   decomposes digital orders into TMF641 service orders, mock-activates (TMF640's stand-in),
   records TMF638 services and completes the product order machine-side. Physical/install
