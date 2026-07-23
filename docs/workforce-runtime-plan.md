@@ -130,4 +130,16 @@ controller's Deployment instead of raw replicas.
 
 ## Shipped
 
-*(pending — this document is the plan; build begins on approval.)*
+*2026-07-24. All three milestones, suite #66 green first run.* Landed:
+the headless Hermes image (installer-built, env-configured, refuses to
+boot half-alive; the container IS the cron); the worker-controller
+(hire = badge + container, fire = revoke + stop, auth by the BSS's own
+verdict, port 8129 — 8127/8128 were taken); worker-ai-* in the tenant
+registry with the rolling-restart watcher (the LIVE BRAIN SWAP is proven:
+one yml edit, the running container re-emerged on the new model, no BSS
+restart); surge polling under the governance ceiling; and the dashboard's
+Hire now goes through the controller when deployed ("Hired AND started",
+zero credentials on screen) with the v1 credentials flow as fallback.
+Field receipts: the first controller-hired worker resolved a voicemail
+ticket, resolved an assurance auto-ticket, and honestly ESCALATED a
+storm-damaged router to field diagnosis.
