@@ -234,6 +234,20 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   if (!kpis.reopen || kpis.reopen.definition == null) fail('the reopen (honesty) metric is missing');
   const wRow = kpis.workers.find((w) => w.completed >= 1)
     || fail('no worker row on the scoreboard');
+  // THE CREW: each worker carries an OBSERVED type + its own numbers, and
+  // the type rollup answers "how many of each kind of worker"
+  if (!wRow.type || !Array.isArray(wRow.kinds) || wRow.workingNow === undefined) {
+    fail('worker rows must carry type/kinds/workingNow: ' + JSON.stringify(wRow));
+  }
+  if (wRow.type !== 'generalist') {
+    // this worker completed a ticket AND touched cash — the ledger observes both
+    fail(`worked tickets AND cash → type should be generalist, got '${wRow.type}'`);
+  }
+  const typeRow = kpis.workerTypes[wRow.type]
+    || fail('the worker type rollup misses ' + wRow.type);
+  if (typeRow.workers < 1 || typeRow.completed < 1) {
+    fail('the type rollup carries no numbers: ' + JSON.stringify(typeRow));
+  }
   console.log(`OK SCOREBOARD: ${kpis.completed} completed / ${kpis.escalated} escalated`
     + ` (deflection ${Math.round((kpis.deflectionRate || 0) * 100)}%), reopen rate`
     + ` ${Math.round(kpis.reopen.rate * 100)}% of ${kpis.reopen.checked} checked,`
@@ -288,6 +302,14 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     await page.waitForSelector('[data-testid=wf-kpi-completed]', { timeout: 15000 });
     const completedCard = await page.locator('[data-testid=wf-kpi-completed] b').textContent();
     if (Number(completedCard) < 1) fail('the dashboard shows no completed work');
+    // the crew renders: type cards ("N × care / back-office / generalist")
+    // and one row per worker with its own record
+    if (!(await page.locator('[data-testid=wf-type-card]').count())) {
+      fail('the dashboard shows no worker-type cards');
+    }
+    if (!(await page.locator('[data-testid=wf-worker-row]').count())) {
+      fail('the dashboard shows no per-worker rows');
+    }
     await page.waitForSelector('[data-testid=wf-approval-row]', { timeout: 10000 });
     const rows = await page.locator('[data-testid=wf-approval-row]').count();
     await page.locator('[data-testid=wf-approve]').first().click();
