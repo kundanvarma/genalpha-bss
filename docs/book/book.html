@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and sixty-three end-to-end test suites that all pass
+    composable components, six customer surfaces, and sixty-four end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2531,6 +2531,104 @@
     <p class="pull edge">Sixty suites. The shop now knows the difference between "people like
     you" and YOU — and it learned it the only honest way: by asking first, spending inside a
     budget, and writing every word it generates into a ledger someone can audit.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Forty-Four</div>
+    <h3>What goes with this</h3>
+    <div class="epi">"there is also one feature missing in webshop related to recommendation…
+    like customer who bought this also likes this… like iphone will likely buy iphonecover"
+    <span class="who">— the operator, naming the oldest trick in retail</span></div>
+
+    <p class="drop">Every shop on earth answers one question at the shelf: what goes with this?
+    The webshop could already rank a shelf FOR a person — the "For you" rail — but it could not
+    yet speak for the crowd: customers who bought this phone also bought that case. The data was
+    never missing. The recommendation component already read the tenant's whole inventory to
+    rank popularity; the same rows, grouped differently, ARE the market basket. Group every
+    owned product by its owner, and each customer becomes a basket; for any offering, tally what
+    else its owners hold, and the tally is the answer — no model, no training run, just honest
+    counting over what the tenant's customers actually own together.</p>
+
+    <p>Two design choices carried the honesty. The first is a minimum support of two: an
+    offering appears in the rail only when at least two of the anchor's owners also hold it —
+    signal over noise, and a privacy floor, because a rail that reflects a single customer's
+    basket is a window into that basket. Aggregate or absent, never in between. The second is
+    that the endpoint is PUBLIC, like the product page it decorates — a guest with no token
+    reads it, because it reveals only what the crowd did, never who the crowd is. And it is
+    tenant-walled like everything else: nova's shoppers see nova's baskets, reached by nova's
+    hostname, because the gateway stamps tenancy from the host and a spoofed header dies at the
+    door.</p>
+
+    <p>The build's best gift was the bug it flushed out. The affinity rail came up EMPTY against
+    a tenant whose customers demonstrably co-owned half the catalog — because the inventory
+    client fetched one page of five hundred products and the tenant had two thousand two hundred
+    and eleven. The fix — walk every page — repaired affinity AND quietly sharpened the
+    popularity ranker that had been sampling the same truncated sample all along. One bug, two
+    features honester. The suite learned its own lesson the same day: proving a minimum-support
+    floor against REAL data means seeding baskets on offering ids unique to the run, because two
+    thousand real products co-own their way into any shared id you borrow.</p>
+
+    <p class="pull edge">Sixty-three suites. The demo tenant's own data supplied the closing
+    argument: buyers of the Samsung flagship also take the home bundle — a hundred and
+    fifty-seven times. The shop did not guess that. It counted.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Forty-Five</div>
+    <h3>A door for the agents</h3>
+    <div class="epi">"so our mcp server still dosent expose core commerce… which means anyone
+    trying to purchase using perplexity or chatgpt etc wont be able to see our offerings?"
+    <span class="who">— the operator, finding the missing door</span></div>
+
+    <p class="drop">The question was sharper than it looked. The MCP server had been the proof
+    of the B2B slice story — intent, feasibility, quote, order — and in the glow of that demo it
+    was easy to believe the BSS was "agent-ready." It was not. Not one retail offering was
+    visible to an AI agent. A customer who asked their assistant to find a phone plan would be
+    told, truthfully, that this operator does not exist. And the research said the gap was wider
+    than a missing tool: shopping agents do not browse arbitrary MCP servers. ChatGPT's checkout
+    speaks the Agentic Commerce Protocol — an open standard: a product feed, a checkout-session
+    lifecycle, a delegated payment token. MCP reaches Claude's kind; ACP reaches the storefront
+    inside ChatGPT. Honesty demanded both, so the build shipped one core wearing two
+    transports: the ACP surface IS the agent API, and the MCP tools are a thin skin over it.</p>
+
+    <p>Nothing new was invented underneath — that is the point of a spine. The feed is a
+    projection of the TMF620 catalog, priced by the storefront's own rules; an offering the feed
+    cannot price honestly is skipped, not guessed. A checkout session IS a TMF663 cart wearing
+    protocol dressing, so agent baskets sit in the same funnel and the same abandonment
+    analytics as human ones. And complete is a payment and a TMF622 order created with the
+    CALLER'S token — the cart service forwards the credential it was handed and never lends its
+    own, so an under-authorized agent is refused by the same services that refuse any
+    under-authorized human.</p>
+
+    <p>The one genuine design decision was authority. An agent buying FOR a customer must hold
+    less than the customer — not a machine identity, which holds more. The answer was OAuth
+    token exchange: the shopper's credential goes in, and what comes out is scoped to a
+    confidential client that has been granted exactly five authorities — read the catalog,
+    order, pay. The realm must name the delegation path explicitly (an audience mapper on the
+    shopper's client; without it the exchange is refused), and the suite does not take the
+    downscoping on faith: it DECODES both tokens. The customer's carries twenty-five
+    authorities — bills, profile, tickets. The agent's carries five. Same subject, less power,
+    provable by anyone with a base64 decoder. Money got the same discipline: a replayed
+    Idempotency-Key returns the SAME order, and a fresh key against a completed session is
+    refused — one approval, one purchase, ever.</p>
+
+    <p>And then the operator's question behind the question: who decides to be shopped by
+    machines? Not the platform, and not the default. A per-tenant switch — off, discovery,
+    full — lives in the same registry file as every other tenant capability, enforced at the
+    gateway, live-refreshed, flippable from the operator form. Off is a 404, because a closed
+    door should not confirm there is a room behind it. Discovery is the honest middle every
+    retailer will ask for: be findable, be comparable, keep the checkout human. And every
+    NEWBORN tenant is born off — being bought from by AI agents is a choice an operator makes,
+    never one it discovers. The demo fleet proves all three positions at once: one tenant sells
+    to agents, one shows itself and declines to sell, one does not exist.</p>
+
+    <p class="pull edge">Sixty-four suites. The last assertion is the quiet one: paula's own
+    token reads the order the agent placed for her, channel-marked and tenant-walled — because
+    a shop that lets machines buy must first let humans see what the machines bought.</p>
   </section>
 
   <hr class="soft">

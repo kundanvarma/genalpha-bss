@@ -60,6 +60,7 @@ beside it.</p>
 12. <a href="#mocks">The mock integrations</a><br>
 13. <a href="#prodops">Production operations</a><br>
 14. <a href="#privacy">Privacy &amp; GDPR operations</a><br>
+15. <a href="#agents">The agent channel (agentic commerce)</a><br>
 </p>
 </div>
 
@@ -436,7 +437,48 @@ double-sweep.</p>
 (SAQ-A-shaped; a QSA attests the rest). Lawful intercept: the BSS half is warrant-gated
 subscriber disclosure — shaped, not built; see <a href="../privacy.md">docs/privacy.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-three suites, eleven CTKs at zero
+<h2 id="agents">15 · The agent channel (agentic commerce) — suite #64</h2>
+<div class="rule"><b>Being shopped by AI agents is opt-in.</b> Every operator carries
+<code>agent-commerce: off | discovery | full</code> in the tenant registry — <code>off</code>
+(dark to agents, 404), <code>discovery</code> (the product feed answers; agent checkout refused
+with 403 — findable, checkout stays human), <code>full</code> (delegated checkout too).
+Newborn operators are born <code>off</code>. Flip it on the operator form (console → Operators
+→ Agent commerce) or by env (<code>AGENT_COMMERCE</code>, <code>AGENT_COMMERCE_&lt;ID&gt;</code>);
+the gateway enforces it live — no restart.</div>
+
+<h3>The surface (ACP, spec 2026-04-17)</h3>
+<p><b>Feed</b>: <code>GET /acp/product_feed</code> — public projection of the active TMF620
+catalog (unconditioned prices only, one-time preferred; unpriced offerings are skipped).
+<b>Checkout</b>: <code>POST /acp/checkout_sessions</code> with <code>{items:[{id,quantity}]}</code>,
+then <code>GET/POST /acp/checkout_sessions/{id}</code>,
+<code>POST …/{id}/complete</code> (needs <code>Authorization</code> + <code>Idempotency-Key</code>
++ <code>payment_data.token</code>), <code>POST …/{id}/cancel</code>. A session rides a real
+TMF663 cart; complete charges the payment token and places a TMF622 order marked
+<code>category=agenticCommerce</code> with the buyer as relatedParty. A replayed
+Idempotency-Key returns the <em>same</em> order; a fresh key on a completed session is 409.</p>
+
+<h3>Delegated checkout (the trust model)</h3>
+<p>Agents never hold a machine identity. The shopper's token is exchanged (OAuth token
+exchange, Keycloak ≥26.2) through the confidential <code>bss-agent</code> client —
+<code>fullScopeAllowed</code> off, scope-mapped to exactly
+<code>catalog:read ordering:read/write payment:read/write</code> — so the agent's credential
+can order and pay and nothing else. The shopper's client must carry an audience mapper naming
+<code>bss-agent</code>: the realm grants the delegation path explicitly, or the exchange is
+refused. Suite #64 decodes both tokens to prove the downscoping.</p>
+
+<h3>MCP tools (Claude-class agents)</h3>
+<p><code>integrations/mcp-server</code> wears the same surface as five retail tools:
+<code>search_offerings</code>, <code>get_offering</code> (with "also bought"),
+<code>start_checkout</code>, <code>update_checkout</code>, <code>complete_checkout</code>.
+Shopper env: <code>BSS_SHOPPER_USERNAME/PASSWORD</code>; exchange client:
+<code>BSS_AGENT_CLIENT_ID/SECRET</code>.</p>
+
+<p class="dim">Honest scope: the merchant surface is implemented and proven. Appearing
+<em>inside</em> ChatGPT/Perplexity additionally requires the operator's business onboarding
+with those platforms (feed registration, PSP delegated-payment agreement) — an operator act,
+not a code gap. The endpoints they register are the ones suite #64 exercises.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-four suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
