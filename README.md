@@ -66,7 +66,14 @@ bookkeeping categories are retained WITH their named legal basis, the profile an
 place, the login dies scrubbed at the IdP, and every erasure leaves an immutable audit row;
 retention as TickGuard-guarded clocks; PCI scope verified-then-claimed — the vault holds
 `pspToken/lastFour`, never a PAN; suite #58, the whole story in
-[docs/privacy.md](docs/privacy.md)), the **AI control plane** (every LLM turn authenticated,
+[docs/privacy.md](docs/privacy.md)), **post-quantum readiness — *ready*, never "proof"** (the
+BSS is crypto-agile by construction: identity, transport and payment crypto all live behind
+seams, so migrating is swapping what a seam points at, not a rewrite; today SIM secrets are
+AES-256-GCM at rest, PKCE is SHA-256, and a hybrid **X25519MLKEM768** TLS key exchange —
+ML-KEM-768, FIPS 203 — guards recorded traffic against *harvest-now-decrypt-later*; the one
+classically vulnerable primitive, RSA token signatures at the IdP, is named honestly and swaps
+to ML-DSA at the identity seam when the OIDC ecosystem lands it — the full crypto inventory,
+holding nothing back, in [docs/pqc-readiness.md](docs/pqc-readiness.md)), the **AI control plane** (every LLM turn authenticated,
 METERED — tokens and cost on the audit ledger — and governed: per-tenant spend ceilings that
 refuse fail-closed with an honest 429 when crossed, an operator kill-switch, and agent ACTIONS
 on the same ledger as the words — the advisor's draft-adoption lands as
