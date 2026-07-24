@@ -17,7 +17,9 @@ executes with their own token. With the opt-in **workforce package** deployed, t
 its `worker-controller` (the only holder of spawn-rights — never the core BSS) makes hire = a
 running container with the badge injected, fire = revoke + stop, and the worker's BRAIN
 (`worker-ai-*` in the live registry) hot-swappable by config — the controller rolls the workers,
-free because claims are self-expiring leases.
+free because claims are self-expiring leases. And a tenant can WRAP a legacy BSS (suite #67):
+three per-tenant seams federate its catalog, hand fulfilment back to its queue, and let the
+workforce work its incident backlog — legacy stays the master, never two writers.
 
 ```mermaid
 flowchart TB
@@ -91,6 +93,7 @@ TMF642/656"]
     FLOW["flow — Live Flow\n(read-only event observability)"]
     KAFKA[("Kafka\nbss.*.events\ntransactional outbox")]
     IDP[("OIDC IdPs\none issuer per tenant\n(Keycloak realms in dev)")]
+    LEGACY[("A wrapped LEGACY BSS\n(per-tenant overlay seams —\nempty = native mode)")]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
     SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
@@ -116,6 +119,9 @@ TMF642/656"]
     AI -.->|"churn engine → ChurnRiskDetectedEvent"| KAFKA
     AI -.->|"workforce queue DERIVES from\nreal backlogs (never copied)"| TICKET & BILL
     ROLES -.-> IDP
+    CAT -.->|"federation: read-through,\nlegacy- prefixed, fail-soft"| LEGACY
+    ORD -.->|"fulfilment HAND-OFF for\nlegacy- items (fail-soft, logged)"| LEGACY
+    AI -.->|"workforce works the legacy\nincident backlog — completion\nVERIFIED against legacy state"| LEGACY
 
     Core & Revenue & Care & Decisioning -->|events| KAFKA
     KAFKA -->|"tenant-tagged envelopes"| COMM & INTER & FLOW
@@ -249,6 +255,14 @@ the acting tenant's machine identity.
   approval rows a human executes with their own token; the tenant's one AI kill-switch stops
   workers and copilots alike; and the console's Workforce tab is the scoreboard (deflection,
   handle time, reopen rate, minutes-saved labeled as the estimate it is).
+- **A legacy estate is just another seam (proven, suite #67).** Three per-tenant registry
+  fields — `legacy-catalog-base-url`, `legacy-fulfilment-base-url`, `legacy-ticket-base-url`
+  (empty = native mode) — wrap an existing BSS: its catalog federates read-through into the
+  native list and the ACP feed (legacy-prefixed, cached, fail-soft — a dead legacy never breaks
+  the native catalog); orders carrying legacy- items hand off to the legacy work-order queue
+  (genalpha keeps the engagement record — never two writers); and the digital workforce works
+  the legacy incident backlog age-stamped, with completion verified against the LEGACY system's
+  own state.
 - **The loop closes only by opt-in.** The workforce package's `worker-controller` is the sole
   holder of container spawn-rights (docker.sock / a scoped ServiceAccount — deployed via
   `--profile workforce`, never by default): one dashboard click hires a RUNNING worker with the
