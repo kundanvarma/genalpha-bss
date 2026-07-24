@@ -65,6 +65,11 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** THE OVERLAY SEAM: the legacy estate's fulfilment queue. */
+        private String legacyFulfilmentBaseUrl;
+
+        public String getLegacyFulfilmentBaseUrl() { return legacyFulfilmentBaseUrl; }
+        public void setLegacyFulfilmentBaseUrl(String v) { this.legacyFulfilmentBaseUrl = v; }
 
         public String getId() {
             return id;

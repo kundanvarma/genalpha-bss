@@ -71,6 +71,17 @@ public class TenantRegistry {
         /** Agentic-commerce exposure (off|discovery|full) — the gateway is
          * the authoritative gate; this copy is defense in depth. */
         private String agentCommerce = "off";
+        /** THE OVERLAY SEAM: this tenant's legacy BSS catalog — read-through
+         * federation; empty means no legacy estate (native mode). */
+        private String legacyCatalogBaseUrl;
+
+        public String getLegacyCatalogBaseUrl() {
+            return legacyCatalogBaseUrl;
+        }
+
+        public void setLegacyCatalogBaseUrl(String v) {
+            this.legacyCatalogBaseUrl = v;
+        }
 
         public String getId() {
             return id;

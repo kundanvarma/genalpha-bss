@@ -56,11 +56,13 @@ public class ProductOrderService {
     private final StockClient stockClient;
     private final PaymentClient paymentClient;
     private final PolicyClient policyClient;
+    private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
-            StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient) {
+            StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient,
+            com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -75,6 +77,7 @@ public class ProductOrderService {
         this.stockClient = stockClient;
         this.paymentClient = paymentClient;
         this.policyClient = policyClient;
+        this.legacyHandoff = legacyHandoff;
     }
 
     @Transactional(readOnly = true)
@@ -154,6 +157,9 @@ public class ProductOrderService {
         reserveStock(dto, id);
         ProductOrderDto created = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderCreateEvent", "productOrder", created);
+        // THE OVERLAY SEAM: legacy-federated items hand off to the legacy
+        // fulfilment queue — fail-soft, the order stands either way
+        legacyHandoff.handoff(id, flattenItemMaps(dto.getProductOrderItem()), entity.getOwnerPartyId());
         if (modifyOnly) {
             // A plan change touches no network: same service, same number. It
             // completes in this transaction so the channel sees it instantly.

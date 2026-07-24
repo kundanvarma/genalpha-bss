@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty-six Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-seven Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -154,7 +154,7 @@ intentional hardened gaps (payment, communication) — in
 - 🛡️ **[Production hardening](docs/hardening.md)** — what is done and proven (tick locks under two live replicas, a crash-resumable billing run with its own ledger, Redis-backed rate ceilings that survive restarts, a backup that provably restores, fleet-wide alert rules, the secret gate, GDPR as endpoints — and the **Helm chart run live on three clouds** — local k3s, AWS EKS, Azure AKS — billing at 2 replicas with one set of tick leases against a managed database each time, [receipts](docs/k8s-soak-plan.md)) and the honest list a real deployment still owes: managed HA Postgres/Kafka, TLS in transit, a third-party pen test
 - 🔏 **[Privacy & compliance](docs/privacy.md)** — the GDPR data passport and eraser (self-service export on the caller's own token, erasure with the law's own exceptions, retention clocks, the audit that outlives the erased), verified PCI scope, and the honest boundary statements for lawful intercept and regional DR
 - 📊 **[Performance baselines](docs/perf-baselines.md)** — throughput's first honest numbers from `ops/load/loadtest.js` (one laptop, all 30 JVMs: ~680 req/s catalog at p95 39 ms, ~450 req/s authenticated reads through JWT+RLS), the caveats stated, and the smoke-SLO tripwire suite #57 arms
-- 🧅 **[The overlay strategy](docs/overlay-gtm.md)** — a full next-generation BSS sufficient to be an operator's ONLY one, that can also START as the agentic layer on top of an existing estate: a legacy stack is just another per-tenant seam, never-two-writers data mastery, and the strangler-fig roadmap where the next brand launches natively in minutes — honestly labeled strategy until the wrapped-legacy proof suite lands
+- 🧅 **[The overlay strategy](docs/overlay-gtm.md)** — a full next-generation BSS sufficient to be an operator's ONLY one, that can also START as the agentic layer on top of an existing estate: a legacy stack is just another per-tenant seam, never-two-writers data mastery, and the strangler-fig roadmap where the next brand launches natively in minutes — PROVEN by suite #67: a wrapped legacy stack federated, sold from, handed fulfilment, and worked by the digital workforce with the legacy system as the source of truth
 - 🔐 **[Post-quantum readiness](docs/pqc-readiness.md)** — the honest crypto inventory: one vulnerable primitive (RSA token signatures, swappable at the IdP seam), hybrid-TLS guidance for harvest-now-decrypt-later, and why seams make PQC a checklist, not a rewrite
 - 📐 **[Architecture views](docs/architecture.md)** — component map, tenancy model, order-to-bill flow, event backbone
 - 🧩 **[ODA Composer](https://kundanvarma.github.io/genalpha-bss/composer.html)** — pick the modules a deployment needs; dependencies enforced; output is a Helm values override

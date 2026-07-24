@@ -41,6 +41,13 @@ bss:
         worker-ai-base-url: ${WORKER_AI_BASE_URL:}
         worker-ai-api-key: ${WORKER_AI_API_KEY:}
         worker-ai-model: ${WORKER_AI_MODEL:claude-haiku-4-5-20251001}
+        # THE OVERLAY SEAMS: the legacy estate this tenant wraps (empty =
+        # native mode, no legacy). Catalog federates read-through; orders
+        # with legacy- items hand off to the legacy queue; the workforce
+        # works the legacy incident backlog with verified completion.
+        legacy-catalog-base-url: ${LEGACY_CATALOG_BASE_URL:}
+        legacy-fulfilment-base-url: ${LEGACY_FULFILMENT_BASE_URL:}
+        legacy-ticket-base-url: ${LEGACY_TICKET_BASE_URL:}
         hosts: [localhost, 127.0.0.1, shop.genalpha.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL:https://www.google-analytics.com}
