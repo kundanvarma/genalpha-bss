@@ -102,5 +102,19 @@ repo is careful about.
 
 ## Shipped
 
-*(strategy adopted 2026-07-24; the wrapped-legacy proof suite is the
-open build item.)*
+**2026-07-24 — the receipt landed the same day.** Suite #67
+(`ops/e2e/wrapped_legacy_test.js`) green first run, all four legs:
+`mock-legacy-bss` (envelope-wrapped, PROD_CD-shaped — deliberately old)
+wrapped by genalpha through three per-tenant seams
+(`legacy-catalog-base-url` / `-fulfilment-` / `-ticket-`, empty = native
+mode). FEDERATION: the legacy catalog surfaces in the ACP feed as priced,
+legacy-prefixed TMF620 (30s cache, fail-soft — a dead legacy never breaks
+the native catalog; catalog findById resolves legacy- ids so ordering's
+reference validation covers wrapped offerings). THE SALE: an agent bought
+a legacy-federated offering through the standard ACP checkout. THE
+HAND-OFF: the order landed in the legacy work-order queue (WO-1000),
+fail-soft with the miss logged for reconciliation. THE WORKFORCE ACROSS
+THE WRAP: the legacy incident joined the queue AGE-STAMPED; completing it
+while the legacy system said OPEN was refused with 409; it completed only
+after the incident closed IN the legacy system. Never two writers held
+everywhere. The overlay is no longer strategy — it is proven.

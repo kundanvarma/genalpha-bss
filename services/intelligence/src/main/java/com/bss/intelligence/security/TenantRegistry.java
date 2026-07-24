@@ -70,6 +70,12 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** THE OVERLAY SEAM: the legacy estate's incident system — the
+         * workforce works LEGACY backlogs through it. */
+        private String legacyTicketBaseUrl;
+
+        public String getLegacyTicketBaseUrl() { return legacyTicketBaseUrl; }
+        public void setLegacyTicketBaseUrl(String v) { this.legacyTicketBaseUrl = v; }
 
         public String getId() {
             return id;

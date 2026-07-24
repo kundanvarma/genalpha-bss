@@ -43,13 +43,16 @@ public class WorkforceService {
     private final TenantScope tenantScope;
     private final long leaseSeconds;
 
+    private final LegacyIncidentClient legacyIncidents;
+
     public WorkforceService(WorkforceTaskRepository tasks, AiBudgetRepository budgets,
-            BssApiClient bss, TenantScope tenantScope,
+            BssApiClient bss, TenantScope tenantScope, LegacyIncidentClient legacyIncidents,
             @Value("${bss.workforce.lease-seconds:900}") long leaseSeconds) {
         this.tasks = tasks;
         this.budgets = budgets;
         this.bss = bss;
         this.tenantScope = tenantScope;
+        this.legacyIncidents = legacyIncidents;
         this.leaseSeconds = leaseSeconds;
     }
 
@@ -183,6 +186,20 @@ public class WorkforceService {
                     "[" + ticket.getOrDefault("severity", "-") + "] "
                             + ticket.getOrDefault("name", "trouble ticket")));
         }
+        // THE OVERLAY SEAM: the wrapped estate's open incidents join the
+        // queue, AGE-STAMPED — legacy data always says how old it is
+        for (Map<String, Object> inc : legacyIncidents.openIncidents()) {
+            String no = String.valueOf(inc.get("INC_NO"));
+            long ageMin = 0;
+            try {
+                ageMin = java.time.Duration.between(
+                        OffsetDateTime.parse(String.valueOf(inc.get("OPENED_TS"))),
+                        OffsetDateTime.now()).toMinutes();
+            } catch (Exception ignored) { }
+            out.add(task(LegacyIncidentClient.KIND, no,
+                    "[legacy estate] " + inc.getOrDefault("SUMMARY", "incident")
+                            + " · opened " + ageMin + "m ago · asOf " + OffsetDateTime.now()));
+        }
         for (Map<String, Object> cash : bss.unappliedCash()) {
             String id = String.valueOf(cash.get("id"));
             Object amount = cash.get("amount");
@@ -212,6 +229,15 @@ public class WorkforceService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "the ticket is still '" + status
                                 + "' — finish the work before completing the task");
+            }
+        } else if (LegacyIncidentClient.KIND.equals(row.getKind())) {
+            // the LEGACY system's own state decides — the wrap changes
+            // nothing about honesty
+            String status = legacyIncidents.statusOf(row.getSubjectRef());
+            if ("OPEN".equals(status)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "the legacy incident is still OPEN — finish the work in the legacy"
+                                + " system before completing the task");
             }
         } else if (KIND_CASH.equals(row.getKind())) {
             boolean stillParked = bss.unappliedCash().stream()

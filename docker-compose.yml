@@ -65,6 +65,7 @@ services:
     container_name: bss-product-catalog
     restart: unless-stopped
     environment:
+      LEGACY_CATALOG_BASE_URL: http://mock-legacy:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
@@ -99,6 +100,7 @@ services:
     container_name: bss-product-ordering
     restart: unless-stopped
     environment:
+      LEGACY_FULFILMENT_BASE_URL: http://mock-legacy:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-ordering
@@ -447,6 +449,7 @@ services:
     container_name: bss-intelligence
     restart: unless-stopped
     environment:
+      LEGACY_TICKET_BASE_URL: http://mock-legacy:8080
       # the product advisor's sources
       CATALOG_BASE_URL: http://product-catalog:8080
       BILLING_BASE_URL: http://billing:8080
@@ -1285,6 +1288,13 @@ services:
     ports:
       - "10000:10000"
 
+  mock-legacy:
+    build: ./integrations/mock-legacy-bss
+    container_name: bss-mock-legacy
+    restart: unless-stopped
+    ports:
+      - "8130:8080"
+
   mock-llm:
     build: ./integrations/mock-llm
     container_name: bss-mock-llm
@@ -1394,6 +1404,7 @@ services:
       STOCK_URL: http://product-stock:8080
       PAYMENT_URL: http://payment:8080
       WORKER_CONTROLLER_URL: http://worker-controller:8080
+      LEGACY_URL: http://mock-legacy:8080
       BILLING_URL: http://billing:8080
       QUALIFICATION_URL: http://qualification:8080
       APPOINTMENT_URL: http://appointment:8080

@@ -32,21 +32,33 @@ public class ProductOfferingService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.catalog.pim.ProductContentSource content;
+    private final LegacyFederation legacy;
+    private final com.bss.catalog.security.TenantRegistry tenants;
 
     public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope,
-            com.bss.catalog.pim.ProductContentSource content) {
+            com.bss.catalog.pim.ProductContentSource content, LegacyFederation legacy,
+            com.bss.catalog.security.TenantRegistry tenants) {
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
         this.tenantScope = tenantScope;
         this.content = content;
+        this.legacy = legacy;
+        this.tenants = tenants;
     }
 
     @Transactional(readOnly = true)
     public PagedResult<ProductOfferingDto> findAll(int offset, int limit, Map<String, String> filters) {
         Page<ProductOffering> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
-        return new PagedResult<>(page.getContent().stream().map(mapper::toDto).map(this::withContent).toList(),
-                page.getTotalElements());
+        List<ProductOfferingDto> items = new java.util.ArrayList<>(
+                page.getContent().stream().map(mapper::toDto).map(this::withContent).toList());
+        // THE OVERLAY SEAM: a tenant wrapping a legacy estate sees that
+        // catalog federated in — read-through, legacy-prefixed, fail-soft.
+        // First page only, so paging math stays honest.
+        List<ProductOfferingDto> federated = offset == 0
+                ? legacy.offeringsFor(tenants.byId(tenantScope.currentTenantId())) : List.of();
+        items.addAll(federated);
+        return new PagedResult<>(items, page.getTotalElements() + federated.size());
     }
 
     /**
@@ -98,6 +110,15 @@ public class ProductOfferingService {
 
     @Transactional(readOnly = true)
     public ProductOfferingDto findById(String id) {
+        if (id.startsWith(LegacyFederation.PREFIX)) {
+            // overlay: a legacy-prefixed id resolves through the federation —
+            // so ordering's reference validation covers wrapped offerings too
+            ProductOfferingDto dto = legacy.byId(tenants.byId(tenantScope.currentTenantId()), id);
+            if (dto == null) {
+                throw NotFoundException.forResource(RESOURCE, id);
+            }
+            return dto;
+        }
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         return withContent(mapper.toDto(entity));

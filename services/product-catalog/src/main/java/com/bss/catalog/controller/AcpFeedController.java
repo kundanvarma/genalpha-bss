@@ -121,7 +121,22 @@ public class AcpFeedController {
             return null;
         }
         List<ProductOfferingPriceDto> resolved = refs.stream()
-                .map(ref -> priceIndex.get(String.valueOf(ref.get("id"))))
+                .map(ref -> {
+                    ProductOfferingPriceDto indexed = priceIndex.get(String.valueOf(ref.get("id")));
+                    if (indexed != null) {
+                        return indexed;
+                    }
+                    // overlay: federated legacy offerings embed their price on
+                    // the ref itself — build a DTO from it
+                    if (ref.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
+                        ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
+                        dto.setId(String.valueOf(ref.get("id")));
+                        dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
+                        dto.setPrice((Map<String, Object>) p);
+                        return dto;
+                    }
+                    return null;
+                })
                 .filter(p -> p != null)
                 .filter(p -> p.getProdSpecCharValueUse() == null || p.getProdSpecCharValueUse().isEmpty())
                 .toList();

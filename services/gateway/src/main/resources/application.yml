@@ -17,6 +17,14 @@ spring:
             - Path=/acp/checkout_sessions/**,/acp/checkout_sessions
         # The workforce package's controller (opt-in profile): hire-and-start,
         # fire, list — the controller re-checks the caller against the BSS.
+        - id: legacy-estate
+          # the wrapped legacy stack's own API (dev mock) — the overlay
+          # suite drives legacy-side actions through here
+          uri: ${LEGACY_URL:http://localhost:8130}
+          predicates:
+            - Path=/legacy/**
+          filters:
+            - StripPrefix=1
         - id: workforce-runtime
           uri: ${WORKER_CONTROLLER_URL:http://localhost:8129}
           predicates:
