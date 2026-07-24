@@ -62,6 +62,7 @@ beside it.</p>
 14. <a href="#privacy">Privacy &amp; GDPR operations</a><br>
 15. <a href="#agents">The agent channel (agentic commerce)</a><br>
 16. <a href="#workforce">The digital workforce</a><br>
+17. <a href="#overlay">The wrapped legacy estate (overlay)</a><br>
 </p>
 </div>
 
@@ -527,6 +528,18 @@ once), <code>config.snippet.yaml</code> (Hermes <code>~/.hermes/config.yaml</cod
 with the tool whitelist), and SKILL.md job cards (care-triage every 15 min, cash-matching
 daily). Runtime-neutral by construction — any MCP-speaking agent hires into the same job,
 badge and audit.</p>
+
+<h2 id="overlay">17 · The wrapped legacy estate (overlay) — suite #67</h2>
+<div class="rule"><b>A legacy BSS is just another seam.</b> Three per-tenant registry fields —
+<code>legacy-catalog-base-url</code>, <code>legacy-fulfilment-base-url</code>,
+<code>legacy-ticket-base-url</code> (empty = native mode) — wrap an existing estate: its catalog
+federates read-through into the native list and the ACP feed (legacy-prefixed, cached,
+fail-soft); orders carrying <code>legacy-</code> items hand off to the legacy work-order queue;
+the digital workforce works the legacy incident backlog age-stamped, with completion VERIFIED
+against the legacy system's own state. Never two writers: legacy masters its data, genalpha
+masters engagement. Also: the workforce package's closed loop — dashboard Hire starts a running
+worker container via the controller (<code>--profile workforce</code>); the worker's LLM is
+live registry config (<code>worker-ai-*</code>) rolled onto by the controller.</div>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · sixty-seven suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
