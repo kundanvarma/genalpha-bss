@@ -63,6 +63,7 @@ beside it.</p>
 15. <a href="#agents">The agent channel (agentic commerce)</a><br>
 16. <a href="#workforce">The digital workforce</a><br>
 17. <a href="#overlay">The wrapped legacy estate (overlay)</a><br>
+18. <a href="#geo">Generative discoverability (GEO)</a><br>
 </p>
 </div>
 
@@ -540,6 +541,20 @@ against the legacy system's own state. Never two writers: legacy masters its dat
 masters engagement. Also: the workforce package's closed loop — dashboard Hire starts a running
 worker container via the controller (<code>--profile workforce</code>); the worker's LLM is
 live registry config (<code>worker-ai-*</code>) rolled onto by the controller.</div>
+
+<h2 id="geo">18 · Generative discoverability (GEO) — suite #68</h2>
+<div class="rule"><b>AI crawlers read HTML only — and the operator holds the switch.</b>
+Per-tenant <code>ai-visibility: open | search-only | dark</code> executes at robots.txt:
+<code>open</code> welcomes all crawlers (+ llms.txt, honestly labeled speculative);
+<code>search-only</code> keeps classic search and disallows AI answer/training bots (GPTBot,
+ClaudeBot, PerplexityBot, Google-Extended, CCBot…); <code>dark</code> disallows everyone.
+Newborn operators default <code>search-only</code>.</div>
+<p>The gateway DUAL-SERVES <code>/shop/offering/{id}</code> by User-Agent: crawlers get
+bot-readable HTML with schema.org Product/Offer JSON-LD rendered live from TMF620 (no authoring,
+no syncing — suite #68 proves bot price == catalog price); humans get the SPA unchanged.
+<code>/robots.txt</code>, <code>/sitemap.xml</code>, <code>/llms.txt</code> generate per tenant
+from the same source. Follow-ups, named: insight ai-answer referrer tagging; knowledge-base FAQ
+pages as a public help center.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · sixty-eight suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
