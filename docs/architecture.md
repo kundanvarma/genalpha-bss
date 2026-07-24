@@ -19,7 +19,10 @@ running container with the badge injected, fire = revoke + stop, and the worker'
 (`worker-ai-*` in the live registry) hot-swappable by config — the controller rolls the workers,
 free because claims are self-expiring leases. And a tenant can WRAP a legacy BSS (suite #67):
 three per-tenant seams federate its catalog, hand fulfilment back to its queue, and let the
-workforce work its incident backlog — legacy stays the master, never two writers.
+workforce work its incident backlog — legacy stays the master, never two writers. AI ANSWER-ENGINE crawlers (GPTBot-class, which
+execute no JavaScript) get a third face of the same catalog: the gateway dual-serves shop URLs
+by User-Agent into bot-readable HTML with schema.org JSON-LD, behind a per-tenant
+`ai-visibility: open | search-only | dark` switch executed at robots.txt (suite #68).
 
 ```mermaid
 flowchart TB
@@ -34,6 +37,8 @@ flowchart TB
 
     AGENTS(["AI shopping agents\nChatGPT/Perplexity (ACP) · Claude (MCP)\nfeed + delegated checkout"])
 
+    CRAWLERS(["AI answer-engine crawlers\nGPTBot · ClaudeBot · PerplexityBot\n(no JS — read HTML only)"])
+
     WORKERS(["AI digital workers\nHermes / any MCP runtime\nbadge-hired staff: tickets ·\nunapplied cash · approvals"])
 
     WCTL["worker-controller\n(opt-in workforce package —\nthe ONLY holder of spawn-rights)"]
@@ -46,7 +51,7 @@ flowchart TB
     end
 
     subgraph Core["Core commerce"]
-        CAT["product-catalog TMF620\n+ ACP product feed"]
+        CAT["product-catalog TMF620\n+ ACP product feed\n+ GEO bot pages · sitemap · robots"]
         ORD["product-ordering TMF622"]
         INV["product-inventory TMF637"]
         CART["shopping-cart TMF663\n+ ACP checkout_sessions"]
@@ -98,6 +103,7 @@ TMF642/656"]
 
     SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
     AGENTS -->|"/acp/* — per-tenant gate\noff → 404 · discovery → feed only"| GW
+    CRAWLERS -->|"DUAL-SERVE by User-Agent:\nbot HTML + JSON-LD from TMF620\nrobots.txt per ai-visibility switch"| GW
     WORKERS -->|"digital-worker badge (revocable)\nworkforce queue + TMF doors;\nrefunds/cease only as approvals"| GW
     GW -->|"/workforce-runtime/*\n(caller staff-verified by the BSS)"| WCTL
     WCTL -.->|"hire = start · fire = stop\nrolls workers on worker-ai-* change\nsurge scaling ≤ governance maxWorkers"| WORKERS
@@ -263,6 +269,14 @@ the acting tenant's machine identity.
   (genalpha keeps the engagement record — never two writers); and the digital workforce works
   the legacy incident backlog age-stamped, with completion verified against the LEGACY system's
   own state.
+- **Crawlers get a third face of the same catalog (suite #68).** AI answer-engine bots execute
+  no JavaScript, so the gateway dual-serves `/shop/offering/*` by User-Agent: crawlers receive
+  complete HTML with schema.org Product/Offer JSON-LD rendered LIVE from TMF620 (the suite
+  proves bot price == catalog price — the faces are proven equal, never maintained equal);
+  humans keep the untouched SPA. The per-tenant `ai-visibility` switch (open | search-only |
+  dark) executes at robots.txt — the lever crawlers actually obey — with search-only as the
+  middle state: classic search yes, AI answer/training bots no. Newborn tenants default
+  search-only; llms.txt ships for open tenants, honestly labeled speculative.
 - **The loop closes only by opt-in.** The workforce package's `worker-controller` is the sole
   holder of container spawn-rights (docker.sock / a scoped ServiceAccount — deployed via
   `--profile workforce`, never by default): one dashboard click hires a RUNNING worker with the
