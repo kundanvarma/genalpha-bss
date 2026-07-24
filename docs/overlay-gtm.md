@@ -2,17 +2,26 @@
 
 *2026-07-24. Most operators run several BSS stacks already, and nobody
 rips one out: replacement cycles are 5–10 years and existentially risky.
-This document positions genalpha-bss as the **agentic layer on top** —
-sold to the digital budget in quarters, not to core IT in decades — with
-the architecture, the honest hard parts, and the migration path that
-makes itself.*
+This document describes the **overlay deployment mode** of a BSS that
+is complete in its own right — sold to the digital budget in quarters,
+not to core IT in decades — with the architecture, the honest hard
+parts, and the migration path that makes itself.*
+
+## The positioning, precisely
+
+genalpha-bss is NOT an overlay product. It is a **full-fledged,
+next-generation BSS** — catalog to cash, 33 components, 66 suites, 11
+CTKs at zero — sufficient to run as an operator's ONLY BSS, and doing so
+for every tenant in this repo. The overlay is a **deployment mode and a
+go-to-market wedge** for the same product, not its identity. Lead with
+the whole BSS; sell the entry point.
 
 ## The pitch, in one sentence
 
-> **Don't replace your BSS. Give it an agentic layer** — the channels,
-> the governed AI, the agents that buy from you and the workforce that
-> works for you — running on top of whatever you have, one seam per
-> legacy system, retiring nothing until you choose to.
+> **A complete next-generation BSS that can be your only one — or start
+> as the agentic layer on top of the ones you have**: channels, governed
+> AI, agents that buy from you and a workforce that works for you, one
+> seam per legacy system, retiring nothing until you choose to.
 
 ## Why the overlay sells where replacement doesn't
 
