@@ -252,7 +252,9 @@ public class TenantOnboardingService {
                         + ".localhost, console." + id + ".localhost, biz." + id + ".localhost]")
                 // a newborn operator is DARK to AI shopping agents until it
                 // opts in — being shopped by agents is a choice, not a default
-                .replaceAll("agent-commerce: .*", "agent-commerce: \"off\"");
+                .replaceAll("agent-commerce: .*", "agent-commerce: \"off\"")
+                // newborns are conservative to crawlers too
+                .replaceAll("ai-visibility: .*", "ai-visibility: \"search-only\"");
         Files.writeString(Path.of(tenantsFile), yml + block);
         log.info("tenant block '{}' appended to {}", id, tenantsFile);
     }

@@ -47,6 +47,9 @@ public class SecurityConfig {
                         // shopping agents read it anonymously; the gateway's
                         // per-tenant switch decides whether it answers at all.
                         .requestMatchers(HttpMethod.GET, "/acp/product_feed").permitAll()
+                        // GEO: the crawler-facing pages are as public as the
+                        // shop they mirror; robots.txt is the real gate
+                        .requestMatchers(HttpMethod.GET, "/seo/**").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

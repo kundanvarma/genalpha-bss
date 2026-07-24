@@ -7,6 +7,21 @@ spring:
         # Agentic commerce (ACP): the feed lives with the catalog, the
         # checkout-session lifecycle with the cart. AgentCommerceGateFilter
         # holds the per-tenant off|discovery|full switch in front of both.
+        # GEO dual-serve: crawlers (no-JS readers) get the bot-rendered
+        # page for the SAME shop URL; humans fall through to the SPA route.
+        - id: geo-bot-offering
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/shop/offering/**
+            - Header=User-Agent, .*(GPTBot|OAI-SearchBot|ClaudeBot|anthropic-ai|PerplexityBot|Google-Extended|Googlebot|bingbot|CCBot|Bytespider).*
+          filters:
+            - RewritePath=/shop/offering/(?<id>.*), /seo/offering/$\{id}
+        - id: geo-well-known
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/robots.txt,/sitemap.xml,/llms.txt
+          filters:
+            - RewritePath=/(?<f>.*), /seo/$\{f}
         - id: acp-product-feed
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
