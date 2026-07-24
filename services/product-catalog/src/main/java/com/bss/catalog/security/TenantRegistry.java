@@ -74,6 +74,14 @@ public class TenantRegistry {
         /** THE OVERLAY SEAM: this tenant's legacy BSS catalog — read-through
          * federation; empty means no legacy estate (native mode). */
         private String legacyCatalogBaseUrl;
+        /** GEO: crawler visibility — open | search-only | dark. */
+        private String aiVisibility = "search-only";
+        private String brandName;
+
+        public String getAiVisibility() { return aiVisibility; }
+        public void setAiVisibility(String v) { this.aiVisibility = v; }
+        public String getBrandName() { return brandName; }
+        public void setBrandName(String v) { this.brandName = v; }
 
         public String getLegacyCatalogBaseUrl() {
             return legacyCatalogBaseUrl;

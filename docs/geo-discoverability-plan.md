@@ -93,4 +93,22 @@ analytics as campaign lift. No new dashboard in v1; the events carry it.
 
 ## Shipped
 
-*(pending — this document is the plan; build begins on approval.)*
+**2026-07-24 — suite #68 green first run.** Landed: the crawler-facing
+render path on the catalog service (`/seo/offering/{id}`, sitemap.xml,
+robots.txt, llms.txt — all generated LIVE from TMF620, nothing authored,
+nothing synced) with the gateway DUAL-SERVING by User-Agent route
+predicate: the same `/shop/offering/{id}` URL gives GPTBot-class
+crawlers complete HTML with schema.org Product/Offer JSON-LD and gives
+humans the untouched SPA. The suite proves the two faces EQUAL (bot
+price == catalog price) rather than trusting them maintained. The
+`ai-visibility: open | search-only | dark` switch landed in the registry
+(genalpha open / nova search-only / fjord dark — all three proven by
+hostname), driving robots.txt — including the middle state operators
+will actually want: classic search yes, AI answer/training bots no.
+llms.txt ships for open tenants only, labeled speculative. Newborn
+tenants default search-only (appendTenantBlock forces it). DEFERRED,
+honestly: the insight ai-answer referrer tagging (leg 5) — it touches
+the beacon schema and gets its own slot; the knowledge-base FAQ pages as
+public help-center are the second follow-up. Legacy-federated offerings
+ride the bot pages automatically (the price fallback covers embedded
+refs). Regressions green: storefront, agentic_commerce #64.

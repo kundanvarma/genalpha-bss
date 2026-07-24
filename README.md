@@ -6,7 +6,7 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
-**Every feature is verified end-to-end in a real browser** — sixty-seven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — sixty-eight Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
