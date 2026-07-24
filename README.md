@@ -1,4 +1,4 @@
-# genalpha-bss — a composable, multi-tenant BSS on TM Forum ODA
+# genalpha-bss — a composable, multi-tenant, agentic BSS on TM Forum ODA
 
 A vendor-neutral telecom **Business Support System** built as **33 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **six channels** (five web, one mobile), behind one API
