@@ -112,10 +112,43 @@ the data passport (`GET /privacy/v1/export`, the caller's own token
 doing all the reading), erasure with the law's own exceptions (active
 contracts refuse 409; bookkeeping categories retained WITH their basis;
 profile anonymized in place; login scrubbed at the IdP; immutable
-audit rows), and retention as TickGuard-guarded clocks. PCI scope is
-verified-then-claimed (token vault, no PAN — SAQ-A-shaped, a QSA
-attests the rest). Lawful intercept is stated as a boundary: the BSS
-half (warrant-gated disclosure) is shaped, not built. Suite #58.
+audit rows), and retention as TickGuard-guarded clocks. Lawful
+intercept is stated as a boundary: the BSS half (warrant-gated
+disclosure) is shaped, not built. Suite #58.
+
+### PCI-DSS scope — PAN-free by construction
+
+An external PSP **reduces** PCI-DSS scope; it never removes the
+obligation — the deploying operator is the merchant and must attest
+every year regardless. What the architecture buys them is the lightest
+possible tier, and the claim has a receipt in the schema:
+
+- **No PAN, anywhere.** The `payment-method` vault stores
+  `brand`, `lastFour`, `expiry`, `pspToken` — there is no card-number
+  column in any migration, so full card data neither transits nor
+  rests on BSS servers, in logs, or in backups. The payment service
+  talks to the PSP by token (Stripe PaymentIntents-shaped adapter;
+  mock by default).
+- **SAQ tier by capture style.** PSP-hosted capture (redirect or
+  PSP-hosted fields) → **SAQ A**. Embedding the PSP's card elements in
+  our own storefront page → **SAQ A-EP** (our JavaScript can influence
+  the form, so the page is in scope). Nothing in this BSS requires the
+  SAQ D that storing or transmitting PAN would trigger.
+- **PCI DSS 4.0.1 note (current since 31 Mar 2025):** SAQ A merchants
+  no longer answer 6.4.3/11.6.1 line-items but MUST attest their
+  e-commerce site "is not susceptible to attacks from scripts" — in
+  practice, script inventory/integrity on the pages that lead to
+  payment (CSP headers, SRI, or a tamper-watch) is still the evidence
+  a QSA asks for. SAQ A-EP and SAQ D keep 6.4.3/11.6.1 in full.
+- **The MOTO trap, designed out.** The CSR console has NO card-entry
+  field, deliberately: an agent taking card numbers by phone drags the
+  whole call center into scope. If assisted payment is ever needed,
+  the pattern is pay-by-link (the PSP's secure page in the customer's
+  own hands), never read-your-card-to-the-agent.
+
+The honest claim mirrors the PQC one: not "PCI-certified" (that is
+per-deployment, per-merchant, attested by a QSA) but **"PAN-free by
+construction — SAQ A / A-EP scope, receipts in the repo."**
 
 ### Still open — the honest remainder
 | | |
