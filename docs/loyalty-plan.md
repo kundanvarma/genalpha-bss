@@ -164,5 +164,33 @@ rebuilt (host-built jars). Regressions green: storefront, ocs.
   context enrichment is the wired path; a run-billed tier discount
   lands next period. Regressions green: pricing, deals, storefront.
 
-*(Phase 3 — churn-offer campaign preset, TierChanged trigger picker,
-app parity — open.)*
+**Phase 3 — 2026-07-25, suite #69 at nine legs, all green. The arc is
+complete.**
+- **Retention wiring**: the martech ear now listens on `bss.loyalty.events`
+  (one topic added to the campaign consumer); `LoyaltyTierChangedEvent`
+  carries relatedParty like every business event, so the generic
+  extraction just worked. Suite leg 8 proves it live: a REAL tier flip
+  (thresholds raised, adjust recomputes) rode the outbox into a campaign
+  and landed a REAL TMF681 message in paula's inbox — the congratulations
+  journey is a NORMAL campaign, no new machinery.
+- **Console recipes**: the campaign form opens with retention plays that
+  PREFILL the form and stay fully editable — "Churn save: a loyalty offer
+  to at-risk customers" (ChurnRiskDetectedEvent; the message points at the
+  points balance that already exists, honestly — no double-earn mechanic
+  is promised) and "Loyalty: congratulate a tier change". Implemented as
+  a reusable `recipe` field kind (a select whose options fill sibling
+  controls); the trigger picker gained "Loyalty tier changed".
+- **App parity**: the mobile app's adaptive Home composed the same
+  My-points card (opt-in, balance + tier, redeem GB, redeem voucher) over
+  the same TMF658 API — no app-only path. Suite leg 9 signs paula into
+  the app and reads "…pts · gold" off her Home.
+- Build note: the mobile image build died on a full Colima disk — 2.8 GB
+  of Android APK outputs were riding into the build context; `android/`
+  joined .dockerignore and the build cache got pruned. (Kafka had ALSO
+  crash-looped on the same full disk — the outbox retried and nothing was
+  lost, which is what the outbox is for.)
+- Regressions green: martech, app.
+
+The capability-map row is fully ✅ #69; loyalty left the "bring from
+elsewhere" list in the map, the README and the manual. The story is
+memoir chapter 51 ("The currency of staying") and manual §20.

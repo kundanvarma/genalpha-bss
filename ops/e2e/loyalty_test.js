@@ -1,4 +1,4 @@
-/* Loyalty (TMF658, component #34) — reward & retain, phase 1. Suite #69.
+/* Loyalty (TMF658, component #34) — reward & retain, complete. Suite #69.
  *
  *  - the PROGRAM is data (staff sets earn rate + GB price; readable by all)
  *  - membership is OPT-IN: paula enrolls; a settled bill EARNS for her at
@@ -215,7 +215,62 @@ async function call(method, path, tok, body) {
     + ` 1-month clock (expired 0, liability steady at ${liabAfter}); the clock is program data,`
     + ' 0 = never. (Aged-points expiry math: earnedBeforeCutoff − spent, journaled.)');
 
+  /* ---------- 8. retention wiring: a tier change IS a campaign trigger ---------- */
+  // the martech ear now listens on bss.loyalty.events; a marketer wires the
+  // congratulations journey in the console (tier-congrats recipe) — here the
+  // same campaign is defined over the API and a REAL tier flip must land a
+  // REAL TMF681 message in paula's inbox
+  const camp = await call('POST', '/tmf-api/campaignManagement/v4/campaign', staff, {
+    name: `tier-congrats-${run}`,
+    triggerEventType: 'LoyaltyTierChangedEvent',
+    message: { subject: `Your loyalty moved you up ${run}`,
+      content: 'Tier benefits are live — member pricing applies automatically.' },
+  });
+  if (camp.status !== 201) fail(`tier campaign: ${camp.status} ${camp.text.slice(0, 150)}`);
+  // flip paula's tier: raise the bar sky-high, an adjust recomputes her down
+  await call('POST', `${L}/loyaltyProgram`, staff,
+    { silverThreshold: 100000000, goldThreshold: 200000000 });
+  const flip = await call('POST', `${L}/adjust`, staff,
+    { partyId: paulaId, points: 1, reason: 'suite-campaign-flip' });
+  if (flip.body.tier === 'gold') fail('raising the bar must drop the tier');
+  let congrats = null;
+  for (let i = 0; i < 24 && !congrats; i++) {
+    await sleep(2500);
+    const inbox = (await call('GET',
+      `/tmf-api/communicationManagement/v4/communicationMessage?relatedPartyId=${paulaId}&limit=50`,
+      staff)).body || [];
+    congrats = inbox.find((m) => (m.subject || '').includes(String(run)));
+  }
+  // restore: thresholds back, paula recomputes to gold, campaign paused
+  await call('POST', `${L}/loyaltyProgram`, staff, { silverThreshold: 100, goldThreshold: 300 });
+  await call('POST', `${L}/adjust`, staff,
+    { partyId: paulaId, points: 1, reason: 'suite-campaign-restore' });
+  await call('PATCH', `/tmf-api/campaignManagement/v4/campaign/${camp.body.id}`, staff,
+    { status: 'paused' });
+  if (!congrats) fail('the tier change never became a campaign message');
+  console.log('OK RETENTION WIRING: the tier flip rode the outbox into the martech ear and'
+    + ` became a real TMF681 message in paula's inbox ("${congrats.subject}") — the`
+    + ' congratulations journey is a NORMAL campaign, one console recipe, no new machinery.');
+
+  /* ---------- 9. app parity: the same card in the customer's pocket ---------- */
+  const { chromium } = require('playwright');
+  const browser = await chromium.launch();
+  const page = await (await browser.newContext()).newPage();
+  await page.goto(`${API}/app/`);
+  await page.locator('[data-testid="signin"]').click();
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.fill('input[name="username"]', 'paula@family.example');
+  await page.fill('input[name="password"]', 'paula');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.locator('[data-testid="app-loyalty-card"]').waitFor({ timeout: 30000 });
+  const pts = (await page.locator('[data-testid="app-loyalty-points"]').innerText()).trim();
+  if (!/\d+ pts/.test(pts)) fail(`app card shows no balance: "${pts}"`);
+  await browser.close();
+  console.log(`OK APP PARITY: paula signed into the app and the My-points card composed onto`
+    + ` her adaptive Home — "${pts.replace(/\s+/g, ' ')}" — same TMF658 API, same opt-in, no app-only path.`);
+
   console.log('\nALL LOYALTY CHECKS PASSED — the program is data, membership is a choice, the'
     + ' bill relationship earns, the meter proves the burn, and the liability has a number.'
-    + ' Reward & retain is complete: earn, burn to data, vouchers, tiers as policy, expiry with a clock.');
+    + ' Reward & retain is COMPLETE: earn, burn to data, vouchers, tiers as policy, expiry'
+    + ' with a clock, tier changes that campaign, and the card in the customer\'s pocket.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

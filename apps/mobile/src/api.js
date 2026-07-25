@@ -138,6 +138,17 @@ export const decideApproval = (orderId, approve) =>
   call(`/tmf-api/productOrderingManagement/v4/productOrder/${orderId}/approval`, {
     method: 'POST', body: JSON.stringify({ approve }) });
 
+// Loyalty (TMF658): opt-in membership, balance + tier, points spent as
+// data or a voucher — parity with the storefront's "My points" card.
+const LOYALTY = '/tmf-api/loyaltyManagement/v4';
+export const loyaltyProgram = () => soft(call(`${LOYALTY}/loyaltyProgram`), null);
+export const myLoyalty = () => soft(call(`${LOYALTY}/loyaltyProgramMember/me`), null);
+export const enrollLoyalty = () => call(`${LOYALTY}/loyaltyProgramMember`, { method: 'POST' });
+export const redeemLoyaltyData = (gb) => call(`${LOYALTY}/redeem`, {
+  method: 'POST', body: JSON.stringify({ type: 'data', gb }) });
+export const redeemLoyaltyVoucher = () => call(`${LOYALTY}/redeem`, {
+  method: 'POST', body: JSON.stringify({ type: 'voucher' }) });
+
 /** Gift remaining GB — to a family member by id or any number in reach. */
 export const giftData = (receiver, amount) =>
   call('/tmf-api/usageManagement/v4/gift', {

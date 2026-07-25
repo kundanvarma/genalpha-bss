@@ -48,6 +48,27 @@ const TRIGGER_EVENTS = [
   { value: 'ShoppingCartAbandonedEvent', label: 'Cart abandoned' },
   { value: 'AgreementCreateEvent', label: 'Agreement started' },
   { value: 'ChurnRiskDetectedEvent', label: 'Churn risk detected (AI scorer)' },
+  { value: 'LoyaltyTierChangedEvent', label: 'Loyalty tier changed' },
+];
+
+// Retention plays as one-click starting points: picking one prefills the
+// form below (trigger + message) — everything stays editable before Save.
+const CAMPAIGN_RECIPES = [
+  { value: 'churn-save', label: 'Churn save: a loyalty offer to at-risk customers', fill: {
+    name: 'Churn save — your points are waiting',
+    triggerEventType: 'ChurnRiskDetectedEvent',
+    messageSubject: 'A little thank-you from us',
+    messageContent: 'We appreciate having you with us. Your loyalty points are'
+      + ' waiting on your My page — redeem them for extra data this month or a'
+      + ' discount voucher on anything in the shop. (Tip: attach a promo code'
+      + ' above and {code} drops it into this message.)' } },
+  { value: 'tier-congrats', label: 'Loyalty: congratulate a tier change', fill: {
+    name: 'Tier congratulations',
+    triggerEventType: 'LoyaltyTierChangedEvent',
+    messageSubject: 'Your loyalty just moved you up',
+    messageContent: 'Congratulations — your tier has changed! Tier benefits are'
+      + ' applied automatically wherever you shop with us: member pricing shows'
+      + ' at checkout and on your bill, no code needed.' } },
 ];
 
 const RESOURCES = [
@@ -193,6 +214,8 @@ const RESOURCES = [
     noEdit: true,
     noDelete: true,
     fields: [
+      { name: 'recipe', label: 'Recipe (optional) — prefills a proven retention play; edit freely', kind: 'recipe',
+        options: CAMPAIGN_RECIPES },
       { name: 'name', label: 'Name', required: true },
       { name: 'triggerEventType', label: 'Trigger (event campaigns)', kind: 'select', options: TRIGGER_EVENTS },
       { name: 'segmentName', label: 'Segment (blast campaigns) — an Insight interest (e.g. Devices) or analytics audience', placeholder: 'leave blank for event campaigns' },
@@ -926,6 +949,28 @@ function selectControl(field) {
   return [select];
 }
 
+/** A select that PREFILLS sibling fields (option.fill) — never sent itself. */
+function recipeControl(field) {
+  const select = document.createElement('select');
+  select.name = field.name;
+  select.append(new Option('— from scratch —', ''));
+  for (const opt of field.options) {
+    select.append(new Option(opt.label, opt.value));
+  }
+  select.addEventListener('change', () => {
+    const opt = field.options.find((o) => o.value === select.value);
+    if (!opt?.fill) return;
+    for (const [name, value] of Object.entries(opt.fill)) {
+      controls[name]?.set({ [name]: value });
+    }
+  });
+  controls[field.name] = {
+    get: () => undefined, // a starting point, not a payload field
+    set: () => { select.value = ''; },
+  };
+  return [select];
+}
+
 function longTextControl(field) {
   const input = document.createElement('textarea');
   input.name = field.name;
@@ -1370,6 +1415,7 @@ function renderEditor() {
       f.kind === 'bundlecomposer' ? bundleComposerControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
       f.kind === 'select' ? selectControl(f) :
+      f.kind === 'recipe' ? recipeControl(f) :
       f.kind === 'longtext' ? longTextControl(f) :
       f.kind === 'codepick' ? codePickControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');

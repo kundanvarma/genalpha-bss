@@ -65,6 +65,7 @@ beside it.</p>
 17. <a href="#overlay">The wrapped legacy estate (overlay)</a><br>
 18. <a href="#geo">Generative discoverability (GEO)</a><br>
 19. <a href="#capmap">The capability map</a><br>
+20. <a href="#loyalty">Loyalty — reward &amp; retain</a><br>
 </p>
 </div>
 
@@ -563,11 +564,39 @@ implementation-free) mapped to tech capabilities (ODA functional blocks / TMF Op
 the component carrying each, across eTOM-style domains. Every ✅ cites its proof suite; every
 ◐ carries its caveat (mock-default PSP, OCS facade, NRDB shaped-not-connected); the ❌ column
 names what a deployment brings from elsewhere (production OCS, tax engine, ERP/GL, roaming
-settlement, fraud/RA, loyalty, FSM, real OSS) — each behind an existing seam or the overlay
+settlement, fraud/RA, FSM, real OSS) — each behind an existing seam or the overlay
 pattern (suite #67). The full map:
 <a href="../capability-map.md">docs/capability-map.md</a> · executive view (filterable,
 GENERATED from the md so the faces cannot drift):
 <a href="../capability-map.html">capability-map.html</a>.</p>
+
+<h2 id="loyalty">20 · Loyalty — reward &amp; retain — suite #69</h2>
+<p><b>The program is data; membership is a choice.</b> Component #34 (<code>loyalty</code>,
+TMF658, :8114) is a points LEDGER wired between engines that already exist. The program —
+earn rate, gigabyte price, voucher percent, tier thresholds, expiry clock (0&nbsp;=&nbsp;never)
+— is marketer-editable data (campaign:write). Customers OPT IN on the storefront My page or
+the app's My-points card; nobody is enrolled by default. Every point movement is an
+append-only journal row carrying its cause: <code>bill:&lt;id&gt;</code>,
+<code>redeem:…</code>, <code>expiry:&lt;date&gt;</code>, <code>adjust:&lt;reason&gt;</code>
+(goodwill credits REQUIRE a reason).</p>
+<p><b>Earn</b> — a settled bill earns at the program's rate, idempotent per bill (the journal's
+unique cause index), members only. <b>Burn</b> — three ways, each landing on an existing
+engine and verified there, never on loyalty's own word: points → gigabytes on THIS month's
+meter via the usage allowance-boost mechanic; points → a single-use discount voucher minted
+as a REAL TMF671 promotion (unique code, valid at the same <code>checkPromotion</code> door
+as any campaign code, second redemption 409s); tiers → PRICING, because
+<code>loyaltyTier</code> rides the billing pricing context and one console-authored rule
+("Loyalty tier benefit" preset) prices gold differently — the pricing engine needed zero new
+code. <b>Govern</b> — points are a liability: the TickGuard-guarded expiry sweep journals
+every expired point (FIFO arithmetic), and <code>GET …/liability</code> returns the
+outstanding-points number a finance team books.</p>
+<p><b>Retention wiring</b> — <code>LoyaltyTierChangedEvent</code> rides the outbox onto
+<code>bss.loyalty.events</code>, which the campaign engine hears like any business event: the
+console's campaign form now opens with RECIPES ("Churn save: a loyalty offer to at-risk
+customers" on the churn scorer's alert; "Loyalty: congratulate a tier change") that prefill
+trigger + message and stay fully editable. Suite #69 proves all nine legs end to end,
+including a real tier flip landing a real TMF681 message, and paula's points card composed
+onto her app Home.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · sixty-nine suites, eleven CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
