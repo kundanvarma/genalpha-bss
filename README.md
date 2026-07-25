@@ -137,9 +137,9 @@ admin mints a new operator from five console fields, every service live-refreshe
 registry with zero restarts, and `shop.<id>.localhost` wears the new brand the moment the
 gateway notices), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
-**Eleven official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
+**Twelve official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
 plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
-usage-consumption and TMF678 customer-bill. See the full, honest scorecard — including the two
+usage-consumption, TMF678 customer-bill and TMF683 party-interaction. See the full, honest scorecard — including the two
 intentional hardened gaps (payment, communication) — in
 [docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with [ops/ctk](ops/ctk/README.md).
 

@@ -241,7 +241,20 @@ public class PartyInteractionService {
         if (map.get("channel") instanceof String s) {
             map.put("channel", List.of(Map.of("name", s)));
         }
-        map.put("direction", entity.getDirection());
+        // TMF683 makes channel, direction and reason mandatory on EVERY
+        // interaction. House-written rows (touchpoint feed, older writers)
+        // predate that discipline — derive the trio from facts we do store,
+        // so the whole history is conformant, not just API-created rows.
+        if (map.get("channel") == null) {
+            map.put("channel", List.of(Map.of("name",
+                    entity.getSourceSystem() != null ? entity.getSourceSystem()
+                            : entity.getAgentId() != null ? "assisted" : "digital")));
+        }
+        if (map.get("reason") == null) {
+            map.put("reason", entity.getDescription() != null
+                    ? entity.getDescription() : "customer interaction");
+        }
+        map.put("direction", entity.getDirection() == null ? "inbound" : entity.getDirection());
         map.put("status", entity.getStatus());
         if (entity.getSourceSystem() != null) {
             map.put("sourceSystem", entity.getSourceSystem());

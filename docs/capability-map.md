@@ -47,7 +47,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Authenticate & authorize per tenant | TMF672 over any OIDC | `user-roles` | ✅ |
 | Honor privacy rights (consent, export, erasure) | privacy front door | party-account fan-out | ✅ #58 |
 | Resolve customer problems | TMF621 | `trouble-ticket` | ✅ |
-| Remember every customer interaction | TMF683 | `party-interaction` | ◐ CTK long tail open |
+| Remember every customer interaction | TMF683 | `party-interaction` | ✅ CTK zero (846/846) |
 | Notify & message customers | TMF681 + ESP seam | `communication` | ✅ (email/inbox; ◐ no SMS/push gateway — bring an SMSC/push provider) |
 | Help customers help themselves | TMF knowledge + pgvector | `knowledge` | ✅ |
 | Predict churn & recommend the next best offer | governed AI | `intelligence` | ✅ (rules + trained LR; ◐ GBM/QoE features future) |
@@ -107,7 +107,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 69 suites and 11 CTKs.
+multi-tenant operation — proven by 69 suites and 12 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec, wholesale/roaming

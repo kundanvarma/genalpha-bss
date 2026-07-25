@@ -20,12 +20,17 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **usage** | **TMF635** | **223/223, 0 failures** |
 | **usage (consumption)** | **TMF677** | **60/60, 0 failures** |
 | **billing** | **TMF678** | **19230/19230, 0 failures** |
+| **party-interaction** | **TMF683** | **846/846, 0 failures** |
 
 ## Measured, not yet zero
 
-| Component | CTK | Assertions | Why not zero |
-|---|---|---|---|
-| party-interaction | TMF683 | 624/786 | Improved 3× (relaxed create, rich fields round-trip). Long tail of nested-field/filter assertions remains. |
+None. The last amber row (party-interaction, long stuck at 624/786) went to
+zero when the real cause surfaced: the kit walks the FULL interaction list and
+asserts TMF683's mandatory `channel`/`direction`/`reason` on every row — and
+the rows our own channels write (CSR console, the omnichannel touchpoint feed)
+carried `description` but not the trio. The fix derives them for every row from
+facts the service already stores (source system, agent, description), so the
+whole history is conformant — not just kit-created records.
 
 ## Intentional gaps — hardened beyond the spec (by design)
 
