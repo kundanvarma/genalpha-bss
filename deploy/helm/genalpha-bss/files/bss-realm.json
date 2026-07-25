@@ -685,6 +685,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-revenue",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "revenue-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -1177,6 +1188,15 @@
       "realmRoles": [
         "promotion:write",
         "promotion:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-revenue",
+      "enabled": true,
+      "serviceAccountClientId": "bss-revenue",
+      "realmRoles": [
+        "billing:read",
+        "campaign:read"
       ]
     }
   ],

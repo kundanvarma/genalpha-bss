@@ -66,6 +66,7 @@ beside it.</p>
 18. <a href="#geo">Generative discoverability (GEO)</a><br>
 19. <a href="#capmap">The capability map</a><br>
 20. <a href="#loyalty">Loyalty — reward &amp; retain</a><br>
+21. <a href="#revenue">Revenue export — the subledger</a><br>
 </p>
 </div>
 
@@ -598,7 +599,29 @@ trigger + message and stay fully editable. Suite #69 proves all nine legs end to
 including a real tier flip landing a real TMF681 message, and paula's points card composed
 onto her app Home.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · sixty-nine suites, thirteen CTKs at zero
+<h2 id="revenue">21 · Revenue export — the subledger — suite #70</h2>
+<p><b>The BSS is the subledger; the ERP is the ledger.</b> Component #35
+(<code>revenue</code>, house API <code>/revenue/v1</code>, :8107 — no TM Forum Open API covers
+the GL, deliberately) turns billing and payment events into balanced double-entry journal
+postings: invoice issued → AR debit / revenue credits per rate line (discounts as
+contra-revenue); cash books ONCE, at payment capture, whichever door the money came through
+(card, CSR, bank giro via remittance); refunds book the reverse. Balance is a save-time
+INVARIANT and every posting is idempotent per source ref — at-least-once delivery can never
+double-book.</p>
+<p><b>The chart is data</b> — <code>GET/POST /revenue/v1/accountMapping</code>
+(billing:admin): finance's own codes and names per posting key; booked lines keep the
+snapshot they were born with, so a remap never rewrites history.
+<b>The export</b> — <code>GET /revenue/v1/journalExport?date=</code> (CSV, one row per line)
+is the file a period-close import ingests; <code>journalEntry</code> serves the same data as
+JSON; the console's read-only <b>Journal</b> tab shows entries with their lines.
+<b>The tie-out</b> — <code>GET /revenue/v1/reconciliation?date=</code>: per-account totals,
+billed vs cash, every entry balance-checked live, and the loyalty points liability as a
+labeled CONTROL number (no currency valuation is invented — pricing a point is P2 config).
+<code>POST /revenue/v1/backfill</code> onboards pre-arc bills idempotently. Rev-rec
+(ASC&nbsp;606/IFRS&nbsp;15) stays in the ERP's engine; this feed is its clean input. See
+<a href="../revenue-export-plan.md">docs/revenue-export-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · seventy suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

@@ -31,6 +31,7 @@ const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
+const REVENUE_BASE = '/revenue/v1';
 const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
@@ -144,6 +145,27 @@ const RESOURCES = [
         type: r.type,
         amount: `${Number(r.taxExcludedAmount?.value ?? 0).toFixed(2)} ${r.taxExcludedAmount?.unit || ''}`,
         for: r.forParty?.id ? r.forParty.id.slice(0, 8) + '…' : '—',
+      }));
+    },
+  },
+  {
+    path: 'journalEntry',
+    base: REVENUE_BASE,
+    title: 'Journal',
+    readOnly: true,
+    // the subledger: every billing/payment event as a BALANCED double-entry
+    // posting — what the ERP's general ledger ingests (docs/revenue-export-plan.md)
+    fields: [],
+    columns: ['entryDate', 'sourceType', 'description', 'currency'],
+    detail: async (item) => {
+      const res = await authFetch(`${REVENUE_BASE}/journalEntry/${item.id}`);
+      const entry = res.ok ? await res.json() : { lines: [] };
+      return (entry.lines || []).map((l) => ({
+        account: `${l.accountCode} ${l.accountName}`,
+        debit: Number(l.debit) ? Number(l.debit).toFixed(2) : '',
+        credit: Number(l.credit) ? Number(l.credit).toFixed(2) : '',
+        ref: l.ref,
+        line: l.description,
       }));
     },
   },
@@ -807,6 +829,7 @@ const TAB_ROLE = {
   productOfferingPrice: 'catalog:write',
   productStock: 'stock:read',
   customerBill: 'billing:admin',
+  journalEntry: 'billing:admin',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',

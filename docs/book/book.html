@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and sixty-nine end-to-end test suites that all pass
+    composable components, six customer surfaces, and seventy end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -2870,6 +2870,53 @@
     <p class="pull edge">Sixty-nine suites. The map's reddest row went green the only way
     this book allows — earn proven on the bill, burn proven at the meter, and the debt to
     the customer carried as a number finance can read.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Fifty-Two</div>
+    <h3>The honest subledger</h3>
+    <div class="epi">"dosent bss need to send GL info to ERP and other system?"
+    <span class="who">— the operator, asking the finance question</span></div>
+
+    <p class="drop">Two questions arrived together, and they were both really about scope. Does
+    the BSS owe the general ledger a feed? Do we need PCI-DSS if the payment gateway is
+    external? The second had the shorter answer: an external PSP reduces scope, never removes
+    the obligation — and this schema earns the lightest tier honestly, because the vault holds
+    brand, last four, expiry, token, and there is no card-number column anywhere for an auditor
+    to find. The claim writes itself the way the PQC one did: not certified — that is the
+    merchant's yearly ritual — but PAN-free by construction, receipts in the repo.</p>
+
+    <p>The first question deserved research before code, and the research came back with a
+    settled industry shape: the billing system is the SUBLEDGER; the ERP's ledger receives
+    summarized daily journal batches against control accounts; the mapping from business events
+    to debits and credits is data, not code. Which is this house's whole doctrine wearing a
+    green eyeshade. So component thirty-five became the subledger: a double-entry journal where
+    BALANCE IS A SAVE-TIME INVARIANT — an unbalanced entry refuses to exist, rather than
+    surfacing in a report three weeks later — and a chart of accounts that finance renames at
+    will, because every booked line SNAPSHOTS the code and name it was born with. Remapping
+    changes the future; history is not editable. An accountant would call that obvious. Most
+    software does not.</p>
+
+    <p>The recon earned its keep twice. It caught that a matched bank payment fires TWO events
+    — the remittance and the recorded payment — so cash books once, at capture, whichever door
+    the money came through. And the build's best failure was an invisible privilege: the admin
+    API hands every new service account the realm's default roles, which include CUSTOMER — so
+    billing politely confined the machine to "its own" bills and 404'd everyone else's. A
+    machine identity holds exactly the roles it needs, and nothing it merely inherits.</p>
+
+    <p>The suite ties the knot the way finance would: paula's fifty-euro bill becomes one
+    balanced entry whose AR debit equals the bill to the cent; replaying it creates nothing;
+    a refund books the reverse of its cash; and the reconciliation carries the loyalty points
+    liability as a labeled control number that must MATCH the loyalty component's own — two
+    systems agreeing about a debt neither is allowed to value in currency, because a point has
+    no exchange rate until the program prices one. The ledger stays in the ERP, where it
+    belongs. What leaves here is the feed it always needed.</p>
+
+    <p class="pull edge">Seventy suites. The map's oldest red row now reads the only way a
+    finance system should: we are not your ledger — we are the subledger your ledger can
+    finally trust.</p>
   </section>
 
   <hr class="soft">

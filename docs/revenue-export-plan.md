@@ -161,4 +161,27 @@ Account mapping editor lands in P2.
 
 ## Shipped
 
-*(Nothing yet — plan committed first, the house way.)*
+**Phase 1 — 2026-07-25, suite #70 green (eight legs).** Component #35
+`revenue` (port 8107, `/revenue/v1`) is live: the journal with balance
+as a save-time invariant, the seeded editable chart, both event
+builders, backfill, CSV export, and the reconciliation tie-out — plus a
+read-only console Journal tab (billing:admin). Proven live: paula's
+50 EUR bill became ONE balanced entry whose AR debit equals the bill to
+the cent and whose revenue/contra lines mirror the rate lines; a second
+backfill created NOTHING; a captured payment booked cash exactly once
+and its refund booked the reverse; the reconciliation tied billed and
+cash totals and carried the loyalty points liability (1442 pts) as a
+control number that MATCHES the loyalty component's own; finance
+renamed an account and booked history kept its snapshot; nova saw
+nothing. Regressions green: storefront, console.
+
+Build notes (the instructive failures): the `revenue` DATABASE must be
+created live on an existing postgres volume (init-databases.sql only
+runs on first init). Keycloak imports realms with IGNORE_EXISTING — a
+NEW machine client in the realm FILE does not reach a LIVE keycloak;
+create it via the admin API too (file + live, like role grants). And
+the admin API auto-grants `default-roles-<realm>` to new service
+accounts, WHICH INCLUDES `customer` — billing's PartyScope then
+politely confined the machine to "its own" bills and 404'd everyone
+else's. A machine identity holds exactly the roles it needs: strip the
+default composite.

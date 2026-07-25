@@ -404,6 +404,44 @@ services:
       kafka:
         condition: service_started
 
+  revenue:
+    build: ./services/revenue
+    container_name: bss-revenue
+    restart: unless-stopped
+    environment:
+      OIDC_CLIENT_ID: bss-revenue
+      OIDC_CLIENT_SECRET: revenue-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      BILLING_BASE_URL: http://billing:8080
+      LOYALTY_BASE_URL: http://loyalty:8080
+      # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      DB_URL: jdbc:postgresql://postgres:5432/revenue
+      # Runtime role is RLS-restricted; Flyway migrates as the owner.
+      DB_USERNAME: revenue_app
+      DB_PASSWORD: revenue_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
+      JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8107:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   promotion:
     build: ./services/promotion
     container_name: bss-promotion
@@ -1444,6 +1482,7 @@ services:
       WORKER_CONTROLLER_URL: http://worker-controller:8080
       LEGACY_URL: http://mock-legacy:8080
       LOYALTY_URL: http://loyalty:8080
+      REVENUE_URL: http://revenue:8080
       BILLING_URL: http://billing:8080
       QUALIFICATION_URL: http://qualification:8080
       APPOINTMENT_URL: http://appointment:8080

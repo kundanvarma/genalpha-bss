@@ -65,7 +65,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Collect overdue debt (in-house) | billing clocks | `billing` | ✅ (❌ external collections-agency handoff) |
 | Charge in real time (prepay balance) | TMF654 facade + OCS seam | `usage` + mock-ocs | ◐ the TMF654 API face is CTK-certified (282/282); REAL online charging (Gy/Ro, 5G CHF) still needs a production OCS behind the seam |
 | Calculate jurisdictional taxes | — | — | ❌ prices are tax-inclusive by convention; jurisdictional tax (VAT/US telecom tax) needs Vertex/Avalara-class |
-| Account revenue (GL, rev-rec ASC 606) | — | — | ❌ export to ERP |
+| Account revenue (GL, rev-rec ASC 606) | subledger journal export (house `/revenue/v1`) | `revenue` (#35) | ✅ #70 the FEED (balanced double-entry journal from billing/payment events, CoA mapping as data, CSV export, cent-exact reconciliation tie-out); ❌ the LEDGER itself + the rev-rec engine stay in the ERP — by design |
 | Settle wholesale / interconnect / roaming | — | — | ❌ carrier-grade settlement is its own product |
 | Assure revenue & fight fraud | — | — | ❌ (the audit trails feed one nicely) |
 
@@ -107,10 +107,10 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 69 suites and 13 CTKs.
+multi-tenant operation — proven by 70 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
-charging, a taxation engine, ERP/GL and rev-rec, wholesale/roaming
+charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming
 settlement, fraud/revenue assurance, full field-service
 management, SMS/push gateways, real OSS inventory + mediation, and the
 enterprise estate (HR, procurement, BI warehouse). Every one of these

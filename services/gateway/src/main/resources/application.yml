@@ -134,6 +134,11 @@ spring:
           uri: ${INTELLIGENCE_URL:http://localhost:8109}
           predicates:
             - Path=/ai/**
+        - id: revenue
+          # the subledger's export face — finance-grade, staff-only
+          uri: ${REVENUE_URL:http://localhost:8107}
+          predicates:
+            - Path=/revenue/**
         - id: product-advisor
           # findings with receipts; adopt births a draft
           uri: ${INTELLIGENCE_URL:http://localhost:8109}
