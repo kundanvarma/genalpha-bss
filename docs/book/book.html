@@ -2960,6 +2960,51 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Fifty-Four</div>
+    <h3>Closing the books</h3>
+    <div class="epi">"go ahead with revenue phase 2 … go ahead with credit note P2 … go ahead
+    with revenue P3" <span class="who">— the operator, finishing what the map started</span></div>
+
+    <p class="drop">The finance movement finished the way it began: every new power arrived as
+    DATA on a posting key, never as code. A VAT percent on the tax key split every posting
+    into net revenue and a tax-payable credit — with the tax computed as gross minus the sum
+    of the nets, so rounding CANNOT unbalance an entry; the arithmetic forbids it. A
+    per-point value on the liability key turned the loyalty control number into a real daily
+    accrual that books only the delta against the loyalty component's live figure — and
+    unpriced points stay a control number, because the machine does not invent valuations.
+    And the period close made the export FINAL: a posting aimed into a closed period refuses
+    with a 409, reopening is an explicit act, and finality — an accountant will tell you —
+    is the entire point of closing.</p>
+
+    <p>The credit note grew into its legal clothes. The kreditnota now renders as UBL
+    CreditNote-2 — type code 381, the EHF and Peppol BIS shape — carrying the one element
+    the law is really about, a BillingReference naming the invoice it reverses, and it ships
+    on the SAME distribution ledger as the bills, same relay, same retries. Credits learned
+    to name their target: a note can reverse one rate line specifically, the negative line
+    carries that line's own name, and a line cannot be over-credited. The dispute worklist
+    landed in the back-office console rather than the CSR console the plan first named —
+    a deviation recorded, not hidden — because that is where the deciding privilege actually
+    lives. Agents open disputes; admins decide money.</p>
+
+    <p>Then revenue's last phase drew the cleanest line in the whole movement. The rev-rec
+    export hands the ERP one row per active commitment — who, what, from when, for how many
+    months, how far along — and REFUSES to restate prices, because the journal already says
+    what was billed and this file says what was promised; allocating one across the other is
+    the rev-rec engine's job, and pretending otherwise would make the BSS a second source of
+    accounting truth. And the deferred-revenue checkbox got the best answer of all: an
+    analysis instead of an entry. A top-up's gigabytes land on the current month's meter the
+    moment the order completes — the obligation is satisfied inside the period, so there is
+    nothing to defer, so nothing was booked, and the plan says exactly why. The machine's
+    proudest posting is the one it declined to make.</p>
+
+    <p class="pull edge">Seventy-one suites, thirteen kits at zero. The books close the way
+    books should: balanced by invariant, final by decision, and empty of every number nobody
+    could defend.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>
