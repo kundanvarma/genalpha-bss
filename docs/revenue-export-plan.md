@@ -205,9 +205,29 @@ nothing. Regressions green: storefront, console.
   keys, codes, names and config values.
 - Regressions green: console.
 
-P3 / next (open): formal CREDIT NOTE document in billing (+ storefront/
-CSR faces) feeding a `creditNote` posting here; TMF651 rev-rec inputs;
-deferred revenue for prepaid top-ups.
+**P3 — SHIPPED 2026-07-25, suite #70 at fourteen legs, all green.**
+(Credit notes shipped as their own arc — docs/credit-note-plan.md,
+suite #71 — feeding the `creditNote` postings here.)
+- **Rev-rec inputs**: `GET /revenue/v1/revrecInput` (and format=csv) —
+  one row per ACTIVE TMF651 commitment: contract, party, offering,
+  start/end, commitmentMonths, monthsElapsed/Remaining (elapsed plus
+  remaining = months, asserted). The DESIGN DECISION stated out loud:
+  the journal export already says what was BILLED; this export says
+  what was PROMISED; SSP allocation and the ASC 606 / IFRS 15 engine
+  are deliberately the ERP's job — the BSS does not restate prices.
+  Machine identity gained agreement:read (file + live, default-roles
+  stripped — the P1 lesson applied).
+- **Deferred revenue for top-ups — analyzed, NOT booked, on purpose**:
+  in this BSS a top-up's gigabytes land on the CURRENT month's meter at
+  order completion — the performance obligation is satisfied within the
+  billing period, so there is no material contract liability to defer.
+  The genuinely deferred items are loyalty points (already carried as a
+  liability with the P2 accrual) and any real prepay balance in the
+  OCS — the charging master's number, external by design; an aggregate
+  prepay-liability control joins the reconciliation when a production
+  OCS behind the seam exposes one. Booking a made-up deferral to tick
+  a checkbox is exactly the kind of entry this component exists to
+  refuse.
 
 Build notes (the instructive failures): the `revenue` DATABASE must be
 created live on an existing postgres volume (init-databases.sql only
