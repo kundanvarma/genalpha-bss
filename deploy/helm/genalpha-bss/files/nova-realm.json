@@ -674,6 +674,17 @@
       "attributes": {
         "standard.token.exchange.enabled": "true"
       }
+    },
+    {
+      "clientId": "bss-loyalty",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "loyalty-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -1137,6 +1148,15 @@
       "serviceAccountClientId": "bss-communication",
       "realmRoles": [
         "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-loyalty",
+      "enabled": true,
+      "serviceAccountClientId": "bss-loyalty",
+      "realmRoles": [
+        "promotion:write",
+        "promotion:read"
       ]
     }
   ],

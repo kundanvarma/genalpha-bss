@@ -48,6 +48,8 @@ springdoc:
 bss:
   events:
     topic: bss.loyalty.events
+  downstream:
+    promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

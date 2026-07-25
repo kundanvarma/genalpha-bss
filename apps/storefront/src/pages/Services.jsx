@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -398,6 +398,14 @@ export default function Services() {
                     setLoyaltyMsg(t('Redeemed! The GB lands on this month\u2019s meter.'));
                   } catch (e) { setLoyaltyMsg(String(e.message || e)); }
                 }}>{t('Redeem 1 GB')} ({loyaltyProg.pointsPerGb} {t('points')})</button>
+              <button data-testid="loyalty-voucher" disabled={loyalty.balance < (loyaltyProg.pointsPerVoucher || 200)}
+                onClick={async () => {
+                  try {
+                    const r = await redeemLoyaltyVoucher();
+                    setLoyalty(r);
+                    setLoyaltyMsg(`${t('Voucher')}: ${r.redeemed.voucherCode} (−${r.redeemed.percent}%)`);
+                  } catch (e) { setLoyaltyMsg(String(e.message || e)); }
+                }}>{t('Redeem voucher')} ({loyaltyProg.pointsPerVoucher || 200} {t('points')})</button>
               {loyaltyMsg && <span data-testid="loyalty-msg" style={{ color: 'var(--dim, #666)' }}>{loyaltyMsg}</span>}
             </div>
           ) : (

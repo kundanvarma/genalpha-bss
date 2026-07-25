@@ -57,11 +57,34 @@ public class LoyaltyController {
 
     @PostMapping("/redeem")
     public Map<String, Object> redeem(@RequestBody Map<String, Object> body) {
-        if (!"data".equals(body.get("type"))) {
-            throw new com.bss.loyalty.exception.BadRequestException(
-                    "phase 1 redeems data only: {type:\"data\", gb:N}");
+        String type = String.valueOf(body.get("type"));
+        if ("data".equals(type)) {
+            return service.redeemData(Integer.parseInt(String.valueOf(body.getOrDefault("gb", "1"))));
         }
-        return service.redeemData(Integer.parseInt(String.valueOf(body.getOrDefault("gb", "1"))));
+        if ("voucher".equals(type)) {
+            return service.redeemVoucher();
+        }
+        throw new com.bss.loyalty.exception.BadRequestException(
+                "redeem types: {type:\"data\", gb:N} or {type:\"voucher\"}");
+    }
+
+    /** Machine/staff read — billing enriches the pricing context with this. */
+    @GetMapping("/tier")
+    public Map<String, Object> tier(
+            @org.springframework.web.bind.annotation.RequestParam("partyId") String partyId) {
+        return service.tierOf(partyId);
+    }
+
+    /** Operator goodwill / service-recovery credit — cause required. */
+    @PostMapping("/adjust")
+    public Map<String, Object> adjust(@RequestBody Map<String, Object> body) {
+        return service.adjust(body);
+    }
+
+    /** On-demand expiry sweep — demos and suites don't wait for the clock. */
+    @PostMapping("/expirySweep")
+    public Map<String, Object> expirySweep() {
+        return service.expirySweep();
     }
 
     @GetMapping("/liability")

@@ -126,6 +126,27 @@ public class RestDownstreamClients {
         };
     }
 
+    /** The member's loyalty tier — a pricing-context enrichment. Fail-open:
+     * no loyalty component (or no member) simply means no tier benefits. */
+    @Bean
+    @SuppressWarnings("unchecked")
+    java.util.function.Function<String, String> loyaltyTierClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.loyalty-base-url:http://localhost:8114}") String loyaltyUrl) {
+        RestClient rest = client(builder, tokenInterceptor, loyaltyUrl);
+        return partyId -> {
+            try {
+                Map<String, Object> res = rest.get()
+                        .uri("/tmf-api/loyaltyManagement/v4/tier?partyId=" + partyId)
+                        .retrieve().body(Map.class);
+                String tier = res == null ? null : String.valueOf(res.get("tier"));
+                return tier == null || "none".equals(tier) || "null".equals(tier) ? null : tier;
+            } catch (RestClientException e) {
+                return null;
+            }
+        };
+    }
+
     @Bean
     @SuppressWarnings("unchecked")
     DownstreamClients.PricingClient pricingClient(RestClient.Builder builder,

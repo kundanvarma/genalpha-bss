@@ -557,7 +557,8 @@ const RESOURCES = [
         { value: 'price-verified', label: 'Price: discount / surcharge for verified customers' },
         { value: 'price-when-item', label: 'Price: discount / surcharge when the cart has an item' },
         { value: 'price-always', label: 'Price: discount / surcharge for everyone' },
-        { value: 'price-company', label: 'Price: negotiated deal for one company (B2B)' },
+        { value: 'price-loyalty-tier', label: 'Loyalty tier benefit (e.g. gold pays less)' },
+  { value: 'price-company', label: 'Price: negotiated deal for one company (B2B)' },
         { value: 'price-characteristic', label: 'Price: campaign on a configured choice (e.g. a colour)' },
         { value: 'price-volume', label: 'Price: volume deal — any company with enough people (B2B)' },
         { value: 'price-advanced', label: 'Price: advanced — raw JSON-logic condition' },
@@ -640,7 +641,10 @@ const RESOURCES = [
             `${(body.characteristicName || 'color').trim()}:${(body.characteristicValue || '').trim()}`,
             { var: 'characteristicValues' }] });
           break;
-        case 'price-company':
+        case 'price-loyalty-tier':
+      condition = { '==': [{ var: 'loyaltyTier' }, body.loyaltyTier || 'gold'] };
+      break;
+    case 'price-company':
           // organizationId only exists in the context when the payer IS a
           // company, so this can never touch a consumer.
           condition = JSON.stringify({ '==': [{ var: 'organizationId' }, idOf(body.organization)] });

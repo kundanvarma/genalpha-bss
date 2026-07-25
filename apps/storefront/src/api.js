@@ -461,6 +461,12 @@ export async function loyaltyProgram() {
   if (res.status === 404) return null;
   return json(res);
 }
+export async function redeemLoyaltyVoucher() {
+  return json(await authFetch(`${LOYALTY}/redeem`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'voucher' }),
+  }));
+}
 export async function redeemLoyaltyData(gb) {
   return json(await authFetch(`${LOYALTY}/redeem`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

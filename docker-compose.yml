@@ -372,6 +372,11 @@ services:
     container_name: bss-loyalty
     restart: unless-stopped
     environment:
+      OIDC_CLIENT_ID: bss-loyalty
+      OIDC_CLIENT_SECRET: loyalty-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      PROMOTION_BASE_URL: http://promotion:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/loyalty
@@ -1081,6 +1086,7 @@ services:
     container_name: bss-billing
     restart: unless-stopped
     environment:
+      BSS_DOWNSTREAM_LOYALTY_BASE_URL: http://loyalty:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-billing

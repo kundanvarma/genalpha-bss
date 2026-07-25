@@ -26,6 +26,21 @@ public class LoyaltyProgram {
     @Column(name = "points_per_gb", nullable = false)
     private int pointsPerGb = 100;
 
+    @Column(name = "expiry_months", nullable = false)
+    private int expiryMonths;
+
+    @Column(name = "voucher_percent", nullable = false)
+    private int voucherPercent = 10;
+
+    @Column(name = "points_per_voucher", nullable = false)
+    private int pointsPerVoucher = 200;
+
+    @Column(name = "silver_threshold", nullable = false)
+    private long silverThreshold = 500;
+
+    @Column(name = "gold_threshold", nullable = false)
+    private long goldThreshold = 2000;
+
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
@@ -37,6 +52,16 @@ public class LoyaltyProgram {
     public void setEarnPointsPerCurrency(BigDecimal v) { this.earnPointsPerCurrency = v; }
     public int getPointsPerGb() { return pointsPerGb; }
     public void setPointsPerGb(int v) { this.pointsPerGb = v; }
+    public int getExpiryMonths() { return expiryMonths; }
+    public void setExpiryMonths(int v) { this.expiryMonths = v; }
+    public int getVoucherPercent() { return voucherPercent; }
+    public void setVoucherPercent(int v) { this.voucherPercent = v; }
+    public int getPointsPerVoucher() { return pointsPerVoucher; }
+    public void setPointsPerVoucher(int v) { this.pointsPerVoucher = v; }
+    public long getSilverThreshold() { return silverThreshold; }
+    public void setSilverThreshold(long v) { this.silverThreshold = v; }
+    public long getGoldThreshold() { return goldThreshold; }
+    public void setGoldThreshold(long v) { this.goldThreshold = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
 }

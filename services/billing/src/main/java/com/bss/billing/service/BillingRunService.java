@@ -47,6 +47,7 @@ public class BillingRunService {
     private final DownstreamClients.UsageClient usage;
     private final DownstreamClients.PromotionClient promotions;
     private final DownstreamClients.PricingClient pricing;
+    private final java.util.function.Function<String, String> loyaltyTierClient;
     private final DownstreamClients.OrgClient orgs;
     private final BillDistributionService distribution;
     private final DomainEventPublisher events;
@@ -66,10 +67,12 @@ public class BillingRunService {
             BillDistributionService distribution,
             BillingRunRecordRepository runs,
             com.bss.billing.tick.TickGuard tickGuard,
+            java.util.function.Function<String, String> loyaltyTierClient,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.billing.run-account-delay-ms:0}") long accountDelayMs) {
         this.bills = bills;
+        this.loyaltyTierClient = loyaltyTierClient;
         this.rates = rates;
         this.inventory = inventory;
         this.catalog = catalog;
@@ -555,6 +558,13 @@ public class BillingRunService {
                     pricingContext.put("organizationId", owner.getKey());
                 }
                 pricingContext.put("memberCount", membersOf.get(owner.getKey()).size());
+                // loyalty tier benefits are pricing rules — the tier rides
+                // the same context organizationId does (fail-open: no
+                // loyalty component means no tier, never a failed run)
+                String loyaltyTier = loyaltyTierClient.apply(owner.getKey());
+                if (loyaltyTier != null) {
+                    pricingContext.put("loyaltyTier", loyaltyTier);
+                }
                 List<Map<String, Object>> priceAdjustments = pricing.adjustments(pricingContext);
                 for (Map<String, Object> adjustment : priceAdjustments == null ? List.<Map<String, Object>>of() : priceAdjustments) {
                     BigDecimal amount = new BigDecimal(String.valueOf(adjustment.getOrDefault("amount", "0")));

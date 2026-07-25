@@ -18,6 +18,8 @@ const NO = {
   'Earn points on every bill; redeem them as data.': 'Tjen poeng på hver regning; løs inn som data.',
   'points': 'poeng',
   'Redeem 1 GB': 'Løs inn 1 GB',
+  'Redeem voucher': 'Løs inn rabattkode',
+  'Voucher': 'Rabattkode',
   'Redeemed! The GB lands on this month\u2019s meter.': 'Innløst! GB legges på denne månedens måler.',
   // nav + identity
   'Offers': 'Tilbud',

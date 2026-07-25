@@ -132,5 +132,37 @@ Data interfaces don't scan (split top-level); the outbox DDL must match
 the shared entity exactly; gateway route edits need the gateway JAR
 rebuilt (host-built jars). Regressions green: storefront, ocs.
 
-*(Phases 2–3 — vouchers, tiers + policy benefits, expiry, churn wiring,
-app parity — next.)*
+**Phase 2 — 2026-07-25, suite #69 extended to seven legs, all green.**
+- **Vouchers**: points mint a REAL TMF671 promotion under loyalty's OWN
+  machine identity (new `bss-loyalty` client, `promotion:write` — the
+  fallback identity honestly lacked it) — unique code per redemption
+  (LOYAL-XXXXXXXX, program-set percent, 90-day window), valid at the
+  same `checkPromotion` door WELCOME10 uses; single-use = unique code +
+  the promotion component's once-per-customer redemption (a second
+  redemption 409s, proven). Mint-before-debit: a failed mint burns no
+  points. Storefront card gained "Redeem voucher".
+- **Tiers as policy**: tier computed from the rolling-365-day earn vs
+  program thresholds, recomputed on every earn/adjust;
+  `LoyaltyTierChangedEvent` on the outbox. `loyaltyTier` joined the
+  BILLING pricing context (fail-open machine read of the new
+  `GET /tier?partyId=`) exactly as `organizationId` did — and the policy
+  engine needed ZERO changes: one console-authorable rule priced gold
+  −10% and left bronze alone. Guests can't fish tiers: `loyaltyTier`
+  added to the indicative-path identity strip. Console gained the
+  `price-loyalty-tier` preset.
+- **Expiry**: TickGuard-guarded sweep (tick_lock V3) + on-demand
+  `POST /expirySweep`; FIFO by arithmetic (earnedBeforeCutoff − spent,
+  capped at balance), journaled per member; `expiryMonths` is program
+  data, 0 = never. Proven honest: young points survived a 1-month clock.
+- **Adjust**: operator goodwill/service-recovery credits
+  (`POST /adjust`, campaign:write, reason REQUIRED — goodwill has a
+  cause too); doubles as tier-recompute trigger.
+- Build notes: machine calls need `OIDC_TOKEN_URI` backchannel env (the
+  agreement template never had machine calls); policy rule `condition`
+  is a JSON STRING; adjustment lines carry `label`/`ruleName`.
+- On-demand bills don't reprice (recon finding) — the billing-run
+  context enrichment is the wired path; a run-billed tier discount
+  lands next period. Regressions green: pricing, deals, storefront.
+
+*(Phase 3 — churn-offer campaign preset, TierChanged trigger picker,
+app parity — open.)*

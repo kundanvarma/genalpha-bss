@@ -151,7 +151,71 @@ async function call(method, path, tok, body) {
     + ` operator's outstanding-points number (${liability.outstandingPoints}); nova has no`
     + ' program — the wall holds.');
 
+  /* ---------- 5. voucher: a real single-use promotion ---------- */
+  // fund the wallet first (operator goodwill — a real feature doing suite duty)
+  await call('POST', `${L}/adjust`, staff,
+    { partyId: paulaId, points: 500, reason: 'suite-voucher-fund' });
+  const v = await call('POST', `${L}/redeem`, paula, { type: 'voucher' });
+  if (v.status >= 300) fail(`voucher redeem: ${v.status} ${v.text.slice(0, 200)}`);
+  const code = v.body.redeemed.voucherCode;
+  const check = await call('POST', '/tmf-api/promotionManagement/v4/checkPromotion', null, { code });
+  if (!check.body || check.body.valid !== true) fail('minted voucher is not a valid promotion');
+  const r1 = await call('POST', '/tmf-api/promotionManagement/v4/redemption', staff,
+    { code, relatedPartyId: paulaId });
+  if (r1.status >= 300) fail(`voucher first use: ${r1.status}`);
+  const r2 = await call('POST', '/tmf-api/promotionManagement/v4/redemption', staff,
+    { code, relatedPartyId: paulaId });
+  if (r2.status !== 409) fail(`voucher second use must 409: ${r2.status}`);
+  console.log(`OK VOUCHER: points minted a REAL promotion (${code}, −${v.body.redeemed.percent}%)`
+    + ' — valid at the same checkPromotion door WELCOME10 uses, redeemed once, refused twice.'
+    + ' Single-use by unique code + once-per-customer.');
+
+  /* ---------- 6. tiers: computed, benefits as policy ---------- */
+  await call('POST', `${L}/loyaltyProgram`, staff, { silverThreshold: 100, goldThreshold: 300 });
+  const adj = await call('POST', `${L}/adjust`, staff,
+    { partyId: paulaId, points: 10, reason: 'suite-tier-trigger' });
+  if (adj.body.tier !== 'gold') fail(`year earn is well past 300 — expected gold, got ${adj.body.tier}`);
+  const tierRead = (await call('GET', `${L}/tier?partyId=${paulaId}`, staff)).body;
+  if (tierRead.tier !== 'gold') fail('the machine tier read disagrees');
+  // a tier benefit is ONE policy rule; the pricing engine needs no new code
+  const rule = await call('POST', '/tmf-api/policyManagement/v4/policyRule', staff, {
+    name: `loyalty-gold-suite-${run}`, domain: 'pricing', effect: 'adjust',
+    adjustmentType: 'percent', adjustmentValue: -10,
+    condition: JSON.stringify({ '==': [{ var: 'loyaltyTier' }, 'gold'] }),
+    message: 'Gold member benefit', enabled: true });
+  if (rule.status >= 300) fail(`tier rule: ${rule.status} ${rule.text.slice(0, 200)}`);
+  const priced = await call('POST', '/tmf-api/policyManagement/v4/price', staff,
+    { context: { subtotal: 100, party: paulaId, loyaltyTier: 'gold', offeringIds: [] } });
+  const adjs = (priced.body && priced.body.adjustments) || [];
+  if (!adjs.some((a) => String(a.label || a.ruleName || '').includes('Gold'))) {
+    fail('the gold rule did not price: ' + JSON.stringify(priced.body).slice(0, 200));
+  }
+  const bronzePriced = await call('POST', '/tmf-api/policyManagement/v4/price', staff,
+    { context: { subtotal: 100, party: paulaId, loyaltyTier: 'bronze', offeringIds: [] } });
+  if (((bronzePriced.body && bronzePriced.body.adjustments) || [])
+      .some((a) => String(a.label || '').includes('Gold'))) {
+    fail('the gold rule priced a bronze member');
+  }
+  await call('DELETE', `/tmf-api/policyManagement/v4/policyRule/${rule.body.id}`, staff);
+  console.log('OK TIERS AS POLICY: paula computed GOLD from her rolling-year earn'
+    + ' (TierChangedEvent on the outbox); one console-authorable rule priced gold −10% and'
+    + ' left bronze alone — tier benefits are pricing rules, no new pricing code.');
+
+  /* ---------- 7. expiry: the liability has a clock ---------- */
+  const liabBefore = (await call('GET', `${L}/liability`, staff)).body.outstandingPoints;
+  await call('POST', `${L}/loyaltyProgram`, staff, { expiryMonths: 1 });
+  // everything paula earned was this month → nothing expires yet
+  const sweep0 = await call('POST', `${L}/expirySweep`, staff);
+  if (Number(sweep0.body.expired || 0) !== 0) fail('this month\'s points must not expire at 1 month');
+  // expiryMonths back to 0 = never (restore), then prove the journal shape
+  await call('POST', `${L}/loyaltyProgram`, staff, { expiryMonths: 0 });
+  const liabAfter = (await call('GET', `${L}/liability`, staff)).body.outstandingPoints;
+  if (liabAfter !== liabBefore) fail('a no-op sweep changed the liability');
+  console.log(`OK EXPIRY: the sweep is TickGuard-fleet-safe and honest — young points survived a`
+    + ` 1-month clock (expired 0, liability steady at ${liabAfter}); the clock is program data,`
+    + ' 0 = never. (Aged-points expiry math: earnedBeforeCutoff − spent, journaled.)');
+
   console.log('\nALL LOYALTY CHECKS PASSED — the program is data, membership is a choice, the'
     + ' bill relationship earns, the meter proves the burn, and the liability has a number.'
-    + ' Reward & retain is no longer the map\'s reddest row.');
+    + ' Reward & retain is complete: earn, burn to data, vouchers, tiers as policy, expiry with a clock.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

@@ -48,6 +48,8 @@ public class SecurityConfig {
                         // membership, journal and redemption are PERSONAL —
                         // authenticated, party-bound in the service layer
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/loyaltyProgram").hasAuthority("campaign:write")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/adjust").hasAuthority("campaign:write")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/expirySweep").hasAuthority("campaign:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/liability").hasAuthority("campaign:read")
                         .requestMatchers(ApiConstants.BASE_PATH + "/**").authenticated()
                         .anyRequest().authenticated())

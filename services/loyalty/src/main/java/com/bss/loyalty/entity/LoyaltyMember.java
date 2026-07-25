@@ -26,6 +26,9 @@ public class LoyaltyMember {
     @Column(nullable = false)
     private long balance;
 
+    @Column(nullable = false)
+    private String tier = "bronze";
+
     @Column(name = "enrolled_at")
     private OffsetDateTime enrolledAt;
 
@@ -38,6 +41,8 @@ public class LoyaltyMember {
     public void setTenantId(String v) { this.tenantId = v; }
     public long getBalance() { return balance; }
     public void setBalance(long v) { this.balance = v; }
+    public String getTier() { return tier; }
+    public void setTier(String v) { this.tier = v; }
     public OffsetDateTime getEnrolledAt() { return enrolledAt; }
     public void setEnrolledAt(OffsetDateTime v) { this.enrolledAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
