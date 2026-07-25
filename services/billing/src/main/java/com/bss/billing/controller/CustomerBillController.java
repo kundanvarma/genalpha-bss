@@ -37,6 +37,7 @@ public class CustomerBillController {
     private final FieldSelector fieldSelector;
     private final com.bss.billing.service.DunningService dunningService;
     private final com.bss.billing.service.DisputeService disputeService;
+    private final com.bss.billing.service.CreditNoteService creditNoteService;
     private final com.bss.billing.service.BillFormatProfileService formatProfileService;
     private final com.bss.billing.service.BillDistributionService distributionService;
     private final com.bss.billing.service.RemittanceService remittanceService;
@@ -46,6 +47,7 @@ public class CustomerBillController {
     public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
             com.bss.billing.service.DunningService dunningService,
             com.bss.billing.service.DisputeService disputeService,
+            com.bss.billing.service.CreditNoteService creditNoteService,
             com.bss.billing.service.BillFormatProfileService formatProfileService,
             com.bss.billing.service.BillDistributionService distributionService,
             com.bss.billing.service.RemittanceService remittanceService,
@@ -55,6 +57,7 @@ public class CustomerBillController {
         this.fieldSelector = fieldSelector;
         this.dunningService = dunningService;
         this.disputeService = disputeService;
+        this.creditNoteService = creditNoteService;
         this.formatProfileService = formatProfileService;
         this.distributionService = distributionService;
         this.remittanceService = remittanceService;
@@ -151,6 +154,33 @@ public class CustomerBillController {
     @PostMapping("/customerBill/{id}/resend")
     public ResponseEntity<Map<String, Object>> resend(@PathVariable("id") String id) {
         return ResponseEntity.accepted().body(documentService.resend(id));
+    }
+
+    /** The reversing DOCUMENT: numbered, gapless, reason required.
+     * Unpaid bill: the due comes down. Settled: the PSP pays it back. */
+    @PostMapping("/customerBill/{id}/creditNote")
+    public ResponseEntity<Map<String, Object>> issueCreditNote(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(creditNoteService.issue(id, dto));
+    }
+
+    @GetMapping("/creditNote")
+    public ResponseEntity<List<Map<String, Object>>> creditNotes(
+            @RequestParam(name = "billId", required = false) String billId) {
+        return ResponseEntity.ok(creditNoteService.list(billId));
+    }
+
+    @GetMapping("/creditNote/{id}")
+    public ResponseEntity<Map<String, Object>> creditNote(@PathVariable("id") String id) {
+        return ResponseEntity.ok(creditNoteService.byId(id));
+    }
+
+    @GetMapping(value = "/creditNote/{id}/document.pdf", produces = "application/pdf")
+    public ResponseEntity<byte[]> creditNotePdf(@PathVariable("id") String id) {
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "inline; filename=\"" + id + ".pdf\"")
+                .body(creditNoteService.pdfOf(id));
     }
 
     /** "This charge is wrong": open a dispute (customer or agent). */

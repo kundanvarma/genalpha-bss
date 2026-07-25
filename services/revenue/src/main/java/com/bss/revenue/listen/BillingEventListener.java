@@ -48,14 +48,13 @@ public class BillingEventListener {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     revenue.postBill(String.valueOf(bill.get("id")), bill);
                 }
-            } else if ("DisputeResolvedEvent".equals(eventType)) {
-                Map<String, Object> dispute = resource(envelope, "dispute");
-                // credited SETTLED bills refund through the PSP — the refund
-                // event books that path; here only unpaid-bill credits book
-                if ("credited".equals(dispute.get("status")) && dispute.get("id") != null
-                        && !"settled".equals(dispute.get("billState"))) {
+            } else if ("CreditNoteIssuedEvent".equals(eventType)) {
+                Map<String, Object> creditNote = resource(envelope, "creditNote");
+                // REFUNDED notes moved money via the PSP — the refund event
+                // books that; only REDUCED notes book contra-revenue here
+                if ("reduced".equals(creditNote.get("settlement")) && creditNote.get("id") != null) {
                     try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                        revenue.postDisputeCredit(String.valueOf(dispute.get("id")), dispute);
+                        revenue.postCreditNote(String.valueOf(creditNote.get("id")), creditNote);
                     }
                 }
             }

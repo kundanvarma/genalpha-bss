@@ -6,7 +6,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   portingOrdersOf, recommendationsOf, redemptionsOf,
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
-  disputeBill, transferService, findCustomerByEmail, diagnoseService,
+  disputeBill, issueCreditNote, transferService, findCustomerByEmail, diagnoseService,
   openBillPdf, resendBill, setBillDeliveryFor } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
@@ -475,6 +475,24 @@ export default function Customer360() {
                         });
                       })}>
                     Email bill
+                  </button>
+                  <button className="ghost" data-testid="csr-issue-credit-note"
+                      title="Issue a numbered credit note — reduces an unpaid bill or refunds a settled one (billing:admin)"
+                      onClick={() => {
+                        const amount = window.prompt('Credit amount (blank = the full remaining amount):');
+                        if (amount === null) return;
+                        const reason = window.prompt('Reason (required — the credit note carries it):');
+                        if (!reason) return;
+                        act(async () => {
+                          const cn = await issueCreditNote(b.id, amount ? Number(amount) : null, reason);
+                          await logInteraction({
+                            description: `Credit note ${cn.creditNoteNo} issued on ${b.billNo}: ${cn.amount.value} ${cn.amount.unit} — ${reason}`,
+                            channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                            relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                          });
+                        });
+                      }}>
+                    Credit note
                   </button>
                   {(!b.dispute || b.dispute.status !== 'open') && (
                     <button className="ghost" data-testid="csr-dispute-bill"

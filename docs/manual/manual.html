@@ -67,6 +67,7 @@ beside it.</p>
 19. <a href="#capmap">The capability map</a><br>
 20. <a href="#loyalty">Loyalty — reward &amp; retain</a><br>
 21. <a href="#revenue">Revenue export — the subledger</a><br>
+22. <a href="#creditnote">Credit notes</a><br>
 </p>
 </div>
 
@@ -627,7 +628,22 @@ dispute credits on unpaid bills book contra-revenue automatically;
 (ASC&nbsp;606/IFRS&nbsp;15) stays in the ERP's engine; this feed is its clean input. See
 <a href="../revenue-export-plan.md">docs/revenue-export-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · seventy suites, thirteen CTKs at zero
+<h2 id="creditnote">22 · Credit notes — suite #71</h2>
+<p><b>The wrong invoice is never edited</b> — a numbered credit note reverses it.
+<code>POST /customerBill/{id}/creditNote {amount?, reason}</code> (billing:admin — agents open
+disputes, admins decide money; the 403 wall is suite-proven): mints <code>CN-NNNNNN</code> from
+billing's gapless per-tenant <code>document_sequence</code> (row-locked — the bookkeeping rules
+demand an unbroken series), references the original bill number, and REQUIRES a reason. Unpaid
+bill → the due comes down (a negative <code>creditNote</code> line says why; zero settles).
+Settled bill → the money moves BACK through the PSP (settlement <code>refunded</code>,
+refundRef kept). Dispute resolutions with outcome=credit now mint their own credit note
+(disputeId carried). Customers read their own notes (<code>GET /creditNote</code>, PDF at
+<code>/creditNote/{id}/document.pdf</code>) — the storefront shows a kreditnota chip per bill;
+the CSR 360 has the issue button. The revenue subledger books REDUCED notes as contra-revenue
+under the document's number and books nothing extra for REFUNDED ones (the refund event owns
+that). P2 open: EHF/Peppol BIS CreditNote via the distribution seam; per-line credits.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-one suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

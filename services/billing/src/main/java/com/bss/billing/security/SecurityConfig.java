@@ -49,6 +49,7 @@ public class SecurityConfig {
                         // the distribution partner's callback — same per-tenant secret we send with
                         .requestMatchers(HttpMethod.POST, "/distribution/v1/response").permitAll()
                         // deciding a dispute is BACK-OFFICE: a customer opens one, never closes one
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/customerBill/*/creditNote").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/dispute/**").hasAuthority("billing:admin")
                         // format profiles shape every outgoing e-invoice — tenant admin only
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")

@@ -192,11 +192,22 @@ const balanced = (entry) => {
   if (!taxEntry || !balanced(taxEntry)) fail('kai bill entry missing/unbalanced');
   const vatLine = taxEntry.lines.find((l) => l.accountCode === '2700');
   if (!vatLine || cents(vatLine.credit) <= 0) fail('no VAT credit line on a taxed bill');
-  const gross = cents(kaiBill.amountDue.value);
+  // the entry booked the bill GROSS at issue time; credit notes issued since
+  // (suite #71) follow the bill down — so booked AR minus this bill's
+  // credit-note postings must equal the LIVE due, to the cent
   const arLine = taxEntry.lines.find((l) => l.accountName.match(/receivable/i));
-  if (cents(arLine.debit) !== gross) fail('AR must stay GROSS under tax-inclusive pricing');
-  console.log(`OK TAX SPLIT: 25% VAT configured as DATA — AR stays gross`
-    + ` (${kaiBill.amountDue.value}), revenue books net, VAT payable carries`
+  // count credit-note postings AND legacy pre-refactor dispute postings —
+  // the journal is append-only, history keeps its original source type
+  const credited = jTax.filter((e) => (e.sourceType === 'creditNote' || e.sourceType === 'dispute')
+      && (String(e.description).includes(kaiBill.billNo)
+          || e.lines.some((l) => l.ref === kaiBill.id)))
+    .reduce((sum, e) => sum + e.lines.reduce((t, l) =>
+      t + (l.accountName.match(/receivable/i) ? cents(l.credit) : 0), 0), 0);
+  if (cents(arLine.debit) - credited !== cents(kaiBill.amountDue.value)) {
+    fail(`booked AR (${arLine.debit}) minus credit notes (${credited / 100}) must equal the live due (${kaiBill.amountDue.value})`);
+  }
+  console.log(`OK TAX SPLIT: 25% VAT configured as DATA — AR booked gross and reconciles`
+    + ` through credit notes to the live due (${kaiBill.amountDue.value}), revenue books net, VAT payable carries`
     + ` ${vatLine.credit}; gross-minus-nets arithmetic means rounding can never unbalance.`);
 
   /* ---------- 10. a dispute credit books contra-revenue ---------- */
@@ -206,19 +217,23 @@ const balanced = (entry) => {
   const resolve = await call('POST', `${BILLS}/dispute/${disputed.body.id}/resolve`, staff,
     { outcome: 'credit', amount: 0.5, note: 'suite goodwill' });
   if (resolve.status >= 300) fail(`dispute resolve: ${resolve.status} ${resolve.text.slice(0, 200)}`);
+  // the dispute credit is now DOCUMENT-BACKED: find its credit note, then its posting
+  const cns = (await call('GET', `${BILLS}/creditNote?billId=${kaiBill.id}`, staff)).body || [];
+  const disputeCn = cns.find((c) => c.disputeId === disputed.body.id);
+  if (!disputeCn) fail('dispute credit minted no credit note');
   let dEntry = null;
   for (let i = 0; i < 20 && !dEntry; i++) {
     await sleep(2500);
     const j = (await call('GET', `${R}/journalEntry`, staff)).body || [];
-    dEntry = j.find((e) => e.sourceRef === `dispute:${disputed.body.id}`);
+    dEntry = j.find((e) => e.sourceRef === `creditNote:${disputeCn.id}`);
   }
-  if (!dEntry || !balanced(dEntry)) fail('dispute credit never became a balanced posting');
-  if (!dEntry.lines.some((l) => cents(l.debit) === 50 && l.accountCode === '4092')) {
-    fail('no 0.50 contra-revenue debit for the dispute');
+  if (!dEntry || !balanced(dEntry)) fail('credit note never became a balanced posting');
+  if (!dEntry.lines.some((l) => cents(l.debit) === 50 && l.accountCode === '4093')) {
+    fail('no 0.50 contra-revenue debit under the credit-note account');
   }
-  console.log('OK DISPUTE CREDIT: an unpaid bill credited AFTER journaling books'
-    + ' contra-revenue against AR — the subledger follows the bill down, no silent drift.'
-    + ' (Settled-bill credits refund via the PSP and book on the refund event.)');
+  console.log('OK DISPUTE CREDIT: the dispute now mints a NUMBERED credit note'
+    + ` (${disputeCn.creditNoteNo}) and the subledger books it under the document's own`
+    + ' number — contra-revenue against AR, no silent drift.');
 
   /* ---------- 11. loyalty points priced into currency — only when finance says so ---------- */
   await call('POST', `${R}/accountMapping`, staff, { key: 'loyalty:liability',

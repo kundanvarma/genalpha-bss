@@ -51,6 +51,8 @@ public class RevenueService {
         DEFAULT_CHART.put("rate:priceAdjustment", new String[] {"4091", "Pricing adjustments"});
         DEFAULT_CHART.put("rate:disputeCredit", new String[] {"4092", "Dispute credits (contra-revenue)"});
         DEFAULT_CHART.put("dispute", new String[] {"4092", "Dispute credits (contra-revenue)"});
+        DEFAULT_CHART.put("rate:creditNote", new String[] {"4093", "Credit notes (contra-revenue)"});
+        DEFAULT_CHART.put("creditNote", new String[] {"4093", "Credit notes (contra-revenue)"});
         DEFAULT_CHART.put("refund", new String[] {"4095", "Refunds (contra-revenue)"});
         // config_value on 'tax' = VAT percent (prices are tax-INCLUSIVE; 0/absent = no split)
         DEFAULT_CHART.put("tax", new String[] {"2700", "VAT payable"});
@@ -188,27 +190,30 @@ public class RevenueService {
                 "note", posted ? "journal entry created" : "already journaled — nothing to do");
     }
 
-    /** An UNPAID bill credited after journaling: contra-revenue against AR.
-     * (A credited SETTLED bill refunds through the PSP — the refund event
-     * books that path; booking here too would double-count.) */
+    /** A credit note on an UNPAID bill: contra-revenue against AR, under
+     * the document's own number. (A REFUNDED credit note moved money via
+     * the PSP — the refund event books that path; one path, never two.) */
     @Transactional
-    public boolean postDisputeCredit(String disputeId, Map<String, Object> dispute) {
+    public boolean postCreditNote(String creditNoteId, Map<String, Object> creditNote) {
         String tenant = tenantScope.currentTenantId();
-        String sourceRef = "dispute:" + disputeId;
+        String sourceRef = "creditNote:" + creditNoteId;
         if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
-        BigDecimal amount = money(dispute.get("creditAmount"));
+        BigDecimal amount = money(creditNote.get("amount") instanceof Map<?, ?> a
+                ? castMap(a).get("value") : null);
         if (amount.signum() <= 0) {
             return false;
         }
-        String billId = String.valueOf(dispute.getOrDefault("billId", ""));
+        String no = String.valueOf(creditNote.getOrDefault("creditNoteNo", creditNoteId));
+        String billNo = String.valueOf(creditNote.getOrDefault("billNo", ""));
         List<JournalLine> posting = List.of(
-                line("dispute", amount, null, billId,
-                        "Dispute credit — " + dispute.getOrDefault("reason", disputeId)),
-                line("ar", null, amount, billId, "Bill reduced by dispute credit"));
-        saveBalanced(tenant, sourceRef, "dispute", "Dispute credited — " + disputeId,
-                "EUR", partyOf(dispute), posting);
+                line("creditNote", amount, null, no,
+                        no + " — " + creditNote.getOrDefault("reason", "credit")),
+                line("ar", null, amount, no, "Credits invoice " + billNo));
+        saveBalanced(tenant, sourceRef, "creditNote", "Credit note " + no + " (credits " + billNo + ")",
+                String.valueOf(castMap(creditNote.get("amount")).getOrDefault("unit", "EUR")),
+                partyOf(creditNote), posting);
         return true;
     }
 

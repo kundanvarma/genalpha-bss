@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { billRates, createPayment, disputeBill, myBills, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
+import { t } from '../i18n.js';
+import { billRates, createPayment, disputeBill, myBills, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
+  const [creditNotes, setCreditNotes] = useState([]);
   const [rates, setRates] = useState({});     // bill id -> line items
   const [paying, setPaying] = useState(null); // bill id with the card form open
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
@@ -10,7 +12,10 @@ export default function Bills() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  const load = () => myBills().then(setBills).catch((e) => setError(e.message));
+  const load = () => {
+    myBills().then(setBills).catch((e) => setError(e.message));
+    myCreditNotes().then(setCreditNotes).catch(() => {});
+  };
   useEffect(() => { load(); }, []);
   // Hooks must run unconditionally, BEFORE the early returns below.
   useEffect(() => {
@@ -161,6 +166,20 @@ export default function Bills() {
                     dispute {bill.dispute.status}
                   </span>
                 )}
+                {creditNotes.filter((cn) => cn.billId === bill.id).map((cn) => (
+                  <a key={cn.id} className="state settled" data-testid="credit-note-chip"
+                     title={cn.reason} style={{ textDecoration: 'none', cursor: 'pointer' }}
+                     onClick={(e) => {
+                       e.preventDefault();
+                       import('../auth.js').then(async ({ authFetch }) => {
+                         const res = await authFetch(`/tmf-api/customerBillManagement/v4/creditNote/${cn.id}/document.pdf`);
+                         if (!res.ok) { setError('PDF: HTTP ' + res.status); return; }
+                         window.open(URL.createObjectURL(await res.blob()), '_blank');
+                       });
+                     }}>
+                    {t('credit note')} {cn.creditNoteNo} · −{Number(cn.amount.value).toFixed(2)} {cn.amount.unit}
+                  </a>
+                ))}
                 {(!bill.dispute || bill.dispute.status !== 'open') && (
                   <button className="ghost" data-testid="dispute-bill"
                     onClick={async () => {

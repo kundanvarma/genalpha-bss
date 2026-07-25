@@ -122,4 +122,25 @@ flow now); suite #70 leg 10 re-targets accordingly.
 
 ## Shipped
 
-*(Nothing yet — plan committed first, the house way.)*
+**P1 — 2026-07-25, suite #71 green (eight legs).** The document exists:
+`CN-000001` and `CN-000002` minted CONSECUTIVELY on camera (the gapless
+series is billing's first sequential counter — `document_sequence`,
+row-locked), each referencing its invoice number, reason required (400
+without). Unpaid bills came down and settled at zero; a settled bill
+refunded 1.00 back through the PSP (refundedAmount rose on the settling
+payment); the dispute resolve now mints its own numbered paper; kai
+read his own note and its PDF on the storefront (chip + kreditnota
+nb-NO); the subledger booked the REDUCED note under the document's
+number and refused to double-book the REFUNDED one; and the walls held
+— over-credit 400, agent-without-billing:admin 403, nova nothing.
+
+Regressions green: revenue #70 (leg 10 retargeted to the credit-note
+posting; the tax-split tie-out STRENGTHENED — booked AR minus the
+bill's credit-note postings must equal the live due, with legacy
+pre-refactor dispute postings counted, because the journal is
+append-only and history keeps its source type), refunds (a
+pre-existing CALENDAR FLAKE surfaced and fixed: the suite hardcoded a
+3.50 credit against a month-end prorated bill of 3.39 — now adaptive),
+storefront, csr. Build note: injecting JSX next to a conditionally
+rendered sibling needs the conditional's braces re-balanced — vite
+said so immediately.

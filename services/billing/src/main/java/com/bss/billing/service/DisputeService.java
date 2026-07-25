@@ -48,9 +48,13 @@ public class DisputeService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper =
             new com.fasterxml.jackson.databind.ObjectMapper();
 
+    private final CreditNoteService creditNoteService;
+
     public DisputeService(BillDisputeRepository disputes, CustomerBillRepository bills,
             AppliedBillingRateRepository rates, DownstreamClients.PaymentClient payments,
-            DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope) {
+            DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
+            CreditNoteService creditNoteService) {
+        this.creditNoteService = creditNoteService;
         this.disputes = disputes;
         this.bills = bills;
         this.rates = rates;
@@ -117,31 +121,13 @@ public class DisputeService {
                 throw new BadRequestException("credit must be 0 < amount <= the bill's "
                         + bill.getAmountDueValue());
             }
-            if (CustomerBill.SETTLED.equals(bill.getState())) {
-                // money already moved — it moves BACK, through the PSP
-                String paymentId = settlingPaymentOf(bill);
-                if (paymentId == null) {
-                    throw new ConflictException("settled bill has no payment reference to refund");
-                }
-                payments.refund(paymentId, amount,
-                        "dispute credit on " + bill.getBillNo());
-            } else {
-                // unpaid: a negative line that says why, and a smaller due
-                AppliedBillingRate credit = new AppliedBillingRate();
-                credit.setId(UUID.randomUUID().toString());
-                credit.setTenantId(tenant);
-                credit.setName("Dispute credit — " + (note != null ? note : dispute.getReason()));
-                credit.setRateType("disputeCredit");
-                credit.setAmountValue(amount.negate());
-                credit.setAmountUnit(bill.getAmountDueUnit());
-                credit.setBillId(bill.getId());
-                credit.setOwnerPartyId(bill.getOwnerPartyId());
-                credit.setRateDate(OffsetDateTime.now());
-                rates.save(credit);
-                bill.setAmountDueValue(bill.getAmountDueValue().subtract(amount));
-                bill.setLastUpdate(OffsetDateTime.now());
-                bills.save(bill);
-            }
+            // every dispute credit is DOCUMENT-BACKED: the credit note owns
+            // both mechanics (reduced due on unpaid, PSP refund on settled),
+            // the gapless number, and the CreditNoteIssuedEvent
+            creditNoteService.issue(bill.getId(), Map.of(
+                    "amount", amount,
+                    "reason", "Dispute credit — " + (note != null ? note : dispute.getReason())),
+                    dispute.getId());
             dispute.setStatus(BillDispute.CREDITED);
             dispute.setCreditAmount(amount);
         } else {

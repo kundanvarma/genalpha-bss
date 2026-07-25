@@ -517,6 +517,13 @@ export async function decideApproval(orderId, approve) {
 
 const BILLING = '/tmf-api/customerBillManagement/v4';
 
+/** Credit notes: the numbered documents that reversed (part of) a bill. */
+export async function myCreditNotes() {
+  const res = await authFetch(`${BILLING}/creditNote`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function myBills() {
   return json(await authFetch(`${BILLING}/customerBill?limit=100`));
 }

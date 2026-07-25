@@ -326,6 +326,20 @@ export async function findCustomerByEmail(q) {
 }
 
 /** "This charge is wrong": open a dispute for the caller. */
+/** The reversing document — staff-only (billing:admin); reason REQUIRED. */
+export async function issueCreditNote(billId, amount, reason) {
+  return json(await authFetch(`${BILLING}/customerBill/${billId}/creditNote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...(amount ? { amount } : {}), reason }),
+  }));
+}
+
+export async function creditNotesOf(billId) {
+  const res = await authFetch(`${BILLING}/creditNote?billId=${billId}`);
+  return res.ok ? res.json() : [];
+}
+
 export async function disputeBill(billId, reason) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/dispute`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

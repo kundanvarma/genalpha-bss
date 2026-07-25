@@ -79,7 +79,8 @@ async function token(ctx, user, pass) {
   }
   if (!acked) fail('the customer never got the dispute acknowledgement');
 
-  const creditAmount = 3.5;
+  // month-end prorated bills can be tiny — credit what the bill can carry
+  const creditAmount = Math.min(3.5, Number(a1.bill.amountDue.value));
   const resolved = await (await ctx.post(`${BILLS}/dispute/${opened.id}/resolve`,
     { headers: H(staff), data: { outcome: 'credit', amount: creditAmount,
       note: 'roaming rate misapplied' } })).json();

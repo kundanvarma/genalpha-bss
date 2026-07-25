@@ -187,6 +187,7 @@ const RESOURCES = [
         { value: 'rate:discount', label: 'Discounts (contra)' },
         { value: 'rate:priceAdjustment', label: 'Pricing adjustments' },
         { value: 'rate:disputeCredit', label: 'Dispute credits (billed lines)' },
+        { value: 'creditNote', label: 'Credit notes (contra-revenue)' },
         { value: 'dispute', label: 'Dispute credits (post-journal)' },
         { value: 'refund', label: 'Refunds (contra)' },
         { value: 'tax', label: 'VAT payable — configValue = percent' },

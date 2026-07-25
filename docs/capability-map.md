@@ -59,7 +59,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Business capability | TMF tech capability | Component | Status |
 |---|---|---|---|
 | Rate usage | TMF635/677 (+CTKs) | `usage` | ✅ |
-| Bill customers (runs, invoices, e-invoice formats) | TMF678 (+CTK) | `billing` (crash-resumable) | ✅ #57 |
+| Bill customers (runs, invoices, e-invoice formats, credit notes) | TMF678 (+CTK) | `billing` (crash-resumable) | ✅ #57, #71 (numbered GAPLESS credit notes: unpaid bills reduce, settled refund via PSP, disputes mint their own paper) |
 | Deliver bills & apply incoming payments | distribution seam | `billing` | ✅ |
 | Collect & safeguard payments | TMF676/670 | `payment` + `payment-method` | ✅ (◐ PSP: mock default, Stripe adapter shaped — certify per deployment) |
 | Collect overdue debt (in-house) | billing clocks | `billing` | ✅ (❌ external collections-agency handoff) |
@@ -107,7 +107,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 70 suites and 13 CTKs.
+multi-tenant operation — proven by 71 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming
