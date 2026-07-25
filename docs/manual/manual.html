@@ -617,7 +617,13 @@ JSON; the console's read-only <b>Journal</b> tab shows entries with their lines.
 <b>The tie-out</b> — <code>GET /revenue/v1/reconciliation?date=</code>: per-account totals,
 billed vs cash, every entry balance-checked live, and the loyalty points liability as a
 labeled CONTROL number (no currency valuation is invented — pricing a point is P2 config).
-<code>POST /revenue/v1/backfill</code> onboards pre-arc bills idempotently. Rev-rec
+<code>POST /revenue/v1/backfill</code> onboards pre-arc bills idempotently. P2 dials, all data:
+a VAT percent on the <code>tax</code> key splits postings into net revenue + tax payable
+(gross-minus-nets — rounding can never unbalance); a per-point value on
+<code>loyalty:liability</code> turns the points control number into a daily booked accrual;
+<code>POST /periodClose</code> makes the export FINAL (postings into a closed period 409);
+dispute credits on unpaid bills book contra-revenue automatically;
+<code>?format=sap|netsuite</code> emits ERP-shaped layouts. Rev-rec
 (ASC&nbsp;606/IFRS&nbsp;15) stays in the ERP's engine; this feed is its clean input. See
 <a href="../revenue-export-plan.md">docs/revenue-export-plan.md</a>.</p>
 

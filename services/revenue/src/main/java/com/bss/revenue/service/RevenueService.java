@@ -4,6 +4,7 @@ import com.bss.revenue.client.BillingClient;
 import com.bss.revenue.entity.AccountMapping;
 import com.bss.revenue.entity.JournalEntry;
 import com.bss.revenue.entity.JournalLine;
+import com.bss.revenue.entity.PeriodClose;
 import com.bss.revenue.exception.BadRequestException;
 import com.bss.revenue.exception.NotFoundException;
 import com.bss.revenue.repository.AccountMappingRepository;
@@ -40,28 +41,40 @@ public class RevenueService {
     private static final Logger log = LoggerFactory.getLogger(RevenueService.class);
 
     /** The editable default chart — finance renames, history keeps snapshots. */
-    private static final Map<String, String[]> DEFAULT_CHART = Map.of(
-            "ar", new String[] {"1200", "Accounts receivable"},
-            "cash", new String[] {"1000", "Cash / PSP clearing"},
-            "rate:recurringCharge", new String[] {"4000", "Service revenue"},
-            "rate:usageCharge", new String[] {"4010", "Usage revenue"},
-            "rate:discount", new String[] {"4090", "Discounts (contra-revenue)"},
-            "rate:priceAdjustment", new String[] {"4091", "Pricing adjustments"},
-            "refund", new String[] {"4095", "Refunds (contra-revenue)"});
+    private static final Map<String, String[]> DEFAULT_CHART = new LinkedHashMap<>();
+    static {
+        DEFAULT_CHART.put("ar", new String[] {"1200", "Accounts receivable"});
+        DEFAULT_CHART.put("cash", new String[] {"1000", "Cash / PSP clearing"});
+        DEFAULT_CHART.put("rate:recurringCharge", new String[] {"4000", "Service revenue"});
+        DEFAULT_CHART.put("rate:usageCharge", new String[] {"4010", "Usage revenue"});
+        DEFAULT_CHART.put("rate:discount", new String[] {"4090", "Discounts (contra-revenue)"});
+        DEFAULT_CHART.put("rate:priceAdjustment", new String[] {"4091", "Pricing adjustments"});
+        DEFAULT_CHART.put("rate:disputeCredit", new String[] {"4092", "Dispute credits (contra-revenue)"});
+        DEFAULT_CHART.put("dispute", new String[] {"4092", "Dispute credits (contra-revenue)"});
+        DEFAULT_CHART.put("refund", new String[] {"4095", "Refunds (contra-revenue)"});
+        // config_value on 'tax' = VAT percent (prices are tax-INCLUSIVE; 0/absent = no split)
+        DEFAULT_CHART.put("tax", new String[] {"2700", "VAT payable"});
+        DEFAULT_CHART.put("loyalty:expense", new String[] {"6100", "Loyalty program expense"});
+        // config_value on 'loyalty:liability' = currency per point (0/absent = control number only)
+        DEFAULT_CHART.put("loyalty:liability", new String[] {"2400", "Loyalty points liability"});
+    }
 
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
     private final AccountMappingRepository mappings;
     private final BillingClient billingClient;
     private final TenantScope tenantScope;
+    private final com.bss.revenue.repository.PeriodCloseRepository periods;
 
     public RevenueService(JournalEntryRepository entries, JournalLineRepository lines,
-            AccountMappingRepository mappings, BillingClient billingClient, TenantScope tenantScope) {
+            AccountMappingRepository mappings, BillingClient billingClient, TenantScope tenantScope,
+            com.bss.revenue.repository.PeriodCloseRepository periods) {
         this.entries = entries;
         this.lines = lines;
         this.mappings = mappings;
         this.billingClient = billingClient;
         this.tenantScope = tenantScope;
+        this.periods = periods;
     }
 
     /* ---------- posting builders ---------- */
@@ -71,6 +84,7 @@ public class RevenueService {
     public boolean postBill(String billId, Map<String, Object> billEvent) {
         String tenant = tenantScope.currentTenantId();
         String sourceRef = "bill:" + billId;
+        requireOpenPeriod(tenant, billEvent.get("billDate"));
         if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
             return false;
         }
@@ -84,8 +98,15 @@ public class RevenueService {
         String currency = amountDue.get("unit") == null ? "EUR" : String.valueOf(amountDue.get("unit"));
         String party = partyOf(billEvent);
 
+        // prices are tax-INCLUSIVE by convention; a configured VAT percent
+        // splits each line into net revenue + one tax-payable credit. The tax
+        // line is computed as gross-minus-sum-of-nets so rounding can never
+        // unbalance the entry.
+        BigDecimal taxPct = configValueOf("tax");
+        BigDecimal divisor = BigDecimal.ONE.add(taxPct.movePointLeft(2));
         List<JournalLine> posting = new ArrayList<>();
         posting.add(line("ar", total, null, billId, "Invoice " + billEvent.getOrDefault("billNo", billId)));
+        BigDecimal netSum = BigDecimal.ZERO;
         for (Map<String, Object> rate : rates) {
             String type = String.valueOf(rate.getOrDefault("type", "recurringCharge"));
             BigDecimal amount = money(rate.get("taxExcludedAmount") instanceof Map<?, ?> a
@@ -93,11 +114,20 @@ public class RevenueService {
             if (amount.signum() == 0) {
                 continue;
             }
+            BigDecimal net = taxPct.signum() > 0
+                    ? amount.divide(divisor, 2, RoundingMode.HALF_UP) : amount;
+            netSum = netSum.add(net);
             // discounts arrive NEGATIVE: a negative credit is a debit to contra-revenue
             String key = DEFAULT_CHART.containsKey("rate:" + type) ? "rate:" + type : "rate:priceAdjustment";
-            posting.add(amount.signum() < 0
-                    ? line(key, amount.negate(), null, billId, String.valueOf(rate.get("name")))
-                    : line(key, null, amount, billId, String.valueOf(rate.get("name"))));
+            posting.add(net.signum() < 0
+                    ? line(key, net.negate(), null, billId, String.valueOf(rate.get("name")))
+                    : line(key, null, net, billId, String.valueOf(rate.get("name"))));
+        }
+        if (taxPct.signum() > 0) {
+            BigDecimal tax = total.subtract(netSum);
+            if (tax.signum() != 0) {
+                posting.add(line("tax", null, tax, billId, "VAT " + taxPct.stripTrailingZeros().toPlainString() + "% (tax-inclusive prices)"));
+            }
         }
         saveBalanced(tenant, sourceRef, "bill", "Invoice issued — " + billId, currency, party, posting);
         return true;
@@ -153,9 +183,128 @@ public class RevenueService {
     @Transactional
     public Map<String, Object> backfill(String billId) {
         Map<String, Object> bill = billingClient.bill(billId);
-        boolean posted = postBill(billId, bill);
+        boolean posted = postBill(billId, bill);   // close guard runs inside
         return Map.of("billId", billId, "posted", posted,
                 "note", posted ? "journal entry created" : "already journaled — nothing to do");
+    }
+
+    /** An UNPAID bill credited after journaling: contra-revenue against AR.
+     * (A credited SETTLED bill refunds through the PSP — the refund event
+     * books that path; booking here too would double-count.) */
+    @Transactional
+    public boolean postDisputeCredit(String disputeId, Map<String, Object> dispute) {
+        String tenant = tenantScope.currentTenantId();
+        String sourceRef = "dispute:" + disputeId;
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal amount = money(dispute.get("creditAmount"));
+        if (amount.signum() <= 0) {
+            return false;
+        }
+        String billId = String.valueOf(dispute.getOrDefault("billId", ""));
+        List<JournalLine> posting = List.of(
+                line("dispute", amount, null, billId,
+                        "Dispute credit — " + dispute.getOrDefault("reason", disputeId)),
+                line("ar", null, amount, billId, "Bill reduced by dispute credit"));
+        saveBalanced(tenant, sourceRef, "dispute", "Dispute credited — " + disputeId,
+                "EUR", partyOf(dispute), posting);
+        return true;
+    }
+
+    /** Points priced into currency — ONLY when finance sets a per-point value.
+     * Books the DELTA between the loyalty component's live liability and what
+     * this journal already carries, one accrual per day (fleet-safe tick or
+     * on-demand). No value configured = control number only, nothing booked. */
+    @Transactional
+    public Map<String, Object> loyaltyAccrual() {
+        String tenant = tenantScope.currentTenantId();
+        BigDecimal perPoint = configValueOf("loyalty:liability");
+        if (perPoint.signum() <= 0) {
+            return Map.of("posted", false, "note",
+                    "no currency-per-point configured on loyalty:liability — points stay a control number");
+        }
+        Long points = billingClient.loyaltyPointsLiability();
+        if (points == null) {
+            return Map.of("posted", false, "note", "loyalty component unreachable");
+        }
+        String liabilityCode = mappings.findByTenantIdAndMappingKey(tenant, "loyalty:liability")
+                .orElseThrow().getAccountCode();
+        BigDecimal booked = BigDecimal.ZERO;
+        for (JournalEntry e : entries.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)) {
+            for (JournalLine l : lines.findAllByTenantIdAndEntryIdOrderBySeqAsc(tenant, e.getId())) {
+                if (liabilityCode.equals(l.getAccountCode())) {
+                    booked = booked.add(l.getCredit()).subtract(l.getDebit());
+                }
+            }
+        }
+        BigDecimal target = perPoint.multiply(BigDecimal.valueOf(points)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal delta = target.subtract(booked);
+        if (delta.abs().compareTo(new BigDecimal("0.01")) < 0) {
+            return Map.of("posted", false, "note", "booked liability already matches "
+                    + points + " pts x " + perPoint);
+        }
+        String sourceRef = "loyalty-accrual:" + LocalDate.now();
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return Map.of("posted", false, "note", "already accrued today — daily cadence");
+        }
+        List<JournalLine> posting = delta.signum() > 0
+                ? List.of(line("loyalty:expense", delta, null, "loyalty", "Points liability accrual"),
+                          line("loyalty:liability", null, delta, "loyalty",
+                                  points + " pts x " + perPoint + "/pt"))
+                : List.of(line("loyalty:liability", delta.negate(), null, "loyalty",
+                                  "Points redeemed/expired — liability release"),
+                          line("loyalty:expense", null, delta.negate(), "loyalty", "Accrual release"));
+        saveBalanced(tenant, sourceRef, "loyalty", "Loyalty points accrual — " + points + " pts",
+                "EUR", null, posting);
+        return Map.of("posted", true, "points", points, "delta", delta, "target", target);
+    }
+
+    /** Close = a completeness attestation: balanced (invariant) and FINAL —
+     * postings for bills dated inside a closed period refuse with 409. */
+    @Transactional
+    public Map<String, Object> closePeriod(String through) {
+        String tenant = tenantScope.currentTenantId();
+        LocalDate date;
+        try {
+            date = LocalDate.parse(String.valueOf(through));
+        } catch (Exception e) {
+            throw new BadRequestException("through must be YYYY-MM-DD");
+        }
+        PeriodClose close = periods.findById(tenant).orElseGet(() -> {
+            PeriodClose c = new PeriodClose();
+            c.setTenantId(tenant);
+            return c;
+        });
+        close.setClosedThrough(date);
+        close.setClosedAt(OffsetDateTime.now());
+        periods.save(close);
+        return Map.of("closedThrough", date.toString(),
+                "note", "postings for bills dated on or before this refuse; the export is final");
+    }
+
+    private void requireOpenPeriod(String tenant, Object billDate) {
+        LocalDate closed = periods.findById(tenant)
+                .map(PeriodClose::getClosedThrough).orElse(null);
+        if (closed == null || billDate == null) {
+            return;
+        }
+        try {
+            LocalDate d = LocalDate.parse(String.valueOf(billDate).substring(0, 10));
+            if (!d.isAfter(closed)) {
+                throw new com.bss.revenue.exception.ConflictException("period closed through "
+                        + closed + " — this bill is dated " + d + "; book it in the ERP or reopen");
+            }
+        } catch (java.time.format.DateTimeParseException e) {
+            // unparseable date: not a close violation
+        }
+    }
+
+    private BigDecimal configValueOf(String key) {
+        seedDefaults(tenantScope.currentTenantId());
+        return mappings.findByTenantIdAndMappingKey(tenantScope.currentTenantId(), key)
+                .map(AccountMapping::getConfigValue).map(v -> v == null ? BigDecimal.ZERO : v)
+                .orElse(BigDecimal.ZERO);
     }
 
     /* ---------- reads ---------- */
@@ -181,9 +330,40 @@ public class RevenueService {
         return entryView(e, lines.findAllByTenantIdAndEntryIdOrderBySeqAsc(tenant, e.getId()));
     }
 
-    /** CSV, one row per line — the shape a period-close import job wants. */
+    /** CSV, one row per line — the shape a period-close import job wants.
+     * format=sap|netsuite emits ERP-flavored column layouts (SHAPED to their
+     * import conventions, not certified against a live instance — honest). */
     @Transactional(readOnly = true)
-    public String exportCsv(LocalDate date) {
+    public String exportCsv(LocalDate date, String format) {
+        if ("sap".equalsIgnoreCase(format)) {
+            StringBuilder sap = new StringBuilder("BLDAT,BUDAT,XBLNR,BKTXT,HKONT,SHKZG,WRBTR,WAERS\n");
+            for (Map<String, Object> entry : journal(date)) {
+                for (Object o : (List<?>) entry.get("lines")) {
+                    Map<String, Object> l = castMap(o);
+                    boolean debit = money(l.get("debit")).signum() > 0;
+                    sap.append(String.join(",", String.valueOf(entry.get("entryDate")),
+                            String.valueOf(entry.get("entryDate")), String.valueOf(entry.get("sourceRef")),
+                            quote(entry.get("description")), String.valueOf(l.get("accountCode")),
+                            debit ? "S" : "H", plain(debit ? l.get("debit") : l.get("credit")),
+                            String.valueOf(entry.get("currency")))).append('\n');
+                }
+            }
+            return sap.toString();
+        }
+        if ("netsuite".equalsIgnoreCase(format)) {
+            StringBuilder ns = new StringBuilder("Date,Journal,Account,Debit,Credit,Memo,Currency\n");
+            for (Map<String, Object> entry : journal(date)) {
+                for (Object o : (List<?>) entry.get("lines")) {
+                    Map<String, Object> l = castMap(o);
+                    ns.append(String.join(",", String.valueOf(entry.get("entryDate")),
+                            String.valueOf(entry.get("id")),
+                            quote(l.get("accountCode") + " " + l.get("accountName")),
+                            plain(l.get("debit")), plain(l.get("credit")),
+                            quote(l.get("description")), String.valueOf(entry.get("currency")))).append('\n');
+                }
+            }
+            return ns.toString();
+        }
         StringBuilder csv = new StringBuilder(
                 "entryDate,entryId,sourceType,accountCode,accountName,debit,credit,currency,ref,description\n");
         for (Map<String, Object> entry : journal(date)) {
@@ -252,6 +432,8 @@ public class RevenueService {
                 ? Map.of("note", "no loyalty component reachable")
                 : Map.of("points", points, "note",
                         "control number — no currency valuation configured (see plan P2)"));
+        periods.findById(tenantScope.currentTenantId()).ifPresent(c ->
+                out.put("closedThrough", c.getClosedThrough().toString()));
         out.put("@type", "RevenueReconciliation");
         return out;
     }
@@ -264,8 +446,14 @@ public class RevenueService {
         seedDefaults(tenant);
         List<Map<String, Object>> out = new ArrayList<>();
         for (AccountMapping m : mappings.findAllByTenantIdOrderByMappingKeyAsc(tenant)) {
-            out.add(Map.of("key", m.getMappingKey(), "accountCode", m.getAccountCode(),
-                    "accountName", m.getAccountName()));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("key", m.getMappingKey());
+            row.put("accountCode", m.getAccountCode());
+            row.put("accountName", m.getAccountName());
+            if (m.getConfigValue() != null) {
+                row.put("configValue", m.getConfigValue());
+            }
+            out.add(row);
         }
         return out;
     }
@@ -284,9 +472,20 @@ public class RevenueService {
         AccountMapping m = mappings.findByTenantIdAndMappingKey(tenant, key).orElseThrow();
         m.setAccountCode(String.valueOf(dto.get("accountCode")));
         m.setAccountName(String.valueOf(dto.get("accountName")));
+        if (dto.containsKey("configValue")) {
+            m.setConfigValue(dto.get("configValue") == null ? null
+                    : new BigDecimal(String.valueOf(dto.get("configValue"))));
+        }
         mappings.save(m);
-        return Map.of("key", key, "accountCode", m.getAccountCode(), "accountName", m.getAccountName(),
-                "note", "applies to FUTURE postings — booked lines keep their snapshot");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("key", key);
+        out.put("accountCode", m.getAccountCode());
+        out.put("accountName", m.getAccountName());
+        if (m.getConfigValue() != null) {
+            out.put("configValue", m.getConfigValue());
+        }
+        out.put("note", "applies to FUTURE postings — booked lines keep their snapshot");
+        return out;
     }
 
     /* ---------- internals ---------- */

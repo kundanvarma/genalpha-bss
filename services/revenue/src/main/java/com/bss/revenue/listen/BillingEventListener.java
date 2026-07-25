@@ -37,17 +37,27 @@ public class BillingEventListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"CustomerBillCreateEvent".equals(envelope.get("eventType"))) {
-                return;
-            }
+            String eventType = String.valueOf(envelope.get("eventType"));
             String tenantId = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
-            Map<String, Object> bill = resource(envelope, "customerBill");
-            if (bill.get("id") == null) {
-                return;
-            }
-            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                revenue.postBill(String.valueOf(bill.get("id")), bill);
+            if ("CustomerBillCreateEvent".equals(eventType)) {
+                Map<String, Object> bill = resource(envelope, "customerBill");
+                if (bill.get("id") == null) {
+                    return;
+                }
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    revenue.postBill(String.valueOf(bill.get("id")), bill);
+                }
+            } else if ("DisputeResolvedEvent".equals(eventType)) {
+                Map<String, Object> dispute = resource(envelope, "dispute");
+                // credited SETTLED bills refund through the PSP — the refund
+                // event books that path; here only unpaid-bill credits book
+                if ("credited".equals(dispute.get("status")) && dispute.get("id") != null
+                        && !"settled".equals(dispute.get("billState"))) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        revenue.postDisputeCredit(String.valueOf(dispute.get("id")), dispute);
+                    }
+                }
             }
         } catch (Exception e) {
             log.warn("revenue: skipping unprocessable billing event: {}", e.getMessage());

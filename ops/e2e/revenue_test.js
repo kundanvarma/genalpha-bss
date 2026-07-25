@@ -177,8 +177,96 @@ const balanced = (entry) => {
   console.log('OK WALL: the journal is staff-only and tenant-walled — nova sees nothing of'
     + ' genalpha\'s books.');
 
+  /* ---------- 9. tax split: gross prices, net revenue, VAT payable ---------- */
+  const kai = await token('kai@bss.local', 'kai');
+  const kaiId = sub(kai);
+  await call('POST', `${R}/accountMapping`, staff,
+    { key: 'tax', accountCode: '2700', accountName: 'VAT payable', configValue: 25 });
+  const kaiBills = (await call('GET',
+    `${BILLS}/customerBill?relatedPartyId=${kaiId}&limit=50`, kai)).body || [];
+  const kaiBill = kaiBills.find((b) => b.amountDue && Number(b.amountDue.value) > 1);
+  if (!kaiBill) fail('kai has no bill to journal');
+  await call('POST', `${R}/backfill`, staff, { billId: kaiBill.id });
+  const jTax = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+  const taxEntry = jTax.find((e) => e.sourceRef === `bill:${kaiBill.id}`);
+  if (!taxEntry || !balanced(taxEntry)) fail('kai bill entry missing/unbalanced');
+  const vatLine = taxEntry.lines.find((l) => l.accountCode === '2700');
+  if (!vatLine || cents(vatLine.credit) <= 0) fail('no VAT credit line on a taxed bill');
+  const gross = cents(kaiBill.amountDue.value);
+  const arLine = taxEntry.lines.find((l) => l.accountName.match(/receivable/i));
+  if (cents(arLine.debit) !== gross) fail('AR must stay GROSS under tax-inclusive pricing');
+  console.log(`OK TAX SPLIT: 25% VAT configured as DATA — AR stays gross`
+    + ` (${kaiBill.amountDue.value}), revenue books net, VAT payable carries`
+    + ` ${vatLine.credit}; gross-minus-nets arithmetic means rounding can never unbalance.`);
+
+  /* ---------- 10. a dispute credit books contra-revenue ---------- */
+  const disputed = await call('POST', `${BILLS}/customerBill/${kaiBill.id}/dispute`, kai,
+    { reason: `revenue suite dispute ${run}` });
+  if (disputed.status >= 300) fail(`dispute open: ${disputed.status} ${disputed.text.slice(0, 150)}`);
+  const resolve = await call('POST', `${BILLS}/dispute/${disputed.body.id}/resolve`, staff,
+    { outcome: 'credit', amount: 0.5, note: 'suite goodwill' });
+  if (resolve.status >= 300) fail(`dispute resolve: ${resolve.status} ${resolve.text.slice(0, 200)}`);
+  let dEntry = null;
+  for (let i = 0; i < 20 && !dEntry; i++) {
+    await sleep(2500);
+    const j = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+    dEntry = j.find((e) => e.sourceRef === `dispute:${disputed.body.id}`);
+  }
+  if (!dEntry || !balanced(dEntry)) fail('dispute credit never became a balanced posting');
+  if (!dEntry.lines.some((l) => cents(l.debit) === 50 && l.accountCode === '4092')) {
+    fail('no 0.50 contra-revenue debit for the dispute');
+  }
+  console.log('OK DISPUTE CREDIT: an unpaid bill credited AFTER journaling books'
+    + ' contra-revenue against AR — the subledger follows the bill down, no silent drift.'
+    + ' (Settled-bill credits refund via the PSP and book on the refund event.)');
+
+  /* ---------- 11. loyalty points priced into currency — only when finance says so ---------- */
+  await call('POST', `${R}/accountMapping`, staff, { key: 'loyalty:liability',
+    accountCode: '2400', accountName: 'Loyalty points liability', configValue: 0.01 });
+  const accrual = await call('POST', `${R}/loyaltyAccrual`, staff);
+  if (accrual.status >= 300) fail(`accrual: ${accrual.status} ${accrual.text.slice(0, 150)}`);
+  const jAcc = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+  const accEntry = jAcc.find((e) => e.sourceType === 'loyalty'
+    && e.sourceRef === `loyalty-accrual:${new Date().toISOString().slice(0, 10)}`);
+  if (accrual.body.posted === true) {
+    if (!accEntry || !balanced(accEntry)) fail('accrual posted but no balanced entry found');
+  } else if (!accEntry && !String(accrual.body.note || '').match(/already matches|already accrued/)) {
+    fail('accrual neither posted nor already-covered: ' + JSON.stringify(accrual.body));
+  }
+  const accrual2 = await call('POST', `${R}/loyaltyAccrual`, staff);
+  if (accrual2.body.posted === true) fail('same-day second accrual must be a no-op');
+  console.log('OK LOYALTY ACCRUAL: finance priced a point (0.01 EUR) and the points'
+    + ' liability became a real booked number — daily cadence, delta-based, and a'
+    + ' same-day rerun books NOTHING. Unpriced points stay a control number.');
+
+  /* ---------- 12. period close: the export becomes final ---------- */
+  const close = await call('POST', `${R}/periodClose`, staff, { through: today });
+  if (close.status >= 300) fail(`close: ${close.status} ${close.text.slice(0, 150)}`);
+  const blocked = await call('POST', `${R}/backfill`, staff, { billId: kaiBill.id });
+  if (blocked.status !== 409) fail(`backfill into a closed period must 409, got ${blocked.status}`);
+  const reconClosed = (await call('GET', `${R}/reconciliation?date=${today}`, staff)).body;
+  if (reconClosed.closedThrough !== today) fail('reconciliation misses closedThrough');
+  await call('POST', `${R}/periodClose`, staff, { through: '1970-01-01' }); // reopen for re-runs
+  console.log('OK PERIOD CLOSE: closed through today — a posting for a bill inside the'
+    + ' period refuses with 409, the reconciliation announces the close, and reopening'
+    + ' is an explicit act.');
+
+  /* ---------- 13. ERP-flavored exports ---------- */
+  const sap = await (await fetch(`${API}${R}/journalExport?date=${today}&format=sap`,
+    { headers: { Authorization: `Bearer ${staff}` } })).text();
+  if (!sap.startsWith('BLDAT,BUDAT,XBLNR')) fail('SAP layout header wrong');
+  const ns = await (await fetch(`${API}${R}/journalExport?date=${today}&format=netsuite`,
+    { headers: { Authorization: `Bearer ${staff}` } })).text();
+  if (!ns.startsWith('Date,Journal,Account')) fail('NetSuite layout header wrong');
+  console.log('OK ERP LAYOUTS: the same journal exports in SAP- and NetSuite-shaped CSV —'
+    + ' shaped to their import conventions, honestly not certified against a live instance.');
+
+  // restore: tax off so earlier legs stay deterministic on re-runs
+  await call('POST', `${R}/accountMapping`, staff,
+    { key: 'tax', accountCode: '2700', accountName: 'VAT payable', configValue: 0 });
+
   console.log('\nALL REVENUE CHECKS PASSED — the BSS is an honest subledger: every posting'
     + ' balanced by invariant, idempotent by construction, tied out against billing and'
-    + ' payments to the cent, exported in the shape a general ledger ingests. The GL stays'
+    + ' payments to the cent, exported in the shape a general ledger ingests (SAP and NetSuite flavors included), with tax split, dispute credits, priced loyalty liability and a period close that makes the export FINAL. The GL stays'
     + ' in the ERP — this is the feed it always needed.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

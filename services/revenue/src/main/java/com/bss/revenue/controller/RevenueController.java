@@ -45,11 +45,25 @@ public class RevenueController {
     }
 
     @GetMapping(value = "/journalExport", produces = "text/csv")
-    public ResponseEntity<String> export(@RequestParam(required = false) String date) {
+    public ResponseEntity<String> export(@RequestParam(required = false) String date,
+            @RequestParam(required = false) String format) {
         return ResponseEntity.ok()
                 .header("Content-Disposition", "attachment; filename=journal-"
                         + (date == null ? "all" : date) + ".csv")
-                .body(service.exportCsv(parseDate(date)));
+                .body(service.exportCsv(parseDate(date), format));
+    }
+
+    @PostMapping("/loyaltyAccrual")
+    public ResponseEntity<Map<String, Object>> loyaltyAccrual() {
+        return ResponseEntity.ok(service.loyaltyAccrual());
+    }
+
+    @PostMapping("/periodClose")
+    public ResponseEntity<Map<String, Object>> periodClose(@RequestBody Map<String, Object> dto) {
+        if (dto.get("through") == null) {
+            throw new BadRequestException("through (YYYY-MM-DD) is required");
+        }
+        return ResponseEntity.ok(service.closePeriod(String.valueOf(dto.get("through"))));
     }
 
     @GetMapping(value = "/reconciliation", produces = MediaType.APPLICATION_JSON_VALUE)

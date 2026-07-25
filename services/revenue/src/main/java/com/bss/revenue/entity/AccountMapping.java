@@ -29,6 +29,18 @@ public class AccountMapping {
     @Column(name = "account_name")
     private String accountName;
 
+    /** Key-specific dial: 'tax' = VAT percent; 'loyalty:liability' = currency per point. */
+    @Column(name = "config_value")
+    private java.math.BigDecimal configValue;
+
+    public java.math.BigDecimal getConfigValue() {
+        return configValue;
+    }
+
+    public void setConfigValue(java.math.BigDecimal configValue) {
+        this.configValue = configValue;
+    }
+
     public String getTenantId() {
         return tenantId;
     }

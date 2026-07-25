@@ -65,7 +65,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Collect overdue debt (in-house) | billing clocks | `billing` | ✅ (❌ external collections-agency handoff) |
 | Charge in real time (prepay balance) | TMF654 facade + OCS seam | `usage` + mock-ocs | ◐ the TMF654 API face is CTK-certified (282/282); REAL online charging (Gy/Ro, 5G CHF) still needs a production OCS behind the seam |
 | Calculate jurisdictional taxes | — | — | ❌ prices are tax-inclusive by convention; jurisdictional tax (VAT/US telecom tax) needs Vertex/Avalara-class |
-| Account revenue (GL, rev-rec ASC 606) | subledger journal export (house `/revenue/v1`) | `revenue` (#35) | ✅ #70 the FEED (balanced double-entry journal from billing/payment events, CoA mapping as data, CSV export, cent-exact reconciliation tie-out); ❌ the LEDGER itself + the rev-rec engine stay in the ERP — by design |
+| Account revenue (GL, rev-rec ASC 606) | subledger journal export (house `/revenue/v1`) | `revenue` (#35) | ✅ #70 the FEED (balanced double-entry journal from billing/payment events, CoA mapping as data, tax split, dispute credits, priced loyalty liability, period close, SAP/NetSuite-shaped CSV, cent-exact reconciliation tie-out); ❌ the LEDGER itself + the rev-rec engine stay in the ERP — by design |
 | Settle wholesale / interconnect / roaming | — | — | ❌ carrier-grade settlement is its own product |
 | Assure revenue & fight fraud | — | — | ❌ (the audit trails feed one nicely) |
 

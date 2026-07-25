@@ -170,6 +170,36 @@ const RESOURCES = [
     },
   },
   {
+    path: 'accountMapping',
+    base: REVENUE_BASE,
+    title: 'Chart of accounts',
+    noEdit: true,
+    noDelete: true,
+    // posting rules as DATA: finance's own codes and names; a remap applies
+    // to FUTURE postings only — booked journal lines keep their snapshot.
+    // configValue: VAT percent on 'tax'; currency-per-point on 'loyalty:liability'.
+    fields: [
+      { name: 'key', label: 'Posting key', kind: 'select', required: true, options: [
+        { value: 'ar', label: 'Accounts receivable (control)' },
+        { value: 'cash', label: 'Cash / PSP clearing' },
+        { value: 'rate:recurringCharge', label: 'Service revenue' },
+        { value: 'rate:usageCharge', label: 'Usage revenue' },
+        { value: 'rate:discount', label: 'Discounts (contra)' },
+        { value: 'rate:priceAdjustment', label: 'Pricing adjustments' },
+        { value: 'rate:disputeCredit', label: 'Dispute credits (billed lines)' },
+        { value: 'dispute', label: 'Dispute credits (post-journal)' },
+        { value: 'refund', label: 'Refunds (contra)' },
+        { value: 'tax', label: 'VAT payable — configValue = percent' },
+        { value: 'loyalty:expense', label: 'Loyalty program expense' },
+        { value: 'loyalty:liability', label: 'Loyalty points liability — configValue = value per point' },
+      ] },
+      { name: 'accountCode', label: 'Account code (your GL)', required: true },
+      { name: 'accountName', label: 'Account name', required: true },
+      { name: 'configValue', label: 'Config value (tax % / per-point value — see key)', kind: 'number' },
+    ],
+    columns: ['key', 'accountCode', 'accountName', 'configValue'],
+  },
+  {
     path: 'serviceableArea',
     base: QUALIFICATION_BASE,
     title: 'Serviceable Areas',
@@ -830,6 +860,7 @@ const TAB_ROLE = {
   productStock: 'stock:read',
   customerBill: 'billing:admin',
   journalEntry: 'billing:admin',
+  accountMapping: 'billing:admin',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',

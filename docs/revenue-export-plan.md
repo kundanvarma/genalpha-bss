@@ -175,6 +175,40 @@ control number that MATCHES the loyalty component's own; finance
 renamed an account and booked history kept its snapshot; nova saw
 nothing. Regressions green: storefront, console.
 
+**Phase 2 — 2026-07-25, suite #70 at thirteen legs, all green.**
+- **Tax split as config**: prices stay tax-INCLUSIVE; setting a VAT
+  percent on the `tax` posting key (config_value — data, not code)
+  splits every bill posting into net revenue lines + one VAT-payable
+  credit, with the tax computed as gross-minus-sum-of-nets so ROUNDING
+  CAN NEVER UNBALANCE an entry. AR stays gross. Proven at 25%.
+- **Dispute credits**: an UNPAID bill credited after journaling books
+  contra-revenue against AR (DisputeResolvedEvent listener) — the
+  subledger follows the bill down, no silent reconciliation drift.
+  Settled-bill credits refund via the PSP and book on the refund event
+  (one path, never two). NOTE, corrected on the operator's ask: a
+  FORMAL CREDIT NOTE (separate numbered document reversing a posted
+  invoice — a bookkeeping-rules requirement in e.g. Norway) does NOT
+  exist in billing or any frontend; dispute credits and refunds are
+  the adjacent machinery. Credit-note-proper is a billing arc, listed
+  under P3/next.
+- **Loyalty points priced**: config_value on `loyalty:liability` =
+  currency per point; the daily accrual (TickGuard tick + on-demand
+  POST /loyaltyAccrual) books the DELTA between the loyalty
+  component's live liability and what the journal carries — unpriced
+  points remain a control number, and a same-day rerun books nothing.
+- **Period close**: POST /periodClose {through} — postings for bills
+  dated inside the closed period refuse 409, the reconciliation
+  announces closedThrough, reopening is an explicit act.
+- **ERP layouts**: journalExport?format=sap|netsuite — SAP- and
+  NetSuite-shaped CSV, labeled shaped-not-certified.
+- **Console**: the Chart of accounts tab (billing:admin) edits posting
+  keys, codes, names and config values.
+- Regressions green: console.
+
+P3 / next (open): formal CREDIT NOTE document in billing (+ storefront/
+CSR faces) feeding a `creditNote` posting here; TMF651 rev-rec inputs;
+deferred revenue for prepaid top-ups.
+
 Build notes (the instructive failures): the `revenue` DATABASE must be
 created live on an existing postgres volume (init-databases.sql only
 runs on first init). Keycloak imports realms with IGNORE_EXISTING — a
