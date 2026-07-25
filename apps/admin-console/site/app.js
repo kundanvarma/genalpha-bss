@@ -201,6 +201,36 @@ const RESOURCES = [
     columns: ['key', 'accountCode', 'accountName', 'configValue'],
   },
   {
+    path: 'dispute',
+    base: BILLING_BASE,
+    title: 'Disputes',
+    readOnly: true,
+    // the back-office worklist: contested money waits for a DECISION with
+    // a name on it — credit (a numbered credit note) or uphold (explained)
+    fields: [],
+    columns: ['billNo', 'reason', 'status', 'creditAmount', 'resolutionNote'],
+    rowAction: {
+      label: (item) => (item.status === 'open' ? 'Decide' : ''),
+      apply: async (item) => {
+        if (item.status !== 'open') return;
+        const outcome = window.prompt('Decision — type "credit" or "uphold":');
+        if (!outcome || !['credit', 'uphold'].includes(outcome)) return;
+        let body = { outcome };
+        if (outcome === 'credit') {
+          const amount = window.prompt('Credit amount:');
+          if (!amount) return;
+          body.amount = Number(amount);
+        }
+        const note = window.prompt('Resolution note (told to the customer):');
+        if (note) body.note = note;
+        await authFetch(`${BILLING_BASE}/dispute/${item.id}/resolve`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      },
+    },
+  },
+  {
     path: 'serviceableArea',
     base: QUALIFICATION_BASE,
     title: 'Serviceable Areas',
@@ -862,6 +892,7 @@ const TAB_ROLE = {
   customerBill: 'billing:admin',
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
+  dispute: 'billing:admin',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',

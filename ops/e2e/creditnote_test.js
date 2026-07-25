@@ -203,8 +203,64 @@ const seqOf = (no) => Number(String(no).replace('CN-', ''));
   console.log('OK WALLS: over-credit refuses; an agent WITHOUT billing:admin gets a clean 403'
     + ' (agents open disputes, admins decide money); nova sees nothing.');
 
+  /* ---------- 9. the legal wire format: UBL CreditNote-2 (EHF shape) ---------- */
+  const xmlRes = await fetch(`${API}${BILLS}/creditNote/${cn1.body.id}/document.xml`,
+    { headers: { Authorization: `Bearer ${staff}` } });
+  const xml = await xmlRes.text();
+  if (!xml.includes('urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2')) {
+    fail('not a UBL CreditNote-2 document');
+  }
+  if (!xml.includes('<cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>')) {
+    fail('missing type code 381');
+  }
+  if (!xml.includes(`<cbc:ID>${bill.billNo}</cbc:ID>`)) {
+    fail('missing the BillingReference to the original invoice');
+  }
+  console.log(`OK WIRE FORMAT: ${cn1.body.creditNoteNo} renders as UBL CreditNote-2 (type 381,`
+    + ` EHF/Peppol BIS shape) carrying the reference to ${bill.billNo} — the kreditnota travels`
+    + ' the same structured channel as the invoice it reverses.');
+
+  /* ---------- 10. per-LINE credits: name what you reverse ---------- */
+  const billLines = (await call('GET',
+    `${BILLS}/customerBill/${bill.id}/appliedCustomerBillingRate`, staff)).body || [];
+  const target = billLines.find((l) => Number(l.taxExcludedAmount.value) > 0.5);
+  if (!target) fail('no positive rate line to credit');
+  const cnL = await call('POST', `${BILLS}/customerBill/${bill.id}/creditNote`, staff,
+    { lines: [{ id: target.id, amount: 0.3 }], reason: `line correction ${run}` });
+  if (cnL.status !== 201) fail(`line credit: ${cnL.status} ${cnL.text.slice(0, 200)}`);
+  if (!cnL.body.creditedLines || cnL.body.creditedLines.length !== 1
+      || Math.abs(Number(cnL.body.creditedLines[0].amount) - 0.3) > 0.001) {
+    fail('creditedLines missing/wrong: ' + JSON.stringify(cnL.body.creditedLines));
+  }
+  if (Math.abs(Number(cnL.body.amount.value) - 0.3) > 0.001) {
+    fail('credit note total must equal the sum of its lines');
+  }
+  const overLine = await call('POST', `${BILLS}/customerBill/${bill.id}/creditNote`, staff,
+    { lines: [{ id: target.id, amount: 99999 }], reason: 'too much for the line' });
+  if (overLine.status !== 400) fail(`over-line credit must 400, got ${overLine.status}`);
+  const linesAfter = (await call('GET',
+    `${BILLS}/customerBill/${bill.id}/appliedCustomerBillingRate`, staff)).body || [];
+  if (!linesAfter.some((l) => l.type === 'creditNote'
+      && l.name.includes(cnL.body.creditNoteNo) && l.name.includes(target.name))) {
+    fail('the negative line does not NAME the credited line');
+  }
+  console.log(`OK PER-LINE: ${cnL.body.creditNoteNo} credits 0.30 of the "${target.name}" line`
+    + ' specifically — the reversal names what it reverses, a line cannot be over-credited,'
+    + ' and the total equals the sum of its lines.');
+
+  /* ---------- 11. the back-office worklist has the decision ---------- */
+  const worklist = (await call('GET', `${BILLS}/dispute`, staff)).body || [];
+  const decided = worklist.find((d) => d.id === dispute.body.id);
+  if (!decided || decided.status !== 'credited') {
+    fail('the resolved dispute is missing from the worklist');
+  }
+  console.log('OK WORKLIST: the dispute queue (console Disputes tab, billing:admin) carries'
+    + ` the decided case — status ${decided.status}, credit ${decided.creditAmount} — every`
+    + ' decision has a name on it.');
+
   console.log('\nALL CREDIT-NOTE CHECKS PASSED — the wrong invoice is never edited: a numbered,'
     + ' gapless, reasoned document reverses it; unpaid bills come down, settled bills refund'
-    + ' through the PSP, disputes mint their own paper, the customer holds the PDF, and the'
+    + ' through the PSP, disputes mint their own paper, the customer holds the PDF, the kreditnota'
+    + ' ships as UBL CreditNote-2 on the e-invoice wire, lines are credited by NAME, and the'
     + ' subledger books the document exactly once.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

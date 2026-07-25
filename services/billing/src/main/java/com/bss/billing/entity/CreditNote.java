@@ -57,6 +57,10 @@ public class CreditNote {
     @Column(name = "issued_at")
     private OffsetDateTime issuedAt;
 
+    /** The credited rate lines, snapshotted as [{id, name, amount}]. */
+    @Column(name = "lines_json")
+    private String linesJson;
+
     public String getId() { return id; }
     public void setId(String v) { this.id = v; }
     public String getTenantId() { return tenantId; }
@@ -81,6 +85,8 @@ public class CreditNote {
     public void setRefundRef(String v) { this.refundRef = v; }
     public String getDisputeId() { return disputeId; }
     public void setDisputeId(String v) { this.disputeId = v; }
+    public String getLinesJson() { return linesJson; }
+    public void setLinesJson(String v) { this.linesJson = v; }
     public OffsetDateTime getIssuedAt() { return issuedAt; }
     public void setIssuedAt(OffsetDateTime v) { this.issuedAt = v; }
 }

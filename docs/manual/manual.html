@@ -641,7 +641,11 @@ refundRef kept). Dispute resolutions with outcome=credit now mint their own cred
 <code>/creditNote/{id}/document.pdf</code>) — the storefront shows a kreditnota chip per bill;
 the CSR 360 has the issue button. The revenue subledger books REDUCED notes as contra-revenue
 under the document's number and books nothing extra for REFUNDED ones (the refund event owns
-that). P2 open: EHF/Peppol BIS CreditNote via the distribution seam; per-line credits.</p>
+that). P2 shipped: <code>GET /creditNote/{id}/document.xml</code> is the UBL CreditNote-2
+(type 381, EHF/Peppol shape, BillingReference to the invoice) and partner-wired tenants ship
+it on the SAME distribution ledger as bills; <code>lines:[{id, amount?}]</code> credits named
+rate lines (each reversal names what it reverses, capped per line); the back-office console's
+Disputes tab is the decide worklist.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · seventy-one suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is

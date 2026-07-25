@@ -362,6 +362,90 @@ public class BillDistributionService {
     /** UBL 2.1 Invoice — the EN 16931 core wearing whatever customization
      * the PROFILE ROW declares; EHF, generic Peppol BIS and A-NZ are the
      * same skeleton with different rows. */
+    /** UBL CreditNote-2 (type 381), the Peppol BIS / EHF shape: its own
+     * number, a BillingReference to the invoice it reverses, credited
+     * lines. The same profile row (CustomizationID/ProfileID) that
+     * dresses invoices dresses their reversals. */
+    public String creditNoteXml(String tenantId, com.bss.billing.entity.CreditNote note,
+            List<Map<String, Object>> creditedLines) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        String format = tenant == null || tenant.getBillDistributionFormat() == null
+                ? "ehf" : tenant.getBillDistributionFormat();
+        Profile profile = profileOf(tenantId, format);
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.append("<CreditNote xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2\"\n")
+           .append("            xmlns:cac=\"urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2\"\n")
+           .append("            xmlns:cbc=\"urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2\">\n");
+        if (profile.customizationId() != null) {
+            xml.append("  <cbc:CustomizationID>").append(profile.customizationId())
+               .append("</cbc:CustomizationID>\n");
+        }
+        if (profile.profileId() != null) {
+            xml.append("  <cbc:ProfileID>").append(profile.profileId()).append("</cbc:ProfileID>\n");
+        }
+        xml.append("  <cbc:ID>").append(note.getCreditNoteNo()).append("</cbc:ID>\n");
+        xml.append("  <cbc:IssueDate>").append(note.getIssuedAt().toLocalDate()).append("</cbc:IssueDate>\n");
+        xml.append("  <cbc:CreditNoteTypeCode>381</cbc:CreditNoteTypeCode>\n");
+        xml.append("  <cbc:DocumentCurrencyCode>").append(note.getAmountUnit()).append("</cbc:DocumentCurrencyCode>\n");
+        // the law's load-bearing element: WHICH invoice this reverses
+        xml.append("  <cac:BillingReference><cac:InvoiceDocumentReference><cbc:ID>")
+           .append(note.getBillNo())
+           .append("</cbc:ID></cac:InvoiceDocumentReference></cac:BillingReference>\n");
+        xml.append("  <cac:AccountingSupplierParty><cac:Party><cac:PartyName><cbc:Name>")
+           .append(tenantId).append("</cbc:Name></cac:PartyName></cac:Party></cac:AccountingSupplierParty>\n");
+        xml.append("  <cac:AccountingCustomerParty><cac:Party><cac:PartyIdentification><cbc:ID>")
+           .append(note.getOwnerPartyId()).append("</cbc:ID></cac:PartyIdentification></cac:Party></cac:AccountingCustomerParty>\n");
+        xml.append("  <cac:LegalMonetaryTotal><cbc:PayableAmount currencyID=\"")
+           .append(note.getAmountUnit()).append("\">")
+           .append(note.getAmountValue()).append("</cbc:PayableAmount></cac:LegalMonetaryTotal>\n");
+        int lineNo = 1;
+        List<Map<String, Object>> ublLines = creditedLines == null || creditedLines.isEmpty()
+                ? List.of(Map.of("name", note.getReason(), "amount", note.getAmountValue()))
+                : creditedLines;
+        for (Map<String, Object> line : ublLines) {
+            xml.append("  <cac:CreditNoteLine><cbc:ID>").append(lineNo++).append("</cbc:ID>")
+               .append("<cbc:CreditedQuantity unitCode=\"C62\">1</cbc:CreditedQuantity>")
+               .append("<cbc:LineExtensionAmount currencyID=\"").append(note.getAmountUnit()).append("\">")
+               .append(line.get("amount")).append("</cbc:LineExtensionAmount>")
+               .append("<cac:Item><cbc:Name>").append(escape(String.valueOf(line.get("name"))))
+               .append("</cbc:Name></cac:Item>")
+               .append("</cac:CreditNoteLine>\n");
+        }
+        xml.append("</CreditNote>\n");
+        return xml.toString();
+    }
+
+    /** A credit note rides the SAME distribution ledger as the invoice it
+     * reverses — when the tenant is partner-wired for e-invoicing, the
+     * kreditnota ships as structured XML too. Fail-open otherwise. */
+    public void distributeCreditNote(String tenantId, com.bss.billing.entity.CreditNote note,
+            List<Map<String, Object>> creditedLines) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || !"partner".equalsIgnoreCase(tenant.getBillDistributionProvider())
+                || tenant.getBillDistributionUrl() == null
+                || tenant.getBillDistributionUrl().isBlank()) {
+            return;
+        }
+        BillDistribution row = new BillDistribution();
+        row.setId(java.util.UUID.randomUUID().toString());
+        row.setTenantId(tenantId);
+        row.setBillId(note.getBillId());
+        row.setBillNo(note.getCreditNoteNo());
+        row.setFormat(tenant.getBillDistributionFormat() == null ? "ehf"
+                : tenant.getBillDistributionFormat());
+        row.setChannel("einvoice");
+        row.setRecipient(note.getOwnerPartyId());
+        row.setContentType("application/xml");
+        row.setPayload(creditNoteXml(tenantId, note, creditedLines));
+        row.setStatus(BillDistribution.PENDING);
+        row.setAttempts(0);
+        row.setNextAttemptAt(OffsetDateTime.now());
+        row.setCreatedAt(OffsetDateTime.now());
+        row.setLastUpdate(OffsetDateTime.now());
+        ledger.save(row);
+    }
+
     private String ublOf(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines,
             Profile profile) {
         StringBuilder xml = new StringBuilder();

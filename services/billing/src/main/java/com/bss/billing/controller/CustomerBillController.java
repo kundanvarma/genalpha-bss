@@ -176,6 +176,12 @@ public class CustomerBillController {
         return ResponseEntity.ok(creditNoteService.byId(id));
     }
 
+    /** The legal wire format: UBL CreditNote-2 (EHF / Peppol BIS shape). */
+    @GetMapping(value = "/creditNote/{id}/document.xml", produces = "application/xml")
+    public ResponseEntity<String> creditNoteXml(@PathVariable("id") String id) {
+        return ResponseEntity.ok(creditNoteService.xmlOf(id));
+    }
+
     @GetMapping(value = "/creditNote/{id}/document.pdf", produces = "application/pdf")
     public ResponseEntity<byte[]> creditNotePdf(@PathVariable("id") String id) {
         return ResponseEntity.ok()

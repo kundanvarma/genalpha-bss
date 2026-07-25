@@ -116,9 +116,25 @@ flow now); suite #70 leg 10 re-targets accordingly.
    revenue listener + chart key + #70 leg 10 retarget, storefront +
    CSR faces, suite #71, regressions (revenue, storefront, csr),
    capability-map/README counts (71 suites), books.
-2. **P2 (open)**: EHF/Peppol BIS CreditNote via the bill-distribution
-   seam; credit-note lines (partial per-line credits); dispute-resolve
-   worklist UI in the CSR console.
+2. **P2 — SHIPPED 2026-07-25, suite #71 at eleven legs, all green.**
+   - **The wire format**: `GET /creditNote/{id}/document.xml` renders
+     UBL CreditNote-2 (type code 381, EHF/Peppol BIS shape) with the
+     load-bearing element the law wants — a BillingReference to the
+     invoice it reverses — dressed by the SAME tenant profile row that
+     dresses invoices. When the tenant is partner-wired for
+     e-invoicing, issuing a credit note also enqueues it on the SAME
+     distribution ledger (same relay, same retries) as the bills.
+   - **Per-line credits** (V26 `lines_json`): `lines: [{id, amount?}]`
+     credits named rate lines — each gets its own negative line
+     carrying the credited line's NAME, a line cannot be over-credited
+     (400), the note's total equals the sum of its lines, and the
+     credited lines ride the view, the PDF and the XML.
+   - **The worklist**: the back-office console gained a Disputes tab
+     (billing:admin — where the resolve privilege actually lives, a
+     deliberate deviation from the plan's "CSR console": agents open
+     disputes, admins decide money) — open cases carry a Decide action
+     (credit, amount, note — or uphold).
+   - Regressions green: bill-distribution, console, refunds.
 
 ## Shipped
 
