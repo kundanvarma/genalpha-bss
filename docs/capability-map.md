@@ -63,7 +63,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Deliver bills & apply incoming payments | distribution seam | `billing` | ✅ |
 | Collect & safeguard payments | TMF676/670 | `payment` + `payment-method` | ✅ (◐ PSP: mock default, Stripe adapter shaped — certify per deployment) |
 | Collect overdue debt (in-house) | billing clocks | `billing` | ✅ (❌ external collections-agency handoff) |
-| Charge in real time (prepay balance) | TMF654 facade + OCS seam | `usage` + mock-ocs | ◐ REAL online charging (Gy/Ro, 5G CHF) needs a production OCS behind the seam |
+| Charge in real time (prepay balance) | TMF654 facade + OCS seam | `usage` + mock-ocs | ◐ the TMF654 API face is CTK-certified (282/282); REAL online charging (Gy/Ro, 5G CHF) still needs a production OCS behind the seam |
 | Calculate jurisdictional taxes | — | — | ❌ prices are tax-inclusive by convention; jurisdictional tax (VAT/US telecom tax) needs Vertex/Avalara-class |
 | Account revenue (GL, rev-rec ASC 606) | — | — | ❌ export to ERP |
 | Settle wholesale / interconnect / roaming | — | — | ❌ carrier-grade settlement is its own product |
@@ -107,7 +107,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 69 suites and 12 CTKs.
+multi-tenant operation — proven by 69 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec, wholesale/roaming

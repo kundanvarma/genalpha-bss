@@ -49,5 +49,6 @@ The 4th arg is the collection's base-URL variable name (`auto` detects it).
 | payment | CTK-TMF676_Payment | `/tmf-api/paymentManagement/v4/` |
 | communication | CTK-TMF681-Communication | `/tmf-api/communicationManagement/v4/` |
 | billing | CTK-TMF678-CustomerBill | `/tmf-api/customerBillManagement/v4/` |
+| usage (prepay facade) | CTK-TMF654-PrepayBalance | `/tmf-api/prepayBalanceManagement/v4/` |
 
 See [`../../docs/ctk-conformance.md`](../../docs/ctk-conformance.md) for the current scorecard.

@@ -21,6 +21,7 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **usage (consumption)** | **TMF677** | **60/60, 0 failures** |
 | **billing** | **TMF678** | **19230/19230, 0 failures** |
 | **party-interaction** | **TMF683** | **846/846, 0 failures** |
+| **usage (prepay facade)** | **TMF654** | **282/282, 0 failures** |
 
 ## Measured, not yet zero
 
