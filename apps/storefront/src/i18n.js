@@ -13,6 +13,12 @@ export const currency = CFG.currency || 'EUR';
 export const intlLocale = { no: 'nb-NO', en: 'en-IE' }[locale] || locale;
 
 const NO = {
+  'My points': 'Mine poeng',
+  'Join the loyalty program': 'Bli med i fordelsprogrammet',
+  'Earn points on every bill; redeem them as data.': 'Tjen poeng på hver regning; løs inn som data.',
+  'points': 'poeng',
+  'Redeem 1 GB': 'Løs inn 1 GB',
+  'Redeemed! The GB lands on this month\u2019s meter.': 'Innløst! GB legges på denne månedens måler.',
   // nav + identity
   'Offers': 'Tilbud',
   'Cart': 'Handlekurv',

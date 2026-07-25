@@ -33,12 +33,31 @@ public class OrderEventListener {
         this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "${bss.usage.order-topic:bss.ordering.events}", groupId = "usage")
+    @KafkaListener(topics = { "${bss.usage.order-topic:bss.ordering.events}",
+            "${bss.usage.loyalty-topic:bss.loyalty.events}" }, groupId = "usage")
     @SuppressWarnings("unchecked")
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"ProductOrderStateChangeEvent".equals(String.valueOf(envelope.get("eventType")))) {
+            String eventType = String.valueOf(envelope.get("eventType"));
+            if ("LoyaltyDataRewardEvent".equals(eventType)) {
+                // points became gigabytes on the loyalty ledger; the meter
+                // delivers them — idempotent per redemption
+                String tenant = envelope.get("tenantId") == null ? "genalpha"
+                        : String.valueOf(envelope.get("tenantId"));
+                Map<String, Object> ev = envelope.get("event") instanceof Map<?, ?> em
+                        ? (Map<String, Object>) em : Map.of();
+                if (ev.get("loyaltyReward") instanceof Map<?, ?> rw) {
+                    try (TenantContext ignored = TenantContext.actAs(tenant)) {
+                        usage.recordLoyaltyBoost(tenant,
+                                String.valueOf(rw.get("partyId")),
+                                new java.math.BigDecimal(String.valueOf(rw.get("gb"))),
+                                String.valueOf(rw.get("redemptionId")));
+                    }
+                }
+                return;
+            }
+            if (!"ProductOrderStateChangeEvent".equals(eventType)) {
                 return;
             }
             String tenantId = envelope.get("tenantId") == null ? "genalpha"

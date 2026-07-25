@@ -445,6 +445,29 @@ export async function myUsage() {
 /** Gift remaining GB — to a family member by id, or straight to a phone
  * number when the plan's giftScope reaches that far; usage verifies the
  * link (or resolves the number in the tenant's own pool) live. */
+const LOYALTY = '/tmf-api/loyaltyManagement/v4';
+
+/** Loyalty: opt-in membership, my balance, and points→GB redemption. */
+export async function myLoyalty() {
+  const res = await authFetch(`${LOYALTY}/loyaltyProgramMember/me`);
+  if (res.status === 404) return null; // not a member (or no program)
+  return json(res);
+}
+export async function enrollLoyalty() {
+  return json(await authFetch(`${LOYALTY}/loyaltyProgramMember`, { method: 'POST' }));
+}
+export async function loyaltyProgram() {
+  const res = await authFetch(`${LOYALTY}/loyaltyProgram`);
+  if (res.status === 404) return null;
+  return json(res);
+}
+export async function redeemLoyaltyData(gb) {
+  return json(await authFetch(`${LOYALTY}/redeem`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'data', gb }),
+  }));
+}
+
 export async function giftData(receiver, amount) {
   return json(await authFetch('/tmf-api/usageManagement/v4/gift', {
     method: 'POST',

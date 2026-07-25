@@ -529,6 +529,35 @@ public class UsageService {
 
     // ---------------- gifting & rollover (the gifting move, family-wide) ----------------
 
+    /**
+     * THE LOYALTY REWARD: points burned on the loyalty ledger arrive here as
+     * gigabytes on THIS month's meter — the same allowance-boost mechanic
+     * top-ups and gifts use, idempotent per redemption, source-labeled so
+     * the meter's history says where every GB came from.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void recordLoyaltyBoost(String tenantId, String party, java.math.BigDecimal gb,
+            String redemptionId) {
+        String marker = "loyalty-" + redemptionId;
+        LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
+        List<GbPosition> positions = gbPositions(tenantId, party, periodStart);
+        if (positions.isEmpty()) {
+            org.slf4j.LoggerFactory.getLogger(UsageService.class)
+                    .warn("loyalty boost skipped: {} has no data bucket to credit", party);
+            return;
+        }
+        String spec = positions.get(0).spec();
+        if (boosts.existsByTenantIdAndProductOrderIdAndUsageSpecName(tenantId, marker, spec)) {
+            return; // at-least-once delivery, exactly-once gigabytes
+        }
+        boosts.save(giftBoost(tenantId, party, spec, gb, marker, "loyalty", periodStart));
+        events.publish("BucketBalanceChangeEvent", "bucket", Map.of(
+                "relatedParty", List.of(Map.of("id", party, "role", "customer")),
+                "amount", gb, "units", "GB", "usageType", spec, "source", "loyalty"));
+        org.slf4j.LoggerFactory.getLogger(UsageService.class)
+                .info("loyalty: {} credited {} GB on {} (redemption {})", party, gb, spec, redemptionId);
+    }
+
     /** A party's GB position this month, per usage spec: base, boosted, used. */
     private record GbPosition(String spec, String offeringId,
             BigDecimal base, BigDecimal allowed, BigDecimal used) {

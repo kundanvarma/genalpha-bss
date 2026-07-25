@@ -113,4 +113,24 @@ entry, not new machinery.
 
 ## Shipped
 
-*(pending — this document is the plan; build begins on approval.)*
+**Phase 1 — 2026-07-25, suite #69 green.** Component #34 `loyalty`
+(TMF658, port 8114) landed: program-as-data (earn rate, GB price —
+campaign:write to edit, marketer-owned), OPT-IN membership (party-bound,
+never auto), the append-only journal with cause on every movement, and
+the liability endpoint. EARNING: a Kafka listener on bss.billing.events
+turns CustomerBillStateChangeEvent(state=settled) into points at the
+program's rate — idempotent per bill (unique cause index), members only;
+proven live: paula's 50 EUR bill earned 500 points. BURNING: points →
+gigabytes through the outbox (LoyaltyDataRewardEvent) into the usage
+service's allowance-boost mechanic (source="loyalty", idempotent per
+redemption) — and the suite verifies AT THE METER (usageConsumptionReport
+allowedValue rises), never on the loyalty API's word. Storefront My page
+gained the "My points" card (opt-in, balance, redeem 1 GB, nb-NO). The
+capability map's reddest Market & Sales row is ✅ #69 with phase-2 items
+(tiers, vouchers, expiry) honestly marked ◐. Build notes: nested Spring
+Data interfaces don't scan (split top-level); the outbox DDL must match
+the shared entity exactly; gateway route edits need the gateway JAR
+rebuilt (host-built jars). Regressions green: storefront, ocs.
+
+*(Phases 2–3 — vouchers, tiers + policy benefits, expiry, churn wiring,
+app parity — next.)*

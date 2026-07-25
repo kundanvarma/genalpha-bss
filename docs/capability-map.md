@@ -23,7 +23,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Sell through indirect channels (retail, telesales) | dealer API + TMF683 logging | SOM dealer module + `apps/dealer-console` | ✅ #48/#51 |
 | Plan, run & MEASURE marketing campaigns | TMF Campaign-shaped | `campaign` (journeys, A/B, holdout lift, caps) | ✅ #35–39 |
 | Capture & develop sales leads | TMF699 Sales Management | `quote` service | ✅ |
-| Reward & retain customers (loyalty) | TMF Loyalty | — | ❌ points/tiers/earn-burn need a loyalty engine |
+| Reward & retain customers (loyalty) | TMF658 Loyalty Management | `loyalty` (#34) | ✅ #69 (phase 1: earn on settled bills, burn to DATA verified at the meter, liability endpoint; ◐ tiers/vouchers/expiry = phase 2) |
 | Sell through AI shopping agents | ACP + MCP over TMF620/663/622 | catalog + cart + gateway | ✅ #64 |
 | Be recommendable by AI answer engines | GEO dual-serve + JSON-LD | catalog `/seo` + gateway | ✅ #68 |
 
@@ -107,7 +107,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 68 suites and 11 CTKs.
+multi-tenant operation — proven by 69 suites and 11 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec, wholesale/roaming

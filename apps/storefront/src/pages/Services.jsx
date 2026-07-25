@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, diagnoseMyService, giftData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -199,6 +199,13 @@ function ProductRow({ product, services, offerings, prices, onChanged, nested })
 }
 
 export default function Services() {
+  const [loyalty, setLoyalty] = useState(null);
+  const [loyaltyProg, setLoyaltyProg] = useState(null);
+  const [loyaltyMsg, setLoyaltyMsg] = useState('');
+  useEffect(() => {
+    loyaltyProgram().then(setLoyaltyProg).catch(() => {});
+    myLoyalty().then(setLoyalty).catch(() => {});
+  }, []);
   const [products, setProducts] = useState(null);
   const [services, setServices] = useState([]);
   const [buckets, setBuckets] = useState([]);
@@ -376,6 +383,33 @@ export default function Services() {
         </section>
       )}
 
+      {loyaltyProg && (
+        <section className="card" data-testid="loyalty-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+          <h2 style={{ marginTop: 0 }}>{t('My points')}</h2>
+          {loyalty ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <b data-testid="loyalty-points" style={{ fontSize: '1.4rem' }}>{loyalty.balance}</b>
+              <span>{t('points')}</span>
+              <button data-testid="loyalty-redeem" disabled={loyalty.balance < loyaltyProg.pointsPerGb}
+                onClick={async () => {
+                  try {
+                    const r = await redeemLoyaltyData(1);
+                    setLoyalty(r);
+                    setLoyaltyMsg(t('Redeemed! The GB lands on this month\u2019s meter.'));
+                  } catch (e) { setLoyaltyMsg(String(e.message || e)); }
+                }}>{t('Redeem 1 GB')} ({loyaltyProg.pointsPerGb} {t('points')})</button>
+              {loyaltyMsg && <span data-testid="loyalty-msg" style={{ color: 'var(--dim, #666)' }}>{loyaltyMsg}</span>}
+            </div>
+          ) : (
+            <div>
+              <p style={{ margin: '4px 0 10px' }}>{t('Earn points on every bill; redeem them as data.')}</p>
+              <button data-testid="loyalty-join" onClick={async () => {
+                setLoyalty(await enrollLoyalty());
+              }}>{t('Join the loyalty program')}</button>
+            </div>
+          )}
+        </section>
+      )}
       {broadband.length > 0 && (
         <section className="card" data-testid="broadband-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Broadband')}</h2>
