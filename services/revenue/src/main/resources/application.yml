@@ -51,6 +51,7 @@ bss:
   downstream:
     billing-base-url: ${BILLING_BASE_URL:http://localhost:8088}
     loyalty-base-url: ${LOYALTY_BASE_URL:http://localhost:8114}
+    agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8106}
   revenue:
     billing-topic: ${REVENUE_BILLING_TOPIC:bss.billing.events}
     payment-topic: ${REVENUE_PAYMENT_TOPIC:bss.payment.events}

@@ -53,6 +53,16 @@ public class RevenueController {
                 .body(service.exportCsv(parseDate(date), format));
     }
 
+    /** Obligation timelines for the ERP's rev-rec engine (ASC 606/IFRS 15). */
+    @GetMapping("/revrecInput")
+    public ResponseEntity<?> revrecInput(@RequestParam(required = false) String format) {
+        if ("csv".equalsIgnoreCase(format)) {
+            return ResponseEntity.ok().header("Content-Type", "text/csv")
+                    .body(service.revrecCsv());
+        }
+        return ResponseEntity.ok(service.revrecInput());
+    }
+
     @PostMapping("/loyaltyAccrual")
     public ResponseEntity<Map<String, Object>> loyaltyAccrual() {
         return ResponseEntity.ok(service.loyaltyAccrual());

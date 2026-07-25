@@ -280,6 +280,25 @@ const balanced = (entry) => {
   await call('POST', `${R}/accountMapping`, staff,
     { key: 'tax', accountCode: '2700', accountName: 'VAT payable', configValue: 0 });
 
+  /* ---------- 14. rev-rec inputs: the obligation timeline ---------- */
+  const revrec = (await call('GET', `${R}/revrecInput`, staff)).body || [];
+  if (!revrec.length) fail('no active commitments in the rev-rec input');
+  const rr = revrec.find((r2) => r2.commitmentMonths > 0 && r2.offeringName);
+  if (!rr) fail('no commitment row with months + offering');
+  if (Number(rr.monthsElapsed) + Number(rr.monthsRemaining) !== Number(rr.commitmentMonths)) {
+    fail('elapsed + remaining must equal the commitment');
+  }
+  if (!rr.contractId || !rr.partyId || !rr.startDate || !rr.endDate) {
+    fail('rev-rec row missing obligation fields: ' + JSON.stringify(rr));
+  }
+  const rrCsv = await (await fetch(`${API}${R}/revrecInput?format=csv`,
+    { headers: { Authorization: `Bearer ${staff}` } })).text();
+  if (!rrCsv.startsWith('contractId,contractName,partyId')) fail('rev-rec CSV header wrong');
+  console.log(`OK REV-REC INPUTS: ${revrec.length} active commitments exported as obligation`
+    + ` timelines (e.g. "${rr.offeringName}", ${rr.commitmentMonths} months,`
+    + ` ${rr.monthsRemaining} remaining) — the journal says what was BILLED, this says what`
+    + ' was PROMISED; SSP allocation stays the ERP engine\'s job, deliberately.');
+
   console.log('\nALL REVENUE CHECKS PASSED — the BSS is an honest subledger: every posting'
     + ' balanced by invariant, idempotent by construction, tied out against billing and'
     + ' payments to the cent, exported in the shape a general ledger ingests (SAP and NetSuite flavors included), with tax split, dispute credits, priced loyalty liability and a period close that makes the export FINAL. The GL stays'

@@ -415,6 +415,7 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       BILLING_BASE_URL: http://billing:8080
       LOYALTY_BASE_URL: http://loyalty:8080
+      AGREEMENT_BASE_URL: http://agreement:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/revenue

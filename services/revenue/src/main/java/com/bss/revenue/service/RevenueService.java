@@ -443,6 +443,74 @@ public class RevenueService {
         return out;
     }
 
+    /** REV-REC INPUTS: the obligation timeline the ERP's ASC 606 / IFRS 15
+     * engine allocates over. One row per active commitment: who, what,
+     * from-when, to-when, how many months, how far along. The BSS does
+     * NOT restate prices here — the journal export already carries what
+     * was billed; SSP allocation is deliberately the ERP's job. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> revrecInput() {
+        LocalDate today = LocalDate.now();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> a : billingClient.agreements()) {
+            if (!"active".equals(a.get("status"))) {
+                continue;
+            }
+            Map<String, Object> period = castMap(a.get("agreementPeriod"));
+            if (period.get("startDateTime") == null || period.get("endDateTime") == null) {
+                continue;
+            }
+            LocalDate start = LocalDate.parse(String.valueOf(period.get("startDateTime")).substring(0, 10));
+            LocalDate end = LocalDate.parse(String.valueOf(period.get("endDateTime")).substring(0, 10));
+            long months = a.get("commitmentMonths") instanceof Number n ? n.longValue()
+                    : java.time.temporal.ChronoUnit.MONTHS.between(start, end);
+            long elapsed = Math.max(0, Math.min(months,
+                    java.time.temporal.ChronoUnit.MONTHS.between(start, today)));
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("contractId", a.get("id"));
+            row.put("contractName", a.get("name"));
+            String party = null;
+            if (a.get("engagedParty") instanceof List<?> parties) {
+                for (Object p2 : parties) {
+                    if (p2 instanceof Map<?, ?> ref && ref.get("id") != null) {
+                        party = String.valueOf(ref.get("id"));
+                        break;
+                    }
+                }
+            }
+            row.put("partyId", party);
+            if (a.get("agreementItem") instanceof List<?> items && !items.isEmpty()
+                    && items.get(0) instanceof Map<?, ?> item
+                    && item.get("productOffering") instanceof Map<?, ?> po) {
+                row.put("offeringId", po.get("id"));
+                row.put("offeringName", po.get("name"));
+            }
+            row.put("startDate", start.toString());
+            row.put("endDate", end.toString());
+            row.put("commitmentMonths", months);
+            row.put("monthsElapsed", elapsed);
+            row.put("monthsRemaining", months - elapsed);
+            row.put("@type", "RevRecInput");
+            out.add(row);
+        }
+        return out;
+    }
+
+    /** The same timeline as the CSV a rev-rec import wants. */
+    @Transactional(readOnly = true)
+    public String revrecCsv() {
+        StringBuilder csv = new StringBuilder(
+                "contractId,contractName,partyId,offeringId,offeringName,startDate,endDate,commitmentMonths,monthsElapsed,monthsRemaining\n");
+        for (Map<String, Object> row : revrecInput()) {
+            csv.append(String.join(",", plain(row.get("contractId")), quote(row.get("contractName")),
+                    plain(row.get("partyId")), plain(row.get("offeringId")),
+                    quote(row.get("offeringName")), plain(row.get("startDate")),
+                    plain(row.get("endDate")), plain(row.get("commitmentMonths")),
+                    plain(row.get("monthsElapsed")), plain(row.get("monthsRemaining")))).append('\n');
+        }
+        return csv.toString();
+    }
+
     /* ---------- the chart ---------- */
 
     @Transactional

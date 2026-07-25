@@ -25,12 +25,15 @@ public class BillingClient {
 
     private final RestClient billing;
     private final RestClient loyalty;
+    private final RestClient agreement;
 
     public BillingClient(RestClient.Builder builder, MachineTokenInterceptor machineToken,
             @Value("${bss.downstream.billing-base-url}") String billingBase,
-            @Value("${bss.downstream.loyalty-base-url}") String loyaltyBase) {
+            @Value("${bss.downstream.loyalty-base-url}") String loyaltyBase,
+            @Value("${bss.downstream.agreement-base-url}") String agreementBase) {
         this.billing = builder.baseUrl(billingBase).requestInterceptor(machineToken).build();
         this.loyalty = RestClient.builder().baseUrl(loyaltyBase).requestInterceptor(machineToken).build();
+        this.agreement = RestClient.builder().baseUrl(agreementBase).requestInterceptor(machineToken).build();
     }
 
     public Map<String, Object> bill(String billId) {
@@ -42,6 +45,13 @@ public class BillingClient {
         return billing.get()
                 .uri("/tmf-api/customerBillManagement/v4/customerBill/{id}/appliedCustomerBillingRate", billId)
                 .retrieve().body(LIST);
+    }
+
+    /** The TMF651 commitments — rev-rec's obligation timeline. */
+    public List<Map<String, Object>> agreements() {
+        List<Map<String, Object>> out = agreement.get()
+                .uri("/tmf-api/agreementManagement/v4/agreement?limit=200").retrieve().body(LIST);
+        return out == null ? List.of() : out;
     }
 
     /** Fail-soft: no loyalty component (or no program) is not an error. */

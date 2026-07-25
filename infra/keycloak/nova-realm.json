@@ -1176,7 +1176,8 @@
       "serviceAccountClientId": "bss-revenue",
       "realmRoles": [
         "billing:read",
-        "campaign:read"
+        "campaign:read",
+        "agreement:read"
       ]
     }
   ],
