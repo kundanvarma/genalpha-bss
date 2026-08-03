@@ -72,6 +72,7 @@ beside it.</p>
 24. <a href="#standards">The standards sweep</a><br>
 25. <a href="#configurator">The product configurator</a><br>
 26. <a href="#servicequal">Service qualification &amp; the coverage map</a><br>
+27. <a href="#aimgmt">AI management — the control plane's face</a><br>
 </p>
 </div>
 
@@ -732,7 +733,28 @@ refusals speak the qualification's words), and the cart's address block names wh
 network delivers ("Fiber up to 1000 Mbit/s at your address"). See
 <a href="../tmf645-service-qualification-plan.md">docs/tmf645-service-qualification-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty suites, thirteen CTKs at zero
+<h2 id="aimgmt">27 · AI management — the control plane's face (TMF915) — suite #81</h2>
+<p>The governed-AI machinery, standards-addressable on intelligence at
+<code>/tmf-api/aiManagement/v4</code>. <b>GET /aiModel</b> (ai:use): the models the audit
+ledger PROVES have served — distinct provider/model/tier pairs with the scenarios each
+served, plus the trained churn classifier carrying its <code>trainingRecord</code>
+(sampleCount, positives, trainedAt). <b>GET /aiModelContract[/{id}]</b> (ai:use): one
+contract per governed scenario — <code>state</code> (active | suspended |
+haltedByKillSwitch), <code>servedBy</code> model refs, <code>monitoring</code> (calls,
+tokens, costMicros, avgLatencyMs, and per-outcome counts including
+<code>refused-budget</code>/<code>refused-disabled</code>/<code>refused-contract</code>),
+and the <code>guardrail</code> block (tenant kill-switch, budget, window).
+<b>PATCH /aiModelContract/{id}</b> (<code>ai:admin</code> — the seam, now open):
+<code>{state: suspended|active, note}</code> — the per-scenario brake, checked in the
+governor's gate order right after the tenant kill-switch; a suspended contract's calls
+403 and land on the ledger as <code>refused-contract</code>. Budget-setting
+(<code>POST /ai/v1/governance/budget</code>) now also requires <code>ai:admin</code>.
+Ops note: <code>accessTokenLifespan</code> is 1800s in BOTH realm files — a Keycloak
+container recreate re-imports realms from files, so live-only settings (and
+dynamically-onboarded realms like aurora) do not survive one. See
+<a href="../tmf915-ai-management-plan.md">docs/tmf915-ai-management-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-one suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

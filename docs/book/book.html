@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and eighty end-to-end test suites that all pass
+    composable components, six customer surfaces, and eighty-one end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -3184,6 +3184,55 @@
     <p class="pull edge">Eighty suites. The commercial question and the technical one now
     have separate, honest answers from the same small service — and the refusal that used
     to arrive as a failed delivery arrives as a sentence, with an alternative attached.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Fifty-Nine</div>
+    <h3>The scalpel beside the kill-switch</h3>
+    <div class="epi">"update the books with the 915 arc and then start another tmf"
+    <span class="who">— the operator, in the rhythm now</span></div>
+
+    <p class="drop">Of everything the fleet had built, the strangest omission was this: its
+    most differentiated machinery had no standard face. Every model call in the system
+    walks through one door — kill-switch, budget, meter, one audit row, refusals included —
+    and that door had been suite-proven for months. TM Forum's TMF915 asks exactly the
+    question this machinery answers: how does an operator GOVERN AI deployed at scale? Its
+    central idea, the model contract, mapped onto the fleet's eleven scenario identifiers
+    almost word for word. And the honest rule held again: a face may only claim what the
+    thing knows. So the models the face lists are the ones the audit ledger PROVES have
+    served — a stub, two local llamas, a real frontier model from past experiments, and
+    the one genuinely versioned artifact, the trained churn classifier with its training
+    record. Nothing registered. Everything observed.</p>
+
+    <p>The face's first breath told months of truth at once: sixteen contracts projected
+    from the ledger, campaign-copy alone carrying sixty-eight calls, its spend in micros,
+    its average latency — and every refusal class, including the refused-budget and
+    refused-disabled rows an old suite had left behind like fossils. That is what an audit
+    ledger is FOR: the face didn't need to be told the history, it inherited it. But the
+    recon had also found the one honest gap worth new substance. The only brake was the
+    tenant-wide kill-switch — all the AI or none of it. TMF915's in-life contract
+    management is precisely the missing lever, so the arc built it: a per-scenario switch,
+    checked in the governor's gate order, refusing with its own audited outcome. The suite
+    suspended campaign-copy over the standard face, watched the next call refuse ON the
+    ledger, and watched a different scenario keep answering. One scenario braked; the
+    fleet unharmed.</p>
+
+    <p>The arc also opened a door that had been promised in a comment since the control
+    plane was born: the governance controller's javadoc had always said a production
+    deployment would separate an ai:admin authority — "the seam is the matcher." Contract
+    suspension and budget-setting now require it, and the suite proves the split the only
+    honest way: a staff user holding ai:use alone, refused on camera. And the regressions
+    taught their own lesson — the day's Keycloak recreate had silently reverted a
+    live-set token lifespan, killing long suites mid-wait, and the fix went where every
+    such fix now goes: into the FILES first, then live. The file-plus-live doctrine, it
+    turns out, covers realm settings too.</p>
+
+    <p class="pull edge">Eighty-one suites. The machine that governs the machines is now
+    itself governable over a standard — models it can prove, contracts with their real
+    numbers, refusals with receipts, and a scalpel where there used to be only a
+    kill-switch.</p>
   </section>
 
   <hr class="soft">
