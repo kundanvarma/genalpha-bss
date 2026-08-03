@@ -44,6 +44,16 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // the product advisor is the PRODUCT OWNER\u2019s tool
                         .requestMatchers("/tmf-api/incidentManagement/v4/**").hasAuthority("ai:use")
+                        // TMF915: reading the control plane's face is ops-grade;
+                        // SUSPENDING a model contract is the first door behind
+                        // ai:admin — the seam production always needed, opened
+                        .requestMatchers(HttpMethod.PATCH,
+                                "/tmf-api/aiManagement/v4/**").hasAuthority("ai:admin")
+                        .requestMatchers("/tmf-api/aiManagement/v4/**").hasAuthority("ai:use")
+                        // setting budgets / throwing the tenant kill-switch is
+                        // ai:admin too, now that the authority exists
+                        .requestMatchers(HttpMethod.POST,
+                                ApiConstants.BASE_PATH + "/governance/budget").hasAuthority("ai:admin")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         // the customer's OWN rail: self-scoped in the handler
                         // (party = token subject), so plain authentication is

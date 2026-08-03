@@ -40,6 +40,7 @@ public class AiGovernor {
     private final LlmAdapter llm;
     private final AiAuditRepository audits;
     private final AiBudgetRepository budgets;
+    private final com.bss.intelligence.audit.AiContractRepository contracts;
     private final TenantScope tenantScope;
     private final Redactor redactor;
     private final org.springframework.transaction.support.TransactionTemplate newTx;
@@ -47,6 +48,7 @@ public class AiGovernor {
     private final Map<String, Long> pricePer1kByModel;
 
     public AiGovernor(LlmAdapter llm, AiAuditRepository audits, AiBudgetRepository budgets,
+            com.bss.intelligence.audit.AiContractRepository contracts,
             TenantScope tenantScope, Redactor redactor,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             @Value("${bss.ai.default-price-per-1k-micros:2000}") long defaultPricePer1kMicros,
@@ -54,6 +56,7 @@ public class AiGovernor {
         this.llm = llm;
         this.audits = audits;
         this.budgets = budgets;
+        this.contracts = contracts;
         this.tenantScope = tenantScope;
         this.redactor = redactor;
         // ledger rows record what HAPPENED — they must survive whatever the
@@ -85,6 +88,15 @@ public class AiGovernor {
             record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-disabled", null, null, null);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "AI is disabled for this tenant");
+        }
+        // TMF915: the per-scenario brake — a suspended model contract
+        // refuses THIS use case while the rest of the fleet keeps working
+        boolean contractSuspended = contracts.findByTenantIdAndUseCase(tenant, useCase)
+                .map(c -> !c.isEnabled()).orElse(false);
+        if (contractSuspended) {
+            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-contract", null, null, null);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "the model contract for '" + useCase + "' is suspended");
         }
         if (overBudget(tenant, budget)) {
             record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-budget", null, null, null);

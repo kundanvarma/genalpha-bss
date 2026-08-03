@@ -314,6 +314,10 @@
             "billing:admin"
           ]
         }
+      },
+      {
+        "name": "ai:admin",
+        "description": "Govern the AI control plane: budgets, kill-switch, model-contract suspension"
       }
     ]
   },
@@ -835,7 +839,8 @@
         "appointment:admin",
         "knowledge:read",
         "knowledge:write",
-        "insight:read"
+        "insight:read",
+        "ai:admin"
       ],
       "id": "69eb7c8c-9c3e-4254-87e2-2fceed188668"
     },
@@ -1241,5 +1246,6 @@
         "payment:write"
       ]
     }
-  ]
+  ],
+  "accessTokenLifespan": 1800
 }

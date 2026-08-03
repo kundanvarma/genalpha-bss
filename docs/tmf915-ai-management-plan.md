@@ -81,4 +81,33 @@ routing, process-memory.
 
 ## Shipped
 
-*(recorded when the phase lands)*
+**2026-08-03, suite #81 green (four legs), first full run.** TMF915
+lives at `/tmf-api/aiManagement/v4` on intelligence. The face told the
+truth on its first breath: sixteen model contracts projected straight
+from the audit ledger — campaign-copy alone showing 68 calls, the spend
+in micros, the average latency, and every refusal class INCLUDING the
+historical refused-budget and refused-disabled rows suite #59 left
+behind months ago; five models the ledger proves have served (stub,
+two local llamas, a real Anthropic haiku — and the trained churn
+classifier with its sampleCount/positives/trainedAt training record).
+Nothing registered, everything observed. The new substance: the
+`ai_contract` per-scenario brake, checked in the governor's gate order
+right after the tenant kill-switch — suspending campaign-copy over the
+standard face 403'd the next call, AUDITED it as `refused-contract`,
+and knowledgeAsk kept answering; reactivation restored service and the
+contract remembers its last decision. The `ai:admin` seam the
+governance controller always promised is OPEN: contract PATCH and
+budget POST both require it (demo holds it, file + live in both
+realms); a staff user with ai:use alone was refused on camera, a
+customer saw nothing, and genalpha's suspension never crossed into
+nova. Regressions green (serial): ai control plane #59, model routing
+(after re-onboarding aurora — today's KC recreate had wiped the
+dynamically-onboarded realms; the first operator-form run also tripped
+on refresher lag against July's rebranded manifest, clean on re-run),
+process-memory. That last one surfaced a real environment lesson: the
+KC recreate had ALSO reverted accessTokenLifespan to the 300s default
+(a live-only setting from months back), so long suites with
+single-mint tokens started dying mid-wait with 401-objects. Fixed the
+doctrine way — `accessTokenLifespan: 1800` in BOTH realm FILES and
+live, helm synced: the file+live rule covers realm SETTINGS, not just
+clients and roles.

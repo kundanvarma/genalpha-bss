@@ -103,6 +103,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Capability | Where | Status |
 |---|---|---|
 | AI control plane (meter/budget/kill-switch/audit) | `intelligence` | ✅ #59 |
+| Govern AI at scale, standards-addressable (TMF915: model contracts, per-scenario brake, ai:admin) | `intelligence` /tmf-api/aiManagement | ✅ #81 (models the ledger proves; contracts with real metrics incl. every refusal class; suspend one scenario without stopping the fleet) |
 | Agentic surfaces: GEO / ACP / MCP / workforce / closed loop | gateway + catalog + cart + intelligence + packages | ✅ #64–66, #68 |
 | Legacy overlay (wrap an existing BSS) | 3 per-tenant seams | ✅ #67 |
 | Event backbone + observability (Live Flow) | Kafka outbox + `flow` | ✅ |
