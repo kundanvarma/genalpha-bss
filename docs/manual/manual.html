@@ -73,6 +73,7 @@ beside it.</p>
 25. <a href="#configurator">The product configurator</a><br>
 26. <a href="#servicequal">Service qualification &amp; the coverage map</a><br>
 27. <a href="#aimgmt">AI management — the control plane's face</a><br>
+28. <a href="#risk">Risk management — the door check</a><br>
 </p>
 </div>
 
@@ -754,7 +755,26 @@ container recreate re-imports realms from files, so live-only settings (and
 dynamically-onboarded realms like aurora) do not survive one. See
 <a href="../tmf915-ai-management-plan.md">docs/tmf915-ai-management-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-one suites, thirteen CTKs at zero
+<h2 id="risk">28 · Risk management — the door check (TMF696) — suite #82</h2>
+<p>The acquisition-side twin of churn, on intelligence at
+<code>/tmf-api/riskManagement/v4</code> behind <code>risk:assess</code> (demo staff + the
+bss-ordering machine; customers 403 even on their own scores — a risk score is a credit
+check). <b>POST /partyRiskAssessment</b> <code>{relatedParty:[{id}]}</code> and
+<b>POST /productOrderRiskAssessment</b> (adds <code>totalQuantity</code>,
+<code>lineCount</code>, <code>verifiedIdentity</code> — supplied by the caller whose
+session knows it; a verified session scores 20 lower). The score is TRANSPARENT: named
+signals (unpaidBills, creditNotes, orderVelocity, newAccount, bulkOrder,
+verifiedSession) each with points + raw evidence in the body — recomputable by hand.
+Deliberately NOT scored: failed payments (refusals never persist) and lifetime
+verification (session claim only). Assessments persist and read back by id.
+<b>Enforcement is data</b>: ordering fetches a fresh assessment (machine identity,
+fail-open) into the policy context as <code>riskScore</code>/<code>riskLevel</code>;
+the operator's JsonLogic rule sets the threshold — deny returns 422
+<code>POLICY_DENIED</code>. Billing's <code>GET /creditNote</code> grew a
+<code>relatedPartyId</code> filter for the engine. See
+<a href="../tmf696-risk-plan.md">docs/tmf696-risk-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-two suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

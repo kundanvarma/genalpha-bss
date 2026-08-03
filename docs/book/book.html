@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and eighty-one end-to-end test suites that all pass
+    composable components, six customer surfaces, and eighty-two end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -3233,6 +3233,52 @@
     itself governable over a standard — models it can prove, contracts with their real
     numbers, refusals with receipts, and a scalpel where there used to be only a
     kill-switch.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty</div>
+    <h3>The other direction of trust</h3>
+    <div class="epi">"go ahead with the plan and build" <span class="who">— the operator,
+    five arcs into one day</span></div>
+
+    <p class="drop">The fleet had spent months learning to score who might LEAVE — the
+    churn scorer, its features, its alerts. It had never once asked the opposite
+    question: who should not be let IN? Subscription fraud is acquisition's oldest tax,
+    and TMF696 is its standard face. But the recon mattered more than the spec here,
+    because its most important findings were about what the data could NOT say. Failed
+    payments leave no row — a refused charge throws and persists nothing, so "how many
+    failed payments has this party had" is unanswerable, and the face must not pretend
+    otherwise. And nothing anywhere records that a party has EVER BankID-verified —
+    verification lives in the session token and dies with it. Two silences, both honored:
+    the engine scores neither.</p>
+
+    <p>What it does score, it scores in the open. Unpaid bills, credit notes, order
+    velocity, account tenure, the order's own bulk — each signal contributes named
+    points and carries its raw evidence inside the assessment body, so the total
+    recomputes by hand from what the assessment itself says. The first real run argued
+    the design better than any demo script could have: kai, the storefront's oldest
+    test customer, scored eighty-five — two genuinely unpaid bills, seventeen genuine
+    credit notes, and forty-six orders in twenty-four hours of genuine suite traffic.
+    The suite fetched every number independently and watched them match. And the
+    verified session became the great reducer: the same order, BankID-verified, scored
+    exactly twenty lower — the strongest anti-fraud signal the fleet has, known only to
+    the token that carries it.</p>
+
+    <p>Enforcement went where this fleet keeps all its decisions: in data. Ordering
+    fetches a fresh assessment under its own machine identity and drops two variables
+    into the policy context; the OPERATOR's rule decides the threshold. The suite pinned
+    a ceiling just under kai's score, watched his order refuse with the review message,
+    deleted the rule, and watched the same order pass — a fraud posture switched on and
+    off without a deploy. And one wall mattered more than the rest: a customer cannot
+    read his own risk score. A risk score is a credit check — the back office's honest
+    opinion, not a customer surface — and the suite proves the refusal on camera.</p>
+
+    <p class="pull edge">Eighty-two suites. Trust now has both directions: the fleet
+    knows who might leave, knows who to doubt at the door — and can show its arithmetic
+    for either, signal by signal, with the silences labeled as carefully as the
+    numbers.</p>
   </section>
 
   <hr class="soft">
