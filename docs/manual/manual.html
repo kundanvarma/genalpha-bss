@@ -70,6 +70,7 @@ beside it.</p>
 22. <a href="#creditnote">Credit notes</a><br>
 23. <a href="#process">Process flows &amp; the incident agent</a><br>
 24. <a href="#standards">The standards sweep</a><br>
+25. <a href="#configurator">The product configurator</a><br>
 </p>
 </div>
 
@@ -685,7 +686,30 @@ filter (billing:admin), delivery ledger with backoff retries and dead-letter.
 TMF653 serviceTests with history over diagnose, TMF639 pools + issued-number ledger with the
 honest generator note. See <a href="../standards-completion-plan.md">docs/standards-completion-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-six suites, thirteen CTKs at zero
+<h2 id="configurator">25 · The product configurator (TMF760) — suites #77/#78</h2>
+<p>Two anonymous task resources on product-catalog at
+<code>/tmf-api/productConfigurationManagement/v5</code> (TMF760 has no v4), stateless —
+the POST computes from the catalog's own rows and answers.
+<b>Query</b>: <code>POST /queryProductConfiguration</code> with
+<code>{productConfiguration:{productOffering:{id}}}</code> returns the configuration space —
+fixed members, choice groups (<code>minSelections</code>/<code>maxSelections</code>/default),
+each option's pickers and prices with <code>appliesWhen</code> conditions visible.
+<b>Check</b>: <code>POST /checkProductConfiguration</code> with
+<code>selectedOption:[{id}]</code> + <code>configurationCharacteristic:[{name,value}]</code>
+validates BOTH pick bounds, characteristic values scoped to the PICKED options, and policy
+block rules (under <code>bss-catalog</code>, the catalog's machine identity; fail-open) —
+rejections use ordering's exact wording. An approved answer carries
+<code>configurationPrice</code> (monthly + one-time + lines; conditioned lines only on exact
+match; the deal engine's indicative total rides along) and an ORDER-READY
+<code>productConfiguration</code> echo with each pick on the option whose spec owns it.
+<b>Agent channel</b>: MCP tools <code>get_configuration_options</code> and
+<code>configure_product</code> (an approved answer includes a ready <code>checkoutItem</code>);
+ACP checkout items accept <code>configuration</code> — the cart prices from the check, refuses
+invalid picks before a session opens, and complete builds nested order items with
+<code>product.productCharacteristic</code>, so billing rates the configuration like any other
+channel's order. See <a href="../tmf760-configurator-plan.md">docs/tmf760-configurator-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-eight suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

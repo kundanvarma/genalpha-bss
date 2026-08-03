@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and seventy-six end-to-end test suites that all pass
+    composable components, six customer surfaces, and seventy-eight end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -3089,6 +3089,51 @@
     <p class="pull edge">Seventy-six suites, thirty-eight components, six new standard faces
     in one sweep — and not one of them built new substance. They named what the fleet had
     already earned, which is what standards are for.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Fifty-Seven</div>
+    <h3>The configurator that was hiding in the browser</h3>
+    <div class="epi">"any other tmf left?" <span class="who">— the operator, unwilling to
+    leave a standard on the table</span></div>
+
+    <p class="drop">The last gap on the list was hiding in plain sight, which is where the
+    best ones hide. The storefront's Offering page WAS a product configurator — choice
+    groups, pick-one-of-three radios, colour and storage pickers, a price that followed
+    every selection — and every rule that made it one lived in client JavaScript. TMF760
+    is the standard face for exactly that machine, and the recon found something better
+    than a gap: it found three half-enforcements that nobody had ever added up. The
+    storefront checked only the LOWER pick bound, trusting radio-button physics to hold
+    the upper. Ordering checked both bounds, but only at submit time. And nobody, anywhere,
+    validated a characteristic VALUE — a nonsense colour rode through every channel
+    politely.</p>
+
+    <p>So the configurator moved server-side, onto the catalog that already owned every
+    input, as two stateless task resources — no task table, nothing persisted, the POST
+    computes and answers. The query returns the configuration space as data: the groups,
+    the bounds, the defaults, the pickers, and every conditioned price with its condition
+    visible. The check runs all three validations no single channel had, speaks ordering's
+    exact error language so a configure-time refusal reads like the order-time 400 it
+    prevents, consults policy under the catalog's first machine identity, and prices the
+    pick with the storefront's own matching semantics ported verbatim — Titanium Edition
+    two euros dearer than Icy Blue, on its own line, only when that exact string is
+    picked on the phone that has it. Anonymous, deliberately: configuring IS browsing.</p>
+
+    <p>Then the second phase collected the proof the arc was really for. The agent channel
+    — the one selling over MCP and ACP — could only say "id and quantity", so the suite's
+    first leg bought the family bundle flat and watched ordering's cardinality gate refuse
+    it. The gap, on camera. Then the same bundle went through configured: the check's
+    answer now carries an ORDER-READY echo, each selected option holding exactly the picks
+    its own spec owns, so the cart turned it into nested order items without understanding
+    specs at all — and the same gate that refused the flat purchase accepted the
+    configured one. The premium landed on the Samsung's line, where billing would rate it,
+    the same as if a human had clicked it.</p>
+
+    <p class="pull edge">Seventy-eight suites. One rule, one place, every channel: the
+    storefront validates for speed, but the configurator decides — and an AI agent can now
+    sell what yesterday it could only misconfigure.</p>
   </section>
 
   <hr class="soft">
