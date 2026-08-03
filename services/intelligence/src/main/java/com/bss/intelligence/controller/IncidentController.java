@@ -29,6 +29,24 @@ public class IncidentController {
         return ResponseEntity.ok(agent.list());
     }
 
+    @GetMapping("/incident/stats")
+    public ResponseEntity<Map<String, Object>> stats() {
+        return ResponseEntity.ok(agent.stats());
+    }
+
+    @GetMapping("/runbook")
+    public ResponseEntity<List<Map<String, Object>>> runbooks() {
+        return ResponseEntity.ok(agent.listRunbooks());
+    }
+
+    @PostMapping("/runbook/{id}/{decision}")
+    public ResponseEntity<Map<String, Object>> decide(@PathVariable("id") String id,
+            @PathVariable("decision") String decision,
+            @RequestBody(required = false) Map<String, Object> dto) {
+        return ResponseEntity.ok(agent.decideRunbook(id, decision,
+                dto == null || dto.get("note") == null ? null : String.valueOf(dto.get("note"))));
+    }
+
     @PostMapping("/incident/{id}/verdict")
     public ResponseEntity<Map<String, Object>> verdict(@PathVariable("id") String id,
             @RequestBody Map<String, Object> dto) {

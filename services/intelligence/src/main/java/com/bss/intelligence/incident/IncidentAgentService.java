@@ -40,14 +40,18 @@ public class IncidentAgentService {
             CONFIDENCE: <0.0-1.0>
             ACTION: <the single next step a human operator should take>""";
 
+    static final int PROMOTION_THRESHOLD = 3;
+
     private final IncidentTraceRepository traces;
+    private final IncidentRunbookRepository runbooks;
     private final BssApiClient bss;
     private final AiGovernor governor;
     private final TenantScope tenantScope;
 
-    public IncidentAgentService(IncidentTraceRepository traces, BssApiClient bss,
-            AiGovernor governor, TenantScope tenantScope) {
+    public IncidentAgentService(IncidentTraceRepository traces, IncidentRunbookRepository runbooks,
+            BssApiClient bss, AiGovernor governor, TenantScope tenantScope) {
         this.traces = traces;
+        this.runbooks = runbooks;
         this.bss = bss;
         this.governor = governor;
         this.tenantScope = tenantScope;
@@ -84,16 +88,29 @@ public class IncidentAgentService {
         trace.setVerdict("pending");
         trace.setCreatedAt(OffsetDateTime.now());
 
-        // the GOVERNED diagnosis — same doors as every other AI call
-        try {
-            String answer = governor.complete("incident-diagnosis",
-                    LlmAdapter.Tier.SMART, SYSTEM_PROMPT, context);
-            trace.setHypothesis(clip(section(answer, "DIAGNOSIS"), 1900));
-            trace.setConfidence(confidenceOf(answer));
-            trace.setProposedAction(clip(section(answer, "ACTION"), 900));
-        } catch (Exception e) {
-            trace.setHypothesis("diagnosis unavailable: " + clip(e.getMessage(), 200));
-            trace.setConfidence(BigDecimal.ZERO);
+        // PROCEDURAL MEMORY FIRST: an approved runbook diagnoses on sight —
+        // no LLM call, no model spend, and the audit trail says so
+        IncidentRunbook approved = runbooks
+                .findFirstByTenantIdAndSignatureAndStatusOrderByVersionDesc(
+                        tenant, signature, IncidentRunbook.APPROVED).orElse(null);
+        if (approved != null) {
+            trace.setSource("runbook");
+            trace.setHypothesis("[runbook " + signature + " v" + approved.getVersion() + "] "
+                    + approved.getDiagnosis());
+            trace.setProposedAction(approved.getAction());
+            trace.setConfidence(new BigDecimal("0.95"));
+        } else {
+            // the GOVERNED diagnosis — same doors as every other AI call
+            try {
+                String answer = governor.complete("incident-diagnosis",
+                        LlmAdapter.Tier.SMART, SYSTEM_PROMPT, context);
+                trace.setHypothesis(clip(section(answer, "DIAGNOSIS"), 1900));
+                trace.setConfidence(confidenceOf(answer));
+                trace.setProposedAction(clip(section(answer, "ACTION"), 900));
+            } catch (Exception e) {
+                trace.setHypothesis("diagnosis unavailable: " + clip(e.getMessage(), 200));
+                trace.setConfidence(BigDecimal.ZERO);
+            }
         }
         trace.setDiagnoseMs(System.currentTimeMillis() - started);
 
@@ -104,7 +121,10 @@ public class IncidentAgentService {
                 String.valueOf(event.getOrDefault("message", "process task failed")),
                 trace.getPartyId());
         if (ticketId != null) {
-            bss.addTicketNote(ticketId, "AGENT DIAGNOSIS (L0, read-only — confidence "
+            bss.addTicketNote(ticketId, "AGENT DIAGNOSIS ("
+                    + ("runbook".equals(trace.getSource())
+                        ? "AUTO, from approved runbook — no model call"
+                        : "L0, read-only") + " — confidence "
                     + trace.getConfidence() + "):\n" + trace.getHypothesis()
                     + (trace.getProposedAction() == null ? ""
                         : "\nPROPOSED ACTION (human executes): " + trace.getProposedAction()));
@@ -154,7 +174,132 @@ public class IncidentAgentService {
         trace.setVerdict(useful ? "useful" : "not-useful");
         trace.setVerdictNote(dto.get("note") == null ? null : clip(String.valueOf(dto.get("note")), 500));
         traces.save(trace);
+        if (useful) {
+            maybePromote(trace.getSignature()); // the loop closes on evidence, not enthusiasm
+        }
         return view(trace);
+    }
+
+    /* ---------- the compounding loop ---------- */
+
+    /** N useful verdicts on one signature draft a candidate runbook —
+     * promotion is EARNED, never automatic past the human gate. */
+    private void maybePromote(String signature) {
+        String tenant = tenantScope.currentTenantId();
+        List<IncidentTrace> history =
+                traces.findByTenantIdAndSignatureOrderByCreatedAtDesc(tenant, signature);
+        long useful = history.stream().filter(t -> "useful".equals(t.getVerdict())).count();
+        if (useful < PROMOTION_THRESHOLD || runbooks.existsByTenantIdAndSignatureAndStatusIn(
+                tenant, signature, List.of(IncidentRunbook.PROPOSED, IncidentRunbook.APPROVED))) {
+            return;
+        }
+        List<IncidentTrace> evidence = history.stream()
+                .filter(t -> "useful".equals(t.getVerdict())).limit(5).toList();
+        String draft;
+        try {
+            draft = governor.complete("incident-runbook-draft", LlmAdapter.Tier.SMART,
+                    "You are a runbook author for a telecom BSS operations team. From the"
+                    + " consistent, human-confirmed diagnoses below, write ONE reusable"
+                    + " runbook. Answer EXACTLY:\nDIAGNOSIS: <the recurring cause, reusable"
+                    + " wording, no order-specific ids>\nACTION: <the reusable fix a human"
+                    + " operator executes>",
+                    "Signature: " + signature + "\nConfirmed diagnoses:\n" + evidence.stream()
+                            .map(t -> "- " + t.getHypothesis() + " => " + t.getProposedAction())
+                            .reduce("", (a, b) -> a + b + "\n"));
+        } catch (Exception e) {
+            log.warn("runbook draft failed for {}: {}", signature, e.getMessage());
+            return;
+        }
+        int version = runbooks.findByTenantIdAndSignatureOrderByVersionDesc(tenant, signature)
+                .stream().findFirst().map(r -> r.getVersion() + 1).orElse(1);
+        IncidentRunbook rb = new IncidentRunbook();
+        rb.setId(UUID.randomUUID().toString());
+        rb.setTenantId(tenant);
+        rb.setSignature(signature);
+        rb.setVersion(version);
+        rb.setStatus(IncidentRunbook.PROPOSED);
+        rb.setTitle("Runbook: " + signature + " v" + version);
+        rb.setDiagnosis(clip(section(draft, "DIAGNOSIS") == null
+                ? evidence.get(0).getHypothesis() : section(draft, "DIAGNOSIS"), 1900));
+        rb.setAction(clip(section(draft, "ACTION") == null
+                ? evidence.get(0).getProposedAction() : section(draft, "ACTION"), 900));
+        rb.setProvenanceJson(evidence.stream().map(IncidentTrace::getId)
+                .reduce("[", (a, b) -> a.equals("[") ? a + "\"" + b + "\"" : a + ",\"" + b + "\"") + "]");
+        rb.setCreatedAt(OffsetDateTime.now());
+        runbooks.save(rb);
+        log.info("runbook DRAFTED for {} (v{}) from {} useful traces — awaiting human decision",
+                signature, version, useful);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRunbooks() {
+        return runbooks.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
+                .stream().map(this::runbookView).toList();
+    }
+
+    /** approve | reject | revoke — a decision with a name on it. */
+    @Transactional
+    public Map<String, Object> decideRunbook(String id, String decision, String note) {
+        IncidentRunbook rb = runbooks.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "no such runbook"));
+        switch (decision) {
+            case "approve" -> {
+                if (!IncidentRunbook.PROPOSED.equals(rb.getStatus())) {
+                    throw new ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                            "only a proposed runbook can be approved (status: " + rb.getStatus() + ")");
+                }
+                rb.setStatus(IncidentRunbook.APPROVED);
+            }
+            case "reject" -> rb.setStatus(IncidentRunbook.REJECTED);
+            case "revoke" -> rb.setStatus(IncidentRunbook.REVOKED);
+            default -> throw new ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "decision must be approve, reject or revoke");
+        }
+        rb.setDecidedAt(OffsetDateTime.now());
+        rb.setDecidedNote(clip(note, 500));
+        runbooks.save(rb);
+        return runbookView(rb);
+    }
+
+    /** The learning curve as DATA — the number a stateless agent cannot fake. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> stats() {
+        List<IncidentTrace> all =
+                traces.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
+        long fromRunbook = all.stream().filter(t -> "runbook".equals(t.getSource())).count();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("traces", all.size());
+        out.put("fromLlm", all.size() - fromRunbook);
+        out.put("fromRunbook", fromRunbook);
+        out.put("autoDiagnosedRate", all.isEmpty() ? 0
+                : Math.round(fromRunbook * 1000.0 / all.size()) / 10.0);
+        out.put("verdicts", Map.of(
+                "useful", all.stream().filter(t -> "useful".equals(t.getVerdict())).count(),
+                "notUseful", all.stream().filter(t -> "not-useful".equals(t.getVerdict())).count(),
+                "pending", all.stream().filter(t -> "pending".equals(t.getVerdict())).count()));
+        out.put("@type", "IncidentStats");
+        return out;
+    }
+
+    private Map<String, Object> runbookView(IncidentRunbook rb) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", rb.getId());
+        map.put("signature", rb.getSignature());
+        map.put("version", rb.getVersion());
+        map.put("status", rb.getStatus());
+        map.put("title", rb.getTitle());
+        map.put("diagnosis", rb.getDiagnosis());
+        map.put("action", rb.getAction());
+        map.put("provenance", rb.getProvenanceJson());
+        map.put("createdAt", rb.getCreatedAt());
+        if (rb.getDecidedAt() != null) {
+            map.put("decidedAt", rb.getDecidedAt());
+            map.put("decidedNote", rb.getDecidedNote());
+        }
+        map.put("@type", "IncidentRunbook");
+        return map;
     }
 
     private Map<String, Object> view(IncidentTrace t) {

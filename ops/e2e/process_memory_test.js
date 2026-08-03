@@ -180,6 +180,104 @@ async function call(method, path, tok, body) {
     + ' 403), and recorded on the trace — the loop\'s raw material, one verdict per'
     + ' investigation.');
 
+  /* ---------- 6. recurrence earns a runbook (promotion is gated) ---------- */
+  // the leg-2 strand was ALSO investigated — verdict it useful (2nd useful)
+  const inc0 = (await call('GET', '/ai/v1/incident', staff)).body || [];
+  const trace0 = inc0.find((t) => t.productOrderId === strand.body.id);
+  if (trace0 && trace0.verdict === 'pending') {
+    await call('POST', `/ai/v1/incident/${trace0.id}/verdict`, staff,
+      { useful: true, note: 'same cause as before' });
+  }
+  await call('POST', `${P}/processFlowSpecification`, staff,
+    { code: 'order-physical', taskFlowSpecification: shrunk });
+  const strand3 = await call('POST', `${ORDERS}/productOrder`, kai, {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+      product: { place: [{ role: 'installation', streetName: `Third ${run}`, postcode: '111' }] } }] });
+  let trace3 = null;
+  for (let i4 = 0; i4 < 40 && !trace3; i4++) {
+    await sleep(3000);
+    const incidents = (await call('GET', '/ai/v1/incident', staff)).body || [];
+    trace3 = incidents.find((t) => t.productOrderId === strand3.body.id) || null;
+  }
+  if (!trace3) fail('third failure never investigated');
+  await call('POST', `/ai/v1/incident/${trace3.id}/verdict`, staff,
+    { useful: true, note: 'third occurrence, same cause' });
+  let proposed = null;
+  for (let i5 = 0; i5 < 10 && !proposed; i5++) {
+    await sleep(1500);
+    const rbs = (await call('GET', '/ai/v1/runbook', staff)).body || [];
+    proposed = rbs.find((r2) => r2.signature === 'order-physical:fulfilled'
+      && r2.status === 'proposed') || null;
+  }
+  if (!proposed) fail('three useful verdicts drafted no runbook');
+  if (!proposed.provenance || proposed.provenance.length < 10) fail('runbook lacks provenance');
+  const approved = await call('POST', `/ai/v1/runbook/${proposed.id}/approve`, staff,
+    { note: 'confirmed by ops' });
+  if (approved.status >= 300 || approved.body.status !== 'approved') {
+    fail('approval failed: ' + approved.text.slice(0, 150));
+  }
+  console.log(`OK PROMOTION: three human-confirmed traces drafted runbook v${proposed.version}`
+    + ' (provenance back to its source traces) — and it needed the HUMAN gate: proposed'
+    + ' until ops approved it.');
+
+  /* ---------- 7. THE HEADLINE: auto-diagnosed from memory, no model call ---------- */
+  const auditBefore = ((await call('GET', '/ai/v1/audit', staff)).body || [])
+    .filter((a) => String(a.useCase || a.use_case).includes('incident-diagnosis')).length;
+  const strand4 = await call('POST', `${ORDERS}/productOrder`, kai, {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+      product: { place: [{ role: 'installation', streetName: `Fourth ${run}`, postcode: '111' }] } }] });
+  let trace4 = null;
+  for (let i6 = 0; i6 < 40 && !trace4; i6++) {
+    await sleep(3000);
+    const incidents = (await call('GET', '/ai/v1/incident', staff)).body || [];
+    trace4 = incidents.find((t) => t.productOrderId === strand4.body.id) || null;
+  }
+  if (!trace4) fail('fourth failure never investigated');
+  if (trace4.source !== 'runbook') fail('fourth failure should auto-diagnose: ' + trace4.source);
+  if (!String(trace4.hypothesis).startsWith('[runbook')) fail('hypothesis not from the runbook');
+  const auditAfter = ((await call('GET', '/ai/v1/audit', staff)).body || [])
+    .filter((a) => String(a.useCase || a.use_case).includes('incident-diagnosis')).length;
+  if (auditAfter !== auditBefore) {
+    fail(`auto-diagnosis must make NO model call: audit ${auditBefore} -> ${auditAfter}`);
+  }
+  const stats = (await call('GET', '/ai/v1/incident/stats', staff)).body;
+  if (!(Number(stats.fromRunbook) >= 1) || !(Number(stats.autoDiagnosedRate) > 0)) {
+    fail('stats miss the curve: ' + JSON.stringify(stats));
+  }
+  console.log(`OK THE HEADLINE: the fourth identical failure was diagnosed FROM MEMORY —`
+    + ` source=runbook, zero new model calls (audit ${auditBefore}→${auditAfter}), and the`
+    + ` curve exists as data: ${stats.autoDiagnosedRate}% auto-diagnosed`
+    + ` (${stats.fromRunbook}/${stats.traces}). A stateless agent cannot produce this number.`);
+
+  /* ---------- 8. revocation: bad memory cannot compound silently ---------- */
+  await call('POST', `/ai/v1/runbook/${proposed.id}/revoke`, staff,
+    { note: 'suite proves the brake' });
+  const strand5 = await call('POST', `${ORDERS}/productOrder`, kai, {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+      product: { place: [{ role: 'installation', streetName: `Fifth ${run}`, postcode: '111' }] } }] });
+  let trace5 = null;
+  for (let i7 = 0; i7 < 40 && !trace5; i7++) {
+    await sleep(3000);
+    const incidents = (await call('GET', '/ai/v1/incident', staff)).body || [];
+    trace5 = incidents.find((t) => t.productOrderId === strand5.body.id) || null;
+  }
+  if (!trace5) fail('fifth failure never investigated');
+  if (trace5.source !== 'llm') fail('after revocation the LLM path must resume: ' + trace5.source);
+  // tidy: restore the spec; complete the stranded flows via the lever
+  await call('POST', `${P}/processFlowSpecification`, staff,
+    { code: 'order-physical', taskFlowSpecification: physical.taskFlowSpecification });
+  for (const o of [strand3, strand4, strand5]) {
+    const fl = ((await call('GET', `${P}/processFlow?productOrderId=${o.body.id}`, staff)).body || [])[0];
+    const ft = fl && fl.taskFlow.find((t) => t.state === 'failed');
+    if (ft) {
+      await call('PATCH', `${P}/processFlow/${fl.id}/taskFlow/${ft.id}`, staff,
+        { state: 'completed', message: 'suite tidy-up' });
+    }
+  }
+  console.log('OK THE BRAKE: revoked the runbook and the fifth failure went back to the'
+    + ' governed LLM path — memory is versioned, provenanced, and revocable; a wrong'
+    + ' lesson cannot compound silently.');
+
   /* ---------- 3. walls ---------- */
   const kaiFlows = (await call('GET', `${P}/processFlow`, kai)).body || [];
   if (kaiFlows.some((f) => (f.relatedParty || []).every((p) => p.id !== sub(kai)))) {
@@ -200,6 +298,8 @@ async function call(method, path, tok, body) {
   console.log('\nALL PROCESS-LAYER CHECKS PASSED — choreography runs the flows, TMF701'
     + ' explains them, and stuck is a loud state. Phase 2 is live: every failure'
     + ' investigated, diagnosed under governance, posted L0 to a ticket, and remembered'
-    + ' as a trace with a mandatory human verdict. (Phase 3 promotes recurring traces'
-    + ' to runbooks.)');
+    + ' as a trace with a mandatory human verdict. Phase 3 CLOSED THE LOOP: recurrence'
+    + ' plus human approval promotes traces to versioned runbooks, the next occurrence'
+    + ' diagnoses from memory with no model call, and revocation is the brake. The'
+    + ' learning curve is a suite assertion now.');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

@@ -257,6 +257,38 @@ const RESOURCES = [
     },
   },
   {
+    path: 'runbook',
+    base: '/ai/v1',
+    title: 'Runbooks',
+    readOnly: true,
+    // procedural memory: promoted from N human-confirmed traces; approval
+    // is the gate, revocation the brake — versioned, provenance attached
+    fields: [],
+    columns: ['signature', 'version', 'status', 'diagnosis', 'decidedNote'],
+    rowAction: {
+      label: (item) => (item.status === 'proposed' ? 'Decide'
+        : item.status === 'approved' ? 'Revoke' : ''),
+      apply: async (item) => {
+        if (item.status === 'proposed') {
+          const d = window.prompt('Decision — "approve" or "reject":');
+          if (!d || !['approve', 'reject'].includes(d)) return;
+          const note = window.prompt('Decision note (kept on the runbook):') || '';
+          await authFetch(`/ai/v1/runbook/${item.id}/${d}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+          });
+        } else if (item.status === 'approved') {
+          const note = window.prompt('Revoke this runbook — why?');
+          if (note === null) return;
+          await authFetch(`/ai/v1/runbook/${item.id}/revoke`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ note }),
+          });
+        }
+      },
+    },
+  },
+  {
     path: 'serviceableArea',
     base: QUALIFICATION_BASE,
     title: 'Serviceable Areas',
@@ -920,6 +952,7 @@ const TAB_ROLE = {
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
   processFlow: 'ordering:write',
+  runbook: 'ai:use',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',

@@ -225,3 +225,21 @@ one per investigation. Proven live: signature
 `order-physical:fulfilled`, confidence 0.72, 65ms, ticket noted,
 verdict recorded. Regression green: copilot (the stub gained a
 scenario without disturbing its neighbours).
+
+**P3 — 2026-08-03, suite #72 at nine legs, all green. The loop is
+closed.** Promotion is EARNED: three human-confirmed traces on one
+signature drafted runbook v1 (a governed LLM draft with its own audit
+use case), carrying provenance to its source traces, and it stayed
+`proposed` until ops approved it. THE HEADLINE PROVED: the fourth
+identical failure was diagnosed FROM PROCEDURAL MEMORY — source
+`runbook`, hypothesis prefixed with the runbook version, ZERO new
+model calls (the audit count stood still, 5→5, asserted), and
+`GET /ai/v1/incident/stats` carries the curve as data (16.7%
+auto-diagnosed on camera) — the number a stateless agent cannot
+produce. THE BRAKE PROVED: revoking the runbook sent the fifth
+occurrence back to the governed LLM path — memory is versioned,
+provenanced, revocable; a wrong lesson cannot compound silently.
+Console gained the Runbooks tab (decide/revoke). Regressions green
+(console). P4 stays honestly open: embedding-similarity signatures,
+L1 in the consoles, L2 behind per-taskFlow idempotency the process
+layer must earn first.

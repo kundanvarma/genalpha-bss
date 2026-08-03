@@ -68,6 +68,7 @@ beside it.</p>
 20. <a href="#loyalty">Loyalty — reward &amp; retain</a><br>
 21. <a href="#revenue">Revenue export — the subledger</a><br>
 22. <a href="#creditnote">Credit notes</a><br>
+23. <a href="#process">Process flows &amp; the incident agent</a><br>
 </p>
 </div>
 
@@ -646,6 +647,27 @@ that). P2 shipped: <code>GET /creditNote/{id}/document.xml</code> is the UBL Cre
 it on the SAME distribution ledger as bills; <code>lines:[{id, amount?}]</code> credits named
 rate lines (each reversal names what it reverses, capped per line); the back-office console's
 Disputes tab is the decide worklist.</p>
+
+<h2 id="process">23 · Process flows &amp; the incident agent — suite #72</h2>
+<p><b>Choreography runs the flows; TMF701 explains them.</b> Component #36 (<code>process</code>,
+:8116, <code>/tmf-api/processFlowManagement/v4</code>): design intent as editable
+<code>processFlowSpecification</code>s (each task's owed event + time allowance), run-time
+<code>processFlow</code>s PROJECTED from ordering/SOM events with the per-flow cross-system
+timeline persisted, and STUCK AS A STATE — the TickGuard sweep fails a task past its
+allowance, out loud on <code>bss.process.events</code>. Operators recover via
+<code>PATCH …/taskFlow/{id}</code>; customers see their own flows (self-service order
+tracking); console: Process flows tab.</p>
+<p><b>The agent whose memory compounds</b> (in <code>intelligence</code>, IG1547-aligned):
+a failed task triggers context assembly (spec + failed step + timeline) and a GOVERNED
+diagnosis — same kill-switch/budget/meter/audit doors as every AI call; its ONLY write is a
+ticket note (L0). Every investigation is an episodic trace with a MANDATORY human verdict
+(<code>POST /ai/v1/incident/{id}/verdict</code>). Three useful verdicts on one signature
+draft a runbook (governed, provenance to source traces) that stays <code>proposed</code>
+until approved (console: Runbooks tab); the next occurrence auto-diagnoses FROM MEMORY —
+no model call, audit as witness — and <code>GET /ai/v1/incident/stats</code> carries the
+learning curve as data. Revocation sends diagnosis back to the LLM path: the brake is
+first-class. L2 auto-remediation stays out of scope until per-taskFlow idempotency is
+earned. See <a href="../process-memory-plan.md">docs/process-memory-plan.md</a>.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · seventy-two suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is

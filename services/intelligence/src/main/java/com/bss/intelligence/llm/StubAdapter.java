@@ -15,6 +15,14 @@ public class StubAdapter implements LlmAdapter {
 
     @Override
     public String complete(String system, String user) {
+        if (system.contains("runbook author for a telecom BSS")) {
+            return "DIAGNOSIS: Physical-fulfilment tasks time out when the installer/warehouse"
+                    + " callback is not delivered to the orchestration layer; upstream ordering"
+                    + " is healthy in every confirmed case.\n"
+                    + "ACTION: Verify the fulfilment job exists and completed at the"
+                    + " warehouse/installer, then PATCH the failed taskFlow to completed"
+                    + " (or inProgress to restart its allowance clock).";
+        }
         if (system.contains("process incident diagnostician")) {
             String step = user.contains("FAILED STEP: fulfilled") ? "fulfilled"
                     : user.contains("FAILED STEP: provisioned") ? "provisioned" : "unknown";
