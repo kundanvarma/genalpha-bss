@@ -74,6 +74,7 @@ beside it.</p>
 26. <a href="#servicequal">Service qualification &amp; the coverage map</a><br>
 27. <a href="#aimgmt">AI management — the control plane's face</a><br>
 28. <a href="#risk">Risk management — the door check</a><br>
+29. <a href="#thintail">Partnership types &amp; geographic sites</a><br>
 </p>
 </div>
 
@@ -774,7 +775,26 @@ the operator's JsonLogic rule sets the threshold — deny returns 422
 <code>relatedPartyId</code> filter for the engine. See
 <a href="../tmf696-risk-plan.md">docs/tmf696-risk-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-two suites, thirteen CTKs at zero
+<h2 id="thintail">29 · Partnership types &amp; geographic sites (TMF668 + TMF674) — suites #83/#84</h2>
+<p><b>TMF668</b> on the agreement service at
+<code>/tmf-api/partnershipTypeManagement/v4/partnershipType</code> (reads
+<code>agreement:read</code>, writes <code>agreement:write</code>): a partnership KIND is
+<code>{name, description, status, roleType:[{name, description}]}</code> — a kind without
+roles is refused. An agreement with <code>agreementType: "partnership"</code> whose
+<code>characteristic.partnershipTypeId</code> names a kind is VALIDATED at create: every
+<code>engagedParty.role</code> must be one the kind permits (refusals name the permitted
+list; unknown/retired kinds refuse outright). Untyped agreements are untouched.
+<b>TMF674</b> on geographic-address at
+<code>/tmf-api/geographicSiteManagement/v4/geographicSite</code> (reads
+<code>address:read</code>, writes <code>address:write</code>): a site is
+<code>{name, status: planned|active|retired, relatedParty, place:{id}}</code> where
+<code>place.id</code> MUST reference a stored TMF673 <code>geographicAddress</code>
+(validated at create, embedded on every read); filter with
+<code>?relatedPartyId=</code>; PATCH moves the lifecycle; a site's address is reusable on
+orders — entered once. See
+<a href="../tmf668-674-thin-tail-plan.md">docs/tmf668-674-thin-tail-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-four suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

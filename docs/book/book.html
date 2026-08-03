@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and eighty-two end-to-end test suites that all pass
+    composable components, six customer surfaces, and eighty-four end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -3279,6 +3279,49 @@
     knows who might leave, knows who to doubt at the door — and can show its arithmetic
     for either, signal by signal, with the silences labeled as carefully as the
     numbers.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty-One</div>
+    <h3>Partners typed, places named</h3>
+    <div class="epi">"i am going to sleep, can you implement all other TMF as discussed after
+    this so i can check tomorrow" <span class="who">— the operator, handing over the night
+    shift</span></div>
+
+    <p class="drop">The gap list ended the way long lists end: not with a bang but with two
+    small, honest arcs run while the operator slept. TMF668 first. The fleet was FULL of
+    partners — dealers as commission rows, bill-distribution partners on the Peppol wire,
+    event-hub subscribers — and had no vocabulary for any of them. Worse, the recon found
+    that agreements accepted any role string anyone invented; "smuggler" would have signed
+    as happily as "dealer". So partnership KINDS became data — a kind is the roles it
+    permits, and a kind without roles is refused at authoring — and typed partnerships are
+    validated at signature, the bad role refused naming the permitted list. The restraint
+    mattered as much as the rule: an untyped commercial agreement signs exactly as before.
+    No ceremony where none is due.</p>
+
+    <p>Then TMF674, the address book nobody had. Addresses were flat unnamed rows; places
+    rode orders per-transaction and were retyped every time; the B2B org model — which
+    resolves membership live and trusts nothing from the request — had no way to say "the
+    Göteborg branch." A site is the first reusable named place: a name, an owner, a real
+    lifecycle, and a STORED address it must prove exists, embedded on every read. The suite
+    told the story end to end: the HQ address, typed exactly once when the site was born,
+    rode an order and landed intact on fulfilment's parcel. Entered once, reused forever.</p>
+
+    <p>And the night shift earned its keep one more way: the guest regression failed, and
+    the failure was REAL — a latent bug from the service-qualification arc three days of
+    work back, where the cart's new footprint line had borrowed the serviceability line's
+    CSS classes, so a strict locator resolved to two elements whenever one fetch won a race
+    against the other. The kind of bug that passes twice and fails on the third Tuesday.
+    It got its own class, and the flake became deterministic in both directions. That is
+    what the regression discipline is FOR — not to prove the new code works, but to catch
+    what the old code was quietly wrong about.</p>
+
+    <p class="pull edge">Eighty-four suites, and the TMF gap list is closed. Every standard
+    the fleet had earned now has its face; every face claims exactly what the data knows;
+    and the last two arcs shipped while the person who asked for them was asleep — which
+    may be the most honest benchmark this machine has ever passed.</p>
   </section>
 
   <hr class="soft">
