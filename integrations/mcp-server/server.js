@@ -262,9 +262,71 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_configuration_options',
+    description: 'The configuration space of an offering (TMF760): fixed members, choice groups '
+      + 'with pick bounds and defaults, per-option pickers (colour, storage) and prices with '
+      + 'their conditions visible. Call this before configure_product on any bundle.',
+    inputSchema: {
+      type: 'object',
+      properties: { offeringId: { type: 'string' } },
+      required: ['offeringId'],
+    },
+    run: async (a) => {
+      const out = await anonApi('POST',
+        '/tmf-api/productConfigurationManagement/v5/queryProductConfiguration',
+        { productConfiguration: { productOffering: { id: a.offeringId } } });
+      return (out.computedProductConfigurationItem || [])[0] || out;
+    },
+  },
+  {
+    name: 'configure_product',
+    description: 'Validate and price a pick set against an offering (TMF760 check): both '
+      + 'cardinality bounds, characteristic values scoped to the picked options, policy rules, '
+      + 'and the exact price the configuration will bill at. An approved answer includes '
+      + '`checkoutItem` — pass it straight into start_checkout items to buy the configured '
+      + 'bundle; a rejection names precisely what to fix.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        offeringId: { type: 'string' },
+        selectedOptions: {
+          type: 'array', items: { type: 'string' },
+          description: 'Offering ids picked from the choice groups',
+        },
+        characteristics: {
+          type: 'object', additionalProperties: { type: 'string' },
+          description: 'Characteristic picks, e.g. {"color": "Titanium Edition", "storage": "512GB"}',
+        },
+      },
+      required: ['offeringId'],
+    },
+    run: async (a) => {
+      const configuration = {
+        selectedOption: (a.selectedOptions || []).map((id) => ({ id })),
+        configurationCharacteristic: Object.entries(a.characteristics || {})
+          .map(([name, value]) => ({ name, value })),
+      };
+      const out = await anonApi('POST',
+        '/tmf-api/productConfigurationManagement/v5/checkProductConfiguration',
+        { checkProductConfigurationItem: [{ productConfiguration: {
+          productOffering: { id: a.offeringId }, ...configuration } }] });
+      const item = (out.checkProductConfigurationItem || [])[0] || {};
+      if (item.state !== 'approved') {
+        return { result: 'rejected', messages: item.message || [] };
+      }
+      return {
+        result: 'approved',
+        price: item.configurationPrice,
+        checkoutItem: { id: a.offeringId, quantity: 1, configuration },
+      };
+    },
+  },
+  {
     name: 'start_checkout',
-    description: 'Open an ACP checkout session from items [{id, quantity}]. Returns the session '
-      + 'with honest totals: one-time charges due now; recurring prices bill on the first invoice.',
+    description: 'Open an ACP checkout session from items [{id, quantity, configuration?}]. A '
+      + 'configured bundle (from configure_product\'s checkoutItem) is re-validated and priced '
+      + 'by the configurator. Returns the session with honest totals: one-time charges due now; '
+      + 'recurring prices bill on the first invoice.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -272,7 +334,15 @@ const TOOLS = [
           type: 'array',
           items: {
             type: 'object',
-            properties: { id: { type: 'string' }, quantity: { type: 'number' } },
+            properties: {
+              id: { type: 'string' },
+              quantity: { type: 'number' },
+              configuration: {
+                type: 'object',
+                description: 'TMF760 picks for a bundle: {selectedOption: [{id}], '
+                  + 'configurationCharacteristic: [{name, value}]} — use configure_product first',
+              },
+            },
             required: ['id'],
           },
         },
@@ -283,7 +353,8 @@ const TOOLS = [
   },
   {
     name: 'update_checkout',
-    description: 'Change an open checkout session\'s items; totals are re-priced from the feed.',
+    description: 'Change an open checkout session\'s items; totals are re-priced from the feed '
+      + '(configured bundles re-validated by the configurator).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -292,7 +363,11 @@ const TOOLS = [
           type: 'array',
           items: {
             type: 'object',
-            properties: { id: { type: 'string' }, quantity: { type: 'number' } },
+            properties: {
+              id: { type: 'string' },
+              quantity: { type: 'number' },
+              configuration: { type: 'object' },
+            },
             required: ['id'],
           },
         },

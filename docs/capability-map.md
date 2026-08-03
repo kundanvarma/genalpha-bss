@@ -33,7 +33,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 |---|---|---|---|
 | Define & manage sellable offers (bundles, variants) | TMF620 (+CTK) | `product-catalog` | ✅ CTK zero |
 | Price offers by configuration | TMF620 `prodSpecCharValueUse` | catalog + policy + billing | ✅ #24 |
-| Configure & validate complex offers, any channel | TMF760 Product Configuration v5 | `product-catalog` + policy | ✅ #77 (server-side: both pick bounds, values scoped to the picked option, priced to the pick, policy consulted) |
+| Configure & validate complex offers, any channel | TMF760 Product Configuration v5 | `product-catalog` + policy | ✅ #77/#78 (server-side: both pick bounds, values scoped to the picked option, priced to the pick, policy consulted; agent channel configures → checks → orders with nested items) |
 | Govern ordering & pricing with business rules | TMF policy pattern | `policy` (JSON-logic) | ✅ |
 | Run promotions & discounts | TMF671 | `promotion` | ✅ |
 | Manage product content & imagery | TMF667 + PIM seam | `document` + per-tenant PIM | ✅ #23 |

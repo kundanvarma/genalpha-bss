@@ -136,3 +136,24 @@ seeded bundle has GROWN a fourth choice group since the seed script was
 written — the suite asserts the three known groups by name, not a
 count. Regressions green (serial): family_max, color_pricing,
 storefront. Capability map: 52✅.
+
+**P2 — 2026-08-03, suite #78 green (four legs), first full run.** The
+agent channel is a configurator client. The suite DEMONSTRATES
+yesterday's gap before closing it: a bundle bought flat through ACP
+(id + quantity, the only shape the channel had) is refused by
+ordering's cardinality gate — then the same bundle, configured, sails
+through that same gate. The pieces: the check response now echoes an
+ORDER-READY configuration (each selected option carrying exactly the
+picks its own spec owns — colour and storage on the Samsung, nothing
+on the plan — so channels never need to understand specs); ACP
+sessions accept `configuration` on an item and the cart prices it FROM
+THE CHECK (monthly recurring + one-time due now), never from the feed,
+rejecting invalid picks with the configurator's own messages before a
+session even opens; complete builds nested TMF622 children with
+`product.productCharacteristic` — the storefront's exact shape, so
+billing rates the Titanium premium from the same place as every other
+channel. MCP: `get_configuration_options` + `configure_product` (whose
+approved answer includes a ready `checkoutItem`), start/update_checkout
+schemas extended. The delegated-token model unchanged — same RFC 8693
+exchange, same idempotent complete. Regressions green (serial):
+agentic_commerce, configurator, storefront.

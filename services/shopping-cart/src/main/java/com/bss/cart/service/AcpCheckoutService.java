@@ -181,6 +181,7 @@ public class AcpCheckoutService {
 
     /* ---------- pricing ---------- */
 
+    @SuppressWarnings("unchecked")
     private List<Map<String, Object>> requestedItems(Map<String, Object> request) {
         Object raw = request == null ? null : request.get("items");
         if (!(raw instanceof List<?> list) || list.isEmpty()) {
@@ -194,7 +195,14 @@ public class AcpCheckoutService {
                 if (quantity < 1) {
                     throw new BadRequestException("quantity must be at least 1");
                 }
-                items.add(Map.of("id", String.valueOf(m.get("id")), "quantity", quantity));
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", String.valueOf(m.get("id")));
+                item.put("quantity", quantity);
+                // a configured bundle: picks ride the item, TMF760-shaped
+                if (m.get("configuration") instanceof Map<?, ?> config) {
+                    item.put("configuration", (Map<String, Object>) config);
+                }
+                items.add(item);
             }
         }
         if (items.isEmpty()) {
@@ -211,6 +219,10 @@ public class AcpCheckoutService {
         int n = 1;
         for (Map<String, Object> item : items) {
             String offeringId = String.valueOf(item.get("id"));
+            if (item.get("configuration") instanceof Map<?, ?>) {
+                lines.add(configuredLine(item, "li_" + n++, tenantId));
+                continue;
+            }
             Map<String, Object> feedItem = clients.feedItem(offeringId, tenantId);
             if (feedItem == null) {
                 throw new BadRequestException("offering '" + offeringId
@@ -239,6 +251,64 @@ public class AcpCheckoutService {
             lines.add(line);
         }
         return lines;
+    }
+
+    /**
+     * A configured bundle is priced by the TMF760 configurator, never by
+     * this service: the check endpoint validates the picks (both bounds,
+     * allowed values, policy) and answers with the price AND an order-ready
+     * configuration — the same authority every other channel gets. A
+     * rejected configuration surfaces the configurator's own messages, so
+     * the agent learns exactly what a human shopper would.
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> configuredLine(Map<String, Object> item, String lineId,
+            String tenantId) {
+        Map<String, Object> config = new LinkedHashMap<>(
+                (Map<String, Object>) item.get("configuration"));
+        config.put("productOffering", Map.of("id", String.valueOf(item.get("id"))));
+        Map<String, Object> checked;
+        try {
+            checked = clients.checkConfiguration(config, tenantId);
+        } catch (RestClientResponseException e) {
+            throw new BadRequestException("the configurator refused the request: "
+                    + e.getResponseBodyAsString());
+        }
+        List<?> checkedItems = checked == null ? List.of()
+                : (List<?>) checked.getOrDefault("checkProductConfigurationItem", List.of());
+        if (checkedItems.isEmpty() || !(checkedItems.get(0) instanceof Map<?, ?> result)) {
+            throw new BadRequestException("the configurator returned no verdict");
+        }
+        if (!"approved".equals(result.get("state"))) {
+            Object messages = result.get("message");
+            throw new BadRequestException("the configuration was rejected: "
+                    + (messages instanceof List<?> l ? String.join("; ",
+                            l.stream().map(String::valueOf).toList()) : String.valueOf(messages)));
+        }
+        Map<String, Object> price = (Map<String, Object>) result.get("configurationPrice");
+        Map<String, Object> monthly = (Map<String, Object>) price.get("monthlyTotal");
+        Map<String, Object> oneTime = (Map<String, Object>) price.get("oneTimeTotal");
+        Map<String, Object> orderReady = (Map<String, Object>) result.get("productConfiguration");
+        int quantity = (int) item.get("quantity");
+        String currency = String.valueOf(monthly.get("unit"));
+        BigDecimal dueNow = new BigDecimal(String.valueOf(oneTime.get("value")))
+                .multiply(BigDecimal.valueOf(quantity));
+
+        Map<String, Object> line = new LinkedHashMap<>();
+        line.put("id", lineId);
+        line.put("item", Map.of(
+                "id", String.valueOf(item.get("id")),
+                "title", String.valueOf(((Map<?, ?>) orderReady.get("productOffering")).get("name"))));
+        line.put("quantity", quantity);
+        // the recurring side of the configuration; one-time charges are due now
+        line.put("unit_price", Map.of(
+                "amount", String.valueOf(monthly.get("value")), "currency", currency));
+        line.put("price_type", "recurring");
+        line.put("recurring_period", "month");
+        line.put("due_now", Map.of("amount", dueNow.toPlainString(), "currency", currency));
+        line.put("configuration", orderReady);
+        line.put("price_line", price.get("priceLine"));
+        return line;
     }
 
     private BigDecimal dueNowTotal(List<Map<String, Object>> lines) {
@@ -281,13 +351,22 @@ public class AcpCheckoutService {
         int n = 1;
         for (Map<String, Object> line : lines) {
             Map<?, ?> item = (Map<?, ?>) line.get("item");
-            orderItems.add(Map.of(
-                    "id", String.valueOf(n++),
-                    "action", "add",
-                    "quantity", line.get("quantity"),
-                    "productOffering", Map.of(
-                            "id", item.get("id"), "name", item.get("title"),
-                            "@referredType", "ProductOffering")));
+            Map<String, Object> orderItem = new LinkedHashMap<>();
+            orderItem.put("id", String.valueOf(n));
+            orderItem.put("action", "add");
+            orderItem.put("quantity", line.get("quantity"));
+            orderItem.put("productOffering", Map.of(
+                    "id", item.get("id"), "name", item.get("title"),
+                    "@referredType", "ProductOffering"));
+            // a configured bundle: the configurator's order-ready echo becomes
+            // nested TMF622 items — the same shape the storefront submits, so
+            // ordering's cardinality gate sees a channel it already trusts
+            if (line.get("configuration") instanceof Map<?, ?> config) {
+                addConfiguredChildren(orderItem, (Map<String, Object>) config,
+                        String.valueOf(n), line.get("quantity"));
+            }
+            orderItems.add(orderItem);
+            n++;
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("description", "Agentic checkout (ACP session " + session.getId() + ")");
@@ -306,6 +385,41 @@ public class AcpCheckoutService {
             return clients.createOrder(body, authorization);
         } catch (RestClientResponseException e) {
             throw new ConflictException("the order was refused: " + e.getResponseBodyAsString());
+        }
+    }
+
+    /** The nested children of a configured bundle item, with each option's
+     * own picks as product.productCharacteristic — billing rates the
+     * configuration from exactly these, like every other channel's order. */
+    @SuppressWarnings("unchecked")
+    private void addConfiguredChildren(Map<String, Object> orderItem,
+            Map<String, Object> config, String parentId, Object quantity) {
+        Object rawOptions = config.get("selectedOption");
+        if (!(rawOptions instanceof List<?> options) || options.isEmpty()) {
+            return;
+        }
+        List<Map<String, Object>> children = new ArrayList<>();
+        int j = 1;
+        for (Object entry : options) {
+            if (!(entry instanceof Map<?, ?> option)) {
+                continue;
+            }
+            Map<String, Object> child = new LinkedHashMap<>();
+            child.put("id", parentId + "." + j++);
+            child.put("action", "add");
+            child.put("quantity", quantity);
+            child.put("productOffering", Map.of(
+                    "id", String.valueOf(option.get("id")),
+                    "name", String.valueOf(option.get("name")),
+                    "@referredType", "ProductOffering"));
+            if (option.get("characteristic") instanceof List<?> picks && !picks.isEmpty()) {
+                child.put("product", Map.of("productCharacteristic", picks));
+            }
+            children.add(child);
+        }
+        orderItem.put("productOrderItem", children);
+        if (config.get("configurationCharacteristic") instanceof List<?> own && !own.isEmpty()) {
+            orderItem.put("product", Map.of("productCharacteristic", own));
         }
     }
 

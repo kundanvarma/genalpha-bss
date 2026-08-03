@@ -50,6 +50,23 @@ public class AcpCommerceClients {
         }
     }
 
+    /**
+     * TMF760 check: the configurator is the single authority on whether a
+     * pick set is orderable and what it costs. Anonymous like the feed —
+     * configuring is browsing — with the tenant carried the same way.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> checkConfiguration(Map<String, Object> productConfiguration,
+            String tenantId) {
+        return catalog.post()
+                .uri("/tmf-api/productConfigurationManagement/v5/checkProductConfiguration")
+                .header("X-Tenant-Id", tenantId)
+                .header("Content-Type", "application/json")
+                .body(Map.of("checkProductConfigurationItem",
+                        List.of(Map.of("productConfiguration", productConfiguration))))
+                .retrieve().body(Map.class);
+    }
+
     /** POST the payment AS THE CALLER — their delegated token, their charge. */
     public Map<String, Object> createPayment(Map<String, Object> body, String authorization) {
         return payment.post().uri("/tmf-api/paymentManagement/v4/payment")

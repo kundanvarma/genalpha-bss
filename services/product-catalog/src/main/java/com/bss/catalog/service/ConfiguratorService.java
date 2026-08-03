@@ -222,11 +222,62 @@ public class ConfiguratorService {
                 outItem.put("ruleName", verdict.ruleName());
             }
         }
-        outItem.put("productConfiguration", Map.of(
-                "productOffering", Map.of("id", bundle.getId(), "name", bundle.getName()),
-                "@type", "ProductConfiguration"));
+        outItem.put("productConfiguration",
+                orderReadyConfiguration(bundle, selectedOfferings, picks));
         outItem.put("@type", "CheckProductConfigurationItem");
         return outItem;
+    }
+
+    /**
+     * The approved configuration echoed ORDER-READY: each selected option
+     * carries exactly the picked values that belong to ITS spec (colour and
+     * storage ride the phone, never the plan), bundle-own picks stay at the
+     * top. A channel can turn this into nested TMF622 order items without
+     * knowing anything about specs — the configurator stays the single
+     * authority on where a characteristic lives.
+     */
+    private Map<String, Object> orderReadyConfiguration(ProductOfferingDto bundle,
+            List<ProductOfferingDto> selectedOfferings, Map<String, String> picks) {
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("productOffering", Map.of("id", bundle.getId(), "name", bundle.getName(),
+                "@referredType", "ProductOffering"));
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (ProductOfferingDto offering : selectedOfferings) {
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("id", offering.getId());
+            option.put("name", offering.getName());
+            List<Map<String, Object>> owned = picksOwnedBy(offering, picks);
+            if (!owned.isEmpty()) {
+                option.put("characteristic", owned);
+            }
+            options.add(option);
+        }
+        config.put("selectedOption", options);
+        List<Map<String, Object>> ownPicks = picksOwnedBy(bundle, picks);
+        if (!ownPicks.isEmpty()) {
+            config.put("configurationCharacteristic", ownPicks);
+        }
+        config.put("@type", "ProductConfiguration");
+        return config;
+    }
+
+    /** The picks whose name AND value belong to this offering's own spec. */
+    private List<Map<String, Object>> picksOwnedBy(ProductOfferingDto offering,
+            Map<String, String> picks) {
+        List<Map<String, Object>> owned = new ArrayList<>();
+        for (Map<String, Object> ch : configurableCharacteristicsOf(offering)) {
+            String name = String.valueOf(ch.get("name"));
+            String picked = picks.get(name);
+            if (picked == null) {
+                continue;
+            }
+            boolean hasValue = listOf(ch.get("productSpecCharacteristicValue")).stream()
+                    .anyMatch(v -> picked.equals(String.valueOf(v.get("value"))));
+            if (hasValue) {
+                owned.add(Map.of("name", name, "value", picked));
+            }
+        }
+        return owned;
     }
 
     /* =====================================================================
