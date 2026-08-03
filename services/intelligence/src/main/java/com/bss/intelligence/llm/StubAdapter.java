@@ -15,6 +15,18 @@ public class StubAdapter implements LlmAdapter {
 
     @Override
     public String complete(String system, String user) {
+        if (system.contains("process incident diagnostician")) {
+            String step = user.contains("FAILED STEP: fulfilled") ? "fulfilled"
+                    : user.contains("FAILED STEP: provisioned") ? "provisioned" : "unknown";
+            return "DIAGNOSIS: The '" + step + "' task exceeded its owed time allowance with no"
+                    + " downstream event on the timeline — the flow is waiting on an external"
+                    + " callback (installer/fulfilment) that never arrived; upstream steps"
+                    + " completed normally, so the order itself is well-formed.\n"
+                    + "CONFIDENCE: 0.72\n"
+                    + "ACTION: Confirm the fulfilment job with the warehouse/installer, then"
+                    + " PATCH the failed taskFlow to completed (or inProgress to restart its"
+                    + " clock) via the process API.";
+        }
         if (system.contains("product copilot")) {
             return productCopilot(user);
         }

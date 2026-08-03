@@ -206,3 +206,22 @@ Regressions green (storefront — one flake diagnosed as billing-run
 contention between back-to-back runs, clean alone; console).
 Empirical find: `product.place` survives ordering's event payload
 end-to-end, so physical-vs-digital spec pick needs no new modelling.
+
+**P2 — 2026-08-03, suite #72 at six legs, all green.** The incident
+agent is live in `intelligence`: a failed taskFlow on
+`bss.process.events` triggers CONTEXT ASSEMBLY (design intent from the
+spec, the failed step with its owed-time message, the flow's
+cross-system timeline — all machine reads under bss-intelligence,
+which gained ordering:read + ticket:write file-AND-live, default-roles
+lesson applied), then a GOVERNED diagnosis through the same
+kill-switch/budget/meter/audit doors as every AI call, with a
+deterministic stub scenario so suites need no API keys. L0 exactly as
+promised: the agent's ONLY write is a ticket + diagnosis note (the
+machine is the visible author); the episodic trace stores signature
+(`spec:task`), context digest, hypothesis, confidence, proposed
+action, source and diagnose-time; and the human VERDICT is mandatory
+(400 without `useful`, staff-only — a customer got 403 on camera),
+one per investigation. Proven live: signature
+`order-physical:fulfilled`, confidence 0.72, 65ms, ticket noted,
+verdict recorded. Regression green: copilot (the stub gained a
+scenario without disturbing its neighbours).

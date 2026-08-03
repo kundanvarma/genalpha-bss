@@ -937,7 +937,9 @@
         "catalog:read",
         "catalog:write",
         "billing:read",
-        "billing:admin"
+        "billing:admin",
+        "ticket:write",
+        "ordering:read"
       ]
     },
     {

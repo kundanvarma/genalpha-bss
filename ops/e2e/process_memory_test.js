@@ -121,6 +121,65 @@ async function call(method, path, tok, body) {
     + " flow resumed — TMF701's own recovery handle; the spec's allowance went back to its"
     + ' default (design intent is DATA, edited twice in this suite without a deploy).');
 
+  /* ---------- 4. the agent investigates (P2: episodic memory, L0) ---------- */
+  // strand another physical order with the shrunk allowance — this time the
+  // failure has an audience: the incident agent on bss.process.events
+  await call('POST', `${P}/processFlowSpecification`, staff,
+    { code: 'order-physical', taskFlowSpecification: shrunk });
+  const strand2 = await call('POST', `${ORDERS}/productOrder`, kai, {
+    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+      product: { place: [{ role: 'installation', streetName: `Agent ${run}`, postcode: '111' }] } }] });
+  if (strand2.status !== 201) fail(`agent-leg order: ${strand2.status}`);
+  let trace = null;
+  for (let i3 = 0; i3 < 40 && !trace; i3++) {
+    await sleep(3000);
+    const incidents = (await call('GET', '/ai/v1/incident', staff)).body || [];
+    trace = incidents.find((t) => t.productOrderId === strand2.body.id) || null;
+  }
+  if (!trace) fail('the agent never investigated the stranded order');
+  if (trace.signature !== 'order-physical:fulfilled') fail('wrong signature: ' + trace.signature);
+  if (!trace.hypothesis || trace.hypothesis.length < 40) fail('empty hypothesis');
+  if (!(Number(trace.confidence) > 0 && Number(trace.confidence) <= 1)) {
+    fail('confidence out of range: ' + trace.confidence);
+  }
+  if (trace.source !== 'llm') fail('P2 diagnoses come from the LLM path: ' + trace.source);
+  if (!trace.ticketId) fail('L0 ticket missing');
+  const ticket = (await call('GET',
+    `/tmf-api/troubleTicket/v4/troubleTicket/${trace.ticketId}`, staff)).body;
+  const notes = JSON.stringify(ticket.note || []);
+  if (!notes.includes('AGENT DIAGNOSIS')) fail('the diagnosis note is not on the ticket');
+  console.log(`OK THE AGENT (L0): the failed task triggered context assembly + a GOVERNED`
+    + ` diagnosis — signature ${trace.signature}, confidence ${trace.confidence},`
+    + ` ${trace.diagnoseMs}ms — and its ONLY write was a ticket note (ticket`
+    + ` ${String(trace.ticketId).slice(0, 8)}…). Episodic trace stored, verdict pending.`);
+
+  /* ---------- 5. the verdict is mandatory, and walled ---------- */
+  const noVerdict = await call('POST', `/ai/v1/incident/${trace.id}/verdict`, staff, { note: 'hm' });
+  if (noVerdict.status !== 400) fail(`verdict without useful must 400, got ${noVerdict.status}`);
+  const kaiVerdict = await call('POST', `/ai/v1/incident/${trace.id}/verdict`, kai,
+    { useful: true });
+  if (kaiVerdict.status !== 403) fail(`customer verdict must 403, got ${kaiVerdict.status}`);
+  const verdict = await call('POST', `/ai/v1/incident/${trace.id}/verdict`, staff,
+    { useful: true, note: 'correct — installer job was missing' });
+  if (verdict.status >= 300 || verdict.body.verdict !== 'useful') {
+    fail('verdict not recorded: ' + verdict.text.slice(0, 150));
+  }
+  // tidy: restore the spec and complete the stranded flow via the lever
+  await call('POST', `${P}/processFlowSpecification`, staff,
+    { code: 'order-physical', taskFlowSpecification: physical.taskFlowSpecification });
+  const flows2 = (await call('GET',
+    `${P}/processFlow?productOrderId=${strand2.body.id}`, staff)).body || [];
+  if (flows2[0]) {
+    const ft = flows2[0].taskFlow.find((t) => t.state === 'failed');
+    if (ft) {
+      await call('PATCH', `${P}/processFlow/${flows2[0].id}/taskFlow/${ft.id}`, staff,
+        { state: 'completed', message: 'suite tidy-up' });
+    }
+  }
+  console.log('OK THE VERDICT: useful/not is REQUIRED (400 without), staff-only (customer'
+    + ' 403), and recorded on the trace — the loop\'s raw material, one verdict per'
+    + ' investigation.');
+
   /* ---------- 3. walls ---------- */
   const kaiFlows = (await call('GET', `${P}/processFlow`, kai)).body || [];
   if (kaiFlows.some((f) => (f.relatedParty || []).every((p) => p.id !== sub(kai)))) {
@@ -138,8 +197,9 @@ async function call(method, path, tok, body) {
   console.log('OK WALLS: customers see only their OWN order flows (self-service tracking for'
     + ' free), foreign flows 404, nova sees nothing.');
 
-  console.log('\nALL PROCESS-LAYER CHECKS PASSED — the fleet\'s choreography now has a TMF701'
-    + ' face: design intent as data, every flow inspectable with its cross-system timeline,'
-    + ' STUCK as a loud state instead of a silent wait, and an operator lever to recover.'
-    + ' (Phase 2 gives these failures to an agent with memory.)');
+  console.log('\nALL PROCESS-LAYER CHECKS PASSED — choreography runs the flows, TMF701'
+    + ' explains them, and stuck is a loud state. Phase 2 is live: every failure'
+    + ' investigated, diagnosed under governance, posted L0 to a ticket, and remembered'
+    + ' as a trace with a mandatory human verdict. (Phase 3 promotes recurring traces'
+    + ' to runbooks.)');
 })().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });

@@ -74,7 +74,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Business capability | TMF tech capability | Component | Status |
 |---|---|---|---|
 | Fulfil & activate services | TMF641/640/638 | `service-orchestration` | ✅ thin: mock activation, real state machine |
-| Orchestrate & EXPLAIN order processes | TMF701 Process Flow Management | `process` (#36) | ✅ #72 (design intent as data, flows projected from the event stream with their cross-system timeline, STUCK is a state on the bus, operator recovery lever; ◐ incident agent + compounding memory = phases 2–3) |
+| Orchestrate & EXPLAIN order processes | TMF701 Process Flow Management | `process` (#36) | ✅ #72 (design intent as data, flows projected from the event stream with their cross-system timeline, STUCK is a state on the bus, operator recovery lever; ✚ #72 P2: failures investigated by a GOVERNED agent — context assembled, diagnosis as an L0 ticket note, episodic traces with mandatory human verdicts; ◐ runbook promotion = phase 3) |
 | Manage numbers & SIMs | TMF685 + SIM/OTA seams | SOM | ✅ (◐ real HLR/HSS/OTA behind seams) |
 | Port numbers in & out (MNP) | clearinghouse seam | `porting` | ✅ (◐ NRDB shaped, not connected) |
 | Detect & resolve service problems | TMF642/656 | `assurance` | ✅ (thin; real FM/PM needs the NMS) |

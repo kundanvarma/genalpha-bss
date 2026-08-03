@@ -30,6 +30,7 @@ public class BssApiClient {
     private final RestClient assuranceClient;
     private final RestClient billingClient;
     private final ObjectMapper objectMapper;
+    private final RestClient processClient;
 
     public BssApiClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             ObjectMapper objectMapper,
@@ -40,7 +41,10 @@ public class BssApiClient {
             @Value("${bss.downstream.recommendation-base-url:http://localhost:8102}") String recommendationBaseUrl,
             @Value("${bss.downstream.insight-base-url:http://localhost:8119}") String insightBaseUrl,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBaseUrl,
-            @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBaseUrl) {
+            @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBaseUrl,
+            @Value("${bss.downstream.process-base-url:http://localhost:8116}") String processBaseUrl) {
+        this.processClient = builder.baseUrl(processBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
         this.agreementClient = builder.baseUrl(agreementBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.billingClient = builder.baseUrl(billingBaseUrl)
@@ -58,6 +62,63 @@ public class BssApiClient {
         this.inventoryClient = builder.baseUrl(inventoryBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
+    }
+
+    /** The failed flow, with tasks and its cross-system timeline. */
+    public Map<String, Object> processFlow(String flowId) {
+        try {
+            String body = processClient.get()
+                    .uri("/tmf-api/processFlowManagement/v4/processFlow/" + flowId)
+                    .retrieve().body(String.class);
+            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() { });
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    /** Design intent: the specs the flows are supposed to follow. */
+    public List<Map<String, Object>> processSpecs() {
+        try {
+            String body = processClient.get()
+                    .uri("/tmf-api/processFlowManagement/v4/processFlowSpecification")
+                    .retrieve().body(String.class);
+            return objectMapper.readValue(body, JSON_LIST);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** L0's only write: a ticket carrying the diagnosis as a NOTE — the
+     * machine is the visible author, the assurance pattern. */
+    public String openTicket(String name, String description, String partyId) {
+        try {
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("name", name);
+            body.put("description", description);
+            body.put("severity", "major");
+            if (partyId != null) {
+                body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
+            }
+            String created = ticketClient.post()
+                    .uri("/tmf-api/troubleTicket/v4/troubleTicket")
+                    .body(body).retrieve().body(String.class);
+            Map<String, Object> ticket =
+                    objectMapper.readValue(created, new TypeReference<Map<String, Object>>() { });
+            return ticket == null ? null : String.valueOf(ticket.get("id"));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void addTicketNote(String ticketId, String text) {
+        try {
+            ticketClient.patch()
+                    .uri("/tmf-api/troubleTicket/v4/troubleTicket/" + ticketId)
+                    .body(Map.of("note", List.of(Map.of("text", text))))
+                    .retrieve().toBodilessEntity();
+        } catch (Exception e) {
+            // the diagnosis still lives in the trace — a note failure is logged upstream
+        }
     }
 
     public List<Map<String, Object>> ticketsOf(String partyId) {
