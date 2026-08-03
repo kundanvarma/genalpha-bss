@@ -144,6 +144,11 @@ spring:
           uri: ${PROCESS_URL:http://localhost:8116}
           predicates:
             - Path=/tmf-api/processFlowManagement/**
+        - id: sla
+          # TMF623: promises in force, and the ones that broke
+          uri: ${ASSURANCE_URL:http://localhost:8105}
+          predicates:
+            - Path=/tmf-api/slaManagement/**
         - id: fulfilment
           # TMF700/697: the parcel and the visit — the warehouse/installer face
           uri: ${FULFILMENT_URL:http://localhost:8117}

@@ -33,16 +33,19 @@ public class AssuranceService {
     private final ServiceProblemRepository problems;
     private final com.bss.assurance.service.SelfHealService selfHeal;
     private final DomainEventPublisher events;
+    private final SlaService slaService;
     private final TenantScope tenantScope;
 
     public AssuranceService(AlarmRepository alarms, ServiceProblemRepository problems,
             DomainEventPublisher events, TenantScope tenantScope,
-            com.bss.assurance.service.SelfHealService selfHeal) {
+            com.bss.assurance.service.SelfHealService selfHeal,
+            SlaService slaService) {
         this.alarms = alarms;
         this.problems = problems;
         this.selfHeal = selfHeal;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.slaService = slaService;
     }
 
     @Transactional
@@ -99,6 +102,7 @@ public class AssuranceService {
                 alarm.setClearedAt(OffsetDateTime.now());
                 alarms.save(alarm);
                 events.publish("ServiceProblemStateChangeEvent", "serviceProblem", problemMap(problem));
+        slaService.onProblemResolved(problem); // did any signed promise break?
             }
         }
         return alarmMap(alarm);
@@ -141,6 +145,7 @@ public class AssuranceService {
         }
         Map<String, Object> resolved = problemMap(problem);
         events.publish("ServiceProblemStateChangeEvent", "serviceProblem", resolved);
+        slaService.onProblemResolved(problem); // did any signed promise break?
         return resolved;
     }
 

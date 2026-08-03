@@ -15,4 +15,6 @@ public interface CreditNoteRepository extends JpaRepository<CreditNote, String> 
     List<CreditNote> findByTenantIdAndOwnerPartyIdOrderByIssuedAtDesc(String tenantId, String ownerPartyId);
 
     List<CreditNote> findByTenantIdAndBillIdOrderByIssuedAtDesc(String tenantId, String billId);
+
+    boolean existsByTenantIdAndReason(String tenantId, String reason);
 }

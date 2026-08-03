@@ -89,6 +89,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 |---|---|---|---|
 | Manage channel partners & their compensation | dealer API | SOM | ✅ |
 | Manage customer agreements & commitments | TMF651 | `agreement` | ✅ |
+| Honor service-level promises (SLA → credit) | TMF623 SLA Management | `assurance` + `billing` | ✅ #74 (SLA terms as agreement DATA; late-resolved problems mint violations on a capped ledger; billing compensates with the PRE-AGREED credit note — no human decides at breach time) |
 | Quote complex B2B deals | TMF648 | `quote` | ✅ (◐ full CPQ: approvals, versioned proposals, e-sign — no) |
 | Operate multiple brands / tenants (MVNE) | tenant registry + realm mint | fleet-wide | ✅ #49 |
 | Bundle partner services (VAS) | entitlement seam | SOM | ✅ (◐ settlement/rev-share no) |
@@ -109,7 +110,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 73 suites and 13 CTKs.
+multi-tenant operation — proven by 74 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming

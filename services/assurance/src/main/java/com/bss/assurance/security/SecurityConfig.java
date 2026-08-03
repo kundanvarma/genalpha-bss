@@ -46,6 +46,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.ALARM_BASE + "/**",
                                 ApiConstants.PROBLEM_BASE + "/**").hasAuthority("assurance:read")
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/tmf-api/slaManagement/v4/**").hasAuthority("assurance:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ALARM_BASE + "/**",
                                 ApiConstants.PROBLEM_BASE + "/**").hasAuthority("assurance:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.ALARM_BASE + "/**",

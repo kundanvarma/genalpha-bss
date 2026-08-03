@@ -1016,6 +1016,7 @@ services:
     restart: unless-stopped
     environment:
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
+      AGREEMENT_BASE_URL: http://agreement:8080
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       OIDC_CLIENT_ID: bss-assurance
       OIDC_CLIENT_SECRET: assurance-secret

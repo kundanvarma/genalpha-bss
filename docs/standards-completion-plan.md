@@ -142,3 +142,23 @@ party-scope refusal now 403s them explicitly). Regressions green:
 storefront, process-memory. Build note: gateway routes are HOST-BUILT
 jars — the route 404s until the gateway is rebuilt (bitten again,
 recorded again).
+
+**P2 — 2026-08-03, suite #74 green.** TMF623 lives across two owners,
+each doing its own job: ASSURANCE detects and keeps the ledger (the
+`sla_violation` table the monthly cap is enforced against, the
+`SlaViolationEvent`, and the TMF623 read faces `/sla` +
+`/slaViolation` — the SLAs projected LIVE from agreements whose
+characteristic carries the `sla` block); BILLING compensates
+(`SlaViolationListener` → in-process `CreditNoteService.issue`, no
+admin machine grant — the recon's call held: nobody decides at breach
+time, the contract decided at signature). Proven live: a 0-minute
+promise on a named circuit, three sequential outages of ~1m each →
+three violations, TWO credited as CN-000022/23 at the pre-agreed
+2 EUR, the THIRD recorded-but-capped with the reason written down; a
+lenient 99999m control never violated. Machine identity:
+bss-assurance += agreement:read (file+live). Debug lessons: assurance
+mints ONE problem per object (breaches must cycle); the manual and
+auto resolve paths publish DIFFERENT expressions — hook BOTH (the
+exact-string replace matched only one and the suite caught it); suite
+waits outlive access tokens — re-mint per cycle. Regressions green:
+ai-slice (self-heal), credit notes.

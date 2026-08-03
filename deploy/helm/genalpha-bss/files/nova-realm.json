@@ -973,7 +973,8 @@
         "service:read",
         "service:write",
         "ticket:write",
-        "ticket:read"
+        "ticket:read",
+        "agreement:read"
       ]
     },
     {

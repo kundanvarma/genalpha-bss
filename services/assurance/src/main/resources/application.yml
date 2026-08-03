@@ -48,6 +48,7 @@ springdoc:
 bss:
   downstream:
     som-base-url: ${SOM_BASE_URL:http://localhost:8104}
+    agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8106}
     ticket-base-url: ${TICKET_BASE_URL:http://localhost:8092}
   events:
     topic: bss.assurance.events
