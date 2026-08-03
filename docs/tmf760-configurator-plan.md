@@ -114,4 +114,25 @@ the server check (or keeps both — instant UI + authoritative server).
 
 ## Shipped
 
-*(recorded as phases land)*
+**P1 — 2026-08-03, suite #77 green (six legs), first full run.** TMF760
+lives at `/tmf-api/productConfigurationManagement/v5` on product-catalog,
+stateless instant-sync — no task table, no migration.
+`queryProductConfiguration` computes the space (fixed members, choice
+groups normalized from BOTH cardinality homes, pickers with
+absent-`configurable`-means-true honored, prices with their conditions
+visible); `checkProductConfiguration` runs the three validations no
+single channel had (both bounds — the suite rejected 3-of-2 family
+lines, the hole no UI catches; characteristic values scoped to the
+PICKED options — "Titanium Edition" on an iPhone rejects by name;
+foreign offering ids refused), consults policy block rules under
+`bss-catalog` (the catalog's FIRST machine identity: policy:evaluate
+only, file + live, defaults stripped), and prices the pick with the
+money.js semantics ported verbatim — Titanium at 108.49/mo vs Icy Blue
+at 106.49/mo, exactly the 2.00 conditioned premium apart, totals
+reconciling to the line sum, the deal engine's indicative price riding
+along. Anonymous like the catalog (explicit permitAll on the two
+POSTs); nova's hostname 404s genalpha's bundle. Live-data note: the
+seeded bundle has GROWN a fourth choice group since the seed script was
+written — the suite asserts the three known groups by name, not a
+count. Regressions green (serial): family_max, color_pricing,
+storefront. Capability map: 52✅.

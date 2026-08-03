@@ -50,6 +50,11 @@ spring:
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
             - Path=/tmf-api/productCatalogManagement/**
+        # TMF760: the configurator lives WITH the catalog it computes from
+        - id: product-configurator
+          uri: ${CATALOG_URL:http://localhost:8081}
+          predicates:
+            - Path=/tmf-api/productConfigurationManagement/**
         - id: product-ordering
           uri: ${ORDERING_URL:http://localhost:8082}
           predicates:

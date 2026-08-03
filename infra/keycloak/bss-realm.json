@@ -330,6 +330,17 @@
       "directAccessGrantsEnabled": false
     },
     {
+      "clientId": "bss-catalog",
+      "name": "product-catalog machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "catalog-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
       "clientId": "bss-billing",
       "name": "billing machine identity (client credentials; dev secret)",
       "enabled": true,
@@ -727,6 +738,14 @@
         "promotion:read",
         "policy:evaluate",
         "inventory:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-catalog",
+      "enabled": true,
+      "serviceAccountClientId": "bss-catalog",
+      "realmRoles": [
+        "policy:evaluate"
       ]
     },
     {

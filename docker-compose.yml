@@ -68,6 +68,13 @@ services:
       LEGACY_CATALOG_BASE_URL: http://mock-legacy:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      # TMF760: the configurator consults policy's block rules under the
+      # catalog's own machine identity, and the deal engine anonymously
+      POLICY_BASE_URL: http://policy:8080
+      OIDC_CLIENT_ID: bss-catalog
+      OIDC_CLIENT_SECRET: catalog-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       DB_URL: jdbc:postgresql://postgres:5432/product_catalog
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: catalog_app

@@ -48,6 +48,10 @@ springdoc:
 bss:
   events:
     topic: bss.catalog.events
+  downstream:
+    # the configurator consults policy: block rules (machine seam) and
+    # the public deal engine's indicative price — both fail open
+    policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
