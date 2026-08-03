@@ -78,4 +78,33 @@ manual section for the pair; counts to 84.
 
 ## Shipped
 
-*(recorded as the phases land)*
+**P1 — 2026-08-04 (overnight), suite #83 green (four legs), first
+run.** TMF668 lives at `/tmf-api/partnershipTypeManagement/v4` on the
+agreement service, riding the agreement scopes. A kind without roles
+is refused at authoring ("a partnership kind IS the roles it
+permits"); a typed partnership agreement is validated at signature —
+the "smuggler" role was refused NAMING the permitted list
+(provider, dealer), a ghost type refused outright — and a plain
+commercial agreement with an arbitrary role signed exactly as before:
+the type system binds only those who claim a type. Customer 403 on
+authoring; nova isolation; delete is first-class.
+
+**P2 — 2026-08-04 (overnight), suite #84 green (four legs), first
+run.** TMF674 lives at `/tmf-api/geographicSiteManagement/v4` on
+geographic-address, leaning on TMF673 exactly as the specs intend: a
+site's place MUST reference a stored geographicAddress (a bogus ref
+400s) and the address is EMBEDDED on every read. Lifecycle
+planned→active→retired enforced as vocabulary (an invented status
+400s); the org filter lists exactly its own sites. The address-book
+story proven end to end: the HQ address — typed once when the site
+was born — rode kai's order and landed intact on fulfilment's parcel.
+Customers 403 (the address book is back-office); nova sees nothing;
+a retired branch deletes.
+
+Regressions (serial): b2b green; guest FAILED first and the failure
+was a real latent bug from the TMF645 arc — the cart's new footprint
+line reused the `serviceability ok` CSS classes, so Playwright's
+strict locator resolved to TWO elements whenever the footprint fetch
+won the race. Fixed deterministically: the footprint line got its own
+`serviceability footprint` class (+ CSS); guest green on re-run. The
+TMF gap list is CLOSED.

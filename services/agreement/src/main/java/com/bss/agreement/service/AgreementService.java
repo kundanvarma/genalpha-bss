@@ -44,12 +44,16 @@ public class AgreementService {
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
+    private final PartnershipTypeService partnershipTypes;
+
     public AgreementService(AgreementRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper) {
+            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper,
+            PartnershipTypeService partnershipTypes) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
+        this.partnershipTypes = partnershipTypes;
         this.objectMapper = objectMapper;
     }
 
@@ -59,6 +63,7 @@ public class AgreementService {
         if (dto.get("name") == null) {
             throw new BadRequestException("name is required");
         }
+        requirePermittedPartnershipRoles(dto);
         String owner = null;
         if (dto.get("engagedParty") instanceof List<?> parties) {
             for (Object p : parties) {
@@ -206,4 +211,42 @@ public class AgreementService {
             throw new IllegalStateException("unreadable stored JSON", e);
         }
     }
+
+    /**
+     * TMF668: a TYPED partnership is validated at signature — every engaged
+     * role must be one its partnership type permits. Untyped agreements pass
+     * untouched: no ceremony where none is due.
+     */
+    @SuppressWarnings("unchecked")
+    private void requirePermittedPartnershipRoles(Map<String, Object> dto) {
+        if (!"partnership".equalsIgnoreCase(String.valueOf(dto.get("agreementType")))) {
+            return;
+        }
+        String typeId = null;
+        Object characteristic = dto.get("characteristic");
+        if (characteristic instanceof Map<?, ?> m && m.get("partnershipTypeId") != null) {
+            typeId = String.valueOf(m.get("partnershipTypeId"));
+        }
+        if (typeId == null) {
+            return; // an untyped partnership is legal — the type is the opt-in
+        }
+        List<String> permitted = partnershipTypes.permittedRoles(typeId);
+        if (permitted.isEmpty()) {
+            throw new BadRequestException(
+                    "partnership type '" + typeId + "' is unknown or retired");
+        }
+        if (dto.get("engagedParty") instanceof List<?> parties) {
+            for (Object p : parties) {
+                if (p instanceof Map<?, ?> ref && ref.get("role") != null) {
+                    String role = String.valueOf(ref.get("role"));
+                    if (permitted.stream().noneMatch(r -> r.equalsIgnoreCase(role))) {
+                        throw new BadRequestException("role '" + role
+                                + "' is not permitted by this partnership type (permitted: "
+                                + String.join(", ", permitted) + ")");
+                    }
+                }
+            }
+        }
+    }
+
 }

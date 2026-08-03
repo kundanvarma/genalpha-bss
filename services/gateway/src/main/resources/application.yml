@@ -127,7 +127,7 @@ spring:
         - id: agreement
           uri: ${AGREEMENT_URL:http://localhost:8098}
           predicates:
-            - Path=/tmf-api/agreementManagement/**
+            - Path=/tmf-api/agreementManagement/**,/tmf-api/partnershipTypeManagement/**
         - id: promotion
           uri: ${PROMOTION_URL:http://localhost:8099}
           predicates:
@@ -218,7 +218,7 @@ spring:
         - id: geographic-address
           uri: ${ADDRESS_URL:http://localhost:8101}
           predicates:
-            - Path=/tmf-api/geographicAddressManagement/**
+            - Path=/tmf-api/geographicAddressManagement/**,/tmf-api/geographicSiteManagement/**
         - id: document
           uri: ${DOCUMENT_URL:http://localhost:8106}
           predicates:

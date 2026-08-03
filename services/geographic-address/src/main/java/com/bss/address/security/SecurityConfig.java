@@ -45,6 +45,10 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/geographicAddressValidation").permitAll()
+                        // TMF674: sites ride the same scopes as the addresses they name
+                        .requestMatchers(HttpMethod.GET,
+                                "/tmf-api/geographicSiteManagement/v4/**").hasAuthority("address:read")
+                        .requestMatchers("/tmf-api/geographicSiteManagement/v4/**").hasAuthority("address:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("address:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")

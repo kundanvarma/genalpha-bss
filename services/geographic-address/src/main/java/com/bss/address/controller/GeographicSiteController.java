@@ -1,0 +1,63 @@
+package com.bss.address.controller;
+
+import com.bss.address.service.GeographicSiteService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.net.URI;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * TMF674 Geographic Site Management: named, reusable places with a
+ * lifecycle — the address book the org model never had. Rides the same
+ * scopes as the addresses it leans on (TMF673 next door).
+ */
+@RestController
+@RequestMapping("/tmf-api/geographicSiteManagement/v4")
+public class GeographicSiteController {
+
+    private final GeographicSiteService service;
+
+    public GeographicSiteController(GeographicSiteService service) {
+        this.service = service;
+    }
+
+    @GetMapping("/geographicSite")
+    public ResponseEntity<List<Map<String, Object>>> list(
+            @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
+        return ResponseEntity.ok(service.findAll(relatedPartyId));
+    }
+
+    @GetMapping("/geographicSite/{id}")
+    public ResponseEntity<Map<String, Object>> byId(@PathVariable("id") String id) {
+        return ResponseEntity.ok(service.findById(id));
+    }
+
+    @PostMapping("/geographicSite")
+    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+        Map<String, Object> created = service.create(dto);
+        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    }
+
+    @PatchMapping("/geographicSite/{id}")
+    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.patch(id, dto));
+    }
+
+    @DeleteMapping("/geographicSite/{id}")
+    public ResponseEntity<Void> delete(@PathVariable("id") String id) {
+        service.delete(id);
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
+}

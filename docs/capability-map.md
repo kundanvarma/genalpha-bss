@@ -96,6 +96,8 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Quote complex B2B deals | TMF648 | `quote` | ✅ (◐ full CPQ: approvals, versioned proposals, e-sign — no) |
 | Operate multiple brands / tenants (MVNE) | tenant registry + realm mint | fleet-wide | ✅ #49 |
 | Bundle partner services (VAS) | entitlement seam | SOM | ✅ (◐ settlement/rev-share no) |
+| Type partnerships & their permitted roles (onboarding) | TMF668 Partnership Type | `agreement` | ✅ #83 (kinds as data; typed partnerships validated at signature) |
+| Name & reuse customer/org sites (the address book) | TMF674 Geographic Site | `geographic-address` | ✅ #84 (site = name + owner + lifecycle + stored TMF673 address, embedded; reused on orders end to end) |
 | HR / workforce mgmt (human), ERP, procurement | — | — | ❌ enterprise systems |
 | BI / data warehouse | — | `insight` events help | ◐ insight is a CDP-ish spine, not a DWH |
 

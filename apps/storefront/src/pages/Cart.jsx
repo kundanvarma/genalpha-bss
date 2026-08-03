@@ -451,7 +451,7 @@ export default function Cart() {
                   .map((c) => [c.name, c.value])))
                 .sort((a, b) => (b.maxDownstreamMbps || 0) - (a.maxDownstreamMbps || 0))[0];
               return (
-                <p className="serviceability ok">
+                <p className="serviceability footprint">
                   {(label[best.technology] || best.technology)}
                   {' up to '}{best.maxDownstreamMbps}{' Mbit/s at your address'}
                 </p>

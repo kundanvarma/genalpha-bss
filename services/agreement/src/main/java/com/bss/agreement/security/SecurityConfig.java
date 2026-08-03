@@ -43,6 +43,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // TMF668: the partnership-type catalog rides the same scopes —
+                        // read what you may read, author what you may sign
+                        .requestMatchers(HttpMethod.GET,
+                                "/tmf-api/partnershipTypeManagement/v4/**").hasAuthority("agreement:read")
+                        .requestMatchers("/tmf-api/partnershipTypeManagement/v4/**").hasAuthority("agreement:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("agreement:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("agreement:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("agreement:write")
