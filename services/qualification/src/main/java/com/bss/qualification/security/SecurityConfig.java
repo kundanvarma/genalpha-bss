@@ -45,6 +45,17 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST,
                                 ApiConstants.BASE_PATH + "/checkProductOfferingQualification").permitAll()
+                        // TMF645: the technical shop window is as anonymous as the
+                        // commercial one — a prospect asks before having identity.
+                        // A persisted check reads back by its unguessable id; the
+                        // LIST (customer addresses) and the coverage CRUD are
+                        // back-office and fall through to the write gate below.
+                        .requestMatchers(HttpMethod.POST,
+                                "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification",
+                                "/tmf-api/serviceQualificationManagement/v4/queryServiceQualification").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification/*").permitAll()
+                        .requestMatchers("/tmf-api/serviceQualificationManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

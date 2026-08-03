@@ -94,7 +94,8 @@ spring:
         - id: qualification
           uri: ${QUALIFICATION_URL:http://localhost:8089}
           predicates:
-            - Path=/tmf-api/productOfferingQualification/**
+            # TMF679 commercial + TMF645 technical: one qualification service
+            - Path=/tmf-api/productOfferingQualification/**,/tmf-api/serviceQualificationManagement/**
         - id: appointment
           uri: ${APPOINTMENT_URL:http://localhost:8091}
           predicates:

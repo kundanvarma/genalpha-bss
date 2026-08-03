@@ -102,4 +102,20 @@ Console: a Coverage tab over the CRUD.
 
 ## Shipped
 
-*(recorded as phases land)*
+**P1 — 2026-08-03, suite #79 green (four legs), first full run.** TMF645
+lives on the qualification service at
+`/tmf-api/serviceQualificationManagement/v4`, beside the TMF679 it
+completes. The substance is the `coverage_map` — five seeded rows:
+fiber 1000/1000 in 111* (XGS-PON), 500 in 222*, 300 in 333*, VDSL 100
+in Malmö's copper, and 5G-FWA 100 with the EMPTY prefix as the
+everywhere-fallback — operator-editable over REST, evented, RLS-walled.
+`queryServiceQualification` answers the footprint per place (longest
+prefix wins per technology); `checkServiceQualification` never says a
+bare no — fiber in Kiruna refused WITH the 5G-FWA alternative proposed,
+a 500 Mbps ask against Malmö's 300 Mbps plant refused naming the
+ceiling, the same ask in Stockholm qualified at the full 1000. Checks
+PERSIST (`service_qualification`) and read back by unguessable id; the
+list (customer addresses) and the coverage CRUD are back-office —
+anonymous and customer both refused on camera, staff served, and
+nova's hostname answered from nova's own empty footprint. Regressions
+green (serial): guest, storefront.
