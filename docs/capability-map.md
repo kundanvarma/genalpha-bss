@@ -80,7 +80,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Port numbers in & out (MNP) | clearinghouse seam | `porting` | ✅ (◐ NRDB shaped, not connected) |
 | Detect & resolve service problems | TMF642/656 + TMF653 tests + TMF724 incidents | `assurance` + `service-orchestration` + `intelligence` | ✅ (thin; real FM/PM needs the NMS; #76: diagnose as serviceTest with history, agent memory as standard incidents) |
 | Qualify serviceability (commercial) | TMF679 | `qualification` | ✅ |
-| Qualify service delivery (technical: technology, bandwidth, alternative) | TMF645 Service Qualification | `qualification` coverage map | ✅ #79 (never a bare no — the best available technology is proposed on refusal) |
+| Qualify service delivery (technical: technology, bandwidth, alternative) | TMF645 Service Qualification | `qualification` coverage map | ✅ #79/#80 (never a bare no — the best available technology proposed on refusal; ordering gates every placed item at create; the cart names technology + speed) |
 | Schedule installations | TMF646 | `appointment` | ✅ (❌ full field-service mgmt: routing, van stock, workforce scheduling — now behind a REAL seam: work orders #73) |
 | Ship & install what was sold | TMF700 Shipping Order + TMF697 Work Order | `fulfilment` (#37) | ✅ #73 (parcel + visit as resources, warehouse/installer API, machine completion when both gates pass, milestones on the process timeline; customers track deliveries) |
 | Network inventory (physical/logical), mediation (CDR pipelines) | — | — | ❌ real OSS estate — or wrap it (suite #67 pattern) |

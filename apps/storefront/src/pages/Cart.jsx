@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, checkQualification, getOffering, getSpec, myParty, previewPrice, priceIndex, searchTimeSlots } from '../api.js';
+import { availabilityFor, checkQualification, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
@@ -20,6 +20,7 @@ export default function Cart() {
   const [card, setCard] = useState({ cardNumber: '', expiry: '', cvc: '' });
   const [saveCard, setSaveCard] = useState(false);
   const [serviceability, setServiceability] = useState(null); // TMF679 check result
+  const [footprint, setFootprint] = useState(null); // TMF645: what the network delivers here
   const [slots, setSlots] = useState(null);
   const [promoInput, setPromoInput] = useState('');
   // Survives the sign-in redirect, like the address draft.
@@ -85,6 +86,15 @@ export default function Cart() {
       .then((check) => setServiceability({ check, postCode }))
       .catch(() => setServiceability(null));
   }, [lines, offerings, address.postCode]);
+
+  // TMF645: the technical footprint at this address — technology and speed
+  useEffect(() => {
+    const postCode = address.postCode;
+    if (!postCode) { setFootprint(null); return; }
+    queryServiceQualification({ postCode, city: address.city, country: address.country })
+      .then((result) => setFootprint({ result, postCode }))
+      .catch(() => setFootprint(null));
+  }, [address.postCode]);
 
   const qualificationItemsResult = serviceability?.check?.productOfferingQualificationItem || [];
   const needsInstall = qualificationItemsResult.some((i) => i.serviceabilityGated);
@@ -432,6 +442,21 @@ export default function Cart() {
                 : unqualifiedItem.eligibilityUnavailabilityReason?.[0]?.label || 'Not serviceable at this address'}
             </p>
           )}
+          {isComplete(address) && footprint?.postCode === address.postCode
+            && (footprint.result.serviceQualificationItem || []).length > 0 && (() => {
+              // TMF645: name the best technology this address can actually have
+              const label = { fiber: 'Fiber', vdsl: 'VDSL', '5g-fwa': '5G broadband' };
+              const best = footprint.result.serviceQualificationItem
+                .map((i) => Object.fromEntries((i.service.serviceCharacteristic || [])
+                  .map((c) => [c.name, c.value])))
+                .sort((a, b) => (b.maxDownstreamMbps || 0) - (a.maxDownstreamMbps || 0))[0];
+              return (
+                <p className="serviceability ok">
+                  {(label[best.technology] || best.technology)}
+                  {' up to '}{best.maxDownstreamMbps}{' Mbit/s at your address'}
+                </p>
+              );
+            })()}
         </div>
       )}
 

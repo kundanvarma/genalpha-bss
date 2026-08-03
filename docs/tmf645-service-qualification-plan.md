@@ -119,3 +119,24 @@ list (customer addresses) and the coverage CRUD are back-office —
 anonymous and customer both refused on camera, staff served, and
 nova's hostname answered from nova's own empty footprint. Regressions
 green (serial): guest, storefront.
+
+**P2 — 2026-08-03, suite #80 green (three legs), first full run.** The
+channels adopted the answer. THE GATE: ordering now qualifies every
+placed item at create — the same TMF679 check the storefront runs at
+checkout, finally enforced at the one door every channel walks through
+(anonymous call, tenant header, fail-open; hook right after
+validateBundleComposition). An API-direct fiber order for postcode
+99999 — the kind that sailed through yesterday and died at fulfilment —
+is refused with the qualification's own words; the same fiber at 11122
+orders fine; an ungated mobile plan orders anywhere: the gate refuses
+exactly what the qualification refuses, nothing more. THE CART LINE:
+the storefront's address block now names WHAT the network delivers, not
+just whether — "Fiber up to 1000 Mbit/s at your address" / "5G
+broadband up to 100 Mbit/s" — from `queryServiceQualification`
+(`api.js` + a footprint effect in Cart.jsx; composable-safe: no
+qualification component, no line). Design note: the order gate uses
+TMF679 (offering + place — ordering already has both) rather than
+inventing an offering→technology mapping the data does not carry;
+TMF645's technical answer powers the shop window. Deferred to the
+console backlog: a Coverage tab over the CRUD (the footprint is
+REST-editable today). Regressions green (serial): storefront, guest.

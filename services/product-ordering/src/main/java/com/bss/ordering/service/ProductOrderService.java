@@ -56,12 +56,14 @@ public class ProductOrderService {
     private final StockClient stockClient;
     private final PaymentClient paymentClient;
     private final PolicyClient policyClient;
+    private final com.bss.ordering.client.ServiceabilityClient serviceabilityClient;
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
             StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient,
+            com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
             com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff) {
         this.repository = repository;
         this.mapper = mapper;
@@ -77,6 +79,7 @@ public class ProductOrderService {
         this.stockClient = stockClient;
         this.paymentClient = paymentClient;
         this.policyClient = policyClient;
+        this.serviceabilityClient = serviceabilityClient;
         this.legacyHandoff = legacyHandoff;
     }
 
@@ -139,6 +142,7 @@ public class ProductOrderService {
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
         validateBundleComposition(dto);
+        validateServiceability(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState("acknowledged");
         }
@@ -926,6 +930,44 @@ public class ProductOrderService {
                     .map(CatalogClient.OfferingRef::name).orElse(offeringId);
         } catch (Exception e) {
             return offeringId;
+        }
+    }
+
+    /**
+     * The serviceability gate the API never had: the storefront checks at
+     * checkout, but an API-direct or agent order for an un-serviceable
+     * address used to sail through and fail at fulfilment. Every item that
+     * carries a place is qualified against the SAME TMF679 check the shop
+     * window uses (anonymous, fail-open) — a refusal answers with the
+     * qualification's own reason.
+     */
+    private void validateServiceability(ProductOrderDto dto) {
+        List<Map<String, Object>> qualificationItems = new ArrayList<>();
+        for (Map<String, Object> item : flattenItemMaps(dto.getProductOrderItem())) {
+            if (!(item.get("product") instanceof Map<?, ?> product)
+                    || product.get("place") == null
+                    || !(item.get("productOffering") instanceof Map<?, ?> offering)
+                    || offering.get("id") == null) {
+                continue;
+            }
+            Object place = product.get("place") instanceof List<?> places && !places.isEmpty()
+                    ? places.get(0) : product.get("place");
+            if (!(place instanceof Map)) {
+                continue;
+            }
+            Object name = offering.get("name") == null ? offering.get("id") : offering.get("name");
+            qualificationItems.add(Map.of(
+                    "productOffering", Map.of(
+                            "id", String.valueOf(offering.get("id")),
+                            "name", String.valueOf(name)),
+                    "place", place));
+        }
+        if (qualificationItems.isEmpty()) {
+            return;
+        }
+        List<String> reasons = serviceabilityClient.unqualifiedReasons(qualificationItems);
+        if (!reasons.isEmpty()) {
+            throw new OrderValidationException(String.join("; ", reasons));
         }
     }
 

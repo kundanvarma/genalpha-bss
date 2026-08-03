@@ -563,6 +563,22 @@ async function checkQualificationStrict(items, place) {
   }));
 }
 
+/** TMF645 technical footprint: what the network can DELIVER at this place —
+ * technology and bandwidth, anonymous like the commercial check above.
+ * Composable: no qualification component means no footprint to show. */
+export async function queryServiceQualification(place) {
+  try {
+    return json(await publicFetch(
+      '/tmf-api/serviceQualificationManagement/v4/queryServiceQualification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchCriteria: { place } }),
+      }));
+  } catch {
+    return { serviceQualificationItem: [] };
+  }
+}
+
 /** TMF646 free installer slots — also anonymous. */
 export async function searchTimeSlots() {
   try {

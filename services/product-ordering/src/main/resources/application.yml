@@ -87,3 +87,4 @@ bss:
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8089}
