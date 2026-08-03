@@ -167,8 +167,9 @@ public class CustomerBillController {
 
     @GetMapping("/creditNote")
     public ResponseEntity<List<Map<String, Object>>> creditNotes(
-            @RequestParam(name = "billId", required = false) String billId) {
-        return ResponseEntity.ok(creditNoteService.list(billId));
+            @RequestParam(name = "billId", required = false) String billId,
+            @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
+        return ResponseEntity.ok(creditNoteService.list(billId, relatedPartyId));
     }
 
     @GetMapping("/creditNote/{id}")

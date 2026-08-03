@@ -68,7 +68,8 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Calculate jurisdictional taxes | — | — | ❌ prices are tax-inclusive by convention; jurisdictional tax (VAT/US telecom tax) needs Vertex/Avalara-class |
 | Account revenue (GL, rev-rec ASC 606) | subledger journal export (house `/revenue/v1`) | `revenue` (#35) | ✅ #70 the FEED (balanced double-entry journal from billing/payment events, CoA mapping as data, tax split, dispute credits, priced loyalty liability, period close, SAP/NetSuite-shaped CSV, cent-exact reconciliation tie-out); ❌ the LEDGER itself + the rev-rec engine stay in the ERP — by design |
 | Settle wholesale / interconnect / roaming | — | — | ❌ carrier-grade settlement is its own product |
-| Assure revenue & fight fraud | — | — | ❌ (the audit trails feed one nicely) |
+| Fight acquisition fraud (party/order risk) | TMF696 Risk Management | `intelligence` risk engine | ✅ #82 (transparent additive score from real signals — unpaid bills, credit notes, velocity, tenure, verified session; threshold enforced as a policy rule, reversibly) |
+| Assure revenue (usage reconciliation, leakage) | — | — | ❌ specialist tooling (the audit trails feed one nicely) |
 
 ## 5. Service & Resource (the thin OSS)
 

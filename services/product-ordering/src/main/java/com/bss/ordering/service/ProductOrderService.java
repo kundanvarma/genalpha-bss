@@ -57,6 +57,7 @@ public class ProductOrderService {
     private final PaymentClient paymentClient;
     private final PolicyClient policyClient;
     private final com.bss.ordering.client.ServiceabilityClient serviceabilityClient;
+    private final com.bss.ordering.client.RiskClient riskClient;
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
@@ -64,6 +65,7 @@ public class ProductOrderService {
             DomainEventPublisher events, PartyScope partyScope, TenantScope tenantScope,
             StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient,
             com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
+            com.bss.ordering.client.RiskClient riskClient,
             com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff) {
         this.repository = repository;
         this.mapper = mapper;
@@ -80,6 +82,7 @@ public class ProductOrderService {
         this.paymentClient = paymentClient;
         this.policyClient = policyClient;
         this.serviceabilityClient = serviceabilityClient;
+        this.riskClient = riskClient;
         this.legacyHandoff = legacyHandoff;
     }
 
@@ -396,6 +399,16 @@ public class ProductOrderService {
         context.put("maxLineQuantity", maxLineQuantity);
         context.put("totalQuantity", total);
         context.put("lineCount", items.size());
+        // TMF696: the party's risk, freshly assessed, as two more vars the
+        // OPERATOR's rules may reference. Fail-open — no engine, no vars,
+        // and a rule naming riskScore simply does not fire.
+        com.bss.ordering.client.RiskClient.Assessment risk = riskClient.assessOrder(
+                ownerPartyId, total, items.size(), verifiedIdentity.isVerified());
+        if (risk != null) {
+            context.put("riskScore", risk.score());
+            context.put("riskLevel", risk.level());
+            context.put("riskAssessmentId", risk.assessmentId());
+        }
         return context;
     }
 

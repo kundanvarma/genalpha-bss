@@ -159,8 +159,8 @@ spring:
           # TMF724: the agent's memory, standards-addressable
           uri: ${INTELLIGENCE_URL:http://localhost:8109}
           predicates:
-            # TMF724 incidents + TMF915 AI management: both faces of intelligence
-            - Path=/tmf-api/incidentManagement/**,/tmf-api/aiManagement/**
+            # TMF724 incidents + TMF915 AI management + TMF696 risk: intelligence's faces
+            - Path=/tmf-api/incidentManagement/**,/tmf-api/aiManagement/**,/tmf-api/riskManagement/**
         - id: event-hub
           # TMF688: the fleet's envelopes, subscribable — partner grade
           uri: ${EVENTHUB_URL:http://localhost:8123}

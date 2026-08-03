@@ -318,6 +318,10 @@
       {
         "name": "ai:admin",
         "description": "Govern the AI control plane: budgets, kill-switch, model-contract suspension"
+      },
+      {
+        "name": "risk:assess",
+        "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
       }
     ]
   },
@@ -741,7 +745,8 @@
         "promotion:write",
         "promotion:read",
         "policy:evaluate",
-        "inventory:read"
+        "inventory:read",
+        "risk:assess"
       ]
     },
     {
@@ -840,7 +845,8 @@
         "knowledge:read",
         "knowledge:write",
         "insight:read",
-        "ai:admin"
+        "ai:admin",
+        "risk:assess"
       ],
       "id": "9b308a96-8629-4614-bc67-6dc10db87b53"
     },
@@ -974,7 +980,8 @@
         "billing:read",
         "billing:admin",
         "ticket:write",
-        "ordering:read"
+        "ordering:read",
+        "party:read"
       ]
     },
     {

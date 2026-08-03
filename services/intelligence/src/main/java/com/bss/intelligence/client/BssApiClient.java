@@ -31,6 +31,8 @@ public class BssApiClient {
     private final RestClient billingClient;
     private final ObjectMapper objectMapper;
     private final RestClient processClient;
+    private final RestClient orderingClient;
+    private final RestClient partyClient;
 
     public BssApiClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             ObjectMapper objectMapper,
@@ -42,7 +44,9 @@ public class BssApiClient {
             @Value("${bss.downstream.insight-base-url:http://localhost:8119}") String insightBaseUrl,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBaseUrl,
             @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBaseUrl,
-            @Value("${bss.downstream.process-base-url:http://localhost:8116}") String processBaseUrl) {
+            @Value("${bss.downstream.process-base-url:http://localhost:8116}") String processBaseUrl,
+            @Value("${bss.downstream.ordering-base-url:http://localhost:8082}") String orderingBaseUrl,
+            @Value("${bss.downstream.party-base-url:http://localhost:8084}") String partyBaseUrl) {
         this.processClient = builder.baseUrl(processBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.agreementClient = builder.baseUrl(agreementBaseUrl)
@@ -60,6 +64,10 @@ public class BssApiClient {
         this.insightClient = builder.baseUrl(insightBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.inventoryClient = builder.baseUrl(inventoryBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
+        this.orderingClient = builder.baseUrl(orderingBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
+        this.partyClient = builder.baseUrl(partyBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
     }
@@ -230,6 +238,56 @@ public class BssApiClient {
         try {
             String body = inventoryClient.get()
                     .uri("/tmf-api/productInventory/v4/product?relatedPartyId=" + partyId + "&limit=50")
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /* ---- TMF696 risk signals: exactly what the fleet's data knows ---- */
+
+    /** Every order this party owns (velocity computes from orderDate). */
+    public List<Map<String, Object>> ordersOf(String partyId) {
+        try {
+            String body = orderingClient.get()
+                    .uri("/tmf-api/productOrderingManagement/v4/productOrder?relatedPartyId={p}&limit=100", partyId)
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** The party's unpaid bills (state=new). */
+    public List<Map<String, Object>> unpaidBills(String partyId) {
+        try {
+            String body = billingClient.get()
+                    .uri("/tmf-api/customerBillManagement/v4/customerBill?relatedPartyId={p}&state=new&limit=100", partyId)
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** The party's credit notes — money the operator gave back. */
+    public List<Map<String, Object>> creditNotesOf(String partyId) {
+        try {
+            String body = billingClient.get()
+                    .uri("/tmf-api/customerBillManagement/v4/creditNote?relatedPartyId={p}", partyId)
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** The party's roles — PartyRole.createdAt is the only tenure signal. */
+    public List<Map<String, Object>> partyRolesOf(String partyId) {
+        try {
+            String body = partyClient.get()
+                    .uri("/tmf-api/partyRoleManagement/v4/partyRole?partyId={p}", partyId)
                     .retrieve().body(String.class);
             return parse(body);
         } catch (Exception e) {

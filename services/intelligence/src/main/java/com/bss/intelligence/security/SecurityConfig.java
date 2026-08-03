@@ -44,6 +44,9 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // the product advisor is the PRODUCT OWNER\u2019s tool
                         .requestMatchers("/tmf-api/incidentManagement/v4/**").hasAuthority("ai:use")
+                        // TMF696: a risk score is a credit check — back-office
+                        // and the ordering machine, never a customer surface
+                        .requestMatchers("/tmf-api/riskManagement/v4/**").hasAuthority("risk:assess")
                         // TMF915: reading the control plane's face is ops-grade;
                         // SUSPENDING a model contract is the first door behind
                         // ai:admin — the seam production always needed, opened

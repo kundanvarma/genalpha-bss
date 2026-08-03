@@ -170,11 +170,16 @@ public class CreditNoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String billId) {
+    public List<Map<String, Object>> list(String billId, String relatedPartyId) {
         String tenant = tenantScope.currentTenantId();
+        // customers stay self-scoped; a machine caller (risk engine) may ask
+        // per party — the finder existed since the credit-note arc, this is
+        // its API face
         List<CreditNote> found = partyScope.scopedPartyId()
                 .map(own -> creditNotes.findByTenantIdAndOwnerPartyIdOrderByIssuedAtDesc(tenant, own))
-                .orElseGet(() -> billId != null
+                .orElseGet(() -> relatedPartyId != null
+                        ? creditNotes.findByTenantIdAndOwnerPartyIdOrderByIssuedAtDesc(tenant, relatedPartyId)
+                        : billId != null
                         ? creditNotes.findByTenantIdAndBillIdOrderByIssuedAtDesc(tenant, billId)
                         : creditNotes.findByTenantIdOrderByIssuedAtDesc(tenant));
         return found.stream()

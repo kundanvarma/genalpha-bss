@@ -85,4 +85,29 @@ isolation). Regressions serial: policy, bankid, storefront.
 
 ## Shipped
 
-*(recorded when the phase lands)*
+**2026-08-03, suite #82 green (four legs).** TMF696 lives at
+`/tmf-api/riskManagement/v4` on intelligence, behind the new
+`risk:assess` authority (demo + the bss-ordering SA; intelligence SA
++= party:read — all file + live). The engine's first real assessment
+was its own best argument: kai scored 85/100 (high) from three named
+signals — 2 unpaid bills at 418.68 due (+40), 17 credit notes (+15),
+46 orders in 24h from the day's suite traffic (+30) — each echoing
+evidence the suite verified INDEPENDENTLY against billing and
+ordering, the total recomputable by hand from the assessment's own
+body. The session leg: the same order assessed BankID-verified scored
+exactly 20 lower — verification as the great reducer, known only to
+the caller's token. The operator leg: a policy rule pinned at
+riskScore>=80 denied kai's order with 422 POLICY_DENIED and the
+review message (ordering fetches a FRESH assessment under its machine
+identity into the policy context — fail-open, so a rule naming an
+absent riskScore simply does not fire); rule deleted, same order
+passed. Walls: a customer 403s on reading AND running assessments —
+even his own (a risk score is a credit check); nova's list holds
+nothing of genalpha's. Billing grew the `relatedPartyId` filter on
+GET /creditNote (the repo finder from the credit-note arc, given its
+API face). Deliberately absent, per the recon: failed payments (never
+persisted — the data cannot answer) and lifetime verification (session
+claim only). Build note: the RISK_BASE_URL compose env was missed on
+the first run and the fail-open path proved itself — orders proceeded
+unscored with a WARN, exactly as designed. Regressions green (serial):
+policy, bankid, storefront.

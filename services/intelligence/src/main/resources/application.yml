@@ -51,6 +51,8 @@ bss:
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     billing-base-url: ${BILLING_BASE_URL:http://localhost:8088}
+    ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
     process-base-url: ${PROCESS_BASE_URL:http://localhost:8116}
     agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
