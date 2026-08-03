@@ -45,6 +45,11 @@ public class OrderEventListener {
         handle(payload, "bss.som.events");
     }
 
+    @KafkaListener(topics = "${bss.process.fulfilment-topic:bss.fulfilment.events}", groupId = "process")
+    public void onFulfilmentEvent(String payload) {
+        handle(payload, "bss.fulfilment.events");
+    }
+
     @SuppressWarnings("unchecked")
     private void handle(String payload, String topic) {
         try {
@@ -76,6 +81,19 @@ public class OrderEventListener {
                             case "cancelled" -> service.onMilestone(orderId, "cancelled",
                                     eventType, topic, resource);
                             default -> { }
+                        }
+                    }
+                    case "ShippingOrderCreateEvent", "ShippingOrderStateChangeEvent",
+                         "WorkOrderCreateEvent", "WorkOrderStateChangeEvent" -> {
+                        String orderId = String.valueOf(resource.get("productOrderId"));
+                        if (!"null".equals(orderId)) {
+                            // milestones journal onto the flow's timeline; 'delivered'
+                            // also completes the physical 'fulfilled' task
+                            if ("delivered".equals(resource.get("state"))) {
+                                service.onMilestone(orderId, "fulfilled", eventType, topic, resource);
+                            } else {
+                                service.recordOnly(orderId, eventType, topic, resource);
+                            }
                         }
                     }
                     case "ServiceOrderStateChangeEvent" -> {

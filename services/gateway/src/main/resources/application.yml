@@ -144,6 +144,11 @@ spring:
           uri: ${PROCESS_URL:http://localhost:8116}
           predicates:
             - Path=/tmf-api/processFlowManagement/**
+        - id: fulfilment
+          # TMF700/697: the parcel and the visit — the warehouse/installer face
+          uri: ${FULFILMENT_URL:http://localhost:8117}
+          predicates:
+            - Path=/tmf-api/shippingOrderManagement/**
         - id: product-advisor
           # findings with receipts; adopt births a draft
           uri: ${INTELLIGENCE_URL:http://localhost:8109}

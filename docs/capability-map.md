@@ -79,7 +79,8 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Port numbers in & out (MNP) | clearinghouse seam | `porting` | ✅ (◐ NRDB shaped, not connected) |
 | Detect & resolve service problems | TMF642/656 | `assurance` | ✅ (thin; real FM/PM needs the NMS) |
 | Qualify serviceability | TMF679 | `qualification` | ✅ |
-| Schedule installations | TMF646 | `appointment` | ✅ (❌ full field-service mgmt: routing, van stock, workforce scheduling) |
+| Schedule installations | TMF646 | `appointment` | ✅ (❌ full field-service mgmt: routing, van stock, workforce scheduling — now behind a REAL seam: work orders #73) |
+| Ship & install what was sold | TMF700 Shipping Order + TMF697 Work Order | `fulfilment` (#37) | ✅ #73 (parcel + visit as resources, warehouse/installer API, machine completion when both gates pass, milestones on the process timeline; customers track deliveries) |
 | Network inventory (physical/logical), mediation (CDR pipelines) | — | — | ❌ real OSS estate — or wrap it (suite #67 pattern) |
 
 ## 6. Partner & Enterprise
@@ -108,7 +109,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 72 suites and 13 CTKs.
+multi-tenant operation — proven by 73 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming

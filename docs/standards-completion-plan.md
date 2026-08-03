@@ -119,4 +119,26 @@ Read-only `resourcePool` (counter + prefix honestly labeled) +
 
 ## Shipped
 
-*(Nothing yet — plan committed first, the house way.)*
+**P1 — 2026-08-03, suite #73 green (four legs).** Component #37
+`fulfilment` (port 8117, `/tmf-api/shippingOrderManagement/v4`) is
+live. The parcel: a physical order mints a shippingOrder
+(acknowledged), the warehouse drives
+acknowledged→inProgress→shipped→delivered over the API (trackingRef
+carried), and DELIVERED completes the product order under the
+service's own machine identity (`bss-fulfilment`, ordering:read/write,
+file+live, defaults stripped) — the CSR button demoted from
+load-bearing to optional, race-safe against it by ordering's own
+terminal-state guard. The visit: an install appointment whose
+relatedEntity names the order mints a workOrder (appointment ref
+carried), and BOTH gates must pass — the suite proved a delivered
+parcel alone does NOT complete an order with an open visit. The
+process layer's timeline now carries the parcel milestones and the
+physical flow's 'fulfilled' task completes on delivery — the incident
+agent sees WHICH leg of fulfilment stalled. Party-scoped reads gave
+customers delivery tracking for free; the suite caught a REAL wall
+hole en route (customers hold ordering:write for their own orders, so
+the role gate alone could not keep them out of the warehouse — a
+party-scope refusal now 403s them explicitly). Regressions green:
+storefront, process-memory. Build note: gateway routes are HOST-BUILT
+jars — the route 404s until the gateway is rebuilt (bitten again,
+recorded again).

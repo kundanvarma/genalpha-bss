@@ -153,6 +153,13 @@ public class ProcessFlowService {
         record(flow, "ProductOrderCreateEvent", "bss.ordering.events", resource);
     }
 
+    /** Journal an event onto the flow's timeline without advancing tasks. */
+    @Transactional
+    public void recordOnly(String orderId, String eventType, String topic, Map<String, Object> resource) {
+        flows.findByTenantIdAndCorrelationId(tenantScope.currentTenantId(), orderId)
+                .ifPresent(flow -> record(flow, eventType, topic, resource));
+    }
+
     /** A correlated milestone arrived: advance the matching task. */
     @Transactional
     public void onMilestone(String orderId, String taskCode, String eventType, String topic,

@@ -696,6 +696,17 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-fulfilment",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "fulfilment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -1180,6 +1191,15 @@
         "billing:read",
         "campaign:read",
         "agreement:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-fulfilment",
+      "enabled": true,
+      "serviceAccountClientId": "bss-fulfilment",
+      "realmRoles": [
+        "ordering:read",
+        "ordering:write"
       ]
     }
   ],
