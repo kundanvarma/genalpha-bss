@@ -71,6 +71,7 @@ beside it.</p>
 23. <a href="#process">Process flows &amp; the incident agent</a><br>
 24. <a href="#standards">The standards sweep</a><br>
 25. <a href="#configurator">The product configurator</a><br>
+26. <a href="#servicequal">Service qualification &amp; the coverage map</a><br>
 </p>
 </div>
 
@@ -709,7 +710,29 @@ invalid picks before a session opens, and complete builds nested order items wit
 <code>product.productCharacteristic</code>, so billing rates the configuration like any other
 channel's order. See <a href="../tmf760-configurator-plan.md">docs/tmf760-configurator-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-eight suites, thirteen CTKs at zero
+<h2 id="servicequal">26 · Service qualification &amp; the coverage map (TMF645) — suites #79/#80</h2>
+<p>TMF679 answers the commercial question (may this offering be sold here); TMF645 answers
+the technical one, on the same `qualification` service at
+<code>/tmf-api/serviceQualificationManagement/v4</code>. The substance is the
+<b>coverage map</b> — operator-editable rows
+<code>{technology, postcodePrefix, maxDownMbps, maxUpMbps}</code>; an EMPTY prefix matches
+everywhere (the mobile fallback), longest matching prefix wins per technology; seeded by
+<code>ops/seed/seed_coverage_map.py</code>, CRUD gated by <code>qualification:write</code>.
+<b>Query</b>: <code>POST /queryServiceQualification</code> with
+<code>{searchCriteria:{place:{postCode}}}</code> — every technology deliverable there, with
+bandwidth characteristics. <b>Check</b>: <code>POST /checkServiceQualification</code> —
+verdict per requested service (name the technology via
+<code>serviceSpecification.name</code> or a characteristic; optional
+<code>minDownstreamMbps</code>), and NEVER a bare no: a refusal carries
+<code>eligibilityUnavailabilityReason</code> AND <code>alternateServiceProposal</code> with
+the best technology the address can have. Checks persist and read back anonymously by
+unguessable id; the LIST (customer addresses) is back-office. <b>Channels</b>: ordering
+qualifies every placed item at create (same TMF679 check the storefront runs; fail-open;
+refusals speak the qualification's words), and the cart's address block names what the
+network delivers ("Fiber up to 1000 Mbit/s at your address"). See
+<a href="../tmf645-service-qualification-plan.md">docs/tmf645-service-qualification-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
