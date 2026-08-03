@@ -162,3 +162,19 @@ auto resolve paths publish DIFFERENT expressions — hook BOTH (the
 exact-string replace matched only one and the suite caught it); suite
 waits outlive access tokens — re-mint per cycle. Regressions green:
 ai-slice (self-heal), credit notes.
+
+**P3 — 2026-08-03, suite #75 green.** Component #38 `event-hub` (port
+8123, `/tmf-api/eventManagement/v4`): register a callback + event-type
+filter (partner/back-office grade — an event feed is a firehose of
+business facts, a customer got 403 on camera), and the fleet's OWN
+envelopes arrive — the suite's mock partner received a real
+AgreementCreateEvent, tenant-stamped, while unsubscribed noise stayed
+on the bus. Ingestion reuses Live Flow's pattern-listener
+(`bss\..*\.events`); delivery is a LEDGER with exponential-backoff
+retries and a DEAD state that keeps its error — the unreachable
+listener was retried 4x then dead-lettered, never lost, never silent.
+Flow stays deliberately DB-free, exactly as the recon recommended.
+Build lessons: the scaffold's outbox table is NON-OPTIONAL even for a
+consumer-ish service (the shared entity validates it), and the
+host-built-jar gotcha extends to MIGRATION files — an edited V1 ships
+only after `mvn package`. Regression green: storefront.

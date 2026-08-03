@@ -149,6 +149,11 @@ spring:
           uri: ${ASSURANCE_URL:http://localhost:8105}
           predicates:
             - Path=/tmf-api/slaManagement/**
+        - id: event-hub
+          # TMF688: the fleet's envelopes, subscribable — partner grade
+          uri: ${EVENTHUB_URL:http://localhost:8123}
+          predicates:
+            - Path=/tmf-api/eventManagement/**
         - id: fulfilment
           # TMF700/697: the parcel and the visit — the warehouse/installer face
           uri: ${FULFILMENT_URL:http://localhost:8117}

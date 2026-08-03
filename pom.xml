@@ -33,6 +33,7 @@
         <module>services/revenue</module>
         <module>services/process</module>
         <module>services/fulfilment</module>
+        <module>services/event-hub</module>
         <module>services/promotion</module>
         <module>services/campaign</module>
         <module>services/intelligence</module>

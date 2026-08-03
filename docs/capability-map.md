@@ -104,13 +104,14 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Agentic surfaces: GEO / ACP / MCP / workforce / closed loop | gateway + catalog + cart + intelligence + packages | ✅ #64–66, #68 |
 | Legacy overlay (wrap an existing BSS) | 3 per-tenant seams | ✅ #67 |
 | Event backbone + observability (Live Flow) | Kafka outbox + `flow` | ✅ |
+| Let partners SUBSCRIBE to the event stream | TMF688 Event Management | `event-hub` (#38) | ✅ #75 (callback + filter, tenant-walled, delivery ledger w/ backoff retries + dead-letter that keeps its error) |
 | Hardening: tick locks, resumable billing, backups, GDPR, PQC-ready | fleet | ✅ #56–58 |
 
 ## The honest summary for a buying CSP
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 74 suites and 13 CTKs.
+multi-tenant operation — proven by 75 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming

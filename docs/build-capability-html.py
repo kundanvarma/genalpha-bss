@@ -82,7 +82,7 @@ An integration plan, not a wall.</p>
 <div class="stat"><b style="color:var(--ok)">{counts['proven']}</b><span>proven (suite-backed)</span></div>
 <div class="stat"><b style="color:var(--part)">{counts['partial']}</b><span>partial — caveat attached</span></div>
 <div class="stat"><b style="color:var(--gap)">{counts['gap']}</b><span>gaps — bring from elsewhere</span></div>
-<div class="stat"><b>74</b><span>proof suites · 13 CTKs at zero</span></div>
+<div class="stat"><b>75</b><span>proof suites · 13 CTKs at zero</span></div>
 </div>
 <div class="filters">
 <button class="chip on" data-f="all">All</button>

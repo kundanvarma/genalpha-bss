@@ -24,6 +24,7 @@ scrape_configs:
           - revenue:8080
           - process:8080
           - fulfilment:8080
+          - event-hub:8080
           - promotion:8080
           - campaign:8080
           - intelligence:8080
