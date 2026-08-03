@@ -75,9 +75,9 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 |---|---|---|---|
 | Fulfil & activate services | TMF641/640/638 | `service-orchestration` | ✅ thin: mock activation, real state machine |
 | Orchestrate & EXPLAIN order processes | TMF701 Process Flow Management | `process` (#36) | ✅ #72 (design intent as data, flows projected from the event stream with their cross-system timeline, STUCK is a state on the bus, operator recovery lever; and failures feed an agent whose MEMORY COMPOUNDS: governed L0 diagnosis to a ticket note, episodic traces w/ mandatory verdicts, runbooks promoted on N recurrences + human approval — the fourth identical failure auto-diagnosed from memory with ZERO model calls, revocation proven as the brake) |
-| Manage numbers & SIMs | TMF685 + SIM/OTA seams | SOM | ✅ (◐ real HLR/HSS/OTA behind seams) |
+| Manage numbers & SIMs | TMF685 + TMF639 facade + SIM/OTA seams | SOM | ✅ (◐ real HLR/HSS/OTA behind seams; #76: pools + issued ledger honestly faced) |
 | Port numbers in & out (MNP) | clearinghouse seam | `porting` | ✅ (◐ NRDB shaped, not connected) |
-| Detect & resolve service problems | TMF642/656 | `assurance` | ✅ (thin; real FM/PM needs the NMS) |
+| Detect & resolve service problems | TMF642/656 + TMF653 tests + TMF724 incidents | `assurance` + `service-orchestration` + `intelligence` | ✅ (thin; real FM/PM needs the NMS; #76: diagnose as serviceTest with history, agent memory as standard incidents) |
 | Qualify serviceability | TMF679 | `qualification` | ✅ |
 | Schedule installations | TMF646 | `appointment` | ✅ (❌ full field-service mgmt: routing, van stock, workforce scheduling — now behind a REAL seam: work orders #73) |
 | Ship & install what was sold | TMF700 Shipping Order + TMF697 Work Order | `fulfilment` (#37) | ✅ #73 (parcel + visit as resources, warehouse/installer API, machine completion when both gates pass, milestones on the process timeline; customers track deliveries) |
@@ -111,7 +111,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 75 suites and 13 CTKs.
+multi-tenant operation — proven by 76 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming

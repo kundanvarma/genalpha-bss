@@ -69,6 +69,7 @@ beside it.</p>
 21. <a href="#revenue">Revenue export — the subledger</a><br>
 22. <a href="#creditnote">Credit notes</a><br>
 23. <a href="#process">Process flows &amp; the incident agent</a><br>
+24. <a href="#standards">The standards sweep</a><br>
 </p>
 </div>
 
@@ -669,7 +670,22 @@ learning curve as data. Revocation sends diagnosis back to the LLM path: the bra
 first-class. L2 auto-remediation stays out of scope until per-taskFlow idempotency is
 earned. See <a href="../process-memory-plan.md">docs/process-memory-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-five suites, thirteen CTKs at zero
+<h2 id="standards">24 · The standards sweep — suites #73–76</h2>
+<p><b>Fulfilment (TMF700+697, component #37, :8117)</b> — physical orders mint
+<code>shippingOrder</code>s (warehouse PATCHes states, tracking ref), install bookings mint
+<code>workOrder</code>s; DELIVERED + visit COMPLETED completes the product order
+machine-driven. Customers track their own deliveries; state changes are staff-only.
+<b>SLA (TMF623)</b> — an <code>sla</code> block on the agreement characteristic (circuit,
+thresholdMinutes, creditAmount, capPerMonth); late-resolved problems mint violations on
+assurance's capped ledger (<code>/tmf-api/slaManagement/v4/sla|slaViolation</code>) and
+billing compensates with the PRE-AGREED credit note, in-process, no one deciding at breach
+time. <b>Event hub (TMF688, component #38, :8123)</b> — <code>POST /hub</code> callback +
+filter (billing:admin), delivery ledger with backoff retries and dead-letter.
+<b>Thin faces</b>: TMF724 incidents over the agent's memory (verdicts are the state machine),
+TMF653 serviceTests with history over diagnose, TMF639 pools + issued-number ledger with the
+honest generator note. See <a href="../standards-completion-plan.md">docs/standards-completion-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · seventy-six suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

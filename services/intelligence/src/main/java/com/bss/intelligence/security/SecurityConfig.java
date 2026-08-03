@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // the product advisor is the PRODUCT OWNER\u2019s tool
+                        .requestMatchers("/tmf-api/incidentManagement/v4/**").hasAuthority("ai:use")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         // the customer's OWN rail: self-scoped in the handler
                         // (party = token subject), so plain authentication is

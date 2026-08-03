@@ -43,6 +43,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
+                        .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.ORDER_BASE + "/**",
                                 ApiConstants.INVENTORY_BASE + "/**",
                                 "/tmf-api/resourcePoolManagement/v4/**",

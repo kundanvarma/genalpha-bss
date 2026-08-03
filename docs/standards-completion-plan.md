@@ -178,3 +178,23 @@ Build lessons: the scaffold's outbox table is NON-OPTIONAL even for a
 consumer-ish service (the shared entity validates it), and the
 host-built-jar gotcha extends to MIGRATION files — an edited V1 ships
 only after `mvn package`. Regression green: storefront.
+
+**P4–P6 — 2026-08-03, suite #76 green. The program is COMPLETE.**
+- **TMF724** (`/tmf-api/incidentManagement/v4` on intelligence): the
+  agent's episodic memory, standards-addressable — a trace pending its
+  verdict is an ACKNOWLEDGED incident, a verdicted one RESOLVED (the
+  verdict discipline IS the state machine); rootCauseAid carries the
+  hypothesis, confidence and source; the linked ticket rides along.
+  Ops-only (ai:use) — a customer 403'd.
+- **TMF653** (`/tmf-api/serviceTestManagement/v4` on SOM): diagnose
+  became a serviceTest WITH HISTORY — the POST executes the SAME code
+  path and owner check as the CSR button (the sibling controller is
+  invoked directly, zero duplicated logic), persists verdict +
+  findings, and a foreign service 404s.
+- **TMF639** (`/tmf-api/resourceInventoryManagement/v4` on SOM): pools
+  with prefix + issuedCounter and the honest generator note in the
+  payload itself; the issued-number ledger + quarantined numbers as
+  resources; staff-only (the number plan is not a customer surface).
+Regressions green: storefront, process-memory. Six phases, four new
+suites (#73–76), two new components (#37, #38), and six standard faces
+none of which invented anything the data could not say.
