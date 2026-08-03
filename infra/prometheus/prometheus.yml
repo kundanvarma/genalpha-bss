@@ -22,6 +22,7 @@ scrape_configs:
           - agreement:8080
           - loyalty:8080
           - revenue:8080
+          - process:8080
           - promotion:8080
           - campaign:8080
           - intelligence:8080

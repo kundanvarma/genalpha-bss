@@ -139,6 +139,11 @@ spring:
           uri: ${REVENUE_URL:http://localhost:8107}
           predicates:
             - Path=/revenue/**
+        - id: process
+          # TMF701: the flows explained — specs, instances, and stuck as a state
+          uri: ${PROCESS_URL:http://localhost:8116}
+          predicates:
+            - Path=/tmf-api/processFlowManagement/**
         - id: product-advisor
           # findings with receipts; adopt births a draft
           uri: ${INTELLIGENCE_URL:http://localhost:8109}

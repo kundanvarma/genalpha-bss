@@ -74,6 +74,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Business capability | TMF tech capability | Component | Status |
 |---|---|---|---|
 | Fulfil & activate services | TMF641/640/638 | `service-orchestration` | ✅ thin: mock activation, real state machine |
+| Orchestrate & EXPLAIN order processes | TMF701 Process Flow Management | `process` (#36) | ✅ #72 (design intent as data, flows projected from the event stream with their cross-system timeline, STUCK is a state on the bus, operator recovery lever; ◐ incident agent + compounding memory = phases 2–3) |
 | Manage numbers & SIMs | TMF685 + SIM/OTA seams | SOM | ✅ (◐ real HLR/HSS/OTA behind seams) |
 | Port numbers in & out (MNP) | clearinghouse seam | `porting` | ✅ (◐ NRDB shaped, not connected) |
 | Detect & resolve service problems | TMF642/656 | `assurance` | ✅ (thin; real FM/PM needs the NMS) |
@@ -107,7 +108,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 
 **Complete here**: digital BSS core (catalog→order→activate→bill→cash),
 six channels, martech, personalization, the full agentic layer, and
-multi-tenant operation — proven by 71 suites and 13 CTKs.
+multi-tenant operation — proven by 72 suites and 13 CTKs.
 
 **Bring (or keep) from elsewhere**: a production OCS for real-time
 charging, a taxation engine, ERP/GL and rev-rec (now FED by the #70 journal-export seam), wholesale/roaming

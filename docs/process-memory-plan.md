@@ -187,4 +187,22 @@ diagnosis. The learning curve is DATA the suite asserts, not a slide.
 
 ## Shipped
 
-*(Nothing yet — plan committed first, the house way.)*
+**P1 — 2026-08-03, suite #72 green (three legs).** Component #36
+`process` (port 8116, `/tmf-api/processFlowManagement/v4`) is live:
+three seeded editable specs (digital / physical / held), flows
+projected from `bss.ordering.events` + `bss.som.events` with the
+Live-Flow correlation recipe persisted (including the
+productOrderId-as-sibling join-key trap), the per-flow event journal,
+the TickGuard stuck sweep, `bss.process.events` state changes, the
+taskFlow PATCH lever, party-scoped customer reads (self-service order
+tracking fell out for free), and a console Process-flows tab. Proven
+live: kai's digital order projected to a COMPLETED flow whose journal
+stitched ProductOrderCreate → ServiceOrderStateChange →
+ProductOrderStateChange; a physical order with no installer callback —
+a PUBLIC-API fault injection, place on the order item — went FAILED at
+'fulfilled' with the owed-time message after the spec's allowance was
+shrunk to 8s AS DATA; the operator lever resumed it; walls held.
+Regressions green (storefront — one flake diagnosed as billing-run
+contention between back-to-back runs, clean alone; console).
+Empirical find: `product.place` survives ordering's event payload
+end-to-end, so physical-vs-digital spec pick needs no new modelling.

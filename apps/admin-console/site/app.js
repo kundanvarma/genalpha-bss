@@ -32,6 +32,7 @@ const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
 const REVENUE_BASE = '/revenue/v1';
+const PROCESS_BASE = '/tmf-api/processFlowManagement/v4';
 const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
@@ -228,6 +229,31 @@ const RESOURCES = [
           body: JSON.stringify(body),
         });
       },
+    },
+  },
+  {
+    path: 'processFlow',
+    base: PROCESS_BASE,
+    title: 'Process flows',
+    readOnly: true,
+    // TMF701 run-time: every order flow inspectable, STUCK as a state.
+    // Specs (design intent, allowances) are data on the same API.
+    fields: [],
+    columns: ['specCode', 'productOrderId', 'state', 'message', 'startedAt'],
+    detail: async (item) => {
+      const res = await authFetch(`${PROCESS_BASE}/processFlow/${item.id}`);
+      const flow = res.ok ? await res.json() : { taskFlow: [], timeline: [] };
+      return (flow.taskFlow || []).map((t) => ({
+        task: `${t.code} — ${t.name}`,
+        state: t.state,
+        owes: t.allowanceSeconds ? `${t.allowanceSeconds}s` : '—',
+        note: t.message || '',
+      })).concat((flow.timeline || []).map((e) => ({
+        task: `⏱ ${e.eventType}`,
+        state: e.sourceTopic,
+        owes: String(e.eventTime).slice(11, 19),
+        note: (e.digest || '').slice(0, 80),
+      })));
     },
   },
   {
@@ -893,6 +919,7 @@ const TAB_ROLE = {
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
+  processFlow: 'ordering:write',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
