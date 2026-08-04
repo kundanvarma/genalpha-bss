@@ -24,14 +24,30 @@ public class AgreementClient {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * ALL active agreements, paged to exhaustion. The proof run's lesson:
+     * a fixed limit=200 silently dropped newly signed promises once the
+     * fleet aged past 200 agreements — a face must never under-report
+     * because the tenant grew. Server-side status filter + offset paging,
+     * the same pattern intelligence's client always used.
+     */
     public List<Map<String, Object>> activeAgreements() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
         try {
-            String body = agreement.get()
-                    .uri("/tmf-api/agreementManagement/v4/agreement?limit=200")
-                    .retrieve().body(String.class);
-            return objectMapper.readValue(body, new TypeReference<List<Map<String, Object>>>() { });
+            for (int offset = 0; offset < 10_000; offset += 100) {
+                String body = agreement.get()
+                        .uri("/tmf-api/agreementManagement/v4/agreement?status=active&limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                List<Map<String, Object>> page = objectMapper.readValue(body,
+                        new TypeReference<List<Map<String, Object>>>() { });
+                all.addAll(page);
+                if (page.size() < 100) {
+                    break;
+                }
+            }
         } catch (Exception e) {
-            return List.of();
+            return all;
         }
+        return all;
     }
 }

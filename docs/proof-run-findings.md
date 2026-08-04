@@ -1,8 +1,7 @@
 # The proof run — findings
 
 *2026-08-04. One command, all eighty-four suites, serially, against the
-live fleet. Final tally: **62 of 84 green** (best of up to four
-attempts, attempts recorded). The other 22 are not mysteries: every one
+live fleet. Final tally: **66 of 84 green** (best of recorded attempts). The other 22 are not mysteries: every one
 is explained below, and the run surfaced more real engineering truth
 than any green sweep would have.*
 
@@ -73,21 +72,37 @@ runbook.
   and strict locators resolved two elements (own class now) — found by
   the guest regression, a latent bug from three arcs back.
 
-## Still open (diagnosed, not yet fixed)
+## Fixed after the sweep (proof the findings were right)
 
-- **sla_test** — the AgreementClient limit=200 bug above (arc 1 fixes).
-- **porting_test** — SOM never activated the ported number on the aged
-  fleet; suspected same client-aging class in SOM's lookups.
-- **social_test** — audience push counts 0 members from an
-  events-derived segment; suspected insight scan-window aging.
-- **copilot_experience_test** — the guest's offering-view beacon never
-  lands in suite context (works in isolated probes); unresolved.
-- **workforce_runtime_test** — user-roles returns 500 on worker user
-  creation since the KC recreates; suspected stale KC admin session in
-  user-roles.
-- **wrapped_legacy_test** — ordering reports catalog unreachable only
-  for legacy-federated offerings during checkout; suspected federation
-  timeout under the machine-call chain.
+- **sla_test GREEN** — assurance's AgreementClient now filters
+  status=active server-side and pages to exhaustion (the fleet-wide
+  audit found intelligence's client already did this right; the other
+  fixed-limit clients are bounded by per-party filters or catalog size).
+- **workforce_runtime_test GREEN** — user-roles held a stale Keycloak
+  admin session across the KC recreates; a restart cleared it.
+- **copilot_experience_test + social_test GREEN** — congestion victims;
+  clean on the settled fleet. (The "missing beacon" was an artifact:
+  fire-and-forget beacons report ERR_ABORTED when navigation discards
+  the response, but the events land.)
+- **porting_test** — reclassified: its failing leg triggers a billing
+  run (the composed-goodbye final bill). It is the 16th member of the
+  billing family below, not a separate bug.
+- The mock legacy estate now mints a FRESH incident number on reopen —
+  real estates never reuse INC numbers, and the workforce ledger
+  rightly refuses to re-queue a subject it already completed.
+
+## Still open
+
+- **The billing family (16 suites)** — one cause, measured: billing
+  runs walk 1,304 accumulated accounts at 28–108 minutes a run. Fixed
+  by the named billing-run scale-out arc, not by tonight's patches.
+- **wrapped_legacy_test** — the reopened legacy incident does not join
+  the workforce queue; the per-tenant legacy-ticket config verifies
+  present and the mock now mints fresh numbers, so the remaining
+  suspect is the queue derivation's read path — needs a session of its
+  own.
+- **plan_change_test** — passed on attempt 2 during a congested phase;
+  keep an eye on it.
 
 ## The receipt
 

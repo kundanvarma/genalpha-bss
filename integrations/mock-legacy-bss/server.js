@@ -45,8 +45,13 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (url.pathname === '/api/reopenIncident' && req.method === 'POST') {
-    incidents[0].STATUS = 'OPEN'; delete incidents[0].RESOLUTION; // suite reset hook
-    return send({ result: { status: 'OPEN' } });
+    // a NEW occurrence gets a NEW incident number — real estates never
+    // reuse INC numbers, and the workforce ledger rightly refuses to
+    // re-queue a subject it has already completed
+    const no = 'INC-' + (9100 + incidents.length);
+    incidents.push({ INC_NO: no, SUMMARY: incidents[0].SUMMARY,
+      STATUS: 'OPEN', OPENED_TS: new Date().toISOString() });
+    return send({ result: { status: 'OPEN', INC_NO: no } });
   }
   if (url.pathname === '/health') return send({ ok: true });
   res.writeHead(404); res.end();
