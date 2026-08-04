@@ -46,4 +46,31 @@ the pool.
 
 ## Shipped
 
-*(recorded when it lands)*
+**2026-08-05 (overnight), suite #85 green — and an honest boundary.**
+The pool landed as designed: 1,243 accounts skip-checked in 2.3
+seconds (from a measured 28–108 minutes), the ledger row, heartbeat
+and exactly-one-bill checkpoint all proven to survive the worker
+threads, concurrency as a dial. Two more layers of the disease fell
+out during the payoff runs and were fixed the same night:
+
+- **The 400ms dev pacing knob was baked into the running container**
+  — 1,304 × 400ms ≈ 8.7 minutes of pure sleep per serial run, a third
+  of the original disease; the parallel path no longer honors it.
+- **Billing's machine clients had no read timeouts** — one aged
+  account's pathological usage rating hung a worker fifteen minutes;
+  a RestClientCustomizer now bounds every call at 60s so a poisoned
+  account fails ALONE and the run walks on. (The pathological rating
+  itself — party aff-solo-1784817883752 — is recorded for the usage
+  service and the pruning runbook.)
+
+**The boundary, stated plainly**: runs that hit the bill checkpoint
+(the common case — suites re-billing the current period) are now
+seconds. Runs over a FRESH period bypass the checkpoint entirely and
+grind the full rating chain for all 1,304 aged accounts to
+mostly-EMPTY outcomes — the pool cuts that 4–8× but minutes is still
+beyond a suite's 30-second patience, so the billing-family suites
+remain starved on the aged fleet. The next honest cut is not more
+concurrency: it is BATCHING (a bulk usage-rating call instead of
+1,304 singles) or the dev-fleet pruning runbook (1,304 accounts of
+suite detritus back to ~50 real personas — which fixes every
+aged-fleet finding at once). Named, scoped, next.

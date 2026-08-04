@@ -57,6 +57,7 @@ public class BillingRunService {
     private final com.bss.billing.tick.TickGuard tickGuard;
     private final org.springframework.transaction.support.TransactionTemplate newTx;
     private final long accountDelayMs;
+    private final int runConcurrency;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
@@ -70,7 +71,9 @@ public class BillingRunService {
             java.util.function.Function<String, String> loyaltyTierClient,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             @org.springframework.beans.factory.annotation.Value(
-                    "${bss.billing.run-account-delay-ms:0}") long accountDelayMs) {
+                    "${bss.billing.run-account-delay-ms:0}") long accountDelayMs,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.billing.run-concurrency:8}") int runConcurrency) {
         this.bills = bills;
         this.loyaltyTierClient = loyaltyTierClient;
         this.rates = rates;
@@ -93,6 +96,7 @@ public class BillingRunService {
         this.newTx.setPropagationBehavior(
                 org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.accountDelayMs = accountDelayMs;
+        this.runConcurrency = Math.max(1, runConcurrency);
     }
 
     /**
@@ -179,8 +183,10 @@ public class BillingRunService {
             primaryAccountOf.putIfAbsent(ownerId, ownerId);
         }
 
-        Map<String, BigDecimal> priceCache = new HashMap<>();
-        Map<String, String> unitCache = new HashMap<>();
+        // read-write from the worker pool: concurrent, and computeIfAbsent
+        // dedupes simultaneous identical catalog lookups for free
+        Map<String, BigDecimal> priceCache = new java.util.concurrent.ConcurrentHashMap<>();
+        Map<String, String> unitCache = new java.util.concurrent.ConcurrentHashMap<>();
 
         // Configurable device co-pay: the company pays a device's monthly
         // charge only up to its deviceAllowance policy; anything above it
@@ -256,42 +262,61 @@ public class BillingRunService {
             runs.save(record);
         });
 
-        int created = 0;
-        int skipped = 0;
-        int failed = 0;
-        String lastError = null;
+        // THE SCALE-OUT: each account already bills in its own REQUIRES_NEW
+        // transaction with the bill as the idempotency checkpoint — the
+        // two-replica suite proved per-account concurrency safe long ago;
+        // the run finally uses that safety inside itself. Workers bind the
+        // RLS tenant per task; the coordinator keeps the heartbeat and the
+        // ledger's progress row alive from atomic counters.
+        java.util.concurrent.atomic.AtomicInteger created = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger skipped = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger failed = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicReference<String> lastError =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.concurrent.ExecutorService pool =
+                java.util.concurrent.Executors.newFixedThreadPool(runConcurrency, r -> {
+                    Thread t = new Thread(r, "billing-run-worker");
+                    t.setDaemon(true);
+                    return t;
+                });
         for (Map.Entry<String, List<Map<String, Object>>> owner : byAccount.entrySet()) {
-            Outcome outcome;
-            try {
-                outcome = newTx.execute(tx -> billAccount(tenantId, today, defaultStart, defaultEnd,
-                        owner, orgAccounts, membersOf, primaryAccountOf, personalExcess,
-                        companyShareOf, priceCache, unitCache));
-            } catch (RuntimeException oneAccountDown) {
-                // this account's bill rolled back alone; the run walks on
-                failed++;
-                lastError = owner.getKey() + ": " + oneAccountDown.getMessage();
-                log.warn("billing run {}: account {} failed — {}", runId, owner.getKey(),
-                        oneAccountDown.getMessage());
-                continue;
-            }
-            if (outcome == Outcome.CREATED) {
-                created++;
-            } else if (outcome == Outcome.SKIPPED) {
-                skipped++;
-            }
-            progress(runId, created, skipped, failed, lastError, false);
-            tickGuard.extend("billing-run", java.time.Duration.ofMinutes(2)); // heartbeat
-            if (accountDelayMs > 0) {
-                try {
-                    Thread.sleep(accountDelayMs); // dev pacing knob, 0 in production
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+            pool.submit(() -> {
+                try (com.bss.billing.security.TenantContext ignored =
+        com.bss.billing.security.TenantContext.actAs(tenantId)) {
+                    Outcome outcome = newTx.execute(tx -> billAccount(tenantId, today,
+                            defaultStart, defaultEnd, owner, orgAccounts, membersOf,
+                            primaryAccountOf, personalExcess, companyShareOf,
+                            priceCache, unitCache));
+                    if (outcome == Outcome.CREATED) {
+                        created.incrementAndGet();
+                    } else if (outcome == Outcome.SKIPPED) {
+                        skipped.incrementAndGet();
+                    }
+                } catch (RuntimeException oneAccountDown) {
+                    // this account's bill rolled back alone; the run walks on
+                    failed.incrementAndGet();
+                    lastError.set(owner.getKey() + ": " + oneAccountDown.getMessage());
+                    log.warn("billing run {}: account {} failed — {}", runId, owner.getKey(),
+                            oneAccountDown.getMessage());
                 }
-            }
+                // the old dev pacing knob (accountDelayMs) is deliberately NOT
+                // honored per worker: 1,304 accounts x 400ms of sleep was a
+                // third of the 28-minute serial runs the proof run measured
+            });
         }
-        progress(runId, created, skipped, failed, lastError, true);
-        return Map.of("billsCreated", created, "customersSkipped", skipped,
-                "accountsFailed", failed, "runId", runId,
+        pool.shutdown();
+        try {
+            while (!pool.awaitTermination(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                tickGuard.extend("billing-run", java.time.Duration.ofMinutes(2)); // heartbeat
+                progress(runId, created.get(), skipped.get(), failed.get(), lastError.get(), false);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            pool.shutdownNow();
+        }
+        progress(runId, created.get(), skipped.get(), failed.get(), lastError.get(), true);
+        return Map.of("billsCreated", created.get(), "customersSkipped", skipped.get(),
+                "accountsFailed", failed.get(), "runId", runId,
                 "billingPeriod", Map.of("startDateTime", defaultStart.toString(),
                         "endDateTime", defaultEnd.toString()));
     }
