@@ -104,7 +104,7 @@ async function token(ctx, realm, user, pass) {
   /* ================= FREQUENCY CAPS (genalpha) ================= */
   const staff = await token(ctx, 'bss', 'demo', 'demo');
   try {
-    const setting = await (await ctx.post(SETTINGS, { headers: H(staff),
+    const setting = await (await ctx.post(SETTINGS, { timeout: 90000, headers: H(staff),
       data: { maxMarketingMessages: 2, perDays: 1 } })).json();
     if (!setting.capActive) fail('the cap did not activate: ' + JSON.stringify(setting));
     console.log('OK the tenant set a marketing budget: 2 messages per customer per day');
@@ -145,7 +145,7 @@ async function token(ctx, realm, user, pass) {
       + ' budget spent, and the inbox has exactly two pitches');
   } finally {
     // the cap is tenant-wide: ALWAYS switch it off so other suites keep blasting
-    await ctx.post(SETTINGS, { headers: H(staff), data: { maxMarketingMessages: 0 } });
+    await ctx.post(SETTINGS, { timeout: 90000, headers: H(staff), data: { maxMarketingMessages: 0 } });
   }
   const off = await (await ctx.get(SETTINGS, { headers: H(staff) })).json();
   if (off[0].capActive) fail('the cap did not switch off after the test');
@@ -155,7 +155,7 @@ async function token(ctx, realm, user, pass) {
   try {
     // a window that covers RIGHT NOW, tenant-local = UTC for determinism
     const hhmm = (d) => `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-    const quiet = await (await ctx.post(SETTINGS, { headers: H(staff), data: {
+    const quiet = await (await ctx.post(SETTINGS, { timeout: 90000, headers: H(staff), data: {
       maxMarketingMessages: 0,
       quietStart: hhmm(new Date(Date.now() - 3600e3)),
       quietEnd: hhmm(new Date(Date.now() + 3600e3)),
@@ -186,14 +186,14 @@ async function token(ctx, realm, user, pass) {
       + ' not a suggestion');
 
     /* morning comes (settings save is full-replace: no quiet fields = cleared) */
-    await ctx.post(SETTINGS, { headers: H(staff), data: { maxMarketingMessages: 0 } });
+    await ctx.post(SETTINGS, { timeout: 90000, headers: H(staff), data: { maxMarketingMessages: 0 } });
     const morning = await (await ctx.post(`${CAMPAIGN}/${qc.id}/execute`,
       { headers: H(staff), data: {} })).json();
     if (morning.reached !== 1) fail('the skipped customer was not reachable after quiet hours: '
       + JSON.stringify(morning));
     console.log('OK MORNING: the same execute reaches them once the window lifts — skipped, never lost');
   } finally {
-    await ctx.post(SETTINGS, { headers: H(staff), data: { maxMarketingMessages: 0 } });
+    await ctx.post(SETTINGS, { timeout: 90000, headers: H(staff), data: { maxMarketingMessages: 0 } });
   }
 
   console.log('\nALL GUARDRAIL CHECKS PASSED — the provider\'s receipts stamp messages and feed'

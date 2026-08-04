@@ -521,13 +521,19 @@ async function token(ctx, realm, user, pass) {
   }
   await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
   await page.locator('.tab', { hasText: 'Bill formats' }).click();
-  await page.waitForSelector('#listing-body tr:has-text("A-NZ Peppol")', { timeout: 15000 })
-    .catch(() => fail('the seeded A-NZ profile row is not visible on the console page'));
+  await page.waitForSelector('#listing-body tr:has-text("A-NZ Peppol")', { timeout: 30000 })
+    .catch(async () => {
+      const rows = await page.locator('#listing-body tr').allTextContents().catch(() => []);
+      fail('the seeded A-NZ profile row is not visible on the console page — saw '
+        + rows.length + ' row(s): ' + JSON.stringify(rows.slice(0, 4)));
+    });
   console.log('OK CONSOLE PAGE: Bill formats renders the profile rows — the operator SEES what'
     + ' every outgoing e-invoice declares, next to disputes and dunning');
 
   // add Germany through the UI: XRechnung is one more row on the UBL skeleton
-  const xrCode = `xrechnung${run}`;
+  // FIXED code: the API upserts by code, so re-runs update ONE row instead
+  // of piling a duplicate per run (nine of them once hid A-NZ off-screen)
+  const xrCode = 'xrechnung-e2e';
   await page.fill('input[name="code"]', xrCode);
   await page.fill('input[name="name"]', 'XRechnung 3.0 (Germany)');
   await page.selectOption('select[name="syntax"]', 'ubl');

@@ -46,6 +46,9 @@ services:
     restart: unless-stopped
     command: ["start-dev", "--import-realm"]
     environment:
+      # the one JVM nobody capped: under the proof run's token load the
+      # kernel OOM-killer took it (wrapper exits 0 — Docker never sees it)
+      JAVA_OPTS_APPEND: "-Xmx640m -XX:MaxMetaspaceSize=256m"
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       # Browsers must reach every interactive URL on localhost:8085, so that is

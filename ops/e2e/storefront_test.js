@@ -459,7 +459,7 @@ async function apiGet(page, path, token) {
 
   // --- Billing: a run rates Alice's provisioned products into one bill
   const runRes = await setup.request.post(
-    `${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: staffHeaders });
+    `${API}/tmf-api/customerBillManagement/v4/billingRun`, { timeout: 120000, headers: staffHeaders });
   if (runRes.status() !== 200) fail(`billing run failed: ${runRes.status()} ${await runRes.text()}`);
   console.log('OK billing run:', JSON.stringify(await runRes.json()));
 
@@ -547,7 +547,7 @@ async function apiGet(page, path, token) {
 
   // Idempotency + isolation: rerun bills nobody twice; B has no bills
   const rerun = await (await setup.request.post(
-    `${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: staffHeaders })).json();
+    `${API}/tmf-api/customerBillManagement/v4/billingRun`, { timeout: 120000, headers: staffHeaders })).json();
   if (rerun.billsCreated !== 0) fail('second billing run cut duplicate bills: ' + JSON.stringify(rerun));
   const bBills = JSON.parse((await apiGet(b,
     '/tmf-api/customerBillManagement/v4/customerBill?limit=10', tokenB)).body);

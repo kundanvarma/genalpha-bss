@@ -89,7 +89,10 @@ async function token(ctx, realm, user, pass) {
       { headers: { Host: 'shop.aurora.localhost' } });
     if (res.status() === 200) {
       const body = await res.json();
-      if (JSON.stringify(body).includes('Aurora Tele')) manifest = body;
+      // wait for the FRESH manifest (the form's colour), not any Aurora
+      // manifest — a previous run's rebrand also contains 'Aurora Tele'
+      // and would be grabbed before the file refresher catches up
+      if (JSON.stringify(body).includes('#0E7C61')) manifest = body;
     }
   }
   if (!manifest) fail('shop.aurora.localhost never wore the Aurora brand');

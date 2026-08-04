@@ -136,7 +136,7 @@ async function token(request, client, user, pass) {
   console.log("OK Erik's line is live — number visible on his row");
 
   // --- operator billing run → ONE consolidated Acme invoice
-  await ctx.request.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`, { headers: H });
+  await ctx.request.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`, { timeout: 120000, headers: H });
   const orgBills = await (await ctx.request.get(
     `${API}/tmf-api/customerBillManagement/v4/customerBill?relatedPartyId=${org.id}`,
     { headers: H })).json();

@@ -259,9 +259,16 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
     + ' on the board — every number from the ledger, every estimate labeled');
 
   /* ---------- 5d. surge staffing: the signal and the ceiling ---------- */
-  // the SIGNAL's semantics hold whatever leases linger from earlier runs:
-  // surge = backlog with no workers, or backlog beyond threshold × workers
-  const s0 = kpis.staffing || fail('the staffing signal is missing from the KPIs');
+  // seed a FRESH open ticket first: the earlier legs drained this suite's
+  // own backlog, and a clean fleet (post proof-run hygiene) has no ambient
+  // leftovers to lean on — the signal must be provoked, not assumed
+  const surgeTicket = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
+    name: `Surge probe ${run}`, description: 'open backlog for the staffing signal',
+    severity: 'minor',
+  });
+  if (surgeTicket.status >= 300) fail('surge probe ticket failed: ' + surgeTicket.status);
+  const kpis2 = (await call('GET', '/ai/v1/workforce/kpis', staff)).body;
+  const s0 = kpis2.staffing || fail('the staffing signal is missing from the KPIs');
   if (s0.backlogDepth < 1) fail('staffing sees no backlog despite open tasks');
   const expectSurge = s0.activeWorkers === 0 ? s0.backlogDepth > 0
     : s0.backlogDepth > s0.surgeThresholdOpenPerWorker * s0.activeWorkers;

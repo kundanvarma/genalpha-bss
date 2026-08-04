@@ -67,6 +67,8 @@ block = re.sub(r'token-uri: \$\{[^}]*\}',
                f'token-uri: http://keycloak:8080/realms/{tid}/protocol/openid-connect/token', block)
 block = re.sub(r'brand-name: .*', f'brand-name: {name}', block)
 block = re.sub(r'brand-color: .*', f'brand-color: "{color}"', block)
+block = re.sub(r'agent-commerce: .*', f'agent-commerce: ${{AGENT_COMMERCE_{tid.upper()}:off}}', block)
+block = re.sub(r'ai-visibility: .*', f'ai-visibility: ${{AI_VISIBILITY_{tid.upper()}:dark}}', block)
 block = re.sub(r'locale: .*', f'locale: "{locale}"', block)
 block = re.sub(r'currency: .*', f'currency: {currency}', block)
 block = re.sub(r'hosts: .*', f'hosts: [shop.{tid}.localhost, csr.{tid}.localhost, '
