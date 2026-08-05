@@ -76,6 +76,9 @@ run_one() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$name" "$verdict" "$((end - start))" "$status" "$attempt" >> "$RESULTS"
   echo "[$(date +%H:%M:%S)] $verdict ${name} ($((end - start))s, attempt $attempt)"
   after_suite "$name"
+  # a young, fast fleet can out-run its own per-subject rate limiter when
+  # suites go back-to-back — the pacing that slow runs used to provide
+  sleep 30
 }
 
 docker stop bss-worker-controller >/dev/null 2>&1 || true

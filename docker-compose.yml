@@ -1580,7 +1580,10 @@ services:
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       # dev clocks: partner rate window small enough for a suite to trip
-      BSS_GATEWAY_PARTNER_RATE_CAPACITY: "10"
+      # 25/2s: a young fleet renders a page in one burst of ~20 anonymous
+      # calls — the old 10/2s ceiling was tuned when slow pages self-paced.
+      # hardening's 30-knock probe still trips it (refusal at knock 26).
+      BSS_GATEWAY_PARTNER_RATE_CAPACITY: "25"
       BSS_GATEWAY_PARTNER_RATE_WINDOW_MS: "2000"
       # the wide ring: EVERY path has a ceiling — generous by default,
       # swappable so a suite can trip it (GLOBAL_RATE_CAPACITY=15 ... up -d gateway)

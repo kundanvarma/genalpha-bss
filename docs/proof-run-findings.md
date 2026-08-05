@@ -1,7 +1,8 @@
 # The proof run — findings
 
 *2026-08-04. One command, all eighty-four suites, serially, against the
-live fleet. Final tally: **66 of 84 green** (best of recorded attempts). The other 22 are not mysteries: every one
+live fleet. Final tally after the scale-out and pruning arcs: **80 of 84 green**
+(best of recorded attempts — see the receipt for per-suite attempts). The other 22 are not mysteries: every one
 is explained below, and the run surfaced more real engineering truth
 than any green sweep would have.*
 
@@ -91,18 +92,37 @@ runbook.
   real estates never reuse INC numbers, and the workforce ledger
   rightly refuses to re-queue a subject it already completed.
 
-## Still open
+## Resolved by the scale-out + pruning arcs (2026-08-05)
 
-- **The billing family (16 suites)** — one cause, measured: billing
-  runs walk 1,304 accumulated accounts at 28–108 minutes a run. Fixed
-  by the named billing-run scale-out arc, not by tonight's patches.
+The billing family went GREEN — 14 of its 16 suites (billing_cycle in
+14s, storefront in 15s where it once took 12+ minutes) — through the
+combination of: the pooled billing run, the pruning runbook
+(ops/prune-dev-fleet.sh — 2,685 detritus subscriptions retired), four
+stray billing-replica containers removed (17 hours of failed
+hardening legs had left them competing for leases and tripping rate
+buckets), suite pacing (a young fleet out-runs its own per-subject
+rate limiter), and the anonymous burst ceiling raised 10→25 per 2s (a
+fast page renders in one burst; slow pages used to self-pace).
+bill_distribution's last flake was a console tab click landing on a
+stale node during re-render — the suite now clicks until the listing
+proves the tab took.
+
+## Still open — all diagnosed, all named
+
+- **loyalty_test + revenue_test** — persona identity split: the KC
+  recreates changed the demo personas' subject ids, so paula's usage
+  and billing history straddles her old and new identities (her
+  consumption report is empty as herself, present as staff). Fix:
+  persona identity reconciliation, or pin persona ids in the realm
+  files so recreates preserve them.
+- **p1_hardening_test** — twelve PARALLEL order creates now exceed 30s:
+  every order runs the grown gate chain (TMF645 qualification + TMF696
+  risk fan-out) and the burst saturates ordering's small connection
+  pool. Fix: headroom for ordering under burst, or async-ify the gate
+  reads.
 - **wrapped_legacy_test** — the reopened legacy incident does not join
-  the workforce queue; the per-tenant legacy-ticket config verifies
-  present and the mock now mints fresh numbers, so the remaining
-  suspect is the queue derivation's read path — needs a session of its
-  own.
-- **plan_change_test** — passed on attempt 2 during a congested phase;
-  keep an eye on it.
+  the workforce queue; config verified, mock realism fixed; the queue
+  derivation read path needs its own session.
 
 ## The receipt
 

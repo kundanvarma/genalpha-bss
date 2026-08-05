@@ -299,9 +299,17 @@ public class BillingRunService {
                     log.warn("billing run {}: account {} failed — {}", runId, owner.getKey(),
                             oneAccountDown.getMessage());
                 }
-                // the old dev pacing knob (accountDelayMs) is deliberately NOT
-                // honored per worker: 1,304 accounts x 400ms of sleep was a
-                // third of the 28-minute serial runs the proof run measured
+                if (accountDelayMs > 0) {
+                    // the dev pacing knob: p1_hardening widens the kill window
+                    // with it (suite sets it, kills mid-run, resets it). It is
+                    // 0 in every normal deployment — the proof run found it
+                    // silently baked-in once, which cost 8.7 min/run of sleep.
+                    try {
+                        Thread.sleep(accountDelayMs);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
             });
         }
         pool.shutdown();

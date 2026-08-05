@@ -520,13 +520,20 @@ async function token(ctx, realm, user, pass) {
     await page.click('input[type="submit"], button[type="submit"]');
   }
   await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
-  await page.locator('.tab', { hasText: 'Bill formats' }).click();
-  await page.waitForSelector('#listing-body tr:has-text("A-NZ Peppol")', { timeout: 30000 })
-    .catch(async () => {
-      const rows = await page.locator('#listing-body tr').allTextContents().catch(() => []);
-      fail('the seeded A-NZ profile row is not visible on the console page — saw '
-        + rows.length + ' row(s): ' + JSON.stringify(rows.slice(0, 4)));
-    });
+  // a click during a tab-bar re-render can land on a stale node and the
+  // listing silently stays on the previous tab — click until the LISTING
+  // proves the tab took (the instrumented failure showed offering rows)
+  let onTab = false;
+  for (let t = 0; t < 5 && !onTab; t++) {
+    await page.locator('.tab', { hasText: 'Bill formats' }).click();
+    onTab = await page.waitForSelector('#listing-body tr:has-text("A-NZ Peppol")',
+      { timeout: 6000 }).then(() => true).catch(() => false);
+  }
+  if (!onTab) {
+    const rows = await page.locator('#listing-body tr').allTextContents().catch(() => []);
+    fail('the seeded A-NZ profile row is not visible on the console page — saw '
+      + rows.length + ' row(s): ' + JSON.stringify(rows.slice(0, 4)));
+  }
   console.log('OK CONSOLE PAGE: Bill formats renders the profile rows — the operator SEES what'
     + ' every outgoing e-invoice declares, next to disputes and dunning');
 
