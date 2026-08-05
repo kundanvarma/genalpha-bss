@@ -1,7 +1,7 @@
 # The proof run — findings
 
 *2026-08-04. One command, all eighty-four suites, serially, against the
-live fleet. Final tally: **82 of 84 green** (83 of 85 with the billing-scale
+live fleet. Final tally: **81 of 84 green** (82 of 85 with the billing-scale
 suite) — best of recorded attempts; the receipt lists every attempt. The other 22 are not mysteries: every one
 is explained below, and the run surfaced more real engineering truth
 than any green sweep would have.*
