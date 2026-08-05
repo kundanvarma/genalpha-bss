@@ -76,6 +76,7 @@ beside it.</p>
 28. <a href="#risk">Risk management — the door check</a><br>
 29. <a href="#thintail">Partnership types &amp; geographic sites</a><br>
 30. <a href="#proofrun">The proof run &amp; fleet-age runbooks</a><br>
+31. <a href="#shopknows">The shop that knows you</a><br>
 </p>
 </div>
 
@@ -815,7 +816,27 @@ on a worker pool (<code>bss.billing.run-concurrency</code>, default 8; crash-res
 proven by suite #57 against the pool) — suite #85 asserts the aged-fleet run completes
 inside suite patience.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-five suites, thirteen CTKs at zero
+<h2 id="shopknows">31 · The shop that knows you (personalization) — suite #86</h2>
+<p><b>Usage-aware upsell</b>: the signed-in <code>GET /ai/v1/forYou</code> payload
+carries an <code>upsell</code> block when any meter is ≥ 80% used —
+<code>{bucketName, usedPct, currentAllowance, suggestedOffering, suggestedAllowance}</code>,
+the suggestion being the NEXT rung of the allowance ladder (the usage service's
+<code>usageAllowance</code> rows per offering, smallest larger allowance for the same
+usage type; rows without an offering name get a descriptive label). No meter, a
+comfortable meter, or no fuller rung → no block. The Shop page renders it as
+<code>data-testid=upsell-card</code> above the recommended rail.
+<b>Returning-visitor rules</b>: the personalization rule context now carries
+<code>visits</code> (distinct event-days per visitor) — author
+<code>{"&gt;=": [{"var":"visits"}, 2]}</code> rules in Rules or via the copilot.
+<b>Full-profile grid</b>: the Shop grid ranks singles by the visitor's whole consented
+<code>interests[]</code> array in browse-weight order; a rule's
+<code>heroCategory</code> still floats to the top. Pricing on the grid is deliberately
+NOT a personalization lever. Hygiene note: killed suite runs orphan their
+finally-cleanup policy rules — if default experiences misbehave, list
+<code>domain=personalization</code> rules for leftovers. See
+<a href="../personalization-shop-plan.md">docs/personalization-shop-plan.md</a>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-six suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

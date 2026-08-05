@@ -119,7 +119,7 @@
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
     operator sells, bills, and serves customers through — from an empty repository to thirty-three
-    composable components, six customer surfaces, and eighty-five end-to-end test suites that all pass
+    composable components, six customer surfaces, and eighty-six end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
     to end, against the real thing.</em></p>
@@ -3375,6 +3375,52 @@
     ages like a production fleet, and then it heals faster than its guardrails expect.
     The claim on the README is finally a fact — and the command that makes it a fact
     again tomorrow ships in ops/.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Three</div>
+    <h3>The shop that knows you</h3>
+    <div class="epi">"go ahead with the personalization arc, research and plan first"
+    <span class="who">— the operator, back to features at last</span></div>
+
+    <p class="drop">The oldest note in the backlog said "personalize pages and offers,"
+    and half of it had quietly shipped months ago — segments, campaigns, the guest
+    banner, the for-you rail. The recon's job was to find what the vision still owed,
+    and the answer was almost embarrassing: the shop never once used the customer's OWN
+    data to shape an offer. The meter sat one page away — the Services page drew it
+    beautifully — and the Shop page never looked. A visitor's full interest profile
+    rode the experience payload and the grid used exactly one category of it. And no
+    rule an operator could write knew whether a guest had ever been here before.</p>
+
+    <p>The flagship was the upsell, and its best part was discovering that the upgrade
+    ladder already existed — nobody had ever assembled it. Every offering's usage
+    allowance had been data since the usage arc; sorted by size within a usage type,
+    those rows ARE the ladder, and "the next bigger plan" is just the next rung. So the
+    for-you payload grew an upsell block with hard rules: only when a meter crosses
+    eighty percent, only the NEXT rung — the suite verifies against the ladder itself
+    that no smaller step was skipped — and only a real offering, linked, never an
+    invented deal. A customer at ninety-two percent of ten gigabytes was shown the
+    thirty; a customer at twenty percent was shown nothing at all, and the suite
+    asserts the nothing as firmly as the something. The returning guest became a
+    variable: `visits`, distinct days on the ledger, so "welcome back" is a rule an
+    operator authors as data. And the grid finally ranks by the whole consented
+    profile, in browse-weight order.</p>
+
+    <p>One decision mattered as much as any feature: pricing on the grid stayed OUT.
+    The experience machinery could technically bend prices per visitor, and the plan
+    says plainly why it never will — price is the bill's truth, not a personalization
+    lever. Personal means the shop reads what you already shared with it; it does not
+    mean the shop charges you differently for having shared it. The regression run
+    added its own footnote to the fleet's honesty file: two orphaned rules from
+    killed suite runs were quietly shadowing every guest's default experience —
+    cleanup code in a finally block only runs if the run survives to reach it.</p>
+
+    <p class="pull edge">Eighty-six suites. The backlog's oldest wish is closed both
+    halves now — marketing that measures itself, and a shop that uses what it already
+    knew: the meter, the profile, the return visit. Personal, honest, and never a
+    nag.</p>
   </section>
 
   <hr class="soft">
