@@ -7,10 +7,10 @@ It normalises the CTK's broken URL objects into properly structured Postman
 URLs (the collections pre-parse the whole template into the host array, which
 modern newman cannot resolve), bakes the auth header in, and runs newman.
 """
-import json, os, subprocess, sys
+import json, os, re, subprocess, sys
 from urllib.parse import urlsplit, parse_qsl
 
-ctk_dir, base, token, varname = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+ctk_dir, base, token, varname = os.path.abspath(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
 ctkjs = os.path.join(ctk_dir, "ctk")
 
 # 1. config.json: point at the live component, inject bearer auth.
@@ -40,11 +40,33 @@ def structured(raw):
     }
 
 
+# Some kit generations write pmtest.json BEFORE index.js injects the
+# config.json example payloads (the injection only feeds the kit's own,
+# broken, newman invocation). Inject them here: an empty POST body whose
+# resource segment matches a configured payload gets the operator example.
+payloads = {k.lower(): v.get("POST", {}).get("payload")
+            for k, v in cfg.get("payloads", {}).items()}
+
+
+def inject(it):
+    req = it["request"]
+    if req.get("method") != "POST" or not payloads:
+        return
+    u = req.get("url")
+    raw = (u.get("raw") if isinstance(u, dict) else u) or ""
+    raw = re.sub(r"\{\{[^}]+\}\}", "", raw)  # base var may abut the resource
+    seg = raw.split("?")[0].rstrip("/").split("/")[-1].lower()
+    body = req.get("body") or {}
+    if body.get("raw", "{}").strip() in ("", "{}") and seg in payloads and payloads[seg]:
+        req["body"] = {"mode": "raw", "raw": json.dumps(payloads[seg])}
+
+
 def walk(items):
     for it in items:
         if "item" in it:
             walk(it["item"])
         if "request" in it:
+            inject(it)
             u = it["request"].get("url")
             raw = u.get("raw") if isinstance(u, dict) else u
             if raw:

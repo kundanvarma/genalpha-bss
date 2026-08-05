@@ -59,14 +59,21 @@ public class AssuranceService {
         alarm.setId(id);
         alarm.setTenantId(tenant);
         alarm.setHref(ApiConstants.ALARM_BASE + "/alarm/" + id);
-        alarm.setAlarmedObject(String.valueOf(dto.get("alarmedObject")));
+        Object alarmed = dto.get("alarmedObject");
+        alarm.setAlarmedObject(alarmed instanceof Map<?, ?> ref && ref.get("id") != null
+                ? String.valueOf(ref.get("id")) : String.valueOf(alarmed));
         alarm.setAlarmType(dto.get("alarmType") == null ? "equipmentAlarm"
                 : String.valueOf(dto.get("alarmType")));
         alarm.setSeverity(String.valueOf(dto.get("perceivedSeverity")).toLowerCase(Locale.ROOT));
         alarm.setState(Alarm.RAISED);
         alarm.setProbableCause(dto.get("probableCause") == null ? null
                 : String.valueOf(dto.get("probableCause")));
-        alarm.setRaisedAt(OffsetDateTime.now());
+        alarm.setSourceSystemId(dto.get("sourceSystemId") == null ? "network"
+                : String.valueOf(dto.get("sourceSystemId")));
+        // microsecond precision: what Postgres stores — so the timestamp a
+        // client captures from the POST echo survives every later read
+        alarm.setRaisedAt(OffsetDateTime.now()
+                .truncatedTo(java.time.temporal.ChronoUnit.MICROS));
         alarms.save(alarm);
 
         // Critical alarms open (or join) the object's service problem.
@@ -109,12 +116,69 @@ public class AssuranceService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> alarms(String state) {
+    public List<Map<String, Object>> alarms(Map<String, String> filters, String fields) {
         String tenant = tenantScope.currentTenantId();
-        List<Alarm> rows = state != null
-                ? alarms.findByTenantIdAndState(tenant, state)
-                : alarms.findAll().stream().filter(a -> tenant.equals(a.getTenantId())).toList();
-        return rows.stream().map(this::alarmMap).toList();
+        List<Map<String, Object>> rows = alarms.findAll().stream()
+                .filter(a -> tenant.equals(a.getTenantId()))
+                .map(this::alarmMap)
+                .filter(m -> filters.entrySet().stream().allMatch(f ->
+                        f.getValue() == null
+                                || unquote(f.getValue()).equals(String.valueOf(m.get(f.getKey())))))
+                .toList();
+        if (fields == null || fields.isBlank()) {
+            return rows;
+        }
+        // TMF630 attribute selection: id and href always ride along
+        List<String> keep = new java.util.ArrayList<>(List.of("id", "href"));
+        for (String f : fields.split(",")) {
+            keep.add(f.trim());
+        }
+        return rows.stream().map(m -> {
+            Map<String, Object> slim = new LinkedHashMap<>();
+            for (String k : keep) {
+                if (m.containsKey(k)) {
+                    slim.put(k, m.get(k));
+                }
+            }
+            return slim;
+        }).toList();
+    }
+
+    /** TMF630 filter values may arrive quoted: state='raised'. */
+    private static String unquote(String v) {
+        return v.length() >= 2 && v.startsWith("'") && v.endsWith("'")
+                ? v.substring(1, v.length() - 1) : v;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> alarmById(String id) {
+        return alarms.findById(id)
+                .filter(a -> tenantScope.currentTenantId().equals(a.getTenantId()))
+                .map(this::alarmMap)
+                .orElseThrow(() -> NotFoundException.forResource("Alarm", id));
+    }
+
+    /** EMS-grade attribute updates: cause, severity, type, state. */
+    @Transactional
+    public Map<String, Object> patchAlarm(String id, Map<String, Object> patch) {
+        Alarm alarm = alarms.findById(id)
+                .filter(a -> tenantScope.currentTenantId().equals(a.getTenantId()))
+                .orElseThrow(() -> NotFoundException.forResource("Alarm", id));
+        if (patch.get("probableCause") != null) {
+            alarm.setProbableCause(String.valueOf(patch.get("probableCause")));
+        }
+        if (patch.get("perceivedSeverity") != null) {
+            alarm.setSeverity(String.valueOf(patch.get("perceivedSeverity"))
+                    .toLowerCase(Locale.ROOT));
+        }
+        if (patch.get("alarmType") != null) {
+            alarm.setAlarmType(String.valueOf(patch.get("alarmType")));
+        }
+        if (patch.get("state") != null) {
+            alarm.setState(String.valueOf(patch.get("state")));
+        }
+        alarms.save(alarm);
+        return alarmMap(alarm);
     }
 
     @Transactional(readOnly = true)
@@ -157,7 +221,9 @@ public class AssuranceService {
         map.put("alarmType", a.getAlarmType());
         map.put("perceivedSeverity", a.getSeverity());
         map.put("state", a.getState());
-        if (a.getProbableCause() != null) map.put("probableCause", a.getProbableCause());
+        // TMF642 mandatory attributes ride EVERY row, house-raised included
+        map.put("probableCause", a.getProbableCause() == null ? "unknown" : a.getProbableCause());
+        map.put("sourceSystemId", a.getSourceSystemId() == null ? "network" : a.getSourceSystemId());
         map.put("alarmRaisedTime", a.getRaisedAt().toString());
         map.put("@type", "Alarm");
         return map;

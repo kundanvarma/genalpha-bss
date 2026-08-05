@@ -31,8 +31,30 @@ public class AssuranceController {
 
     @GetMapping(ApiConstants.ALARM_BASE + "/alarm")
     public ResponseEntity<List<Map<String, Object>>> alarms(
-            @RequestParam(required = false) String state) {
-        return ResponseEntity.ok(service.alarms(state));
+            @RequestParam(required = false) String id,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String alarmRaisedTime,
+            @RequestParam(required = false) String probableCause,
+            @RequestParam(required = false) String sourceSystemId,
+            @RequestParam(required = false) String fields) {
+        Map<String, String> filters = new java.util.LinkedHashMap<>();
+        filters.put("id", id);
+        filters.put("state", state);
+        filters.put("alarmRaisedTime", alarmRaisedTime);
+        filters.put("probableCause", probableCause);
+        filters.put("sourceSystemId", sourceSystemId);
+        return ResponseEntity.ok(service.alarms(filters, fields));
+    }
+
+    @GetMapping(ApiConstants.ALARM_BASE + "/alarm/{id}")
+    public ResponseEntity<Map<String, Object>> alarmById(@PathVariable String id) {
+        return ResponseEntity.ok(service.alarmById(id));
+    }
+
+    @PatchMapping(ApiConstants.ALARM_BASE + "/alarm/{id}")
+    public ResponseEntity<Map<String, Object>> patchAlarm(@PathVariable String id,
+            @RequestBody Map<String, Object> patch) {
+        return ResponseEntity.ok(service.patchAlarm(id, patch));
     }
 
     @GetMapping(ApiConstants.PROBLEM_BASE + "/serviceProblem")

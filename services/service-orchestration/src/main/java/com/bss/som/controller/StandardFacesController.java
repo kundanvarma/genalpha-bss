@@ -1,9 +1,11 @@
 package com.bss.som.controller;
 
+import com.bss.som.entity.InventoryResource;
 import com.bss.som.entity.NumberQuarantine;
 import com.bss.som.entity.ResourceAssignment;
 import com.bss.som.entity.ResourcePool;
 import com.bss.som.entity.ServiceTest;
+import com.bss.som.repository.InventoryResourceRepository;
 import com.bss.som.repository.NumberQuarantineRepository;
 import com.bss.som.repository.ResourceAssignmentRepository;
 import com.bss.som.repository.ResourcePoolRepository;
@@ -45,18 +47,21 @@ public class StandardFacesController {
     private final ResourcePoolRepository pools;
     private final ResourceAssignmentRepository assignments;
     private final NumberQuarantineRepository quarantine;
+    private final InventoryResourceRepository inventory;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public StandardFacesController(SomController som, ServiceTestRepository tests,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
-            NumberQuarantineRepository quarantine, TenantScope tenantScope, PartyScope partyScope) {
+            NumberQuarantineRepository quarantine, InventoryResourceRepository inventory,
+            TenantScope tenantScope, PartyScope partyScope) {
         this.som = som;
         this.tests = tests;
         this.pools = pools;
         this.assignments = assignments;
         this.quarantine = quarantine;
+        this.inventory = inventory;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
     }
@@ -130,40 +135,115 @@ public class StandardFacesController {
         return ResponseEntity.ok(out);
     }
 
+    @PostMapping("/tmf-api/resourceInventoryManagement/v4/resource")
+    public ResponseEntity<Map<String, Object>> createResource(@RequestBody Map<String, Object> dto) {
+        if (!(dto.get("name") instanceof String name) || name.isBlank()) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "name is required — an inventory record IS a named thing");
+        }
+        InventoryResource r = new InventoryResource();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setName(name);
+        r.setCategory(dto.get("category") instanceof String c ? c : null);
+        r.setResourceStatus(dto.get("resourceStatus") instanceof String s ? s : "available");
+        r.setDocumentJson(writeJson(dto));
+        r.setCreatedAt(OffsetDateTime.now());
+        inventory.save(r);
+        Map<String, Object> view = storedView(r);
+        return ResponseEntity.created(java.net.URI.create(String.valueOf(view.get("href")))).body(view);
+    }
+
     @GetMapping("/tmf-api/resourceInventoryManagement/v4/resource")
     public ResponseEntity<List<Map<String, Object>>> resources(
-            @RequestParam(required = false) String serviceId) {
+            @RequestParam(required = false) String serviceId,
+            @RequestParam(required = false) String name) {
         String tenant = tenantScope.currentTenantId();
         List<Map<String, Object>> out = new ArrayList<>();
+        for (InventoryResource r : inventory.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)) {
+            out.add(storedView(r));
+        }
         List<ResourceAssignment> issued = serviceId != null
                 ? assignments.findByTenantIdAndServiceId(tenant, serviceId)
                 : assignments.findAll().stream()
                         .filter(a -> tenant.equals(a.getTenantId())).limit(200).toList();
         for (ResourceAssignment a : issued) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", a.getId());
-            map.put("value", a.getValue());
-            map.put("resourceStatus", "assigned");
-            map.put("poolId", a.getPoolId());
-            if (a.getServiceId() != null) {
-                map.put("relatedService", Map.of("id", a.getServiceId()));
-            }
-            if (a.getOwnerPartyId() != null) {
-                map.put("relatedParty", List.of(Map.of("id", a.getOwnerPartyId(), "role", "customer")));
-            }
-            map.put("@type", "Resource");
-            out.add(map);
+            out.add(assignmentView(a));
         }
         for (NumberQuarantine q : quarantine.findAll().stream()
                 .filter(q -> tenant.equals(q.getTenantId())).limit(100).toList()) {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", "quarantine-" + q.getNumber());
-            map.put("value", q.getNumber());
-            map.put("resourceStatus", "quarantined");
-            map.put("@type", "Resource");
-            out.add(map);
+            out.add(quarantineView(q));
+        }
+        if (serviceId != null) {
+            out.removeIf(m -> !(m.get("relatedService") instanceof Map<?, ?> ref
+                    && serviceId.equals(ref.get("id"))));
+        }
+        if (name != null) {
+            out.removeIf(m -> !name.equals(m.get("name")));
         }
         return ResponseEntity.ok(out);
+    }
+
+    @GetMapping("/tmf-api/resourceInventoryManagement/v4/resource/{id}")
+    public ResponseEntity<Map<String, Object>> resourceById(@PathVariable("id") String id) {
+        String tenant = tenantScope.currentTenantId();
+        return inventory.findByIdAndTenantId(id, tenant).map(r -> ResponseEntity.ok(storedView(r)))
+                .or(() -> assignments.findById(id)
+                        .filter(a -> tenant.equals(a.getTenantId()))
+                        .map(a -> ResponseEntity.ok(assignmentView(a))))
+                .or(() -> quarantine.findAll().stream()
+                        .filter(q -> tenant.equals(q.getTenantId())
+                                && ("quarantine-" + q.getNumber()).equals(id))
+                        .findFirst().map(q -> ResponseEntity.ok(quarantineView(q))))
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException
+                        .forResource("Resource", id));
+    }
+
+    private Map<String, Object> storedView(InventoryResource r) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        try {
+            if (r.getDocumentJson() != null) {
+                map.putAll(objectMapper.readValue(r.getDocumentJson(), Map.class));
+            }
+        } catch (Exception ignored) { }
+        map.put("id", r.getId());
+        map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/" + r.getId());
+        map.put("name", r.getName());
+        if (r.getCategory() != null) {
+            map.put("category", r.getCategory());
+        }
+        map.put("resourceStatus", r.getResourceStatus());
+        map.putIfAbsent("@type", "Resource");
+        return map;
+    }
+
+    private Map<String, Object> assignmentView(ResourceAssignment a) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", a.getId());
+        map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/" + a.getId());
+        map.put("name", a.getValue());
+        map.put("value", a.getValue());
+        map.put("resourceStatus", "assigned");
+        map.put("poolId", a.getPoolId());
+        if (a.getServiceId() != null) {
+            map.put("relatedService", Map.of("id", a.getServiceId()));
+        }
+        if (a.getOwnerPartyId() != null) {
+            map.put("relatedParty", List.of(Map.of("id", a.getOwnerPartyId(), "role", "customer")));
+        }
+        map.put("@type", "Resource");
+        return map;
+    }
+
+    private Map<String, Object> quarantineView(NumberQuarantine q) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", "quarantine-" + q.getNumber());
+        map.put("href", "/tmf-api/resourceInventoryManagement/v4/resource/quarantine-" + q.getNumber());
+        map.put("name", q.getNumber());
+        map.put("value", q.getNumber());
+        map.put("resourceStatus", "quarantined");
+        map.put("@type", "Resource");
+        return map;
     }
 
     private Map<String, Object> testView(ServiceTest t) {

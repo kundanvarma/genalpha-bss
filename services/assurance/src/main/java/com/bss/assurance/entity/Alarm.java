@@ -40,6 +40,9 @@ public class Alarm {
     @Column(name = "probable_cause")
     private String probableCause;
 
+    @Column(name = "source_system_id", length = 128)
+    private String sourceSystemId;
+
     @Column(name = "raised_at", nullable = false)
     private OffsetDateTime raisedAt;
 
@@ -62,6 +65,8 @@ public class Alarm {
     public void setState(String state) { this.state = state; }
     public String getProbableCause() { return probableCause; }
     public void setProbableCause(String probableCause) { this.probableCause = probableCause; }
+    public String getSourceSystemId() { return sourceSystemId; }
+    public void setSourceSystemId(String sourceSystemId) { this.sourceSystemId = sourceSystemId; }
     public OffsetDateTime getRaisedAt() { return raisedAt; }
     public void setRaisedAt(OffsetDateTime raisedAt) { this.raisedAt = raisedAt; }
     public OffsetDateTime getClearedAt() { return clearedAt; }
