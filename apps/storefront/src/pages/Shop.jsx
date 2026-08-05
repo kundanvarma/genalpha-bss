@@ -45,6 +45,16 @@ export default function Shop() {
   // operator experience rule can pin one offering on top of that
   const hero = experience?.personalized ? experience.heroCategory : null;
   const catOf = (o) => ((o.category || [])[0] || {}).name || '';
+  // the FULL interest profile ranks the grid (they consented to exactly
+  // this); the single hero — a rule's override — still floats to the top
+  const interestRank = (o) => {
+    const list = experience?.personalized ? (experience.interests || []) : [];
+    const i = list.indexOf(catOf(o));
+    return i === -1 ? list.length : i;
+  };
+  if (experience?.personalized && (experience.interests || []).length) {
+    singles = [...singles].sort((a, b) => interestRank(a) - interestRank(b));
+  }
   if (hero) {
     singles = [...singles].sort((a, b) => (catOf(b) === hero) - (catOf(a) === hero));
   }
@@ -81,6 +91,19 @@ export default function Shop() {
             {recent.map((o) => <OfferingCard key={'recent-' + o.id} offering={o} prices={prices} />)}
           </div>
         </>
+      )}
+      {personal?.upsell && (
+        <div className="lobcard" data-testid="upsell-card" style={{ margin: '10px 0', padding: '12px 16px' }}>
+          <strong>
+            {t('You\'ve used')} {personal.upsell.usedValue} {t('of your')}{' '}
+            {personal.upsell.currentAllowance} {personal.upsell.units} {personal.upsell.bucketName}
+          </strong>
+          <p className="dim" style={{ margin: '4px 0' }}>
+            {personal.upsell.suggestedOffering.name} {t('gives you')}{' '}
+            {personal.upsell.suggestedAllowance} {personal.upsell.units} —{' '}
+            <Link to={'/offering/' + personal.upsell.suggestedOffering.id}>{t('take a look')}</Link>
+          </p>
+        </div>
       )}
       {picks.length > 0 && (
         <>

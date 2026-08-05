@@ -65,4 +65,25 @@ serial: personalization, for_you.
 
 ## Shipped
 
-*(recorded as phases land)*
+**Both phases — 2026-08-05, suite #86 green (four legs).** THE UPSELL:
+the for-you payload grew an `upsell` block computed from the
+customer's own meters joined to the allowance ladder (a new
+`usageAllowances()` read — the upgrade path that was always data,
+finally assembled): a purpose-made customer at 9.2/10 GB (92%)
+surfaced "the 30 GB plan" — the NEXT rung, verified against the
+ladder itself (no smaller rung skipped), with a descriptive label
+fallback when a ladder row carries no offering name; a customer at
+20% saw NOTHING (no nagging — the block exists only when the meter
+argues for it). The Shop page renders the card above the recommended
+rail, linking to the real offering. THE RETURN: insight's experience
+context grew `visits` (distinct event-days per visitor) — a
+first-day guest passed a `visits >= 2` welcome-back rule by, a
+two-day guest was greeted; frequency is an operator-authorable
+variable now. THE PROFILE: the Shop grid ranks singles by the FULL
+consented `interests[]` array in browse-weight order (hero override
+intact), not one floating category. Regressions green
+(personalization, for_you) after removing two chaos-era leftover
+personalization rules — killed suite runs had orphaned their
+`finally` cleanups; noted for fleet hygiene. Deliberately NOT built:
+pricing on the grid — price is the bill's truth, not a
+personalization lever.

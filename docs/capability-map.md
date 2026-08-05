@@ -52,6 +52,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Notify & message customers | TMF681 + ESP seam | `communication` | ✅ (email/inbox; ◐ no SMS/push gateway — bring an SMSC/push provider) |
 | Help customers help themselves | TMF knowledge + pgvector | `knowledge` | ✅ |
 | Predict churn & recommend the next best offer | governed AI | `intelligence` | ✅ (rules + trained LR; ◐ GBM/QoE features future) |
+| Personalize the shop from the customer's OWN data (usage-aware upsell, interest-ranked grid, returning-visitor rules) | insight + policy + TMF680 + for-you | storefront + `intelligence` + `insight` | ✅ #86 (the next rung of the allowance ladder, never a nag; frequency and full interest profile as rule variables) |
 | Staff care & back-office with AI workers | MCP + workforce API | `intelligence` + package | ✅ #65–66 |
 | Social/community management, NPS/CX survey suite | — | — | ❌ |
 

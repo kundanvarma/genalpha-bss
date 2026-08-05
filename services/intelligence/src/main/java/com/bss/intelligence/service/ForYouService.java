@@ -83,12 +83,95 @@ public class ForYouService {
         out.put("items", rail);
         out.put("interests", interests);
         out.put("retentionFlag", retention);
+        Map<String, Object> upsell = upsellOf(partyId);
+        if (upsell != null) {
+            out.put("upsell", upsell);
+        }
         out.put("caption", rail.isEmpty() ? null
                 : caption(rail, interests, holdings, retention));
         out.put("generatedAt", OffsetDateTime.now().toString());
         out.put("cached", false);
         cache.put(key, new CacheEntry(System.currentTimeMillis(), out));
         return out;
+    }
+
+
+    /**
+     * The usage-aware upsell: when a meter is nearly drained (>= 80%),
+     * suggest the CHEAPEST-STEP fuller plan — the offering with the
+     * next-larger allowance for the SAME usage type, from the allowance
+     * ladder the fleet always had as data. No meter, no fuller rung, or a
+     * comfortable meter: no block. Never an invented deal — just the next
+     * rung, named.
+     */
+    private Map<String, Object> upsellOf(String partyId) {
+        List<Map<String, Object>> meters = bss.usageMeters(partyId);
+        Map<String, Object> tightest = null;
+        double tightestPct = 0;
+        for (Map<String, Object> m : meters) {
+            double allowed = numberOf(m.get("allowedValue"));
+            double used = numberOf(m.get("usedValue"));
+            if (allowed <= 0) {
+                continue;
+            }
+            double pct = used / allowed;
+            if (pct >= 0.8 && pct > tightestPct) {
+                tightest = m;
+                tightestPct = pct;
+            }
+        }
+        if (tightest == null) {
+            return null;
+        }
+        String spec = String.valueOf(tightest.get("name"));
+        double current = numberOf(tightest.get("allowedValue"));
+        Map<String, Object> nextRung = null;
+        double nextValue = Double.MAX_VALUE;
+        for (Map<String, Object> a : bss.usageAllowances()) {
+            if (!spec.equals(String.valueOf(a.get("usageType")))) {
+                continue;
+            }
+            double value = a.get("allowance") instanceof Map<?, ?> al
+                    ? numberOf(al.get("value")) : 0;
+            if (value > current && value < nextValue
+                    && a.get("productOffering") instanceof Map<?, ?> off
+                    && off.get("id") != null) {
+                nextValue = value;
+                // some ladder rows carry no offering name — the card still
+                // links to the real offering; the label stays descriptive
+                Object name = off.get("name");
+                String label = name == null || "null".equals(String.valueOf(name))
+                        ? "the " + stripTrailingZeros(value) + " "
+                                + String.valueOf(a.get("allowance") instanceof Map<?, ?> al2
+                                        ? al2.get("units") : "") + " plan"
+                        : String.valueOf(name);
+                nextRung = Map.of("id", String.valueOf(off.get("id")), "name", label);
+            }
+        }
+        if (nextRung == null) {
+            return null; // already on the top rung — nothing honest to suggest
+        }
+        Map<String, Object> upsell = new LinkedHashMap<>();
+        upsell.put("bucketName", spec);
+        upsell.put("usedPct", Math.round(tightestPct * 100));
+        upsell.put("usedValue", tightest.get("usedValue"));
+        upsell.put("currentAllowance", tightest.get("allowedValue"));
+        upsell.put("units", tightest.get("units"));
+        upsell.put("suggestedOffering", nextRung);
+        upsell.put("suggestedAllowance", nextValue);
+        return upsell;
+    }
+
+    private static String stripTrailingZeros(double v) {
+        return v == Math.floor(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    private static double numberOf(Object v) {
+        try {
+            return v == null ? 0 : Double.parseDouble(String.valueOf(v));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /** One governed FAST call for one warm sentence — or silence. */

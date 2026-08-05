@@ -11,6 +11,12 @@ import java.util.List;
 @Repository
 public interface VisitorEventRepository extends JpaRepository<VisitorEvent, String> {
 
+    /** Distinct days this visitor has shown up — the frequency signal an
+     * operator's returning-visitor rules key on. */
+    @Query("select count(distinct function('date', e.createdAt)) from VisitorEvent e"
+            + " where e.tenantId = :tenantId and e.visitorId = :visitorId")
+    long visitDaysOf(@Param("tenantId") String tenantId, @Param("visitorId") String visitorId);
+
     /** Interests, strongest first: category view counts for one visitor. */
     @Query("select e.category, count(e) from VisitorEvent e"
             + " where e.tenantId = :tenantId and e.visitorId = :visitorId"

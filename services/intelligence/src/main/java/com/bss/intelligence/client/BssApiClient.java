@@ -245,6 +245,20 @@ public class BssApiClient {
         }
     }
 
+    /** The allowance LADDER: every offering's allowance per usage type —
+     * the upgrade path nobody declared, assembled from data that always
+     * existed. */
+    public List<Map<String, Object>> usageAllowances() {
+        try {
+            String body = usageClient.get()
+                    .uri("/tmf-api/usageManagement/v4/usageAllowance?limit=200")
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     /* ---- TMF696 risk signals: exactly what the fleet's data knows ---- */
 
     /** Every order this party owns (velocity computes from orderDate). */

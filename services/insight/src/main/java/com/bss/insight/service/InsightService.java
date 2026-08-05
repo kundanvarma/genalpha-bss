@@ -171,6 +171,8 @@ public class InsightService {
         context.put("channel", channel);
         context.put("segments", segments);
         context.put("knownCustomer", p.getPartyId() != null);
+        // the frequency signal: rules can greet a RETURNING visitor as data
+        context.put("visits", events.visitDaysOf(tenantId, visitorId));
         Map<String, Object> decision = policy.experience(context).orElse(null);
         out.put("personalized", !interests.isEmpty() || decision != null || !segments.isEmpty());
         out.put("interests", interests);
