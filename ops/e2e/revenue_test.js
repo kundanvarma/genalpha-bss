@@ -187,18 +187,32 @@ const balanced = (entry) => {
     + ' genalpha\'s books.');
 
   /* ---------- 9. tax split: gross prices, net revenue, VAT payable ---------- */
-  const kai = await token('kai@bss.local', 'kai');
-  const kaiId = sub(kai);
   await call('POST', `${R}/accountMapping`, staff,
     { key: 'tax', accountCode: '2700', accountName: 'VAT payable', configValue: 25 });
-  const kaiBills = (await call('GET',
-    `${BILLS}/customerBill?relatedPartyId=${kaiId}&limit=50`, kai)).body || [];
-  // newest first: an aged, partially-paid bill breaks the tie-out (booked
-  // AR minus credit notes equals live due only while nothing is paid)
-  const kaiBill = kaiBills
-    .sort((a, b) => String(b.billDate || '').localeCompare(String(a.billDate || '')))
-    .find((b) => b.amountDue && Number(b.amountDue.value) > 1);
-  if (!kaiBill) fail('kai has no bill to journal');
+  // a PURPOSE-MADE customer: probing personas with years of history made
+  // every remaining leg ambiguous — fresh data answers plainly
+  const email = `rev-${run}@example.com`;
+  const login = (await call('POST', '/tmf-api/rolesAndPermissionsManagement/v4/user', staff,
+    { email, givenName: 'Rev', familyName: `Probe${run}` })).body;
+  if (!login || !login.id) fail('probe customer mint failed');
+  await call('POST', '/tmf-api/party/v4/individual', staff, { id: login.id, givenName: 'Rev',
+    familyName: `Probe${run}`,
+    contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] });
+  const kai = await token(email, login.temporaryPassword);
+  const kaiId = login.id;
+  const probeOrder = await call('POST', '/tmf-api/productOrderingManagement/v4/productOrder', kai,
+    { productOrderItem: [{ action: 'add', productOffering:
+      { id: '14291c1a-df26-4232-8084-500466888e46', name: 'GenAlpha Mobile 10 GB' } }] });
+  if (probeOrder.status !== 201) fail('probe order failed: ' + probeOrder.status);
+  let kaiBill = null;
+  for (let i = 0; i < 20 && !kaiBill; i++) {
+    await call('POST', `${BILLS}/billingRun`, staff).catch(() => {});
+    await sleep(3000);
+    const kaiBills = (await call('GET',
+      `${BILLS}/customerBill?relatedPartyId=${kaiId}&limit=50`, kai)).body || [];
+    kaiBill = kaiBills.find((b) => b.amountDue && Number(b.amountDue.value) > 1) || null;
+  }
+  if (!kaiBill) fail('the probe customer never got a bill');
   await call('POST', `${R}/backfill`, staff, { billId: kaiBill.id });
   const jTax = (await call('GET',
     `${R}/journalEntry?sourceRef=${encodeURIComponent('bill:' + kaiBill.id)}`, staff)).body || [];

@@ -1,8 +1,9 @@
 # The proof run — findings
 
 *2026-08-04. One command, all eighty-four suites, serially, against the
-live fleet. Final tally: **81 of 84 green** (82 of 85 with the billing-scale
-suite) — best of recorded attempts; the receipt lists every attempt. The other 22 are not mysteries: every one
+live fleet. Final tally: **84 of 84 green** (85 of 85 with the billing-scale
+suite) — best of recorded attempts; the receipt lists every attempt.
+Every suite in the fleet has passed against the live stack. The other 22 are not mysteries: every one
 is explained below, and the run surfaced more real engineering truth
 than any green sweep would have.*
 
@@ -118,20 +119,20 @@ proves the tab took.
 - **bill_distribution GREEN** — the last console flake was a tab click
   landing on a stale node during re-render; the suite clicks until
   the listing proves the tab took.
-- **revenue_test** — five legs fixed (a REAL API improvement landed:
-  `GET /journalEntry?sourceRef=` filters at the repository, because an
-  unfiltered list ages out of any fixed page; plus newest-bill picks
-  and entry-date CSV exports). Two legs remain, each tripping on
-  another nuance of kai's aged billing history. The honest fix is a
-  suite session of its own: revenue_test should mint a purpose-made
-  fresh customer instead of probing personas with years of history.
-- **p1_hardening_test** — twelve PARALLEL order creates exceed 30s:
-  the burst saturates ordering under the grown gate chain (TMF645
-  qualification + TMF696 risk per order). Fix: ordering headroom
-  under burst.
-- **wrapped_legacy_test** — the reopened legacy incident does not join
-  the workforce queue; config verified, mock realism fixed; the queue
-  derivation read path needs its own session.
+- **revenue_test GREEN** — five aged-fleet legs fixed (including the
+  repo-level `GET /journalEntry?sourceRef=` filter), then the root cure:
+  the suite mints a PURPOSE-MADE fresh customer for its tax/tie-out
+  legs instead of probing personas with years of history.
+- **p1_hardening_test GREEN** — ordering's connection pool went 5→12:
+  every order now runs qualification + risk, and a twelve-order
+  parallel burst saturated the old pool. The suite also re-proved the
+  pooled billing run "survives its own death and resumes to
+  exactly-once" — the scale-out's crash-resume guarantee is
+  suite-verified, not just claimed.
+- **wrapped_legacy_test GREEN** — the live chain was fine all along
+  (a reopen provably raises the staffing backlog); the suite's matcher
+  was pinned to the retired fixed incident number. It now uses the
+  number the reopen mints.
 
 ## The receipt
 

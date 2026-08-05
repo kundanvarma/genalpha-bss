@@ -125,7 +125,9 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      # 12, not 5: every order now runs qualification + risk (which reads
+      # back into ordering) — a parallel order burst saturates a 5-pool
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "12"
       # 21 JVMs share one VM: bounded heap beats the 75%-of-RAM default.
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token

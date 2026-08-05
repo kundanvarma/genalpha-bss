@@ -243,3 +243,6 @@ revenue_test	fail	0	1	18
 revenue_test	fail	0	1	19
 revenue_test	fail	0	1	20
 revenue_test	fail	0	1	21
+wrapped_legacy_test	pass	0	0	22
+p1_hardening_test	pass	0	0	22
+revenue_test	pass	0	0	23

@@ -78,7 +78,10 @@ async function call(method, path, tok, body, headers = {}) {
     + ' Never two writers.');
 
   /* ---------- 4. the workforce works the LEGACY backlog ---------- */
-  await call('POST', '/legacy/api/reopenIncident', null, {}); // idempotent re-runs
+  // the mock mints a FRESH incident number per reopen (real estates never
+  // reuse INC numbers; the ledger rightly refuses re-queuing worked ones)
+  const reopened = await call('POST', '/legacy/api/reopenIncident', null, {});
+  const incNo = (reopened.body && reopened.body.result && reopened.body.result.INC_NO) || 'INC-9001';
   const minted = (await call('POST', '/tmf-api/rolesAndPermissionsManagement/v4/user', staff,
     { email: `worker-wrap-${run}@bss.local`, givenName: 'Wrap', familyName: 'Worker' })).body;
   await call('POST', '/tmf-api/rolesAndPermissionsManagement/v4/permission', staff,
@@ -87,7 +90,7 @@ async function call(method, path, tok, body, headers = {}) {
     username: minted.username, password: minted.temporaryPassword })).access_token;
 
   const queue = (await call('GET', '/ai/v1/workforce/tasks', worker)).body;
-  const task = queue.find((t) => t.kind === 'legacy-ticket' && t.subjectRef === 'INC-9001')
+  const task = queue.find((t) => t.kind === 'legacy-ticket' && t.subjectRef === incNo)
     || fail('the legacy incident never joined the workforce queue');
   if (!task.summary.includes('asOf') || !task.summary.includes('opened')) {
     fail('legacy data must be AGE-STAMPED: ' + task.summary);
@@ -100,7 +103,7 @@ async function call(method, path, tok, body, headers = {}) {
     { outcome: 'fixed (it was not)' });
   if (early.status !== 409) fail(`completing an OPEN legacy incident must 409: ${early.status}`);
   await call('POST', '/legacy/api/closeIncident', null,
-    { INC_NO: 'INC-9001', RESOLUTION: 'DSLAM-041 port re-seated; link stable 15m.' });
+    { INC_NO: incNo, RESOLUTION: 'DSLAM-041 port re-seated; link stable 15m.' });
   const finished = await call('POST',
     `/ai/v1/workforce/tasks/${encodeURIComponent(task.id)}/complete`, worker,
     { outcome: 'Resolved in the legacy system: DSLAM port re-seated.' });
