@@ -75,6 +75,7 @@ beside it.</p>
 27. <a href="#aimgmt">AI management — the control plane's face</a><br>
 28. <a href="#risk">Risk management — the door check</a><br>
 29. <a href="#thintail">Partnership types &amp; geographic sites</a><br>
+30. <a href="#proofrun">The proof run &amp; fleet-age runbooks</a><br>
 </p>
 </div>
 
@@ -794,7 +795,27 @@ list; unknown/retired kinds refuse outright). Untyped agreements are untouched.
 orders — entered once. See
 <a href="../tmf668-674-thin-tail-plan.md">docs/tmf668-674-thin-tail-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-four suites, thirteen CTKs at zero
+<h2 id="proofrun">30 · The proof run &amp; fleet-age runbooks — suite #85 and the receipt</h2>
+<p><b>The proof run</b>: <code>ops/run-all-suites.sh</code> runs all suites serially with a
+readiness gate (IdP + gateway must answer before each suite), inter-suite pacing (a young
+fleet out-runs its own per-subject rate limiter), the surge controller parked except for
+the suite that tests it, onboarding suites first (a recreated Keycloak forgets dynamic
+realms), rate-limit suites last, and one automatic retry pass with attempts recorded.
+The receipt renders to <code>docs/proof-run.html</code> via
+<code>docs/build-proof-run-html.py</code>. <b>The pruning runbook</b>:
+<code>ops/prune-dev-fleet.sh</code> retires active subscriptions owned by anyone who is
+not a named demo persona (nothing deleted — products stop billing), then seed one usage
+record per persona (meters derive from monthly usage). <b>Fleet-age laws</b> (from
+<a href="../proof-run-findings.md">docs/proof-run-findings.md</a>): machine list-clients
+page to exhaustion or filter server-side (an unfiltered list ages out of any fixed page —
+<code>GET /revenue/v1/journalEntry?sourceRef=</code> exists because of this); batch
+endpoints get batch timeouts; suites probing aged personas should mint purpose-made
+customers; ad-hoc suite runs park <code>bss-worker-controller</code> first. Billing runs
+on a worker pool (<code>bss.billing.run-concurrency</code>, default 8; crash-resume
+proven by suite #57 against the pool) — suite #85 asserts the aged-fleet run completes
+inside suite patience.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-five suites, thirteen CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
