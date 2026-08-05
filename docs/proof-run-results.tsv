@@ -233,3 +233,13 @@ hardening_test	pass	77	0	11
 p1_hardening_test	fail	36	1	11
 bill_distribution_test	pass	0	0	12
 p1_hardening_test	fail	0	1	12
+loyalty_test	fail	0	1	13
+loyalty_test	pass	0	0	14
+revenue_test	fail	0	1	14
+revenue_test	fail	0	1	15
+revenue_test	fail	0	1	16
+revenue_test	fail	0	1	17
+revenue_test	fail	0	1	18
+revenue_test	fail	0	1	19
+revenue_test	fail	0	1	20
+revenue_test	fail	0	1	21

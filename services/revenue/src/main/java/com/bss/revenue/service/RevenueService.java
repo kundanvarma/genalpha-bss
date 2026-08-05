@@ -316,8 +316,16 @@ public class RevenueService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> journal(LocalDate date) {
+        return journal(date, null);
+    }
+
+    public List<Map<String, Object>> journal(LocalDate date, String sourceRef) {
         String tenant = tenantScope.currentTenantId();
-        List<JournalEntry> found = date == null
+        // the proof run's lesson: an unfiltered list ages out of any fixed
+        // page — asking about ONE source must be a repository question
+        List<JournalEntry> found = sourceRef != null && !sourceRef.isBlank()
+                ? entries.findByTenantIdAndSourceRef(tenant, sourceRef)
+                : date == null
                 ? entries.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)
                 : entries.findAllByTenantIdAndEntryDateOrderByCreatedAtAsc(tenant, date);
         List<Map<String, Object>> out = new ArrayList<>();

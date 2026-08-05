@@ -60,7 +60,11 @@ const balanced = (entry) => {
   }
   const bills = (await call('GET',
     `${BILLS}/customerBill?relatedPartyId=${paulaId}&limit=50`, paula)).body || [];
-  const bill = bills.find((b) => b.amountDue && Number(b.amountDue.value) > 0);
+  // the NEWEST due bill: this suite's legs (journal, replay, CSV) all
+  // refer to the probe bill's journal DATE — an aged fleet's oldest due
+  // bill drifts out of every date-scoped view
+  const bill = bills.filter((b) => b.amountDue && Number(b.amountDue.value) > 0)
+    .sort((a, b) => String(b.billDate || '').localeCompare(String(a.billDate || '')))[0];
   if (!bill) fail('paula has no bill with an amount due');
   const rates = (await call('GET',
     `${BILLS}/customerBill/${bill.id}/appliedCustomerBillingRate`, paula)).body || [];
@@ -68,7 +72,8 @@ const balanced = (entry) => {
 
   const bf1 = await call('POST', `${R}/backfill`, staff, { billId: bill.id });
   if (bf1.status >= 300) fail(`backfill: ${bf1.status} ${bf1.text.slice(0, 200)}`);
-  const journal = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+  const journal = (await call('GET',
+    `${R}/journalEntry?sourceRef=${encodeURIComponent('bill:' + bill.id)}`, staff)).body || [];
   const entry = journal.find((e) => e.sourceRef === `bill:${bill.id}`);
   if (!entry) fail('no journal entry for the bill');
   if (!balanced(entry)) fail('bill entry is not balanced: ' + JSON.stringify(entry.lines));
@@ -85,7 +90,8 @@ const balanced = (entry) => {
   /* ---------- 2. idempotency proven, not promised ---------- */
   const bf2 = await call('POST', `${R}/backfill`, staff, { billId: bill.id });
   if (bf2.body.posted !== false) fail('second backfill must be a no-op');
-  const again = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+  const again = (await call('GET',
+    `${R}/journalEntry?sourceRef=${encodeURIComponent('bill:' + bill.id)}`, staff)).body || [];
   if (again.filter((e) => e.sourceRef === `bill:${bill.id}`).length !== 1) {
     fail('duplicate journal entry after replay');
   }
@@ -146,7 +152,10 @@ const balanced = (entry) => {
     + ` number (${loyaltyCtl.points ?? 'n/a'} pts) that MATCHES the loyalty component's own.`);
 
   /* ---------- 6. the CSV a period-close import wants ---------- */
-  const csvRes = await fetch(`${API}${R}/journalExport?date=${today}`,
+  // export the ENTRY'S day, not the wall clock's — the probe bill may
+  // have been journaled on an earlier date on an aged fleet
+  const entryDay = String(entry.entryDate || today).slice(0, 10);
+  const csvRes = await fetch(`${API}${R}/journalExport?date=${entryDay}`,
     { headers: { Authorization: `Bearer ${staff}` } });
   const csv = await csvRes.text();
   if (!csv.startsWith('entryDate,entryId,sourceType,accountCode')) fail('CSV header wrong');
@@ -184,10 +193,15 @@ const balanced = (entry) => {
     { key: 'tax', accountCode: '2700', accountName: 'VAT payable', configValue: 25 });
   const kaiBills = (await call('GET',
     `${BILLS}/customerBill?relatedPartyId=${kaiId}&limit=50`, kai)).body || [];
-  const kaiBill = kaiBills.find((b) => b.amountDue && Number(b.amountDue.value) > 1);
+  // newest first: an aged, partially-paid bill breaks the tie-out (booked
+  // AR minus credit notes equals live due only while nothing is paid)
+  const kaiBill = kaiBills
+    .sort((a, b) => String(b.billDate || '').localeCompare(String(a.billDate || '')))
+    .find((b) => b.amountDue && Number(b.amountDue.value) > 1);
   if (!kaiBill) fail('kai has no bill to journal');
   await call('POST', `${R}/backfill`, staff, { billId: kaiBill.id });
-  const jTax = (await call('GET', `${R}/journalEntry`, staff)).body || [];
+  const jTax = (await call('GET',
+    `${R}/journalEntry?sourceRef=${encodeURIComponent('bill:' + kaiBill.id)}`, staff)).body || [];
   const taxEntry = jTax.find((e) => e.sourceRef === `bill:${kaiBill.id}`);
   if (!taxEntry || !balanced(taxEntry)) fail('kai bill entry missing/unbalanced');
   const vatLine = taxEntry.lines.find((l) => l.accountCode === '2700');

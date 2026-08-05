@@ -35,8 +35,9 @@ public class RevenueController {
 
     @GetMapping("/journalEntry")
     public ResponseEntity<List<Map<String, Object>>> journal(
-            @RequestParam(required = false) String date) {
-        return ResponseEntity.ok(service.journal(parseDate(date)));
+            @RequestParam(required = false) String date,
+            @RequestParam(required = false) String sourceRef) {
+        return ResponseEntity.ok(service.journal(parseDate(date), sourceRef));
     }
 
     @GetMapping("/journalEntry/{id}")

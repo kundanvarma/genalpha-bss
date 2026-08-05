@@ -16,4 +16,6 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Stri
     List<JournalEntry> findAllByTenantIdAndEntryDateOrderByCreatedAtAsc(String tenantId, LocalDate entryDate);
 
     List<JournalEntry> findTop200ByTenantIdOrderByCreatedAtDesc(String tenantId);
+
+    List<JournalEntry> findByTenantIdAndSourceRef(String tenantId, String sourceRef);
 }

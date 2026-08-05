@@ -1,8 +1,8 @@
 # The proof run — findings
 
 *2026-08-04. One command, all eighty-four suites, serially, against the
-live fleet. Final tally after the scale-out and pruning arcs: **80 of 84 green**
-(best of recorded attempts — see the receipt for per-suite attempts). The other 22 are not mysteries: every one
+live fleet. Final tally: **82 of 84 green** (83 of 85 with the billing-scale
+suite) — best of recorded attempts; the receipt lists every attempt. The other 22 are not mysteries: every one
 is explained below, and the run surfaced more real engineering truth
 than any green sweep would have.*
 
@@ -107,19 +107,28 @@ bill_distribution's last flake was a console tab click landing on a
 stale node during re-render — the suite now clicks until the listing
 proves the tab took.
 
-## Still open — all diagnosed, all named
+## The last mile (2026-08-05 afternoon)
 
-- **loyalty_test + revenue_test** — persona identity split: the KC
-  recreates changed the demo personas' subject ids, so paula's usage
-  and billing history straddles her old and new identities (her
-  consumption report is empty as herself, present as staff). Fix:
-  persona identity reconciliation, or pin persona ids in the realm
-  files so recreates preserve them.
-- **p1_hardening_test** — twelve PARALLEL order creates now exceed 30s:
-  every order runs the grown gate chain (TMF645 qualification + TMF696
-  risk fan-out) and the burst saturates ordering's small connection
-  pool. Fix: headroom for ordering under burst, or async-ify the gate
-  reads.
+- **loyalty_test GREEN** — the identity-split theory died on evidence
+  (persona ids were already pinned in the realm files and match live);
+  the real cause was simpler: paula had no usage records this month —
+  her meter derives from them. One seeded usage record restored it.
+  The pruning runbook now needs "seed one usage record per persona"
+  on its checklist.
+- **bill_distribution GREEN** — the last console flake was a tab click
+  landing on a stale node during re-render; the suite clicks until
+  the listing proves the tab took.
+- **revenue_test** — five legs fixed (a REAL API improvement landed:
+  `GET /journalEntry?sourceRef=` filters at the repository, because an
+  unfiltered list ages out of any fixed page; plus newest-bill picks
+  and entry-date CSV exports). Two legs remain, each tripping on
+  another nuance of kai's aged billing history. The honest fix is a
+  suite session of its own: revenue_test should mint a purpose-made
+  fresh customer instead of probing personas with years of history.
+- **p1_hardening_test** — twelve PARALLEL order creates exceed 30s:
+  the burst saturates ordering under the grown gate chain (TMF645
+  qualification + TMF696 risk per order). Fix: ordering headroom
+  under burst.
 - **wrapped_legacy_test** — the reopened legacy incident does not join
   the workforce queue; config verified, mock realism fixed; the queue
   derivation read path needs its own session.
