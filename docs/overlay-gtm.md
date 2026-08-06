@@ -10,7 +10,7 @@ parts, and the migration path that makes itself.*
 ## The positioning, precisely
 
 genalpha-bss is NOT an overlay product. It is a **full-fledged,
-next-generation BSS** — catalog to cash, 33 components, 66 suites, 11
+next-generation BSS** — catalog to cash, 38 components, 86 suites, 25
 CTKs at zero — sufficient to run as an operator's ONLY BSS, and doing so
 for every tenant in this repo. The overlay is a **deployment mode and a
 go-to-market wedge** for the same product, not its identity. Lead with
@@ -36,7 +36,7 @@ the whole BSS; sell the entry point.
   scoreboard (#65/#66), consent-first personalization, and martech with
   holdout-measured lift. Incumbent stacks do catalog-order-bill fine;
   none of them do this.
-- **Composability is the sales unit.** 33 components means the operator
+- **Composability is the sales unit.** 38 components means the operator
   adopts slices — the agentic storefront this quarter, the workforce
   next — not a platform ultimatum.
 
