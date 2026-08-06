@@ -16,8 +16,13 @@ public class OffsetPageRequest implements Pageable {
 
     private final long offset;
     private final int limit;
+    private final Sort sort;
 
     public OffsetPageRequest(long offset, int limit) {
+        this(offset, limit, Sort.by(Sort.Direction.ASC, "id"));
+    }
+
+    public OffsetPageRequest(long offset, int limit, Sort sort) {
         if (offset < 0) {
             throw new IllegalArgumentException("offset must be >= 0");
         }
@@ -26,6 +31,7 @@ public class OffsetPageRequest implements Pageable {
         }
         this.offset = offset;
         this.limit = limit;
+        this.sort = sort;
     }
 
     @Override
@@ -45,27 +51,27 @@ public class OffsetPageRequest implements Pageable {
 
     @Override
     public Sort getSort() {
-        return Sort.by(Sort.Direction.ASC, "id");
+        return sort;
     }
 
     @Override
     public Pageable next() {
-        return new OffsetPageRequest(offset + limit, limit);
+        return new OffsetPageRequest(offset + limit, limit, sort);
     }
 
     @Override
     public Pageable previousOrFirst() {
-        return hasPrevious() ? new OffsetPageRequest(Math.max(0, offset - limit), limit) : first();
+        return hasPrevious() ? new OffsetPageRequest(Math.max(0, offset - limit), limit, sort) : first();
     }
 
     @Override
     public Pageable first() {
-        return new OffsetPageRequest(0, limit);
+        return new OffsetPageRequest(0, limit, sort);
     }
 
     @Override
     public Pageable withPage(int pageNumber) {
-        return new OffsetPageRequest((long) pageNumber * limit, limit);
+        return new OffsetPageRequest((long) pageNumber * limit, limit, sort);
     }
 
     @Override

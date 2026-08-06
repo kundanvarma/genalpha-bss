@@ -45,7 +45,10 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",
+                                "/tmf-api/serviceOrdering/v3/serviceOrder").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.GET, ApiConstants.ORDER_BASE + "/**",
+                                "/tmf-api/serviceOrdering/v3/**",
                                 ApiConstants.INVENTORY_BASE + "/**",
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**").hasAuthority(READ)

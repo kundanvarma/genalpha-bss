@@ -63,6 +63,17 @@ public class AssuranceController {
         return ResponseEntity.ok(service.problems(status));
     }
 
+    @GetMapping(ApiConstants.PROBLEM_BASE + "/serviceProblem/{id}")
+    public ResponseEntity<Map<String, Object>> problemById(@PathVariable String id) {
+        return ResponseEntity.ok(service.problemById(id));
+    }
+
+    @PostMapping(ApiConstants.PROBLEM_BASE + "/serviceProblem")
+    public ResponseEntity<Map<String, Object>> declareProblem(
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createProblem(dto));
+    }
+
     @PatchMapping(ApiConstants.PROBLEM_BASE + "/serviceProblem/{id}")
     public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
             @RequestBody Map<String, Object> patch) {

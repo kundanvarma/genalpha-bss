@@ -1,6 +1,7 @@
 package com.bss.som.controller;
 
 import com.bss.som.api.ApiConstants;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.bss.som.entity.ServiceInstance;
 import com.bss.som.entity.ServiceOrder;
 import com.bss.som.repository.ServiceInstanceRepository;
@@ -471,13 +472,132 @@ public class SomController {
 
     @GetMapping(ApiConstants.ORDER_BASE + "/serviceOrder")
     public ResponseEntity<List<Map<String, Object>>> serviceOrders(
-            @RequestParam(required = false) String productOrderId) {
+            @RequestParam(required = false) String productOrderId,
+            @RequestParam(required = false) String externalId,
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String priority,
+            @RequestParam(required = false) String fields,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "100") int limit) {
         String tenant = tenantScope.currentTenantId();
         List<ServiceOrder> rows = productOrderId != null
                 ? serviceOrders.findByTenantIdAndProductOrderId(tenant, productOrderId)
                 : serviceOrders.findAll().stream()
-                        .filter(o -> tenant.equals(o.getTenantId())).toList();
-        return ResponseEntity.ok(rows.stream().map(this::orderMap).toList());
+                        .filter(o -> tenant.equals(o.getTenantId()))
+                        .sorted(java.util.Comparator.comparing(
+                                ServiceOrder::getCreatedAt).reversed())
+                        .toList();
+        List<Map<String, Object>> out = rows.stream()
+                .filter(o -> externalId == null || unquote(externalId).equals(o.getExternalId()))
+                .filter(o -> priority == null || unquote(priority).equals(o.getPriority()))
+                .map(this::orderMap)
+                .filter(m -> category == null
+                        || unquote(category).equals(String.valueOf(m.get("category"))))
+                .skip(offset).limit(limit)
+                .toList();
+        if (fields != null && !fields.isBlank()) {
+            List<String> keep = new java.util.ArrayList<>(List.of("id"));
+            for (String f : fields.split(",")) {
+                keep.add(f.split("\\.")[0].trim());
+            }
+            out = out.stream().map(m -> {
+                Map<String, Object> slim = new LinkedHashMap<>();
+                for (String k : keep) {
+                    if (m.containsKey(k)) {
+                        slim.put(k, m.get(k));
+                    }
+                }
+                return slim;
+            }).toList();
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * TMF641 northbound: an external system files a service order directly
+     * (no product order behind it). The order is RECORDED and acknowledged —
+     * fulfilment of external orders is the caller's workflow, honestly
+     * reflected in a state that never claims progress that didn't happen.
+     * The /v3 alias serves the R18-era clients, same validation.
+     */
+    @org.springframework.web.bind.annotation.PostMapping({
+            ApiConstants.ORDER_BASE + "/serviceOrder",
+            "/tmf-api/serviceOrdering/v3/serviceOrder"})
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<Map<String, Object>> createServiceOrder(
+            @org.springframework.web.bind.annotation.RequestBody Map<String, Object> dto) {
+        if (!(dto.get("orderItem") instanceof List<?> items) || items.isEmpty()) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "orderItem is required — an order orders SOMETHING");
+        }
+        for (Object item : items) {
+            if (item instanceof Map<?, ?> it && it.get("service") instanceof Map<?, ?> svc
+                    && svc.get("serviceSpecification") instanceof Map<?, ?> spec
+                    && (spec.get("id") == null || String.valueOf(spec.get("id")).isBlank())) {
+                throw new com.bss.som.exception.BadRequestException(
+                        "serviceSpecification needs an id — a nameless spec specifies nothing");
+            }
+        }
+        String tenant = tenantScope.currentTenantId();
+        ServiceOrder order = new ServiceOrder();
+        String id = java.util.UUID.randomUUID().toString();
+        order.setId(id);
+        order.setTenantId(tenant);
+        order.setHref(ApiConstants.ORDER_BASE + "/serviceOrder/" + id);
+        order.setState("acknowledged");
+        order.setProductOrderId("external");
+        order.setItemName(dto.get("category") == null ? "external"
+                : String.valueOf(dto.get("category")));
+        order.setExternalId(dto.get("externalId") == null ? null
+                : String.valueOf(dto.get("externalId")));
+        order.setPriority(dto.get("priority") == null ? null
+                : String.valueOf(dto.get("priority")));
+        order.setDescription(dto.get("description") == null ? null
+                : String.valueOf(dto.get("description")));
+        try {
+            order.setDocumentJson(new ObjectMapper().writeValueAsString(dto));
+        } catch (com.fasterxml.jackson.core.JacksonException e) {
+            throw new com.bss.som.exception.BadRequestException("unserializable order document");
+        }
+        order.setCreatedAt(java.time.OffsetDateTime.now());
+        order.setLastUpdate(java.time.OffsetDateTime.now());
+        serviceOrders.save(order);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(orderMap(order));
+    }
+
+    @GetMapping({ApiConstants.ORDER_BASE + "/serviceOrder/{id}",
+            "/tmf-api/serviceOrdering/v3/serviceOrder/{id}"})
+    public ResponseEntity<Map<String, Object>> serviceOrderById(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestParam(required = false) String fields) {
+        ServiceOrder order = serviceOrders.findById(id)
+                .filter(o -> tenantScope.currentTenantId().equals(o.getTenantId()))
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException
+                        .forResource("ServiceOrder", id));
+        Map<String, Object> full = orderMap(order);
+        if (fields == null || fields.isBlank()) {
+            return ResponseEntity.ok(full);
+        }
+        Map<String, Object> slim = new LinkedHashMap<>();
+        slim.put("id", full.get("id"));
+        for (String f : fields.split(",")) {
+            String key = f.split("\\.")[0].trim();
+            if (full.containsKey(key)) {
+                slim.put(key, full.get(key));
+            }
+        }
+        return ResponseEntity.ok(slim);
+    }
+
+    /** TMF630 filter values may arrive quoted: priority="1". */
+    private static String unquote(String v) {
+        if (v == null || v.length() < 2) {
+            return v;
+        }
+        char a = v.charAt(0);
+        char b = v.charAt(v.length() - 1);
+        return (a == b && (a == '\'' || a == '"')) ? v.substring(1, v.length() - 1) : v;
     }
 
     /**
@@ -606,14 +726,50 @@ public class SomController {
         return ResponseEntity.ok(orchestration.terminateService(id, reason));
     }
 
+    @SuppressWarnings("unchecked")
     private Map<String, Object> orderMap(ServiceOrder o) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", o.getId());
         map.put("href", o.getHref());
         map.put("state", o.getState());
         map.put("category", o.getItemName());
+        map.put("orderDate", o.getCreatedAt().toString());
         map.put("productOrderId", o.getProductOrderId());
+        if (o.getExternalId() != null) map.put("externalId", o.getExternalId());
+        if (o.getPriority() != null) map.put("priority", o.getPriority());
+        if (o.getDescription() != null) map.put("description", o.getDescription());
         if (o.getCompletedAt() != null) map.put("completionDate", o.getCompletedAt().toString());
+        // orderItem rides every row: the posted items for external orders,
+        // the single add-item an internal order factually IS otherwise
+        List<Map<String, Object>> items = null;
+        if (o.getDocumentJson() != null) {
+            try {
+                Map<String, Object> doc = new ObjectMapper().readValue(o.getDocumentJson(), Map.class);
+                if (doc.get("orderItem") instanceof List<?> raw) {
+                    items = new java.util.ArrayList<>();
+                    int n = 0;
+                    for (Object it : raw) {
+                        n++;
+                        Map<String, Object> item = new LinkedHashMap<>((Map<String, Object>) it);
+                        item.putIfAbsent("id", String.valueOf(n));
+                        item.putIfAbsent("state", o.getState());
+                        item.putIfAbsent("action", "add");
+                        items.add(item);
+                    }
+                }
+            } catch (com.fasterxml.jackson.core.JacksonException ignored) {
+                // fall through to the derived item
+            }
+        }
+        if (items == null || items.isEmpty()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", "1");
+            item.put("state", o.getState());
+            item.put("action", "add");
+            item.put("service", Map.of("name", o.getItemName()));
+            items = List.of(item);
+        }
+        map.put("orderItem", items);
         map.put("@type", "ServiceOrder");
         return map;
     }

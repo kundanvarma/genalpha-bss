@@ -53,7 +53,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /* ---------- 2. hire IS start ---------- */
   const seeded = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
-    name: `CLOSED LOOP ${run}: SIM not activating`, severity: 'minor',
+    name: `CLOSED LOOP ${run}: SIM not activating`, severity: 'minor', ticketType: 'support',
     description: 'eSIM QR scanned but the profile never activates.' });
   const hired = await call('POST', '/workforce-runtime/workers', staff,
     { name: `s66-${run % 10000}`, job: 'care' });

@@ -41,6 +41,10 @@ if varname == "auto":
 
 def structured(raw):
     raw = raw.replace("{{" + varname + "}}", base)
+    # secondary host-vars ({{Service_Ordering}}/tmf-api/...): the var is a
+    # bare origin — point it at ours so the leg reaches the live gateway
+    sp0 = urlsplit(base)
+    raw = re.sub(r"\{\{\w+\}\}(?=/tmf-api/)", f"{sp0.scheme}://{sp0.netloc}", raw)
     sp = urlsplit(raw)
     return {
         "raw": raw,

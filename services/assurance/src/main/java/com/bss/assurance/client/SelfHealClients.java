@@ -48,8 +48,10 @@ public class SelfHealClients {
 
     public void openTicket(String name, String description, String partyId) {
         Map<String, Object> body = partyId == null
-                ? Map.of("name", name, "description", description, "severity", "major")
+                ? Map.of("name", name, "description", description, "severity", "major",
+                        "ticketType", "incident")
                 : Map.of("name", name, "description", description, "severity", "major",
+                        "ticketType", "incident",
                         "relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         ticket.post().uri("/tmf-api/troubleTicket/v4/troubleTicket")
                 .header("Content-Type", "application/json")

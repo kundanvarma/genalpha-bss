@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification/*").permitAll()
                         .requestMatchers("/tmf-api/serviceQualificationManagement/v4/**").hasAuthority(WRITE)
+                        .requestMatchers("/tmf-api/serviceQualificationManagement/v3/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

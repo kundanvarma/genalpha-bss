@@ -32,6 +32,12 @@ public class TroubleTicket {
     @Column(name = "severity")
     private String severity;
 
+    @Column(name = "ticket_type", length = 64)
+    private String ticketType;
+
+    public String getTicketType() { return ticketType; }
+    public void setTicketType(String ticketType) { this.ticketType = ticketType; }
+
     @Column(name = "status")
     private String status;
 

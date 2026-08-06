@@ -190,6 +190,59 @@ public class AssuranceService {
         return rows.stream().map(this::problemMap).toList();
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> problemById(String id) {
+        return problems.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .map(this::problemMap)
+                .orElseThrow(() -> NotFoundException.forResource("ServiceProblem", id));
+    }
+
+    /** TMF656: a problem DECLARED from outside the alarm loop (a NOC, a
+     * partner system) — recorded with who declared it and why. */
+    @Transactional
+    public Map<String, Object> createProblem(Map<String, Object> dto) {
+        if (!(dto.get("originatorParty") instanceof Map<?, ?> originator)
+                || originator.get("role") == null) {
+            throw new BadRequestException(
+                    "originatorParty {role} is required — a problem is DECLARED by someone");
+        }
+        if (dto.get("description") == null) {
+            throw new BadRequestException("description is required");
+        }
+        String tenant = tenantScope.currentTenantId();
+        ServiceProblem problem = new ServiceProblem();
+        String id = UUID.randomUUID().toString();
+        problem.setId(id);
+        problem.setTenantId(tenant);
+        problem.setHref(ApiConstants.PROBLEM_BASE + "/serviceProblem/" + id);
+        problem.setName(dto.get("name") == null ? String.valueOf(dto.get("description"))
+                : String.valueOf(dto.get("name")));
+        problem.setDescription(String.valueOf(dto.get("description")));
+        problem.setStatus(ServiceProblem.OPEN);
+        problem.setAffectedObject(dto.get("affectedObject") == null ? "declared"
+                : String.valueOf(dto.get("affectedObject")));
+        problem.setCategory(dto.get("category") == null ? "serviceProvider.declared"
+                : String.valueOf(dto.get("category")));
+        problem.setPriority(dto.get("priority") instanceof Number n ? n.intValue()
+                : dto.get("priority") != null ? Integer.parseInt(String.valueOf(dto.get("priority")))
+                        : 2);
+        problem.setReason(dto.get("reason") == null ? "unknown"
+                : String.valueOf(dto.get("reason")));
+        try {
+            problem.setOriginatorJson(new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(originator));
+        } catch (com.fasterxml.jackson.core.JacksonException e) {
+            throw new BadRequestException("unserializable originatorParty");
+        }
+        problem.setAffectedServices(0); // nothing measured yet — an honest zero
+        problem.setCreatedAt(OffsetDateTime.now());
+        problem.setLastUpdate(OffsetDateTime.now());
+        problems.save(problem);
+        Map<String, Object> created = problemMap(problem);
+        events.publish("ServiceProblemCreateEvent", "serviceProblem", created);
+        return created;
+    }
+
     /** Resolving the problem clears every raised alarm on its object. */
     @Transactional
     public Map<String, Object> resolveProblem(String id) {
@@ -234,13 +287,43 @@ public class AssuranceService {
         map.put("id", p.getId());
         map.put("href", p.getHref());
         map.put("name", p.getName());
-        if (p.getDescription() != null) map.put("description", p.getDescription());
+        map.put("description", p.getDescription() == null ? p.getName() : p.getDescription());
         map.put("status", p.getStatus());
         map.put("affectedObject", p.getAffectedObject());
+        // TMF656 mandatory attributes ride EVERY row — alarm-born problems
+        // derive them from what the loop factually knows
+        map.put("category", p.getCategory() == null
+                ? "serviceProvider.declared" : p.getCategory());
+        map.put("priority", p.getPriority() == null ? 1 : p.getPriority());
+        map.put("reason", p.getReason() != null ? p.getReason()
+                : p.getDescription() != null ? p.getDescription() : "unknown");
+        map.put("originatorParty", readOriginator(p));
+        map.put("responsibleParty", Map.of("id", "op-" + p.getTenantId(),
+                "role", "operations", "name", "network operations"));
+        // the alarmed OBJECT is the one affected thing the loop can vouch
+        // for — a conservative lower bound, never an invented count
+        map.put("affectedNumberOfServices", p.getAffectedServices() == null
+                ? (p.getOriginAlarmId() != null ? 1 : 0) : p.getAffectedServices());
+        map.put("timeRaised", p.getCreatedAt().toString());
+        map.put("timeChanged", p.getLastUpdate().toString());
+        map.put("statusChangeDate", p.getLastUpdate().toString());
         if (p.getOriginAlarmId() != null) {
             map.put("underlyingAlarm", List.of(Map.of("id", p.getOriginAlarmId())));
         }
         map.put("@type", "ServiceProblem");
         return map;
+    }
+
+    private Map<String, Object> readOriginator(ServiceProblem p) {
+        if (p.getOriginatorJson() != null) {
+            try {
+                return new com.fasterxml.jackson.databind.ObjectMapper()
+                        .readValue(p.getOriginatorJson(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+            } catch (com.fasterxml.jackson.core.JacksonException ignored) {
+                // fall through to the monitoring-system default
+            }
+        }
+        return Map.of("id", "assurance", "role", "monitoringSystem",
+                "name", "assurance loop");
     }
 }

@@ -663,7 +663,7 @@ export async function raiseTicket(name, description) {
   return json(await authFetch(`${TICKET}/troubleTicket`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, description, severity: 'minor' }),
+    body: JSON.stringify({ name, description, severity: 'minor', ticketType: 'support' }),
   }));
 }
 

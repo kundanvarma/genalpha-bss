@@ -48,6 +48,26 @@ public class ServiceOrder {
     @Column(name = "last_update", nullable = false)
     private OffsetDateTime lastUpdate;
 
+    @Column(name = "external_id", length = 64)
+    private String externalId;
+
+    @Column(name = "priority", length = 8)
+    private String priority;
+
+    private String description;
+
+    @Column(name = "document_json", length = 4000)
+    private String documentJson;
+
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+    public String getPriority() { return priority; }
+    public void setPriority(String priority) { this.priority = priority; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public String getDocumentJson() { return documentJson; }
+    public void setDocumentJson(String documentJson) { this.documentJson = documentJson; }
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getId() { return id; }

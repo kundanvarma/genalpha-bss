@@ -91,7 +91,7 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   const ticketName = `Router blinking red ${run}`;
   const ticket = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
     name: ticketName, description: 'Customer reports the router LED is red after the storm.',
-    severity: 'major',
+    severity: 'major', ticketType: 'incident',
   });
   if (ticket.status >= 300) fail(`seed ticket: ${ticket.status} ${ticket.text.slice(0, 200)}`);
   const ticketId = ticket.body.id;
@@ -264,7 +264,7 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   // leftovers to lean on — the signal must be provoked, not assumed
   const surgeTicket = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
     name: `Surge probe ${run}`, description: 'open backlog for the staffing signal',
-    severity: 'minor',
+    severity: 'minor', ticketType: 'support',
   });
   if (surgeTicket.status >= 300) fail('surge probe ticket failed: ' + surgeTicket.status);
   const kpis2 = (await call('GET', '/ai/v1/workforce/kpis', staff)).body;

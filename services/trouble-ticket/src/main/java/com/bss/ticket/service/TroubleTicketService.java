@@ -75,13 +75,17 @@ public class TroubleTicketService {
                 case "id" -> probe.setId(f.getValue());
                 case "status" -> probe.setStatus(f.getValue());
                 case "severity" -> probe.setSeverity(f.getValue());
+                case "ticketType" -> probe.setTicketType(f.getValue());
                 case "relatedPartyId" -> probe.setOwnerPartyId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
         orgScope.scopedOrgId().ifPresent(probe::setOrgId);
-        Page<TroubleTicket> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
+        // newest first: fresh tickets must appear on the default page even
+        // when the history has thousands (the proof run's pagination lesson)
+        Page<TroubleTicket> page = repository.findAll(Example.of(probe), new OffsetPageRequest(
+                offset, limit, org.springframework.data.domain.Sort.by("creationDate").descending()));
         return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
     }
 
@@ -96,15 +100,24 @@ public class TroubleTicketService {
     @Transactional
     @SuppressWarnings("unchecked")
     public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || String.valueOf(dto.get("name")).isBlank()) {
-            throw new BadRequestException("name is required");
+        // TMF621: description and ticketType are the spec's mandatory pair;
+        // name is optional and falls back to the description
+        if (dto.get("description") == null && dto.get("name") == null) {
+            throw new BadRequestException("description is required");
+        }
+        if (dto.get("ticketType") == null || String.valueOf(dto.get("ticketType")).isBlank()) {
+            throw new BadRequestException("ticketType is required — a ticket declares its kind");
+        }
+        if (dto.get("note") instanceof Map<?, ?> lone && lone.get("text") == null) {
+            throw new BadRequestException("a note IS its text — text is required");
         }
         TroubleTicket entity = new TroubleTicket();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setHref(ApiConstants.BASE_PATH + "/troubleTicket/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
+        entity.setName(String.valueOf(dto.get("name") != null ? dto.get("name") : dto.get("description")));
         entity.setDescription(dto.get("description") == null ? null : String.valueOf(dto.get("description")));
+        entity.setTicketType(String.valueOf(dto.get("ticketType")));
         entity.setSeverity(dto.get("severity") == null ? "minor" : String.valueOf(dto.get("severity")));
         entity.setStatus(TroubleTicket.ACKNOWLEDGED);
         // Customer tickets belong to the customer and the operator's default
@@ -209,10 +222,10 @@ public class TroubleTicketService {
         map.put("id", entity.getId());
         map.put("href", entity.getHref());
         map.put("name", entity.getName());
-        if (entity.getDescription() != null) {
-            map.put("description", entity.getDescription());
-        }
+        map.put("description", entity.getDescription() == null
+                ? entity.getName() : entity.getDescription());
         map.put("severity", entity.getSeverity());
+        map.put("ticketType", entity.getTicketType() == null ? "support" : entity.getTicketType());
         map.put("status", entity.getStatus());
         if (entity.getOwnerPartyId() != null) {
             map.put("relatedParty", List.of(Map.of(

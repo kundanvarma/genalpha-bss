@@ -41,6 +41,7 @@ public class TroubleTicketController {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
+        filters.remove("fields");
         PagedResult<Map<String, Object>> result = service.findAll(offset, limit, filters);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
@@ -49,11 +50,24 @@ public class TroubleTicketController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id) {
-        return ResponseEntity.ok(service.findById(id));
+    public ResponseEntity<Map<String, Object>> getById(@PathVariable("id") String id,
+            @RequestParam(name = "fields", required = false) String fields) {
+        Map<String, Object> full = service.findById(id);
+        if (fields == null || fields.isBlank()) {
+            return ResponseEntity.ok(full);
+        }
+        // TMF630 attribute selection, strict: exactly the asked-for fields
+        Map<String, Object> slim = new java.util.LinkedHashMap<>();
+        for (String f : fields.split(",")) {
+            String key = f.trim();
+            if (full.containsKey(key)) {
+                slim.put(key, full.get(key));
+            }
+        }
+        return ResponseEntity.ok(slim);
     }
 
-    @PostMapping
+    @PostMapping({"", "/"})
     public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
         Map<String, Object> created = service.create(dto);
         return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);

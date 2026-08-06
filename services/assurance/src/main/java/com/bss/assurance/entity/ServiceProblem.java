@@ -48,6 +48,32 @@ public class ServiceProblem {
     @Column(name = "last_update", nullable = false)
     private OffsetDateTime lastUpdate;
 
+    @Column(name = "category", length = 64)
+    private String category;
+
+    @Column(name = "priority")
+    private Integer priority;
+
+    @Column(name = "reason")
+    private String reason;
+
+    @Column(name = "originator_json", length = 1000)
+    private String originatorJson;
+
+    @Column(name = "affected_services")
+    private Integer affectedServices;
+
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public Integer getPriority() { return priority; }
+    public void setPriority(Integer priority) { this.priority = priority; }
+    public String getReason() { return reason; }
+    public void setReason(String reason) { this.reason = reason; }
+    public String getOriginatorJson() { return originatorJson; }
+    public void setOriginatorJson(String originatorJson) { this.originatorJson = originatorJson; }
+    public Integer getAffectedServices() { return affectedServices; }
+    public void setAffectedServices(Integer affectedServices) { this.affectedServices = affectedServices; }
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getId() { return id; }
