@@ -1,6 +1,6 @@
 # genalpha-bss — a composable, multi-tenant, agentic BSS on TM Forum ODA
 
-A vendor-neutral telecom **Business Support System** built as **33 composable ODA components**
+A vendor-neutral telecom **Business Support System** built as **38 composable ODA components**
 (Spring Boot microservices exposing TMF Open APIs) plus **six channels** (five web, one mobile), behind one API
 gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker — nothing
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
@@ -137,10 +137,14 @@ admin mints a new operator from five console fields, every service live-refreshe
 registry with zero restarts, and `shop.<id>.localhost` wears the new brand the moment the
 gateway notices), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
-**Thirteen official TM Forum CTKs pass with zero failures**: the five core (TMF620/622/632/637/666)
-plus TMF663 shopping-cart, TMF669 party-role, TMF687 product-stock, TMF635 usage, TMF677
-usage-consumption, TMF678 customer-bill, TMF683 party-interaction and TMF654 prepay-balance
-(the charging FACADE — the OCS behind the seam stays yours). See the full, honest scorecard — including the two
+**Twenty-five official TM Forum CTKs pass with zero failures** — every published kit that matches
+a face this fleet serves: the five core (TMF620/622/632/637/666), TMF663 shopping-cart, TMF669
+party-role, TMF687 product-stock, TMF635 usage, TMF677 usage-consumption, TMF678 customer-bill,
+TMF683 party-interaction, TMF654 prepay-balance (the charging FACADE — the OCS behind the seam
+stays yours), TMF674 geographic-site, TMF639 resource-inventory, TMF642 alarm, TMF668
+partnership-type, TMF651 agreement, TMF638 service-inventory, TMF653 service-test, TMF641
+service-ordering, TMF656 service-problem, TMF621 trouble-ticket, TMF645 service-qualification and
+TMF679 product-offering-qualification. See the full, honest scorecard — including the two
 intentional hardened gaps (payment, communication) — in
 [docs/ctk-conformance.md](docs/ctk-conformance.md); reproduce any row with [ops/ctk](ops/ctk/README.md).
 

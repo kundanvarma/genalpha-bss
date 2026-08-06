@@ -22,6 +22,39 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **billing** | **TMF678** | **19230/19230, 0 failures** |
 | **party-interaction** | **TMF683** | **846/846, 0 failures** |
 | **usage (prepay facade)** | **TMF654** | **282/282, 0 failures** |
+| **geographic-address (site)** | **TMF674** | **111/111, 0 failures** |
+| **service-orchestration (resource facade)** | **TMF639** | **2809/2809, 0 failures** |
+| **assurance (alarm)** | **TMF642** | **2907/2907, 0 failures** |
+| **agreement (partnership type)** | **TMF668** | **164/164, 0 failures** |
+| **agreement** | **TMF651** | **532/532, 0 failures** |
+| **service-orchestration (inventory)** | **TMF638** | **5836/5836, 0 failures** |
+| **service-orchestration (service test)** | **TMF653** | **915/915, 0 failures** |
+| **service-orchestration (ordering)** | **TMF641** | **220/220, 0 failures** |
+| **assurance (service problem)** | **TMF656** | **5548/5548, 0 failures** |
+| **trouble-ticket** | **TMF621** | **488/488, 0 failures** |
+| **qualification (service, v3 task face)** | **TMF645** | **288/288, 0 failures** |
+| **qualification (offering, task face)** | **TMF679** | **160/160, 0 failures** |
+
+**Twenty-five kits, zero failures — and this is the closed list**: the
+`tmforum-rand` org publishes no CTK for the remaining faces this fleet serves
+(TMF688 events, TMF696 risk, TMF760 configurator, TMF915 AI management,
+TMF700/697 fulfilment, TMF701 process, TMF724 incident, TMF623 SLA). There is
+nothing left to run.
+
+The 2026-08-06 campaign (twelve kits in one overnight) taught the same lesson
+TMF683 did, at scale: **the kits audit the whole history, not just their own
+records** — every inventory row needed the full v3 shape, every alarm its
+`sourceSystemId`, every ticket its `ticketType`. Where a kit demanded data the
+fleet truly does not have, the row SAYS so (a `standalone` self-reference, an
+`inconclusive` verdict, a "nothing was measured" note) instead of inventing.
+Where the kit's contract conflicted with a deliberate protection, the
+protection MOVED to where it always mattered rather than vanishing: a roleless
+partnership kind now stores but permits nothing at signature; a scoped
+customer probing a foreign service still gets its 404. Two real product
+improvements fell out en route: agreement and trouble-ticket lists page
+newest-first (the proof run's pagination lesson, applied before it bit), and
+the gateway finally forwards `X-Forwarded-*` (SCG 4.2 trusted-proxies) so
+Location headers match the URL the client actually called.
 
 ## Measured, not yet zero
 
@@ -62,4 +95,11 @@ addressable usageConsumptionReport resource. Each is certified above.*
 The CTKs are Node-16 / newman-4 era and their bundled runner breaks on modern
 Node (URL/environment mangling). [`ops/ctk/runctk.py`](../ops/ctk/runctk.py)
 fixes that — it structures the collection URLs, injects a live bearer token, and
-runs with a modern newman, so every number here is trustworthy.
+runs with a modern newman, so every number here is trustworthy. The R18-era
+generation (raw Postman collection + environment, no config.json) runs through
+[`ops/ctk/runctk-r18.py`](../ops/ctk/runctk-r18.py) — same idea, plus
+secondary host-var resolution and baked Content-Type. Two kits need one-time
+data prep (documented in [`ops/ctk/README.md`](../ops/ctk/README.md)): TMF674's
+example payload must reference a STORED TMF673 address, and TMF638 assumes a
+sandbox inventory (seed two uniquely-named probe services, one in a state
+nothing else uses).
