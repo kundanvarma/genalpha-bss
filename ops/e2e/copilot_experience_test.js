@@ -84,6 +84,24 @@ async function token(request, user, pass) {
     await guest.click('[data-testid=consent-accept]');
     await guest.locator('text=Samsung').first().click();
     await guest.waitForTimeout(1500);
+    // under sweep load the browse beacon can die with the navigation
+    // (fire-and-forget vs goBack) — the PRECONDITION is "this visitor has
+    // a Devices interest", so prove it landed before judging the banner,
+    // re-sending the same first-party event if the fleet dropped it
+    const vid = await guest.evaluate(() => localStorage.getItem('bss.shop.visitor'));
+    let interested = false;
+    for (let i = 0; i < 15 && !interested; i++) {
+      const exp = await (await ctx.request.get(
+        `${API}/insight/v1/experience?visitorId=${vid}`)).json().catch(() => ({}));
+      interested = (exp.interests || []).includes('Devices');
+      if (!interested) {
+        await ctx.request.post(`${API}/insight/v1/event`, {
+          headers: { 'Content-Type': 'application/json' },
+          data: { visitorId: vid, type: 'view', category: 'Devices' } });
+        await guest.waitForTimeout(2000);
+      }
+    }
+    if (!interested) fail('the visitor interest never landed in insight');
     await guest.goBack();
     await guest.locator('.cards').first().waitFor({ timeout: 10000 });
     let seen = false;

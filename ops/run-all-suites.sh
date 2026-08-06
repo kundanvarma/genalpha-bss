@@ -46,14 +46,16 @@ wait_ready() {
 
 before_suite() {
   case "$1" in
-    closed_loop_test)
+    closed_loop_test|workforce_runtime_test)
+      # both drive the controller itself; agentic_workforce needs it PARKED
+      # (its dashboard-hire leg asserts the credentials path)
       docker start bss-worker-controller >/dev/null 2>&1 || true
       sleep 8 ;;
   esac
 }
 after_suite() {
   case "$1" in
-    closed_loop_test)
+    closed_loop_test|workforce_runtime_test)
       docker stop bss-worker-controller >/dev/null 2>&1 || true
       docker ps --format '{{.Names}}' | grep '^wf-' | xargs -r docker rm -f >/dev/null 2>&1 || true ;;
   esac
