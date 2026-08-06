@@ -118,7 +118,7 @@
     <div class="num">Preface</div>
     <h3>What this book is</h3>
     <p class="drop">This is the story of building a telecom Business Support System — the software an
-    operator sells, bills, and serves customers through — from an empty repository to thirty-three
+    operator sells, bills, and serves customers through — from an empty repository to thirty-eight
     composable components, six customer surfaces, and eighty-six end-to-end test suites that all pass
     in a real browser. It was built by one person working with an AI pair, over a compressed and
     relentless arc, held together by a single discipline: <em>nothing is real until it is proven, end
@@ -230,7 +230,8 @@
     pass TM Forum's official <b>Conformance Test Kits</b> — an independent, published suite that
     proves a component really implements a standard rather than merely resembling it. Not "we think
     it's TMF620." An outside authority agrees it's TMF620. Five kits at first; the doctrine would
-    compound until, near the end of this story, <em>thirteen</em> kits agreed — and the two that
+    compound until, by this story's end, <em>twenty-five</em> kits agreed — every kit the standards
+    body publishes for a face this fleet serves — and the two that
     deliberately didn't became one of the book's most useful lessons. Second: every feature, without
     exception, would be driven through a <em>real browser</em> — register, configure, add to cart,
     pay, watch the order complete, watch the notification arrive. If a human couldn't do it in a
@@ -3421,6 +3422,106 @@
     halves now — marketing that measures itself, and a shop that uses what it already
     knew: the meter, the profile, the return visit. Personal, honest, and never a
     nag.</p>
+  </section>
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Four</div>
+    <h3>The night of the kits</h3>
+    <div class="epi">"run ctk kit for all, use whole night to make all of them pass…
+    is that a right approach"
+    <span class="who">— the operator, before going to bed</span></div>
+
+    <p class="drop">Thirteen kits had agreed, and for months that number had been good
+    enough. But the fleet had grown since — a whole standards program of new faces —
+    and one evening the operator asked the obvious question: why not all of them, and
+    why not tonight? The honest answer required a correction first. "All of them" was
+    not ours to promise; every kit in this book's history had turned into its own
+    small war (TMF683 demanded a derived trio on every historical row; TMF654 grew a
+    persisted task resource), and some kits might demand architecture we had
+    deliberately refused. So the plan became: every kit, in priority order, each to
+    zero or to an honestly documented no — and the first discovery of the night
+    redrew the map entirely. The standards body publishes forty-seven kits. Crossed
+    against the faces this fleet serves, minus the thirteen already green and the two
+    that fail on purpose, exactly <em>twelve</em> remained — and for the newest faces,
+    the ones we had been most nervous about (events, risk, the configurator, AI
+    management), no kit exists at all. The mountain had a summit after all.</p>
+
+    <p>The first three kits were the modern generation, and they went down the way
+    good tools fail: informatively. TMF674 passed the moment its example payload
+    respected our own rule — a site's place must reference a stored address, so the
+    operator example simply had to store one first. But the run also caught the
+    harness itself lying: invoked with a relative path, the runner's newman died in
+    silence and the summary read a <em>stale</em> result file from an earlier attempt
+    — green numbers from a run that never happened. The fix was one line; the lesson
+    was old and durable: distrust the receipt printer too. TMF639 made the resource
+    facade grow an honest store for gear the pools never issued, and TMF642 taught
+    the alarm face manners nobody had ever demanded of it — real field selection,
+    quoted filter values, and a subtle one: the POST echo printed nanoseconds while
+    Postgres stores microseconds, so a timestamp a client captured could never be
+    used as a filter again. Truncate at the source; what the store keeps is what the
+    echo says.</p>
+
+    <p>Then came the older generation — R18-era kits, raw Postman collections from a
+    world before the v4 renames — and with them the night's recurring argument:
+    what happens when the standard's letter meets a protection we chose on purpose?
+    The partnership-type kit posted a kind with no roles and expected success; our
+    face refused, because a kind IS the roles it permits. The resolution became the
+    campaign's doctrine: <em>protections move, they don't vanish.</em> A roleless
+    kind now stores as valid catalog data that permits nothing — and the refusal
+    happens where it always mattered, at the agreement's signature, where the first
+    typed partnership against the empty kind dies with the permitted list quoted at
+    it. The suite got sharper, not looser. The same shape repeated on the service
+    test face: the kit posts tests against services that don't exist, our face runs
+    a REAL diagnosis behind every test. Staff referencing an unknown service now get
+    an honest <code>inconclusive</code> — "nothing was measured" — while a scoped
+    customer probing a foreign service still gets the same 404 the owner check
+    always gave. And where the spec demanded facts we had simply never required —
+    an agreement's type, a ticket's type — the fleet adopted the requirement
+    everywhere at once: the storefront files "support," the self-heal loop files
+    "incident," and the lenient defaults that had let callers omit the fact turned
+    out to be OUR deviation, not the standard's.</p>
+
+    <p>The service-inventory kit was the night's TMF683 at scale. It walks every row
+    of the list and dereferences the first element of six arrays on each — every
+    service must name a relationship, a supporting service, a supporting resource, a
+    party, a place, a spec. The fleet's two thousand services had none of that shape,
+    and the honest fill became a small essay in derivation: category read from the
+    name, the operator itself as a related party of every service it runs, the
+    service order as the provisioning record where no resource was ever issued, the
+    spec references pointed at a tiny new read-only catalog face so they actually
+    dereference — and where a service truly relates to nothing, the entry SAYS so,
+    an explicit standalone self-reference instead of a phantom dependency. Two probe
+    services had to be seeded because the kit assumes a sandbox where names are
+    unique and one state returns one row; the prep is documented next to the runner,
+    the same way the stored-address trick is. Twelve hours earlier any of this would
+    have sounded like weeks.</p>
+
+    <p>The last two kits spoke v3 outright — <code>serviceQualification</code> where
+    v4 says <code>checkServiceQualification</code> — and earned the campaign's most
+    satisfying pattern: the dialect face. A small controller accepts the old task
+    document, stores it, and delegates the actual evaluation to the same coverage
+    engine the v4 check uses. One truth, two dialects; the kit's fictional specs
+    came back <code>unqualified</code> with a real alternative proposed from the
+    real coverage map, because the engine genuinely ran. Items it cannot evaluate
+    carry a note that nothing was measured and no verdict is claimed. Along the way
+    the gateway gained something it had silently lacked for its whole life: a
+    trusted-proxies setting, without which the newer Spring Cloud Gateway never adds
+    the forwarded-host headers — which meant every Location header the fleet had
+    ever returned was a bare path, and the kits were the first client rude enough
+    to check it against the URL they actually called.</p>
+
+    <p>By morning the regression sweep had run — twelve suites over every touched
+    service, all green, one suite made honest on the way (the workforce ceiling
+    proof had been quietly leaning on ambient backlog; it seeds both of its own
+    seats now). The scorecard closed at twenty-five kits, zero failures, and under
+    it a sentence no earlier version of the page could carry: <em>this is the
+    closed list.</em> Nothing left to run — not because the night ran out, but
+    because the standards body has nothing further to ask of these faces.</p>
+
+    <p class="pull edge">Twenty-five kits, zero failures, two refusals explained,
+    and a closed list. The kits audit the whole history, so the whole history is
+    conformant; the facts we don't have say so out loud; and every protection that
+    moved is still standing — one door further in, where it always belonged.</p>
   </section>
 
   <hr class="soft">

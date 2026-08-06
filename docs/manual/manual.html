@@ -77,6 +77,7 @@ beside it.</p>
 29. <a href="#thintail">Partnership types &amp; geographic sites</a><br>
 30. <a href="#proofrun">The proof run &amp; fleet-age runbooks</a><br>
 31. <a href="#shopknows">The shop that knows you</a><br>
+32. <a href="#ctkcampaign">The CTK campaign — twenty-five kits, the closed list</a><br>
 </p>
 </div>
 
@@ -836,7 +837,41 @@ finally-cleanup policy rules — if default experiences misbehave, list
 <code>domain=personalization</code> rules for leftovers. See
 <a href="../personalization-shop-plan.md">docs/personalization-shop-plan.md</a>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-six suites, thirteen CTKs at zero
+<h2 id="ctkcampaign">32 · The CTK campaign — twenty-five kits, the closed list</h2>
+<p><b>Scorecard</b>: <a href="../ctk-conformance.md">docs/ctk-conformance.md</a> —
+twenty-five official CTKs at zero failures; TMF676/681 stay intentional partials.
+<b>The list is CLOSED</b>: the <code>tmforum-rand</code> org publishes no kit for the
+remaining faces (688/696/760/915/700/697/701/724/623) — there is nothing left to run.
+<b>Runners</b>: modern kits (config.json + index.js) via <code>ops/ctk/runctk.py</code>;
+R18-era kits (raw collection + environment) via <code>ops/ctk/runctk-r18.py</code> —
+both structure URLs for modern newman, bake the bearer, run with
+<code>--timeout-script 120000</code>. Gotchas that will bite again: pass the kit dir by
+<b>absolute path</b> (relative once made newman fail silently and the summary read a
+STALE result.json); some kits write <code>pmtest.json</code> BEFORE their own payload
+injection (runctk.py injects config payloads itself now); secondary host-vars
+(<code>{{Service_Ordering}}/tmf-api/…</code>) hang newman on literal-var DNS —
+runctk-r18.py resolves them to the gateway origin.
+<b>One-time kit prep</b> (documented in <a href="../../ops/ctk/README.md">ops/ctk/README.md</a>):
+TMF674's example payload must reference a STORED TMF673 address; TMF638 assumes a sandbox —
+seed two uniquely-named probe services, the newer in state <code>designed</code>.
+<b>Contract changes the campaign shipped, fleet-wide</b>: agreement <code>type</code>
+(= <code>agreementType</code>) and ticket <code>ticketType</code> are now MANDATORY
+(storefront files <code>support</code>, self-heal files <code>incident</code>); a roleless
+partnership kind stores but permits NOTHING at signature; serviceTest requires
+<code>testSpecification</code> (the built-in virtual spec is <code>diagnose</code>);
+agreement + ticket lists page NEWEST-FIRST. New faces: read-only TMF633
+<code>serviceSpecification</code> on SOM (so inventory spec refs dereference), northbound
+<code>POST /serviceOrder</code> (external orders recorded <code>acknowledged</code>),
+<code>POST /serviceProblem</code> (declared problems), and v3 task dialects for TMF645/679
+that delegate to the v4 coverage/serviceable-area engines.
+<b>Gateway</b>: SCG 4.2+ only adds <code>X-Forwarded-*</code> for
+<code>trusted-proxies</code> (now set to the private ranges); services build absolute
+Location headers from those — keep that setting when changing gateway config.
+<b>Workforce suites</b>: <code>workforce_runtime</code>/<code>agentic_workforce</code> need
+<code>bss-worker-controller</code> UP (start for them, stop after, then
+<code>docker rm -f wf-*</code>).</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-six suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
