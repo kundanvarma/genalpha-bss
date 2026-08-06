@@ -180,3 +180,12 @@ th { border-bottom-color: var(--line); }
 .detailtable th { text-align: left; color: var(--dim, #8a979c); font-weight: 600;
   text-transform: uppercase; font-size: 10.5px; letter-spacing: 0.05em; padding: 3px 10px 3px 0; }
 .detailtable td { padding: 3px 10px 3px 0; border-top: 1px solid var(--line); }
+
+/* copilot mic: quiet until listening, unmistakable while it is */
+#copilot-mic { white-space: nowrap; }
+#copilot-mic.mic-live {
+  color: #b4231f;
+  border-color: #b4231f;
+  animation: micpulse 1.2s ease-in-out infinite;
+}
+@keyframes micpulse { 50% { opacity: 0.55; } }

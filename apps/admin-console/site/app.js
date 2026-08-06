@@ -2185,7 +2185,50 @@ async function renderProductCopilot() {
   }
   send.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  bar.append(input, send, clear);
+
+  // THE MIC: "by talking", literally — browser speech-to-text fills the
+  // input and stops there. The human reads the transcript and presses
+  // Send; voice changes the keyboard, never the approval. Hidden where
+  // the browser has no recognizer (Safari partial, Firefox none).
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let mic = null;
+  if (SR) {
+    mic = document.createElement('button');
+    mic.className = 'ghost';
+    mic.id = 'copilot-mic';
+    mic.type = 'button';
+    mic.textContent = '\u{1F3A4}';
+    mic.title = 'Speak instead of typing — the transcript lands here, you still press Send';
+    mic.dataset.testid = 'copilot-mic';
+    let rec = null;
+    mic.addEventListener('click', () => {
+      if (rec) { rec.stop(); return; } // second tap = stop listening
+      rec = new SR();
+      rec.lang = document.documentElement.lang || 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      mic.textContent = '\u25CF listening';
+      mic.classList.add('mic-live');
+      rec.onresult = (e) => {
+        input.value = Array.from(e.results)
+          .map((r) => r[0] && r[0].transcript ? r[0].transcript : '')
+          .join(' ').replace(/\s+/g, ' ').trim();
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          input.placeholder = 'microphone blocked — type instead';
+        }
+      };
+      rec.onend = () => {
+        mic.textContent = '\u{1F3A4}';
+        mic.classList.remove('mic-live');
+        rec = null;
+        input.focus();
+      };
+      rec.start();
+    });
+  }
+  bar.append(input, ...(mic ? [mic] : []), send, clear);
   panel.append(intro, log, bar);
   input.focus();
 }

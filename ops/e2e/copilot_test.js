@@ -190,6 +190,56 @@ async function token(request, client, user, pass) {
   await shopPage.close();
   console.log('OK the plan page ADVERTISES the deal — with the honest consumer-only note');
 
+  /* ---------- the mic: "by talking", literally ---------- */
+  // A stubbed recognizer (CI has no microphone) proves the wiring the film
+  // claims: speech becomes the transcript, the transcript becomes the
+  // message — and the HUMAN still presses Send.
+  const micCtx = await browser.newContext();
+  await micCtx.addInitScript(() => {
+    window.SpeechRecognition = class {
+      start() {
+        this._t = setTimeout(() => {
+          if (this.onresult) {
+            this.onresult({ results: [
+              [{ transcript: 'I want to sell' }],
+              [{ transcript: 'a padel court booking service' }],
+            ] });
+          }
+          if (this.onend) this.onend();
+        }, 150);
+      }
+      stop() { clearTimeout(this._t); if (this.onend) this.onend(); }
+    };
+  });
+  const micPage = await micCtx.newPage();
+  await micPage.goto(`${API}/console/`);
+  await micPage.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await micPage.fill('input[name="username"]', 'pat@bss.local');
+  await micPage.fill('input[name="password"]', 'pat');
+  await micPage.click('input[type="submit"], button[type="submit"]');
+  await micPage.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+  await micPage.locator('.tab', { hasText: 'Copilot' }).click();
+  await micPage.waitForSelector('#copilot-input', { timeout: 10000 });
+  await micPage.locator('[data-testid="copilot-mic"]').waitFor({ timeout: 5000 });
+  await micPage.click('[data-testid="copilot-mic"]');
+  await micPage.waitForFunction(() =>
+    document.getElementById('copilot-input').value.includes('padel court'), { timeout: 5000 });
+  const spoken = await micPage.inputValue('#copilot-input');
+  if (spoken !== 'I want to sell a padel court booking service') {
+    fail('the transcript did not land verbatim: ' + spoken);
+  }
+  // nothing was sent by the mic itself — the log holds no user bubble yet
+  if (await micPage.locator('.copilot-user').count()) {
+    fail('the mic must not auto-send — the human presses Send');
+  }
+  await micPage.click('#copilot-send');
+  await micPage.locator('.copilot-user', { hasText: 'padel court booking service' })
+    .waitFor({ timeout: 10000 });
+  await micCtx.close();
+  console.log('OK THE MIC: a spoken sentence became the transcript, the transcript became'
+    + ' the message, and only the HUMAN\'s Send sent it — voice changes the keyboard,'
+    + ' never the approval.');
+
   // tidy: this was a demo conversation, not tenant catalog
   await sweep();
   await browser.close();

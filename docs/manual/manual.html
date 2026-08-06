@@ -127,7 +127,10 @@ payloads, the console shows a human card, and a deterministic executor applies i
 <em>your</em> token on confirmation. The model never writes. The copilot also authors
 <b>pricing rules</b> ("10% off the phone with this plan") and — suite #61 —
 <b>personalization experience rules</b> ("device browsers see this banner and this pin"):
-both become policy rows you can disable in Rules.</p>
+both become policy rows you can disable in Rules. <b>Voice input</b>: the &#127908; button
+uses the browser's speech recognizer (Chrome/Edge; hidden where unsupported) — the
+transcript lands in the input and the human still presses Send; the mic never auto-sends.
+Server-side STT (bring-your-own Whisper) is a named seam for later.</p>
 <h3>Product Advisor (console → Product advisor) — suite #52</h3>
 <p>Findings with receipts: top-up attach counted from inventory ("2 of 2 customers on this plan
 also bought top-ups"), market price gaps from the tenant's market feed (10% materiality
