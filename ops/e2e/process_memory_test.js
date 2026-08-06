@@ -211,6 +211,14 @@ async function call(method, path, tok, body) {
   }
   if (!proposed) fail('three useful verdicts drafted no runbook');
   if (!proposed.provenance || proposed.provenance.length < 10) fail('runbook lacks provenance');
+  // the signature is GOVERNANCE: pat holds ai:use (he can read the library)
+  // but not ai:admin — his approval must be refused before staff's succeeds
+  const patTok = await token('pat@bss.local', 'pat');
+  const patTry = await call('POST', `/ai/v1/runbook/${proposed.id}/approve`, patTok,
+    { note: 'pat should not be able to sign this' });
+  if (patTry.status !== 403) {
+    fail('runbook approval must need ai:admin — pat got ' + patTry.status);
+  }
   const approved = await call('POST', `/ai/v1/runbook/${proposed.id}/approve`, staff,
     { note: 'confirmed by ops' });
   if (approved.status >= 300 || approved.body.status !== 'approved') {

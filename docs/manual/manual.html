@@ -675,7 +675,8 @@ diagnosis — same kill-switch/budget/meter/audit doors as every AI call; its ON
 ticket note (L0). Every investigation is an episodic trace with a MANDATORY human verdict
 (<code>POST /ai/v1/incident/{id}/verdict</code>). Three useful verdicts on one signature
 draft a runbook (governed, provenance to source traces) that stays <code>proposed</code>
-until approved (console: Runbooks tab); the next occurrence auto-diagnoses FROM MEMORY —
+until approved (console: Runbooks tab; deciding — approve/reject/revoke — is
+<code>ai:admin</code> like contracts and budgets, <code>ai:use</code> reads the library); the next occurrence auto-diagnoses FROM MEMORY —
 no model call, audit as witness — and <code>GET /ai/v1/incident/stats</code> carries the
 learning curve as data. Revocation sends diagnosis back to the LLM path: the brake is
 first-class. L2 auto-remediation stays out of scope until per-taskFlow idempotency is
@@ -756,7 +757,10 @@ and the <code>guardrail</code> block (tenant kill-switch, budget, window).
 <code>{state: suspended|active, note}</code> — the per-scenario brake, checked in the
 governor's gate order right after the tenant kill-switch; a suspended contract's calls
 403 and land on the ledger as <code>refused-contract</code>. Budget-setting
-(<code>POST /ai/v1/governance/budget</code>) now also requires <code>ai:admin</code>.
+(<code>POST /ai/v1/governance/budget</code>) now also requires <code>ai:admin</code> —
+as do runbook decisions and workforce hire/fire (the worker-controller probes
+<code>GET /ai/v1/governance/adminCheck</code> and trusts the BSS's 200/403 as the verdict;
+the console hides ceiling+hire from non-admins, who keep the scoreboard and approvals).
 Ops note: <code>accessTokenLifespan</code> is 1800s in BOTH realm files — a Keycloak
 container recreate re-imports realms from files, so live-only settings (and
 dynamically-onboarded realms like aurora) do not survive one. See

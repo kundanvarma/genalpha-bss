@@ -266,8 +266,13 @@ const RESOURCES = [
     fields: [],
     columns: ['signature', 'version', 'status', 'diagnosis', 'decidedNote'],
     rowAction: {
-      label: (item) => (item.status === 'proposed' ? 'Decide'
-        : item.status === 'approved' ? 'Revoke' : ''),
+      // deciding is ai:admin (governance) — others see the library read-only
+      label: (item) => {
+        const roles = (tokenClaims().realm_access || {}).roles || [];
+        if (!roles.includes('ai:admin')) return '';
+        return item.status === 'proposed' ? 'Decide'
+          : item.status === 'approved' ? 'Revoke' : '';
+      },
       apply: async (item) => {
         if (item.status === 'proposed') {
           const d = window.prompt('Decision — "approve" or "reject":');
@@ -2449,7 +2454,18 @@ async function renderWorkforce() {
   });
   hireRow.append(hireName, hireJob, hireGo);
   hireBox.append(hireHead, hireRow, hireOut);
-  controls.append(ceilBox, hireBox);
+  // ceiling + hiring are GOVERNANCE (ai:admin) — the approvals queue below
+  // stays operational; the server refuses non-admins either way
+  const wfRoles = (tokenClaims().realm_access || {}).roles || [];
+  if (wfRoles.includes('ai:admin')) {
+    controls.append(ceilBox, hireBox);
+  } else {
+    const dim = document.createElement('p');
+    dim.className = 'dim';
+    dim.style.cssText = 'font-size:0.85rem';
+    dim.textContent = 'Crew ceiling and hiring need ai:admin — you can watch the crew and approve its work.';
+    controls.append(dim);
+  }
 
   // THE CREW: how many of each type of worker, then each worker's own
   // record. Type is OBSERVED from the ledger (what it actually works —

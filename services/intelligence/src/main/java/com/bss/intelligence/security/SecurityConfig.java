@@ -57,6 +57,13 @@ public class SecurityConfig {
                         // ai:admin too, now that the authority exists
                         .requestMatchers(HttpMethod.POST,
                                 ApiConstants.BASE_PATH + "/governance/budget").hasAuthority("ai:admin")
+                        // deciding a runbook (approve/reject/revoke) is a
+                        // GOVERNANCE signature, like contracts and budgets:
+                        // ai:use reads the library, ai:admin signs it
+                        .requestMatchers(HttpMethod.POST,
+                                ApiConstants.BASE_PATH + "/runbook/*/*").hasAuthority("ai:admin")
+                        .requestMatchers(HttpMethod.GET,
+                                ApiConstants.BASE_PATH + "/governance/adminCheck").hasAuthority("ai:admin")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         // the customer's OWN rail: self-scoped in the handler
                         // (party = token subject), so plain authentication is

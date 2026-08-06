@@ -43,6 +43,14 @@ public class GovernanceController {
         this.tenantScope = tenantScope;
     }
 
+    /** A side-effect-free probe for machine callers (the worker-controller)
+     * that must know whether a human may SIGN governance acts: the security
+     * rule on this path is ai:admin, so a 200 IS the verdict. */
+    @GetMapping("/adminCheck")
+    public ResponseEntity<Map<String, Object>> adminCheck() {
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
     @GetMapping
     public ResponseEntity<Map<String, Object>> governance() {
         String tenant = tenantScope.currentTenantId();

@@ -55,6 +55,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const seeded = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
     name: `CLOSED LOOP ${run}: SIM not activating`, severity: 'minor', ticketType: 'support',
     description: 'eSIM QR scanned but the profile never activates.' });
+  // hiring is a GOVERNANCE signature: pat (ai:use, no ai:admin) is refused
+  // by the BSS's own verdict before demo's hire succeeds
+  const pat = await token('pat@bss.local', 'pat');
+  const patHire = await call('POST', '/workforce-runtime/workers', pat,
+    { name: 'pat-shadow-crew', job: 'care' });
+  if (patHire.status !== 403) {
+    fail('hiring must need ai:admin — pat got ' + patHire.status);
+  }
   const hired = await call('POST', '/workforce-runtime/workers', staff,
     { name: `s66-${run % 10000}`, job: 'care' });
   if (hired.status !== 201) fail(`hire-and-start: ${hired.status} ${hired.text.slice(0, 200)}`);

@@ -86,6 +86,15 @@ async function callerIsStaff(authorization) {
   return r.ok;
 }
 
+/* hiring and firing are GOVERNANCE signatures: the probe's path needs
+ * ai:admin server-side, so the BSS's 200 IS the admin verdict */
+async function callerIsAdmin(authorization) {
+  if (!authorization) return false;
+  const r = await fetch(GATEWAY + '/ai/v1/governance/adminCheck',
+    { headers: { Authorization: authorization } });
+  return r.ok;
+}
+
 /* ---------- docker ---------- */
 const docker = (...args) => execFileSync('docker', args, { encoding: 'utf8' });
 function listWorkers() {
@@ -196,6 +205,9 @@ const server = http.createServer(async (req, res) => {
       return send(200, listWorkers());
     }
     if (req.method === 'POST' && url.pathname === '/workers') {
+      if (!(await callerIsAdmin(req.headers.authorization))) {
+        return send(403, { error: 'hiring needs ai:admin — the BSS decides who signs' });
+      }
       let body = '';
       req.on('data', (c) => { body += c; });
       req.on('end', async () => {
@@ -208,6 +220,9 @@ const server = http.createServer(async (req, res) => {
     }
     const del = url.pathname.match(/^\/workers\/([\w-]+)$/);
     if (req.method === 'DELETE' && del) {
+      if (!(await callerIsAdmin(req.headers.authorization))) {
+        return send(403, { error: 'firing needs ai:admin — the BSS decides who signs' });
+      }
       await fire(del[1]);
       return send(200, { fired: del[1] });
     }
