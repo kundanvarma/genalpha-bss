@@ -104,6 +104,7 @@ public class BssApiClient {
             body.put("name", name);
             body.put("description", description);
             body.put("severity", "major");
+            body.put("ticketType", "incident");
             if (partyId != null) {
                 body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
             }

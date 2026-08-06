@@ -625,7 +625,7 @@ export default function Customer360() {
             if (!ticketName.trim()) return;
             act(() => createTicket({
               name: ticketName.trim(),
-              severity: 'minor',
+              severity: 'minor', ticketType: 'support',
               relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
             }));
             setTicketName('');

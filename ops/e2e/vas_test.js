@@ -77,8 +77,12 @@ async function apiCall(page, method, path, token, body) {
 
   const sn = svcs.find((s) => s.name === 'GenAlpha Secure Net');
   if (!sn || sn.state !== 'active') fail('Secure Net feature service missing/inactive');
-  if ((sn.supportingResource || []).length) fail('Secure Net should hold no resources');
-  console.log('OK security feature: active service, zero resources —', sn.name);
+  // TMF638 conformance gave every service a provisioning-record entry
+  // (@referredType ServiceOrder) — the honest claim is: no NETWORK resource
+  if ((sn.supportingResource || []).some((r) => r['@referredType'] === 'Resource')) {
+    fail('Secure Net should hold no network resources');
+  }
+  console.log('OK security feature: active service, zero network resources —', sn.name);
 
   if (svcs.some((s) => s.name === 'GenAlpha Device Care')) {
     fail('insurance minted a service — it must be billing-only');

@@ -209,7 +209,7 @@ export function payBill(bill, methodId) {
 export function createTicket(name, description) {
   return call('/tmf-api/troubleTicket/v4/troubleTicket', {
     method: 'POST',
-    body: JSON.stringify({ name, description, severity: 'minor',
+    body: JSON.stringify({ name, description, severity: 'minor', ticketType: 'support',
       channel: { name: 'app' } }),
   });
 }
