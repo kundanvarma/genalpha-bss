@@ -262,11 +262,18 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   // seed a FRESH open ticket first: the earlier legs drained this suite's
   // own backlog, and a clean fleet (post proof-run hygiene) has no ambient
   // leftovers to lean on — the signal must be provoked, not assumed
+  // TWO probes: the ceiling leg below needs two OPEN tasks, and this suite
+  // seeds everything it needs — ambient leftovers are not a dependency
   const surgeTicket = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
     name: `Surge probe ${run}`, description: 'open backlog for the staffing signal',
     severity: 'minor', ticketType: 'support',
   });
   if (surgeTicket.status >= 300) fail('surge probe ticket failed: ' + surgeTicket.status);
+  const surgeTicket2 = await call('POST', '/tmf-api/troubleTicket/v4/troubleTicket', staff, {
+    name: `Surge probe B ${run}`, description: 'second seat for the ceiling proof',
+    severity: 'minor', ticketType: 'support',
+  });
+  if (surgeTicket2.status >= 300) fail('surge probe B failed: ' + surgeTicket2.status);
   const kpis2 = (await call('GET', '/ai/v1/workforce/kpis', staff)).body;
   const s0 = kpis2.staffing || fail('the staffing signal is missing from the KPIs');
   if (s0.backlogDepth < 1) fail('staffing sees no backlog despite open tasks');
@@ -282,7 +289,13 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
   const cap = s0.activeWorkers + 1;
   const capSet = await call('POST', '/ai/v1/governance/budget', staff, { maxWorkers: cap });
   if (capSet.status >= 300) fail(`set maxWorkers: ${capSet.status}`);
-  const openNow = (await call('GET', '/ai/v1/workforce/tasks', worker)).body;
+  // resident workers may be claiming as we read — poll briefly for the two
+  // seeded probes to surface as open tasks
+  let openNow = [];
+  for (let i = 0; i < 10 && openNow.length < 2; i++) {
+    openNow = (await call('GET', '/ai/v1/workforce/tasks', worker)).body || [];
+    if (openNow.length < 2) await new Promise((r) => setTimeout(r, 2000));
+  }
   if (openNow.length < 2) fail('need at least two open tasks for the ceiling proof');
   const claimA = await call('POST',
     `/ai/v1/workforce/tasks/${encodeURIComponent(openNow[0].id)}/claim`, worker);
