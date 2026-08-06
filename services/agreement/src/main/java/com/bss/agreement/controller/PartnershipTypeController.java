@@ -30,7 +30,7 @@ public class PartnershipTypeController {
         this.service = service;
     }
 
-    @GetMapping("/partnershipType")
+    @GetMapping({"/partnershipType", "/partnershipType/"})
     public ResponseEntity<List<Map<String, Object>>> list() {
         return ResponseEntity.ok(service.findAll());
     }
@@ -40,10 +40,20 @@ public class PartnershipTypeController {
         return ResponseEntity.ok(service.findById(id));
     }
 
-    @PostMapping("/partnershipType")
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+    @PostMapping({"/partnershipType", "/partnershipType/"})
+    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto,
+            jakarta.servlet.http.HttpServletRequest request) {
         Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+        // Location = the URL the CLIENT posted to, plus the new id — rebuilt
+        // from the gateway's X-Forwarded headers so it matches their view
+        String host = request.getHeader("X-Forwarded-Host");
+        String proto = request.getHeader("X-Forwarded-Proto");
+        String location = host != null
+                ? (proto == null ? "http" : proto.split(",")[0].trim()) + "://"
+                        + host.split(",")[0].trim() + request.getRequestURI()
+                        + (request.getRequestURI().endsWith("/") ? "" : "/") + created.get("id")
+                : String.valueOf(created.get("href"));
+        return ResponseEntity.created(URI.create(location)).body(created);
     }
 
     @DeleteMapping("/partnershipType/{id}")

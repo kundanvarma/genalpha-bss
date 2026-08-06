@@ -26,6 +26,11 @@ public class ServiceTest {
 
     private String verdict;
 
+    private String name;
+
+    @Column(name = "test_spec_json")
+    private String testSpecJson;
+
     @Column(name = "findings_json")
     private String findingsJson;
 
@@ -42,6 +47,10 @@ public class ServiceTest {
     public void setOwnerPartyId(String v) { this.ownerPartyId = v; }
     public String getVerdict() { return verdict; }
     public void setVerdict(String v) { this.verdict = v; }
+    public String getName() { return name; }
+    public void setName(String v) { this.name = v; }
+    public String getTestSpecJson() { return testSpecJson; }
+    public void setTestSpecJson(String v) { this.testSpecJson = v; }
     public String getFindingsJson() { return findingsJson; }
     public void setFindingsJson(String v) { this.findingsJson = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }

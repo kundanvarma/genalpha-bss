@@ -215,7 +215,7 @@ async function staffToken(request, realm) {
   const agr = await ctx.request.post(`${API}/tmf-api/agreementManagement/v4/agreement`, {
     headers: { ...as(genalpha), ...json },
     data: {
-      name: '12-month term (martech e2e)', status: 'active',
+      name: '12-month term (martech e2e)', agreementType: 'commercial', status: 'active',
       engagedParty: [{ id: churnParty, role: 'customer' }],
       agreementPeriod: { startDateTime: started, endDateTime: soon },
     },

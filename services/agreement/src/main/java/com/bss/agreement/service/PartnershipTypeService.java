@@ -57,11 +57,17 @@ public class PartnershipTypeService {
         if (dto.get("name") == null || String.valueOf(dto.get("name")).isBlank()) {
             throw new BadRequestException("name is required");
         }
-        List<Map<String, Object>> roleTypes = dto.get("roleType") instanceof List<?> list
-                ? sanitizeRoleTypes(list) : List.of();
-        if (roleTypes.isEmpty()) {
-            throw new BadRequestException(
-                    "roleType is required — a partnership kind IS the roles it permits");
+        // A kind without roles is a valid (if inert) catalog entry: it
+        // permits NOTHING, and the agreement-signature check will refuse any
+        // role named against it. But a roleType entry WITHOUT a name is a
+        // contradiction — a role is its name.
+        List<Map<String, Object>> roleTypes = List.of();
+        if (dto.get("roleType") instanceof List<?> list && !list.isEmpty()) {
+            roleTypes = sanitizeRoleTypes(list);
+            if (roleTypes.isEmpty()) {
+                throw new BadRequestException(
+                        "each roleType entry needs a name — a role IS its name");
+            }
         }
         PartnershipType entity = new PartnershipType();
         String id = UUID.randomUUID().toString();

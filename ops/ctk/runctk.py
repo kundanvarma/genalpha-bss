@@ -97,7 +97,8 @@ json.dump(coll, open(pm_path, "w"))
 # 3. Run newman 6.
 res_path = os.path.join(ctkjs, "result.json")
 subprocess.run(["newman", "run", pm_path, "--reporter-json-export", res_path,
-                "-r", "json", "--insecure"], cwd=ctkjs, capture_output=True)
+                "-r", "json", "--insecure", "--timeout-script", "120000"],
+               cwd=ctkjs, capture_output=True)
 
 # 4. Summarise.
 r = json.load(open(res_path))

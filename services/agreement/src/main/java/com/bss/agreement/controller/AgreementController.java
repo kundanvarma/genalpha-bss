@@ -48,8 +48,21 @@ public class AgreementController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String id) {
-        return ResponseEntity.ok(service.findById(id));
+    public ResponseEntity<Map<String, Object>> get(@PathVariable String id,
+            @RequestParam(required = false) String fields) {
+        Map<String, Object> agreement = service.findById(id);
+        if (fields == null || fields.isBlank()) {
+            return ResponseEntity.ok(agreement);
+        }
+        // TMF630 attribute selection, strict: exactly the asked-for fields
+        Map<String, Object> slim = new java.util.LinkedHashMap<>();
+        for (String f : fields.split(",")) {
+            String key = f.trim();
+            if (agreement.containsKey(key)) {
+                slim.put(key, agreement.get(key));
+            }
+        }
+        return ResponseEntity.ok(slim);
     }
 
     @PatchMapping("/{id}")

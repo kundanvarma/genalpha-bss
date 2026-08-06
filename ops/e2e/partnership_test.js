@@ -46,14 +46,27 @@ async function call(method, path, tok, body) {
   if (type.body.roleType.length !== 2 || type.body.status !== 'active') {
     fail('type shape wrong: ' + JSON.stringify(type.body).slice(0, 200));
   }
+  // a roleless kind is a valid catalog entry (TMF668: roleType optional) —
+  // but it PERMITS NOTHING, so any typed partnership against it must fail
   const noRoles = await call('POST', `${PT}/partnershipType`, staff,
     { name: `Empty kind ${run}` });
-  if (noRoles.status !== 400) fail('a kind without roles must be refused — a kind IS its roles');
+  if (noRoles.status !== 201) fail(`a roleless kind is valid catalog data: ${noRoles.status}`);
+  const inert = await call('POST', `${AGREE}/agreement`, staff, {
+    name: `Against empty kind ${run}`, agreementType: 'partnership', status: 'active',
+    engagedParty: [{ id: 'x', role: 'provider' }],
+    characteristic: { partnershipTypeId: noRoles.body.id } });
+  if (inert.status !== 400) {
+    fail('a roleless kind must refuse EVERY role at signature: ' + inert.status);
+  }
+  const nameless = await call('POST', `${PT}/partnershipType`, staff,
+    { name: `Bad kind ${run}`, roleType: [{ description: 'no name' }] });
+  if (nameless.status !== 400) fail('a roleType entry without a name must be refused');
   const listed = (await call('GET', `${PT}/partnershipType`, staff)).body || [];
   if (!listed.some((t) => t.id === type.body.id)) fail('the type is not listed');
   console.log(`OK THE KIND: "${type.body.name}" authored as data — permits provider|dealer,`
-    + ' listed on the catalog; a kind with no roles was refused, because a partnership'
-    + ' kind IS the roles it permits.');
+    + ' listed on the catalog; a roleless kind is storable but permits NOTHING (its'
+    + ' first typed partnership was refused at signature), and a nameless role entry'
+    + ' is refused outright — a role IS its name.');
 
   /* ---------- 2. validated at signature ---------- */
   const good = await call('POST', `${AGREE}/agreement`, staff, {

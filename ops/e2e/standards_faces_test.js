@@ -59,7 +59,7 @@ async function call(method, path, tok, body) {
   const svc = services.find((s) => s.state === 'active') || services[0];
   if (!svc) fail('kai has no service to test');
   const test = await call('POST', '/tmf-api/serviceTestManagement/v4/serviceTest', kai,
-    { relatedService: { id: svc.id } });
+    { relatedService: { id: svc.id }, testSpecification: { id: 'diagnose' } });
   if (test.status !== 201) fail(`serviceTest: ${test.status} ${test.text.slice(0, 200)}`);
   if (!test.body.verdict || !Array.isArray(test.body.testMeasure)) {
     fail('test shape wrong: ' + JSON.stringify(test.body).slice(0, 200));
@@ -72,7 +72,7 @@ async function call(method, path, tok, body) {
   const foreign = all.find((s) => (s.relatedParty || []).every((p) => p.id !== kaiId));
   if (foreign) {
     const denied = await call('POST', '/tmf-api/serviceTestManagement/v4/serviceTest', kai,
-      { relatedService: { id: foreign.id } });
+      { relatedService: { id: foreign.id }, testSpecification: { id: 'diagnose' } });
     if (denied.status !== 404) fail(`foreign service test must 404, got ${denied.status}`);
   }
   console.log(`OK TMF653: kai ran a serviceTest on his own line — verdict "${test.body.verdict}",`

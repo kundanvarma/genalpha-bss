@@ -63,6 +63,21 @@ public class AgreementService {
         if (dto.get("name") == null) {
             throw new BadRequestException("name is required");
         }
+        // TMF651: the agreement's type is mandatory — `type` (spec name)
+        // and `agreementType` (fleet name) are the same fact
+        if (dto.get("agreementType") == null && dto.get("type") != null) {
+            dto.put("agreementType", dto.get("type"));
+        }
+        if (dto.get("agreementType") == null) {
+            throw new BadRequestException("type is required — an agreement without a"
+                    + " type is a promise nobody can classify");
+        }
+        // v3 kits and partners say engagedPartyRole; the fleet says
+        // engagedParty — same list of {id, role} references
+        if (dto.get("engagedParty") == null && dto.get("engagedPartyRole") instanceof List<?>) {
+            dto.put("engagedParty", dto.get("engagedPartyRole"));
+        }
+        requireNamedCharacteristics(dto.get("characteristic"));
         requirePermittedPartnershipRoles(dto);
         String owner = null;
         if (dto.get("engagedParty") instanceof List<?> parties) {
@@ -124,12 +139,17 @@ public class AgreementService {
             switch (f.getKey()) {
                 case "id" -> probe.setId(f.getValue());
                 case "status" -> probe.setStatus(requireStatus(f.getValue()));
+                case "type", "agreementType" -> probe.setAgreementType(f.getValue());
                 case "relatedPartyId", "engagedPartyId" -> probe.setOwnerPartyId(f.getValue());
                 default -> throw new BadRequestException("unsupported filter attribute '" + f.getKey() + "'");
             }
         }
         partyScope.scopedPartyId().ifPresent(probe::setOwnerPartyId);
-        Page<Agreement> page = repository.findAll(Example.of(probe), new OffsetPageRequest(offset, limit));
+        // newest first: a fixed page of an aging list must still show what
+        // was just signed (the proof run's pagination lesson)
+        Page<Agreement> page = repository.findAll(Example.of(probe),
+                new OffsetPageRequest(offset, limit,
+                        org.springframework.data.domain.Sort.by("createdAt").descending()));
         return new PagedResult<>(page.getContent().stream().map(this::toMap).toList(), page.getTotalElements());
     }
 
@@ -152,6 +172,27 @@ public class AgreementService {
         Map<String, Object> updated = toMap(repository.save(entity));
         events.publish("AgreementStateChangeEvent", "agreement", updated);
         return updated;
+    }
+
+    /**
+     * A characteristic is a NAMED value. List form: every entry with a value
+     * needs a name. Map form: keyed entries (partnershipTypeId, sla…) are
+     * names by construction, but a bare {value: …} names nothing.
+     */
+    private void requireNamedCharacteristics(Object characteristic) {
+        if (characteristic instanceof List<?> entries) {
+            for (Object entry : entries) {
+                if (entry instanceof Map<?, ?> m && m.containsKey("value")
+                        && (m.get("name") == null || String.valueOf(m.get("name")).isBlank())) {
+                    throw new BadRequestException(
+                            "every characteristic needs a name — a value alone names nothing");
+                }
+            }
+        } else if (characteristic instanceof Map<?, ?> m
+                && m.containsKey("value") && m.get("name") == null && m.size() == 1) {
+            throw new BadRequestException(
+                    "every characteristic needs a name — a value alone names nothing");
+        }
     }
 
     private String requireStatus(Object status) {
@@ -180,6 +221,7 @@ public class AgreementService {
         map.put("href", a.getHref());
         map.put("name", a.getName());
         map.put("agreementType", a.getAgreementType());
+        map.put("type", a.getAgreementType());
         map.put("status", a.getStatus());
         if (a.getPeriodStart() != null || a.getPeriodEnd() != null) {
             Map<String, Object> period = new LinkedHashMap<>();
@@ -188,8 +230,11 @@ public class AgreementService {
             map.put("agreementPeriod", period);
         }
         if (a.getCommitmentMonths() != null) map.put("commitmentMonths", a.getCommitmentMonths());
-        map.put("engagedParty", readJson(a.getEngagedPartyJson()));
-        map.put("agreementItem", readJson(a.getAgreementItemJson()));
+        Object engaged = readJson(a.getEngagedPartyJson());
+        Object items = readJson(a.getAgreementItemJson());
+        map.put("engagedParty", engaged == null ? List.of() : engaged);
+        map.put("engagedPartyRole", engaged == null ? List.of() : engaged);
+        map.put("agreementItem", items == null ? List.of() : items);
         if (a.getCharacteristicJson() != null) map.put("characteristic", readJson(a.getCharacteristicJson()));
         map.put("lastUpdate", a.getLastUpdate());
         map.put("@type", "Agreement");

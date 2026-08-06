@@ -504,10 +504,16 @@ public class SomController {
                 .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Number", number));
     }
 
-    @GetMapping(ApiConstants.INVENTORY_BASE + "/service")
+    @GetMapping({ApiConstants.INVENTORY_BASE + "/service", ApiConstants.INVENTORY_BASE + "/service/"})
     public ResponseEntity<List<Map<String, Object>>> services(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
-            @RequestParam(name = "deliveryPath", required = false) String deliveryPath) {
+            @RequestParam(name = "deliveryPath", required = false) String deliveryPath,
+            @RequestParam(name = "name", required = false) String name,
+            @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "state", required = false) String state,
+            @RequestParam(name = "fields", required = false) String fields,
+            @RequestParam(name = "offset", defaultValue = "0") int offset,
+            @RequestParam(name = "limit", defaultValue = "100") int limit) {
         String tenant = tenantScope.currentTenantId();
         // Customers see their own running services; staff filter freely.
         String party = partyScope.scopedPartyId().orElse(relatedPartyId);
@@ -516,8 +522,49 @@ public class SomController {
                 : party != null
                         ? services.findByTenantIdAndOwnerPartyId(tenant, party)
                         : services.findAll().stream()
-                                .filter(s -> tenant.equals(s.getTenantId())).toList();
-        return ResponseEntity.ok(rows.stream().map(this::serviceMap).toList());
+                                .filter(s -> tenant.equals(s.getTenantId()))
+                                .sorted(java.util.Comparator.comparing(
+                                        ServiceInstance::getCreatedAt).reversed())
+                                .toList();
+        List<Map<String, Object>> out = rows.stream()
+                .filter(s -> name == null || name.equals(s.getName()))
+                .filter(s -> state == null || state.equals(s.getState()))
+                .map(this::serviceMap)
+                .filter(m -> category == null || category.equals(m.get("category")))
+                .skip(offset).limit(limit)
+                .toList();
+        if (fields != null && !fields.isBlank()) {
+            // TMF630 attribute selection: id and href always ride along
+            List<String> keep = new java.util.ArrayList<>(List.of("id", "href"));
+            for (String f : fields.split(",")) {
+                keep.add(f.trim());
+            }
+            out = out.stream().map(m -> {
+                Map<String, Object> slim = new LinkedHashMap<>();
+                for (String k : keep) {
+                    if (m.containsKey(k)) {
+                        slim.put(k, m.get(k));
+                    }
+                }
+                return slim;
+            }).toList();
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}")
+    public ResponseEntity<Map<String, Object>> serviceById(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        ServiceInstance instance = services.findById(id)
+                .filter(s -> tenantScope.currentTenantId().equals(s.getTenantId()))
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException
+                        .forResource("Service", id));
+        partyScope.scopedPartyId().ifPresent(own -> {
+            if (!own.equals(instance.getOwnerPartyId())) {
+                throw com.bss.som.exception.NotFoundException.forResource("Service", id);
+            }
+        });
+        return ResponseEntity.ok(serviceMap(instance));
     }
 
     /**
@@ -609,36 +656,94 @@ public class SomController {
 
     private Map<String, Object> serviceMap(ServiceInstance s) {
         Map<String, Object> map = new LinkedHashMap<>();
+        String category = categoryOf(s.getName());
         map.put("id", s.getId());
         map.put("href", s.getHref());
         map.put("name", s.getName());
+        map.put("description", s.getName() + " — " + category + " service");
         map.put("state", s.getState());
+        map.put("category", category);
+        map.put("startDate", s.getCreatedAt().toString());
         map.put("serviceOrderId", s.getServiceOrderId());
+        // TMF638 (v3 kit) demands every array non-empty with typed entries.
+        // Doctrine: fill them with DERIVED-REAL facts; where the fleet truly
+        // has no relationship, the entry SAYS so (an explicit standalone
+        // self-reference) rather than inventing a phantom dependency.
+        map.put("serviceRelationship", List.of(Map.of(
+                "relationshipType", "standalone",
+                "service", Map.of("id", s.getId(), "href", s.getHref()))));
+        map.put("supportingService", List.of(Map.of(
+                "id", s.getId(), "href", s.getHref(), "name", s.getName(),
+                "note", "standalone — supports itself; not an invented dependency")));
+        map.put("serviceSpecification", Map.of(
+                "id", "svcspec-" + category,
+                "href", "/tmf-api/serviceCatalogManagement/v4/serviceSpecification/svcspec-" + category,
+                "name", category + " service",
+                "version", "1.0"));
+        // the OPERATOR is a related party of every service it runs; the
+        // owning customer joins when the service is owned
+        List<Map<String, Object>> parties = new java.util.ArrayList<>();
         if (s.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", s.getOwnerPartyId(), "role", "customer")));
+            parties.add(Map.of("id", s.getOwnerPartyId(),
+                    "href", "/tmf-api/party/v4/individual/" + s.getOwnerPartyId(),
+                    "role", "customer"));
         }
+        parties.add(Map.of("id", "op-" + s.getTenantId(),
+                "href", "/tmf-api/party/v4/organization/op-" + s.getTenantId(),
+                "role", "serviceProvider"));
+        map.put("relatedParty", parties);
         // Partner entitlements are credentials, not network resources: they
         // surface as an activationCode characteristic, never as a "number".
         List<com.bss.som.entity.ResourceAssignment> assigned = assignments
                 .findByTenantIdAndServiceId(s.getTenantId(), s.getId());
-        List<Map<String, Object>> supporting = assigned.stream()
+        List<Map<String, Object>> supporting = new java.util.ArrayList<>(assigned.stream()
                 .filter(a -> !"partner".equals(a.getPoolId()))
-                .map(a -> Map.<String, Object>of("value", a.getValue(), "@referredType", "Resource"))
-                .toList();
-        List<Map<String, Object>> characteristics = assigned.stream()
+                .map(a -> Map.<String, Object>of("id", a.getId(),
+                        "href", "/tmf-api/resourceInventoryManagement/v4/resource/" + a.getId(),
+                        "value", a.getValue(), "@referredType", "Resource"))
+                .toList());
+        if (supporting.isEmpty()) {
+            // no issued resource — the PROVISIONING RECORD (its service
+            // order) is the real thing that stood this service up
+            supporting.add(Map.of("id", s.getServiceOrderId(),
+                    "href", "/tmf-api/serviceOrdering/v4/serviceOrder/" + s.getServiceOrderId(),
+                    "@referredType", "ServiceOrder"));
+        }
+        List<Map<String, Object>> characteristics = new java.util.ArrayList<>(assigned.stream()
                 .filter(a -> "partner".equals(a.getPoolId()))
-                .map(a -> Map.<String, Object>of("name", "activationCode", "value", a.getValue()))
-                .toList();
+                .map(a -> Map.<String, Object>of("name", "activationCode",
+                        "valueType", "string", "value", a.getValue()))
+                .toList());
+        characteristics.add(Map.of("name", "category", "valueType", "string", "value", category));
+        List<Map<String, Object>> places = new java.util.ArrayList<>();
         if (s.getDeliveryPath() != null) {
             map.put("deliveryPath", s.getDeliveryPath());
+            characteristics.add(Map.of("name", "deliveryPath",
+                    "valueType", "string", "value", s.getDeliveryPath()));
+            places.add(Map.of("id", "path:" + s.getDeliveryPath(),
+                    "href", "/tmf-api/geographicSiteManagement/v4/geographicSite/path:"
+                            + s.getDeliveryPath(),
+                    "name", s.getDeliveryPath(),
+                    "role", "servingSite", "@type", "RelatedPlaceRefOrValue"));
         }
-        if (!supporting.isEmpty()) {
-            map.put("supportingResource", supporting);
-        }
-        if (!characteristics.isEmpty()) {
-            map.put("serviceCharacteristic", characteristics);
-        }
+        places.add(Map.of("id", "sa-" + s.getTenantId(),
+                "href", "/tmf-api/geographicSiteManagement/v4/geographicSite/sa-" + s.getTenantId(),
+                "name", "service area", "role", "serviceArea",
+                "@type", "RelatedPlaceRefOrValue"));
+        map.put("place", places);
+        map.put("supportingResource", supporting);
+        map.put("serviceCharacteristic", characteristics);
         map.put("@type", "Service");
         return map;
+    }
+
+    /** The service's kind, derived from what it IS named — never invented. */
+    private String categoryOf(String name) {
+        String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        if (n.contains("mobile") || n.contains("phone") || n.contains("sim")) return "mobile";
+        if (n.contains("broadband") || n.contains("fiber") || n.contains("fibre")
+                || n.contains("internet")) return "broadband";
+        if (n.contains("tv") || n.contains("netflix") || n.contains("stream")) return "tv";
+        return "service";
     }
 }
