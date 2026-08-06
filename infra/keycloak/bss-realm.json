@@ -322,6 +322,47 @@
       {
         "name": "risk:assess",
         "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
+      },
+      {
+        "name": "finance-staff",
+        "description": "Finance desk: bills, journal, disputes, dunning, deliveries, unapplied cash",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "billing:admin",
+            "billing:read",
+            "party:read"
+          ]
+        }
+      },
+      {
+        "name": "growth-staff",
+        "description": "Growth desk: campaigns, journeys, audiences, insight, guardrails, sales",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "campaign:read",
+            "campaign:write",
+            "insight:read",
+            "quote:read"
+          ]
+        }
+      },
+      {
+        "name": "ops-staff",
+        "description": "Ops desk: process flows, appointments, porting, knowledge, AI workforce queue",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "ordering:read",
+            "ordering:write",
+            "appointment:admin",
+            "porting:write",
+            "knowledge:write",
+            "workforce:use",
+            "ai:use"
+          ]
+        }
       }
     ]
   },
@@ -1252,6 +1293,66 @@
       "realmRoles": [
         "ordering:read",
         "ordering:write"
+      ]
+    },
+    {
+      "username": "finn@bss.local",
+      "enabled": true,
+      "email": "finn@bss.local",
+      "emailVerified": true,
+      "firstName": "Finn",
+      "lastName": "Finance",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "finn",
+          "temporary": false
+        }
+      ],
+      "id": "c3ae79bd-713f-4d6b-a9d1-3b2e2fccdd62",
+      "realmRoles": [
+        "finance-staff"
+      ]
+    },
+    {
+      "username": "gro@bss.local",
+      "enabled": true,
+      "email": "gro@bss.local",
+      "emailVerified": true,
+      "firstName": "Gro",
+      "lastName": "Growth",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "gro",
+          "temporary": false
+        }
+      ],
+      "id": "3dad4270-4912-4804-bfbd-051a5cd6294e",
+      "realmRoles": [
+        "growth-staff"
+      ]
+    },
+    {
+      "username": "omar@bss.local",
+      "enabled": true,
+      "email": "omar@bss.local",
+      "emailVerified": true,
+      "firstName": "Omar",
+      "lastName": "Ops",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "omar",
+          "temporary": false
+        }
+      ],
+      "id": "4839879d-c707-41a4-b557-2b84632bc05a",
+      "realmRoles": [
+        "ops-staff"
       ]
     }
   ],

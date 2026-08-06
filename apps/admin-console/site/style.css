@@ -189,3 +189,12 @@ th { border-bottom-color: var(--line); }
   animation: micpulse 1.2s ease-in-out infinite;
 }
 @keyframes micpulse { 50% { opacity: 0.55; } }
+
+/* workspaces: departments as labeled groups; a persona with one role sees
+   one short shelf, not a junk drawer */
+#tabs { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; align-items: center; }
+.tabgroup { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.tabgroup-label {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--dim, #8a8a8a); margin-right: 0.2rem; user-select: none;
+}

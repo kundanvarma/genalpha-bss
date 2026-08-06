@@ -496,34 +496,6 @@ const RESOURCES = [
     columns: ['billNo', 'partyId', 'paidCount', 'installments', 'remaining', 'currency', 'status', 'nextDueAt'],
   },
   {
-    path: 'dispute',
-    base: BILLING_BASE,
-    title: 'Disputes',
-    // Contested charges: credit them (money off, or a refund on a settled
-    // bill) or uphold them — either way the customer is told.
-    noEdit: true,
-    noDelete: true,
-    readOnly: true,
-    fields: [],
-    columns: ['billNo', 'partyId', 'reason', 'status', 'creditAmount', 'createdAt'],
-    rowAction: {
-      label: (item) => (item.status === 'open' ? 'Resolve…' : '—'),
-      apply: (item) => {
-        if (item.status !== 'open') return Promise.resolve();
-        const answer = window.prompt(
-          `Dispute on ${item.billNo}: "${item.reason}"\nType an amount to CREDIT (e.g. 5.75), or "uphold: <why>"`);
-        if (!answer) return Promise.resolve();
-        const body = answer.trim().toLowerCase().startsWith('uphold')
-          ? { outcome: 'uphold', note: answer.replace(/^uphold:?\s*/i, '') }
-          : { outcome: 'credit', amount: Number(answer.trim()) };
-        return authFetch(`${BILLING_BASE}/dispute/${item.id}/resolve`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-      },
-    },
-  },
-  {
     path: 'billFormatProfile',
     base: BILLING_BASE,
     title: 'Bill formats',
@@ -914,7 +886,7 @@ const RESOURCES = [
   {
     path: 'workforce',
     base: '/ai/v1',
-    title: 'Workforce',
+    title: 'AI Workforce',
     workforce: true,    // custom panel: the digital-workforce scoreboard
     readOnly: true,
     fields: [],
@@ -956,8 +928,11 @@ const TAB_ROLE = {
   journalEntry: 'billing:admin',
   accountMapping: 'billing:admin',
   dispute: 'billing:admin',
-  processFlow: 'ordering:write',
-  runbook: 'ai:use',
+  // the TMF701 API is party-scoped (customers read their own flows);
+  // the TAB is the ops desk's window — keyed on ops-floor roles, since
+  // the baseline customer composite legitimately holds ordering:write
+  processFlow: ['workforce:use', 'service:write'],
+  runbook: 'ai:admin',
   serviceableArea: 'qualification:write',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
@@ -965,7 +940,6 @@ const TAB_ROLE = {
   policyRule: 'policy:read',
   article: 'knowledge:write',
   settings: 'campaign:read',
-  dispute: 'billing:admin',
   dunning: 'billing:admin',
   billFormatProfile: 'billing:admin',
   findings: 'catalog:write',
@@ -980,13 +954,34 @@ const TAB_ROLE = {
   copilot: 'catalog:write',
   staff: 'roles:admin',
   audit: 'ai:use',
-  workforce: 'ai:use',
+  workforce: ['workforce:use', 'ai:admin'],
 };
 let visible = RESOURCES;
 function computeVisible() {
   const roles = (tokenClaims().realm_access || {}).roles || [];
-  visible = RESOURCES.filter((r) => !TAB_ROLE[r.path] || roles.includes(TAB_ROLE[r.path]));
+  // a tab's gate is one role or an any-of list; no gate = always visible
+  visible = RESOURCES.filter((r) => {
+    const need = TAB_ROLE[r.path];
+    if (!need) return true;
+    return (Array.isArray(need) ? need : [need]).some((x) => roles.includes(x));
+  });
 }
+
+// WORKSPACES: the console as departments — a group renders only when the
+// token can see at least one of its tabs, so each persona gets their own
+// desk and nothing else. Membership is data; the .tab DOM contract the
+// suites click by text is untouched.
+const WORKSPACES = [
+  { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
+    'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
+  { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
+    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied'] },
+  { label: 'Care & Ops', tabs: ['processFlow', 'appointment', 'numberPortingOrder', 'article'] },
+  { label: 'Growth', tabs: ['campaign', 'journey', 'audiences', 'profile', 'settings',
+    'salesLead', 'salesOpportunity'] },
+  { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
+  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule'] },
+];
 
 let active = RESOURCES[0];
 let offset = 0;
@@ -1024,14 +1019,38 @@ async function loadPicklist(field) {
 }
 
 function renderTabs() {
-  el('tabs').replaceChildren(...visible.map((r) => {
+  const tabButton = (r) => {
     const b = document.createElement('button');
     b.textContent = r.title;
     b.className = r === active ? 'tab on' : 'tab';
     b.addEventListener('click', () => { active = r; offset = 0; stopEditing();
       sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
     return b;
-  }));
+  };
+  const placed = new Set();
+  const nodes = [];
+  for (const ws of WORKSPACES) {
+    const rows = ws.tabs
+      .map((path) => visible.find((r) => r.path === path))
+      .filter(Boolean);
+    rows.forEach((r) => placed.add(r));
+    if (!rows.length) continue;
+    const group = document.createElement('div');
+    group.className = 'tabgroup';
+    const label = document.createElement('span');
+    label.className = 'tabgroup-label';
+    label.textContent = ws.label;
+    group.append(label, ...rows.map(tabButton));
+    nodes.push(group);
+  }
+  const stray = visible.filter((r) => !placed.has(r));
+  if (stray.length) {
+    const group = document.createElement('div');
+    group.className = 'tabgroup';
+    group.append(...stray.map(tabButton));
+    nodes.push(group);
+  }
+  el('tabs').replaceChildren(...nodes);
 }
 
 function textControl(field, type) {
