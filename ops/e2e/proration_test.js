@@ -11,7 +11,7 @@ const { request } = require('playwright');
 const API = 'http://localhost:8080';
 const run = Date.now();
 const PLAN_A = { id: '14291c1a-df26-4232-8084-500466888e46', name: 'GenAlpha Mobile 10 GB' };
-const PLAN_B = { id: 'c0a81054-212a-486e-8b22-9ac3621e7831', name: 'GenAlpha Mobile Unlimited 5G' };
+const PLAN_B = { id: null, name: 'GenAlpha Mobile Unlimited 5G' }; // id resolved by name
 
 async function token(ctx, user, pass) {
   const res = await ctx.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
@@ -24,6 +24,10 @@ async function token(ctx, user, pass) {
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const staff = await token(ctx, 'demo', 'demo');
+  const allOffs = await (await ctx.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`)).json();
+  PLAN_B.id = (allOffs || []).find((o) => o.name === PLAN_B.name)?.id;
+  if (!PLAN_B.id) fail(PLAN_B.name + ' missing from catalog');
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
 
   /* catalog truth: what each plan costs per month */

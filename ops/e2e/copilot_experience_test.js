@@ -113,7 +113,7 @@ async function token(request, user, pass) {
     if (!seen) fail('the guest never saw the chatted banner');
     const pick = await guest.locator('[data-testid=personal-pick]').textContent()
       .catch(() => '');
-    if (!/60 GB/.test(pick)) fail('the chatted pin is not on the guest\'s page: ' + pick);
+    if (!/50 GB/.test(pick)) fail('the chatted pin is not on the guest\'s page: ' + pick);
     console.log('OK ON THE GUEST\'S PAGE: a brand-new consenting visitor browsed devices and was'
       + ' greeted with the CHATTED banner over the CHATTED pin — conversation to storefront,'
       + ' no deploy, no JSON');

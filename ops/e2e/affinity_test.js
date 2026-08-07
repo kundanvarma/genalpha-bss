@@ -22,7 +22,7 @@ const R = `aff-solo-${run}`;
 // a REAL catalog offering for the storefront leg — Samsung has strong
 // real co-ownership already (its buyers also buy the flagship bundle),
 // so the rail renders from genuine data, not a seed
-const REAL_PHONE = { id: '1d85b683-406e-4e8b-b3c6-142e7fa7eeda', name: 'Samsung Galaxy S26' };
+let REAL_PHONE = { id: null, name: 'Samsung Galaxy S26' }; // id resolved by name (per-install)
 
 async function token(request, user, pass) {
   const res = await request.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
@@ -32,6 +32,12 @@ async function token(request, user, pass) {
 
 (async () => {
   const browser = await chromium.launch();
+  {
+    const offs = await (await (await browser.newContext()).request.get(
+      `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`)).json();
+    REAL_PHONE.id = (offs.find((o) => o.name === REAL_PHONE.name) || {}).id;
+    if (!REAL_PHONE.id) { console.error('FAIL: Samsung Galaxy S26 missing from catalog'); process.exit(1); }
+  }
   const ctx = await browser.newContext();
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

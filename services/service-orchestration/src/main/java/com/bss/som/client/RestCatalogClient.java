@@ -16,7 +16,7 @@ public class RestCatalogClient implements CatalogClient {
     private final RestClient restClient;
     /** Offerings don't change category mid-flight; cache per id, forever. */
     private final Map<String, Optional<String>> cache = new ConcurrentHashMap<>();
-    private final Map<String, Optional<String>> chargingCache = new ConcurrentHashMap<>();
+    private final Map<String, String> chargingCache = new ConcurrentHashMap<>();
     private final Map<String, Optional<String>> nameCache = new ConcurrentHashMap<>();
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
@@ -33,7 +33,7 @@ public class RestCatalogClient implements CatalogClient {
         return cache.computeIfAbsent(offeringId, id -> {
             try {
                 Map<String, Object> offering = restClient.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                         .retrieve().body(Map.class);
                 if (offering != null && offering.get("category") instanceof List<?> cats
                         && !cats.isEmpty() && cats.get(0) instanceof Map<?, ?> c && c.get("name") != null) {
@@ -55,7 +55,7 @@ public class RestCatalogClient implements CatalogClient {
         return nameCache.computeIfAbsent(offeringId, id -> {
             try {
                 Map<String, Object> offering = restClient.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                         .retrieve().body(Map.class);
                 return offering == null || offering.get("name") == null
                         ? Optional.empty() : Optional.of(String.valueOf(offering.get("name")));
@@ -71,10 +71,18 @@ public class RestCatalogClient implements CatalogClient {
         if (offeringId == null) {
             return Optional.empty();
         }
-        return chargingCache.computeIfAbsent(offeringId, id -> {
+        String cached = chargingCache.get(offeringId);
+        if (cached != null) {
+            return Optional.of(cached);
+        }
+        return computeCharging(offeringId);
+    }
+
+    private Optional<String> computeCharging(String offeringId) {
+        {
             try {
                 Map<String, Object> offering = restClient.get()
-                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", id)
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
                         .retrieve().body(Map.class);
                 Object specRef = offering == null ? null : offering.get("productSpecification");
                 if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
@@ -90,14 +98,18 @@ public class RestCatalogClient implements CatalogClient {
                                 && c.get("productSpecCharacteristicValue") instanceof List<?> values
                                 && !values.isEmpty() && values.get(0) instanceof Map<?, ?> v
                                 && v.get("value") != null) {
-                            return Optional.of(String.valueOf(v.get("value")));
+                            String val = String.valueOf(v.get("value"));
+                            chargingCache.put(offeringId, val); // cache only a HIT
+                            return Optional.of(val);
                         }
                     }
                 }
+                // a MISS is not cached: charging config may be seeded after
+                // the first activation (the fresh-clone drill's lesson)
                 return Optional.empty();
             } catch (RestClientException e) {
                 return Optional.empty();
             }
-        });
+        }
     }
 }

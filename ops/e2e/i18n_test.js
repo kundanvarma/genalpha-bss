@@ -2,7 +2,7 @@
  * in Norwegian with NOK and an English operator in English with EUR — locale
  * and currency ride the tenant manifest, prices carry their own unit all the
  * way from the catalog. Keycloak login speaks each realm's language too. */
-const { chromium } = require('playwright');
+const { chromium, request } = require('playwright');
 
 const NOVA_SHOP = 'http://shop.nova.localhost:8080/shop/';
 const GENALPHA_SHOP = 'http://localhost:8080/shop/';
@@ -56,6 +56,51 @@ const GENALPHA_SHOP = 'http://localhost:8080/shop/';
   console.log('OK the mobile app manifest carries locale/currency too:', manifest.locale, manifest.currency);
 
   // --- B2B parity: the business console speaks Norwegian and bills in NOK
+  // birgit's Fjellheim membership is seeded (seed_nova); here we only make
+  // sure a NOK company invoice EXISTS to read — order + run if the period
+  // has none yet (bills are period-state, not fixture)
+  {
+    const ctx = await request.newContext();
+    const NH = { Authorization: 'Bearer ' + (await (await ctx.post(
+      'http://localhost:8085/realms/nova/protocol/openid-connect/token',
+      { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } })).json()).access_token,
+      'Content-Type': 'application/json' };
+    const birgitTok = (await (await ctx.post(
+      'http://localhost:8085/realms/nova/protocol/openid-connect/token',
+      { form: { grant_type: 'password', client_id: 'bss-demo',
+        username: 'birgit@fjellheim.no', password: 'birgit' } })).json()).access_token;
+    const bsub = JSON.parse(Buffer.from(
+      birgitTok.split('.')[1].padEnd(birgitTok.split('.')[1].length + (4 - birgitTok.split('.')[1].length % 4) % 4, '='),
+      'base64').toString()).sub;
+    const orgs = await (await ctx.get(
+      'http://localhost:8080/tmf-api/party/v4/organization?limit=100', { headers: NH })).json();
+    const fjellheim = (orgs || []).find((o) => o.name === 'Fjellheim AS');
+    if (!fjellheim) fail('Fjellheim AS not seeded — run seed_nova');
+    const orgBills = await (await ctx.get(
+      `http://localhost:8080/tmf-api/customerBillManagement/v4/customerBill?relatedPartyId=${fjellheim.id}&limit=5`,
+      { headers: NH })).json();
+    if (!Array.isArray(orgBills) || !orgBills.length) {
+      const novaOffs = await (await ctx.get(
+        'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?limit=100',
+        { headers: NH })).json();
+      const novaPlan = novaOffs.find((o) => /Unlimited|Smart/.test(o.name) && !o.isBundle);
+      await ctx.post('http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder',
+        { headers: { Authorization: 'Bearer ' + birgitTok, 'Content-Type': 'application/json' },
+          data: { productOrderItem: [{ id: '1', action: 'add', quantity: 1,
+            productOffering: { id: novaPlan.id } }],
+            relatedParty: [{ id: bsub, role: 'customer' }] } });
+      for (let i = 0; i < 15; i++) {
+        await new Promise((r) => setTimeout(r, 4000));
+        await ctx.post('http://localhost:8080/tmf-api/customerBillManagement/v4/billingRun',
+          { headers: NH, data: {} });
+        const bills = await (await ctx.get(
+          `http://localhost:8080/tmf-api/customerBillManagement/v4/customerBill?relatedPartyId=${fjellheim.id}&limit=5`,
+          { headers: NH })).json();
+        if (Array.isArray(bills) && bills.length) break;
+      }
+    }
+    await ctx.dispose();
+  }
   const biz = await (await browser.newContext()).newPage();
   await biz.goto('http://biz.nova.localhost:8080/biz/');
   await biz.waitForSelector('input[name="username"]', { timeout: 20000 });

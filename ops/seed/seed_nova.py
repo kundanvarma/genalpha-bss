@@ -133,3 +133,29 @@ for offering, value, overage, boost in ((smart, 15, 10.0, False), (topup, 5, 10.
     print(f"allowance: {offering['name']} = {value} GB Mobildata" + (" (boost)" if boost else ""))
 
 print("Nova catalog extended: two tiers + top-up, all NOK.")
+
+
+# ---- B2B fixture: Fjellheim AS, with birgit as its business admin --------
+# birgit is a realm persona (business:admin role) but her ORG MEMBERSHIP is
+# runtime data — without it the biz console's consolidated invoicing has no
+# company to bill. Idempotent: reuse the org if it already exists.
+import base64 as _b64
+def _birgit_sub():
+    data = urllib.parse.urlencode({"grant_type": "password", "client_id": "bss-demo",
+        "username": "birgit@fjellheim.no", "password": "birgit"}).encode()
+    with urllib.request.urlopen(urllib.request.Request(KEYCLOAK, data=data)) as r:
+        tok = json.load(r)["access_token"]
+    payload = tok.split(".")[1]
+    payload += "=" * (-len(payload) % 4)  # base64url padding — the bug the drill caught
+    return json.loads(_b64.urlsafe_b64decode(payload))["sub"]
+
+orgs = req("GET", "http://localhost:8080/tmf-api/party/v4/organization?limit=100")
+fjellheim = next((o for o in orgs if o["name"] == "Fjellheim AS"), None)
+if not fjellheim:
+    fjellheim = req("POST", "http://localhost:8080/tmf-api/party/v4/organization",
+                    {"name": "Fjellheim AS", "tradingName": "Fjellheim"})
+    print("created org: Fjellheim AS")
+bsub = _birgit_sub()
+req("PATCH", f"http://localhost:8080/tmf-api/party/v4/individual/{bsub}",
+    {"organization": {"id": fjellheim["id"]}})
+print(f"birgit linked to Fjellheim AS as business admin")

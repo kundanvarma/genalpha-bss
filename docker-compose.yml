@@ -1784,7 +1784,7 @@ services:
       BSS_GATEWAY_URL: http://gateway:8080
       BSS_TOKEN_URL: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       WORKER_IMAGE: bss-hermes-worker:dev
-      WORKER_NETWORK: bss-java_default
+      # WORKER_NETWORK unset: the controller detects its own network at runtime
       WORKER_AI_API_KEY: ${WORKER_AI_API_KEY:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

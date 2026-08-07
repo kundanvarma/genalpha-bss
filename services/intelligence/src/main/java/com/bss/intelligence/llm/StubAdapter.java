@@ -161,7 +161,7 @@ public class StubAdapter implements LlmAdapter {
                     + "\"experienceRules\":[{\"name\":\"Device browsers welcome\","
                     + "\"whenInterest\":\"Devices\","
                     + "\"banner\":\"Phone week: trade-in bonus in every store.\","
-                    + "\"pinOffering\":\"GenAlpha Mobile 60 GB 5G\"}]}}";
+                    + "\"pinOffering\":\"GenAlpha Mobile 50 GB\"}]}}"; // seed-guaranteed (taxonomy)
         }
         boolean asksWatch = lastOwner.contains("smartwatch") || lastOwner.contains("kids watch");
         boolean asksPlanWithDiscount = (lastOwner.contains("50 gb") || lastOwner.contains("50gb"))

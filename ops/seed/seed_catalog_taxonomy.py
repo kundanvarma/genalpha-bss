@@ -67,6 +67,7 @@ for o in offerings:
         req("DELETE", f"{CATALOG}/productOffering/{o['id']}")
         print(f"swept: {o['name']}")
 offerings = {o["name"]: o for o in req("GET", f"{CATALOG}/productOffering?limit=100")}
+specs = req("GET", f"{CATALOG}/productSpecification?limit=100")
 
 # ---- 3. tag existing offerings -------------------------------------------
 TAGS = {
@@ -116,9 +117,14 @@ def ensure_offering(name, category, price, description, pinned_id=None):
     if name in offerings:
         print(f"exists: {name}")
         return offerings[name]
+    spec = req("POST", f"{CATALOG}/productSpecification", {
+        "name": f"{name} spec", "lifecycleStatus": "Active"}) \
+        if not any(x["name"] == f"{name} spec" for x in specs) \
+        else next(x for x in specs if x["name"] == f"{name} spec")
     body = {
         "name": name, "description": description, "lifecycleStatus": "Active",
         "isBundle": False, "category": [cat_ref(category)],
+        "productSpecification": {"id": spec["id"], "name": spec["name"]},
         "productOfferingPrice": [{"id": price["id"], "name": price["name"]}]}
     if pinned_id:
         # fixture-stable id — the suites share it, the catalog honors it

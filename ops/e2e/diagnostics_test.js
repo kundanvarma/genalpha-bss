@@ -14,7 +14,7 @@ const { request } = require('playwright');
 const API = 'http://localhost:8080';
 const OCS = 'http://localhost:8115';
 const run = Date.now();
-const PLAN_ID = '14fd6b3d-a144-4989-b05a-2c3f2778f1b0'; // GenAlpha Mobile 60 GB 5G (OCS-charged)
+let PLAN_ID = null; const PLAN_NAME = 'GenAlpha Mobile 10 GB'; // OCS-charged, seeded
 
 async function token(ctx, user, pass) {
   const res = await ctx.post('http://localhost:8085/realms/bss/protocol/openid-connect/token',
@@ -27,6 +27,10 @@ async function token(ctx, user, pass) {
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const staff = await token(ctx, 'demo', 'demo');
+  PLAN_ID = ((await (await ctx.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`)).json()) || [])
+    .find((o) => o.name === PLAN_NAME)?.id;
+  if (!PLAN_ID) fail(PLAN_NAME + ' missing — run seed_catalog_taxonomy + seed_ocs_charging');
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
 
   /* ---------- a customer with a live 10 GB line ---------- */
@@ -36,7 +40,7 @@ async function token(ctx, user, pass) {
   const cust = await token(ctx, email, login.temporaryPassword);
   await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H(cust), data: {
-      productOrderItem: [{ action: 'add', productOffering: { id: PLAN_ID, name: 'GenAlpha Mobile 60 GB 5G' } }] } });
+      productOrderItem: [{ action: 'add', productOffering: { id: PLAN_ID, name: PLAN_NAME } }] } });
   let svc = null;
   for (let i = 0; i < 30 && !svc; i++) {
     await sleep(2000);

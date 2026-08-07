@@ -29,6 +29,12 @@ async function token(ctx, realm, user, pass) {
 
   /* ---------- nova: the message leaves through nova's OWN provider ---------- */
   const novaStaff = await token(ctx, 'nova', 'demo', 'demo');
+  // norah is a realm persona; her PARTY (and the email delivery needs)
+  // does not exist on a fresh fleet — ensure it, idempotently
+  await ctx.post(`${API}/tmf-api/party/v4/individual`, {
+    headers: H(novaStaff), data: { id: NORAH.id, givenName: 'Norah', familyName: 'Nova',
+      contactMedium: [{ mediumType: 'email',
+        characteristic: { emailAddress: NORAH.email } }] } });
   const subject = `Velkommen ${run}`;
   const sent = await (await ctx.post(MSG, { headers: H(novaStaff), data: {
     subject, content: 'Din faktura er klar.',

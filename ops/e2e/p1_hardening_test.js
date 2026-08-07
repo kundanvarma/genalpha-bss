@@ -49,8 +49,8 @@ async function token(ctx, user, pass) {
   const BILLS = `${API}/tmf-api/customerBillManagement/v4`;
 
   /* ---------- 1. THE RUN SURVIVES ITS OWN DEATH ---------- */
-  console.log('pacing the billing run (400ms per account) ...');
-  sh('RUN_ACCOUNT_DELAY_MS=400 docker compose up -d billing');
+  console.log('pacing the billing run (1500ms per account — the kill must land mid-run on any fleet size) ...');
+  sh('RUN_ACCOUNT_DELAY_MS=1500 docker compose up -d billing');
   let staff = await token(ctx, 'demo', 'demo');
   // wait until billing answers before building the cast
   for (let i = 0; i < 30; i++) {

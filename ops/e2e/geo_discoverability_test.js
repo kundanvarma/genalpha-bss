@@ -27,7 +27,10 @@ const get = async (url, ua) => {
   const off = feed.find((p) => !p.id.startsWith('legacy-')) || fail('no native offering');
   const bot = await get(`${API}/shop/offering/${off.id}`, BOT);
   if (bot.status !== 200) fail(`bot page: ${bot.status}`);
-  if (!bot.text.includes(off.title)) fail('bot page misses the offering name');
+  const escaped = off.title.replace(/&/g, '&amp;');
+  if (!bot.text.includes(off.title) && !bot.text.includes(escaped)) {
+    fail('bot page misses the offering name');
+  }
   const ld = bot.text.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)
     || fail('no JSON-LD on the bot page');
   const schema = JSON.parse(ld[1]);

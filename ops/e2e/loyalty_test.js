@@ -122,7 +122,27 @@ async function call(method, path, tok, body) {
     walk(r);
     return allowed;
   };
-  const before = await meterRead();
+  let before = await meterRead();
+  if (before === null) {
+    // fresh fleet: paula (a realm persona) owns nothing yet — give her the
+    // plan and the one usage record a meter derives from (the pruning
+    // runbook's law, applied by the suite itself)
+    const offs = (await call('GET',
+      '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', staff)).body || [];
+    const plan = offs.find((o) => o.name === 'GenAlpha Mobile 10 GB');
+    if (!plan) fail('GenAlpha Mobile 10 GB missing — run seed_catalog_taxonomy');
+    const ord = await call('POST', '/tmf-api/productOrderingManagement/v4/productOrder', paula,
+      { productOrderItem: [{ id: '1', action: 'add', quantity: 1,
+        productOffering: { id: plan.id, name: plan.name } }] });
+    if (ord.status !== 201) fail('paula plan order failed: ' + ord.status);
+    await call('POST', '/tmf-api/usageManagement/v4/usage', staff, {
+      usageType: 'Mobile data', usageCharacteristic: { value: 0.5, units: 'GB' },
+      productOffering: { id: plan.id }, relatedParty: [{ id: paulaId, role: 'customer' }] });
+    for (let i = 0; i < 20 && before === null; i++) {
+      await sleep(3000);
+      before = await meterRead();
+    }
+  }
   if (before === null) fail('paula has no data meter to receive the reward');
   const burn = await call('POST', `${L}/redeem`, paula, { type: 'data', gb: 1 });
   if (burn.status >= 300) fail(`redeem: ${burn.status} ${burn.text.slice(0, 200)}`);
