@@ -3,6 +3,7 @@
 Nova's own staff identity — the tenant lands in 'nova' because the token's
 issuer is the nova realm, not because anything here says so."""
 import json
+import urllib.error
 import urllib.request
 import urllib.parse
 
@@ -156,6 +157,17 @@ if not fjellheim:
                     {"name": "Fjellheim AS", "tradingName": "Fjellheim"})
     print("created org: Fjellheim AS")
 bsub = _birgit_sub()
+# her INDIVIDUAL party may not exist yet on a pristine fleet — ensure it,
+# then link (create is idempotent; the id is her token subject)
+try:
+    req("POST", "http://localhost:8080/tmf-api/party/v4/individual",
+        {"id": bsub, "givenName": "Birgit", "familyName": "Fjellheim",
+         "organization": {"id": fjellheim["id"]},
+         "contactMedium": [{"mediumType": "email",
+             "characteristic": {"emailAddress": "birgit@fjellheim.no"}}]})
+except urllib.error.HTTPError as e:
+    if e.code not in (200, 201, 409):
+        raise
 req("PATCH", f"http://localhost:8080/tmf-api/party/v4/individual/{bsub}",
     {"organization": {"id": fjellheim["id"]}})
-print(f"birgit linked to Fjellheim AS as business admin")
+print("birgit linked to Fjellheim AS as business admin")
