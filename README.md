@@ -6,6 +6,26 @@ gateway. Any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker �
 operator-specific is hardcoded. Two demo operators run side by side on a single deployment to
 prove it.
 
+**Run it now** — three commands, then a browser:
+
+```bash
+mvn -q package -DskipTests && docker compose build && docker compose up -d
+```
+
+→ [Quickstart](#quickstart) (demo data + every persona login) · [CTK scorecard](docs/ctk-conformance.md) · [the proof run — 87/87, attempts on record](https://kundanvarma.github.io/genalpha-bss/proof-run.html) · [guided demo](#a-look-at-it)
+
+**At a glance**
+
+- Catalog → order → activate → bill → cash, complete — 38 ODA components speaking TMF Open APIs natively
+- 87 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- Two operators run multi-tenant on one deployment; onboarding an MVNO is a form, not a project
+- AI-native with the approval keys kept human: a product copilot (type or speak), an advisor whose every claim carries a receipt, the Hermes digital workforce, agentic commerce off-by-default — all metered, audited, revocable
+- One Helm chart runs it on AWS EKS, Azure AKS, and bare-metal k3s — two flags of difference
+
+
+<details>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — eighty-seven Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+
 **Every feature is verified end-to-end in a real browser** — eighty-seven Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
@@ -137,6 +157,9 @@ admin mints a new operator from five console fields, every service live-refreshe
 registry with zero restarts, and `shop.<id>.localhost` wears the new brand the moment the
 gateway notices), the AI-slice
 lead-to-assure loop and BankID step-up against the full stack.
+
+</details>
+
 **Twenty-five official TM Forum CTKs pass with zero failures** — every published kit that matches
 a face this fleet serves: the five core (TMF620/622/632/637/666), TMF663 shopping-cart, TMF669
 party-role, TMF687 product-stock, TMF635 usage, TMF677 usage-consumption, TMF678 customer-bill,
