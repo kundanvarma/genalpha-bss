@@ -29,7 +29,19 @@ const TOKEN_URL = process.env.BSS_TOKEN_URL
 const PROV_USER = process.env.PROVISIONING_USERNAME || 'demo';
 const PROV_PASS = process.env.PROVISIONING_PASSWORD || 'demo';
 const WORKER_IMAGE = process.env.WORKER_IMAGE || 'bss-hermes-worker:dev';
-const WORKER_NETWORK = process.env.WORKER_NETWORK || 'bss-java_default';
+// the workers join the CONTROLLER'S own network — detected at runtime, so
+// a clone under any directory name (compose project = dir name) still works
+function ownNetwork() {
+  try {
+    const os = require('os');
+    const nets = execFileSync('docker', ['inspect', '--format',
+      '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}', os.hostname()],
+      { encoding: 'utf8' }).trim();
+    if (nets) return nets.split('\n')[0];
+  } catch { /* not in docker, or docker unreachable — fall through */ }
+  return 'bss-java_default';
+}
+const WORKER_NETWORK = process.env.WORKER_NETWORK || ownNetwork();
 const TENANTS_FILE = process.env.BSS_TENANTS_FILE || '/config/tenants.yml';
 const TENANT = process.env.BSS_TENANT || 'genalpha';
 const LABEL = 'bss.workforce.worker';

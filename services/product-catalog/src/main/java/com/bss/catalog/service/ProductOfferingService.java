@@ -130,7 +130,11 @@ public class ProductOfferingService {
             dto.setLifecycleStatus("Active");
         }
         ProductOffering entity = mapper.toEntity(dto);
-        String id = UUID.randomUUID().toString();
+        // fixture-stable ids: a caller MAY supply the id (the demo seeds pin
+        // well-known ids the suites share — same doctrine as persona ids in
+        // the realm files); absent one, we mint as always
+        String id = dto.getId() != null && !dto.getId().isBlank()
+                ? dto.getId() : UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/productOffering/" + id);

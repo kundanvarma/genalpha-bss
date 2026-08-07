@@ -112,14 +112,18 @@ def ensure_price(name, price_type, value, period=None):
     return p
 
 
-def ensure_offering(name, category, price, description):
+def ensure_offering(name, category, price, description, pinned_id=None):
     if name in offerings:
         print(f"exists: {name}")
         return offerings[name]
-    o = req("POST", f"{CATALOG}/productOffering", {
+    body = {
         "name": name, "description": description, "lifecycleStatus": "Active",
         "isBundle": False, "category": [cat_ref(category)],
-        "productOfferingPrice": [{"id": price["id"], "name": price["name"]}]})
+        "productOfferingPrice": [{"id": price["id"], "name": price["name"]}]}
+    if pinned_id:
+        # fixture-stable id — the suites share it, the catalog honors it
+        body["id"] = pinned_id
+    o = req("POST", f"{CATALOG}/productOffering", body)
     print(f"created offering: {name}")
     return o
 
@@ -127,7 +131,8 @@ def ensure_offering(name, category, price, description):
 ten = ensure_offering(
     "GenAlpha Mobile 10 GB", "Mobile plans",
     ensure_price("Mobile 10 GB Monthly", "recurring", 15.00, "month"),
-    "10 GB data, unlimited calls & texts")
+    "10 GB data, unlimited calls & texts",
+    pinned_id="14291c1a-df26-4232-8084-500466888e46")
 fifty = ensure_offering(
     "GenAlpha Mobile 50 GB", "Mobile plans",
     ensure_price("Mobile 50 GB Monthly", "recurring", 20.00, "month"),
