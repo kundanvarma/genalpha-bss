@@ -191,12 +191,13 @@ th { border-bottom-color: var(--line); }
 }
 @keyframes micpulse { 50% { opacity: 0.55; } }
 
-/* workspaces: departments as labeled groups; a persona with one role sees
-   one short shelf, not a junk drawer */
-#tabs { display: flex; flex-wrap: wrap; gap: 0.35rem 1.1rem; align-items: center; }
-.tabgroup { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+/* workspaces: departments as labeled shelves — the caption sits ABOVE its
+   pills so it reads as a header, never as a disabled tab */
+#tabs { display: flex; flex-wrap: wrap; gap: 0.9rem 1.6rem; align-items: flex-start; }
+.tabgroup { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+.tabgroup-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
 .tabgroup-label {
-  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
-  font-weight: 700; color: var(--ink); opacity: 0.75;
-  margin-right: 0.2rem; user-select: none;
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 700; color: var(--teal); user-select: none;
+  border-bottom: 2px solid var(--teal); padding-bottom: 2px;
 }

@@ -1040,14 +1040,20 @@ function renderTabs() {
     const label = document.createElement('span');
     label.className = 'tabgroup-label';
     label.textContent = ws.label;
-    group.append(label, ...rows.map(tabButton));
+    const row = document.createElement('div');
+    row.className = 'tabgroup-row';
+    row.append(...rows.map(tabButton));
+    group.append(label, row);
     nodes.push(group);
   }
   const stray = visible.filter((r) => !placed.has(r));
   if (stray.length) {
     const group = document.createElement('div');
     group.className = 'tabgroup';
-    group.append(...stray.map(tabButton));
+    const row = document.createElement('div');
+    row.className = 'tabgroup-row';
+    row.append(...stray.map(tabButton));
+    group.append(row);
     nodes.push(group);
   }
   el('tabs').replaceChildren(...nodes);
