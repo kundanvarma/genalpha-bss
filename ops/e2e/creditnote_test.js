@@ -50,6 +50,24 @@ const seqOf = (no) => Number(String(no).replace('CN-', ''));
   const paulaId = sub(paula);
 
   /* ---------- 1. the document: numbered, reasoned, party-readable ---------- */
+  // HERMETIC: paula needs a BILLABLE GenAlpha plan for the run to bill her.
+  // A fresh fleet gives personas nothing; the wrapped-legacy overlay may
+  // give her a non-billable DSL service, so check for the PLAN by name, not
+  // just any active service — order + await activation once.
+  {
+    const _offs = (await call('GET',
+      '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', staff)).body || [];
+    const _plan = _offs.find((o) => o.name === 'GenAlpha Mobile 10 GB');
+    const _hasPlan = async () => ((await call('GET',
+      `/tmf-api/serviceInventory/v4/service?relatedPartyId=${paulaId}`, staff)).body || [])
+      .some((s) => s.state === 'active' && /Mobile 10 GB/.test(s.name || ''));
+    if (_plan && !(await _hasPlan())) {
+      await call('POST', '/tmf-api/productOrderingManagement/v4/productOrder', paula,
+        { productOrderItem: [{ id: '1', action: 'add', quantity: 1,
+          productOffering: { id: _plan.id, name: _plan.name } }] });
+      for (let _i = 0; _i < 20 && !(await _hasPlan()); _i++) await sleep(3000);
+    }
+  }
   await call('POST', `${BILLS}/billingRun`, staff).catch(() => {});
   for (let i = 0; i < 30; i++) {
     const runs = (await call('GET', `${BILLS}/billingRun`, staff)).body || [];

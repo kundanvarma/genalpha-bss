@@ -194,7 +194,9 @@ ${entries.map((e) => `      <Ntry>
   const novaOffers = await (await ctx.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: { ...H(novaStaff), Host: 'shop.nova.localhost' } })).json();
-  const novaPlan = novaOffers.find((o) => (o.name || '').includes('Nova') && !o.isBundle)
+  const novaPlan = novaOffers.find((o) => (o.name || '').includes('Nova') && !o.isBundle
+      && !/åfyll|top-?up|datapåfyll/i.test(o.name || '')
+      && (o.productOfferingPrice || []).length > 0)
     || novaOffers[0];
   const nEmail = `giro-${run}@nova.example`;
   const nLogin = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,

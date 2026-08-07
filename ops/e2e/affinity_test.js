@@ -89,6 +89,19 @@ async function token(request, user, pass) {
     + ' product page everyone sees, and it reveals only aggregates');
 
   /* ---------- 3. the shop renders it (real offering, real signal) ---------- */
+  // seed REAL co-purchases for the REAL phone: three customers own the
+  // Samsung AND a real second offering, so its shop page has a rail to show
+  const offs2 = await (await ctx.request.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
+    { headers: H(staff) })).json();
+  const pair = (offs2 || []).find((o) => o.name === 'GenAlpha Mobile 10 GB')
+    || (offs2 || []).find((o) => o.id !== REAL_PHONE.id && !o.isBundle);
+  for (let i = 0; i < 3; i++) {
+    const c = `aff-real-${run}-${i}`;
+    await own(c, REAL_PHONE.id, REAL_PHONE.name);
+    await own(c, pair.id, pair.name);
+  }
+  await sleep(6500); // outlast the affinity cache TTL
   const page = await browser.newPage();
   await page.goto(`${API}/shop/offering/${REAL_PHONE.id}`);
   const rail = page.locator('[data-testid=also-bought]');

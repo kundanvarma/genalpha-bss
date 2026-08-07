@@ -29,6 +29,12 @@ async function token(ctx, user, pass) {
   PLAN_B.id = (allOffs || []).find((o) => o.name === PLAN_B.name)?.id;
   if (!PLAN_B.id) fail(PLAN_B.name + ' missing from catalog');
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
+  // HERMETIC: kill any leaked enabled pricing rule that would skew proration
+  const _pol = `${API}/tmf-api/policyManagement/v4`;
+  for (const r of (((await (await ctx.get(`${_pol}/policyRule?domain=pricing&limit=200`,
+      { headers: H(staff) })).json()) || []).filter((x) => x.enabled))) {
+    await ctx.delete(`${_pol}/policyRule/${r.id}`, { headers: H(staff) });
+  }
 
   /* catalog truth: what each plan costs per month */
   const monthlyOf = async (offeringId) => {

@@ -30,6 +30,17 @@ async function token(request) {
   const price = async (context) =>
     (await (await ctx.request.post(`${POLICY}/price`, { headers: H, data: { context } })).json());
 
+  // HERMETIC SETUP: a killed prior run can leave an enabled pricing rule
+  // that poisons the baseline (the proof run's orphan-rule hazard). Disable
+  // every enabled pricing rule first — a clean fleet has none (seeds ship
+  // disabled), so this only ever removes contamination.
+  const enabledPricing = ((await (await ctx.request.get(
+    `${POLICY}/policyRule?domain=pricing&limit=200`, { headers: H })).json()) || [])
+    .filter((r) => r.enabled);
+  for (const r of enabledPricing) {
+    await ctx.request.delete(`${POLICY}/policyRule/${r.id}`, { headers: H });
+  }
+
   // Baseline: no enabled pricing rules → price is the subtotal, untouched.
   const base = await price({ subtotal: 100 });
   if (!near(base.total, 100)) fail('baseline price should be 100, got ' + base.total);
