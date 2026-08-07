@@ -44,7 +44,12 @@ async function call(method, path, tok, body) {
     familyName: `Knows${run}`,
     contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] });
   const cust = await token(email, login.temporaryPassword);
-  const TEN_GB = { id: '14291c1a-df26-4232-8084-500466888e46', name: 'GenAlpha Mobile 10 GB' };
+  // resolved by NAME: ids are per-install (the drill's hardcoded-UUID lesson)
+  const tenGbRow = ((await call('GET',
+    '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', staff)).body || [])
+    .find((o) => o.name === 'GenAlpha Mobile 10 GB');
+  if (!tenGbRow) fail('GenAlpha Mobile 10 GB missing — run seed_catalog_taxonomy');
+  const TEN_GB = { id: tenGbRow.id, name: tenGbRow.name };
   const ord = await call('POST', '/tmf-api/productOrderingManagement/v4/productOrder', cust,
     { productOrderItem: [{ id: '1', action: 'add', quantity: 1, productOffering: TEN_GB }] });
   if (ord.status !== 201) fail(`order: ${ord.status}`);

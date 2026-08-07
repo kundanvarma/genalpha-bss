@@ -60,10 +60,54 @@ async function agentLogin(page, username) {
   await a.fill('.searchbar input', FAMILY.toLowerCase().slice(0, -2));
   await a.locator('.rowlink', { hasText: FAMILY }).first().waitFor({ timeout: 15000 });
   console.log('OK search-as-you-type finds a lowercase partial name');
-  // ...and a PHONE NUMBER resolves in the tenant's own pool (permanent persona)
-  await a.fill('.searchbar input', '+46701000619');
-  await a.locator('.rowlink', { hasText: 'Sonny' }).first().waitFor({ timeout: 15000 });
-  console.log('OK a typed phone number resolves to its holder');
+  // ...and a PHONE NUMBER resolves to its holder. The search rides the
+  // pool's issued-number ledger, so the suite seeds the real thing: a
+  // customer whose ORDER made the pool issue her a number.
+  {
+    const tokRes = await ctxA.request.post(
+      'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+      { form: { grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' } });
+    const staffTok = (await tokRes.json()).access_token;
+    const SH = { Authorization: 'Bearer ' + staffTok, 'Content-Type': 'application/json' };
+    const email = `sunniva-${run}@example.com`;
+    const mint = await (await ctxA.request.post(
+      'http://localhost:8080/tmf-api/rolesAndPermissionsManagement/v4/user',
+      { headers: SH, data: { email, givenName: 'Sunniva', familyName: `Portholder${run}` } })).json();
+    await ctxA.request.post('http://localhost:8080/tmf-api/party/v4/individual',
+      { headers: SH, data: { id: mint.id, givenName: 'Sunniva', familyName: `Portholder${run}`,
+        contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] } });
+    const herTokRes = await ctxA.request.post(
+      'http://localhost:8085/realms/bss/protocol/openid-connect/token',
+      { form: { grant_type: 'password', client_id: 'bss-demo',
+        username: email, password: mint.temporaryPassword } });
+    const herTok = (await herTokRes.json()).access_token;
+    const offs = await (await ctxA.request.get(
+      'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?limit=100',
+      { headers: SH })).json();
+    const plan = offs.find((o) => o.name === 'GenAlpha Mobile 10 GB')
+      || offs.find((o) => /Mobile/.test(o.name) && !o.isBundle);
+    const ord = await ctxA.request.post(
+      'http://localhost:8080/tmf-api/productOrderingManagement/v4/productOrder',
+      { headers: { Authorization: 'Bearer ' + herTok, 'Content-Type': 'application/json' },
+        data: { productOrderItem: [{ id: '1', action: 'add', quantity: 1,
+          productOffering: { id: plan.id, name: plan.name } }] } });
+    if (ord.status() !== 201) fail('csr number seed: order failed ' + ord.status());
+    let herNumber = null;
+    for (let i = 0; i < 20 && !herNumber; i++) {
+      await a.waitForTimeout(3000);
+      const svcs = await (await ctxA.request.get(
+        `http://localhost:8080/tmf-api/serviceInventory/v4/service?relatedPartyId=${mint.id}`,
+        { headers: SH })).json();
+      for (const svc of svcs) {
+        const res = (svc.supportingResource || []).find((r) => /^\+\d{8,}/.test(r.value || ''));
+        if (res) herNumber = res.value;
+      }
+    }
+    if (!herNumber) fail('csr number seed: no number issued to Sunniva');
+    await a.fill('.searchbar input', herNumber);
+    await a.locator('.rowlink', { hasText: 'Sunniva' }).first().waitFor({ timeout: 15000 });
+    console.log('OK a typed phone number resolves to its holder (self-seeded order + pool number)');
+  }
   await a.fill('.searchbar input', FAMILY);
   const hit = a.locator('.rowlink', { hasText: FAMILY });
   await hit.waitFor({ timeout: 15000 });

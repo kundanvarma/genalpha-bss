@@ -115,7 +115,12 @@ async function token(ctx, realm, client, user, pass) {
     + ' in the tenant\'s own pool, name never disclosed; unknown numbers bounce');
 
   /* ---------- B. GENALPHA keeps the default: household-only ---------- */
-  const PLAN_ID = '14291c1a-df26-4232-8084-500466888e46'; // GenAlpha Mobile 10 GB
+  // resolved by NAME: ids are per-install (the drill's hardcoded-UUID lesson)
+  const PLAN_ID = (await (await ctx.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
+    { headers: H(staff.genalpha) })).json())
+    .find((o) => o.name === 'GenAlpha Mobile 10 GB')?.id;
+  if (!PLAN_ID) fail('GenAlpha Mobile 10 GB missing — run seed_catalog_taxonomy');
   const gus = await mkPerson(API, staff.genalpha, 'bss', 'Gus');
   const greta = await mkPerson(API, staff.genalpha, 'bss', 'Greta'); // strangers
   await meter(API, staff.genalpha, gus.id, PLAN_ID, 'Mobile data', 1);

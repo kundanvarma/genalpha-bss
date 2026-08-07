@@ -180,9 +180,22 @@ const run = Date.now();
   if (!/200\.00/.test(priceVerdict)) fail(`dry-run price should mention 200.00, got "${priceVerdict}"`);
   console.log('OK rules dry-run (price):', priceVerdict.trim());
 
-  // 8. Porting tab: back-office view of MNP orders with the cutover action
+  // 8. Porting tab: back-office view of MNP orders with the cutover action.
+  // The suite SEEDS the order it asserts (a fresh fleet has no ambient MNP
+  // history — the drill's lesson, applied everywhere it bites).
+  const portNumber = '+4740' + String(run).slice(-6);
+  const portSeed = await page.evaluate(async (num) => {
+    const res = await authFetch('/tmf-api/numberPortingManagement/v1/numberPortingOrder', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ direction: 'portIn', phoneNumber: num, country: 'NO',
+        otherOperator: 'OtherTelco',
+        relatedParty: [{ id: 'console-e2e-port', role: 'customer' }] }),
+    });
+    return res.status;
+  }, portNumber);
+  if (portSeed !== 201) fail('porting seed failed: ' + portSeed);
   await page.locator('.tab', { hasText: 'Porting' }).click();
-  const portRow = page.locator('#listing-body tr', { hasText: '+47' });
+  const portRow = page.locator('#listing-body tr', { hasText: portNumber });
   await portRow.first().waitFor({ timeout: 10000 });
   const portCells = await portRow.first().locator('td').allTextContents();
   console.log('OK porting tab:', portCells.slice(0, 4).join(' | '));

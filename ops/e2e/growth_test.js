@@ -13,7 +13,7 @@ const { request } = require('playwright');
 
 const API = 'http://localhost:8080';
 const run = Date.now();
-const PLAN_ID = '14291c1a-df26-4232-8084-500466888e46'; // GenAlpha Mobile 10 GB
+let PLAN_ID = null; // GenAlpha Mobile 10 GB — resolved by NAME (ids are per-install)
 const SEGMENT = `GrowthCat${run}`; // a category only this run browses
 
 async function token(ctx, client, user, pass) {
@@ -24,6 +24,10 @@ async function token(ctx, client, user, pass) {
 
 (async () => {
   const ctx = await request.newContext();
+  PLAN_ID = (await (await ctx.get(
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`)).json())
+    .find((o) => o.name === 'GenAlpha Mobile 10 GB')?.id;
+  if (!PLAN_ID) { console.error('FAIL: GenAlpha Mobile 10 GB missing — run seed_catalog_taxonomy'); process.exit(1); }
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const staff = await token(ctx, 'bss-demo', 'demo', 'demo');

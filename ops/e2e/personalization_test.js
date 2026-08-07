@@ -40,6 +40,17 @@ async function token(request, realm, client, user, pass) {
   const visitorOf = (page) => page.evaluate(() => localStorage.getItem('bss.shop.visitor'));
 
   /* ---------- the consenting guest ---------- */
+  // Banners exist only when an ENABLED operator rule matches — the aged
+  // fleet had ambient deal rules, a fresh fleet has none (the drill's
+  // ambient-data lesson). The suite authors the rule it asserts.
+  const ruleRes = await ctx.request.post(`${API}/tmf-api/policyManagement/v4/policyRule`,
+    { headers: H(staff), data: { name: `Device browsers welcome ${run}`,
+      domain: 'personalization', effect: 'allow', priority: 5, enabled: true,
+      condition: JSON.stringify({ '==': [{ var: 'topInterest' }, 'Devices'] }),
+      message: 'Devices fans get the good stuff first.',
+      experience: JSON.stringify({ heroCategory: 'Devices' }) } });
+  if (ruleRes.status() !== 201) fail('could not author the banner rule: ' + ruleRes.status());
+  const bannerRule = await ruleRes.json();
   const yes = await (await browser.newContext()).newPage();
   await yes.goto(`${API}/shop/`);
   await yes.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
@@ -50,10 +61,12 @@ async function token(request, realm, client, user, pass) {
   let bannerUp = false;
   for (let i = 0; i < 5 && !bannerUp; i++) {
     await yes.reload();
-    bannerUp = await yes.locator('[data-testid=personal-banner]', { hasText: 'Devices' })
+    bannerUp = await yes.locator('[data-testid=personal-banner]', { hasText: 'Devices fans' })
       .waitFor({ timeout: 8000 }).then(() => true).catch(() => false);
   }
   if (!bannerUp) fail('the consenting guest never saw the personalized home');
+  await ctx.request.delete(`${API}/tmf-api/policyManagement/v4/policyRule/${bannerRule.id}`,
+    { headers: H(staff) });
   const yesVid = await visitorOf(yes);
   const yesProfile = await (await profileOf(yesVid)).json();
   if (!yesProfile.analyticsConsent || yesProfile.eventCount < 1) {
