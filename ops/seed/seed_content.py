@@ -3,6 +3,7 @@
 generated SVGs, no external assets. Idempotent by document name."""
 import base64
 import json
+import urllib.error
 import urllib.request
 import urllib.parse
 
@@ -86,8 +87,13 @@ for realm, tenant_color, brand in [("bss", "#0E7C7B", "GenAlpha"), ("nova", "#5B
         if o.get("attachment"):
             continue
         art = upload(f"art-{o['name']}", "offering", offer_svg(kind_for(o["name"]), tenant_color))
-        req(tok, "PATCH", f"/tmf-api/productCatalogManagement/v4/productOffering/{o['id']}", {
-            "attachment": [{"name": "hero", "mimeType": "image/svg+xml",
-                            "url": art["attachmentUrl"], "@type": "Attachment"}]})
-        print(f"{realm}: art -> {o['name']}")
+        try:
+            req(tok, "PATCH", f"/tmf-api/productCatalogManagement/v4/productOffering/{o['id']}", {
+                "attachment": [{"name": "hero", "mimeType": "image/svg+xml",
+                                "url": art["attachmentUrl"], "@type": "Attachment"}]})
+            print(f"{realm}: art -> {o['name']}")
+        except urllib.error.HTTPError as e:
+            # projected offerings (the wrapped-legacy overlay) are read-only
+            # here — their look belongs to the system that owns them
+            print(f"{realm}: skip (not patchable, {e.code}) -> {o['name']}")
 print("done")
