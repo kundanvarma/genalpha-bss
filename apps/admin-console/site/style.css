@@ -191,13 +191,21 @@ th { border-bottom-color: var(--line); }
 }
 @keyframes micpulse { 50% { opacity: 0.55; } }
 
-/* workspaces: departments as labeled shelves — the caption sits ABOVE its
-   pills so it reads as a header, never as a disabled tab */
-#tabs { display: flex; flex-wrap: wrap; gap: 0.9rem 1.6rem; align-items: flex-start; }
-.tabgroup { display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; }
+/* workspaces: departments as boxed shelves. The lesson of three tries:
+   any TEXT in the tab area reads as a tab, and unclickable text reads as
+   a BROKEN tab — so the department name lives on the BOX (a legend on a
+   bordered container), never loose in the row. */
+#tabs { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: stretch; }
+.tabgroup {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem;
+  border: 1px solid var(--line); border-radius: 12px;
+  padding: 0.55rem 0.7rem 0.7rem;
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
 .tabgroup-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
 .tabgroup-label {
-  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.1em;
-  font-weight: 700; color: var(--teal); user-select: none;
-  border-bottom: 2px solid var(--teal); padding-bottom: 2px;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
+  font-weight: 800; color: var(--ink); user-select: none;
 }
+.tabgroup:has(.tab.on) { border-color: var(--teal); }
+.tabgroup:has(.tab.on) .tabgroup-label { color: var(--teal); }
