@@ -400,6 +400,14 @@ node storefront_test.js && node guest_test.js && node console_test.js \
   && node knowledge_test.js && node personalization_test.js && node growth_test.js
 ```
 
+That is the ~10-minute smoke. To run **all 87 suites** serially with one honest
+receipt (readiness gate, worker-controller choreography, one retry pass), use the
+proof runner — it installs Playwright itself if needed:
+
+```bash
+bash ops/run-all-suites.sh          # ~40 min on a warm fleet; writes ops/e2e/.proof-run/
+```
+
 The storefront suite alone walks ~40 assertions: register → configure a bundle (phone choice,
 color, storage) → cart ×2 → serviceability gate → installer slot → pay → order → stock
 consumption → payment capture → commitment agreement → usage meters → billing run with overage

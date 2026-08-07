@@ -18,6 +18,13 @@ set -u
 cd "$(dirname "$0")/.."
 export PATH=/opt/homebrew/bin:$PATH
 
+# the suites are Playwright — make sure it is installed before we judge 87
+# of them (a fresh clone has no node_modules; this is idempotent and quick)
+if [ ! -d ops/e2e/node_modules/playwright ]; then
+  echo "[$(date +%H:%M:%S)] installing Playwright for the suites ..."
+  ( cd ops/e2e && npm i playwright >/dev/null 2>&1 && npx playwright install chromium >/dev/null 2>&1 )
+fi
+
 RESULTS_DIR="ops/e2e/.proof-run"
 mkdir -p "$RESULTS_DIR"
 RESULTS="$RESULTS_DIR/results.tsv"
