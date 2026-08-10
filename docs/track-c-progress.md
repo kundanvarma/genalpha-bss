@@ -38,13 +38,14 @@ physical SIM, 5b validation) on the live stack.
 the cart; or order a digital + physical mix. Open **My orders** — the digital
 part goes active immediately, the parcel arrives on its own with Helthjem tracking.
 
-**⚠️ NOT merged — one open regression (C6):** `storefront_test.js` fails on the
-bundle-checkout provisioning count (expects 5 provisioned products, gets 1). It's
-a completion→provision timing interaction, not a broken core (`provision()` works
-for simple orders; suite #88 is green). Details + diagnosis in the C6 log entry
-below. **`main` stays frozen at 87/87 — nothing merged — so nothing is at risk.**
-Finish before merge: fix this regression, run the FULL sweep, re-run the SOM unit
-test. `fulfilment_test` (updated) and `bundle_test` pass.
+**C6 status — regression resolved; full sweep running; not yet merged.** The
+`storefront_test` "got 1" was a **fragile test, not a bug**: provisioning is
+correct (5 products, confirmed on the API); the old raw `.row === 5` count raced
+the async render and Track C shifted the timing. Fixed deterministically.
+`fulfilment_test` (updated for the carrier model), `bundle_test`, `storefront_test`,
+suite `#88`, and the SOM `OrchestrationTest` all **pass**. The **full
+`ops/run-all-suites.sh` sweep is running** (multi-hour) — merge to `main` waits
+on it being green. **`main` stays frozen at 87/87 until then — nothing at risk.**
 
 **Honest simplifications:** a deferred item's backend service still activates
 optimistically at order time (only its *item state* shows pending). Helthjem
@@ -71,7 +72,7 @@ seam. Per-item install completion rides the whole-order backstop.
 | C3 | eSIM vs physical SIM checkout choice + routing | ✅ done + proven |
 | C4 | 5b validation (proven) + fiber installs-not-ships + SOM test fix | ✅ done |
 | C5 | storefront partial-progress + tracking view | ✅ built (order page) |
-| C6 | suite #88 GREEN; fulfilment+bundle green; storefront_test regression (provisioning) OPEN; NOT merged | ⚠️ partial |
+| C6 | suite #88 + fulfilment + bundle + storefront + SOM-unit all GREEN; full sweep RUNNING; merge pending | 🔄 in progress |
 
 ---
 
