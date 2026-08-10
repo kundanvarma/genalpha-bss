@@ -67,7 +67,7 @@ is on `main` yet.
 | C0 | per-item state machine + derived rollup (additive, behavior-neutral) | ✅ done + smoke-proven |
 | C1 | independent activation timing (digital now, physical/fiber on tracks) | ✅ done + proven |
 | C2 | Helthjem logistics seam + mock + ship-per-item + delivery completes item | ✅ done + proven E2E |
-| C3 | eSIM vs physical SIM checkout choice + ICCID↔MSISDN dispatch gate | — |
+| C3 | eSIM vs physical SIM checkout choice + routing | ✅ done + proven |
 | C4 | fiber install track completes its item + order-time validation (5b) | — |
 | C5 | storefront partial-progress + tracking view | ✅ built (order page) |
 | C6 | E2E suite #88 + re-prove full 88/88, merge to main | — |
@@ -136,3 +136,17 @@ booked". Order badge shows friendly "In progress" for partiallyCompleted. New
 `myShipments()` api call (party-scoped shipping orders → tracking). Files:
 `Orders.jsx`, `api.js` (myShipments), `styles.css`. Deployed & healthy; needs a
 quick visual check in a browser. My-page/Services per-item view = follow-up.
+
+**C3 done — eSIM vs physical SIM, both offered at checkout.** The Cart shows a
+SIM choice for any mobile line: **⚡ eSIM** (activates instantly, no parcel) or
+**📦 Physical SIM** (delivered by Helthjem, tracked). The elegant part: the
+difference IS place-or-no-place, which C1/C2 already route — eSIM line carries a
+`simType=esim` characteristic and no place (→ completed instantly); physical SIM
+carries `simType=physical` and is marked shipping (→ Helthjem parcel → completes
+on delivery). `performCheckout` gained a `simType` param + `isMobileLine` helper;
+Cart adds the toggle + folds physical-SIM into needsShipping; Orders labels
+"⚡ eSIM active" vs "📦 On its way · HJ… (Helthjem)". **Proven E2E via API:**
+eSIM order → completed instantly; physical-SIM order → SIM parcel booked
+(HJ1989856722) → delivered ~15s → completed. Files: `checkout.js`, `Cart.jsx`,
+`Orders.jsx`, `styles.css`. NOTE: backend mints the same ICCID for both (eSIM
+also has an ICCID); the eSIM QR/activation-code artifact on My-page is polish.

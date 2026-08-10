@@ -65,8 +65,14 @@ export default function Orders() {
   function itemStatus(item, ship, visit) {
     const st = item.state || 'acknowledged';
     const physical = !!(item.product && item.product.place);
-    if (st === 'completed') return { cls: 'ok', text: physical ? '✓ Delivered' : '✓ Active' };
+    const chars = (item.product && item.product.productCharacteristic) || [];
+    const simType = (chars.find((c) => c.name === 'simType') || {}).value;
+    if (st === 'completed') {
+      if (simType === 'esim') return { cls: 'ok', text: '✓ eSIM active' };
+      return { cls: 'ok', text: physical ? '✓ Delivered' : '✓ Active' };
+    }
     if (st === 'cancelled') return { cls: 'no', text: 'Cancelled' };
+    if (simType === 'esim') return { cls: 'ok', text: '⚡ eSIM — ready to activate' };
     if (physical && ship && ship.trackingRef) {
       return { cls: 'go', text: `📦 On its way · ${ship.trackingRef} (Helthjem)` };
     }
