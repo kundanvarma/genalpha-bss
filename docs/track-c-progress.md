@@ -16,7 +16,7 @@ newest at top. Plan: `docs/track-c-fulfillment-plan.md`.
 |---|---|---|
 | Setup | branch, plan, toolchain validated (no host JDK → use openjdk@17) | ✅ done |
 | C0 | per-item state machine + derived rollup (additive, behavior-neutral) | ✅ done + smoke-proven |
-| C1 | independent activation timing (digital now, physical/fiber on tracks) | — |
+| C1 | independent activation timing (digital now, physical/fiber on tracks) | ✅ done + proven |
 | C2 | Helthjem logistics seam + mock-logistics + ship-per-item + delivery completes item | — |
 | C3 | eSIM vs physical SIM checkout choice + ICCID↔MSISDN dispatch gate | — |
 | C4 | fiber install track completes its item + order-time validation (5b) | — |
@@ -41,3 +41,19 @@ order). **Smoke-proven** on a held order (place → SOM waits):
 `item2=completed → completed`. Files: `ProductOrderService.java` (stampItemStates,
 updateItemState, rollupState, applyCompletion), `ProductOrderMapper.java`
 (readItems/writeItems), `ProductOrderController.java` (patchItem endpoint).
+
+**C1 done — independent activation (service-orchestration).** Removed the
+order-level `needsFulfilment` gate that made a mixed order wait as a whole. Now
+each item is handled on its own: a digital service activates immediately and its
+item is reported `completed`; an item carrying a `place` (ships/installs) is
+reported `inProgress` and left for its own track; billing-only items report
+`completed`. The final whole-order `ordering.complete()` is replaced by per-item
+reports that drive the C0 rollup (with a safety-net fallback for orders whose
+items predate C0 ids). New `OrderingClient.updateItemState` (fail-soft — a failed
+status callback never unwinds a real activation). **Proven:** a mixed order
+(Netflix digital + Kids-TV-with-place) → Netflix `completed`, Kids TV
+`inProgress`, order `partiallyCompleted`, fully automatically. KNOWN: SOM unit
+test `OrchestrationTest` still asserts `complete()` — update to assert
+`updateItemState` before C6 merge. SIMPLIFICATION (documented): a deferred item's
+backend service still activates optimistically at order time; only its *item
+state* honestly shows pending. C4 will defer real activation to the install.

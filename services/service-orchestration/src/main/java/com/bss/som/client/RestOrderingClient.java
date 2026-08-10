@@ -11,6 +11,8 @@ import java.util.Map;
 @Component
 public class RestOrderingClient implements OrderingClient {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RestOrderingClient.class);
+
     private final RestClient restClient;
 
     public RestOrderingClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
@@ -45,6 +47,23 @@ public class RestOrderingClient implements OrderingClient {
                     .retrieve().toBodilessEntity();
         } catch (RestClientException e) {
             throw new IllegalStateException("ordering rejected the completion callback", e);
+        }
+    }
+
+    @Override
+    public void updateItemState(String productOrderId, String itemId, String state) {
+        // Fail-soft: the service IS activated; a failed status callback is a
+        // reconcile-later event, never a reason to unwind provisioning.
+        try {
+            restClient.patch()
+                    .uri("/tmf-api/productOrderingManagement/v4/productOrder/{id}/productOrderItem/{itemId}",
+                            productOrderId, itemId)
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("state", state))
+                    .retrieve().toBodilessEntity();
+        } catch (RestClientException e) {
+            log.warn("ordering rejected item-state callback for order {} item {} -> {} (reconcile later): {}",
+                    productOrderId, itemId, state, e.getMessage());
         }
     }
 }
