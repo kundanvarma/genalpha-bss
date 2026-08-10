@@ -3,6 +3,55 @@
 Branch `track-c-fulfillment` (off `main` @ 87/87, which stays frozen). Live log,
 newest at top. Plan: `docs/track-c-fulfillment-plan.md`.
 
+---
+
+## ☀️ MORNING SUMMARY (read this first)
+
+**The core is built, proven, and committed.** A bundle order no longer fulfils
+all-or-nothing — each component now completes on its own clock, and physical
+goods ship through a real carrier seam (Helthjem). This is exactly the gap you
+spotted ("mobile shouldn't wait for fiber; and we need a logistics partner").
+
+**What works right now (proven end-to-end on the live stack):**
+- **C0 — per-item order states.** Every order item has its own state; the order
+  derives `partiallyCompleted` → `completed` from its items.
+- **C1 — independent activation.** Digital services (mobile, TV, add-ons)
+  activate in seconds; items that ship/install wait on their own track. The
+  mobile no longer waits for the fiber.
+- **C2 — Helthjem logistics seam.** Physical items are **booked with a carrier**
+  (Helthjem-shaped mock returns a real tracking number, e.g. `HJ6268833420`),
+  the parcel moves on its own, and its **delivery completes that item** and rolls
+  the order up — no human touch. Carrier-agnostic + fail-open (same pattern as
+  your OCS seam); Bring/PostNord drop in behind the same interface later.
+- **C5 — visible in the shop.** `My orders` shows each component's live status
+  ("✓ Active", "📦 On its way · HJ… (Helthjem)", "🔧 Install booked").
+
+**Proven:** mixed order → digital `completed` instantly + physical `inProgress`
+with a Helthjem tracking number → ~15s later carrier delivers → order `completed`.
+Pure mobile-plan order still completes normally (regression check passed).
+
+**How to see it:** order a mix of a digital item + a physical item (any item with
+a shipping address) in the shop, open **My orders** — you'll watch the digital
+part go active immediately and the parcel arrive on its own with tracking.
+
+**NOT done yet (clearly scoped, safe to finish next):**
+- **C3 — eSIM vs physical SIM choice** (you wanted both in the demo). Needs a
+  SIM-type choice at checkout + an eSIM-instant vs physical-ships branch. ~½ day.
+- **C4 — fiber install track** completing its item on install-done + reject an
+  under-configured bundle at order time (5b). ~½ day.
+- **C6 — full 87-suite regression** + update the SOM unit test + merge to `main`.
+  I ran targeted smoke regressions (pure digital ✅, mixed ✅) but NOT the full
+  sweep — do this before merging. `main` is untouched at 87/87, so nothing is
+  at risk.
+
+**Honest simplifications (documented in the log):** a deferred item's backend
+service still activates optimistically at order time (only its *item state*
+shows pending) — C4 defers real activation. Helthjem access is gated to
+customers, so only the mock runs; the adapter is coded to the seam. Nothing here
+is on `main` yet.
+
+---
+
 **Build loop (for reference):**
 `export JAVA_HOME=/opt/homebrew/opt/openjdk@17 PATH=$JAVA_HOME/bin:$PATH` →
 `cd services/<svc> && mvn -q package -DskipTests` →
