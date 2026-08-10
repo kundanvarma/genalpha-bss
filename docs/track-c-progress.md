@@ -13,42 +13,43 @@ goods ship through a real carrier seam (Helthjem). This is exactly the gap you
 spotted ("mobile shouldn't wait for fiber; and we need a logistics partner").
 
 **What works right now (proven end-to-end on the live stack):**
-- **C0 — per-item order states.** Every order item has its own state; the order
-  derives `partiallyCompleted` → `completed` from its items.
-- **C1 — independent activation.** Digital services (mobile, TV, add-ons)
-  activate in seconds; items that ship/install wait on their own track. The
-  mobile no longer waits for the fiber.
+- **C0 — per-item order states.** Each item has its own state; the order derives
+  `partiallyCompleted` → `completed` from its items.
+- **C1 — independent activation.** Digital services activate in seconds; items
+  that ship/install wait on their own track. The mobile no longer waits for fiber.
 - **C2 — Helthjem logistics seam.** Physical items are **booked with a carrier**
-  (Helthjem-shaped mock returns a real tracking number, e.g. `HJ6268833420`),
-  the parcel moves on its own, and its **delivery completes that item** and rolls
-  the order up — no human touch. Carrier-agnostic + fail-open (same pattern as
-  your OCS seam); Bring/PostNord drop in behind the same interface later.
+  (real tracking number), the parcel moves on its own, and its **delivery
+  completes that item**. Carrier-agnostic + fail-open (OCS-seam pattern);
+  Bring/PostNord drop in behind the same interface later.
+- **C3 — eSIM vs physical SIM, both offered at checkout.** eSIM activates
+  instantly with no parcel; a physical SIM ships via Helthjem and completes on
+  delivery. Two clocks, one plan.
+- **C4 — 5b validation + fiber installs (not ships).** An under-configured bundle
+  is refused at order time; fiber's place is the engineer's address (workOrder),
+  not a parcel.
 - **C5 — visible in the shop.** `My orders` shows each component's live status
-  ("✓ Active", "📦 On its way · HJ… (Helthjem)", "🔧 Install booked").
+  ("⚡ eSIM active", "📦 On its way · HJ… (Helthjem)", "🔧 Install booked").
 
-**Proven:** mixed order → digital `completed` instantly + physical `inProgress`
-with a Helthjem tracking number → ~15s later carrier delivers → order `completed`.
-Pure mobile-plan order still completes normally (regression check passed).
+**Proven:** the new **suite #88 `track_c_test.js` passes GREEN** — it exercises
+the whole arc (independent fulfillment, Helthjem booking + auto-delivery, eSIM vs
+physical SIM, 5b validation) on the live stack.
 
-**How to see it:** order a mix of a digital item + a physical item (any item with
-a shipping address) in the shop, open **My orders** — you'll watch the digital
-part go active immediately and the parcel arrive on its own with tracking.
+**How to see it:** order a mobile plan and pick **eSIM** vs **Physical SIM** in
+the cart; or order a digital + physical mix. Open **My orders** — the digital
+part goes active immediately, the parcel arrives on its own with Helthjem tracking.
 
-**NOT done yet (clearly scoped, safe to finish next):**
-- **C3 — eSIM vs physical SIM choice** (you wanted both in the demo). Needs a
-  SIM-type choice at checkout + an eSIM-instant vs physical-ships branch. ~½ day.
-- **C4 — fiber install track** completing its item on install-done + reject an
-  under-configured bundle at order time (5b). ~½ day.
-- **C6 — full 87-suite regression** + update the SOM unit test + merge to `main`.
-  I ran targeted smoke regressions (pure digital ✅, mixed ✅) but NOT the full
-  sweep — do this before merging. `main` is untouched at 87/87, so nothing is
-  at risk.
+**⚠️ NOT merged — one open regression (C6):** `storefront_test.js` fails on the
+bundle-checkout provisioning count (expects 5 provisioned products, gets 1). It's
+a completion→provision timing interaction, not a broken core (`provision()` works
+for simple orders; suite #88 is green). Details + diagnosis in the C6 log entry
+below. **`main` stays frozen at 87/87 — nothing merged — so nothing is at risk.**
+Finish before merge: fix this regression, run the FULL sweep, re-run the SOM unit
+test. `fulfilment_test` (updated) and `bundle_test` pass.
 
-**Honest simplifications (documented in the log):** a deferred item's backend
-service still activates optimistically at order time (only its *item state*
-shows pending) — C4 defers real activation. Helthjem access is gated to
-customers, so only the mock runs; the adapter is coded to the seam. Nothing here
-is on `main` yet.
+**Honest simplifications:** a deferred item's backend service still activates
+optimistically at order time (only its *item state* shows pending). Helthjem
+access is gated to customers, so only the mock runs; the adapter is coded to the
+seam. Per-item install completion rides the whole-order backstop.
 
 ---
 
@@ -70,7 +71,7 @@ is on `main` yet.
 | C3 | eSIM vs physical SIM checkout choice + routing | ✅ done + proven |
 | C4 | 5b validation (proven) + fiber installs-not-ships + SOM test fix | ✅ done |
 | C5 | storefront partial-progress + tracking view | ✅ built (order page) |
-| C6 | E2E suite #88 + re-prove full 88/88, merge to main | — |
+| C6 | suite #88 GREEN; fulfilment+bundle green; storefront_test regression (provisioning) OPEN; NOT merged | ⚠️ partial |
 
 ---
 
@@ -166,3 +167,38 @@ the old whole-order `complete()`. Files: `FulfilmentEventListener.java`,
 `OrchestrationTest.java`. NOTE: per-item install completion (workOrder → complete
 the specific fiber item) still rides the whole-order backstop; a fuller version
 threads the fiber item id onto the workOrder — follow-up.
+
+**C6 (partial) — acceptance suite green, one regression open, NOT merged.**
+- **Suite #88 `track_c_test.js` — GREEN.** Proves the whole arc end-to-end:
+  independent per-component fulfillment, Helthjem booking + auto-delivery,
+  eSIM vs physical SIM, 5b order-time validation. This is the acceptance test.
+- **Regression probe** of the most-affected existing suites:
+  - `fulfilment_test.js` — was RED (asserted newborn shipping order
+    `acknowledged`; C2 now books it → `inProgress` + Helthjem tracking). UPDATED
+    to the new model (carrier books + auto-delivers; install-only fiber gates via
+    workOrder). Now GREEN.
+  - `bundle_test.js` — GREEN (no change needed).
+  - `storefront_test.js` — **RED. OPEN REGRESSION.** After a bundle checkout
+    (bundle ×2 + configured phone + solo), staff-completes the order and expects
+    5 provisioned products on My page; gets 1. Diagnosis so far: the order is
+    built correctly (log confirms bundle ×2 + configured chars) and `provision()`
+    works in general (products ARE created for simple orders); NOT a JSON-column
+    truncation (max item JSON 1375 < 4000). The fault is in the completion→
+    provision interaction under per-item + carrier auto-delivery: the bundle
+    order's completion timing changed, so `provision()` appears to run against an
+    order that yields only the fallback product. NEEDS a focused trace of one
+    bundle order across SOM/fulfilment/ordering logs. **Until fixed, do NOT merge
+    to main.**
+- **Full 87-suite sweep NOT run** (only the 3 highest-risk suites probed).
+- **SOM `OrchestrationTest`** assertion updated (per-item), not re-run under
+  Testcontainers.
+- **main remains frozen at 87/87 — nothing merged.** The branch holds C0–C5 +
+  #88, all committed.
+
+### NEXT (to finish C6 → merge)
+1. Fix the storefront_test provisioning regression (trace one bundle order; likely
+   ensure `provision()` runs once with the full item set at final completion, and
+   the auto-delivery/rollup doesn't complete-then-block it).
+2. Run the FULL `ops/run-all-suites.sh` sweep; fix any further fallout.
+3. Re-run SOM `OrchestrationTest`.
+4. Merge `track-c-fulfillment` → `main` only when green.
