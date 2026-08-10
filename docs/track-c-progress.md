@@ -20,7 +20,7 @@ newest at top. Plan: `docs/track-c-fulfillment-plan.md`.
 | C2 | Helthjem logistics seam + mock + ship-per-item + delivery completes item | ✅ done + proven E2E |
 | C3 | eSIM vs physical SIM checkout choice + ICCID↔MSISDN dispatch gate | — |
 | C4 | fiber install track completes its item + order-time validation (5b) | — |
-| C5 | storefront partial-progress + tracking view | — |
+| C5 | storefront partial-progress + tracking view | ✅ built (order page) |
 | C6 | E2E suite #88 + re-prove full 88/88, merge to main | — |
 
 ---
@@ -79,3 +79,11 @@ whole-order completion (consistency). Compose: `mock-logistics` on :8128,
 `FulfilmentController` (/carrierEvent), `SecurityConfig` (permitAll),
 `integrations/mock-logistics/*`, compose, fulfilment application.yml,
 `ProductOrderService.markAllItems`.
+
+**C5 (partial) done — storefront order page shows per-item progress.**
+`My orders` now lists each component with a live status: digital "✓ Active",
+physical "📦 On its way · HJ… (Helthjem)" / "✓ Delivered", install "🔧 Install
+booked". Order badge shows friendly "In progress" for partiallyCompleted. New
+`myShipments()` api call (party-scoped shipping orders → tracking). Files:
+`Orders.jsx`, `api.js` (myShipments), `styles.css`. Deployed & healthy; needs a
+quick visual check in a browser. My-page/Services per-item view = follow-up.

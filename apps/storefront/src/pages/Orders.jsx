@@ -1,11 +1,32 @@
 import { useEffect, useState } from 'react';
-import { cancelOrder, myAppointments, myOrders } from '../api.js';
+import { cancelOrder, myAppointments, myOrders, myShipments } from '../api.js';
 
 const TERMINAL = ['completed', 'cancelled'];
+
+// Friendly labels — the order/item states are TMF622 words; customers see plain ones.
+const ORDER_LABEL = {
+  acknowledged: 'Received',
+  inProgress: 'In progress',
+  partiallyCompleted: 'In progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+  held: 'Awaiting approval',
+};
+
+// Flatten an order's leaf items (bundle picks are nested children).
+function leafItems(items, into = []) {
+  for (const it of items || []) {
+    const kids = it.productOrderItem || [];
+    if (kids.length) leafItems(kids, into);
+    else if (it.productOffering) into.push(it);
+  }
+  return into;
+}
 
 export default function Orders() {
   const [orders, setOrders] = useState(null);
   const [visits, setVisits] = useState({}); // order id -> appointment
+  const [ships, setShips] = useState({}); // order id -> shipping order
   const [error, setError] = useState(null);
 
   const load = () => myOrders().then(setOrders).catch((e) => setError(e.message));
@@ -18,6 +39,11 @@ export default function Orders() {
         if (orderId && appt.status === 'confirmed') byOrder[orderId] = appt;
       }
       setVisits(byOrder);
+    }).catch(() => {});
+    myShipments().then((shipments) => {
+      const byOrder = {};
+      for (const s of shipments || []) if (s.productOrderId) byOrder[s.productOrderId] = s;
+      setShips(byOrder);
     }).catch(() => {});
   }, []);
 
@@ -35,32 +61,64 @@ export default function Orders() {
     }
   }
 
+  // What one item's status reads as, given its state and any parcel/visit.
+  function itemStatus(item, ship, visit) {
+    const st = item.state || 'acknowledged';
+    const physical = !!(item.product && item.product.place);
+    if (st === 'completed') return { cls: 'ok', text: physical ? '✓ Delivered' : '✓ Active' };
+    if (st === 'cancelled') return { cls: 'no', text: 'Cancelled' };
+    if (physical && ship && ship.trackingRef) {
+      return { cls: 'go', text: `📦 On its way · ${ship.trackingRef} (Helthjem)` };
+    }
+    if (physical && visit) return { cls: 'go', text: '🔧 Install booked' };
+    if (physical) return { cls: 'go', text: '📦 Preparing shipment' };
+    return { cls: 'go', text: 'Activating…' };
+  }
+
   return (
     <>
       <h1>My orders</h1>
       <div className="rows">
-        {orders.map((o) => (
-          <div className="row" key={o.id}>
-            <div>
-              <strong>{o.description || o.id}</strong>
-              <div className="dim small">
-                {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
-              </div>
-              {visits[o.id] && (
-                <div className="small installnote">
-                  🔧 Install: {new Date(visits[o.id].validFor.startDateTime).toLocaleString(undefined,
-                    { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+        {orders.map((o) => {
+          const items = leafItems(o.productOrderItem);
+          const ship = ships[o.id];
+          const visit = visits[o.id];
+          return (
+            <div className="row orderrow" key={o.id}>
+              <div className="ordermain">
+                <strong>{o.description || o.id}</strong>
+                <div className="dim small">
+                  {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
                 </div>
-              )}
+                {visit && (
+                  <div className="small installnote">
+                    🔧 Install: {new Date(visit.validFor.startDateTime).toLocaleString(undefined,
+                      { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
+                {items.length > 0 && (
+                  <ul className="itemlines">
+                    {items.map((it, i) => {
+                      const s = itemStatus(it, ship, visit);
+                      return (
+                        <li key={it.id || i}>
+                          <span className="itemname">{it.productOffering?.name || 'Item'}</span>
+                          <span className={`itemstatus ${s.cls}`}>{s.text}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              <div className="rowend">
+                <span className={`state ${o.state}`}>{ORDER_LABEL[o.state] || o.state}</span>
+                {!TERMINAL.includes(o.state) && (
+                  <button className="ghost danger" onClick={() => cancel(o.id)}>Cancel</button>
+                )}
+              </div>
             </div>
-            <div className="rowend">
-              <span className={`state ${o.state}`}>{o.state}</span>
-              {!TERMINAL.includes(o.state) && (
-                <button className="ghost danger" onClick={() => cancel(o.id)}>Cancel</button>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
