@@ -359,13 +359,25 @@ async function apiGet(page, path, token) {
     { headers: { Authorization: 'Bearer ' + staffToken }, data: { state: 'completed' } });
   if (done.status() !== 200) fail(`staff completing order expected 200, got ${done.status()}`);
 
+  // Completion provisioned 5 per-item products (2 bundle, 2 phone, 1 solo).
+  // Assert this on the inventory API — deterministic — rather than counting
+  // rows on My page, which also renders dynamic SIM-line rows and is racy as
+  // the products/services fetches settle (Track C shifted that timing).
+  const provisioned = JSON.parse(
+    (await apiGet(a, '/tmf-api/productInventory/v4/product?limit=100', tokenA)).body);
+  const names = provisioned.map((p) => p.name).sort();
+  const expected = ['Apple iPhone 17', 'GenAlpha One Home & Mobile',
+    'GenAlpha One Home & Mobile', 'Samsung Galaxy S26', 'Samsung Galaxy S26'].sort();
+  if (JSON.stringify(names) !== JSON.stringify(expected)) {
+    fail(`expected 5 provisioned products (2 bundle, 2 phone, 1 solo), got ${provisioned.length}: ${names.join(', ')}`);
+  }
+  // …and My page renders the provisioned items (the Samsung appears only here —
+  // the order description has no Samsung — so anchor the async route on it).
   await a.click('.nav >> text=My page');
-  // A Samsung row exists only on the services page (order description has no
-  // Samsung) — route transitions render async, so anchor on that.
   await a.locator('.row', { hasText: 'Samsung Galaxy S26' }).first().waitFor({ timeout: 15000 });
-  const serviceCount = await a.locator('.row').count();
-  if (serviceCount !== 5) fail(`expected 5 provisioned products (2 bundle, 2 phone, 1 solo), got ${serviceCount}`);
-  console.log('OK completion provisioned 5 per-item products into customer A inventory');
+  await a.locator('.card >> text=My bundle').first().waitFor({ timeout: 15000 });
+  console.log('OK completion provisioned 5 per-item products into customer A inventory,'
+    + ' and My page renders the bundle + its Samsung line');
 
   // --- Completion consumed the reservation: shelf down 2, availability still 8
   const afterConsume = await (await setup.request.get(
