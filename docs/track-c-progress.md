@@ -17,7 +17,7 @@ newest at top. Plan: `docs/track-c-fulfillment-plan.md`.
 | Setup | branch, plan, toolchain validated (no host JDK → use openjdk@17) | ✅ done |
 | C0 | per-item state machine + derived rollup (additive, behavior-neutral) | ✅ done + smoke-proven |
 | C1 | independent activation timing (digital now, physical/fiber on tracks) | ✅ done + proven |
-| C2 | Helthjem logistics seam + mock-logistics + ship-per-item + delivery completes item | — |
+| C2 | Helthjem logistics seam + mock + ship-per-item + delivery completes item | ✅ done + proven E2E |
 | C3 | eSIM vs physical SIM checkout choice + ICCID↔MSISDN dispatch gate | — |
 | C4 | fiber install track completes its item + order-time validation (5b) | — |
 | C5 | storefront partial-progress + tracking view | — |
@@ -57,3 +57,25 @@ test `OrchestrationTest` still asserts `complete()` — update to assert
 `updateItemState` before C6 merge. SIMPLIFICATION (documented): a deferred item's
 backend service still activates optimistically at order time; only its *item
 state* honestly shows pending. C4 will defer real activation to the install.
+
+**C2 done — Helthjem logistics seam + per-item delivery completion.** New
+carrier-agnostic seam in fulfilment: `LogisticsClient` (fail-open — blank base
+url = no-op, carrier error = warn + manual fallback) + `RestLogisticsClient`,
+copying the OCS seam convention. New `integrations/mock-logistics` = a
+Helthjem-shaped carrier: `POST /shipments` books a parcel (returns HJ tracking
+number + label + tracking URL), auto-advances CREATED→IN_TRANSIT→DELIVERED, and
+fires a delivery CALLBACK (a real Helthjem adapter would poll `getTracking` —
+seam supports both). fulfilment books at dispatch, stores the tracking number,
+and on the carrier's DELIVERED callback (`POST /carrierEvent`, permitAll —
+carrier isn't a BSS identity) completes each shipped ITEM (`updateItemState`)
+which rolls the order up. Ordering now also stamps all items completed on a
+whole-order completion (consistency). Compose: `mock-logistics` on :8128,
+`LOGISTICS_BASE_URL` on fulfilment. **Proven end-to-end:** mixed order → Netflix
+`completed` instantly, Kids TV `inProgress` + shippingOrder booked with Helthjem
+(tracking HJ6268833420) → ~15s later carrier DELIVERED callback → Kids TV
+`completed`, order `completed`. Fully automatic, no human touch. Files:
+`LogisticsClient`, `RestLogisticsClient`, `OrderingClient` (+updateItemState),
+`FulfilmentService` (book + onCarrierEvent + completeShippedItems),
+`FulfilmentController` (/carrierEvent), `SecurityConfig` (permitAll),
+`integrations/mock-logistics/*`, compose, fulfilment application.yml,
+`ProductOrderService.markAllItems`.

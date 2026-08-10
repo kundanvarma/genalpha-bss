@@ -340,6 +340,27 @@ public class ProductOrderService {
         return updated;
     }
 
+    /** Force every item (incl. children) to one state — used on whole-order completion. */
+    @SuppressWarnings("unchecked")
+    private void markAllItems(ProductOrder entity, String state) {
+        List<Map<String, Object>> items = mapper.readItems(entity.getProductOrderItemJson());
+        if (items == null) {
+            return;
+        }
+        setAllItemStates(items, state);
+        entity.setProductOrderItemJson(mapper.writeItems(items));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setAllItemStates(List<Map<String, Object>> items, String state) {
+        for (Map<String, Object> item : items) {
+            item.put("state", state);
+            if (item.get("productOrderItem") instanceof List<?> kids) {
+                setAllItemStates((List<Map<String, Object>>) kids, state);
+            }
+        }
+    }
+
     /** Recursively give each order item a stable id and a starting state. */
     @SuppressWarnings("unchecked")
     private void stampItemStates(List<Map<String, Object>> items) {
@@ -611,6 +632,9 @@ public class ProductOrderService {
         mapper.applyPatch(patch, entity);
         if (completing) {
             applyCompletion(entity);
+            // Keep item states consistent when an order is completed as a whole
+            // (fulfilment/CSR backstop): every leaf is done if the order is.
+            markAllItems(entity, STATE_COMPLETED);
         }
         if (cancelling) {
             stockClient.release(entity.getId());

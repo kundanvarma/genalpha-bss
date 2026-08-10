@@ -1,5 +1,6 @@
 package com.bss.fulfilment.service;
 
+import com.bss.fulfilment.client.LogisticsClient;
 import com.bss.fulfilment.client.OrderingClient;
 import com.bss.fulfilment.entity.ShippingOrder;
 import com.bss.fulfilment.entity.WorkOrder;
@@ -43,20 +44,27 @@ public class FulfilmentService {
     private final ShippingOrderRepository shippingOrders;
     private final WorkOrderRepository workOrders;
     private final OrderingClient ordering;
+    private final com.bss.fulfilment.client.LogisticsClient logistics;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
+    private final String carrierCallbackUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public FulfilmentService(ShippingOrderRepository shippingOrders, WorkOrderRepository workOrders,
-            OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
-            PartyScope partyScope) {
+            OrderingClient ordering, com.bss.fulfilment.client.LogisticsClient logistics,
+            DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
+            @org.springframework.beans.factory.annotation.Value(
+                "${bss.fulfilment.carrier-callback-url:http://fulfilment:8080/tmf-api/shippingOrderManagement/v4/carrierEvent}")
+            String carrierCallbackUrl) {
         this.shippingOrders = shippingOrders;
         this.workOrders = workOrders;
         this.ordering = ordering;
+        this.logistics = logistics;
         this.events = events;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
+        this.carrierCallbackUrl = carrierCallbackUrl;
     }
 
     /* ---------- births (listener-called, acting as tenant) ---------- */
@@ -80,6 +88,72 @@ public class FulfilmentService {
         shippingOrders.save(so);
         events.publish("ShippingOrderCreateEvent", "shippingOrder", shippingView(so));
         log.info("fulfilment: shippingOrder {} minted for order {}", so.getId(), orderId);
+
+        // C2 — hand the parcel to the carrier (Helthjem seam). Fail-open: if the
+        // seam is off or the carrier is down, book() returns null and the parcel
+        // waits for the manual warehouse flow, exactly as before.
+        LogisticsClient.Booking booked = logistics.book(LogisticsClient.Booking.request(
+                so.getId(), tenant, carrierCallbackUrl, partyId, "HOME_STANDARD"));
+        if (booked != null && booked.trackingNumber() != null) {
+            so.setTrackingRef(booked.trackingNumber());
+            so.setState(ShippingOrder.IN_PROGRESS);
+            so.setLastUpdate(OffsetDateTime.now());
+            shippingOrders.save(so);
+            events.publish("ShippingOrderStateChangeEvent", "shippingOrder", shippingView(so));
+            log.info("fulfilment: shippingOrder {} booked with {} — tracking {}",
+                    so.getId(), booked.carrier(), booked.trackingNumber());
+        }
+    }
+
+    /**
+     * C2 — the carrier reports a parcel's status (delivery callback here; a
+     * real Helthjem adapter would poll getTracking). On DELIVERED we mark the
+     * shipping order delivered and complete each shipped ITEM on the product
+     * order — the parent order rolls up from there.
+     */
+    @Transactional
+    public void onCarrierEvent(Map<String, Object> event) {
+        String tenant = event.get("tenantId") == null ? "genalpha" : String.valueOf(event.get("tenantId"));
+        String shippingOrderId = String.valueOf(event.get("shippingOrderId"));
+        String status = String.valueOf(event.get("status"));
+        try (com.bss.fulfilment.security.TenantContext ignored =
+                com.bss.fulfilment.security.TenantContext.actAs(tenant)) {
+            ShippingOrder so = shippingOrders.findByIdAndTenantId(shippingOrderId, tenant).orElse(null);
+            if (so == null) {
+                log.warn("fulfilment: carrier event for unknown shippingOrder {}", shippingOrderId);
+                return;
+            }
+            if (ShippingOrder.DELIVERED.equals(so.getState()) || ShippingOrder.CANCELLED.equals(so.getState())) {
+                return; // terminal; carrier events are at-least-once
+            }
+            if ("DELIVERED".equalsIgnoreCase(status)) {
+                so.setState(ShippingOrder.DELIVERED);
+                so.setLastUpdate(OffsetDateTime.now());
+                shippingOrders.save(so);
+                events.publish("ShippingOrderStateChangeEvent", "shippingOrder", shippingView(so));
+                completeShippedItems(so);
+                maybeCompleteOrder(tenant, so.getProductOrderId());
+                log.info("fulfilment: parcel {} DELIVERED by carrier; shipped items completed", shippingOrderId);
+            } else if ("IN_TRANSIT".equalsIgnoreCase(status) && ShippingOrder.ACKNOWLEDGED.equals(so.getState())) {
+                so.setState(ShippingOrder.IN_PROGRESS);
+                so.setLastUpdate(OffsetDateTime.now());
+                shippingOrders.save(so);
+            }
+        }
+    }
+
+    /** Complete each shipped item on the product order (C2 per-item rollup). */
+    @SuppressWarnings("unchecked")
+    private void completeShippedItems(ShippingOrder so) {
+        Object items = readJson(so.getItemsJson());
+        if (!(items instanceof List<?> list)) {
+            return;
+        }
+        for (Object o : list) {
+            if (o instanceof Map<?, ?> item && item.get("id") != null) {
+                ordering.updateItemState(so.getProductOrderId(), String.valueOf(item.get("id")), "completed");
+            }
+        }
     }
 
     @Transactional
