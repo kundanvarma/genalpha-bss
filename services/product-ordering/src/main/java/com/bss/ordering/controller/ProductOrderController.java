@@ -117,6 +117,19 @@ public class ProductOrderController {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 
+    /**
+     * C0 — per-item fulfillment. A fulfillment track (SOM activation, a delivered
+     * parcel, a completed install) reports one order item reaching a new state;
+     * the parent order rolls up from its items. Machine callers (SOM/fulfilment).
+     */
+    @PatchMapping("/{id}/productOrderItem/{itemId}")
+    public ResponseEntity<ProductOrderDto> patchItem(@PathVariable("id") String id,
+                                                     @PathVariable("itemId") String itemId,
+                                                     @RequestBody java.util.Map<String, Object> body) {
+        String state = String.valueOf(body.get("state"));
+        return ResponseEntity.ok(service.updateItemState(id, itemId, state));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable("id") String id) {
         service.delete(id);

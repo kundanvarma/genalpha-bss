@@ -39,8 +39,15 @@ public class ProductOrderService {
     private static final String RESOURCE = "ProductOrder";
     private static final String STATE_COMPLETED = "completed";
     private static final String STATE_HELD = "held";
+    private static final String STATE_ACKNOWLEDGED = "acknowledged";
+    private static final String STATE_IN_PROGRESS = "inProgress";
+    // TMF622: the parent order is partially fulfilled while some items are done
+    // and others are still on their own track (a shipped SIM, a pending install).
+    private static final String STATE_PARTIALLY_COMPLETED = "partiallyCompleted";
     private static final String TOPUP_CATEGORY = "Top-ups";
     private static final Set<String> TERMINAL_STATES = Set.of(STATE_COMPLETED, "cancelled");
+    // Item-level terminal states used by the per-item rollup.
+    private static final Set<String> ITEM_TERMINAL = Set.of(STATE_COMPLETED, "cancelled");
 
     private final ProductOrderRepository repository;
     private final ProductOrderMapper mapper;
@@ -147,8 +154,11 @@ public class ProductOrderService {
         validateBundleComposition(dto);
         validateServiceability(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
-            dto.setState("acknowledged");
+            dto.setState(STATE_ACKNOWLEDGED);
         }
+        // C0: give every item (incl. nested bundle components) a stable id and a
+        // starting state, so each can be fulfilled and completed on its own track.
+        stampItemStates(dto.getProductOrderItem());
         ProductOrder entity = mapper.toEntity(dto);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
@@ -280,6 +290,129 @@ public class ProductOrderService {
         ProductOrderDto updated = mapper.toDto(repository.save(entity));
         events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
         return updated;
+    }
+
+    /**
+     * The side-effects of an order reaching {@code completed}, shared by the
+     * whole-order PATCH and the per-item rollup (C0): provision inventory,
+     * consume reserved stock, capture payments, mint commitments, redeem promo.
+     */
+    private void applyCompletion(ProductOrder entity) {
+        provision(entity);
+        stockClient.consume(entity.getId());
+        paymentRefIds(entity).forEach(paymentClient::capture);
+        mintCommitments(entity);
+        if (entity.getPromoCode() != null && entity.getOwnerPartyId() != null) {
+            promotionClient.redeem(entity.getPromoCode(), entity.getOwnerPartyId());
+        }
+    }
+
+    /**
+     * C0 — per-item fulfillment. A fulfillment track (SOM activation, a delivered
+     * parcel, a completed install) reports ONE item's completion here; the parent
+     * order state is then rolled up from all its leaf items. When the last item
+     * lands, the order reaches {@code completed} and the completion side-effects
+     * fire exactly once. Machine-scoped (SOM/fulfilment call it); idempotent and
+     * race-safe against the legacy whole-order PATCH.
+     */
+    @Transactional
+    public ProductOrderDto updateItemState(String orderId, String itemId, String newState) {
+        ProductOrder entity = repository.findByIdAndTenantId(orderId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource(RESOURCE, orderId));
+        requireOwn(entity);
+        if (TERMINAL_STATES.contains(entity.getState())) {
+            // Order already closed (e.g. legacy whole-order PATCH won the race).
+            return mapper.toDto(entity);
+        }
+        List<Map<String, Object>> items = mapper.readItems(entity.getProductOrderItemJson());
+        if (items == null || !setItemState(items, itemId, newState)) {
+            throw NotFoundException.forResource("ProductOrderItem", itemId);
+        }
+        entity.setProductOrderItemJson(mapper.writeItems(items));
+        String rolled = rollupState(items);
+        boolean nowComplete = STATE_COMPLETED.equals(rolled) && !STATE_COMPLETED.equals(entity.getState());
+        entity.setState(rolled);
+        if (nowComplete) {
+            applyCompletion(entity);
+        }
+        ProductOrderDto updated = mapper.toDto(repository.save(entity));
+        events.publish("ProductOrderStateChangeEvent", "productOrder", updated);
+        return updated;
+    }
+
+    /** Recursively give each order item a stable id and a starting state. */
+    @SuppressWarnings("unchecked")
+    private void stampItemStates(List<Map<String, Object>> items) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            if (item.get("id") == null) {
+                item.put("id", UUID.randomUUID().toString());
+            }
+            if (item.get("state") == null) {
+                item.put("state", STATE_ACKNOWLEDGED);
+            }
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                stampItemStates((List<Map<String, Object>>) children);
+            }
+        }
+    }
+
+    /** Set the state of the item with this id, anywhere in the tree; true if found. */
+    @SuppressWarnings("unchecked")
+    private boolean setItemState(List<Map<String, Object>> items, String itemId, String newState) {
+        if (items == null) {
+            return false;
+        }
+        for (Map<String, Object> item : items) {
+            if (itemId.equals(String.valueOf(item.get("id")))) {
+                item.put("state", newState);
+                return true;
+            }
+            if (item.get("productOrderItem") instanceof List<?> children
+                    && setItemState((List<Map<String, Object>>) children, itemId, newState)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Roll the parent order state up from its LEAF items (the fulfillable
+     * components; a bundle's picks are its nested children). All leaves terminal
+     * -> completed (or cancelled if none completed); some done, some not ->
+     * partiallyCompleted; any started -> inProgress; else acknowledged.
+     */
+    private String rollupState(List<Map<String, Object>> items) {
+        List<String> leaves = new ArrayList<>();
+        collectLeafStates(items, leaves);
+        if (leaves.isEmpty()) {
+            return STATE_ACKNOWLEDGED;
+        }
+        if (leaves.stream().allMatch(ITEM_TERMINAL::contains)) {
+            return leaves.stream().anyMatch(STATE_COMPLETED::equals) ? STATE_COMPLETED : "cancelled";
+        }
+        if (leaves.stream().anyMatch(STATE_COMPLETED::equals)) {
+            return STATE_PARTIALLY_COMPLETED;
+        }
+        boolean anyStarted = leaves.stream().anyMatch(s -> STATE_IN_PROGRESS.equals(s) || "cancelled".equals(s));
+        return anyStarted ? STATE_IN_PROGRESS : STATE_ACKNOWLEDGED;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectLeafStates(List<Map<String, Object>> items, List<String> into) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            if (item.get("productOrderItem") instanceof List<?> kids && !kids.isEmpty()) {
+                collectLeafStates((List<Map<String, Object>>) kids, into);
+            } else {
+                Object st = item.get("state");
+                into.add(st == null ? STATE_ACKNOWLEDGED : String.valueOf(st));
+            }
+        }
     }
 
     /**
@@ -477,13 +610,7 @@ public class ProductOrderService {
         boolean cancelling = stateChanged && "cancelled".equals(patch.getState());
         mapper.applyPatch(patch, entity);
         if (completing) {
-            provision(entity);
-            stockClient.consume(entity.getId());
-            paymentRefIds(entity).forEach(paymentClient::capture);
-            mintCommitments(entity);
-            if (entity.getPromoCode() != null && entity.getOwnerPartyId() != null) {
-                promotionClient.redeem(entity.getPromoCode(), entity.getOwnerPartyId());
-            }
+            applyCompletion(entity);
         }
         if (cancelling) {
             stockClient.release(entity.getId());

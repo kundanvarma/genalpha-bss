@@ -91,6 +91,15 @@ public class ProductOrderMapper {
         }
     }
 
+    /** Public accessors for the per-item state rollup (C0). */
+    public List<Map<String, Object>> readItems(String json) {
+        return readJsonArray(json);
+    }
+
+    public String writeItems(List<Map<String, Object>> items) {
+        return writeJsonArray(items);
+    }
+
     private String writeJsonArray(List<Map<String, Object>> value) {
         if (value == null) {
             return null;
