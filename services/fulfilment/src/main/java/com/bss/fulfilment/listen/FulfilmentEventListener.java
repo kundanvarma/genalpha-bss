@@ -60,7 +60,11 @@ public class FulfilmentEventListener {
                         for (Object o : items) {
                             if (o instanceof Map<?, ?> item
                                     && item.get("product") instanceof Map<?, ?> product
-                                    && product.get("place") != null) {
+                                    && product.get("place") != null
+                                    && !installsRatherThanShips(item)) {
+                                // installs (fiber/broadband) carry a place for the
+                                // ENGINEER, not a parcel — they go via the workOrder,
+                                // not the carrier. Only shippable goods get a parcel.
                                 physicalItems.add((Map<String, Object>) item);
                                 place = product.get("place");
                             }
@@ -90,6 +94,20 @@ public class FulfilmentEventListener {
         } catch (Exception e) {
             log.warn("fulfilment: skipping unprocessable event: {}", e.getMessage());
         }
+    }
+
+    /**
+     * A broadband/fiber line's place is the INSTALL address (an engineer visit
+     * via the workOrder), not a shipping address — it must not be booked as a
+     * carrier parcel. Heuristic on the offering name; a fuller version would
+     * read the place role or a catalog fulfilment-type flag.
+     */
+    private static boolean installsRatherThanShips(Map<?, ?> item) {
+        Object off = item.get("productOffering");
+        String name = off instanceof Map<?, ?> m && m.get("name") != null
+                ? String.valueOf(m.get("name")).toLowerCase() : "";
+        return name.contains("fiber") || name.contains("fibre") || name.contains("broadband")
+                || name.contains("internet") || name.contains("dsl");
     }
 
     private static String partyOf(Map<String, Object> resource) {

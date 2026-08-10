@@ -66,7 +66,11 @@ class OrchestrationTest {
             orchestration.orchestrate(order("po-1", "acknowledged")); // duplicate delivery
             orchestration.orchestrate(order("po-2", "cancelled"));    // not for us
         }
-        verify(ordering, times(1)).complete("po-1");
+        // C1: SOM now reports each item's completion per-item (both digital →
+        // completed), instead of a single whole-order complete() call.
+        verify(ordering, times(1)).updateItemState("po-1", "1", "completed");
+        verify(ordering, times(1)).updateItemState("po-1", "2", "completed");
+        verify(ordering, never()).complete("po-1");
         verify(ordering, never()).complete("po-2");
 
         mockMvc.perform(get("/tmf-api/serviceOrdering/v4/serviceOrder")

@@ -68,7 +68,7 @@ is on `main` yet.
 | C1 | independent activation timing (digital now, physical/fiber on tracks) | ✅ done + proven |
 | C2 | Helthjem logistics seam + mock + ship-per-item + delivery completes item | ✅ done + proven E2E |
 | C3 | eSIM vs physical SIM checkout choice + routing | ✅ done + proven |
-| C4 | fiber install track completes its item + order-time validation (5b) | — |
+| C4 | 5b validation (proven) + fiber installs-not-ships + SOM test fix | ✅ done |
 | C5 | storefront partial-progress + tracking view | ✅ built (order page) |
 | C6 | E2E suite #88 + re-prove full 88/88, merge to main | — |
 
@@ -150,3 +150,19 @@ eSIM order → completed instantly; physical-SIM order → SIM parcel booked
 (HJ1989856722) → delivered ~15s → completed. Files: `checkout.js`, `Cart.jsx`,
 `Orders.jsx`, `styles.css`. NOTE: backend mints the same ICCID for both (eSIM
 also has an ICCID); the eSIM QR/activation-code artifact on My-page is polish.
+
+**C4 done — order-time validation (5b) + fiber installs-not-ships + SOM test fix.**
+5b: verified the existing cardinality gate already rejects an under-configured
+bundle at ORDER TIME — ordering "GenAlpha One Home & Mobile" with no phone →
+HTTP 400 "'Choose your phone' requires exactly 1 selection(s), but 0 were made".
+So the earlier stuck order was a pre-validation artifact; the safety net is in
+place (storefront client-side prevention = optional polish). Fiber/broadband:
+`FulfilmentEventListener.installsRatherThanShips()` excludes install lines from
+the carrier parcel — a fiber's place is the ENGINEER's address (workOrder), not a
+shipping address, so it no longer gets wrongly booked as a Helthjem parcel; it
+completes via the install/workOrder path + whole-order backstop. Updated SOM
+`OrchestrationTest` to assert per-item `updateItemState(...,completed)` instead of
+the old whole-order `complete()`. Files: `FulfilmentEventListener.java`,
+`OrchestrationTest.java`. NOTE: per-item install completion (workOrder → complete
+the specific fiber item) still rides the whole-order backstop; a fuller version
+threads the fiber item id onto the workOrder — follow-up.
