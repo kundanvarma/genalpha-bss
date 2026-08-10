@@ -202,3 +202,17 @@ threads the fiber item id onto the workOrder — follow-up.
 2. Run the FULL `ops/run-all-suites.sh` sweep; fix any further fallout.
 3. Re-run SOM `OrchestrationTest`.
 4. Merge `track-c-fulfillment` → `main` only when green.
+
+**C6 continued — storefront regression RESOLVED (was a fragile test, not a bug).**
+Root cause found via ground-truth probing: `provision()` is correct — the bundle
+checkout provisions exactly 5 products (confirmed on the inventory API for the
+real customer; sub == party-id so they're all "own"). My page actually renders
+8 rows (5 products + 3 "My SIM" service line-rows). The old test asserted a raw
+`.row === 5`, which only passed because the services fetch settled slower than
+products; Track C shifted that timing, so the count raced (saw 1). FIX: assert
+the 5 provisioned products on the inventory API (deterministic) + that My page
+renders the bundle and its Samsung line. No product code changed. storefront_test
+now GREEN. **Steps done:** (1) storefront regression fixed ✅; (3) SOM
+`OrchestrationTest` re-run under Testcontainers — PASS (1/0/0) ✅. **Step (2) full
+`ops/run-all-suites.sh` sweep RUNNING** (multi-hour on this fleet; results in
+`ops/e2e/.proof-run/results.tsv`). Merge decision pending the sweep.
