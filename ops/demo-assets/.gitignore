@@ -1,0 +1,5 @@
+# Real manufacturer product photos are copyrighted — keep them LOCAL, never in
+# the public repo. Everything here is ignored except this file and the README.
+*
+!.gitignore
+!README.md
