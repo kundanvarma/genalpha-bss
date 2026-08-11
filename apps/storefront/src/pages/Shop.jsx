@@ -14,6 +14,7 @@ export default function Shop() {
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('Bundles'); // line-of-business shop tab
   const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
+  const [planView, setPlanView] = useState('table');  // Mobile: 'table' | 'cards'
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
 
   useEffect(() => {
@@ -147,18 +148,25 @@ export default function Shop() {
         const dataOf = (name) => /unlimited/i.test(name) ? Infinity
           : (name.match(/(\d+)\s*GB/i) ? Number(name.match(/(\d+)\s*GB/i)[1]) : 0);
         const brandOf = (o) => (o.name || '').split(' ')[0];
+        const is5G = (o) => /5G|unlimited/i.test(o.name || '');
 
         let items = active.items;
         let controls = null;
+        const mobileTable = active.key === 'Mobile' && planView === 'table';
         if (active.key === 'Mobile') {
           items = [...items].sort((a, b) => planSort === 'price'
             ? monthlyOf(a) - monthlyOf(b) : dataOf(b.name) - dataOf(a.name));
           controls = (
             <div className="shopfilter" data-testid="plan-sort">
-              <span className="dim">{t('Compare by')}:</span>
+              <span className="dim">{t('Sort')}:</span>
               {['data', 'price'].map((s) => (
                 <button key={s} type="button" className={`chip ${planSort === s ? 'on' : ''}`}
                   onClick={() => setPlanSort(s)}>{s === 'data' ? t('Most data') : t('Lowest price')}</button>
+              ))}
+              <span className="dim" style={{ marginLeft: 8 }}>{t('View')}:</span>
+              {['table', 'cards'].map((v) => (
+                <button key={v} type="button" className={`chip ${planView === v ? 'on' : ''}`}
+                  onClick={() => setPlanView(v)}>{v === 'table' ? t('Compare') : t('Cards')}</button>
               ))}
             </div>
           );
@@ -187,9 +195,64 @@ export default function Shop() {
               ))}
             </nav>
             {controls}
-            <div className="cards" data-testid={`lob-${active.key}`}>
-              {items.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
-            </div>
+            {mobileTable ? (
+              <div className="comparewrap" data-testid="plan-compare">
+                <table className="comparetable">
+                  <thead>
+                    <tr>
+                      <th className="feat" />
+                      {items.map((o) => (
+                        <th key={o.id}>
+                          <div className="planname">{o.name.replace(/^GenAlpha /, '')}</div>
+                          <div className="planprice">
+                            {monthlyOf(o) !== Infinity
+                              ? <><strong>{fmtMonthly({ value: monthlyOf(o), unit: 'EUR' })}</strong></>
+                              : <span className="dim">—</span>}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="feat">{t('Data')}</td>
+                      {items.map((o) => (
+                        <td key={o.id} className="hero">
+                          {dataOf(o.name) === Infinity ? t('Unlimited')
+                            : dataOf(o.name) ? `${dataOf(o.name)} GB` : '—'}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="feat">{t('Calls & texts')}</td>
+                      {items.map((o) => <td key={o.id}>{t('Unlimited')}</td>)}
+                    </tr>
+                    <tr>
+                      <td className="feat">5G</td>
+                      {items.map((o) => (
+                        <td key={o.id}>{is5G(o) ? <span className="yes">✓</span> : <span className="no">—</span>}</td>
+                      ))}
+                    </tr>
+                    <tr>
+                      <td className="feat">{t('EU roaming')}</td>
+                      {items.map((o) => <td key={o.id}><span className="yes">✓</span></td>)}
+                    </tr>
+                    <tr className="choose">
+                      <td className="feat" />
+                      {items.map((o) => (
+                        <td key={o.id}>
+                          <Link className="btn" to={`/offering/${o.id}`}>{t('Choose')}</Link>
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="cards" data-testid={`lob-${active.key}`}>
+                {items.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
+              </div>
+            )}
           </>
         );
       })()}
