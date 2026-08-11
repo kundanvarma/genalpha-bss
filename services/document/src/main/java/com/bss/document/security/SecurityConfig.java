@@ -46,6 +46,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/document/*/content",
                                 ApiConstants.BASE_PATH + "/document/brand-logo").permitAll()
+                        // CMS webhooks arrive unauthenticated and are HMAC-verified inside.
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/webhook/**").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("document:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")
                         .requestMatchers(HttpMethod.PUT, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")

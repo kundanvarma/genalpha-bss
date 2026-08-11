@@ -13,4 +13,7 @@ public interface DocumentRepository extends JpaRepository<StoredDocument, String
     List<StoredDocument> findByTenantIdAndCategory(String tenantId, String category);
 
     List<StoredDocument> findByTenantId(String tenantId);
+
+    /** Documents that reference a given external asset — the webhook's target set. */
+    List<StoredDocument> findByTenantIdAndStorageKey(String tenantId, String storageKey);
 }

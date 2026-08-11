@@ -1,8 +1,10 @@
 # Bring-your-own CMS/DAM — reference-mode content seam
 
-**Status:** P1 + P2 shipped (2026-08-11) · P3–P5 pending · **Depends on:** `services/document` (TMF667), existing `ContentStore` seam
+**Status:** P1 + P2 + P3 shipped (2026-08-11) · P4–P5 pending · **Depends on:** `services/document` (TMF667), existing `ContentStore` seam
 
-> **Built so far:** reference-mode core (`AssetProvider` seam, `AssetProviderRegistry`, `ref:<provider>:<assetId>` keys, `ContentResult`), per-tenant `content_provider_config` (V4 + V5 RLS), redirect delivery with `?rendition=` + placeholder fallback, `ContentProviderController` (PUT/GET/DELETE), and the **Sanity adapter** (`SanityAssetProvider`) proven end-to-end against a `mock-sanity` CMS: upload→ref→302 to the CDN, rendition transform params, hosted default untouched, per-tenant wall, fail-open placeholder. Document module tests green on real Postgres (Testcontainers).
+> **Built so far:** reference-mode core (`AssetProvider` seam, `AssetProviderRegistry`, `ref:<provider>:<assetId>` keys, `ContentResult`), per-tenant `content_provider_config` (V4 + V5 RLS), redirect delivery with `?rendition=` + placeholder fallback, `ContentProviderController` (PUT/GET/DELETE), and the **Sanity adapter** (`SanityAssetProvider`) proven end-to-end against a `mock-sanity` CMS: upload→ref→302 to the CDN, rendition transform params, hosted default untouched, per-tenant wall, fail-open placeholder.
+>
+> **P3:** HMAC-verified webhook (`POST /webhook/{provider}/{tenantId}`, Sanity `t=,v1=` scheme; the shared secret is the auth) → per-tenant, RLS-scoped: a `delete` marks the referencing documents unavailable (read path serves the placeholder), an `upsert` restores them and bumps a cache-busting `content_version` (V6); portable rendition vocab hoisted to a shared `Rendition` enum (`thumb|card|hero|orig`, unknown-safe). Proven: delete→placeholder, upsert→302 with `?v=` bump, bad signature→401. Document module tests green on real Postgres (Testcontainers).
 
 An operator who already runs a headless CMS/DAM (Sanity, Contentful, Strapi, Cloudinary,
 Bynder, …) should be able to serve product imagery **from their own system**, not the

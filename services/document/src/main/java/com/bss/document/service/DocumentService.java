@@ -149,6 +149,11 @@ public class DocumentService {
     }
 
     private ContentResult resolveReference(StoredDocument doc, String key, String rendition) {
+        // A webhook may have reported the referenced asset gone — serve the
+        // placeholder rather than 302-ing to a URL the CMS no longer backs.
+        if (!doc.isAvailable()) {
+            return ContentResult.bytes("image/svg+xml", PLACEHOLDER);
+        }
         try {
             String[] parts = key.split(":", 3);   // ref, provider, assetId
             if (parts.length < 3) {
@@ -160,8 +165,13 @@ public class DocumentService {
             if (provider == null) {
                 throw new IllegalStateException("no provider bound for reference '" + parts[1] + "'");
             }
-            ResolvedAsset resolved = provider.resolve(cfg, parts[2], rendition);
-            return ContentResult.redirect(resolved.url());
+            String url = provider.resolve(cfg, parts[2], rendition).url();
+            // Cache-bust: a webhook upsert bumps the version so a replaced asset
+            // isn't masked by a stale cached redirect. (Bounded by the 302 TTL.)
+            if (doc.getContentVersion() > 0) {
+                url += (url.contains("?") ? "&" : "?") + "v=" + doc.getContentVersion();
+            }
+            return ContentResult.redirect(url);
         } catch (RuntimeException e) {
             log.warn("reference resolve failed for document {} ({}): {}", doc.getId(), key, e.toString());
             return ContentResult.bytes("image/svg+xml", PLACEHOLDER);

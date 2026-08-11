@@ -36,6 +36,10 @@ public class ContentProviderConfig {
     @Column(name = "secret_ref", length = 128)
     private String secretRef;
 
+    /** Env var naming the shared secret the CMS signs its webhooks with. */
+    @Column(name = "webhook_secret_ref", length = 128)
+    private String webhookSecretRef;
+
     @Column(name = "direct_url", nullable = false)
     private boolean directUrl;
 
@@ -60,6 +64,8 @@ public class ContentProviderConfig {
     public void setDataset(String dataset) { this.dataset = dataset; }
     public String getSecretRef() { return secretRef; }
     public void setSecretRef(String secretRef) { this.secretRef = secretRef; }
+    public String getWebhookSecretRef() { return webhookSecretRef; }
+    public void setWebhookSecretRef(String webhookSecretRef) { this.webhookSecretRef = webhookSecretRef; }
     public boolean isDirectUrl() { return directUrl; }
     public void setDirectUrl(boolean directUrl) { this.directUrl = directUrl; }
     public String getConfig() { return config; }

@@ -56,6 +56,7 @@ public class ContentProviderConfigService {
         cfg.setProjectId(str(dto.get("projectId")));
         cfg.setDataset(str(dto.get("dataset")));
         cfg.setSecretRef(str(dto.get("secretRef")));
+        cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
         cfg.setDirectUrl(Boolean.TRUE.equals(dto.get("directUrl")));
         cfg.setConfig(str(dto.get("config")));
         cfg.setLastUpdate(OffsetDateTime.now());
@@ -86,6 +87,7 @@ public class ContentProviderConfigService {
         if (c.getProjectId() != null) map.put("projectId", c.getProjectId());
         if (c.getDataset() != null) map.put("dataset", c.getDataset());
         if (c.getSecretRef() != null) map.put("secretRef", c.getSecretRef());
+        if (c.getWebhookSecretRef() != null) map.put("webhookSecretRef", c.getWebhookSecretRef());
         map.put("directUrl", c.isDirectUrl());
         map.put("@type", "ContentProviderConfig");
         return map;

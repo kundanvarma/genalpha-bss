@@ -95,15 +95,10 @@ public class SanityAssetProvider implements AssetProvider {
         return cdnHost(cfg) + "/images/" + projectId(cfg) + "/" + dataset(cfg) + "/" + file;
     }
 
-    /** thumb|card|hero|orig → Sanity transform query (auto format + max fit). */
+    /** Portable rendition → Sanity transform query (auto format + max fit). */
     private static String renditionParams(String rendition) {
-        int width = switch (rendition == null ? "orig" : rendition) {
-            case "thumb" -> 200;
-            case "card" -> 600;
-            case "hero" -> 1200;
-            default -> 0;                                     // orig / unknown: no transform
-        };
-        return width == 0 ? "" : "w=" + width + "&fit=max&auto=format";
+        Rendition r = Rendition.parse(rendition);
+        return r.sized() ? "w=" + r.width() + "&fit=max&auto=format" : "";
     }
 
     private static String apiHost(ContentProviderConfig cfg) {

@@ -33,10 +33,19 @@ public class StoredDocument {
     @Column(name = "content")
     private byte[] content;
 
-    /** Set when the bytes live in an EXTERNAL store (s3:/azure: keys);
-     * null means in-row, the dev-simple default. */
+    /** Set when the bytes live in an EXTERNAL store (s3:/azure: keys) or an
+     * external CMS/DAM (ref:&lt;provider&gt;:&lt;assetId&gt;); null means in-row. */
     @Column(name = "storage_key")
     private String storageKey;
+
+    /** Reference-mode freshness: a webhook can mark a referenced asset gone
+     * (false → placeholder) or restored, and bump the cache-busting version.
+     * Hosted documents stay available/version 0. */
+    @Column(name = "available", nullable = false)
+    private boolean available = true;
+
+    @Column(name = "content_version", nullable = false)
+    private int contentVersion = 0;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
@@ -60,6 +69,10 @@ public class StoredDocument {
     public void setContent(byte[] content) { this.content = content; }
     public String getStorageKey() { return storageKey; }
     public void setStorageKey(String storageKey) { this.storageKey = storageKey; }
+    public boolean isAvailable() { return available; }
+    public void setAvailable(boolean available) { this.available = available; }
+    public int getContentVersion() { return contentVersion; }
+    public void setContentVersion(int contentVersion) { this.contentVersion = contentVersion; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

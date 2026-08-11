@@ -35,11 +35,11 @@ class PostgresMigrationTest {
     void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
         assertThat(postgres.isRunning()).isTrue();
 
-        // On real Postgres both locations apply: V1/V3/V4 (vendor-neutral) plus
-        // V2/V5 (postgres-only RLS) — five migrations.
+        // On real Postgres both locations apply: V1/V3/V4/V6 (vendor-neutral)
+        // plus V2/V5 (postgres-only RLS) — six migrations.
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(5);
+        assertThat(applied).isEqualTo(6);
 
         assertThat(repository.count()).isZero();
     }
