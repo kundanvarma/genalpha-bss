@@ -1,6 +1,8 @@
 # Bring-your-own PSP + redirect/BNPL methods (Klarna, PayPal)
 
-**Status:** design (not built) · **Depends on:** `services/payment` (PspAdapter seam), the checkout flow, the Integrations console tab
+**Status:** PSP-P1 shipped (2026-08-11) · P2–P4 design · **Depends on:** `services/payment` (PspAdapter seam), the checkout flow, the Integrations console tab
+
+> **PSP-P1 shipped (the marketplace half):** per-tenant `payment_provider_config` (V6 + V7 RLS, `secret_ref` not the key) + `PspRegistry`/`PspRouter` — a tenant charges through its default configured PSP, else the deployment's global PSP (unchanged). **No change to the `authorize/capture/refund` signatures** — the adapters became always-on beans (Mock + Stripe) and only *which* adapter answers changed; capture/refund resolve the same provider that authorized. `PspConfigController` GET/PUT/DELETE `/paymentProvider`; the Integrations **Payment card is live**. Proven: config CRUD + RLS + secret-ref, and the money path intact **both bound and unbound** (global fallback); all 12 payment module tests green (fixed a stale docker-only migration-count assertion, now 7). Visible multi-PSP routing lands with the second successful adapter — **Klarna (PSP-P2)**.
 
 Two asks in one, mirroring the carrier arc: let an operator **choose their payment
 providers per tenant** (the marketplace half — identical to CMS/carriers), and let a

@@ -38,16 +38,17 @@ public class PaymentService {
             Payment.AUTHORIZED, Set.of(Payment.CAPTURED, Payment.VOIDED));
 
     private final PaymentRepository repository;
-    private final PspAdapter psp;
+    private final com.bss.payment.psp.PspRouter pspRouter;
     private final PaymentMethodClient paymentMethods;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
 
-    public PaymentService(PaymentRepository repository, PspAdapter psp, PaymentMethodClient paymentMethods, DomainEventPublisher events,
+    public PaymentService(PaymentRepository repository, com.bss.payment.psp.PspRouter pspRouter,
+            PaymentMethodClient paymentMethods, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
-        this.psp = psp;
+        this.pspRouter = pspRouter;
         this.paymentMethods = paymentMethods;
         this.events = events;
         this.partyScope = partyScope;
@@ -125,6 +126,7 @@ public class PaymentService {
             }
         }
 
+        PspAdapter psp = pspRouter.forCurrentTenant();
         PspAdapter.Authorization auth = psp.authorize(
                 dto.getAmount().getValue(), currency, method, dto.getCorrelatorId());
         if (auth.requiresAction()) {
@@ -229,6 +231,7 @@ public class PaymentService {
             // settles the held authorization, void/refund reverses it. If the
             // PSP rejects the movement, the transition fails — the record never
             // claims money moved when it didn't.
+            PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
             if (Payment.CAPTURED.equals(patch.getStatus())) {
                 PspAdapter.Capture capture = psp.capture(entity.getAuthorizationCode(),
                         entity.getAmountValue(), entity.getAmountUnit());
@@ -274,6 +277,7 @@ public class PaymentService {
             throw new ConflictException("refundable is " + refundable + " " + entity.getAmountUnit()
                     + "; asked for " + amount);
         }
+        PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
         PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(),
                 amount, entity.getAmountUnit());
         if (!refund.refunded()) {

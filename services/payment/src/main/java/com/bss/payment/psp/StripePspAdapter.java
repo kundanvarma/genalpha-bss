@@ -1,7 +1,6 @@
 package com.bss.payment.psp;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -22,14 +21,13 @@ import java.util.Map;
  * on the request, never a raw PAN, matching the vault seam the BSS already uses.
  */
 @Component
-@ConditionalOnProperty(name = "bss.payment.psp", havingValue = "stripe")
 public class StripePspAdapter implements PspAdapter {
 
     private final RestClient stripe;
 
     public StripePspAdapter(RestClient.Builder builder,
             @Value("${bss.payment.stripe.base-url:https://api.stripe.com}") String baseUrl,
-            @Value("${bss.payment.stripe.secret-key}") String secretKey) {
+            @Value("${bss.payment.stripe.secret-key:}") String secretKey) {
         this.stripe = builder.baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + secretKey)
                 .defaultHeader("Content-Type", "application/x-www-form-urlencoded")

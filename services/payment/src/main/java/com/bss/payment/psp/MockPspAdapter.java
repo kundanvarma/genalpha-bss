@@ -1,6 +1,5 @@
 package com.bss.payment.psp;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -14,7 +13,6 @@ import java.util.UUID;
  * else authorizes. Capture and refund succeed. Real money never moves.
  */
 @Component
-@ConditionalOnProperty(name = "bss.payment.psp", havingValue = "mock", matchIfMissing = true)
 public class MockPspAdapter implements PspAdapter {
 
     @Override

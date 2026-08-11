@@ -2602,7 +2602,68 @@ async function renderIntegrations() {
   }
   await loadLogi();
 
-  builtin('Payment', 'PSP seam', 'Stripe-compatible / mock — configured at deploy. Per-tenant config: P2.');
+  // --- Payment / PSP: LIVE, per-tenant menu ---
+  const PAY = '/tmf-api/paymentManagement/v4';
+  const { c: payC, head: payHead } = card('Payment', 'PSP seam');
+  grid.append(payC);
+  async function loadPay() {
+    [...payC.querySelectorAll('[data-pay-body]')].forEach((n) => n.remove());
+    payHead.querySelector('[data-pay-pill]')?.remove();
+    const res = await authFetch(`${PAY}/paymentProvider`);
+    const psps = res.ok ? await res.json() : [];
+    const p = pill(psps.length ? `${psps.length} provider${psps.length > 1 ? 's' : ''}` : 'built-in', psps.length > 0);
+    p.dataset.payPill = '1';
+    payHead.append(p);
+    const wrap = document.createElement('div');
+    wrap.dataset.payBody = '1';
+    wrap.style.cssText = 'margin-top:0.7rem;display:flex;flex-direction:column;gap:0.5rem';
+    if (!psps.length) {
+      const none = document.createElement('div');
+      none.style.fontSize = '0.9rem';
+      none.innerHTML = 'Built-in default (deploy-configured). Add a PSP to override per tenant.';
+      wrap.append(none);
+    } else {
+      for (const ps of psps) {
+        const line = document.createElement('div');
+        line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
+        const label = document.createElement('span');
+        label.innerHTML = `<b>${ps.displayName || ps.provider}</b>${ps.isDefault ? ' · default' : ''}${ps.enabled === false ? ' · off' : ''}`;
+        const del = document.createElement('button');
+        del.textContent = 'Remove';
+        del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
+        del.addEventListener('click', async () => { await authFetch(`${PAY}/paymentProvider/${ps.provider}`, { method: 'DELETE' }); loadPay(); });
+        line.append(label, del);
+        wrap.append(line);
+      }
+    }
+    const form = document.createElement('div');
+    form.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem;border-top:1px solid var(--line,#eee);padding-top:0.5rem;margin-top:0.2rem';
+    const sel = document.createElement('select');
+    [['mock', 'Mock (dev)'], ['stripe', 'Stripe'], ['klarna', 'Klarna'], ['paypal', 'PayPal']].forEach(([v, l]) => sel.append(new Option(l, v)));
+    const base = document.createElement('input'); base.placeholder = 'PSP API base url (optional)'; base.style.cssText = 'padding:0.3rem 0.4rem';
+    const sref = document.createElement('input'); sref.placeholder = 'secret-ref (env var name)'; sref.style.cssText = 'padding:0.3rem 0.4rem';
+    const defWrap = document.createElement('label'); defWrap.style.cssText = 'font-size:0.85rem;display:flex;gap:0.3rem;align-items:center';
+    const defC = document.createElement('input'); defC.type = 'checkbox'; defWrap.append(defC, document.createTextNode('default provider'));
+    const addRow = document.createElement('div'); addRow.style.cssText = 'display:flex;gap:0.5rem;align-items:center';
+    const add = document.createElement('button'); add.textContent = 'Add / update'; add.style.cssText = 'padding:0.3rem 0.9rem';
+    const msg = document.createElement('span'); msg.className = 'dimhint';
+    addRow.append(add, msg);
+    form.append(sel, base, sref, defWrap, addRow);
+    wrap.append(form);
+    add.addEventListener('click', async () => {
+      msg.textContent = 'saving…';
+      const provider = sel.value;
+      const dto = { provider, displayName: sel.options[sel.selectedIndex].text, baseUrl: base.value || null,
+        secretRef: sref.value || null,
+        methods: (provider === 'klarna' || provider === 'paypal') ? ['card', provider] : ['card'], isDefault: defC.checked };
+      const r = await authFetch(`${PAY}/paymentProvider`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto) });
+      msg.textContent = r.ok ? 'saved' : (r.status === 403 ? 'not authorized' : 'failed (' + r.status + ')');
+      if (r.ok) loadPay();
+    });
+    payC.append(wrap);
+  }
+  await loadPay();
+
   builtin('Charging', 'OCS seam', 'Online charging endpoint — configured at deploy.');
   builtin('AI models', 'LLM seam', 'Per-tenant provider + model routing (fast/smart tiers).');
 }
