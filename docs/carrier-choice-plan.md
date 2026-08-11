@@ -1,6 +1,8 @@
 # Carrier choice — operator-configured menu + customer picks (Nordic delivery)
 
-**Status:** C-P1 shipped (carrier persisted + de-hardcoded UI) · C-P2–P4 design · **Depends on:** the logistics seam (`LogisticsClient`), the shipping-order flow, the checkout `simType` pattern, the Integrations console tab
+**Status:** C-P1 + C-P2 shipped · C-P3–P4 design · **Depends on:** the logistics seam (`LogisticsClient`), the shipping-order flow, the checkout `simType` pattern, the Integrations console tab
+
+> **C-P2 shipped:** per-tenant `carrier_config` (V4 + V5 RLS) + `CarrierAdapter` seam + `CarrierRegistry` + `CarrierRouter` (tenant default carrier books via its adapter; no menu → global Helthjem fallback). Two adapters: **Helthjem** (POST /shipments) and **Bring/Posten** (Booking + **Pickup Point** API). `CarrierController` GET/PUT/DELETE `/carrier` + `/carrier/pickupPoints`. The Integrations **Logistics card is live** (list/add/default/remove carriers). Mock `mock-bring` (`:8133`). Proven by suite #90 `carrier_choice_test` (self-cleaning): configure Bring → order books via Bring (`BRG…`, "Posten/Bring"), pickup points returned; Helthjem fallback + `fulfilment_test` stay green. Also fixed a latent console tab-switch race.
 
 A CSP running this BSS should offer **several carriers** (Helthjem, Posten/Bring, PostNord…),
 and the shopper should **choose how it arrives** — home delivery, or a pickup point / parcel

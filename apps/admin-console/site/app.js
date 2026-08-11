@@ -2312,6 +2312,12 @@ function kpiCard(label, value, hint, testid) {
   return div;
 }
 function panelFor(id) {
+  // custom panels replace the generic table entirely — clear + hide it so no
+  // stale row/count bleeds through.
+  el('total').textContent = '';
+  el('listing-head').replaceChildren();
+  el('listing-body').replaceChildren();
+  document.querySelector('.table-wrap')?.setAttribute('hidden', '');
   let panel = document.getElementById(id);
   if (!panel) {
     panel = document.createElement('div');
@@ -2533,8 +2539,68 @@ async function renderIntegrations() {
   }
   await loadCms();
 
+  // --- Logistics / carriers: LIVE, per-tenant menu ---
+  const SHIP = '/tmf-api/shippingOrderManagement/v4';
+  const { c: logiC, head: logiHead } = card('Logistics', 'Carrier seam');
+  grid.append(logiC);
+  async function loadLogi() {
+    [...logiC.querySelectorAll('[data-logi-body]')].forEach((n) => n.remove());
+    logiHead.querySelector('[data-logi-pill]')?.remove();
+    const res = await authFetch(`${SHIP}/carrier`);
+    const carriers = res.ok ? await res.json() : [];
+    const p = pill(carriers.length ? `${carriers.length} carrier${carriers.length > 1 ? 's' : ''}` : 'built-in', carriers.length > 0);
+    p.dataset.logiPill = '1';
+    logiHead.append(p);
+
+    const wrap = document.createElement('div');
+    wrap.dataset.logiBody = '1';
+    wrap.style.cssText = 'margin-top:0.7rem;display:flex;flex-direction:column;gap:0.5rem';
+    if (!carriers.length) {
+      const none = document.createElement('div');
+      none.style.fontSize = '0.9rem';
+      none.innerHTML = 'Built-in default: <b>Helthjem</b> (deploy-configured). Add a carrier to override per tenant.';
+      wrap.append(none);
+    } else {
+      for (const cr of carriers) {
+        const line = document.createElement('div');
+        line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
+        const label = document.createElement('span');
+        label.innerHTML = `<b>${cr.displayName || cr.carrier}</b>${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
+        const del = document.createElement('button');
+        del.textContent = 'Remove';
+        del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
+        del.addEventListener('click', async () => { await authFetch(`${SHIP}/carrier/${cr.carrier}`, { method: 'DELETE' }); loadLogi(); });
+        line.append(label, del);
+        wrap.append(line);
+      }
+    }
+    const form = document.createElement('div');
+    form.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem;border-top:1px solid var(--line,#eee);padding-top:0.5rem;margin-top:0.2rem';
+    const sel = document.createElement('select');
+    [['helthjem', 'Helthjem'], ['bring', 'Posten/Bring']].forEach(([v, l]) => sel.append(new Option(l, v)));
+    const base = document.createElement('input'); base.placeholder = 'carrier API base url'; base.style.cssText = 'padding:0.3rem 0.4rem';
+    const defWrap = document.createElement('label'); defWrap.style.cssText = 'font-size:0.85rem;display:flex;gap:0.3rem;align-items:center';
+    const defC = document.createElement('input'); defC.type = 'checkbox'; defWrap.append(defC, document.createTextNode('default carrier'));
+    const addRow = document.createElement('div'); addRow.style.cssText = 'display:flex;gap:0.5rem;align-items:center';
+    const add = document.createElement('button'); add.textContent = 'Add / update'; add.style.cssText = 'padding:0.3rem 0.9rem';
+    const msg = document.createElement('span'); msg.className = 'dimhint';
+    addRow.append(add, msg);
+    form.append(sel, base, defWrap, addRow);
+    wrap.append(form);
+    add.addEventListener('click', async () => {
+      msg.textContent = 'saving…';
+      const carrier = sel.value;
+      const dto = { carrier, displayName: sel.options[sel.selectedIndex].text, baseUrl: base.value || null,
+        methods: carrier === 'bring' ? ['home', 'pickupPoint'] : ['home'], isDefault: defC.checked };
+      const r = await authFetch(`${SHIP}/carrier`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto) });
+      msg.textContent = r.ok ? 'saved' : (r.status === 403 ? 'not authorized (needs ordering:write)' : 'failed (' + r.status + ')');
+      if (r.ok) loadLogi();
+    });
+    logiC.append(wrap);
+  }
+  await loadLogi();
+
   builtin('Payment', 'PSP seam', 'Stripe-compatible / mock — configured at deploy. Per-tenant config: P2.');
-  builtin('Logistics', 'Carrier seam', 'Helthjem (Posten/Bring next). Per-tenant carrier choice: P2.');
   builtin('Charging', 'OCS seam', 'Online charging endpoint — configured at deploy.');
   builtin('AI models', 'LLM seam', 'Per-tenant provider + model routing (fast/smart tiers).');
 }
@@ -3019,12 +3085,14 @@ function startEditing(item) {
 }
 
 async function loadList() {
+  const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.getElementById('workforce-panel')?.setAttribute('hidden', '');
   document.getElementById('reporting-panel')?.setAttribute('hidden', '');
   document.getElementById('integrations-panel')?.setAttribute('hidden', '');
+  document.querySelector('.table-wrap')?.removeAttribute('hidden');   // generic tabs show the table again
   document.querySelector('.pager')?.removeAttribute('hidden');
   if (active.copilot) {
     el('editor').hidden = true;
@@ -3065,6 +3133,7 @@ async function loadList() {
   renderEditor();
   const res = await authFetch(`${active.base || API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}`);
   const items = await res.json();
+  if (active !== current) return;   // the user switched tabs while this was loading — drop the stale paint
   const total = Number(res.headers.get('X-Total-Count') || items.length);
 
   el('total').textContent = `${total} total`;
