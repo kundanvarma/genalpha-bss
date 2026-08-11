@@ -47,11 +47,14 @@
 3. Shop → refresh → it's selling.
 > "The copilot writes these same rows from a sentence; the console writes them from a form. Nothing is compiled or redeployed — the catalog is data."
 
-### REAL DEVICE PHOTOS (optional, 30 sec — local only, never committed)
-1. Save 3 images into `ops/demo-assets/devices/` (gitignored) named exactly:
-   `samsung-galaxy-s26.png` · `iphone-17.png` · `iphone-17-pro.png` (jpg/webp ok)
-2. `python3 ops/seed/seed_demo_images.py` — real photos override the generated tiles.
-> Repo-safe: the folder is gitignored, so copyrighted photos never leave your machine.
+### REAL DEVICE PHOTOS (already in — how to swap/extend; local only, never committed)
+Drop photos in `ops/demo-assets/devices/` (gitignored), then
+`python3 ops/seed/seed_device_content.py && python3 ops/seed/seed_demo_images.py`.
+- **Whole-device (shop grid + default hero):** `samsung-galaxy-s26.png` · `iphone-17.jpeg` · `iphone-17-pro.jpeg`
+- **Per-colour (configurator hero follows the pick):** `<slug>-<colour>.<ext>`, e.g.
+  `samsung-galaxy-s26-icy-blue.webp` · `iphone-17-pro-deep-blue.jpeg` · `iphone-17-lavender.jpeg`
+  (colours: Samsung = Phantom Black/Cream/Icy Blue · iPhone 17 = Lavender/Green · 17 Pro = Deep Blue/Silver)
+> Any colour without a photo keeps a generated render. Repo-safe: folder is gitignored — copyrighted photos never leave your machine.
 
 ### THE THREE QUESTIONS
 - **vs Amdocs/Netcracker?** "Not competing on feature count — vendor-neutral, composable, AI-native from day one. Full BSS for a smaller operator, or a layer on what you have."

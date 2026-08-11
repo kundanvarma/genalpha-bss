@@ -150,17 +150,37 @@ def simple_tile(name, glyph, bg):
     return svg(glyphs + txt(320, 360, name, 30, 700, "#fff"), bg, INK)
 
 
-def local_device(name):
-    slug = DEVICE_SLUGS.get(name)
+def color_slug(c):
+    """"Icy Blue" -> "icy-blue" so a colour maps to a predictable filename."""
+    return re.sub(r"[^a-z0-9]+", "-", c.lower()).strip("-")
+
+
+def find_photo(slug, suffix=""):
+    """A local raster photo for a device — whole-device (no suffix) or per-colour
+    (suffix = the colour slug). Returns (b64, mime, filename) or None. LOCAL ONLY:
+    ops/demo-assets/devices is gitignored, so real photos never enter the repo."""
     if not slug or not os.path.isdir(ASSETS):
         return None
+    base = f"{slug}-{suffix}" if suffix else slug
     for ext, mime in (("png", "image/png"), ("jpg", "image/jpeg"),
                       ("jpeg", "image/jpeg"), ("webp", "image/webp")):
-        p = os.path.join(ASSETS, f"{slug}.{ext}")
+        p = os.path.join(ASSETS, f"{base}.{ext}")
         if os.path.isfile(p):
             with open(p, "rb") as f:
-                return base64.b64encode(f.read()).decode(), mime, p
+                return base64.b64encode(f.read()).decode(), mime, os.path.basename(p)
     return None
+
+
+def device_colors(o):
+    """The colour values the device's spec offers — these drive variant-{color}."""
+    spec_id = (o.get("productSpecification") or {}).get("id")
+    if not spec_id:
+        return []
+    spec = req("GET", f"{CATALOG}/productSpecification/{spec_id}")
+    for ch in (spec.get("productSpecCharacteristic") or []):
+        if ch.get("name", "").lower() == "color":
+            return [v["value"] for v in ch.get("productSpecCharacteristicValue") or []]
+    return []
 
 
 def kind(name, cats):
@@ -186,18 +206,54 @@ for o in active:
     has_img = bool((o.get("attachment") or [{}])[0].get("url"))
     cats = [c.get("name") for c in (o.get("category") or [])]
     k = kind(name, cats)
-    # real device photo (local only) always wins for devices
-    real = local_device(name) if k == "device" else None
-    if real:
-        b64, mime, path = real
-        link(o, upload(f"photo-{name}", mime, b64), mime)
-        print(f"  {name}: real photo <- {os.path.basename(path)}")
-        did += 1
-        continue
+    # DEVICES: real photos (local only) merge into the per-colour gallery so the
+    # configurator hero keeps following the colour pick. Two file shapes, both win:
+    #   samsung-galaxy-s26.png            -> whole-device shot (shop-grid hero)
+    #   samsung-galaxy-s26-icy-blue.png   -> that colour's variant (picture follows pick)
+    # Any colour you DON'T supply keeps its generated render, so a partial set works.
     if k == "device":
-        # devices keep their per-color GALLERY from seed_device_content.py (the
-        # configurator hero follows the colour pick) — don't clobber it with a
-        # single tile. Only a real local photo (handled above) overrides it.
+        slug = DEVICE_SLUGS.get(name)
+        per_color = {}
+        for c in device_colors(o) if slug else []:
+            photo = find_photo(slug, color_slug(c))
+            if photo:
+                per_color[c] = photo
+        default = find_photo(slug) if slug else None  # whole-device -> shop-grid hero
+        if not per_color and not default:
+            # no real photos: keep the generated per-colour GALLERY untouched.
+            continue
+        current = (req("GET", f"{CATALOG}/productOffering/{o['id']}") or {}).get("attachment") or []
+        atts, hero_url, hero_mime = [], None, None
+        for a in current:
+            nm = str(a.get("name") or "")
+            # real photos carry their own angles — drop the generated back/side
+            # renders so the gallery strip isn't a real photo beside grey blobs.
+            if nm in ("gallery-back", "gallery-side"):
+                continue
+            if nm.startswith("variant-") and nm[len("variant-"):] in per_color:
+                b64, mime, _ = per_color[nm[len("variant-"):]]
+                a = {"name": nm, "mimeType": mime,
+                     "url": upload(f"photo-{name}-{nm[len('variant-'):]}", mime, b64),
+                     "@type": "Attachment"}
+                if hero_url is None:
+                    hero_url, hero_mime = a["url"], mime  # first real colour = fallback grid hero
+            atts.append(a)
+        if default:  # a whole-device shot always wins the grid hero
+            b64, mime, _ = default
+            hero_url, hero_mime = upload(f"photo-{name}", mime, b64), mime
+        if hero_url:  # replace the first non-variant (front) shot IN PLACE — idempotent
+            front = {"name": "gallery-front", "mimeType": hero_mime,
+                     "url": hero_url, "@type": "Attachment"}
+            idx = next((i for i, a in enumerate(atts)
+                        if not str(a.get("name") or "").startswith("variant-")), None)
+            if idx is None:
+                atts.insert(0, front)
+            else:
+                atts[idx] = front
+        req("PATCH", f"{CATALOG}/productOffering/{o['id']}", {"attachment": atts})
+        got = f"{len(per_color)} colour photo(s)" + (" + whole-device" if default else "")
+        print(f"  {name}: real photos <- {got or 'none'}")
+        did += 1
         continue
     if has_img and not FORCE:
         continue

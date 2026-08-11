@@ -52,13 +52,13 @@ DEVICES = {
     },
     "Apple iPhone 17 Pro": {
         "body": "#3c3744", "screen": "#14121f", "accent": "#f2c14e",
-        "colors": {"Natural Titanium": "#c8c2b8", "Blue Titanium": "#5a7d9a"},
+        "colors": {"Deep Blue": "#1e2a44", "Silver": "#e2e4e6"},
         "facts": {"display": '6.7" Super Retina XDR', "camera": "48 MP Pro system",
                   "battery": "4,700 mAh", "weight": "199 g"},
     },
     "Apple iPhone 17": {
         "body": "#44435a", "screen": "#14121f", "accent": "#f2c14e",
-        "colors": {"Starlight": "#e8e1d5", "Midnight": "#232b2b", "Pink": "#e7b9c4"},
+        "colors": {"Lavender": "#c9b8e8", "Green": "#a9c6a0"},
         "facts": {"display": '6.1" Super Retina XDR', "camera": "48 MP dual system",
                   "battery": "3,600 mAh", "weight": "171 g"},
     },

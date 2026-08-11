@@ -89,10 +89,10 @@ def ensure_phone_offering(name, description, spec, price):
 
 # 1. Phone specs with variant characteristics
 spec_pro = ensure_spec("Apple iPhone 17 Pro", "Apple",
-                       chars(("color", ["Black Titanium", "Blue Titanium", "Natural Titanium"]),
+                       chars(("color", ["Deep Blue", "Silver"]),
                              ("storage", ["256GB", "512GB", "1TB"])))
 spec_std = ensure_spec("Apple iPhone 17", "Apple",
-                       chars(("color", ["Black", "White", "Teal", "Pink"]),
+                       chars(("color", ["Lavender", "Green"]),
                              ("storage", ["128GB", "256GB"])))
 spec_sam = ensure_spec("Samsung Galaxy S26", "Samsung",
                        chars(("color", ["Phantom Black", "Cream", "Icy Blue"]),
