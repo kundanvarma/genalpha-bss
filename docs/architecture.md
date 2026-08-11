@@ -62,7 +62,7 @@ flowchart TB
         AGR["agreement TMF651"]
         PROMO["promotion TMF671"]
         REC["recommendation TMF680"]
-        DOC["document TMF667\n(content seam: in-row / S3 / Azure Blob)"]
+        DOC["document TMF667\n(content seam: in-row / S3 / Azure Blob;\nper-tenant reference mode: bring-your-own CMS/DAM)"]
         QUOTE["quote TMF648 + TMF699\n(B2B quotes + sales leads)"]
         PORT["porting\n(MNP, per-country gateway)"]
     end

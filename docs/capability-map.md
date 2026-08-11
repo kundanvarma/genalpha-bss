@@ -37,8 +37,9 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Govern ordering & pricing with business rules | TMF policy pattern | `policy` (JSON-logic) | ✅ |
 | Run promotions & discounts | TMF671 | `promotion` | ✅ |
 | Manage product content & imagery | TMF667 + PIM seam | `document` + per-tenant PIM | ✅ #23 |
+| Bring your own CMS/DAM for imagery | TMF667 reference mode | `document` (per-tenant `AssetProvider`) | ✅ #89 (opt-in per tenant: Sanity adapter + generic HTTP connector proven on Strapi's wire; redirect delivery, renditions, HMAC webhook freshness, fail-open placeholder — the built-in DAM stays default) |
 | Author products conversationally (AI-assisted) | governed LLM over TMF620 | `intelligence` | ✅ #25/#53 |
-| Full enterprise PIM (workflow, DAM, syndication) | — | — | ❌ the catalog is the commercial master, deliberately not a PIM |
+| Full enterprise PIM (authoring workflow, syndication) | — | — | ❌ the catalog is the commercial master, deliberately not a PIM (asset storage can now point at an external DAM; editorial workflow is not built) |
 
 ## 3. Customer
 
