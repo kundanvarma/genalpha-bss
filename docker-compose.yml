@@ -1336,6 +1336,8 @@ services:
       OIDC_CLIENT_SECRET: payment-secret
       PAYMENT_PSP: ${PAYMENT_PSP:-mock}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      # per-tenant PSP webhook secret-ref target (mock; real Klarna signs with its own)
+      KLARNA_WEBHOOK_SECRET: ${KLARNA_WEBHOOK_SECRET:-dev-klarna-webhook-secret}
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       PAYMENT_METHOD_BASE_URL: http://payment-method:8080
@@ -1760,6 +1762,16 @@ services:
       TRACK_PREFIX: PN
     ports:
       - "8134:8080"
+
+  # The redirect/BNPL PSP for proving the Klarna payment session flow (PSP-P2)
+  # without a real Klarna merchant account. Real Klarna needs no code change —
+  # only base_url unset + real credentials.
+  mock-klarna:
+    build: ./integrations/mock-klarna
+    container_name: bss-mock-klarna
+    restart: unless-stopped
+    ports:
+      - "8135:8080"
 
   # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
   # when proving bring-your-own-CMS without a real Sanity project. Speaks the

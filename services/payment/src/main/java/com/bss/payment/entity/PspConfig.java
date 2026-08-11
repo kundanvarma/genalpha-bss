@@ -34,6 +34,10 @@ public class PspConfig {
     @Column(name = "secret_ref")
     private String secretRef;
 
+    /** Env var naming the shared secret the PSP signs its webhooks with. */
+    @Column(name = "webhook_secret_ref")
+    private String webhookSecretRef;
+
     private String methods;
 
     @Column(name = "is_default", nullable = false)
@@ -60,6 +64,8 @@ public class PspConfig {
     public void setBaseUrl(String v) { this.baseUrl = v; }
     public String getSecretRef() { return secretRef; }
     public void setSecretRef(String v) { this.secretRef = v; }
+    public String getWebhookSecretRef() { return webhookSecretRef; }
+    public void setWebhookSecretRef(String v) { this.webhookSecretRef = v; }
     public String getMethods() { return methods; }
     public void setMethods(String v) { this.methods = v; }
     public boolean isDefault() { return isDefault; }

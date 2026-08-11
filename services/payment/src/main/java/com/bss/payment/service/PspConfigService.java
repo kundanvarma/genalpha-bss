@@ -70,6 +70,7 @@ public class PspConfigService {
         cfg.setDisplayName(str(dto.getOrDefault("displayName", provider)));
         cfg.setBaseUrl(str(dto.get("baseUrl")));
         cfg.setSecretRef(str(dto.get("secretRef")));
+        cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
         cfg.setMethods(json(dto.get("methods")));
         cfg.setDefault(Boolean.TRUE.equals(dto.get("isDefault")));
         cfg.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));
@@ -83,6 +84,47 @@ public class PspConfigService {
             }
         }
         return toMap(repository.save(cfg));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<PspConfig> forTenantAndProvider(String tenant, String provider) {
+        return repository.findByTenantIdAndProvider(tenant, provider);
+    }
+
+    /** The payment methods the current tenant offers (from its enabled PSPs), or the
+     * built-in card default when no PSP is configured. */
+    @Transactional(readOnly = true)
+    public List<String> methodsForCurrentTenant() {
+        List<PspConfig> enabled = repository.findByTenantIdAndEnabledTrue(tenantScope.currentTenantId());
+        java.util.LinkedHashSet<String> methods = new java.util.LinkedHashSet<>();
+        for (PspConfig c : enabled) {
+            for (String m : parseMethods(c.getMethods())) {
+                methods.add(m);
+            }
+        }
+        if (methods.isEmpty()) {
+            methods.add("card");
+        }
+        return new java.util.ArrayList<>(methods);
+    }
+
+    /** The provider that serves a method for a tenant (e.g. 'klarna' → the klarna PSP). */
+    @Transactional(readOnly = true)
+    public Optional<PspConfig> providerForMethod(String tenant, String method) {
+        return repository.findByTenantIdAndEnabledTrue(tenant).stream()
+                .filter(c -> parseMethods(c.getMethods()).contains(method))
+                .findFirst();
+    }
+
+    private List<String> parseMethods(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of("card");
+        }
+        try {
+            return mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return List.of("card");
+        }
     }
 
     @Transactional

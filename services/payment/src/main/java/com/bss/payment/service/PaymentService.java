@@ -22,6 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import com.bss.payment.entity.PspConfig;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,16 +43,21 @@ public class PaymentService {
 
     private final PaymentRepository repository;
     private final com.bss.payment.psp.PspRouter pspRouter;
+    private final com.bss.payment.psp.RedirectPspRegistry redirectRegistry;
+    private final PspConfigService pspConfigs;
     private final PaymentMethodClient paymentMethods;
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
 
     public PaymentService(PaymentRepository repository, com.bss.payment.psp.PspRouter pspRouter,
+            com.bss.payment.psp.RedirectPspRegistry redirectRegistry, PspConfigService pspConfigs,
             PaymentMethodClient paymentMethods, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope) {
         this.repository = repository;
         this.pspRouter = pspRouter;
+        this.redirectRegistry = redirectRegistry;
+        this.pspConfigs = pspConfigs;
         this.paymentMethods = paymentMethods;
         this.events = events;
         this.partyScope = partyScope;
@@ -159,6 +168,94 @@ public class PaymentService {
         PaymentDto created = toDto(repository.save(entity));
         events.publish("PaymentCreateEvent", "payment", created);
         return created;
+    }
+
+    /* ---------- redirect / BNPL (PSP-P2) ---------- */
+
+    /** The payment methods the current tenant offers (card + any redirect methods). */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> methods() {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (String m : pspConfigs.methodsForCurrentTenant()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("method", m);
+            row.put("redirect", !"card".equals(m));
+            out.add(row);
+        }
+        return out;
+    }
+
+    /** Open a redirect/BNPL session (Klarna): returns where to send the customer. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> createSession(Map<String, Object> dto) {
+        String method = String.valueOf(dto.get("method"));
+        String tenant = tenantScope.currentTenantId();
+        PspConfig cfg = pspConfigs.providerForMethod(tenant, method)
+                .orElseThrow(() -> new BadRequestException("no provider configured for method '" + method + "'"));
+        com.bss.payment.psp.RedirectPspAdapter adapter = redirectRegistry.get(cfg.getProvider());
+        if (adapter == null) {
+            throw new BadRequestException("no redirect adapter for '" + cfg.getProvider() + "'");
+        }
+        BigDecimal amount = dto.get("amount") instanceof Map<?, ?> a && a.get("value") != null
+                ? new BigDecimal(String.valueOf(a.get("value"))) : BigDecimal.ZERO;
+        String currency = dto.get("amount") instanceof Map<?, ?> a2 && a2.get("unit") != null
+                ? String.valueOf(a2.get("unit")) : "EUR";
+        com.bss.payment.psp.RedirectPspAdapter.Session session =
+                adapter.createSession(cfg, amount, currency, String.valueOf(dto.getOrDefault("returnUrl", "")));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("sessionId", session.sessionId());
+        out.put("redirectUrl", session.redirectUrl());
+        out.put("provider", cfg.getProvider());
+        out.put("@type", "PaymentSession");
+        return out;
+    }
+
+    /**
+     * Confirm a redirect session (the return leg or the webhook) → the AUTHORIZED
+     * payment. Idempotent by session id, so the return AND the webhook can't
+     * double-book. Runs in the given tenant's scope.
+     */
+    @Transactional
+    public PaymentDto confirmSession(String tenant, String provider, String sessionId) {
+        var existing = repository.findFirstByTenantIdAndSessionRef(tenant, sessionId);
+        if (existing.isPresent()) {
+            return toDto(existing.get());
+        }
+        PspConfig cfg = pspConfigs.forTenantAndProvider(tenant, provider)
+                .orElseThrow(() -> new BadRequestException("provider '" + provider + "' not configured"));
+        com.bss.payment.psp.RedirectPspAdapter adapter = redirectRegistry.get(provider);
+        if (adapter == null) {
+            throw new BadRequestException("no redirect adapter for '" + provider + "'");
+        }
+        com.bss.payment.psp.RedirectPspAdapter.Confirmation c = adapter.confirm(cfg, sessionId);
+        if (!c.approved()) {
+            throw new ConflictException(c.declineReason() == null ? "session not approved" : c.declineReason());
+        }
+        Payment entity = new Payment();
+        entity.setTenantId(tenant);
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setHref(ApiConstants.BASE_PATH + "/payment/" + id);
+        entity.setStatus(Payment.AUTHORIZED);
+        entity.setAmountValue(c.amount() == null ? BigDecimal.ZERO : c.amount());
+        entity.setAmountUnit(c.currency() == null ? "EUR" : c.currency());
+        entity.setMethodType(provider);
+        entity.setMethodLabel(c.methodLabel());
+        entity.setAuthorizationCode(c.authorizationCode());
+        entity.setPspProvider(provider);
+        entity.setSessionRef(sessionId);
+        entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
+        entity.setPaymentDate(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        PaymentDto created = toDto(repository.save(entity));
+        events.publish("PaymentCreateEvent", "payment", created);
+        return created;
+    }
+
+    /** Confirm from the authenticated return leg (the current tenant + party). */
+    @Transactional
+    public PaymentDto confirm(String provider, String sessionId) {
+        return confirmSession(tenantScope.currentTenantId(), provider, sessionId);
     }
 
     /**

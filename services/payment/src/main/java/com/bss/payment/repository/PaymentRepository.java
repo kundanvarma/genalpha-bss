@@ -10,4 +10,6 @@ public interface PaymentRepository extends JpaRepository<Payment, String> {
     Optional<Payment> findByIdAndTenantId(String id, String tenantId);
 
     Optional<Payment> findFirstByTenantIdAndCorrelatorId(String tenantId, String correlatorId);
+
+    Optional<Payment> findFirstByTenantIdAndSessionRef(String tenantId, String sessionRef);
 }

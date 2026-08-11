@@ -53,6 +53,10 @@ public class Payment {
     @Column(name = "psp_provider", length = 32)
     private String pspProvider;
 
+    /** The redirect/BNPL session this payment confirmed — makes confirm idempotent. */
+    @Column(name = "session_ref", length = 128)
+    private String sessionRef;
+
     @Column(name = "authorization_code", length = 64)
     private String authorizationCode;
 
@@ -161,6 +165,8 @@ public class Payment {
     public void setSettlementRef(String settlementRef) { this.settlementRef = settlementRef; }
     public String getPspProvider() { return pspProvider; }
     public void setPspProvider(String pspProvider) { this.pspProvider = pspProvider; }
+    public String getSessionRef() { return sessionRef; }
+    public void setSessionRef(String sessionRef) { this.sessionRef = sessionRef; }
 
     public String getCorrelatorId() {
         return correlatorId;

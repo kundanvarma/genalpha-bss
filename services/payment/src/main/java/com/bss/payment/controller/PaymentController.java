@@ -64,6 +64,25 @@ public class PaymentController {
         return ResponseEntity.created(URI.create(created.getHref())).body(created);
     }
 
+    /** The payment methods this tenant offers (card + redirect/BNPL) — the checkout picker. */
+    @GetMapping("/methods")
+    public ResponseEntity<List<Map<String, Object>>> methods() {
+        return ResponseEntity.ok(service.methods());
+    }
+
+    /** Open a redirect/BNPL session (Klarna): returns where to send the customer. */
+    @PostMapping("/session")
+    public ResponseEntity<Map<String, Object>> session(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createSession(dto));
+    }
+
+    /** The return leg: confirm a session and get the authorized payment (idempotent). */
+    @PostMapping("/confirm")
+    public ResponseEntity<PaymentDto> confirm(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.confirm(
+                String.valueOf(dto.get("provider")), String.valueOf(dto.get("sessionId"))));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<PaymentDto> getById(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findById(id));
