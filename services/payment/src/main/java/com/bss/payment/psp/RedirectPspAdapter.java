@@ -21,10 +21,20 @@ public interface RedirectPspAdapter {
     /** Confirm a session after the customer approved (idempotent at the caller). */
     Confirmation confirm(PspConfig cfg, String sessionId);
 
+    /** Capture the order (BNPL captures on ship, not at checkout). */
+    Settlement capture(PspConfig cfg, String sessionId, BigDecimal amount, String currency);
+
+    /** Refund a captured order (full or partial). */
+    Settlement refund(PspConfig cfg, String sessionId, BigDecimal amount, String currency);
+
     record Session(String sessionId, String redirectUrl) {
     }
 
     record Confirmation(boolean approved, BigDecimal amount, String currency,
             String authorizationCode, String methodLabel, String declineReason) {
+    }
+
+    /** Result of a capture/refund — settled + the provider's reference, or why not. */
+    record Settlement(boolean ok, String reference, String failureReason) {
     }
 }

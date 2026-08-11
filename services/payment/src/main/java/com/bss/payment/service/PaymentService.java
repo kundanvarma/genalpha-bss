@@ -258,6 +258,48 @@ public class PaymentService {
         return confirmSession(tenantScope.currentTenantId(), provider, sessionId);
     }
 
+    /** Capture via the redirect adapter (Klarna, by session — BNPL captures on ship)
+     * or the card router (by authorization code). */
+    private String captureVia(Payment entity, BigDecimal amount) {
+        com.bss.payment.psp.RedirectPspAdapter redirect = redirectRegistry.get(entity.getPspProvider());
+        if (redirect != null) {
+            PspConfig cfg = pspConfigs.forTenantAndProvider(entity.getTenantId(), entity.getPspProvider())
+                    .orElseThrow(() -> new ConflictException("provider '" + entity.getPspProvider() + "' not configured"));
+            com.bss.payment.psp.RedirectPspAdapter.Settlement s =
+                    redirect.capture(cfg, entity.getSessionRef(), amount, entity.getAmountUnit());
+            if (!s.ok()) {
+                throw new ConflictException("capture failed: " + s.failureReason());
+            }
+            return s.reference();
+        }
+        PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
+        PspAdapter.Capture capture = psp.capture(entity.getAuthorizationCode(), amount, entity.getAmountUnit());
+        if (!capture.settled()) {
+            throw new ConflictException("capture failed: " + capture.failureReason());
+        }
+        return capture.captureRef();
+    }
+
+    private String refundVia(Payment entity, BigDecimal amount) {
+        com.bss.payment.psp.RedirectPspAdapter redirect = redirectRegistry.get(entity.getPspProvider());
+        if (redirect != null) {
+            PspConfig cfg = pspConfigs.forTenantAndProvider(entity.getTenantId(), entity.getPspProvider())
+                    .orElseThrow(() -> new ConflictException("provider '" + entity.getPspProvider() + "' not configured"));
+            com.bss.payment.psp.RedirectPspAdapter.Settlement s =
+                    redirect.refund(cfg, entity.getSessionRef(), amount, entity.getAmountUnit());
+            if (!s.ok()) {
+                throw new ConflictException("refund failed: " + s.failureReason());
+            }
+            return s.reference();
+        }
+        PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
+        PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(), amount, entity.getAmountUnit());
+        if (!refund.refunded()) {
+            throw new ConflictException("refund failed: " + refund.failureReason());
+        }
+        return refund.refundRef();
+    }
+
     /**
      * A payment that ALREADY HAPPENED at the bank — remittance ingestion
      * (OCR/KID, camt.054) recording money that arrived by giro or credit
@@ -328,21 +370,10 @@ public class PaymentService {
             // settles the held authorization, void/refund reverses it. If the
             // PSP rejects the movement, the transition fails — the record never
             // claims money moved when it didn't.
-            PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
             if (Payment.CAPTURED.equals(patch.getStatus())) {
-                PspAdapter.Capture capture = psp.capture(entity.getAuthorizationCode(),
-                        entity.getAmountValue(), entity.getAmountUnit());
-                if (!capture.settled()) {
-                    throw new ConflictException("capture failed: " + capture.failureReason());
-                }
-                entity.setSettlementRef(capture.captureRef());
+                entity.setSettlementRef(captureVia(entity, entity.getAmountValue()));
             } else if (Payment.VOIDED.equals(patch.getStatus())) {
-                PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(),
-                        entity.getAmountValue(), entity.getAmountUnit());
-                if (!refund.refunded()) {
-                    throw new ConflictException("void/refund failed: " + refund.failureReason());
-                }
-                entity.setSettlementRef(refund.refundRef());
+                entity.setSettlementRef(refundVia(entity, entity.getAmountValue()));
             }
             entity.setStatus(patch.getStatus());
         }
@@ -374,12 +405,7 @@ public class PaymentService {
             throw new ConflictException("refundable is " + refundable + " " + entity.getAmountUnit()
                     + "; asked for " + amount);
         }
-        PspAdapter psp = pspRouter.byProvider(entity.getPspProvider());
-        PspAdapter.Refund refund = psp.refund(entity.getAuthorizationCode(),
-                amount, entity.getAmountUnit());
-        if (!refund.refunded()) {
-            throw new ConflictException("refund failed: " + refund.failureReason());
-        }
+        String refundRef = refundVia(entity, amount);
         entity.setRefundedAmount(entity.getRefundedAmount().add(amount));
         if (entity.getRefundedAmount().compareTo(entity.getAmountValue()) >= 0) {
             entity.setStatus(Payment.REFUNDED);
@@ -389,7 +415,7 @@ public class PaymentService {
         Map<String, Object> receipt = new java.util.LinkedHashMap<>();
         receipt.put("paymentId", entity.getId());
         receipt.put("amount", Map.of("value", amount, "unit", entity.getAmountUnit()));
-        receipt.put("refundRef", refund.refundRef());
+        receipt.put("refundRef", refundRef);
         receipt.put("refundedTotal", entity.getRefundedAmount());
         receipt.put("status", entity.getStatus());
         receipt.put("reason", dto.get("reason") == null ? null : String.valueOf(dto.get("reason")));

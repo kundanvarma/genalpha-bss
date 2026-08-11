@@ -51,6 +51,22 @@ const server = http.createServer((req, res) => {
       + `<script>setTimeout(function(){location.href=${JSON.stringify(back)}},1200)</script></body>`);
   }
 
+  // capture / refund an order (BNPL captures on ship, refunds after)
+  const cap = url.pathname.match(/^\/payments\/v1\/sessions\/([^/]+)\/capture$/);
+  if (req.method === 'POST' && cap) {
+    req.resume();
+    if (!sessions.get(cap[1])) return json(404, { error: 'unknown session' });
+    console.log(`[mock-klarna] captured ${cap[1]}`);
+    return json(200, { captured: true, capture_id: 'cap_' + cap[1].slice(3) });
+  }
+  const ref = url.pathname.match(/^\/payments\/v1\/sessions\/([^/]+)\/refund$/);
+  if (req.method === 'POST' && ref) {
+    req.resume();
+    if (!sessions.get(ref[1])) return json(404, { error: 'unknown session' });
+    console.log(`[mock-klarna] refunded ${ref[1]}`);
+    return json(200, { refunded: true, refund_id: 'ref_' + ref[1].slice(3) });
+  }
+
   if (req.method === 'POST' && url.pathname === '/payments/v1/sessions') {
     let raw = '';
     req.on('data', (c) => { raw += c; });

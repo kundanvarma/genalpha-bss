@@ -89,9 +89,25 @@ async function call(method, path, tok, body, headers) {
     if (forged.status !== 401) fail(`forged webhook should be 401, got ${forged.status}`);
     ok('WEBHOOK: HMAC-verified async confirm lands the same payment; a forged signature is 401');
 
+    /* ---------- 7. capture on ship (BNPL captures the order at fulfilment) ---------- */
+    const cap = await call('PATCH', `${P}/payment/${paymentId}`, staff, { status: 'captured' });
+    if (cap.status !== 200 || cap.body.status !== 'captured') fail(`capture: ${cap.status} ${cap.text}`);
+    if (!cap.body.settlementRef || !cap.body.settlementRef.startsWith('cap_')) {
+      fail('capture should carry Klarna capture_id (cap_…): ' + JSON.stringify(cap.body.settlementRef));
+    }
+    ok(`CAPTURE: transitioning to captured routed to KLARNA by session — settled ${cap.body.settlementRef}`);
+
+    /* ---------- 8. refund routed back through Klarna ---------- */
+    const rf = await call('POST', `${P}/payment/${paymentId}/refund`, staff, { amount: { value: 10.00, unit: 'EUR' }, reason: 'goodwill' });
+    if (rf.status !== 200 || !rf.body.refundRef || !rf.body.refundRef.startsWith('ref_')) {
+      fail(`refund: ${rf.status} ${rf.text}`);
+    }
+    ok(`REFUND: 10.00 EUR routed back through KLARNA by session — reference ${rf.body.refundRef}`);
+
     console.log('\nALL PSP-KLARNA CHECKS PASSED — a tenant offers Klarna alongside cards, the shopper'
-      + ' opens a redirect session, and the approved session mints an authorized payment (idempotent'
-      + ' across the return leg and the webhook). Bring-your-own PSP, the redirect way.');
+      + ' opens a redirect session, the approved session mints an authorized payment (idempotent'
+      + ' across the return leg and the webhook), and capture-on-ship + refunds route back through'
+      + ' Klarna by the session (not the card rail). Bring-your-own PSP, the redirect way.');
   } finally {
     await call('DELETE', `${P}/paymentProvider/klarna`, staff).catch(() => {});
   }

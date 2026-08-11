@@ -59,6 +59,32 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
                 str(resp.get("authorization_code")), "Klarna", approved ? null : str(resp.get("decline_reason")));
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public Settlement capture(PspConfig cfg, String sessionId, BigDecimal amount, String currency) {
+        Map<String, Object> resp = client(cfg).post().uri("/payments/v1/sessions/{id}/capture", sessionId)
+                .header("Content-Type", "application/json")
+                .body(Map.of("amount", amount == null ? 0 : amount, "currency", currency == null ? "EUR" : currency))
+                .retrieve().body(Map.class);
+        boolean ok = resp != null && Boolean.TRUE.equals(resp.get("captured"));
+        log.info("klarna capture session {} -> {}", sessionId, ok);
+        return new Settlement(ok, resp == null ? null : str(resp.get("capture_id")),
+                ok ? null : "capture rejected");
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Settlement refund(PspConfig cfg, String sessionId, BigDecimal amount, String currency) {
+        Map<String, Object> resp = client(cfg).post().uri("/payments/v1/sessions/{id}/refund", sessionId)
+                .header("Content-Type", "application/json")
+                .body(Map.of("amount", amount == null ? 0 : amount, "currency", currency == null ? "EUR" : currency))
+                .retrieve().body(Map.class);
+        boolean ok = resp != null && Boolean.TRUE.equals(resp.get("refunded"));
+        log.info("klarna refund session {} -> {}", sessionId, ok);
+        return new Settlement(ok, resp == null ? null : str(resp.get("refund_id")),
+                ok ? null : "refund rejected");
+    }
+
     private RestClient client(PspConfig cfg) {
         RestClient.Builder b = builder.baseUrl(cfg.getBaseUrl() == null ? "https://api.klarna.com" : cfg.getBaseUrl())
                 .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());
