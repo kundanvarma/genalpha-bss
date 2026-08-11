@@ -87,11 +87,13 @@ const PLAN = { id: '14291c1a-df26-4232-8084-500466888e46', cat: 'Mobile plans' }
   await page.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
   await page.click('[data-testid=consent-accept]');
   // browse two real offering pages so the storefront beacons them
-  await page.locator('text=Samsung').first().click();
+  await page.locator('.shoptab', { hasText: 'Devices' }).first().click().catch(() => {});
+  await page.locator('.card:has-text("Samsung")').first().click();
   await page.waitForTimeout(1200);
   await page.goBack();
   await page.locator('.cards').first().waitFor({ timeout: 10000 });
-  await page.locator('text=GenAlpha Mobile 10 GB').first().click();
+  await page.locator('.shoptab', { hasText: 'Mobile' }).first().click().catch(() => {});
+  await page.locator('.card:has-text("GenAlpha Mobile 10 GB")').first().click();
   await page.waitForTimeout(1200);
   await page.goBack();
   let railUp = false;

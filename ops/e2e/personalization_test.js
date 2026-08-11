@@ -32,7 +32,8 @@ async function token(request, realm, client, user, pass) {
     `${API}/insight/v1/profile?visitorId=${vid}`, { headers: H(staff) });
 
   const browse = async (page) => {
-    await page.locator('text=Samsung').first().click();
+    await page.locator('.shoptab', { hasText: 'Devices' }).first().click().catch(() => {});
+    await page.locator('.card:has-text("Samsung")').first().click();
     await page.waitForTimeout(1200);
     await page.goBack();
     await page.locator('.cards').first().waitFor({ timeout: 10000 });

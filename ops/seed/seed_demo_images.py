@@ -194,6 +194,11 @@ for o in active:
         print(f"  {name}: real photo <- {os.path.basename(path)}")
         did += 1
         continue
+    if k == "device":
+        # devices keep their per-color GALLERY from seed_device_content.py (the
+        # configurator hero follows the colour pick) — don't clobber it with a
+        # single tile. Only a real local photo (handled above) overrides it.
+        continue
     if has_img and not FORCE:
         continue
     if k == "plan":

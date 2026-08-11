@@ -52,7 +52,8 @@ async function token(request, user, pass) {
   await page.goto(`${API}/shop/`);
   await page.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
   await page.click('[data-testid=consent-accept]');
-  await page.locator('text=Samsung').first().click();
+  await page.locator('.shoptab', { hasText: 'Devices' }).first().click().catch(() => {});
+  await page.locator('.card:has-text("Samsung")').first().click();
   await page.waitForTimeout(1500);
   await page.goBack();
   await page.locator('.cards').first().waitFor({ timeout: 10000 });

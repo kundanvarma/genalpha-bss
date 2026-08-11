@@ -74,12 +74,12 @@ def phone_svg(look, view, tint=None):
     body = tint or look["body"]
     screen, accent = look["screen"], look["accent"]
     views = {
-        "front": f'''<rect x="60" y="30" width="120" height="240" rx="22" fill="{body}"/>
-<rect x="70" y="52" width="100" height="196" rx="8" fill="{screen}"/>
-<circle cx="120" cy="42" r="4" fill="{screen}"/>
-<rect x="82" y="70" width="76" height="8" rx="4" fill="{accent}" opacity="0.9"/>
-<rect x="82" y="90" width="52" height="6" rx="3" fill="#ffffff" opacity="0.35"/>
-<circle cx="120" cy="230" r="12" fill="none" stroke="{accent}" stroke-width="3"/>''',
+        "front": f'''<rect x="62" y="28" width="116" height="244" rx="30" fill="{body}" stroke="#ffffff55" stroke-width="1.5"/>
+<rect x="72" y="46" width="96" height="208" rx="18" fill="url(#scr)"/>
+<circle cx="120" cy="40" r="3.5" fill="#00000066"/>
+<path d="M86 50 L150 250" stroke="#ffffff33" stroke-width="11" stroke-linecap="round"/>
+<rect x="178" y="92" width="3.5" height="38" rx="2" fill="#00000033"/>
+<rect x="90" y="236" width="60" height="5" rx="2.5" fill="#ffffff66"/>''',
         "back": f'''<rect x="60" y="30" width="120" height="240" rx="22" fill="{body}"/>
 <rect x="74" y="46" width="40" height="72" rx="14" fill="{screen}"/>
 <circle cx="94" cy="66" r="10" fill="#0a0a0a" stroke="{accent}" stroke-width="2"/>
@@ -91,7 +91,9 @@ def phone_svg(look, view, tint=None):
     }
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="240" height="300" viewBox="0 0 240 300">
 <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-<stop offset="0" stop-color="#f4f7f7"/><stop offset="1" stop-color="#dde7e7"/></linearGradient></defs>
+<stop offset="0" stop-color="#f4f7f7"/><stop offset="1" stop-color="#dde7e7"/></linearGradient>
+<linearGradient id="scr" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="{screen}"/><stop offset="1" stop-color="{accent}"/></linearGradient></defs>
 <rect width="240" height="300" rx="18" fill="url(#bg)"/>
 {views[view]}
 </svg>'''
