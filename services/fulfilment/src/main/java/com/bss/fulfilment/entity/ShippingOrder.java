@@ -41,6 +41,11 @@ public class ShippingOrder {
     @Column(name = "tracking_ref")
     private String trackingRef;
 
+    /** The carrier that booked the parcel (from the logistics seam) — data, not a
+     * constant, so the shop shows whoever actually shipped it. */
+    @Column(name = "carrier")
+    private String carrier;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -63,6 +68,8 @@ public class ShippingOrder {
     public void setPlaceJson(String v) { this.placeJson = v; }
     public String getTrackingRef() { return trackingRef; }
     public void setTrackingRef(String v) { this.trackingRef = v; }
+    public String getCarrier() { return carrier; }
+    public void setCarrier(String v) { this.carrier = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

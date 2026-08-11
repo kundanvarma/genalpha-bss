@@ -96,6 +96,7 @@ public class FulfilmentService {
                 so.getId(), tenant, carrierCallbackUrl, partyId, "HOME_STANDARD"));
         if (booked != null && booked.trackingNumber() != null) {
             so.setTrackingRef(booked.trackingNumber());
+            so.setCarrier(booked.carrier());
             so.setState(ShippingOrder.IN_PROGRESS);
             so.setLastUpdate(OffsetDateTime.now());
             shippingOrders.save(so);
@@ -317,6 +318,9 @@ public class FulfilmentService {
         map.put("place", readJson(so.getPlaceJson()));
         if (so.getTrackingRef() != null) {
             map.put("trackingRef", so.getTrackingRef());
+        }
+        if (so.getCarrier() != null) {
+            map.put("carrier", so.getCarrier());
         }
         if (so.getOwnerPartyId() != null) {
             map.put("relatedParty", List.of(Map.of("id", so.getOwnerPartyId(), "role", "customer")));

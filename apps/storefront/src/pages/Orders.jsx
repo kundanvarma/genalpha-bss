@@ -74,7 +74,8 @@ export default function Orders() {
     if (st === 'cancelled') return { cls: 'no', text: 'Cancelled' };
     if (simType === 'esim') return { cls: 'ok', text: '⚡ eSIM — ready to activate' };
     if (physical && ship && ship.trackingRef) {
-      return { cls: 'go', text: `📦 On its way · ${ship.trackingRef} (Helthjem)` };
+      const via = ship.carrier ? ` (${ship.carrier})` : '';
+      return { cls: 'go', text: `📦 On its way · ${ship.trackingRef}${via}` };
     }
     if (physical && visit) return { cls: 'go', text: '🔧 Install booked' };
     if (physical) return { cls: 'go', text: '📦 Preparing shipment' };

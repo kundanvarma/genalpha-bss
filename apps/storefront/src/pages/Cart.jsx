@@ -500,7 +500,7 @@ export default function Cart() {
             <button type="button" className={`simopt ${simType === 'physical' ? 'on' : ''}`}
                     onClick={() => setSimType('physical')}>
               <span className="simopt-t">📦 Physical SIM</span>
-              <span className="simopt-d">Delivered by Helthjem — track it to your door</span>
+              <span className="simopt-d">Ships to your door — track it every step</span>
             </button>
           </div>
         </div>
