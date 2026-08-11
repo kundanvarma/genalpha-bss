@@ -35,9 +35,11 @@ class PostgresMigrationTest {
     void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
         assertThat(postgres.isRunning()).isTrue();
 
+        // On real Postgres both locations apply: V1/V3/V4 (vendor-neutral) plus
+        // V2/V5 (postgres-only RLS) — five migrations.
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(2);
+        assertThat(applied).isEqualTo(5);
 
         assertThat(repository.count()).isZero();
     }
@@ -47,8 +49,8 @@ class PostgresMigrationTest {
         Integer tables = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema = 'public'
-                  AND table_name IN ('document', 'event_outbox')
+                  AND table_name IN ('document', 'event_outbox', 'content_provider_config')
                 """, Integer.class);
-        assertThat(tables).isEqualTo(2);
+        assertThat(tables).isEqualTo(3);
     }
 }

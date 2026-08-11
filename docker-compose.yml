@@ -1107,8 +1107,12 @@ services:
     container_name: bss-document
     restart: unless-stopped
     environment:
-      # the content seam: in-row (default) | s3 (MinIO/AWS/R2) | azure-blob
+      # the content seam: in-row (default) | s3 (MinIO/AWS/R2) | azure-blob.
+      # Per-tenant reference mode (bring-your-own CMS/DAM) is configured at
+      # runtime in content_provider_config; SANITY_TOKEN is the env the tenant's
+      # secretRef points at (mock ignores it; real Sanity needs a write token).
       CONTENT_STORE: ${CONTENT_STORE:-in-row}
+      SANITY_TOKEN: ${SANITY_TOKEN:-dev-mock-token}
       S3_ENDPOINT: http://minio:9000
       AZURE_BLOB_ENDPOINT: http://azurite:10000/devstoreaccount1
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
@@ -1730,6 +1734,17 @@ services:
       CARRIER_NAME: Helthjem
     ports:
       - "8128:8080"
+
+  # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
+  # when proving bring-your-own-CMS without a real Sanity project. Speaks the
+  # Sanity Assets API + CDN shape; the SanityAssetProvider points here via a
+  # tenant's baseUrl. Real Sanity needs no change — only baseUrl unset + a token.
+  mock-sanity:
+    build: ./integrations/mock-sanity
+    container_name: bss-mock-sanity
+    restart: unless-stopped
+    ports:
+      - "8131:8080"
 
   console:
     build: ./apps/admin-console

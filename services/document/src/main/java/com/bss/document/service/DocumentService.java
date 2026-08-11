@@ -1,20 +1,28 @@
 package com.bss.document.service;
 
 import com.bss.document.api.ApiConstants;
+import com.bss.document.entity.ContentProviderConfig;
 import com.bss.document.entity.StoredDocument;
 import com.bss.document.exception.BadRequestException;
 import com.bss.document.exception.NotFoundException;
 import com.bss.document.repository.DocumentRepository;
 import com.bss.document.security.TenantScope;
+import com.bss.document.store.AssetProvider;
+import com.bss.document.store.AssetProviderRegistry;
 import com.bss.document.store.ContentStore;
+import com.bss.document.store.ResolvedAsset;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -27,20 +35,34 @@ import java.util.UUID;
 @Service
 public class DocumentService {
 
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+
     /** Channel media only — this is a brand asset store, not a file dump. */
     private static final Set<String> IMAGE_TYPES = Set.of(
             "image/svg+xml", "image/png", "image/jpeg", "image/webp");
     private static final int MAX_BYTES = 512 * 1024;
 
+    /** Served when a referenced asset can't be resolved — never a broken image. */
+    private static final byte[] PLACEHOLDER = ("<svg xmlns=\"http://www.w3.org/2000/svg\" "
+            + "width=\"640\" height=\"440\" viewBox=\"0 0 640 440\"><rect width=\"640\" height=\"440\" "
+            + "fill=\"#e6edf0\"/><text x=\"320\" y=\"228\" font-family=\"sans-serif\" font-size=\"22\" "
+            + "fill=\"#7a8b93\" text-anchor=\"middle\">image unavailable</text></svg>")
+            .getBytes(StandardCharsets.UTF_8);
+
     private final DocumentRepository repository;
     private final TenantScope tenantScope;
     private final ContentStore contentStore;
+    private final ContentProviderConfigService providerConfigs;
+    private final AssetProviderRegistry providers;
 
     public DocumentService(DocumentRepository repository, TenantScope tenantScope,
-            ContentStore contentStore) {
+            ContentStore contentStore, ContentProviderConfigService providerConfigs,
+            AssetProviderRegistry providers) {
         this.repository = repository;
         this.tenantScope = tenantScope;
         this.contentStore = contentStore;
+        this.providerConfigs = providerConfigs;
+        this.providers = providers;
     }
 
     @Transactional
@@ -69,12 +91,22 @@ public class DocumentService {
         entity.setName(String.valueOf(dto.get("name")));
         entity.setCategory(dto.get("category") == null ? null : String.valueOf(dto.get("category")));
         entity.setContentType(mimeType);
-        String storageKey = contentStore.put(entity.getTenantId(), id, mimeType, bytes);
-        if (storageKey.startsWith("row:")) {
-            entity.setContent(bytes);
+        // Reference mode: a tenant bound to an external CMS uploads THERE and the
+        // row keeps only a ref:<provider>:<assetId> key. Otherwise the hosted
+        // ContentStore (in-row/S3/Azure) takes the bytes as before.
+        Optional<ContentProviderConfig> external = providerConfigs.forCurrentTenant();
+        AssetProvider provider = external.map(c -> providers.get(c.getProvider())).orElse(null);
+        if (provider != null) {
+            String assetId = provider.upload(external.get(), mimeType, bytes);
+            entity.setStorageKey("ref:" + external.get().getProvider() + ":" + assetId);
         } else {
-            // the bytes live in the object store; the row keeps the key
-            entity.setStorageKey(storageKey);
+            String storageKey = contentStore.put(entity.getTenantId(), id, mimeType, bytes);
+            if (storageKey.startsWith("row:")) {
+                entity.setContent(bytes);
+            } else {
+                // the bytes live in the object store; the row keeps the key
+                entity.setStorageKey(storageKey);
+            }
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
@@ -98,10 +130,42 @@ public class DocumentService {
                 .orElseThrow(() -> NotFoundException.forResource("Document", "brand-logo")));
     }
 
+    /**
+     * The read path. A hosted document serves its bytes; a reference document
+     * resolves the external CMS/DAM's own URL and is served as a 302 redirect
+     * (the browser hits the CMS CDN, not us). Any resolve failure falls open to
+     * a placeholder — never a broken image, never a 500.
+     */
     @Transactional(readOnly = true)
-    public StoredDocument content(String id) {
-        return hydrate(repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
-                .orElseThrow(() -> NotFoundException.forResource("Document", id)));
+    public ContentResult resolveContent(String id, String rendition) {
+        StoredDocument doc = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Document", id));
+        String key = doc.getStorageKey();
+        if (key != null && key.startsWith("ref:")) {
+            return resolveReference(doc, key, rendition);
+        }
+        hydrate(doc);
+        return ContentResult.bytes(doc.getContentType(), doc.getContent());
+    }
+
+    private ContentResult resolveReference(StoredDocument doc, String key, String rendition) {
+        try {
+            String[] parts = key.split(":", 3);   // ref, provider, assetId
+            if (parts.length < 3) {
+                throw new IllegalStateException("malformed reference key");
+            }
+            ContentProviderConfig cfg = providerConfigs.forCurrentTenant().orElse(null);
+            AssetProvider provider = cfg != null && cfg.getProvider().equals(parts[1])
+                    ? providers.get(parts[1]) : null;
+            if (provider == null) {
+                throw new IllegalStateException("no provider bound for reference '" + parts[1] + "'");
+            }
+            ResolvedAsset resolved = provider.resolve(cfg, parts[2], rendition);
+            return ContentResult.redirect(resolved.url());
+        } catch (RuntimeException e) {
+            log.warn("reference resolve failed for document {} ({}): {}", doc.getId(), key, e.toString());
+            return ContentResult.bytes("image/svg+xml", PLACEHOLDER);
+        }
     }
 
     /** Externally-stored bytes are fetched on read; in-row rows already

@@ -48,6 +48,7 @@ public class SecurityConfig {
                                 ApiConstants.BASE_PATH + "/document/brand-logo").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("document:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")
+                        .requestMatchers(HttpMethod.PUT, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("document:write")
                         .anyRequest().authenticated())

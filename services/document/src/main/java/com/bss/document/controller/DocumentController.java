@@ -2,7 +2,9 @@ package com.bss.document.controller;
 
 import com.bss.document.api.ApiConstants;
 import com.bss.document.entity.StoredDocument;
+import com.bss.document.service.ContentResult;
 import com.bss.document.service.DocumentService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -48,13 +50,24 @@ public class DocumentController {
                 .body(doc.getContent());
     }
 
-    /** The anonymous shop window: serve the bytes, cache-forever. */
+    /**
+     * The anonymous shop window. A hosted document serves its bytes (cache-forever);
+     * a reference document 302-redirects to the external CMS/DAM's own URL at the
+     * requested {@code rendition} (thumb|card|hero|orig) — the browser hits their CDN.
+     */
     @GetMapping("/{id}/content")
-    public ResponseEntity<byte[]> content(@PathVariable String id) {
-        StoredDocument doc = service.content(id);
+    public ResponseEntity<byte[]> content(@PathVariable String id,
+            @RequestParam(required = false) String rendition) {
+        ContentResult result = service.resolveContent(id, rendition);
+        if (result.isRedirect()) {
+            return ResponseEntity.status(HttpStatus.FOUND)
+                    .header(HttpHeaders.LOCATION, result.redirectUrl())
+                    .header("Cache-Control", "public, max-age=300")
+                    .build();
+        }
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(doc.getContentType()))
+                .contentType(MediaType.parseMediaType(result.contentType()))
                 .header("Cache-Control", "public, max-age=86400")
-                .body(doc.getContent());
+                .body(result.bytes());
     }
 }
