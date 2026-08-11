@@ -1758,6 +1758,29 @@ services:
     ports:
       - "8132:8080"
 
+  # The REAL, self-hosted Strapi for the genuine generic-connector proof.
+  # OPT-IN (profile: strapi) — heavy to build/run, not part of the default stack.
+  # Secrets are dev placeholders; a throwaway sqlite proof instance.
+  strapi:
+    build: ./integrations/strapi
+    container_name: bss-strapi
+    profiles: ["strapi"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: "1337"
+      APP_KEYS: dev-key-a,dev-key-b
+      API_TOKEN_SALT: dev-api-token-salt
+      ADMIN_JWT_SECRET: dev-admin-jwt-secret
+      TRANSFER_TOKEN_SALT: dev-transfer-token-salt
+      JWT_SECRET: dev-jwt-secret
+      ENCRYPTION_KEY: dev-encryption-key-0123456789abcdef
+      DATABASE_CLIENT: sqlite
+      DATABASE_FILENAME: .tmp/data.db
+    ports:
+      - "1337:1337"
+
   console:
     build: ./apps/admin-console
     container_name: bss-console

@@ -32,7 +32,8 @@ const ok = (m) => console.log('OK ' + m);
 // mock CMS container host -> host-mapped port (only the demo mocks need this).
 const hostReachable = (u) => u
   .replace('http://mock-sanity:8080', 'http://localhost:8131')
-  .replace('http://mock-strapi:8080', 'http://localhost:8132');
+  .replace('http://mock-strapi:8080', 'http://localhost:8132')
+  .replace('http://strapi:1337', 'http://localhost:1337');
 
 async function token(user, pass) {
   const r = await fetch(KC, { method: 'POST',
@@ -148,6 +149,25 @@ async function fetchBytes(url) {
       fail(`strapi did not serve bytes: ${strapiServed.status} ${strapiServed.size}B`);
     }
     ok(`GENERIC CONNECTOR: same code, Strapi's wire (multipart + array + relative url) from config; served ${strapiServed.size}B`);
+
+    /* ---------- 4b. the SAME connector against REAL self-hosted Strapi (opt-in profile) ---------- */
+    const strapiUp = await fetch('http://localhost:1337/_health').then((r) => r.status === 204).catch(() => false);
+    if (strapiUp) {
+      r = await bind(tok, { provider: 'http', config: {
+        uploadUrl: 'http://strapi:1337/api/upload', uploadMode: 'multipart', fileField: 'files',
+        assetIdPath: '/0/url', resolveBase: 'http://strapi:1337', renditionMode: 'none' } });
+      if (r.status !== 200) fail(`bind real strapi: ${r.status} ${r.text}`);
+      const realId = await upload(tok, `byo-realstrapi-${Date.now()}`);
+      res = await call('GET', `${DOC}/document/${realId}/content`, null);
+      if (res.status !== 302 || !/strapi:1337\/uploads\//.test(res.location || '')) {
+        fail(`real Strapi should 302 to /uploads, got ${res.status} ${res.location}`);
+      }
+      const realServed = await fetchBytes(res.location);
+      if (realServed.status !== 200 || realServed.size === 0) fail(`real Strapi did not serve bytes: ${realServed.status}`);
+      ok(`REAL STRAPI: the SAME connector drives a genuine self-hosted Strapi (no vendor code); served ${realServed.size}B`);
+    } else {
+      ok('REAL STRAPI: skipped — opt-in `--profile strapi` not running (mock-strapi covered the wire above)');
+    }
 
     /* ---------- 5. per-tenant: the binding is the tenant's; unbinding restores hosted ---------- */
     let cur = await call('GET', `${DOC}/contentProvider`, tok);
