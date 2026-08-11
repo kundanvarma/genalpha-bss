@@ -149,8 +149,10 @@ export default function Shop() {
         // Shop by line of business — tabs, the way a telco storefront is laid
         // out (Mobile · Internet · TV · Devices · Security · Bundles), instead
         // of one long "all offers" scroll.
+        const isFamily = (o) => /family|kids/i.test(`${o.name || ''} ${o.description || ''}`);
         const LOB = [
           { key: 'Bundles', label: t('Bundles'), items: bundles },
+          { key: 'Family', label: t('Family'), items: offerings.filter(isFamily) },
           { key: 'Mobile', label: t('Mobile'), items: singles.filter((o) => catOf(o) === 'Mobile plans') },
           { key: 'Internet', label: t('Internet'), items: singles.filter((o) => catOf(o) === 'Broadband') },
           { key: 'TV', label: t('TV & Streaming'), items: singles.filter((o) => ['TV & Add-ons', 'Partner services'].includes(catOf(o))) },
@@ -209,6 +211,14 @@ export default function Shop() {
                   onClick={() => setDeviceBrand(b)}>{b === 'All' ? t('All') : b}</button>
               ))}
             </div>
+          );
+        } else if (active.key === 'Family') {
+          // family bundle first, then the family-friendly add-ons
+          items = [...active.items].sort((a, b) => (b.isBundle ? 1 : 0) - (a.isBundle ? 1 : 0));
+          controls = (
+            <p className="dim familyintro" data-testid="family-intro" style={{ margin: '0 0 12px' }}>
+              👨‍👩‍👧‍👦 {t('Everything the household needs on one bill — pick your lines, phones and extras.')}
+            </p>
           );
         }
         return (
