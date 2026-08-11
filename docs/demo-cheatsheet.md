@@ -9,7 +9,8 @@
 ### ① CUSTOMER BUYS + REAL FULFILMENT — `localhost:8080/shop/`
 > **eSIM:** *[mobile plan → cart → pick ⚡ eSIM → pay 4242…]* "Watch it activate on its own." *[My page: line active, number, meters — seconds]* "No human touched that."
 > **Physical SIM:** *[same plan → pick 📦 Physical SIM → pay]* *[My orders: "📦 On its way · HJ… (Helthjem)"]* "Booked with a carrier, number bound before dispatch." *[~15s → Delivered → completes]*
-> **Bundle (per-component):** *[GenAlpha One Home & Mobile → configure → 11122 + install slot → pay]* *[My orders: In progress — TV active now · phone shipping · fiber install booked]* "Not all-or-nothing — every line on its own clock."
+> **Family plan (per-component):** *[**Family** tab → GenAlpha Family Max → pick 1–2 lines + phone + extras → 11122 + install slot → pay]* *[My orders: In progress — TV active now · lines activating · phone shipping · fiber install booked]* "Whole family, one bill — every line on its own clock."
+> *[also show: **Mobile** tab → **Compare** (data/network/roaming side-by-side) · **Devices** → filter by brand]*
 > *[bill → pay]* "Catalog → per-component fulfilment → bill → cash."
 > ⚠️ order stuck at *acknowledged* = an OLD pre-Track-C order; new ones roll partiallyCompleted → completed.
 

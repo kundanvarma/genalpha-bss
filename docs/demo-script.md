@@ -60,16 +60,24 @@ time pick **📦 Physical SIM** (a shipping address is required).
 - ~15 seconds later refresh: the parcel is **Delivered**, the line completes.
   **"The carrier reports delivery and the order finishes itself."**
 
-**1c — The bundle no longer sticks (per-component fulfilment).** Order
-**"GenAlpha One Home & Mobile"** → configure it (pick the phone, colour,
-storage). Postcode `11122` (serviceable), pick an install slot.
-(`99999` first if you like: **"unserviceable is refused at the door."**)
-Pay. Then on **My orders**:
+**1c — The family plan, and the bundle no longer sticks (per-component
+fulfilment).** Click the **Family** tab. **"Same storefront, but organised the
+way a real telco lays it out — Bundles, Family, Mobile, Internet, TV, Devices."**
+Open **"GenAlpha Family Max"** → configure the household:
+- **pick 1–2 mobile lines** (10 GB / 50 GB / Unlimited 5G) — **"the whole family
+  on one bill"**, a phone, and any streaming extras;
+- postcode `11122` (serviceable), pick an install slot
+  (`99999` first if you like: **"unserviceable is refused at the door."**); pay.
+Then on **My orders**:
 - **"This is the point."** The order shows **In progress**, and each component
-  reads its own status: TV/Sports **active now**, the phone **📦 on its way**,
-  fiber **🔧 install booked**. **"A bundle isn't all-or-nothing anymore — the
-  digital parts light up instantly while the phone ships and the fiber waits for
-  the engineer. Every line on its own clock."**
+  reads its own status: TV **active now**, each **mobile line** activating, the
+  phone **📦 on its way**, fiber **🔧 install booked**. **"A family plan isn't
+  all-or-nothing anymore — the digital parts light up instantly while the phone
+  ships and the fiber waits for the engineer. Every line on its own clock, one
+  bill."**
+
+> Also worth a click: the **Mobile** tab → **Compare** — the plans side-by-side
+> (data, network, roaming) from real spec data; and **Devices** → filter by brand.
 
 **1d — Catalog → cash.** Show the bill appear, pay it. **"Catalog → order →
 per-component fulfilment → activation → bill → cash — and product modelling is
