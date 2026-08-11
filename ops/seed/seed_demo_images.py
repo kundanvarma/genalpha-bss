@@ -116,11 +116,28 @@ def plan_tile(name, hero):
 
 
 def device_tile(name):
-    body = ('<rect x="255" y="70" width="130" height="270" rx="26" fill="none" '
-            'stroke="#fff" stroke-width="8"/>'
-            '<rect x="300" y="82" width="40" height="8" rx="4" fill="#fff" opacity="0.7"/>'
-            '<circle cx="320" cy="312" r="9" fill="#fff" opacity="0.7"/>')
-    return svg(body + txt(320, 400, name, 30, 700, "#fff"), "#1b2b34", INK)
+    # A clean, GENERIC front-facing phone render (no logos/trade dress — repo-safe),
+    # tinted per device so the shop has visual variety.
+    n = name.lower()
+    if "samsung" in n:
+        body, s1, s2, bg1, bg2 = "#0b1524", "#4b2fd6", "#8a2be2", "#0a1120", "#111a2e"
+    elif "pro" in n:
+        body, s1, s2, bg1, bg2 = "#26262b", "#0e7c7b", "#1c3b4c", "#15161a", "#0c0d10"
+    else:  # iPhone 17
+        body, s1, s2, bg1, bg2 = "#1a2733", "#3aa0ff", "#0e7c7b", "#0d1620", "#0a1018"
+    inner = (
+        f'<defs><linearGradient id="scr" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0" stop-color="{s1}"/><stop offset="1" stop-color="{s2}"/>'
+        f'</linearGradient></defs>'
+        # body + screen + front camera + a soft reflection + side button
+        f'<rect x="250" y="50" width="140" height="300" rx="32" fill="{body}" '
+        f'stroke="#ffffff26" stroke-width="2"/>'
+        f'<rect x="262" y="64" width="116" height="272" rx="20" fill="url(#scr)"/>'
+        f'<circle cx="320" cy="78" r="4.5" fill="#00000066"/>'
+        f'<path d="M276 78 L344 320" stroke="#ffffff2e" stroke-width="12" stroke-linecap="round"/>'
+        f'<rect x="392" y="118" width="4" height="46" rx="2" fill="#ffffff33"/>'
+        + txt(320, 400, name, 30, 700, "#fff"))
+    return svg(inner, bg1, bg2)
 
 
 def simple_tile(name, glyph, bg):
