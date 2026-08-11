@@ -13,7 +13,8 @@ echo "== 1/3  storefront catalog =="
 echo; echo "== 2/3  campaigns / journeys =="
 bash "$HERE/demo-reset-campaigns.sh"
 
-echo; echo "== 3/3  product imagery =="
+echo; echo "== 3/3  product imagery + plan comparison specs =="
 "$PY" "$HERE/seed/seed_demo_images.py" || echo "  (imagery step skipped — see ops/seed/seed_demo_images.py)"
+"$PY" "$HERE/seed/seed_plan_compare.py" || echo "  (plan-compare step skipped — see ops/seed/seed_plan_compare.py)"
 
 echo; echo "demo reset complete — the stage is clean and curated."

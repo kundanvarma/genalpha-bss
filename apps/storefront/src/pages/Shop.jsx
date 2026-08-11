@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { beacon, consentChoice, forYou, getOffering, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
+import { beacon, consentChoice, forYou, getOffering, getSpec, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -16,6 +16,7 @@ export default function Shop() {
   const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
   const [planView, setPlanView] = useState('table');  // Mobile: 'table' | 'cards'
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
+  const [planSpecs, setPlanSpecs] = useState({}); // offeringId -> {charName: value}
 
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
@@ -37,6 +38,23 @@ export default function Shop() {
       }).catch(() => {});
     }
   }, []);
+
+  // Load each mobile plan's spec characteristics so the comparison table shows
+  // real per-plan values (Data / Network / EU roaming / Calls & texts).
+  useEffect(() => {
+    if (!offerings) return;
+    const plans = offerings.filter((o) =>
+      ((o.category || [])[0] || {}).name === 'Mobile plans' && o.productSpecification?.id);
+    Promise.all(plans.map(async (o) => {
+      const spec = await getSpec(o.productSpecification.id).catch(() => null);
+      const chars = {};
+      for (const c of (spec?.productSpecCharacteristic || [])) {
+        const v = (c.productSpecCharacteristicValue || [])[0]?.value;
+        if (v != null) chars[c.name] = v;
+      }
+      return [o.id, chars];
+    })).then((entries) => setPlanSpecs(Object.fromEntries(entries))).catch(() => {});
+  }, [offerings]);
 
   if (error) return <p className="error">{error}</p>;
   if (!offerings) return <p className="dim">Loading offers…</p>;
@@ -144,18 +162,26 @@ export default function Shop() {
         const active = LOB.find((l) => l.key === tab) || LOB[0];
 
         // Baymard telco UX: compare plans (data/price) and filter the device shop.
+        // Comparison values come from each plan's SPEC characteristics (real data),
+        // falling back to the name only when a spec hasn't loaded.
         const monthlyOf = (o) => monthlyTotal(pricesOf(o, prices))?.value ?? Infinity;
-        const dataOf = (name) => /unlimited/i.test(name) ? Infinity
-          : (name.match(/(\d+)\s*GB/i) ? Number(name.match(/(\d+)\s*GB/i)[1]) : 0);
+        const specOf = (o) => planSpecs[o.id] || {};
+        const dataText = (o) => specOf(o).Data
+          || ((o.name || '').match(/(\d+\s*GB)/i)?.[1]) || (/unlimited/i.test(o.name || '') ? t('Unlimited') : '—');
+        const dataRank = (o) => {
+          const s = dataText(o);
+          if (/unlimited/i.test(s)) return Infinity;
+          const m = String(s).match(/(\d+)/);
+          return m ? Number(m[1]) : 0;
+        };
         const brandOf = (o) => (o.name || '').split(' ')[0];
-        const is5G = (o) => /5G|unlimited/i.test(o.name || '');
 
         let items = active.items;
         let controls = null;
         const mobileTable = active.key === 'Mobile' && planView === 'table';
         if (active.key === 'Mobile') {
           items = [...items].sort((a, b) => planSort === 'price'
-            ? monthlyOf(a) - monthlyOf(b) : dataOf(b.name) - dataOf(a.name));
+            ? monthlyOf(a) - monthlyOf(b) : dataRank(b) - dataRank(a));
           controls = (
             <div className="shopfilter" data-testid="plan-sort">
               <span className="dim">{t('Sort')}:</span>
@@ -216,26 +242,24 @@ export default function Shop() {
                   <tbody>
                     <tr>
                       <td className="feat">{t('Data')}</td>
-                      {items.map((o) => (
-                        <td key={o.id} className="hero">
-                          {dataOf(o.name) === Infinity ? t('Unlimited')
-                            : dataOf(o.name) ? `${dataOf(o.name)} GB` : '—'}
-                        </td>
-                      ))}
+                      {items.map((o) => <td key={o.id} className="hero">{dataText(o)}</td>)}
+                    </tr>
+                    <tr>
+                      <td className="feat">{t('Network')}</td>
+                      {items.map((o) => <td key={o.id}>{specOf(o).Network || '—'}</td>)}
                     </tr>
                     <tr>
                       <td className="feat">{t('Calls & texts')}</td>
-                      {items.map((o) => <td key={o.id}>{t('Unlimited')}</td>)}
-                    </tr>
-                    <tr>
-                      <td className="feat">5G</td>
-                      {items.map((o) => (
-                        <td key={o.id}>{is5G(o) ? <span className="yes">✓</span> : <span className="no">—</span>}</td>
-                      ))}
+                      {items.map((o) => <td key={o.id}>{specOf(o)['Calls & texts'] || t('Unlimited')}</td>)}
                     </tr>
                     <tr>
                       <td className="feat">{t('EU roaming')}</td>
-                      {items.map((o) => <td key={o.id}><span className="yes">✓</span></td>)}
+                      {items.map((o) => {
+                        const r = specOf(o)['EU roaming'];
+                        return <td key={o.id}>{r === 'Included'
+                          ? <span className="yes">✓ {t('Included')}</span>
+                          : (r ? <span className="dim">{r}</span> : '—')}</td>;
+                      })}
                     </tr>
                     <tr className="choose">
                       <td className="feat" />
