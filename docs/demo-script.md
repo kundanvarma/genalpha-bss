@@ -37,22 +37,44 @@ Five narrated acts drive the live system on rails. Nothing is mocked.
 The spine is the customer lifecycle everyone in telecom understands, then the
 AI-native differentiators. Say the **bold** line, do the rest.
 
-### Scene 1 — The customer buys (storefront) · ~4 min
+### Scene 1 — The customer buys, and fulfilment is REAL (storefront) · ~5 min
 URL: `http://localhost:8080/shop/`
 
-1. **"This is the operator's storefront. I'll shop as a new customer."**
-   Register a throwaway account (or browse as guest first to show no forced login).
-2. Open a bundle → configure it: pick the phone, a colour, storage. **"Product
-   modeling is data, not code — this bundle, its choice groups, the colour
-   premium, all TMF620 configuration the operator edits, never a deploy."**
-3. Enter postcode `11122` → serviceability passes, pick an install slot.
-   (Optionally show `99999` first: **"unserviceable is refused at the door."**)
-4. Cart → checkout → pay with `4242 4242 4242 4242`.
-5. **"Watch the order complete on its own."** Refresh the account/My-services
-   page: the line is active with a number, the SIM, meters. **"No human
-   touched that — order to activation is automatic."**
-6. Show the bill appear, pay it. **"Catalog → order → activation → bill →
-   cash, end to end, in four minutes."**
+This scene now carries the fulfilment story — each component fulfils on its own
+clock, physical goods ship through a carrier, and the customer watches it happen.
+
+**1a — eSIM: instant, no human.** Register a throwaway account. Open a **mobile
+plan** → in the cart pick **⚡ eSIM**. Pay with `4242 4242 4242 4242`.
+- **"Watch it activate on its own."** Open **My orders / My page**: the line is
+  active with a number and meters, in seconds. **"No human touched that — an
+  eSIM provisions instantly."**
+
+**1b — Physical SIM: two clocks, one plan.** Order the same plan again, this
+time pick **📦 Physical SIM** (a shipping address is required).
+- On **My orders** the line shows **"📦 On its way · HJ… (Helthjem)"** with a
+  real tracking number. **"Same plan, different fulfilment: the SIM is booked
+  with a carrier and its number is bound before dispatch — no dead SIMs."**
+- ~15 seconds later refresh: the parcel is **Delivered**, the line completes.
+  **"The carrier reports delivery and the order finishes itself."**
+
+**1c — The bundle no longer sticks (per-component fulfilment).** Order
+**"GenAlpha One Home & Mobile"** → configure it (pick the phone, colour,
+storage). Postcode `11122` (serviceable), pick an install slot.
+(`99999` first if you like: **"unserviceable is refused at the door."**)
+Pay. Then on **My orders**:
+- **"This is the point."** The order shows **In progress**, and each component
+  reads its own status: TV/Sports **active now**, the phone **📦 on its way**,
+  fiber **🔧 install booked**. **"A bundle isn't all-or-nothing anymore — the
+  digital parts light up instantly while the phone ships and the fiber waits for
+  the engineer. Every line on its own clock."**
+
+**1d — Catalog → cash.** Show the bill appear, pay it. **"Catalog → order →
+per-component fulfilment → activation → bill → cash — and product modelling is
+data, not code: the plan, the SIM choice, the bundle's choice groups, all TMF620
+the operator edits, never a deploy."**
+
+> If a line is stuck at *acknowledged* on your fleet, it's an OLD pre-Track-C
+> order — new orders roll `acknowledged → partiallyCompleted → completed`.
 
 ### Scene 2 — The product owner creates an offer by TALKING (console) · ~3 min
 URL: `http://localhost:8080/console/` as `pat@bss.local` / `pat`
@@ -88,7 +110,38 @@ Stay in the console (`pat`), or switch to `demo` for the full operator view.
   Revoke it and it goes back to asking the model. Learning as a reviewable
   artifact, not a black box."**
 
-### Scene 4 — One build, any operator (multi-tenant punchline) · ~2 min
+### Scene 4 — Marketing runs the machine, no curl (journeys / martech) · ~4 min
+URL: `http://localhost:8080/console/` as `pat@bss.local` / `pat`
+(or `demo`/`demo` for the full view)
+
+The same event stream that drives fulfilment drives marketing — a marketer sets
+up automation against real business moments, and it fires itself.
+
+1. **Campaigns tab** → *New* (or pick a **recipe** — "Churn save", "Tier
+   congrats" — to prefill). Set trigger **"Order placed"**, subject + message.
+   **"Marketing reacts to real events — an order, a bill, an AI churn signal —
+   not a nightly CSV."**
+2. **Let the AI draft it.** Use the draft button; the `{code}` placeholder for a
+   promo survives. Attach a promo code. **"The AI writes the copy; the marketer
+   approves it. Same human-in-control pattern as everywhere else."**
+3. **Save → then place a new customer's first order** (Scene 1 flow, or a quick
+   guest order). The campaign **fires exactly once** via TMF681 — the reached
+   counter ticks to **1**. A **second** order stays silent. **"Fires once per
+   customer, idempotent, delivered through the standard communication API."**
+4. **Journeys tab** (the sophisticated version): a journey is an ordered
+   **sequence** (message → wait → branch) with a **holdout group** for
+   **measurable lift**. Open one → the stats show *entered / held-out /
+   converted / **lift in points** / revenue per customer*. **"This isn't
+   send-and-hope — a control group proves the lift in money, per customer, per
+   month."**
+5. Pause a campaign from the GUI (button flips to **Resume**). **"On/off is a
+   click, not a deploy — and Nova's tenant sees none of GenAlpha's campaigns."**
+
+> Why it lands: it's the *same* choreography engine as Live Flow and fulfilment,
+> pointed at growth. "Data, not code" holds for marketing too — a journey is
+> ordered steps as JSON the marketer edits.
+
+### Scene 5 — One build, any operator (multi-tenant punchline) · ~2 min
 URL: `http://shop.nova.localhost:8080/shop/`
 
 - **"Same binary, same deployment. This is a second operator — Norwegian,

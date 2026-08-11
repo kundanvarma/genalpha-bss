@@ -6,13 +6,12 @@
 
 ---
 
-### ① CUSTOMER BUYS — `localhost:8080/shop/` (register / browse as guest)
-> "This is the operator's storefront. I'll shop as a new customer."
-> *[configure bundle: phone, colour, storage]* "The bundle, its choices, the colour premium — all data the operator edits, never a deploy."
-> *[postcode 11122, pick install slot]* "Serviceability is checked at the door."
-> *[cart → pay 4242…]* "Now watch the order complete on its own."
-> *[refresh My services — line active, number, SIM]* "No human touched that."
-> *[bill appears → pay]* "Catalog → order → activation → bill → cash. Four minutes."
+### ① CUSTOMER BUYS + REAL FULFILMENT — `localhost:8080/shop/`
+> **eSIM:** *[mobile plan → cart → pick ⚡ eSIM → pay 4242…]* "Watch it activate on its own." *[My page: line active, number, meters — seconds]* "No human touched that."
+> **Physical SIM:** *[same plan → pick 📦 Physical SIM → pay]* *[My orders: "📦 On its way · HJ… (Helthjem)"]* "Booked with a carrier, number bound before dispatch." *[~15s → Delivered → completes]*
+> **Bundle (per-component):** *[GenAlpha One Home & Mobile → configure → 11122 + install slot → pay]* *[My orders: In progress — TV active now · phone shipping · fiber install booked]* "Not all-or-nothing — every line on its own clock."
+> *[bill → pay]* "Catalog → per-component fulfilment → bill → cash."
+> ⚠️ order stuck at *acknowledged* = an OLD pre-Track-C order; new ones roll partiallyCompleted → completed.
 
 ### ② OFFER BY TALKING — `localhost:8080/console/` → `pat`/`pat` → **Copilot** tab
 > "A product manager describes what they want to sell — in words."
@@ -26,10 +25,15 @@
 > **AI Workforce** *(as demo)*: "Digital workers with revocable badges work the same queues humans do. They can't fake 'done', they escalate honestly, a human holds every approval key."
 > **Runbooks** *(as demo)*: "AI learning you can READ. Three confirmed diagnoses → a runbook a human approves → next time, zero model calls. Revoke it, it asks the model again."
 
-### ④ ONE BUILD, ANY OPERATOR — `shop.nova.localhost:8080/shop/` → `nils`/`nils`
+### ④ MARKETING, NO CURL (journeys) — `console/` → `pat`/`pat` → **Campaigns** / **Journeys**
+> **Campaigns** *[New → recipe or trigger "Order placed" → AI-draft the message, {code} survives → attach promo → Save]* "Marketing reacts to real events, not a nightly CSV."
+> *[place a new customer's 1st order]* "Fires exactly once (reached=1) via TMF681; a 2nd order stays silent." *[pause from GUI → Resume]* "On/off is a click."
+> **Journeys** *[open one]* "Ordered steps + a HOLDOUT group → measurable LIFT in points + revenue per customer. Not send-and-hope."
+
+### ⑤ ONE BUILD, ANY OPERATOR — `shop.nova.localhost:8080/shop/` → `nils`/`nils`
 > "Same binary, same deployment. A second operator — Norwegian, prices in NOK, own catalog, walled off by row-level security."
 > *[optional biz.nova.localhost → birgit/birgit]* "B2B too — consolidated company invoice in NOK."
-> "Onboarding a new operator is a form, not a project."
+> "Onboarding a new operator is a form, not a project. Nova sees none of GenAlpha's campaigns."
 
 ### ⑤ (optional) CSR'S DAY — `localhost:8080/csr/` → `agent-anna`/`agent`
 > *[search customer → 360 → copilot summary → work ticket]* "The agent sees everything, the AI drafts, the human sends."
