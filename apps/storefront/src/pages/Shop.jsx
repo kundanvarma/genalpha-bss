@@ -13,6 +13,8 @@ export default function Shop() {
   const [experience, setExperience] = useState(null);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('Bundles'); // line-of-business shop tab
+  const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
+  const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
 
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
@@ -139,6 +141,42 @@ export default function Shop() {
         ].filter((l) => l.items.length);
         if (!LOB.length) return <TalkToSales />;
         const active = LOB.find((l) => l.key === tab) || LOB[0];
+
+        // Baymard telco UX: compare plans (data/price) and filter the device shop.
+        const monthlyOf = (o) => monthlyTotal(pricesOf(o, prices))?.value ?? Infinity;
+        const dataOf = (name) => /unlimited/i.test(name) ? Infinity
+          : (name.match(/(\d+)\s*GB/i) ? Number(name.match(/(\d+)\s*GB/i)[1]) : 0);
+        const brandOf = (o) => (o.name || '').split(' ')[0];
+
+        let items = active.items;
+        let controls = null;
+        if (active.key === 'Mobile') {
+          items = [...items].sort((a, b) => planSort === 'price'
+            ? monthlyOf(a) - monthlyOf(b) : dataOf(b.name) - dataOf(a.name));
+          controls = (
+            <div className="shopfilter" data-testid="plan-sort">
+              <span className="dim">{t('Compare by')}:</span>
+              {['data', 'price'].map((s) => (
+                <button key={s} type="button" className={`chip ${planSort === s ? 'on' : ''}`}
+                  onClick={() => setPlanSort(s)}>{s === 'data' ? t('Most data') : t('Lowest price')}</button>
+              ))}
+            </div>
+          );
+        } else if (active.key === 'Devices') {
+          const brands = ['All', ...Array.from(new Set(active.items.map(brandOf)))];
+          items = active.items
+            .filter((o) => deviceBrand === 'All' || brandOf(o) === deviceBrand)
+            .sort((a, b) => monthlyOf(a) - monthlyOf(b));
+          controls = (
+            <div className="shopfilter" data-testid="device-filter">
+              <span className="dim">{t('Brand')}:</span>
+              {brands.map((b) => (
+                <button key={b} type="button" className={`chip ${deviceBrand === b ? 'on' : ''}`}
+                  onClick={() => setDeviceBrand(b)}>{b === 'All' ? t('All') : b}</button>
+              ))}
+            </div>
+          );
+        }
         return (
           <>
             <nav className="shoptabs" data-testid="shop-tabs">
@@ -148,8 +186,9 @@ export default function Shop() {
                   onClick={() => setTab(l.key)}>{l.label}</button>
               ))}
             </nav>
+            {controls}
             <div className="cards" data-testid={`lob-${active.key}`}>
-              {active.items.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
+              {items.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
             </div>
           </>
         );
