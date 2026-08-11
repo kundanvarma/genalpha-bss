@@ -47,6 +47,10 @@ public class RevenueService {
     static {
         DEFAULT_CHART.put("ar", new String[] {"1200", "Accounts receivable"});
         DEFAULT_CHART.put("cash", new String[] {"1000", "Cash / PSP clearing"});
+        // BNPL (Klarna &c.) pays the merchant on its OWN settlement cycle, so a
+        // capture is a receivable FROM the provider, not cash — cleared to 1000
+        // when the provider remits. Keeps the cash line honest for BNPL orders.
+        DEFAULT_CHART.put("bnpl:receivable", new String[] {"1100", "BNPL / provider clearing"});
         DEFAULT_CHART.put("rate:recurringCharge", new String[] {"4000", "Service revenue"});
         DEFAULT_CHART.put("rate:usageCharge", new String[] {"4010", "Usage revenue"});
         DEFAULT_CHART.put("rate:discount", new String[] {"4090", "Discounts (contra-revenue)"});
@@ -62,6 +66,12 @@ public class RevenueService {
         // config_value on 'loyalty:liability' = currency per point (0/absent = control number only)
         DEFAULT_CHART.put("loyalty:liability", new String[] {"2400", "Loyalty points liability"});
     }
+
+    /** PSPs whose capture is a receivable (deferred settlement), not immediate cash.
+     * Klarna and other BNPL remit later; card/instant PSPs clear to cash at capture.
+     * (A production system would carry the settlement timing as provider config;
+     * here it is a small, explicit list — the honest boundary.) */
+    private static final Set<String> BNPL_PROVIDERS = Set.of("klarna");
 
     private final JournalEntryRepository entries;
     private final JournalLineRepository lines;
@@ -151,10 +161,18 @@ public class RevenueService {
             return false;
         }
         String currency = amount.get("unit") == null ? "EUR" : String.valueOf(amount.get("unit"));
+        // BNPL captures debit a receivable-from-provider (Klarna remits later);
+        // card/instant captures debit cash. Either way AR is relieved.
+        String provider = payment.get("pspProvider") == null ? null
+                : String.valueOf(payment.get("pspProvider")).toLowerCase();
+        boolean bnpl = provider != null && BNPL_PROVIDERS.contains(provider);
+        String debitKey = bnpl ? "bnpl:receivable" : "cash";
+        String debitDesc = bnpl ? "BNPL capture (" + provider + ") — " + paymentId : "Payment " + paymentId;
         List<JournalLine> posting = List.of(
-                line("cash", value, null, paymentId, "Payment " + paymentId),
+                line(debitKey, value, null, paymentId, debitDesc),
                 line("ar", null, value, paymentId, "Payment applied"));
-        saveBalanced(tenant, sourceRef, "payment", "Cash received — " + paymentId, currency,
+        saveBalanced(tenant, sourceRef, "payment",
+                (bnpl ? "BNPL receivable — " : "Cash received — ") + paymentId, currency,
                 payment.get("ownerPartyId") == null ? partyOf(payment) : String.valueOf(payment.get("ownerPartyId")),
                 posting);
         return true;
@@ -402,6 +420,7 @@ public class RevenueService {
         Map<String, Map<String, Object>> byAccount = new TreeMap<>();
         BigDecimal arDebits = BigDecimal.ZERO;
         BigDecimal cashDebits = BigDecimal.ZERO;
+        BigDecimal bnplDebits = BigDecimal.ZERO;
         boolean allBalanced = true;
         for (Map<String, Object> entry : day) {
             BigDecimal d = BigDecimal.ZERO;
@@ -430,6 +449,9 @@ public class RevenueService {
                 if ("cash".equals(key)) {
                     cashDebits = cashDebits.add(debit);
                 }
+                if ("bnpl:receivable".equals(key)) {
+                    bnplDebits = bnplDebits.add(debit);
+                }
             }
             if (d.compareTo(c) != 0) {
                 allBalanced = false;
@@ -441,6 +463,7 @@ public class RevenueService {
         out.put("allEntriesBalanced", allBalanced);
         out.put("billedTotal", arDebits);
         out.put("cashTotal", cashDebits);
+        out.put("bnplReceivableTotal", bnplDebits);   // captured but not yet remitted by the BNPL provider
         out.put("byAccount", new ArrayList<>(byAccount.values()));
         Long points = billingClient.loyaltyPointsLiability();
         out.put("loyaltyPointsLiability", points == null
@@ -603,6 +626,7 @@ public class RevenueService {
         String cashCode = codeFor(tenant, "cash");
         // everything that is NOT one of these is revenue-family (4xxx + contra)
         Set<String> nonRevenue = Set.of(cashCode, codeFor(tenant, "ar"), taxCode,
+                codeFor(tenant, "bnpl:receivable"),
                 codeFor(tenant, "loyalty:expense"), codeFor(tenant, "loyalty:liability"));
 
         Totals cur = totals(tenant, from, to, nonRevenue, taxCode, cashCode);
