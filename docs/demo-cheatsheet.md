@@ -47,6 +47,12 @@
 3. Shop → refresh → it's selling.
 > "The copilot writes these same rows from a sentence; the console writes them from a form. Nothing is compiled or redeployed — the catalog is data."
 
+### REAL DEVICE PHOTOS (optional, 30 sec — local only, never committed)
+1. Save 3 images into `ops/demo-assets/devices/` (gitignored) named exactly:
+   `samsung-galaxy-s26.png` · `iphone-17.png` · `iphone-17-pro.png` (jpg/webp ok)
+2. `python3 ops/seed/seed_demo_images.py` — real photos override the generated tiles.
+> Repo-safe: the folder is gitignored, so copyrighted photos never leave your machine.
+
 ### THE THREE QUESTIONS
 - **vs Amdocs/Netcracker?** "Not competing on feature count — vendor-neutral, composable, AI-native from day one. Full BSS for a smaller operator, or a layer on what you have."
 - **Production-ready?** "Core is proven — 87 E2E suites, 25 CTKs at zero, crash-resumable billing, three clouds. Honest gaps: OCS is a seam, no tax engine, no ERP, no pen test yet — all in the capability map."
