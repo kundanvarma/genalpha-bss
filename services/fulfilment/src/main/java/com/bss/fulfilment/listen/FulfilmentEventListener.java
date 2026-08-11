@@ -103,6 +103,18 @@ public class FulfilmentEventListener {
      * read the place role or a catalog fulfilment-type flag.
      */
     private static boolean installsRatherThanShips(Map<?, ?> item) {
+        // An installation-role place is the ENGINEER's address (a workOrder visit),
+        // never a parcel — the most reliable signal that a line installs, not ships.
+        if (item.get("product") instanceof Map<?, ?> product
+                && product.get("place") instanceof List<?> places) {
+            for (Object pl : places) {
+                if (pl instanceof Map<?, ?> place && place.get("role") != null
+                        && String.valueOf(place.get("role")).toLowerCase().contains("install")) {
+                    return true;
+                }
+            }
+        }
+        // Fallback on the offering name for broadband lines carrying a generic place.
         Object off = item.get("productOffering");
         String name = off instanceof Map<?, ?> m && m.get("name") != null
                 ? String.valueOf(m.get("name")).toLowerCase() : "";
