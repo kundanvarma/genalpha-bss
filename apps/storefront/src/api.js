@@ -252,6 +252,13 @@ export async function myProducts() {
   return json(await authFetch(`${INVENTORY}/product?limit=100`));
 }
 
+// Track-my-delivery: the customer's own shipping orders (party-scoped by the
+// fulfilment service). Each carries a carrier trackingRef once dispatched.
+const SHIPPING = '/tmf-api/shippingOrderManagement/v4';
+export async function myShipments() {
+  return json(await authFetch(`${SHIPPING}/shippingOrder`));
+}
+
 /** A family member's products, through the household link: inventory verifies
  * the caller is their payer or a family admin, live at the party source. */
 export async function memberProducts(memberId) {

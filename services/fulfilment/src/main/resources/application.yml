@@ -51,8 +51,14 @@ bss:
   fulfilment:
     ordering-topic: ${FULFILMENT_ORDERING_TOPIC:bss.ordering.events}
     appointment-topic: ${FULFILMENT_APPOINTMENT_TOPIC:bss.appointment.events}
+    # where the carrier posts delivery callbacks (this service, reachable in-cluster)
+    carrier-callback-url: ${CARRIER_CALLBACK_URL:http://fulfilment:8080/tmf-api/shippingOrderManagement/v4/carrierEvent}
   downstream:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
+    # Logistics seam (TMF700 front): blank = off (manual warehouse flow).
+    # Point at a carrier adapter to hand parcels off. Carrier name is cosmetic.
+    logistics-base-url: ${LOGISTICS_BASE_URL:}
+    logistics-carrier: ${LOGISTICS_CARRIER:Helthjem}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

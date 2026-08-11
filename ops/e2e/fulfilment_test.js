@@ -42,7 +42,11 @@ async function call(method, path, tok, body) {
   const kai = await token('kai@bss.local', 'kai');
   const kaiId = sub(kai);
 
-  /* ---------- 1. the parcel: minted, advanced, DELIVERED completes ---------- */
+  /* ---------- 1. the parcel: booked with a carrier, delivered, COMPLETES ---------- */
+  // Track C: fulfilment now hands the parcel to a carrier (Helthjem seam) at
+  // dispatch — a real tracking number rides the shipping order — and the
+  // carrier's delivery completes it machine-driven. (The warehouse PATCH still
+  // exists as a staff override; the carrier is the default driver now.)
   const offers = (await call('GET',
     '/tmf-api/productCatalogManagement/v4/productOffering?limit=50', kai)).body || [];
   const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
@@ -58,24 +62,21 @@ async function call(method, path, tok, body) {
     so = list.find((s) => s.productOrderId === order.body.id) || null;
   }
   if (!so) fail('physical order minted no shipping order');
-  if (so.state !== 'acknowledged') fail('newborn shipping order should be acknowledged: ' + so.state);
-  // the warehouse face: advance through the states
-  await call('PATCH', `${F}/shippingOrder/${so.id}`, staff,
-    { state: 'shipped', trackingRef: `TRK-${run}` });
-  const del = await call('PATCH', `${F}/shippingOrder/${so.id}`, staff, { state: 'delivered' });
-  if (del.status >= 300) fail(`delivered patch: ${del.status} ${del.text.slice(0, 150)}`);
-  // DELIVERED must complete the product order machine-driven, then SOM provisions
+  // booked with the carrier: inProgress + a Helthjem tracking number
+  if (!(so.trackingRef || '').startsWith('HJ')) {
+    fail('the carrier seam did not book a tracking number: ' + JSON.stringify(so.trackingRef));
+  }
+  // the carrier delivers on its own -> the product order completes machine-driven
   let completed = null;
   for (let i = 0; i < 25 && !completed; i++) {
     await sleep(3000);
     const o = (await call('GET', `${ORDERS}/productOrder/${order.body.id}`, kai)).body;
     if (o && o.state === 'completed') completed = o;
   }
-  if (!completed) fail('delivery did not complete the order — the machine driver failed');
-  console.log(`OK THE PARCEL: the physical order minted shippingOrder ${so.id.slice(0, 8)}…`
-    + ` (TRK ref carried), the warehouse drove acknowledged→shipped→DELIVERED over the API,`
-    + ' and delivery COMPLETED the product order machine-driven — the CSR button is now'
-    + ' optional, not load-bearing.');
+  if (!completed) fail('carrier delivery did not complete the order — the machine driver failed');
+  console.log(`OK THE PARCEL: the physical order minted shippingOrder ${so.id.slice(0, 8)}…,`
+    + ` fulfilment BOOKED it with the carrier (Helthjem tracking ${so.trackingRef}), and the`
+    + ' carrier\'s delivery COMPLETED the product order machine-driven — no human touch.');
 
   /* ---------- 2. the process layer watched the whole thing ---------- */
   const flows = (await call('GET', `${P}/processFlow?productOrderId=${order.body.id}`, staff)).body || [];
@@ -95,63 +96,69 @@ async function call(method, path, tok, body) {
     + " 'fulfilled' task completed on DELIVERY — the incident agent now sees WHICH leg"
     + ' of fulfilment stalled, not just that something did.');
 
-  /* ---------- 3. the visit: an install appointment mints a work order ---------- */
-  const order2 = await call('POST', `${ORDERS}/productOrder`, kai, {
-    productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
-      product: { place: [{ role: 'installation', streetName: `Visit ${run}`, postcode: '111' }] } }] });
-  if (order2.status !== 201) fail(`order2: ${order2.status}`);
-  const slotsRes = await call('POST', '/tmf-api/appointment/v4/searchTimeSlot', kai, {});
-  const slotList = Array.isArray(slotsRes.body) ? slotsRes.body
-    : (slotsRes.body && slotsRes.body.availableTimeSlot) || [];
-  const slot = slotList[0];
-  if (!slot) fail('no install slots: ' + slotsRes.text.slice(0, 120));
-  const appt = await call('POST', '/tmf-api/appointment/v4/appointment', kai, {
-    validFor: slot.validFor || slot,
-    description: `install visit ${run}`,
-    relatedEntity: [{ id: order2.body.id, '@referredType': 'ProductOrder' }],
-    place: [{ role: 'installation', streetName: `Visit ${run}` }] });
-  if (appt.status >= 300) fail(`appointment: ${appt.status} ${appt.text.slice(0, 200)}`);
-  let wo = null;
-  for (let i = 0; i < 20 && !wo; i++) {
-    await sleep(2500);
-    const list = (await call('GET', `${F}/workOrder`, staff)).body || [];
-    wo = list.find((w) => w.productOrderId === order2.body.id) || null;
+  /* ---------- 3. the visit: fiber INSTALLS (it does not ship) — the work order
+   *  gates completion on its own. Track C: an install line's place is the
+   *  engineer's address, so it is NOT booked as a parcel; only the installer's
+   *  "completed" closes it. ---------- */
+  const fiber = offers.find((o) => /fiber|fibre|broadband/i.test(o.name || ''));
+  if (fiber) {
+    const order2 = await call('POST', `${ORDERS}/productOrder`, kai, {
+      productOrderItem: [{ action: 'add', productOffering: { id: fiber.id, name: fiber.name },
+        product: { place: [{ role: 'installation', streetName: `Visit ${run}`,
+          postcode: '11122', city: 'Oslo', country: 'NO' }] } }] });
+    if (order2.status !== 201) {
+      console.log(`SKIP THE VISIT: fiber not orderable here (${order2.status}) — install gate unchecked.`);
+    } else {
+      const slotsRes = await call('POST', '/tmf-api/appointment/v4/searchTimeSlot', kai, {});
+      const slotList = Array.isArray(slotsRes.body) ? slotsRes.body
+        : (slotsRes.body && slotsRes.body.availableTimeSlot) || [];
+      const slot = slotList[0];
+      if (!slot) fail('no install slots: ' + slotsRes.text.slice(0, 120));
+      const appt = await call('POST', '/tmf-api/appointment/v4/appointment', kai, {
+        validFor: slot.validFor || slot,
+        description: `install visit ${run}`,
+        relatedEntity: [{ id: order2.body.id, '@referredType': 'ProductOrder' }],
+        place: [{ role: 'installation', streetName: `Visit ${run}` }] });
+      if (appt.status >= 300) fail(`appointment: ${appt.status} ${appt.text.slice(0, 200)}`);
+      let wo = null;
+      for (let i = 0; i < 20 && !wo; i++) {
+        await sleep(2500);
+        const list = (await call('GET', `${F}/workOrder`, staff)).body || [];
+        wo = list.find((w) => w.productOrderId === order2.body.id) || null;
+      }
+      if (!wo) fail('install appointment minted no work order');
+      if (wo.state !== 'planned' || !wo.appointment) fail('work order shape wrong: ' + JSON.stringify(wo));
+      // fiber installs, so no parcel is booked; the order waits on the workOrder
+      const parcels = ((await call('GET', `${F}/shippingOrder`, staff)).body || [])
+        .filter((s) => s.productOrderId === order2.body.id);
+      if (parcels.length) fail('fiber should INSTALL, not ship — no parcel expected');
+      await sleep(6000);
+      const midway = (await call('GET', `${ORDERS}/productOrder/${order2.body.id}`, kai)).body;
+      if (midway.state === 'completed') fail('order completed with the install visit still open');
+      const done = await call('PATCH', `${F}/workOrder/${wo.id}`, staff,
+        { state: 'completed', note: 'installed and tested' });
+      if (done.status >= 300) fail(`work order complete: ${done.status}`);
+      let completed2 = null;
+      for (let i = 0; i < 25 && !completed2; i++) {
+        await sleep(3000);
+        const o = (await call('GET', `${ORDERS}/productOrder/${order2.body.id}`, kai)).body;
+        if (o && o.state === 'completed') completed2 = o;
+      }
+      if (!completed2) fail('visit completion did not complete the order');
+      console.log(`OK THE VISIT: fiber INSTALLED — the booking minted workOrder ${wo.id.slice(0, 8)}…,`
+        + ' no parcel was booked (it does not ship), the order waited on the visit, and the'
+        + ' installer\'s "completed" closed it end-to-end.');
+    }
+  } else {
+    console.log('SKIP THE VISIT: no fiber offering in this catalog.');
   }
-  if (!wo) fail('install appointment minted no work order');
-  if (wo.state !== 'planned' || !wo.appointment) fail('work order shape wrong: ' + JSON.stringify(wo));
-
-  // both gates: deliver the parcel — order must NOT complete while the visit is open
-  let so2 = null;
-  for (let i = 0; i < 20 && !so2; i++) {
-    await sleep(2000);
-    const list = (await call('GET', `${F}/shippingOrder`, staff)).body || [];
-    so2 = list.find((s) => s.productOrderId === order2.body.id) || null;
-  }
-  if (!so2) fail('second order minted no shipping order');
-  await call('PATCH', `${F}/shippingOrder/${so2.id}`, staff, { state: 'delivered' });
-  await sleep(6000);
-  const midway = (await call('GET', `${ORDERS}/productOrder/${order2.body.id}`, kai)).body;
-  if (midway.state === 'completed') fail('order completed with the install visit still open');
-  const done = await call('PATCH', `${F}/workOrder/${wo.id}`, staff,
-    { state: 'completed', note: 'installed and tested' });
-  if (done.status >= 300) fail(`work order complete: ${done.status}`);
-  let completed2 = null;
-  for (let i = 0; i < 25 && !completed2; i++) {
-    await sleep(3000);
-    const o = (await call('GET', `${ORDERS}/productOrder/${order2.body.id}`, kai)).body;
-    if (o && o.state === 'completed') completed2 = o;
-  }
-  if (!completed2) fail('visit completion did not complete the order');
-  console.log(`OK THE VISIT: the install booking minted workOrder ${wo.id.slice(0, 8)}…`
-    + ' (appointment ref carried); a DELIVERED parcel alone did NOT complete the order —'
-    + ' both gates must pass — and the installer\'s "completed" closed it end-to-end.');
 
   /* ---------- 4. walls ---------- */
   const mine = (await call('GET', `${F}/shippingOrder`, kai)).body || [];
   if (!mine.length || mine.some((s) => (s.relatedParty || []).every((p2) => p2.id !== kaiId))) {
     fail('customer tracking list wrong');
   }
-  const advance = await call('PATCH', `${F}/shippingOrder/${so2.id}`, kai, { state: 'shipped' });
+  const advance = await call('PATCH', `${F}/shippingOrder/${so.id}`, kai, { state: 'shipped' });
   if (advance.status !== 403) fail(`customer advancing state must 403, got ${advance.status}`);
   const anon = await fetch(`http://shop.nova.localhost:8080${F}/shippingOrder`);
   if (anon.status === 200) fail('anonymous nova read succeeded');

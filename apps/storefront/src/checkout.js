@@ -74,7 +74,14 @@ export function dueNow(lines, offerings, prices) {
   return total;
 }
 
-export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null) {
+/** A cart line (or bundle child) that carries a mobile subscription / SIM. */
+export function isMobileLine(name) {
+  const n = (name || '').toLowerCase();
+  return n.includes('mobile') || n.includes('5g') || n.includes('subscription');
+}
+
+export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,
+    simType = 'esim') {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -84,11 +91,21 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   const physical = Object.fromEntries(physicalEntries);
   const offerings = Object.fromEntries(offeringList.map((o) => [o.id, o]));
 
-  const annotated = lines.map((l) => ({
+  // C3 — SIM choice. A physical SIM makes the mobile line SHIP (Helthjem);
+  // an eSIM activates instantly with no parcel. Either way the line carries a
+  // simType characteristic so provisioning and the shop know which it is.
+  const physicalSim = simType === 'physical';
+  const withSim = (item, name) => isMobileLine(name)
+    ? { ...item, characteristics: { ...(item.characteristics || {}), simType },
+        physical: item.physical || physicalSim }
+    : item;
+
+  const annotated = lines.map((l) => withSim({
     ...l,
     physical: Boolean(physical[l.offeringId]),
-    selections: (l.selections || []).map((s) => ({ ...s, physical: Boolean(physical[s.offeringId]) })),
-  }));
+    selections: (l.selections || []).map((s) => withSim(
+      { ...s, physical: Boolean(physical[s.offeringId]) }, s.name)),
+  }, l.name));
   const needsShipping = annotated.some((l) => l.physical || l.selections.some((s) => s.physical));
 
   // A first qualification probe tells us whether anything is

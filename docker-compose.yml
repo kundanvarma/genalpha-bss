@@ -502,6 +502,9 @@ services:
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       ORDERING_BASE_URL: http://product-ordering:8080
+      # C2 logistics seam: hand parcels to the Helthjem-shaped carrier adapter.
+      LOGISTICS_BASE_URL: http://mock-logistics:8080
+      LOGISTICS_CARRIER: Helthjem
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
       DB_URL: jdbc:postgresql://postgres:5432/fulfilment
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
@@ -1715,6 +1718,18 @@ services:
     restart: unless-stopped
     ports:
       - "8115:8080"
+
+  # C2 logistics seam target — a Helthjem-shaped parcel carrier (stands in for
+  # Helthjem / Posten-Bring / PostNord behind fulfilment's LogisticsClient).
+  mock-logistics:
+    build: ./integrations/mock-logistics
+    container_name: bss-mock-logistics
+    restart: unless-stopped
+    environment:
+      DELIVER_AFTER_MS: "15000"
+      CARRIER_NAME: Helthjem
+    ports:
+      - "8128:8080"
 
   console:
     build: ./apps/admin-console

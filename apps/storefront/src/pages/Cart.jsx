@@ -32,6 +32,9 @@ export default function Cart() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '' });
+  // C3 — how the customer wants their SIM: eSIM (instant, no parcel) or a
+  // physical SIM card shipped by the carrier. Default eSIM.
+  const [simType, setSimType] = useState('esim');
 
   useEffect(() => {
     const refresh = () => { cartLines().then(setLines).catch((e) => setError(e.message)); };
@@ -214,7 +217,8 @@ export default function Cart() {
   });
 
   const needsShipping = (lines || []).some((l) =>
-    physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]));
+    physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]))
+    || (hasMobile && simType === 'physical'); // a physical SIM ships too
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
@@ -288,7 +292,7 @@ export default function Cart() {
     setBusy(true);
     try {
       const order = await performCheckout(lines, due ? card : null, promo?.code || null,
-        keepNumber.on ? keepNumber : null);
+        keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim');
       localStorage.removeItem('bss.shop.promo');
       if (due && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
@@ -481,6 +485,24 @@ export default function Cart() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {hasMobile && (
+        <div className="keepnumber simchoice">
+          <h2>Your SIM</h2>
+          <div className="simopts">
+            <button type="button" className={`simopt ${simType === 'esim' ? 'on' : ''}`}
+                    onClick={() => setSimType('esim')}>
+              <span className="simopt-t">⚡ eSIM</span>
+              <span className="simopt-d">Activates instantly — nothing to ship</span>
+            </button>
+            <button type="button" className={`simopt ${simType === 'physical' ? 'on' : ''}`}
+                    onClick={() => setSimType('physical')}>
+              <span className="simopt-t">📦 Physical SIM</span>
+              <span className="simopt-d">Delivered by Helthjem — track it to your door</span>
+            </button>
+          </div>
         </div>
       )}
 

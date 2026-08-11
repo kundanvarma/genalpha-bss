@@ -111,8 +111,16 @@ public class OrchestrationService {
         // just finished, so its digital services provision NOW. Either way,
         // never twice (at-least-once delivery upstream).
         boolean fulfilled = "completed".equals(state);
-        if ((!"acknowledged".equals(state) && !fulfilled)
-                || serviceOrders.existsByTenantIdAndProductOrderId(tenant, productOrderId)) {
+        boolean alreadyOrchestrated = serviceOrders.existsByTenantIdAndProductOrderId(tenant, productOrderId);
+        if (fulfilled && alreadyOrchestrated) {
+            // C4 — fulfilment finished: complete the physical items' service orders
+            // that were HELD inProgress at order time, so the process layer's
+            // provisioned/fulfilled milestones fire on REAL fulfilment (a delivered
+            // parcel / a done install), not on optimistic activation.
+            completeDeferredServiceOrders(tenant, productOrderId);
+            return;
+        }
+        if ((!"acknowledged".equals(state) && !fulfilled) || alreadyOrchestrated) {
             return;
         }
         String owner = null;
@@ -132,17 +140,16 @@ public class OrchestrationService {
         if (items.isEmpty()) {
             return;
         }
-        // Fulfilment-aware: anything that ships or installs (items carrying a
-        // place) completes on human fulfilment, not by the mock activator —
-        // digital services activate instantly.
-        boolean needsFulfilment = items.stream().anyMatch(item ->
-                item.get("product") instanceof Map<?, ?> product && product.get("place") != null);
-        if (needsFulfilment && !fulfilled) {
-            log.info("product order {} needs physical fulfilment; SOM waits for it before activating",
-                    productOrderId);
-            return;
-        }
+        // C1 — INDEPENDENT per-component fulfillment. No order-level gate: a
+        // digital service (mobile eSIM, TV, add-on) activates NOW and its item
+        // is reported completed, while an item that ships or installs (carries a
+        // place) is reported inProgress and finishes on its own track — the
+        // parcel's delivery (C2) or the install (C4). The parent order rolls up
+        // to partiallyCompleted and only reaches completed when every item lands.
+        boolean anyUnreported = false;
         for (Map<String, Object> item : items) {
+            String itemId = item.get("id") != null ? String.valueOf(item.get("id")) : null;
+            boolean deferred = item.get("product") instanceof Map<?, ?> product && product.get("place") != null;
             Map<String, Object> offering = (Map<String, Object>) item.get("productOffering");
             // the SERVICE must carry the offering's real name (the product
             // record does, and downstream correlates the two by it) — an
@@ -160,8 +167,12 @@ public class OrchestrationService {
                     ? null : String.valueOf(offering.get("id"))).orElse("");
             if ("Insurance".equals(category) || "Top-ups".equals(category)) {
                 // insurance covers, top-ups boost an allowance — neither is a
-                // service; they bill, and that's the whole story
+                // service; they bill, and that's the whole story. Nothing to
+                // fulfil, so the item is done.
                 log.info("'{}' is billing-only ({}) — no service to provision", name, category);
+                if (itemId != null) {
+                    ordering.updateItemState(productOrderId, itemId, "completed");
+                }
                 continue;
             }
             boolean partnerService = "Partner services".equals(category);
@@ -269,20 +280,66 @@ public class OrchestrationService {
                 }
             }
 
-            so.setState(ServiceOrder.COMPLETED);
-            so.setCompletedAt(OffsetDateTime.now());
-            so.setLastUpdate(OffsetDateTime.now());
-            serviceOrders.save(so);
-            events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
-                    "id", id, "state", so.getState(), "productOrderId", productOrderId));
+            // C4 — a physical item's service order is HELD inProgress until its
+            // parcel/install actually lands; only a digital service completes NOW.
+            // The line/SIM is already ACTIVE either way (number drawn, OCS
+            // provisioned, ICCID bound before dispatch) — this is the order's
+            // fulfilment-tracking state, which drives the process 'provisioned'
+            // milestone. Holding it keeps that milestone honest for a stranded
+            // physical order instead of optimistically completing it.
+            if (deferred) {
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+            } else {
+                so.setState(ServiceOrder.COMPLETED);
+                so.setCompletedAt(OffsetDateTime.now());
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                        "id", id, "state", so.getState(), "productOrderId", productOrderId));
+            }
+            // C1: report THIS item's fulfillment state. A physical item (ships
+            // or installs — it carries a place) stays inProgress until its own
+            // track lands (parcel delivered / install done); a digital service
+            // is done now. The parent order rolls up from these per-item states.
+            if (itemId != null) {
+                ordering.updateItemState(productOrderId, itemId, deferred ? "inProgress" : "completed");
+            } else {
+                anyUnreported = true;
+            }
         }
-        // Everything active: a digital order completes itself; a fulfilled
-        // order is already completed — activation was the missing half.
-        if (!fulfilled) {
+        // Safety net for orders whose items predate per-item ids (C0): fall back
+        // to the whole-order completion so nothing is left stranded.
+        if (!fulfilled && anyUnreported) {
             ordering.complete(productOrderId);
         }
-        log.info("product order {} {} by SOM ({} service orders)", productOrderId,
-                fulfilled ? "activated post-fulfilment" : "completed", items.size());
+        log.info("product order {} orchestrated by SOM ({} service orders)", productOrderId, items.size());
+    }
+
+    /**
+     * C4 — when fulfilment completes the order, finish the physical items' service
+     * orders that were held IN_PROGRESS at order time, emitting the provisioning
+     * event now. This makes the process layer's provisioned/fulfilled milestones
+     * reflect real physical fulfilment; a stranded order (no delivery) leaves them
+     * inProgress, so the stuck-sweep can honestly flag it.
+     */
+    private void completeDeferredServiceOrders(String tenant, String productOrderId) {
+        int completed = 0;
+        for (ServiceOrder so : serviceOrders.findByTenantIdAndProductOrderId(tenant, productOrderId)) {
+            if (ServiceOrder.IN_PROGRESS.equals(so.getState())) {
+                so.setState(ServiceOrder.COMPLETED);
+                so.setCompletedAt(OffsetDateTime.now());
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                        "id", so.getId(), "state", so.getState(), "productOrderId", productOrderId));
+                completed++;
+            }
+        }
+        if (completed > 0) {
+            log.info("product order {} — {} deferred service order(s) completed post-fulfilment",
+                    productOrderId, completed);
+        }
     }
 
     /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
