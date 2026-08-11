@@ -5,7 +5,7 @@ import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
-import { checkPromotion, savePaymentMethod } from '../api.js';
+import { checkPromotion, confirmPayment, createPaymentSession, paymentMethods, savePaymentMethod } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
@@ -43,6 +43,33 @@ export default function Cart() {
     if (!address.postCode) { setDeliveryOpts(null); return; }
     deliveryOptions(address.postCode).then(setDeliveryOpts).catch(() => setDeliveryOpts(null));
   }, [address.postCode]);
+  // PSP-P2: how to pay — card, or a redirect method (Klarna) the operator offers.
+  const [payMethod, setPayMethod] = useState('card');
+  const [payMethods, setPayMethods] = useState([{ method: 'card', redirect: false }]);
+  useEffect(() => { paymentMethods().then(setPayMethods).catch(() => {}); }, []);
+  // Klarna return leg: the approve page sends us back with ?klarna_session — confirm it and finish.
+  useEffect(() => {
+    const ks = new URLSearchParams(window.location.search).get('klarna_session');
+    if (!ks || !lines || !lines.length) return;
+    (async () => {
+      setBusy(true);
+      try {
+        const payment = await confirmPayment('klarna', ks);
+        const saved = JSON.parse(localStorage.getItem('bss.shop.klarna') || '{}');
+        const order = await performCheckout(lines, null, saved.promoCode || null,
+          saved.keepNumber && saved.keepNumber.on ? saved.keepNumber : null,
+          saved.simType || 'esim', saved.delivery || null, payment);
+        localStorage.removeItem('bss.shop.klarna');
+        window.history.replaceState(null, '', '/shop/cart');
+        await markCartCheckedOut(order.id);
+        navigate('/orders');
+      } catch (e) {
+        setError(e.message);
+        setBusy(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
 
   useEffect(() => {
     const refresh = () => { cartLines().then(setLines).catch((e) => setError(e.message)); };
@@ -233,7 +260,9 @@ export default function Cart() {
   const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
   const signedIn = isSignedIn();
-  const cardReady = !due || !signedIn
+  const klarnaOffered = (payMethods || []).some((m) => m.method === 'klarna');
+  const payingKlarna = payMethod === 'klarna' && klarnaOffered;
+  const cardReady = !due || !signedIn || payingKlarna
     || (card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim());
 
   function setField(name, value) {
@@ -305,6 +334,17 @@ export default function Cart() {
         ? { method: 'pickupPoint', carrier: pickupOpt.carrier,
           pickupPointId: chosenPoint.id, pickupPointName: chosenPoint.name }
         : { method: 'home' };
+      if (payingKlarna && due) {
+        // Redirect to Klarna to approve; the choices survive the hop in localStorage,
+        // the cart survives server-side, and the return leg (above) finishes the order.
+        localStorage.setItem('bss.shop.klarna', JSON.stringify({
+          simType: hasMobile ? simType : 'esim', delivery,
+          keepNumber: keepNumber.on ? keepNumber : null, promoCode: promo?.code || null }));
+        const session = await createPaymentSession({ method: 'klarna',
+          amount: { value: due.value, unit: due.unit }, returnUrl: `${window.location.origin}/shop/cart` });
+        window.location.href = session.redirectUrl;
+        return;
+      }
       const order = await performCheckout(lines, due ? card : null, promo?.code || null,
         keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery);
       localStorage.removeItem('bss.shop.promo');
@@ -572,25 +612,45 @@ export default function Cart() {
       {due && (signedIn ? (
         <div className="payment">
           <h2>Payment</h2>
-          <p className="dim small">Your card is charged the one-time amount due now.
-            Monthly charges arrive on your bill.</p>
-          <div className="addressgrid">
-            <label className="charfield"><span>Card number</span>
-              <input name="cardNumber" value={card.cardNumber} inputMode="numeric"
-                     placeholder="4242 4242 4242 4242"
-                     onChange={(e) => setCard({ ...card, cardNumber: e.target.value })} /></label>
-            <label className="charfield"><span>Expiry</span>
-              <input name="expiry" value={card.expiry} placeholder="MM/YY"
-                     onChange={(e) => setCard({ ...card, expiry: e.target.value })} /></label>
-            <label className="charfield"><span>CVC</span>
-              <input name="cvc" value={card.cvc} inputMode="numeric" placeholder="123"
-                     onChange={(e) => setCard({ ...card, cvc: e.target.value })} /></label>
-          </div>
-          <label className="savecard small">
-            <input type="checkbox" checked={saveCard}
-                   onChange={(e) => setSaveCard(e.target.checked)} />
-            {' '}Save this card for future bills
-          </label>
+          {klarnaOffered && (
+            <div className="simopts" style={{ marginBottom: '0.8rem' }}>
+              <button type="button" className={`simopt ${!payingKlarna ? 'on' : ''}`}
+                      onClick={() => setPayMethod('card')}>
+                <span className="simopt-t">💳 Card</span>
+                <span className="simopt-d">Pay the one-time amount now</span>
+              </button>
+              <button type="button" className={`simopt ${payingKlarna ? 'on' : ''}`}
+                      onClick={() => setPayMethod('klarna')}>
+                <span className="simopt-t">Klarna</span>
+                <span className="simopt-d">Pay in 3 — approve at Klarna</span>
+              </button>
+            </div>
+          )}
+          {payingKlarna ? (
+            <p className="dim small">You'll approve the payment at Klarna, then come back to finish your order.</p>
+          ) : (
+            <>
+              <p className="dim small">Your card is charged the one-time amount due now.
+                Monthly charges arrive on your bill.</p>
+              <div className="addressgrid">
+                <label className="charfield"><span>Card number</span>
+                  <input name="cardNumber" value={card.cardNumber} inputMode="numeric"
+                         placeholder="4242 4242 4242 4242"
+                         onChange={(e) => setCard({ ...card, cardNumber: e.target.value })} /></label>
+                <label className="charfield"><span>Expiry</span>
+                  <input name="expiry" value={card.expiry} placeholder="MM/YY"
+                         onChange={(e) => setCard({ ...card, expiry: e.target.value })} /></label>
+                <label className="charfield"><span>CVC</span>
+                  <input name="cvc" value={card.cvc} inputMode="numeric" placeholder="123"
+                         onChange={(e) => setCard({ ...card, cvc: e.target.value })} /></label>
+              </div>
+              <label className="savecard small">
+                <input type="checkbox" checked={saveCard}
+                       onChange={(e) => setSaveCard(e.target.checked)} />
+                {' '}Save this card for future bills
+              </label>
+            </>
+          )}
         </div>
       ) : (
         <p className="dim small paynote">You'll confirm the payment after signing in.</p>
@@ -605,6 +665,7 @@ export default function Cart() {
             : !serviceable ? 'Not serviceable at this address'
             : !slotReady ? 'Pick an installation slot'
             : !cardReady ? 'Enter card details'
+            : payingKlarna && due && signedIn ? `Continue to Klarna · ${due.value.toFixed(2)} ${due.unit}`
             : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
             : t('Checkout')}
         </button>

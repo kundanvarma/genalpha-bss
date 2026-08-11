@@ -17,6 +17,9 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
+// Where the BROWSER reaches this mock (redirect_url must be browser-reachable);
+// a real Klarna returns its own klarna.com URL, so no equivalent is needed.
+const PUBLIC_BASE = process.env.PUBLIC_BASE || '';
 const sessions = new Map();
 
 const server = http.createServer((req, res) => {
@@ -38,7 +41,8 @@ const server = http.createServer((req, res) => {
   const approve = url.pathname.match(/^\/approve\/([^/]+)$/);
   if (req.method === 'GET' && approve) {
     const s = sessions.get(approve[1]);
-    const back = (s && s.returnUrl) || '/';
+    let back = (s && s.returnUrl) || '/';
+    back += (back.includes('?') ? '&' : '?') + 'klarna_session=' + approve[1]; // return with the session
     res.writeHead(200, { 'Content-Type': 'text/html' });
     return res.end(`<!doctype html><meta charset=utf-8><title>Klarna</title>`
       + `<body style="font-family:sans-serif;text-align:center;padding:3rem">`
@@ -56,7 +60,7 @@ const server = http.createServer((req, res) => {
       const id = 'ks_' + crypto.randomBytes(8).toString('hex');
       sessions.set(id, { amount: body.amount, currency: body.currency || 'EUR', returnUrl: body.returnUrl || '/' });
       console.log(`[mock-klarna] session ${id} for ${body.amount} ${body.currency}`);
-      return json(200, { session_id: id, redirect_url: `/approve/${id}` });
+      return json(200, { session_id: id, redirect_url: `${PUBLIC_BASE}/approve/${id}` });
     });
     return;
   }

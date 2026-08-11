@@ -92,7 +92,7 @@ function deliveryPlace(address, delivery) {
 }
 
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,
-    simType = 'esim', delivery = null) {
+    simType = 'esim', delivery = null, preAuthorized = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -168,7 +168,10 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
 
   let paymentRefs = null;
   const due = dueNow(lines, offerings, prices);
-  if (due) {
+  if (preAuthorized) {
+    // Klarna (redirect) already confirmed the payment; use it, no card needed.
+    paymentRefs = [{ id: preAuthorized.id, href: preAuthorized.href, '@referredType': 'Payment' }];
+  } else if (due) {
     if (!card) {
       throw new Error(PAYMENT_REQUIRED);
     }

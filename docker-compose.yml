@@ -1770,6 +1770,8 @@ services:
     build: ./integrations/mock-klarna
     container_name: bss-mock-klarna
     restart: unless-stopped
+    environment:
+      PUBLIC_BASE: http://localhost:8135
     ports:
       - "8135:8080"
 

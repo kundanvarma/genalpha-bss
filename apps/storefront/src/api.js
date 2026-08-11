@@ -259,6 +259,27 @@ export async function myShipments() {
   return json(await authFetch(`${SHIPPING}/shippingOrder`));
 }
 
+const PAY = '/tmf-api/paymentManagement/v4';
+/** The payment methods this tenant offers (card + redirect/BNPL) — anonymous. */
+export async function paymentMethods() {
+  try {
+    return await json(await publicFetch(`${PAY}/payment/methods`));
+  } catch {
+    return [{ method: 'card', redirect: false }];
+  }
+}
+/** Open a redirect/BNPL session (Klarna) — returns where to send the customer. */
+export async function createPaymentSession(dto) {
+  return json(await authFetch(`${PAY}/payment/session`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto) }));
+}
+/** Confirm a redirect session on return → the authorized payment (idempotent). */
+export async function confirmPayment(provider, sessionId) {
+  return json(await authFetch(`${PAY}/payment/confirm`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, sessionId }) }));
+}
+
 /** The shopper's delivery menu for a postcode (home + pickup points) — anonymous,
  * so guest checkout can offer it. Fail-soft to [] (outage / no carrier menu). */
 export async function deliveryOptions(postCode) {
