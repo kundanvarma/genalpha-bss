@@ -18,6 +18,7 @@ const { URL } = require('url');
 const PORT = process.env.PORT || 8080;
 const DELIVER_AFTER_MS = parseInt(process.env.DELIVER_AFTER_MS || '15000', 10);
 const CARRIER = process.env.CARRIER_NAME || 'Posten/Bring';
+const PREFIX = process.env.TRACK_PREFIX || 'BRG'; // consignment prefix (PN for PostNord)
 const shipments = new Map();
 
 function post(urlStr, payload) {
@@ -81,7 +82,7 @@ const server = http.createServer((req, res) => {
 
     // Booking API
     if (req.method === 'POST' && url.pathname === '/booking/api/booking') {
-      const trackingNumber = 'BRG' + Math.random().toString().slice(2, 12);
+      const trackingNumber = PREFIX + Math.random().toString().slice(2, 12);
       const carrierShipmentId = 'con-' + Math.random().toString(36).slice(2, 10);
       const s = {
         trackingNumber, carrierShipmentId,

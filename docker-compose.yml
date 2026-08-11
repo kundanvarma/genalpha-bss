@@ -1748,6 +1748,19 @@ services:
     ports:
       - "8133:8080"
 
+  # A third carrier for rule-based routing (C-P4): PostNord, reusing the Bring-
+  # shaped mock (same Nordic Booking + Pickup Point wire) with its own name/prefix.
+  mock-postnord:
+    build: ./integrations/mock-bring
+    container_name: bss-mock-postnord
+    restart: unless-stopped
+    environment:
+      DELIVER_AFTER_MS: "15000"
+      CARRIER_NAME: PostNord
+      TRACK_PREFIX: PN
+    ports:
+      - "8134:8080"
+
   # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
   # when proving bring-your-own-CMS without a real Sanity project. Speaks the
   # Sanity Assets API + CDN shape; the SanityAssetProvider points here via a

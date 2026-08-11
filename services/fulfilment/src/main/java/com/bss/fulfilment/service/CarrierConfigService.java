@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 public class CarrierConfigService {
 
-    private static final Set<String> KNOWN = Set.of("helthjem", "bring");
+    private static final Set<String> KNOWN = Set.of("helthjem", "bring", "postnord");
 
     private final CarrierConfigRepository repository;
     private final TenantScope tenantScope;
@@ -62,6 +62,19 @@ public class CarrierConfigService {
         return repository.findByTenantIdAndEnabledTrue(tenant);
     }
 
+    /** Rule-based routing: the enabled carrier whose postcode prefix best matches
+     * (longest wins), or empty when no rule applies. */
+    @Transactional(readOnly = true)
+    public Optional<CarrierConfig> routeByPostcode(String tenant, String postcode) {
+        if (postcode == null || postcode.isBlank()) {
+            return Optional.empty();
+        }
+        return repository.findByTenantIdAndEnabledTrue(tenant).stream()
+                .filter(c -> c.getPostcodePrefix() != null && !c.getPostcodePrefix().isBlank()
+                        && postcode.startsWith(c.getPostcodePrefix()))
+                .max(Comparator.comparingInt(c -> c.getPostcodePrefix().length()));
+    }
+
     @Transactional
     public Map<String, Object> upsert(Map<String, Object> dto) {
         String carrier = str(dto.get("carrier"));
@@ -83,6 +96,7 @@ public class CarrierConfigService {
         cfg.setSecretRef(str(dto.get("secretRef")));
         cfg.setMethods(json(dto.get("methods")));
         cfg.setConfig(json(dto.get("config")));
+        cfg.setPostcodePrefix(str(dto.get("postcodePrefix")));
         cfg.setDefault(Boolean.TRUE.equals(dto.get("isDefault")));
         cfg.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));   // default true
         cfg.setLastUpdate(OffsetDateTime.now());
@@ -130,6 +144,7 @@ public class CarrierConfigService {
         if (c.getBaseUrl() != null) m.put("baseUrl", c.getBaseUrl());
         if (c.getSecretRef() != null) m.put("secretRef", c.getSecretRef());
         if (c.getMethods() != null) m.put("methods", c.getMethods());
+        if (c.getPostcodePrefix() != null) m.put("postcodePrefix", c.getPostcodePrefix());
         m.put("isDefault", c.isDefault());
         m.put("enabled", c.isEnabled());
         m.put("@type", "CarrierConfig");

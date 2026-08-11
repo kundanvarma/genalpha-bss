@@ -2565,7 +2565,7 @@ async function renderIntegrations() {
         const line = document.createElement('div');
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
-        label.innerHTML = `<b>${cr.displayName || cr.carrier}</b>${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
+        label.innerHTML = `<b>${cr.displayName || cr.carrier}</b>${cr.postcodePrefix ? ' · ' + cr.postcodePrefix + '∗' : ''}${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
         const del = document.createElement('button');
         del.textContent = 'Remove';
         del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
@@ -2577,21 +2577,23 @@ async function renderIntegrations() {
     const form = document.createElement('div');
     form.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem;border-top:1px solid var(--line,#eee);padding-top:0.5rem;margin-top:0.2rem';
     const sel = document.createElement('select');
-    [['helthjem', 'Helthjem'], ['bring', 'Posten/Bring']].forEach(([v, l]) => sel.append(new Option(l, v)));
+    [['helthjem', 'Helthjem'], ['bring', 'Posten/Bring'], ['postnord', 'PostNord']].forEach(([v, l]) => sel.append(new Option(l, v)));
     const base = document.createElement('input'); base.placeholder = 'carrier API base url'; base.style.cssText = 'padding:0.3rem 0.4rem';
+    const prefix = document.createElement('input'); prefix.placeholder = 'postcode prefix (optional, e.g. 0)'; prefix.style.cssText = 'padding:0.3rem 0.4rem';
     const defWrap = document.createElement('label'); defWrap.style.cssText = 'font-size:0.85rem;display:flex;gap:0.3rem;align-items:center';
     const defC = document.createElement('input'); defC.type = 'checkbox'; defWrap.append(defC, document.createTextNode('default carrier'));
     const addRow = document.createElement('div'); addRow.style.cssText = 'display:flex;gap:0.5rem;align-items:center';
     const add = document.createElement('button'); add.textContent = 'Add / update'; add.style.cssText = 'padding:0.3rem 0.9rem';
     const msg = document.createElement('span'); msg.className = 'dimhint';
     addRow.append(add, msg);
-    form.append(sel, base, defWrap, addRow);
+    form.append(sel, base, prefix, defWrap, addRow);
     wrap.append(form);
     add.addEventListener('click', async () => {
       msg.textContent = 'saving…';
       const carrier = sel.value;
       const dto = { carrier, displayName: sel.options[sel.selectedIndex].text, baseUrl: base.value || null,
-        methods: carrier === 'bring' ? ['home', 'pickupPoint'] : ['home'], isDefault: defC.checked };
+        methods: (carrier === 'bring' || carrier === 'postnord') ? ['home', 'pickupPoint'] : ['home'],
+        postcodePrefix: prefix.value || null, isDefault: defC.checked };
       const r = await authFetch(`${SHIP}/carrier`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto) });
       msg.textContent = r.ok ? 'saved' : (r.status === 403 ? 'not authorized (needs ordering:write)' : 'failed (' + r.status + ')');
       if (r.ok) loadLogi();

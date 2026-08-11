@@ -104,10 +104,41 @@ async function call(method, path, tok, body) {
     ok(`PICKUP POINT: the shopper chose "${point.name}" → the parcel booked TO PICKUP via Bring`
       + ` (${pso.trackingRef}); the shipping order carries deliveryMethod=pickupPoint + the point name`);
 
+    /* ---------- 5. rule-based routing: the POSTCODE picks the carrier (C-P4) ---------- */
+    // Bring serves postcodes starting 0, PostNord starting 9 — a home order (no
+    // shopper choice) routes to whichever prefix matches; longest prefix wins.
+    await call('PUT', `${F}/carrier`, staff, { carrier: 'bring', displayName: 'Posten/Bring',
+      baseUrl: 'http://mock-bring:8080', methods: ['home'], postcodePrefix: '0', isDefault: false });
+    await call('PUT', `${F}/carrier`, staff, { carrier: 'postnord', displayName: 'PostNord',
+      baseUrl: 'http://mock-postnord:8080', methods: ['home'], postcodePrefix: '9' });
+    const routed = async (postCode, wantCarrier, wantPrefix) => {
+      const o = await call('POST', `${ORDERS}/productOrder`, kai, {
+        productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+          product: { place: [{ role: 'delivery', streetName: `Route ${run}`, postCode }] } }] });
+      if (o.status !== 201) fail(`route order ${postCode}: ${o.status} ${o.text}`);
+      let s = null;
+      for (let i = 0; i < 24 && !s; i++) {
+        await sleep(2500);
+        const ships = (await call('GET', `${F}/shippingOrder`, staff)).body || [];
+        s = ships.find((x) => x.productOrderId === o.body.id && x.carrier) || null;
+      }
+      if (!s || s.carrier !== wantCarrier || !(s.trackingRef || '').startsWith(wantPrefix)) {
+        fail(`postcode ${postCode} routed to ${s && s.carrier}/${s && s.trackingRef}, expected ${wantCarrier}/${wantPrefix}…`);
+      }
+    };
+    await routed('0150', 'Posten/Bring', 'BRG');
+    await routed('9020', 'PostNord', 'PN');
+    ok('POSTCODE ROUTING: a home order to 0150 booked with Bring, to 9020 booked with PostNord'
+      + ' — the operator\'s postcode rules pick the carrier (longest prefix wins), no shopper choice needed');
+
     console.log('\nALL CARRIER-CHOICE CHECKS PASSED — the operator configures a per-tenant carrier menu'
-      + ' (with pickup points), and a booking routes to the chosen carrier AND the shopper\'s chosen'
-      + ' delivery method (home vs pickup point) — the customer half is live.');
+      + ' (with pickup points and postcode routing rules), a booking routes to the shopper\'s chosen'
+      + ' delivery method AND the operator\'s routing — three carriers, one seam.');
   } finally {
-    await call('DELETE', `${F}/carrier/bring`, staff).catch(() => {}); // restore the Helthjem fallback
+    // remove every carrier so the tenant falls back to the global Helthjem default
+    const list = (await call('GET', `${F}/carrier`, staff).catch(() => ({ body: [] }))).body || [];
+    for (const c of list) {
+      await call('DELETE', `${F}/carrier/${c.carrier}`, staff).catch(() => {});
+    }
   }
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

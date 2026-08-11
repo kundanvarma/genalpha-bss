@@ -36,11 +36,19 @@ public class CarrierRouter {
         this.fallback = fallback;
     }
 
-    public LogisticsClient.Booking book(String tenant, LogisticsClient.Booking request, DeliveryChoice delivery) {
-        // The shopper's chosen carrier wins (C-P3); else the tenant's default; else global.
-        Optional<CarrierConfig> chosen = delivery != null && delivery.carrier() != null
-                ? configs.forTenantAndCarrier(tenant, delivery.carrier())
-                : configs.defaultForTenant(tenant);
+    public LogisticsClient.Booking book(String tenant, LogisticsClient.Booking request,
+            DeliveryChoice delivery, String postcode) {
+        // Precedence: the shopper's explicit carrier (C-P3, e.g. a pickup point's
+        // carrier) → a postcode routing rule (C-P4) → the tenant default → global.
+        Optional<CarrierConfig> chosen;
+        if (delivery != null && delivery.carrier() != null) {
+            chosen = configs.forTenantAndCarrier(tenant, delivery.carrier());
+        } else {
+            chosen = configs.routeByPostcode(tenant, postcode);
+            if (chosen.isEmpty()) {
+                chosen = configs.defaultForTenant(tenant);
+            }
+        }
         if (chosen.isEmpty()) {
             return fallback.book(request);                 // no per-tenant menu → global carrier
         }

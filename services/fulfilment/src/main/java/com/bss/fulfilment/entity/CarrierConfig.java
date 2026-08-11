@@ -38,6 +38,10 @@ public class CarrierConfig {
 
     private String config;
 
+    /** Rule-based routing: the postcode prefix this carrier serves (longest match wins). */
+    @Column(name = "postcode_prefix")
+    private String postcodePrefix;
+
     @Column(name = "is_default", nullable = false)
     private boolean isDefault;
 
@@ -66,6 +70,8 @@ public class CarrierConfig {
     public void setMethods(String v) { this.methods = v; }
     public String getConfig() { return config; }
     public void setConfig(String v) { this.config = v; }
+    public String getPostcodePrefix() { return postcodePrefix; }
+    public void setPostcodePrefix(String v) { this.postcodePrefix = v; }
     public boolean isDefault() { return isDefault; }
     public void setDefault(boolean v) { this.isDefault = v; }
     public boolean isEnabled() { return enabled; }

@@ -96,7 +96,7 @@ public class FulfilmentService {
         // waits for the manual warehouse flow, exactly as before.
         LogisticsClient.Booking booked = carrierRouter.book(tenant, LogisticsClient.Booking.request(
                 so.getId(), tenant, carrierCallbackUrl, partyId,
-                delivery.isPickup() ? "PICKUP_POINT" : "HOME_STANDARD"), delivery);
+                delivery.isPickup() ? "PICKUP_POINT" : "HOME_STANDARD"), delivery, postcodeFrom(place));
         if (booked != null && booked.trackingNumber() != null) {
             so.setTrackingRef(booked.trackingNumber());
             so.setCarrier(booked.carrier());
@@ -327,6 +327,16 @@ public class FulfilmentService {
 
     private static String strOrNull(Object o) {
         return o == null ? null : String.valueOf(o);
+    }
+
+    /** The delivery postcode drives rule-based carrier routing (C-P4). */
+    private String postcodeFrom(Object place) {
+        Object first = place instanceof List<?> list && !list.isEmpty() ? list.get(0) : place;
+        if (first instanceof Map<?, ?> m) {
+            Object pc = m.get("postCode") != null ? m.get("postCode") : m.get("postcode");
+            return pc == null ? null : String.valueOf(pc);
+        }
+        return null;
     }
 
     private Map<String, Object> shippingView(ShippingOrder so) {
