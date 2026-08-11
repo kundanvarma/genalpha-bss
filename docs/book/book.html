@@ -3524,6 +3524,93 @@
     moved is still standing — one door further in, where it always belonged.</p>
   </section>
 
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Five</div>
+    <h3>The window they already own</h3>
+    <div class="epi">"i want that any headless cms can be used if they are not using
+    our default bss dam"
+    <span class="who">— the operator, sketching the next seam</span></div>
+
+    <p class="drop">The device photos had just become real — actual glass and aluminium
+    where tinted vector shapes had stood in — when the operator asked the question that
+    turns a feature into a seam. What if the operator running this BSS already keeps a
+    content system? A Sanity project, a Strapi install, a room of marketing people who
+    live in a CMS all day. Were they meant to abandon it and upload into ours? The
+    built-in document store had always been honest about being a seam — bytes in-row
+    for dev, S3 or Azure Blob behind the same TMF667 surface for the cloud — but every
+    one of those still kept the bytes with us. The new question was sharper: could the
+    imagery live entirely in someone else's system, and could our shop still wear it
+    without knowing the difference?</p>
+
+    <p>The temptation was to write a Sanity adapter and call it finished. The research
+    argued otherwise, and it argued in the vocabulary of composable commerce: the
+    linked model. You do not copy the asset into the commerce backend; you reference it
+    where it already lives, and you let that system's own CDN deliver it. Three
+    refinements separated a naive "store the URL" from the real practice, and each
+    became a rule. Store the asset's identity, not a baked-in URL — because URLs drift
+    between environments and change when a file is re-uploaded, and a catalog full of
+    stale links is worse than none. Resolve the delivery URL at read time; let the
+    external CDN do the resizing and the signing, and never proxy the bytes through us.
+    And keep it fresh with webhooks and a graceful fallback, because the only thing
+    worse than a slow image is a broken one.</p>
+
+    <h2>A sibling to the seam we had</h2>
+
+    <p>The content seam we owned spoke in bytes: put these, get those back. Reference
+    mode needed a different verb, so it grew a sibling — a provider that does not move
+    bytes but resolves URLs, chosen per <em>tenant</em> rather than per deployment,
+    because the whole point is that one binary can serve one tenant from Sanity and the
+    tenant next door from the built-in store, at the same time. No binding means the
+    hosted DAM; a binding means your own CMS; opt-in, per operator, row-level-scoped
+    like everything else. The read path learned to branch. Hosted documents still hand
+    back their bytes, but a referenced document answers with a redirect — a 302 to the
+    CMS's own URL — so the browser hits their CDN, not us, and the catalog keeps a
+    stable link that never has to be rewritten when a provider changes underneath it.
+    When a webhook says an asset is gone, that same path serves a placeholder instead
+    of a redirect into a hole. Never a broken image: that was the rule, and the code
+    holds it even when the resolve fails for reasons no one predicted.</p>
+
+    <p>Then the honest reckoning with the words "any CMS." Two providers, deliberately
+    unlike. Sanity earned a named adapter — it is common now among the operators this
+    system courts, and its wire deserved first-class handling. But a fleet of
+    one-adapter-per-vendor is a promise you cannot keep, so the second provider was not
+    a second adapter. It was a generic HTTP connector driven entirely by config: where
+    to upload, how to send the file, which field of the response holds the asset, how
+    to build the delivery URL. If that one connector could drive a CMS whose wire
+    looked nothing like Sanity's, then "any CMS, zero vendor code" was a fact and not a
+    brochure line.</p>
+
+    <h2>The genuine article</h2>
+
+    <p>The CMS to prove it against was Strapi — open source, MIT-licensed, free even for
+    a large operator, the thing so many of them actually self-host. Its wire is
+    gloriously unlike Sanity's: multipart uploads, an array response, relative
+    <code>/uploads</code> paths with no CDN host at all. The connector, reading only its
+    config row, absorbed every difference. First against a faithful mock that spoke
+    Strapi's exact shape — and then, because a mock proving a mock is a circle, against
+    real Strapi itself: scaffolded and booted in a container, its public role granted
+    upload permission so an anonymous multipart POST would land a file and hand back its
+    URL. The same connector code, not one line of it Strapi-specific, pushed a real
+    image into a real Strapi and watched the shop redirect a browser to
+    <code>/uploads</code> and the bytes come home. The suite keeps that proof but keeps
+    it honest — real Strapi is a heavy, opt-in profile, so the test runs the real leg
+    when it is up and skips it cleanly when it is not.</p>
+
+    <p>What it is <em>not</em>, we wrote down plainly. This is the asset half of a CMS —
+    store the imagery, reference it, deliver it, keep it fresh. It is not an editorial
+    workroom: no page authoring, no rich text, no publishing workflow. An operator who
+    wants their marketers writing copy in a studio can have it; this seam only means the
+    pictures they manage there appear on our shelves without a second upload. The
+    catalog stays the commercial master. The CMS keeps the pixels. The line between them
+    is a config row and a redirect.</p>
+
+    <p class="pull edge">The default is still ours, and that is the point: the built-in
+    store for the operator who wants one, and for the operator who already runs a CMS, a
+    seam that references what they built instead of asking them to build it again. Any
+    headless CMS — Sanity by name, or literally any other by config, proven on the real
+    thing — behind a shop that cannot tell the difference.</p>
+  </section>
+
   <hr class="soft">
 
   <!-- Appendix -->

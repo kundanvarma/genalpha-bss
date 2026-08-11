@@ -57,7 +57,10 @@ openai-compatible endpoint for volume, a frontier Anthropic-dialect API for judg
 once, per tenant, as config)), the **content seam over object storage** (one TMF667 surface,
 three homes for the bytes: in-row Postgres by default, the S3 protocol — AWS/MinIO/R2 — or
 Azure Blob's own SharedKey dialect, because "any cloud" is only true if Azure is a first-class
-citizen; the database receipt proves where the bytes live), **search upgraded in place** (a pg_trgm typo
+citizen; the database receipt proves where the bytes live — and a per-tenant **bring-your-own
+CMS/DAM** reference mode where the imagery lives in the operator's OWN headless CMS entirely:
+a Sanity adapter or a config-driven generic connector proven on real self-hosted Strapi, the
+shop 302-redirecting to the CMS's CDN with HMAC webhook freshness, zero vendor code), **search upgraded in place** (a pg_trgm typo
 net under the strict customer search — it only speaks when strict finds nothing — and
 language-aware full-text where each tenant's knowledge base stems in its own tongue: "regning"
 finds "regningene" — and a **pgvector semantic net**: "why is my internet so slow" finds the

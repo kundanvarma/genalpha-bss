@@ -878,7 +878,43 @@ Location headers from those — keep that setting when changing gateway config.
 <code>bss-worker-controller</code> UP (start for them, stop after, then
 <code>docker rm -f wf-*</code>).</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-seven suites, twenty-five CTKs at zero
+<h2 id="byocms">33 · Bring your own CMS/DAM — reference-mode content</h2>
+<p><b>What</b>: a tenant serves product imagery from its OWN headless CMS/DAM instead of the
+built-in TMF667 store — opt-in per tenant. Bind via <code>PUT /tmf-api/documentManagement/v4/contentProvider</code>
+(<code>document:write</code>); no binding = hosted DAM (in-row/S3/Azure). Suite
+<a href="../../ops/e2e/byo_cms_test.js">byo_cms_test.js</a> (#89).
+<b>Model — reference, not copy</b>: the row stores <code>ref:&lt;provider&gt;:&lt;assetId&gt;</code>, no bytes;
+<code>GET /document/{id}/content</code> 302-redirects to the CMS's own URL (the browser hits THEIR CDN),
+with <code>?rendition=thumb|card|hero|orig</code> (shared <code>Rendition</code> vocab) and a fail-open
+placeholder when resolve fails or a webhook marked the asset gone — never a broken image, never a 500.
+The catalog keeps a stable <code>…/content</code> href, so swapping providers never rewrites catalog data.
+<b>Providers</b>: <code>sanity</code> (named adapter — Assets API upload, cdn.sanity.io URL reconstructed
+from the asset id + projectId/dataset, transform params per rendition) and <code>http</code> (the GENERIC
+connector, ZERO vendor code — config JSON: <code>uploadUrl</code>, <code>uploadMode</code> multipart|raw,
+<code>fileField</code>, <code>authHeader/authPrefix</code>, <code>assetIdPath</code> JSON-pointer,
+<code>resolveBase</code>, <code>renditionMode</code>). Sanity is common among CSPs; Strapi (MIT, self-host)
+rides the generic connector.
+<b>Secrets</b>: the upload token and webhook secret are ENV-VAR NAMES (<code>secretRef</code>,
+<code>webhookSecretRef</code>) — never the value; resolved from env at call time.
+<b>Freshness</b>: <code>POST /webhook/{provider}/{tenantId}</code> (anonymous at the door, HMAC-verified
+inside — Sanity's <code>t=,v1=</code> over the raw body; the shared secret IS the auth, one opaque 401 for
+every failure; runs in the tenant's RLS scope). <code>delete</code> → document unavailable (placeholder);
+<code>upsert</code> → restored + <code>content_version</code> bump that cache-busts the delivered URL.
+<b>Real Strapi proof</b>: <code>docker compose --profile strapi up -d strapi</code>
+(<code>integrations/strapi</code> scaffolds Strapi 5 + sqlite, bootstrap grants the public role Upload).
+The suite's real-Strapi leg is health-gated on <code>localhost:1337</code> — runs when up, skips clean when
+down. Fast/offline mocks: <code>mock-sanity</code> :8131, <code>mock-strapi</code> :8132.
+<b>Gotchas that will bite again</b>: (1) the mocks are reachable from the document CONTAINER as
+<code>mock-sanity:8080</code>/<code>strapi:1337</code>, but the suite runs on the HOST — it rewrites the
+redirect host to the mapped port to fetch bytes; real Sanity/Strapi have no such split. (2) Content-addressed
+dedup: identical bytes share ONE CMS asset, so a webhook matches EVERY document referencing it (assert
+<code>&gt;=1</code>, not <code>==1</code>). (3) <code>config</code> sent as a nested JSON object must be
+JSON-serialised (fixed) — Java <code>toString()</code> is not JSON. (4) <code>PostgresMigrationTest</code>
+is <code>disabledWithoutDocker</code>, so its migration-count assertion drifts silently — bump it when you
+add a migration (now 6). (5) A new downstream needs BOTH the config row AND the secret-ref env present in
+compose.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-nine suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
