@@ -111,8 +111,16 @@ public class OrchestrationService {
         // just finished, so its digital services provision NOW. Either way,
         // never twice (at-least-once delivery upstream).
         boolean fulfilled = "completed".equals(state);
-        if ((!"acknowledged".equals(state) && !fulfilled)
-                || serviceOrders.existsByTenantIdAndProductOrderId(tenant, productOrderId)) {
+        boolean alreadyOrchestrated = serviceOrders.existsByTenantIdAndProductOrderId(tenant, productOrderId);
+        if (fulfilled && alreadyOrchestrated) {
+            // C4 — fulfilment finished: complete the physical items' service orders
+            // that were HELD inProgress at order time, so the process layer's
+            // provisioned/fulfilled milestones fire on REAL fulfilment (a delivered
+            // parcel / a done install), not on optimistic activation.
+            completeDeferredServiceOrders(tenant, productOrderId);
+            return;
+        }
+        if ((!"acknowledged".equals(state) && !fulfilled) || alreadyOrchestrated) {
             return;
         }
         String owner = null;
@@ -272,12 +280,24 @@ public class OrchestrationService {
                 }
             }
 
-            so.setState(ServiceOrder.COMPLETED);
-            so.setCompletedAt(OffsetDateTime.now());
-            so.setLastUpdate(OffsetDateTime.now());
-            serviceOrders.save(so);
-            events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
-                    "id", id, "state", so.getState(), "productOrderId", productOrderId));
+            // C4 — a physical item's service order is HELD inProgress until its
+            // parcel/install actually lands; only a digital service completes NOW.
+            // The line/SIM is already ACTIVE either way (number drawn, OCS
+            // provisioned, ICCID bound before dispatch) — this is the order's
+            // fulfilment-tracking state, which drives the process 'provisioned'
+            // milestone. Holding it keeps that milestone honest for a stranded
+            // physical order instead of optimistically completing it.
+            if (deferred) {
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+            } else {
+                so.setState(ServiceOrder.COMPLETED);
+                so.setCompletedAt(OffsetDateTime.now());
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                        "id", id, "state", so.getState(), "productOrderId", productOrderId));
+            }
             // C1: report THIS item's fulfillment state. A physical item (ships
             // or installs — it carries a place) stays inProgress until its own
             // track lands (parcel delivered / install done); a digital service
@@ -294,6 +314,32 @@ public class OrchestrationService {
             ordering.complete(productOrderId);
         }
         log.info("product order {} orchestrated by SOM ({} service orders)", productOrderId, items.size());
+    }
+
+    /**
+     * C4 — when fulfilment completes the order, finish the physical items' service
+     * orders that were held IN_PROGRESS at order time, emitting the provisioning
+     * event now. This makes the process layer's provisioned/fulfilled milestones
+     * reflect real physical fulfilment; a stranded order (no delivery) leaves them
+     * inProgress, so the stuck-sweep can honestly flag it.
+     */
+    private void completeDeferredServiceOrders(String tenant, String productOrderId) {
+        int completed = 0;
+        for (ServiceOrder so : serviceOrders.findByTenantIdAndProductOrderId(tenant, productOrderId)) {
+            if (ServiceOrder.IN_PROGRESS.equals(so.getState())) {
+                so.setState(ServiceOrder.COMPLETED);
+                so.setCompletedAt(OffsetDateTime.now());
+                so.setLastUpdate(OffsetDateTime.now());
+                serviceOrders.save(so);
+                events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                        "id", so.getId(), "state", so.getState(), "productOrderId", productOrderId));
+                completed++;
+            }
+        }
+        if (completed > 0) {
+            log.info("product order {} — {} deferred service order(s) completed post-fulfilment",
+                    productOrderId, completed);
+        }
     }
 
     /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
