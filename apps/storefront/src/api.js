@@ -259,6 +259,17 @@ export async function myShipments() {
   return json(await authFetch(`${SHIPPING}/shippingOrder`));
 }
 
+/** The shopper's delivery menu for a postcode (home + pickup points) — anonymous,
+ * so guest checkout can offer it. Fail-soft to [] (outage / no carrier menu). */
+export async function deliveryOptions(postCode) {
+  if (!postCode) return [];
+  try {
+    return await json(await publicFetch(`${SHIPPING}/carrier/deliveryOptions?postcode=${encodeURIComponent(postCode)}`));
+  } catch {
+    return [];
+  }
+}
+
 /** A family member's products, through the household link: inventory verifies
  * the caller is their payer or a family admin, live at the party source. */
 export async function memberProducts(memberId) {

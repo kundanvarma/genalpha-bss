@@ -46,6 +46,14 @@ public class ShippingOrder {
     @Column(name = "carrier")
     private String carrier;
 
+    /** How the shopper chose to receive it (C-P3): 'home' (default) or 'pickupPoint';
+     * pickup_point is the chosen point's name when it's a pickup. */
+    @Column(name = "delivery_method")
+    private String deliveryMethod;
+
+    @Column(name = "pickup_point")
+    private String pickupPoint;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -70,6 +78,10 @@ public class ShippingOrder {
     public void setTrackingRef(String v) { this.trackingRef = v; }
     public String getCarrier() { return carrier; }
     public void setCarrier(String v) { this.carrier = v; }
+    public String getDeliveryMethod() { return deliveryMethod; }
+    public void setDeliveryMethod(String v) { this.deliveryMethod = v; }
+    public String getPickupPoint() { return pickupPoint; }
+    public void setPickupPoint(String v) { this.pickupPoint = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

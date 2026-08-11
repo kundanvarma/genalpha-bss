@@ -80,8 +80,19 @@ export function isMobileLine(name) {
   return n.includes('mobile') || n.includes('5g') || n.includes('subscription');
 }
 
+/** The delivery place carries the shopper's method (home vs a pickup point at a
+ * carrier) — fulfilment reads it off the place to book the right way. */
+function deliveryPlace(address, delivery) {
+  const base = shippingPlace(address);
+  if (delivery && delivery.method === 'pickupPoint' && delivery.pickupPointId) {
+    return { ...base, deliveryMethod: 'pickupPoint', carrier: delivery.carrier,
+      pickupPointId: delivery.pickupPointId, pickupPointName: delivery.pickupPointName };
+  }
+  return { ...base, deliveryMethod: 'home' };
+}
+
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,
-    simType = 'esim') {
+    simType = 'esim', delivery = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -172,7 +183,7 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
     const me = await myParty();
     await requestPortIn(me.id, keepNumber.number, keepNumber.currentProvider).catch(() => {});
   }
-  const order = await checkoutCart(annotated, needsShipping ? shippingPlace(address) : null, paymentRefs,
+  const order = await checkoutCart(annotated, needsShipping ? deliveryPlace(address, delivery) : null, paymentRefs,
     promotionCode);
   if (needsInstall) {
     await createAppointment(slot, order.id, shippingPlace(address),

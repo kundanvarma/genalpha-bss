@@ -46,6 +46,9 @@ public class SecurityConfig {
                         // the carrier's delivery callback (C2) — not a BSS identity;
                         // carries its own tenant + shippingOrder refs (see controller note)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/carrierEvent").permitAll()
+                        // guest checkout offers delivery options / pickup points anonymously
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/carrier/deliveryOptions",
+                                ApiConstants.BASE_PATH + "/carrier/pickupPoints").permitAll()
                         // reads are party-scoped (customers track their own
                         // deliveries); state changes are warehouse/staff grade
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("ordering:read")

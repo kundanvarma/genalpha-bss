@@ -58,4 +58,12 @@ public class CarrierController {
             @RequestParam String carrier, @RequestParam String postcode) {
         return ResponseEntity.ok(router.pickupPoints(tenantScope.currentTenantId(), carrier, postcode));
     }
+
+    /** The shopper's delivery menu for a postcode (home + pickup points) — anonymous,
+     * so guest checkout can offer it. Empty menu → the built-in home default. */
+    @GetMapping("/deliveryOptions")
+    public ResponseEntity<List<Map<String, Object>>> deliveryOptions(
+            @RequestParam(required = false) String postcode) {
+        return ResponseEntity.ok(router.deliveryOptions(tenantScope.currentTenantId(), postcode));
+    }
 }

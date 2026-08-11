@@ -72,6 +72,7 @@ public class FulfilmentService {
     @Transactional
     public void onPhysicalOrder(String orderId, String partyId, Object items, Object place) {
         String tenant = tenantScope.currentTenantId();
+        com.bss.fulfilment.client.DeliveryChoice delivery = deliveryFrom(place);
         if (shippingOrders.findByTenantIdAndProductOrderId(tenant, orderId).isPresent()) {
             return; // at-least-once delivery
         }
@@ -83,6 +84,7 @@ public class FulfilmentService {
         so.setState(ShippingOrder.ACKNOWLEDGED);
         so.setItemsJson(writeJson(items));
         so.setPlaceJson(writeJson(place));
+        so.setDeliveryMethod(delivery.method());
         so.setCreatedAt(OffsetDateTime.now());
         so.setLastUpdate(OffsetDateTime.now());
         shippingOrders.save(so);
@@ -93,10 +95,14 @@ public class FulfilmentService {
         // seam is off or the carrier is down, book() returns null and the parcel
         // waits for the manual warehouse flow, exactly as before.
         LogisticsClient.Booking booked = carrierRouter.book(tenant, LogisticsClient.Booking.request(
-                so.getId(), tenant, carrierCallbackUrl, partyId, "HOME_STANDARD"));
+                so.getId(), tenant, carrierCallbackUrl, partyId,
+                delivery.isPickup() ? "PICKUP_POINT" : "HOME_STANDARD"), delivery);
         if (booked != null && booked.trackingNumber() != null) {
             so.setTrackingRef(booked.trackingNumber());
             so.setCarrier(booked.carrier());
+            if (delivery.isPickup()) {
+                so.setPickupPoint(delivery.pickupPointName());
+            }
             so.setState(ShippingOrder.IN_PROGRESS);
             so.setLastUpdate(OffsetDateTime.now());
             shippingOrders.save(so);
@@ -308,6 +314,21 @@ public class FulfilmentService {
 
     /* ---------- views ---------- */
 
+    /** The shopper's delivery choice rides the delivery place from checkout. */
+    @SuppressWarnings("unchecked")
+    private com.bss.fulfilment.client.DeliveryChoice deliveryFrom(Object place) {
+        Object first = place instanceof List<?> list && !list.isEmpty() ? list.get(0) : place;
+        if (first instanceof Map<?, ?> m && m.get("deliveryMethod") != null) {
+            return new com.bss.fulfilment.client.DeliveryChoice(String.valueOf(m.get("deliveryMethod")),
+                    strOrNull(m.get("carrier")), strOrNull(m.get("pickupPointId")), strOrNull(m.get("pickupPointName")));
+        }
+        return com.bss.fulfilment.client.DeliveryChoice.HOME;
+    }
+
+    private static String strOrNull(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
     private Map<String, Object> shippingView(ShippingOrder so) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", so.getId());
@@ -321,6 +342,12 @@ public class FulfilmentService {
         }
         if (so.getCarrier() != null) {
             map.put("carrier", so.getCarrier());
+        }
+        if (so.getDeliveryMethod() != null) {
+            map.put("deliveryMethod", so.getDeliveryMethod());
+        }
+        if (so.getPickupPoint() != null) {
+            map.put("pickupPoint", so.getPickupPoint());
         }
         if (so.getOwnerPartyId() != null) {
             map.put("relatedParty", List.of(Map.of("id", so.getOwnerPartyId(), "role", "customer")));

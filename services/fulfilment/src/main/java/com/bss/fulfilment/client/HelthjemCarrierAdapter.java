@@ -31,7 +31,7 @@ public class HelthjemCarrierAdapter implements CarrierAdapter {
 
     @Override
     @SuppressWarnings("unchecked")
-    public LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking r) {
+    public LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking r, DeliveryChoice delivery) {
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
             return null;
         }

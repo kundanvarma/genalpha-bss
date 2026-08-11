@@ -1,6 +1,8 @@
 # Carrier choice — operator-configured menu + customer picks (Nordic delivery)
 
-**Status:** C-P1 + C-P2 shipped · C-P3–P4 design · **Depends on:** the logistics seam (`LogisticsClient`), the shipping-order flow, the checkout `simType` pattern, the Integrations console tab
+**Status:** C-P1 + C-P2 + C-P3 shipped · C-P4 design · **Depends on:** the logistics seam (`LogisticsClient`), the shipping-order flow, the checkout `simType` pattern, the Integrations console tab
+
+> **C-P3 shipped (the customer half):** `GET /carrier/deliveryOptions?postcode=` (anonymous) returns the tenant's methods (home + pickup points inlined). `DeliveryChoice` threads through `CarrierRouter`/adapters (Bring books to a `pickupPoint`); the choice rides the **delivery place** from checkout (like `simType`), `FulfilmentService` reads it and stores `delivery_method` + `pickup_point` on the shipping order (V6). Storefront: `Cart.jsx` delivery-method picker (🏠 home vs 📍 pickup point + point search), `Orders.jsx` shows "To pickup point · <name>". Proven by suite #90 (extended): the shopper picks "Meny 0150" → parcel **books to pickup via Bring**; Helthjem home path + `fulfilment_test` stay green.
 
 > **C-P2 shipped:** per-tenant `carrier_config` (V4 + V5 RLS) + `CarrierAdapter` seam + `CarrierRegistry` + `CarrierRouter` (tenant default carrier books via its adapter; no menu → global Helthjem fallback). Two adapters: **Helthjem** (POST /shipments) and **Bring/Posten** (Booking + **Pickup Point** API). `CarrierController` GET/PUT/DELETE `/carrier` + `/carrier/pickupPoints`. The Integrations **Logistics card is live** (list/add/default/remove carriers). Mock `mock-bring` (`:8133`). Proven by suite #90 `carrier_choice_test` (self-cleaning): configure Bring → order books via Bring (`BRG…`, "Posten/Bring"), pickup points returned; Helthjem fallback + `fulfilment_test` stay green. Also fixed a latent console tab-switch race.
 

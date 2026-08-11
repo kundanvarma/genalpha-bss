@@ -2,10 +2,14 @@ package com.bss.fulfilment.client;
 
 import com.bss.fulfilment.entity.CarrierConfig;
 import com.bss.fulfilment.service.CarrierConfigService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,8 +36,11 @@ public class CarrierRouter {
         this.fallback = fallback;
     }
 
-    public LogisticsClient.Booking book(String tenant, LogisticsClient.Booking request) {
-        Optional<CarrierConfig> chosen = configs.defaultForTenant(tenant);
+    public LogisticsClient.Booking book(String tenant, LogisticsClient.Booking request, DeliveryChoice delivery) {
+        // The shopper's chosen carrier wins (C-P3); else the tenant's default; else global.
+        Optional<CarrierConfig> chosen = delivery != null && delivery.carrier() != null
+                ? configs.forTenantAndCarrier(tenant, delivery.carrier())
+                : configs.defaultForTenant(tenant);
         if (chosen.isEmpty()) {
             return fallback.book(request);                 // no per-tenant menu → global carrier
         }
@@ -44,7 +51,7 @@ public class CarrierRouter {
             return null;
         }
         try {
-            return adapter.book(cfg, request);
+            return adapter.book(cfg, request, delivery == null ? DeliveryChoice.HOME : delivery);
         } catch (Exception e) {
             log.warn("carrier {} book failed for shippingOrder {} (manual fallback): {}",
                     cfg.getCarrier(), request.shippingOrderId(), e.getMessage());
@@ -60,4 +67,44 @@ public class CarrierRouter {
         CarrierAdapter adapter = registry.get(carrier);
         return adapter == null ? List.of() : adapter.pickupPoints(cfg.get(), postcode);
     }
+
+    /** The shopper's delivery menu for a postcode: every enabled carrier × its
+     * methods, with pickup points inlined. Empty menu → the built-in home default. */
+    public List<Map<String, Object>> deliveryOptions(String tenant, String postcode) {
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (CarrierConfig cfg : configs.enabledForTenant(tenant)) {
+            CarrierAdapter adapter = registry.get(cfg.getCarrier());
+            for (String method : parseMethods(cfg.getMethods())) {
+                Map<String, Object> opt = new LinkedHashMap<>();
+                opt.put("method", method);
+                opt.put("carrier", cfg.getCarrier());
+                opt.put("carrierName", cfg.getDisplayName());
+                if (("pickupPoint".equals(method) || "locker".equals(method)) && adapter != null) {
+                    opt.put("points", adapter.pickupPoints(cfg, postcode));
+                }
+                options.add(opt);
+            }
+        }
+        if (options.isEmpty()) {
+            Map<String, Object> home = new LinkedHashMap<>();
+            home.put("method", "home");
+            home.put("carrier", null);
+            home.put("carrierName", "Helthjem");
+            options.add(home);
+        }
+        return options;
+    }
+
+    private List<String> parseMethods(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of("home");
+        }
+        try {
+            return mapper.readValue(json, new TypeReference<List<String>>() { });
+        } catch (Exception e) {
+            return List.of("home");
+        }
+    }
+
+    private final ObjectMapper mapper = new ObjectMapper();
 }

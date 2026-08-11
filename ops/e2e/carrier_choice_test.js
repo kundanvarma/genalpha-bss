@@ -81,9 +81,32 @@ async function call(method, path, tok, body) {
     ok(`ROUTING: the physical order booked via BRING — carrier "${so.carrier}", consignment ${so.trackingRef}`
       + ' — the operator\'s configured carrier drove the booking, not the built-in Helthjem');
 
-    console.log('\nALL CARRIER-CHOICE CHECKS PASSED — the operator configures a per-tenant carrier'
-      + ' menu (with pickup points), and a booking routes to the chosen carrier. The customer-facing'
-      + ' delivery-method picker is next (C-P3).');
+    /* ---------- 4. the shopper picks a PICKUP POINT -> booked to pickup (C-P3) ---------- */
+    const opts = (await call('GET', `${F}/carrier/deliveryOptions?postcode=0150`, null)).body || [];
+    const pickup = opts.find((o) => o.method === 'pickupPoint');
+    if (!pickup || !(pickup.points || []).length) fail('no pickup delivery option: ' + JSON.stringify(opts));
+    const point = pickup.points[0];
+    const pOrder = await call('POST', `${ORDERS}/productOrder`, kai, {
+      productOrderItem: [{ action: 'add', productOffering: { id: plan.id, name: plan.name },
+        product: { place: [{ role: 'delivery', streetName: `Pickup ${run}`, postcode: '0150',
+          deliveryMethod: 'pickupPoint', carrier: 'bring', pickupPointId: point.id, pickupPointName: point.name }] } }] });
+    if (pOrder.status !== 201) fail(`pickup order: ${pOrder.status} ${pOrder.text}`);
+    let pso = null;
+    for (let i = 0; i < 24 && !pso; i++) {
+      await sleep(2500);
+      const shipments = (await call('GET', `${F}/shippingOrder`, staff)).body || [];
+      pso = shipments.find((s) => s.productOrderId === pOrder.body.id && s.trackingRef && s.carrier) || null;
+    }
+    if (!pso) fail('pickup order minted no booked shipping order');
+    if (pso.deliveryMethod !== 'pickupPoint' || pso.pickupPoint !== point.name || !(pso.trackingRef || '').startsWith('BRG')) {
+      fail(`pickup booking wrong: method=${pso.deliveryMethod} point=${pso.pickupPoint} tracking=${pso.trackingRef}`);
+    }
+    ok(`PICKUP POINT: the shopper chose "${point.name}" → the parcel booked TO PICKUP via Bring`
+      + ` (${pso.trackingRef}); the shipping order carries deliveryMethod=pickupPoint + the point name`);
+
+    console.log('\nALL CARRIER-CHOICE CHECKS PASSED — the operator configures a per-tenant carrier menu'
+      + ' (with pickup points), and a booking routes to the chosen carrier AND the shopper\'s chosen'
+      + ' delivery method (home vs pickup point) — the customer half is live.');
   } finally {
     await call('DELETE', `${F}/carrier/bring`, staff).catch(() => {}); // restore the Helthjem fallback
   }

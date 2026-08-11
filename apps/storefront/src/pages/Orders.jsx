@@ -75,6 +75,9 @@ export default function Orders() {
     if (simType === 'esim') return { cls: 'ok', text: '⚡ eSIM — ready to activate' };
     if (physical && ship && ship.trackingRef) {
       const via = ship.carrier ? ` (${ship.carrier})` : '';
+      if (ship.deliveryMethod === 'pickupPoint' && ship.pickupPoint) {
+        return { cls: 'go', text: `📍 To pickup point · ${ship.pickupPoint}${via}` };
+      }
       return { cls: 'go', text: `📦 On its way · ${ship.trackingRef}${via}` };
     }
     if (physical && visit) return { cls: 'go', text: '🔧 Install booked' };

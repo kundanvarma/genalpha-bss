@@ -57,6 +57,11 @@ public class CarrierConfigService {
         return repository.findByTenantIdAndCarrier(tenant, carrier);
     }
 
+    @Transactional(readOnly = true)
+    public List<CarrierConfig> enabledForTenant(String tenant) {
+        return repository.findByTenantIdAndEnabledTrue(tenant);
+    }
+
     @Transactional
     public Map<String, Object> upsert(Map<String, Object> dto) {
         String carrier = str(dto.get("carrier"));

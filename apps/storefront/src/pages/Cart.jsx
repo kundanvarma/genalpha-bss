@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, checkQualification, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots } from '../api.js';
+import { availabilityFor, checkQualification, deliveryOptions, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots } from '../api.js';
 import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
@@ -35,6 +35,14 @@ export default function Cart() {
   // C3 — how the customer wants their SIM: eSIM (instant, no parcel) or a
   // physical SIM card shipped by the carrier. Default eSIM.
   const [simType, setSimType] = useState('esim');
+  // C-P3: how the parcel arrives — home, or a pickup point the operator offers.
+  const [deliveryMethod, setDeliveryMethod] = useState('home');
+  const [deliveryOpts, setDeliveryOpts] = useState(null);
+  const [pickupId, setPickupId] = useState('');
+  useEffect(() => {
+    if (!address.postCode) { setDeliveryOpts(null); return; }
+    deliveryOptions(address.postCode).then(setDeliveryOpts).catch(() => setDeliveryOpts(null));
+  }, [address.postCode]);
 
   useEffect(() => {
     const refresh = () => { cartLines().then(setLines).catch((e) => setError(e.message)); };
@@ -219,6 +227,7 @@ export default function Cart() {
   const needsShipping = (lines || []).some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]))
     || (hasMobile && simType === 'physical'); // a physical SIM ships too
+  const pickupOpt = (deliveryOpts || []).find((o) => o.method === 'pickupPoint' && (o.points || []).length);
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
@@ -291,8 +300,13 @@ export default function Cart() {
     }
     setBusy(true);
     try {
+      const chosenPoint = pickupOpt?.points?.find((p) => p.id === pickupId);
+      const delivery = deliveryMethod === 'pickupPoint' && chosenPoint
+        ? { method: 'pickupPoint', carrier: pickupOpt.carrier,
+          pickupPointId: chosenPoint.id, pickupPointName: chosenPoint.name }
+        : { method: 'home' };
       const order = await performCheckout(lines, due ? card : null, promo?.code || null,
-        keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim');
+        keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery);
       localStorage.removeItem('bss.shop.promo');
       if (due && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
@@ -503,6 +517,32 @@ export default function Cart() {
               <span className="simopt-d">Ships to your door — track it every step</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {needsShipping && pickupOpt && (
+        <div className="delivery-method">
+          <h2>Delivery</h2>
+          <div className="simopts">
+            <button type="button" className={`simopt ${deliveryMethod === 'home' ? 'on' : ''}`}
+                    onClick={() => setDeliveryMethod('home')}>
+              <span className="simopt-t">🏠 Home delivery</span>
+              <span className="simopt-d">To your address — track it to your door</span>
+            </button>
+            <button type="button" className={`simopt ${deliveryMethod === 'pickupPoint' ? 'on' : ''}`}
+                    onClick={() => setDeliveryMethod('pickupPoint')}>
+              <span className="simopt-t">📍 Pickup point</span>
+              <span className="simopt-d">Collect at a {pickupOpt.carrierName} point near you</span>
+            </button>
+          </div>
+          {deliveryMethod === 'pickupPoint' && (
+            <select className="pickup-select" value={pickupId} onChange={(e) => setPickupId(e.target.value)}>
+              <option value="">Choose a pickup point…</option>
+              {(pickupOpt.points || []).map((p) => (
+                <option key={p.id} value={p.id}>{p.name} — {p.address}</option>
+              ))}
+            </select>
+          )}
         </div>
       )}
 

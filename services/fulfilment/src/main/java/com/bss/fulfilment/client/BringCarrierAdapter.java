@@ -36,18 +36,25 @@ public class BringCarrierAdapter implements CarrierAdapter {
 
     @Override
     @SuppressWarnings("unchecked")
-    public LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking r) {
+    public LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking r, DeliveryChoice delivery) {
         if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
             return null;
         }
+        // A pickup-point booking sets the pickupPoint id (Bring's 'parties.pickupPoint');
+        // home delivery omits it. serviceLevel carries the method for the mock's log.
+        boolean pickup = delivery != null && delivery.isPickup() && delivery.pickupPointId() != null;
+        Map<String, Object> body = new java.util.LinkedHashMap<>(Map.of(
+                "shippingOrderId", nz(r.shippingOrderId()),
+                "tenantId", nz(r.tenantId()),
+                "callbackUrl", nz(r.callbackUrl()),
+                "recipientPartyId", nz(r.recipientPartyId()),
+                "serviceLevel", pickup ? "PICKUP_POINT" : nz(r.serviceLevel())));
+        if (pickup) {
+            body.put("pickupPoint", delivery.pickupPointId());
+        }
         Map<String, Object> resp = client(cfg).post().uri("/booking/api/booking")
                 .header("Content-Type", "application/json")
-                .body(Map.of(
-                        "shippingOrderId", nz(r.shippingOrderId()),
-                        "tenantId", nz(r.tenantId()),
-                        "callbackUrl", nz(r.callbackUrl()),
-                        "recipientPartyId", nz(r.recipientPartyId()),
-                        "serviceLevel", nz(r.serviceLevel())))
+                .body(body)
                 .retrieve().body(Map.class);
         if (resp == null) {
             return null;

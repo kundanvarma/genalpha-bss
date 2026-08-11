@@ -16,8 +16,9 @@ public interface CarrierAdapter {
     /** The name used in carrier_config and the registry ('helthjem', 'bring'). */
     String name();
 
-    /** Book a parcel with this carrier; returns the carrier's refs (superset in Booking). */
-    LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking request);
+    /** Book a parcel with this carrier at the chosen delivery method; returns the
+     * carrier's refs (superset in Booking). */
+    LogisticsClient.Booking book(CarrierConfig cfg, LogisticsClient.Booking request, DeliveryChoice delivery);
 
     /** Pickup points near a postcode (empty when the carrier has none / doesn't support it). */
     default List<Map<String, Object>> pickupPoints(CarrierConfig cfg, String postcode) {
