@@ -44,7 +44,7 @@ public class FulfilmentService {
     private final ShippingOrderRepository shippingOrders;
     private final WorkOrderRepository workOrders;
     private final OrderingClient ordering;
-    private final com.bss.fulfilment.client.LogisticsClient logistics;
+    private final com.bss.fulfilment.client.CarrierRouter carrierRouter;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
@@ -52,7 +52,7 @@ public class FulfilmentService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public FulfilmentService(ShippingOrderRepository shippingOrders, WorkOrderRepository workOrders,
-            OrderingClient ordering, com.bss.fulfilment.client.LogisticsClient logistics,
+            OrderingClient ordering, com.bss.fulfilment.client.CarrierRouter carrierRouter,
             DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
             @org.springframework.beans.factory.annotation.Value(
                 "${bss.fulfilment.carrier-callback-url:http://fulfilment:8080/tmf-api/shippingOrderManagement/v4/carrierEvent}")
@@ -60,7 +60,7 @@ public class FulfilmentService {
         this.shippingOrders = shippingOrders;
         this.workOrders = workOrders;
         this.ordering = ordering;
-        this.logistics = logistics;
+        this.carrierRouter = carrierRouter;
         this.events = events;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
@@ -92,7 +92,7 @@ public class FulfilmentService {
         // C2 — hand the parcel to the carrier (Helthjem seam). Fail-open: if the
         // seam is off or the carrier is down, book() returns null and the parcel
         // waits for the manual warehouse flow, exactly as before.
-        LogisticsClient.Booking booked = logistics.book(LogisticsClient.Booking.request(
+        LogisticsClient.Booking booked = carrierRouter.book(tenant, LogisticsClient.Booking.request(
                 so.getId(), tenant, carrierCallbackUrl, partyId, "HOME_STANDARD"));
         if (booked != null && booked.trackingNumber() != null) {
             so.setTrackingRef(booked.trackingNumber());

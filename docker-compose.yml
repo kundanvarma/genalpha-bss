@@ -1736,6 +1736,18 @@ services:
     ports:
       - "8128:8080"
 
+  # The second carrier for per-tenant carrier choice (C-P2): Bring/Posten-shaped,
+  # with a Pickup Point API (the distinctive Nordic delivery method).
+  mock-bring:
+    build: ./integrations/mock-bring
+    container_name: bss-mock-bring
+    restart: unless-stopped
+    environment:
+      DELIVER_AFTER_MS: "15000"
+      CARRIER_NAME: Posten/Bring
+    ports:
+      - "8133:8080"
+
   # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
   # when proving bring-your-own-CMS without a real Sanity project. Speaks the
   # Sanity Assets API + CDN shape; the SanityAssetProvider points here via a
