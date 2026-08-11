@@ -17,6 +17,9 @@ cd ~/Documents/projects/bssproject/bss-java
 docker compose ps | grep -c healthy         # expect ~30 healthy
 # smoke: gateway + identity answer
 curl -s -o /dev/null -w 'gw %{http_code}\n' 'http://localhost:8080/tmf-api/productCatalogManagement/v4/productOffering?limit=1'
+# CLEAN THE STOREFRONT: retire E2E-test debris so the shop shows only the
+# curated demo catalog (21 real products). Idempotent — run it every time.
+python3 ops/demo-reset-catalog.py
 ```
 
 - Open these tabs in your browser BEFORE the call, logged in, so there's no
