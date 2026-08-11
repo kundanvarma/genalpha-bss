@@ -20,10 +20,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -582,6 +584,101 @@ public class RevenueService {
                 mappings.save(m);
             }
         }
+    }
+
+    /* ---------- reporting: governed period summary from the subledger ---------- */
+
+    /**
+     * A governed sales/finance summary for [from, to], computed once from the
+     * subledger (the source of truth) — never re-derived. Net revenue is
+     * credit-minus-debit over the revenue-family accounts (so discounts, credit
+     * notes, disputes and refunds net down exactly as booked); tax and cash come
+     * from their own accounts; and the prior equal-length period gives the delta.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> summary(LocalDate from, LocalDate to) {
+        String tenant = tenantScope.currentTenantId();
+        seedDefaults(tenant);
+        String taxCode = codeFor(tenant, "tax");
+        String cashCode = codeFor(tenant, "cash");
+        // everything that is NOT one of these is revenue-family (4xxx + contra)
+        Set<String> nonRevenue = Set.of(cashCode, codeFor(tenant, "ar"), taxCode,
+                codeFor(tenant, "loyalty:expense"), codeFor(tenant, "loyalty:liability"));
+
+        Totals cur = totals(tenant, from, to, nonRevenue, taxCode, cashCode);
+        long days = ChronoUnit.DAYS.between(from, to) + 1;
+        LocalDate priorTo = from.minusDays(1);
+        LocalDate priorFrom = priorTo.minusDays(days - 1);
+        Totals prev = totals(tenant, priorFrom, priorTo, nonRevenue, taxCode, cashCode);
+
+        long invoices = entries.countByTenantIdAndSourceTypeAndEntryDateBetween(tenant, "bill", from, to);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("@type", "RevenueSummary");
+        out.put("period", Map.of("fromDate", from.toString(), "toDate", to.toString()));
+        out.put("netRevenue", cur.revenue);
+        out.put("taxCollected", cur.tax);
+        out.put("cashCollected", cur.cash);
+        out.put("invoicesIssued", invoices);
+        out.put("priorNetRevenue", prev.revenue);
+        out.put("revenueDeltaPct", pctDelta(prev.revenue, cur.revenue));
+        out.put("byAccount", cur.byAccount);
+        return out;
+    }
+
+    private Totals totals(String tenant, LocalDate from, LocalDate to,
+            Set<String> nonRevenue, String taxCode, String cashCode) {
+        BigDecimal revenue = BigDecimal.ZERO;
+        BigDecimal tax = BigDecimal.ZERO;
+        BigDecimal cash = BigDecimal.ZERO;
+        List<Map<String, Object>> byAccount = new ArrayList<>();
+        for (Object[] row : lines.sumByAccountBetween(tenant, from, to)) {
+            String code = (String) row[0];
+            String name = (String) row[1];
+            BigDecimal debit = bd(row[2]);
+            BigDecimal credit = bd(row[3]);
+            if (code.equals(taxCode)) {
+                tax = tax.add(credit.subtract(debit));
+            } else if (code.equals(cashCode)) {
+                cash = cash.add(debit.subtract(credit));           // cash inflow
+            } else if (!nonRevenue.contains(code)) {
+                BigDecimal net = credit.subtract(debit);            // revenue up, contra down
+                revenue = revenue.add(net);
+                Map<String, Object> acct = new LinkedHashMap<>();
+                acct.put("accountCode", code);
+                acct.put("accountName", name);
+                acct.put("net", scale(net));
+                byAccount.add(acct);
+            }
+        }
+        byAccount.sort((a, b) -> ((BigDecimal) b.get("net")).compareTo((BigDecimal) a.get("net")));
+        return new Totals(scale(revenue), scale(tax), scale(cash), byAccount);
+    }
+
+    private record Totals(BigDecimal revenue, BigDecimal tax, BigDecimal cash,
+            List<Map<String, Object>> byAccount) {
+    }
+
+    private String codeFor(String tenant, String key) {
+        return mappings.findByTenantIdAndMappingKey(tenant, key)
+                .map(AccountMapping::getAccountCode)
+                .orElseGet(() -> DEFAULT_CHART.get(key)[0]);
+    }
+
+    private static BigDecimal bd(Object v) {
+        if (v == null) {
+            return BigDecimal.ZERO;
+        }
+        return v instanceof BigDecimal b ? b : new BigDecimal(v.toString());
+    }
+
+    /** Percent change vs the prior period, or null when there's no base to compare. */
+    private static BigDecimal pctDelta(BigDecimal prev, BigDecimal cur) {
+        if (prev == null || prev.signum() == 0) {
+            return null;
+        }
+        return cur.subtract(prev).multiply(BigDecimal.valueOf(100))
+                .divide(prev.abs(), 1, RoundingMode.HALF_UP);
     }
 
     private JournalLine line(String key, BigDecimal debit, BigDecimal credit, String ref, String description) {

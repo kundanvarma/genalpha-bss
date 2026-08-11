@@ -33,6 +33,20 @@ public class RevenueController {
         this.service = service;
     }
 
+    /**
+     * Governed reporting summary for a period (defaults to month-to-date):
+     * net revenue, tax, cash collected, invoices, and the prior-period delta —
+     * computed once from the subledger. billing:read (GET /** is gated already).
+     */
+    @GetMapping("/summary")
+    public ResponseEntity<Map<String, Object>> summary(
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate) {
+        LocalDate to = parseDate(toDate) != null ? parseDate(toDate) : LocalDate.now();
+        LocalDate from = parseDate(fromDate) != null ? parseDate(fromDate) : to.withDayOfMonth(1);
+        return ResponseEntity.ok(service.summary(from, to));
+    }
+
     @GetMapping("/journalEntry")
     public ResponseEntity<List<Map<String, Object>>> journal(
             @RequestParam(required = false) String date,
