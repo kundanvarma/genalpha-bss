@@ -1747,6 +1747,17 @@ services:
     ports:
       - "8131:8080"
 
+  # Stands in for an operator's self-hosted Strapi (the open-source 2nd option)
+  # to prove the GENERIC HTTP connector against a shape unlike Sanity's:
+  # multipart upload, array response, relative /uploads urls. Real Strapi is the
+  # same wire (a heavier, opt-in container proof).
+  mock-strapi:
+    build: ./integrations/mock-strapi
+    container_name: bss-mock-strapi
+    restart: unless-stopped
+    ports:
+      - "8132:8080"
+
   console:
     build: ./apps/admin-console
     container_name: bss-console

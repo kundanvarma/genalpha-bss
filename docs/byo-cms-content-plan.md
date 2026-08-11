@@ -1,10 +1,12 @@
 # Bring-your-own CMS/DAM — reference-mode content seam
 
-**Status:** P1 + P2 + P3 shipped (2026-08-11) · P4–P5 pending · **Depends on:** `services/document` (TMF667), existing `ContentStore` seam
+**Status:** P1 + P2 + P3 + P4 shipped (2026-08-11) · P5 pending · **Depends on:** `services/document` (TMF667), existing `ContentStore` seam
 
 > **Built so far:** reference-mode core (`AssetProvider` seam, `AssetProviderRegistry`, `ref:<provider>:<assetId>` keys, `ContentResult`), per-tenant `content_provider_config` (V4 + V5 RLS), redirect delivery with `?rendition=` + placeholder fallback, `ContentProviderController` (PUT/GET/DELETE), and the **Sanity adapter** (`SanityAssetProvider`) proven end-to-end against a `mock-sanity` CMS: upload→ref→302 to the CDN, rendition transform params, hosted default untouched, per-tenant wall, fail-open placeholder.
 >
-> **P3:** HMAC-verified webhook (`POST /webhook/{provider}/{tenantId}`, Sanity `t=,v1=` scheme; the shared secret is the auth) → per-tenant, RLS-scoped: a `delete` marks the referencing documents unavailable (read path serves the placeholder), an `upsert` restores them and bumps a cache-busting `content_version` (V6); portable rendition vocab hoisted to a shared `Rendition` enum (`thumb|card|hero|orig`, unknown-safe). Proven: delete→placeholder, upsert→302 with `?v=` bump, bad signature→401. Document module tests green on real Postgres (Testcontainers).
+> **P3:** HMAC-verified webhook (`POST /webhook/{provider}/{tenantId}`, Sanity `t=,v1=` scheme; the shared secret is the auth) → per-tenant, RLS-scoped: a `delete` marks the referencing documents unavailable (read path serves the placeholder), an `upsert` restores them and bumps a cache-busting `content_version` (V6); portable rendition vocab hoisted to a shared `Rendition` enum (`thumb|card|hero|orig`, unknown-safe). Proven: delete→placeholder, upsert→302 with `?v=` bump, bad signature→401.
+>
+> **P4:** the generic **`HttpCmsAssetProvider`** (`provider: http`) — config-driven upload (`multipart`|`raw`, file field, auth header), JSON-pointer asset extraction, `resolveBase` + query-style renditions — so any HTTP CMS is a config row, not a class. Config-serialisation fixed (nested JSON object stored as JSON). **Proven against a Strapi-shaped `mock-strapi`** whose wire is unlike Sanity's (multipart, array response, relative `/uploads` urls): bind→multipart upload→302 to the relative url→bytes served, zero vendor code. *Honest boundary:* proven against a faithful Strapi mock (same wire); a **real self-hosted Strapi container** (admin bootstrap + API token) is a heavier opt-in follow-up, not yet run. Document module tests green on real Postgres (Testcontainers).
 
 An operator who already runs a headless CMS/DAM (Sanity, Contentful, Strapi, Cloudinary,
 Bynder, …) should be able to serve product imagery **from their own system**, not the

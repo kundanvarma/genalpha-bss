@@ -5,6 +5,7 @@ import com.bss.document.exception.BadRequestException;
 import com.bss.document.exception.NotFoundException;
 import com.bss.document.repository.ContentProviderConfigRepository;
 import com.bss.document.security.TenantScope;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class ContentProviderConfigService {
 
     private final ContentProviderConfigRepository repository;
     private final TenantScope tenantScope;
+    private final ObjectMapper mapper = new ObjectMapper();
 
     public ContentProviderConfigService(ContentProviderConfigRepository repository, TenantScope tenantScope) {
         this.repository = repository;
@@ -58,7 +60,7 @@ public class ContentProviderConfigService {
         cfg.setSecretRef(str(dto.get("secretRef")));
         cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
         cfg.setDirectUrl(Boolean.TRUE.equals(dto.get("directUrl")));
-        cfg.setConfig(str(dto.get("config")));
+        cfg.setConfig(configJson(dto.get("config")));
         cfg.setLastUpdate(OffsetDateTime.now());
         return toMap(repository.save(cfg));
     }
@@ -76,6 +78,21 @@ public class ContentProviderConfigService {
 
     private static String str(Object v) {
         return v == null ? null : String.valueOf(v);
+    }
+
+    /** config may arrive as a JSON object (store as JSON) or a JSON string (store as-is). */
+    private String configJson(Object v) {
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof String s) {
+            return s;
+        }
+        try {
+            return mapper.writeValueAsString(v);
+        } catch (Exception e) {
+            throw new BadRequestException("config is not serialisable JSON");
+        }
     }
 
     /** The secret is a REFERENCE only — the token value is never returned. */
