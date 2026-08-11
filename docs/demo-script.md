@@ -94,7 +94,8 @@ URL: `http://localhost:8080/console/` as `pat@bss.local` / `pat`
 > (same result, form vs conversation) is the strongest single moment you have.
 
 ### Scene 3 — AI that keeps humans in control · ~4 min
-Stay in the console (`pat`), or switch to `demo` for the full operator view.
+URL: `http://localhost:8080/console/` — stay as `pat`, or switch to `demo`/`demo`
+for the full operator view (AI Workforce + Runbooks tabs need `demo`).
 
 - **Product advisor** tab: **"Recommendations with receipts. Every finding is
   a number you can re-run — top-up attach counted from inventory, a market

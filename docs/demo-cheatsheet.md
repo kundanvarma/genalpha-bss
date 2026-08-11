@@ -20,27 +20,27 @@
 > *[proposal card]* "It proposed the TMF620 payloads. It did NOT write anything — I decide." *[Yes — create it]*
 > *[shop → refresh → it's there]* "Conversation to storefront. No deploy, no JSON."
 
-### ③ AI, HUMANS IN CONTROL — console as `pat` / `demo`
+### ③ AI, HUMANS IN CONTROL — `localhost:8080/console/` → `pat`/`pat` (or `demo`/`demo`)
 > **Product advisor:** "Recommendations with receipts — every number re-runnable. The AI narrates; it never invents a number. Adopt makes a DRAFT."
-> **AI Workforce** *(as demo)*: "Digital workers with revocable badges work the same queues humans do. They can't fake 'done', they escalate honestly, a human holds every approval key."
-> **Runbooks** *(as demo)*: "AI learning you can READ. Three confirmed diagnoses → a runbook a human approves → next time, zero model calls. Revoke it, it asks the model again."
+> **AI Workforce** *(as `demo`)*: "Digital workers with revocable badges work the same queues humans do. They can't fake 'done', they escalate honestly, a human holds every approval key."
+> **Runbooks** *(as `demo`)*: "AI learning you can READ. Three confirmed diagnoses → a runbook a human approves → next time, zero model calls. Revoke it, it asks the model again."
 
-### ④ MARKETING, NO CURL (journeys) — `console/` → `pat`/`pat` → **Campaigns** / **Journeys**
+### ④ MARKETING, NO CURL (journeys) — `localhost:8080/console/` → `pat`/`pat` → **Campaigns** / **Journeys**
 > **Campaigns** *[New → recipe or trigger "Order placed" → AI-draft the message, {code} survives → attach promo → Save]* "Marketing reacts to real events, not a nightly CSV."
 > *[place a new customer's 1st order]* "Fires exactly once (reached=1) via TMF681; a 2nd order stays silent." *[pause from GUI → Resume]* "On/off is a click."
 > **Journeys** *[open one]* "Ordered steps + a HOLDOUT group → measurable LIFT in points + revenue per customer. Not send-and-hope."
 
 ### ⑤ ONE BUILD, ANY OPERATOR — `shop.nova.localhost:8080/shop/` → `nils`/`nils`
 > "Same binary, same deployment. A second operator — Norwegian, prices in NOK, own catalog, walled off by row-level security."
-> *[optional biz.nova.localhost → birgit/birgit]* "B2B too — consolidated company invoice in NOK."
+> *[optional B2B: `biz.nova.localhost:8080/biz/` → `birgit@fjellheim.no`/`birgit`]* "B2B too — consolidated company invoice in NOK."
 > "Onboarding a new operator is a form, not a project. Nova sees none of GenAlpha's campaigns."
 
-### ⑤ (optional) CSR'S DAY — `localhost:8080/csr/` → `agent-anna`/`agent`
+### ⑥ (optional) CSR'S DAY — `localhost:8080/csr/` → `agent-anna`/`agent`
 > *[search customer → 360 → copilot summary → work ticket]* "The agent sees everything, the AI drafts, the human sends."
 
 ---
 
-### PRODUCT BY HAND (if asked — console as `pat`, no AI)
+### PRODUCT BY HAND (if asked — `localhost:8080/console/` → `pat`/`pat`, no AI)
 1. **Product Offering Prices** → New → `recurring`, `9.99 EUR`, `month` → Create
 2. **Product Offerings** → New → name, **pick a Category**, attach the price → Create
 3. Shop → refresh → it's selling.
