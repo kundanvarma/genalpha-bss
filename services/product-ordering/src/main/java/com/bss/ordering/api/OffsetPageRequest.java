@@ -45,7 +45,12 @@ public class OffsetPageRequest implements Pageable {
 
     @Override
     public Sort getSort() {
-        return Sort.by(Sort.Direction.ASC, "id");
+        // Newest orders first: a just-placed order stays on the first page even
+        // when a party/tenant already holds many (id is a random UUID, so the old
+        // id-ASC sort could bury a fresh order past the page limit). id is a stable
+        // tiebreaker. (No null-precedence: order_date is always set at create, and
+        // query-by-example runs on Criteria queries, which reject NULLS FIRST/LAST.)
+        return Sort.by(Sort.Order.desc("orderDate"), Sort.Order.asc("id"));
     }
 
     @Override

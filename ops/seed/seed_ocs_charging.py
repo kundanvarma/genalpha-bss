@@ -48,8 +48,20 @@ def req(method, path, body=None):
 offerings = req("GET", f"{CATALOG}/productOffering?limit=100")
 for o in offerings:
     rate_plan = CHARGING.get(o["name"])
+    if not rate_plan:
+        continue
     spec_id = (o.get("productSpecification") or {}).get("id")
-    if not rate_plan or not spec_id:
+    if not spec_id:
+        # a rated plan with no spec (data drift, e.g. after a catalog recreate):
+        # mint one carrying the chargingSpecId and link it, so re-seeding self-heals.
+        new_spec = req("POST", f"{CATALOG}/productSpecification", {
+            "name": o["name"] + " spec", "lifecycleStatus": "Active",
+            "productSpecCharacteristic": [{"name": "chargingSpecId", "valueType": "string",
+                "configurable": False, "productSpecCharacteristicValue": [{"value": rate_plan}]}]})
+        req("PATCH", f"{CATALOG}/productOffering/{o['id']}", {
+            "productSpecification": {"id": new_spec["id"], "name": new_spec["name"],
+                "@referredType": "ProductSpecification"}})
+        print(f"{o['name']} -> {rate_plan} (created spec)")
         continue
     spec = req("GET", f"{CATALOG}/productSpecification/{spec_id}")
     chars = spec.get("productSpecCharacteristic") or []
