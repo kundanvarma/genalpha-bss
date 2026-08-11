@@ -1,6 +1,8 @@
 # The Operator Console — integrations marketplace + sales/ops reporting
 
-**Status:** design (not built) · **Depends on:** `apps/admin-console`, the service seams, the revenue/billing/order data already captured
+**Status:** P1 shipped (2026-08-11) · P2–P4 pending · **Depends on:** `apps/admin-console`, the service seams, the revenue/billing/order data already captured
+
+> **P1 (visibility) shipped:** `GET /revenue/v1/summary` — a governed sales/finance summary computed once from the subledger (net revenue = credit−debit over revenue-family accounts, tax, cash collected, invoices, prior-period delta, revenue-by-account). Two new console workspaces (data-driven `RESOURCES` entries + custom panels): **Reporting** (KPI tiles + date range + by-account table) and **Integrations** (the seam catalog — the Content/DAM card is *live* per-tenant config via `/contentProvider` GET/PUT/DELETE; PSP/logistics/OCS/AI shown as built-in with P2 notes). Verified live in the console.
 
 Two asks, one surface: the console a **digital sales lead** actually lives in. Part A makes
 the platform's integration seams *installable and configurable per tenant from a form*

@@ -892,6 +892,22 @@ const RESOURCES = [
     fields: [],
     columns: [],
   },
+  {
+    path: 'reporting',
+    title: 'Reporting',
+    reporting: true,    // custom panel: governed sales/finance summary
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    path: 'integrations',
+    title: 'Integrations',
+    integrations: true, // custom panel: the provider catalog (platform seams)
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
 ];
 
 // Presentation names for raw TMF field keys (fallback: the key itself).
@@ -955,6 +971,8 @@ const TAB_ROLE = {
   staff: 'roles:admin',
   audit: 'ai:use',
   workforce: ['workforce:use', 'ai:admin'],
+  reporting: ['billing:admin', 'billing:read'],
+  integrations: ['roles:admin', 'document:write'],
 };
 let visible = RESOURCES;
 function computeVisible() {
@@ -976,11 +994,12 @@ const WORKSPACES = [
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied'] },
+  { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['campaign', 'journey', 'audiences', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
-  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule'] },
+  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
 ];
 
 let active = RESOURCES[0];
@@ -2277,6 +2296,249 @@ function staffPanel() {
 // THE WORKFORCE SCOREBOARD: what the digital workers did, what it saved
 // (labeled as the estimate it is), the honesty metric (reopen rate), and
 // the approvals queue — where a human's click IS the write.
+// A KPI card in the workforce/reporting house style.
+function kpiCard(label, value, hint, testid) {
+  const div = document.createElement('div');
+  div.style.cssText = 'flex:1 1 9rem;min-width:9rem;padding:0.8rem 1rem;border:1px solid var(--line,#ddd);border-radius:10px;background:var(--card,#fafafa)';
+  if (testid) div.dataset.testid = testid;
+  const b = document.createElement('b');
+  b.style.cssText = 'display:block;font-size:1.4rem';
+  b.textContent = value == null ? '—' : String(value);
+  const s = document.createElement('span');
+  s.style.cssText = 'font-size:0.8rem;color:var(--dim,#777)';
+  s.textContent = label;
+  div.append(b, s);
+  if (hint) div.title = hint;
+  return div;
+}
+function panelFor(id) {
+  let panel = document.getElementById(id);
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = id;
+    document.querySelector('.table-wrap').after(panel);
+  }
+  panel.hidden = false;
+  panel.replaceChildren();
+  return panel;
+}
+
+// REPORTING — governed sales/finance summary from the subledger (P1).
+async function renderReporting() {
+  const panel = panelFor('reporting-panel');
+  const money = (v) => (v == null ? '—'
+    : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €');
+
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = today.slice(0, 8) + '01';
+  const controls = document.createElement('div');
+  controls.style.cssText = 'display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin:0.2rem 0 1rem';
+  const from = document.createElement('input'); from.type = 'date'; from.value = monthStart;
+  const to = document.createElement('input'); to.type = 'date'; to.value = today;
+  const go = document.createElement('button'); go.textContent = 'Refresh';
+  go.style.cssText = 'padding:0.35rem 0.9rem';
+  const hint = (t) => { const s = document.createElement('span'); s.className = 'dimhint'; s.textContent = t; return s; };
+  controls.append(hint('From'), from, hint('To'), to, go);
+  const body = document.createElement('div');
+  panel.append(controls, body);
+
+  async function load() {
+    body.replaceChildren();
+    const res = await authFetch(`${REVENUE_BASE}/summary?fromDate=${from.value}&toDate=${to.value}`);
+    if (!res.ok) {
+      body.textContent = res.status === 403
+        ? 'You do not have access to revenue reporting.' : 'Reporting data unavailable.';
+      return;
+    }
+    const d = await res.json();
+    let delta = '—';
+    if (d.revenueDeltaPct != null) {
+      const p = Number(d.revenueDeltaPct);
+      const mag = Math.abs(p) >= 1000 ? '>1000' : Math.abs(p).toFixed(1);
+      delta = (p >= 0 ? '▲ ' : '▼ ') + mag + '%';
+    }
+    const cards = document.createElement('div');
+    cards.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.7rem;margin:0.2rem 0 1.2rem';
+    cards.append(
+      kpiCard('Net revenue', money(d.netRevenue), 'credit − debit over the revenue accounts, this period', 'rep-netrev'),
+      kpiCard('vs prior period', delta, 'change vs the prior equal-length window'),
+      kpiCard('Cash collected', money(d.cashCollected), 'payments received into the cash account'),
+      kpiCard('Tax collected', money(d.taxCollected), 'VAT payable booked this period'),
+      kpiCard('Invoices issued', d.invoicesIssued, 'bills booked to the subledger this period', 'rep-invoices'),
+    );
+    body.append(cards);
+
+    const h = document.createElement('h3');
+    h.textContent = 'Revenue by account';
+    h.style.cssText = 'margin:1rem 0 0.4rem';
+    body.append(h);
+    const table = document.createElement('table');
+    table.style.cssText = 'width:100%;border-collapse:collapse';
+    const head = document.createElement('tr');
+    ['Account', 'Code', 'Net'].forEach((t, i) => {
+      const th = document.createElement('th');
+      th.textContent = t;
+      th.style.cssText = 'text-align:' + (i === 2 ? 'right' : 'left') + ';padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#ddd);color:var(--dim,#777);font-size:0.8rem';
+      head.append(th);
+    });
+    table.append(head);
+    for (const a of (d.byAccount || [])) {
+      const tr = document.createElement('tr');
+      [a.accountName, a.accountCode, money(a.net)].forEach((v, i) => {
+        const td = document.createElement('td');
+        td.textContent = v;
+        td.style.cssText = 'padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#f0f0f0)' + (i === 2 ? ';text-align:right;font-variant-numeric:tabular-nums' : '');
+        tr.append(td);
+      });
+      table.append(tr);
+    }
+    body.append(table);
+    const note = document.createElement('p');
+    note.className = 'dimhint';
+    note.style.marginTop = '0.8rem';
+    note.textContent = 'Computed once from the subledger — the source of truth. Orders, AOV, MRR/ARPU and churn arrive with the cross-service metrics engine (P3).';
+    body.append(note);
+  }
+  go.addEventListener('click', load);
+  load();
+}
+
+// INTEGRATIONS — the provider catalog over the platform seams (P1: CMS live,
+// the rest shown as built-in/deploy-configured).
+async function renderIntegrations() {
+  const panel = panelFor('integrations-panel');
+  const CONTENT = '/tmf-api/documentManagement/v4';
+
+  const intro = document.createElement('p');
+  intro.className = 'dimhint';
+  intro.textContent = 'Providers behind the platform seams. Built-in adapters ship configured at deploy; the content seam is per-tenant configurable here (the pattern the other seams follow next).';
+  panel.append(intro);
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:flex;flex-wrap:wrap;gap:0.9rem;margin-top:0.8rem;align-items:flex-start';
+  panel.append(grid);
+
+  const pill = (text, ok) => {
+    const s = document.createElement('span');
+    s.textContent = text;
+    s.style.cssText = 'font-size:0.72rem;padding:0.1rem 0.5rem;border-radius:999px;'
+      + (ok ? 'background:#e6f4ea;color:#1a7f37' : 'background:#eef1f3;color:#5a6b73');
+    return s;
+  };
+  const card = (title, sub) => {
+    const c = document.createElement('div');
+    c.style.cssText = 'flex:1 1 17rem;min-width:16rem;max-width:22rem;padding:1rem;border:1px solid var(--line,#ddd);border-radius:12px;background:var(--card,#fafafa)';
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem';
+    const t = document.createElement('b'); t.textContent = title;
+    head.append(t);
+    const s = document.createElement('div'); s.className = 'dimhint'; s.textContent = sub;
+    s.style.marginTop = '0.15rem';
+    c.append(head, s);
+    return { c, head };
+  };
+  const builtin = (title, sub, provider) => {
+    const { c, head } = card(title, sub);
+    head.append(pill('built-in', false));
+    const p = document.createElement('div');
+    p.style.cssText = 'margin-top:0.6rem;font-size:0.9rem';
+    p.textContent = provider;
+    c.append(p);
+    grid.append(c);
+  };
+
+  // --- CMS / DAM: LIVE, per-tenant configurable ---
+  const { c: cmsC, head: cmsHead } = card('Content / DAM', 'TMF667 content seam');
+  grid.append(cmsC);
+  async function loadCms() {
+    // strip everything after the sub/head + status
+    [...cmsC.querySelectorAll('[data-cms-body]')].forEach((n) => n.remove());
+    cmsHead.querySelector('[data-cms-pill]')?.remove();
+    const res = await authFetch(`${CONTENT}/contentProvider`);
+    const bound = res.ok ? await res.json() : null;
+    const label = !bound ? 'Built-in DAM (hosted)'
+      : (bound.provider === 'sanity' ? 'Sanity' : bound.provider === 'http' ? 'Generic HTTP CMS' : bound.provider);
+    const p = pill(bound ? 'external' : 'hosted', !!bound); p.dataset.cmsPill = '1';
+    cmsHead.append(p);
+
+    const wrap = document.createElement('div');
+    wrap.dataset.cmsBody = '1';
+    wrap.style.cssText = 'margin-top:0.7rem;display:flex;flex-direction:column;gap:0.5rem';
+    const now = document.createElement('div');
+    now.style.fontSize = '0.9rem';
+    now.innerHTML = 'Serving from: <b>' + label + '</b>';
+    wrap.append(now);
+
+    const sel = document.createElement('select');
+    ['Built-in DAM (hosted)', 'Sanity', 'Generic HTTP CMS'].forEach((o, i) => sel.append(new Option(o, ['hosted', 'sanity', 'http'][i])));
+    sel.value = bound ? bound.provider : 'hosted';
+    wrap.append(sel);
+
+    const fields = document.createElement('div');
+    fields.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem';
+    wrap.append(fields);
+    const input = (ph, val) => { const i = document.createElement('input'); i.placeholder = ph; if (val) i.value = val; i.style.cssText = 'padding:0.3rem 0.4rem'; return i; };
+    const ta = document.createElement('textarea'); ta.rows = 4; ta.placeholder = 'connector config JSON'; ta.style.cssText = 'padding:0.3rem 0.4rem;font-family:monospace;font-size:0.8rem';
+    const f = {};
+    function syncFields() {
+      fields.replaceChildren();
+      if (sel.value === 'sanity') {
+        f.baseUrl = input('baseUrl (blank = real Sanity)', bound && bound.baseUrl);
+        f.projectId = input('projectId', bound && bound.projectId);
+        f.dataset = input('dataset (e.g. production)', bound && bound.dataset);
+        f.secretRef = input('secretRef (env var name for the token)', bound && bound.secretRef);
+        fields.append(f.baseUrl, f.projectId, f.dataset, f.secretRef);
+      } else if (sel.value === 'http') {
+        f.secretRef = input('secretRef (env var name, optional)', bound && bound.secretRef);
+        if (bound && bound.provider === 'http') { /* config not echoed back; leave for edit */ }
+        ta.value = ta.value || '{\n  "uploadUrl": "",\n  "uploadMode": "multipart",\n  "fileField": "files",\n  "assetIdPath": "/0/url",\n  "resolveBase": "",\n  "renditionMode": "none"\n}';
+        fields.append(f.secretRef, ta);
+      }
+    }
+    sel.addEventListener('change', syncFields);
+    syncFields();
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:0.5rem;align-items:center';
+    const apply = document.createElement('button'); apply.textContent = 'Apply'; apply.style.cssText = 'padding:0.3rem 0.9rem';
+    const msg = document.createElement('span'); msg.className = 'dimhint';
+    row.append(apply, msg);
+    wrap.append(row);
+    cmsC.append(wrap);
+
+    apply.addEventListener('click', async () => {
+      msg.textContent = 'saving…';
+      try {
+        let r;
+        if (sel.value === 'hosted') {
+          r = await authFetch(`${CONTENT}/contentProvider`, { method: 'DELETE' });
+        } else {
+          const dto = { provider: sel.value };
+          if (sel.value === 'sanity') {
+            dto.baseUrl = f.baseUrl.value || null; dto.projectId = f.projectId.value;
+            dto.dataset = f.dataset.value || 'production'; dto.secretRef = f.secretRef.value || null;
+          } else {
+            dto.secretRef = f.secretRef.value || null;
+            dto.config = JSON.parse(ta.value || '{}');
+          }
+          r = await authFetch(`${CONTENT}/contentProvider`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto),
+          });
+        }
+        msg.textContent = r.ok ? 'saved' : (r.status === 403 ? 'not authorized (needs document:write)' : 'failed (' + r.status + ')');
+        if (r.ok) loadCms();
+      } catch (e) {
+        msg.textContent = 'invalid config JSON';
+      }
+    });
+  }
+  await loadCms();
+
+  builtin('Payment', 'PSP seam', 'Stripe-compatible / mock — configured at deploy. Per-tenant config: P2.');
+  builtin('Logistics', 'Carrier seam', 'Helthjem (Posten/Bring next). Per-tenant carrier choice: P2.');
+  builtin('Charging', 'OCS seam', 'Online charging endpoint — configured at deploy.');
+  builtin('AI models', 'LLM seam', 'Per-tenant provider + model routing (fast/smart tiers).');
+}
+
 async function renderWorkforce() {
   let panel = document.getElementById('workforce-panel');
   if (!panel) {
@@ -2761,6 +3023,8 @@ async function loadList() {
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.getElementById('workforce-panel')?.setAttribute('hidden', '');
+  document.getElementById('reporting-panel')?.setAttribute('hidden', '');
+  document.getElementById('integrations-panel')?.setAttribute('hidden', '');
   document.querySelector('.pager')?.removeAttribute('hidden');
   if (active.copilot) {
     el('editor').hidden = true;
@@ -2787,6 +3051,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderWorkforce();
+    return;
+  }
+  if (active.reporting || active.integrations) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    if (active.reporting) renderReporting(); else renderIntegrations();
     return;
   }
   renderEditor();
