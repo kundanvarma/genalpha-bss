@@ -88,7 +88,10 @@ function deliveryPlace(address, delivery) {
     return { ...base, deliveryMethod: 'pickupPoint', carrier: delivery.carrier,
       pickupPointId: delivery.pickupPointId, pickupPointName: delivery.pickupPointName };
   }
-  return { ...base, deliveryMethod: 'home' };
+  // Home delivery carries the shopper's chosen carrier when they picked one, so
+  // the fulfilment router books that carrier (its precedence honours the pick).
+  return { ...base, deliveryMethod: 'home',
+    ...(delivery && delivery.carrier ? { carrier: delivery.carrier } : {}) };
 }
 
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,

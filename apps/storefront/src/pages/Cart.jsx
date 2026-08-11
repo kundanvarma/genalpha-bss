@@ -35,14 +35,23 @@ export default function Cart() {
   // C3 — how the customer wants their SIM: eSIM (instant, no parcel) or a
   // physical SIM card shipped by the carrier. Default eSIM.
   const [simType, setSimType] = useState('esim');
-  // C-P3: how the parcel arrives — home, or a pickup point the operator offers.
-  const [deliveryMethod, setDeliveryMethod] = useState('home');
+  // C-P3: which carrier + method delivers the parcel — the operator's menu, the
+  // shopper's pick. Selection key is `${carrier}:${method}`; default is the first
+  // home option once the menu loads.
+  const [deliverySel, setDeliverySel] = useState(null);
   const [deliveryOpts, setDeliveryOpts] = useState(null);
   const [pickupId, setPickupId] = useState('');
   useEffect(() => {
     if (!address.postCode) { setDeliveryOpts(null); return; }
     deliveryOptions(address.postCode).then(setDeliveryOpts).catch(() => setDeliveryOpts(null));
   }, [address.postCode]);
+  // Default the delivery pick to the first home option once the menu arrives.
+  useEffect(() => {
+    if (deliveryOpts && deliveryOpts.length && !deliverySel) {
+      const first = deliveryOpts.find((o) => o.method === 'home') || deliveryOpts[0];
+      setDeliverySel(`${first.carrier || 'default'}:${first.method}`);
+    }
+  }, [deliveryOpts, deliverySel]);
   // PSP-P2: how to pay — card, or a redirect method (Klarna) the operator offers.
   const [payMethod, setPayMethod] = useState('card');
   const [payMethods, setPayMethods] = useState([{ method: 'card', redirect: false }]);
@@ -254,7 +263,17 @@ export default function Cart() {
   const needsShipping = (lines || []).some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]))
     || (hasMobile && simType === 'physical'); // a physical SIM ships too
-  const pickupOpt = (deliveryOpts || []).find((o) => o.method === 'pickupPoint' && (o.points || []).length);
+  // The operator's delivery menu, split for the picker: a home option per carrier,
+  // plus any carrier's pickup points. optKey pairs a carrier with a method.
+  const optKey = (o) => `${o.carrier || 'default'}:${o.method}`;
+  const isPickupMethod = (m) => m === 'pickupPoint' || m === 'locker';
+  const menuOpts = (deliveryOpts || []).filter((o) => o.method === 'home'
+    || (isPickupMethod(o.method) && (o.points || []).length));
+  const selectedOpt = menuOpts.find((o) => optKey(o) === deliverySel)
+    || menuOpts.find((o) => o.method === 'home') || menuOpts[0] || null;
+  const showDeliveryPicker = needsShipping && menuOpts.length > 1;
+  const deliveryReady = !showDeliveryPicker || !selectedOpt
+    || !isPickupMethod(selectedOpt.method) || Boolean(pickupId);
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
@@ -329,11 +348,13 @@ export default function Cart() {
     }
     setBusy(true);
     try {
-      const chosenPoint = pickupOpt?.points?.find((p) => p.id === pickupId);
-      const delivery = deliveryMethod === 'pickupPoint' && chosenPoint
-        ? { method: 'pickupPoint', carrier: pickupOpt.carrier,
+      const sel = selectedOpt;
+      const chosenPoint = sel && isPickupMethod(sel.method)
+        ? (sel.points || []).find((p) => p.id === pickupId) : null;
+      const delivery = chosenPoint
+        ? { method: 'pickupPoint', carrier: sel.carrier,
           pickupPointId: chosenPoint.id, pickupPointName: chosenPoint.name }
-        : { method: 'home' };
+        : { method: 'home', carrier: sel?.carrier || null };
       if (payingKlarna && due) {
         // Redirect to Klarna to approve; the choices survive the hop in localStorage,
         // the cart survives server-side, and the return leg (above) finishes the order.
@@ -560,25 +581,29 @@ export default function Cart() {
         </div>
       )}
 
-      {needsShipping && pickupOpt && (
+      {showDeliveryPicker && (
         <div className="delivery-method">
           <h2>Delivery</h2>
-          <div className="simopts">
-            <button type="button" className={`simopt ${deliveryMethod === 'home' ? 'on' : ''}`}
-                    onClick={() => setDeliveryMethod('home')}>
-              <span className="simopt-t">🏠 Home delivery</span>
-              <span className="simopt-d">To your address — track it to your door</span>
-            </button>
-            <button type="button" className={`simopt ${deliveryMethod === 'pickupPoint' ? 'on' : ''}`}
-                    onClick={() => setDeliveryMethod('pickupPoint')}>
-              <span className="simopt-t">📍 Pickup point</span>
-              <span className="simopt-d">Collect at a {pickupOpt.carrierName} point near you</span>
-            </button>
+          <div className="simopts deliveryopts">
+            {menuOpts.map((o) => {
+              const key = optKey(o);
+              const pickup = isPickupMethod(o.method);
+              return (
+                <button type="button" key={key} data-testid="delivery-opt"
+                        className={`simopt ${deliverySel === key ? 'on' : ''}`}
+                        onClick={() => { setDeliverySel(key); if (!pickup) setPickupId(''); }}>
+                  <span className="simopt-t">{pickup ? '📍' : '🏠'} {o.carrierName}</span>
+                  <span className="simopt-d">{pickup
+                    ? 'Collect at a pickup point near you'
+                    : 'Home delivery — track it to your door'}</span>
+                </button>
+              );
+            })}
           </div>
-          {deliveryMethod === 'pickupPoint' && (
+          {selectedOpt && isPickupMethod(selectedOpt.method) && (
             <select className="pickup-select" value={pickupId} onChange={(e) => setPickupId(e.target.value)}>
-              <option value="">Choose a pickup point…</option>
-              {(pickupOpt.points || []).map((p) => (
+              <option value="">Choose a {selectedOpt.carrierName} pickup point…</option>
+              {(selectedOpt.points || []).map((p) => (
                 <option key={p.id} value={p.id}>{p.name} — {p.address}</option>
               ))}
             </select>
@@ -659,11 +684,12 @@ export default function Cart() {
       <div className="cartactions">
         <Link to="/" className="dim">Continue shopping</Link>
         <button className="primary big" onClick={checkout}
-                disabled={busy || !addressReady || !serviceable || !slotReady || !cardReady}>
+                disabled={busy || !addressReady || !serviceable || !slotReady || !deliveryReady || !cardReady}>
           {busy ? 'Placing order…'
             : !addressReady ? 'Enter shipping address'
             : !serviceable ? 'Not serviceable at this address'
             : !slotReady ? 'Pick an installation slot'
+            : !deliveryReady ? 'Choose a pickup point'
             : !cardReady ? 'Enter card details'
             : payingKlarna && due && signedIn ? `Continue to Klarna · ${due.value.toFixed(2)} ${due.unit}`
             : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`

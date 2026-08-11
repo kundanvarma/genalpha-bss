@@ -197,7 +197,10 @@ button:disabled { opacity: 0.5; cursor: default; }
 .state.new { color: var(--teal); border-color: var(--teal); }
 
 /* SIM choice (Track C — eSIM vs physical) */
-.simchoice .simopts { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.simchoice .simopts,
+.delivery-method .simopts,
+.payment .simopts { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.deliveryopts .simopt { flex: 1 1 180px; }
 .simopt { flex: 1 1 200px; text-align: left; background: none; cursor: pointer;
   border: 1px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .simopt.on { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
