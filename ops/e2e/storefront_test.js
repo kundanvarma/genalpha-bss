@@ -133,8 +133,9 @@ async function apiGet(page, path, token) {
   await a.locator('.badge', { hasText: '2' }).waitFor({ timeout: 10000 });
   console.log('OK cart line quantity 2, badge follows');
 
-  // Add a standalone phone as a second line
+  // Add a standalone phone as a second line (devices live under the Devices tab)
   await a.click('.nav >> text=Offers');
+  await a.locator('.shoptab', { hasText: 'Devices' }).first().click();
   await a.locator('.card:has(h2:text-is("Apple iPhone 17"))').first().click();
   await a.waitForSelector('.pricetable');
   await a.click('button.primary.big');

@@ -14,7 +14,7 @@ export default function Shop() {
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('Bundles'); // line-of-business shop tab
   const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
-  const [planView, setPlanView] = useState('table');  // Mobile: 'table' | 'cards'
+  const [planView, setPlanView] = useState('cards');  // Mobile: 'cards' | 'table' (compare is opt-in)
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
   const [planSpecs, setPlanSpecs] = useState({}); // offeringId -> {charName: value}
 

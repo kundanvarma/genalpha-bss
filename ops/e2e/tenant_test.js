@@ -24,6 +24,13 @@ async function staffToken(request, realm) {
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto(NOVA_SHOP);
+  // the shop is organised by line-of-business tabs; mobile plans live under Mobile
+  const toMobile = async () => {
+    await page.locator('[data-testid=shop-tabs]').waitFor({ timeout: 20000 });
+    const m = page.locator('.shoptab', { hasText: 'Mobile' }).first();
+    if (await m.count()) await m.click();
+  };
+  await toMobile();
   await page.locator('.card', { hasText: 'Nova Unlimited 5G' }).first().waitFor({ timeout: 20000 });
   if (await page.locator('.card', { hasText: 'GenAlpha One Home & Mobile' }).count()) {
     fail("Nova storefront leaked GenAlpha's bundle");
@@ -50,6 +57,7 @@ async function staffToken(request, realm) {
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('OK Nova customer self-registered through the nova realm');
 
+  await toMobile();
   await page.locator('.card', { hasText: 'Nova Unlimited 5G' }).first().click();
   await page.locator('button', { hasText: 'Legg i handlekurven' }).first().waitFor({ timeout: 15000 });
   await page.locator('button', { hasText: 'Legg i handlekurven' }).first().click();
