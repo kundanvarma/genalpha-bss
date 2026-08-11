@@ -151,36 +151,51 @@ Two supported flows, operator's choice:
    (b) a thin sync/webhook that maps a CMS document → an offering `attachment`. Flow (2b)'s
    mapping is **operator-specific and out of scope for v1** (documented as a gap).
 
-### 3g. Multi-tenancy & secrets
+### 3g. Multi-tenancy & secrets (per-tenant from v1 — locked)
 
-- Provider config is **per-tenant-capable** (a tenant column on a `content_provider_config`
-  row) so operators on the shared pool can each point at their own CMS. v1 may ship a single
-  global provider (compose/helm env) with the per-tenant table as a fast-follow — decision 7c.
-- Tokens/signing keys are **secrets** → env / Helm secret, never committed (same discipline
-  as `SANITY_TOKEN`, PSP keys, `WORKER_AI_API_KEY`).
+- Provider config is **per-tenant from day one** — a `content_provider_config` table keyed by
+  `tenant_id` (provider, endpoint/projectId, dataset, rendition template, `direct-url` flag,
+  and a **secret-ref**, not the secret itself). Each operator on the shared pool points at
+  **their own** Sanity project / CMS; RLS scopes the row like every other tenant-owned table.
+  A compose/helm **global default** row (`tenant_id = default`) covers single-tenant and dev.
+- Resolution order per request: tenant row → global default → built-in DAM. A tenant with no
+  row keeps the hosted DAM — reference mode is strictly opt-in per operator.
+- Tokens/signing keys are **secrets** → the table stores a *reference* (env var name / Helm
+  secret key); the value is injected from env / Helm secret, **never** the DB, never committed
+  (same discipline as PSP keys, `WORKER_AI_API_KEY`). A per-tenant token is a per-tenant
+  secret-ref resolved at call time.
 
 ---
 
-## 4. Phasing (each phase leaves the tree green)
+## 4. Phasing (each phase leaves the tree green) — **Sanity-first**
 
-- **P1 — reference core.** `AssetProvider` interface, `ExternalContentStore`, `ref:` key,
-  redirect delivery in the controller, placeholder fallback. Hosted stores untouched.
-  Prove: a hand-inserted `ref:http:<id>` doc redirects to a stub CMS; catalog attachment
-  renders via the redirect.
-- **P2 — generic HTTP connector.** `HttpCmsAssetProvider` (upload + resolve + templating),
-  full config surface, secret handling. Prove: upload-through-BSS lands bytes in a mock CMS
-  (reuse the `integrations/mock-*` pattern) and reads back via redirect.
-- **P3 — renditions + webhooks.** `?rendition=`, `POST /webhook/{provider}` with HMAC +
-  version bump + `unavailable`. Prove: update webhook busts a cached redirect; delete →
-  placeholder.
-- **P4 — Sanity proof adapter.** `SanityAssetProvider` (real Assets API upload + `cdn.sanity.io`
-  resolve). Prove against a real Sanity project (token via env). Optional: flip the demo
-  devices to reference-mode Sanity to dogfood.
+Reordered per locked decisions: **Sanity is the first real provider**, and **per-tenant config
+is in the core**, not a fast-follow. The generic connector is generalised *out of* the Sanity
+adapter once it works, so "any CMS" rides on a proven shape rather than a speculative one.
+
+- **P1 — reference core + per-tenant config.** `AssetProvider` interface,
+  `ExternalContentStore` (`ref:` key), `content_provider_config` table (tenant-keyed, RLS,
+  secret-ref), redirect delivery in the controller, placeholder fallback. Hosted stores
+  untouched. Prove: a hand-inserted `ref:sanity:<id>` for tenant A redirects; tenant B with no
+  row still serves the hosted DAM.
+- **P2 — Sanity adapter (the first provider).** `SanityAssetProvider` — upload to the Assets
+  API, resolve `cdn.sanity.io` URLs, renditions via Sanity's transform params (`?w=&h=&fit=&fm=`).
+  Per-tenant projectId/dataset/token from the config row + secret-ref. Prove end-to-end against
+  a real Sanity project (token via env); dogfood by flipping the demo devices to reference-mode
+  Sanity for one tenant.
+- **P3 — Sanity webhooks + rendition vocab.** `POST /document/webhook/sanity` (HMAC-verified) →
+  version bump + `unavailable` on delete; fixed `thumb|card|hero|orig` vocab mapped to Sanity
+  transforms. Prove: an asset update in Sanity busts the cached redirect; a delete → placeholder.
+- **P4 — generic HTTP connector (any other CMS).** `HttpCmsAssetProvider` generalised from the
+  Sanity shape: config-driven upload URL / auth-header / asset-id JSON-path / resolve-URL
+  template / signing. Prove against a mock CMS (`integrations/mock-*` pattern) so a second,
+  non-Sanity operator works with zero code.
 - **P5 — suite + docs.** E2E suite (`byo_cms_test.js`): hosted default still serves bytes;
-  external mode redirects; rendition param; webhook invalidation; fallback on broken ref;
-  tenant wall. Update `architecture.md` §content seam + `capability-map`.
+  tenant-A Sanity reference redirects + rendition; webhook invalidation; fallback on broken
+  ref; **per-tenant wall** (tenant B never resolves tenant A's provider/assets). Update
+  `architecture.md` §content seam + `capability-map`.
 
-Backend-only through P3; P4 touches an external service; P5 is the proof.
+Backend-only in P1; P2/P3 touch a real Sanity project; P4 is mock-proven; P5 is the proof.
 
 ## 5. Scope boundaries (honest)
 
@@ -199,17 +214,19 @@ Backend-only through P3; P4 touches an external service; P5 is the proof.
 P1–P3 (core + generic connector + renditions/webhooks) ≈ the size of one hardening arc,
 backend-only, mock-CMS-proven. P4 (Sanity) small given the seam. P5 one suite.
 
-## 7. Decisions (to lock before building)
+## 7. Decisions
 
 - **7a. Default delivery = redirect** (stable href, no stale URL) vs `direct-url` (one less
-  hop). → *Proposed: redirect default, `direct-url` opt-in.*
-- **7b. First real provider** — Sanity as proof, but is there a specific CMS/DAM the first
-  operator will actually run? That reprioritises P4.
-- **7c. Per-tenant provider config** in v1, or global-first with the per-tenant table as a
-  fast-follow? → *Proposed: global-first, table fast-follow, unless a design partner needs
-  per-tenant on day one.*
+  hop). → *Proposed: redirect default, `direct-url` opt-in.* — **open.**
+- **7b. First real provider = Sanity.** ✅ **Locked 2026-08-11.** Sanity has become common
+  among CSPs, so it is the first adapter (P2), and the generic HTTP connector (P4) is
+  generalised out of it.
+- **7c. Per-tenant provider config.** ✅ **Locked 2026-08-11.** `content_provider_config` is
+  tenant-keyed (RLS, secret-ref) **in the core (P1)** — not global-first. Each operator points
+  at their own Sanity project; a `default` row covers single-tenant/dev.
 - **7d. Rendition vocabulary** — fixed `thumb|card|hero|orig` enough, or expose free-form
   transform params? → *Proposed: fixed vocab v1 (keeps consumers portable across providers).*
+  — **open.**
 
 ---
 
