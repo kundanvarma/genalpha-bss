@@ -12,6 +12,7 @@ export default function Shop() {
   const [personal, setPersonal] = useState(null);
   const [experience, setExperience] = useState(null);
   const [error, setError] = useState(null);
+  const [tab, setTab] = useState('Bundles'); // line-of-business shop tab
 
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
@@ -123,14 +124,36 @@ export default function Shop() {
           </div>
         </>
       )}
-      {bundles.length > 0 && <h1>Bundles</h1>}
-      <div className="cards">
-        {bundles.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
-      </div>
-      <h1>All offers</h1>
-      <div className="cards">
-        {singles.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
-      </div>
+      {(() => {
+        // Shop by line of business — tabs, the way a telco storefront is laid
+        // out (Mobile · Internet · TV · Devices · Security · Bundles), instead
+        // of one long "all offers" scroll.
+        const LOB = [
+          { key: 'Bundles', label: t('Bundles'), items: bundles },
+          { key: 'Mobile', label: t('Mobile'), items: singles.filter((o) => catOf(o) === 'Mobile plans') },
+          { key: 'Internet', label: t('Internet'), items: singles.filter((o) => catOf(o) === 'Broadband') },
+          { key: 'TV', label: t('TV & Streaming'), items: singles.filter((o) => ['TV & Add-ons', 'Partner services'].includes(catOf(o))) },
+          { key: 'Devices', label: t('Devices'), items: singles.filter((o) => catOf(o) === 'Devices') },
+          { key: 'Security', label: t('Security'), items: singles.filter((o) => ['Security', 'Insurance'].includes(catOf(o))) },
+          { key: 'Top-ups', label: t('Top-ups'), items: singles.filter((o) => catOf(o) === 'Top-ups') },
+        ].filter((l) => l.items.length);
+        if (!LOB.length) return <TalkToSales />;
+        const active = LOB.find((l) => l.key === tab) || LOB[0];
+        return (
+          <>
+            <nav className="shoptabs" data-testid="shop-tabs">
+              {LOB.map((l) => (
+                <button key={l.key} type="button"
+                  className={`shoptab ${active.key === l.key ? 'on' : ''}`}
+                  onClick={() => setTab(l.key)}>{l.label}</button>
+              ))}
+            </nav>
+            <div className="cards" data-testid={`lob-${active.key}`}>
+              {active.items.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
+            </div>
+          </>
+        );
+      })()}
       <TalkToSales />
     </>
   );
