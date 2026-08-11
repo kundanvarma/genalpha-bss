@@ -107,9 +107,33 @@ bss.content:
     signing-key:     ${CMS_SIGNING_KEY:}       # secret
 ```
 
-Named adapters (`SanityAssetProvider`, `ContentfulAssetProvider`, …) are only written when a
-provider needs richer behaviour than templating (GROQ lookups, transform DSL, signed-URL
-signing). **Sanity ships as the reference proof adapter.**
+Named adapters (`SanityAssetProvider`, …) are only written when a provider needs richer
+behaviour than templating (GROQ lookups, transform DSL, signed-URL signing). **Sanity ships
+as the reference proof adapter; Strapi is the second, open-source option (see 3h).**
+
+### 3h. Provider choices (v1) — one SaaS, one open-source
+
+Deliberately two providers with different shapes, so "any CMS, zero vendor code" is proven,
+not asserted:
+
+- **Sanity (SaaS, first)** — common among CSPs; named `SanityAssetProvider` (Assets API +
+  `cdn.sanity.io` transforms).
+- **Strapi (open-source, second)** — **MIT-licensed** (genuinely free even for a large telco —
+  no revenue cap), the most widely adopted OSS headless CMS, runs as a **standalone service**
+  with a clean media REST API. Its upload-time responsive formats (`thumbnail/small/medium/
+  large`) map onto our `thumb|card|hero|orig` vocab, so no on-the-fly transform engine is
+  needed. Strapi's upload API/URL model is **unlike** Sanity's, so proving the **generic HTTP
+  connector against real Strapi** is the strongest evidence the vendor-neutral claim holds.
+
+  *Considered and rejected for this slot:* **Directus** — best-in-class on-the-fly URL
+  transforms, but **source-available (BSL): free only under ~$5M revenue / <50 staff**, so a
+  CSP would owe a commercial fee → fails "free/open-source" for the target buyer (kept as a
+  documented source-available runner-up). **Payload** — MIT, but v3 **embeds in a Next.js app**
+  rather than running as a standalone CMS the operator points at, plus post-acquisition
+  roadmap uncertainty. Strapi's MIT + standalone shape fits this seam best.
+
+  *Self-host note:* Strapi had auth/SQLi CVEs patched in v5.33.2 (May 2026) — a patch-discipline
+  item for the operator, not a design blocker.
 
 ### 3c. Delivery — redirect, don't proxy
 
@@ -186,10 +210,13 @@ adapter once it works, so "any CMS" rides on a proven shape rather than a specul
 - **P3 — Sanity webhooks + rendition vocab.** `POST /document/webhook/sanity` (HMAC-verified) →
   version bump + `unavailable` on delete; fixed `thumb|card|hero|orig` vocab mapped to Sanity
   transforms. Prove: an asset update in Sanity busts the cached redirect; a delete → placeholder.
-- **P4 — generic HTTP connector (any other CMS).** `HttpCmsAssetProvider` generalised from the
-  Sanity shape: config-driven upload URL / auth-header / asset-id JSON-path / resolve-URL
-  template / signing. Prove against a mock CMS (`integrations/mock-*` pattern) so a second,
-  non-Sanity operator works with zero code.
+- **P4 — generic HTTP connector, proven on real Strapi (the open-source 2nd option).**
+  `HttpCmsAssetProvider` generalised from the Sanity shape: config-driven upload URL /
+  auth-header / asset-id JSON-path / resolve-URL template / rendition mapping / signing. Prove
+  against a **real self-hosted Strapi** (docker, MIT) whose upload API/URL model is unlike
+  Sanity's — a second operator (different tenant) works with **zero vendor code**. Its
+  responsive formats map to the `thumb|card|hero|orig` vocab. (A `mock-cms` stub stays as a
+  fast/offline fallback for CI.)
 - **P5 — suite + docs.** E2E suite (`byo_cms_test.js`): hosted default still serves bytes;
   tenant-A Sanity reference redirects + rendition; webhook invalidation; fallback on broken
   ref; **per-tenant wall** (tenant B never resolves tenant A's provider/assets). Update
@@ -218,9 +245,12 @@ backend-only, mock-CMS-proven. P4 (Sanity) small given the seam. P5 one suite.
 
 - **7a. Default delivery = redirect** (stable href, no stale URL) vs `direct-url` (one less
   hop). → *Proposed: redirect default, `direct-url` opt-in.* — **open.**
-- **7b. First real provider = Sanity.** ✅ **Locked 2026-08-11.** Sanity has become common
-  among CSPs, so it is the first adapter (P2), and the generic HTTP connector (P4) is
-  generalised out of it.
+- **7b. Providers = Sanity (1st, SaaS) + Strapi (2nd, open-source).** ✅ **Locked 2026-08-11.**
+  Sanity is common among CSPs → first named adapter (P2). Strapi is the open-source option:
+  **MIT** (free even for large telcos), standalone, ubiquitous — proven via the generic HTTP
+  connector on **real Strapi** (P4), which also validates "any CMS, zero vendor code."
+  Directus rejected for this slot (BSL source-available → not free for CSP-scale); Payload
+  rejected (embeds in Next.js, not a standalone CMS). See 3h.
 - **7c. Per-tenant provider config.** ✅ **Locked 2026-08-11.** `content_provider_config` is
   tenant-keyed (RLS, secret-ref) **in the core (P1)** — not global-first. Each operator points
   at their own Sanity project; a `default` row covers single-tenant/dev.
