@@ -5,7 +5,7 @@
  * charges when there are any, place the single TMF622 order, and book the
  * install appointment when the cart contains serviceability-gated offerings.
  */
-import { availabilityFor, checkQualification, checkoutCart, createAppointment, createPayment,
+import { availabilityFor, cancelOrder, checkQualification, checkoutCart, createAppointment, createPayment,
   getOffering, myParty, priceIndex, updateMyParty, validateAddress, requestPortIn } from './api.js';
 import { addressOf, isComplete, loadDraft, shippingPlace, withPostalAddress } from './address.js';
 import { oneTimeTotal, pricesOf } from './money.js';
@@ -192,8 +192,19 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   const order = await checkoutCart(annotated, needsShipping ? deliveryPlace(address, delivery) : null, paymentRefs,
     promotionCode);
   if (needsInstall) {
-    await createAppointment(slot, order.id, shippingPlace(address),
-        'Installation: ' + lines.map((l) => l.name).join(', '));
+    try {
+      await createAppointment(slot, order.id, shippingPlace(address),
+          'Installation: ' + lines.map((l) => l.name).join(', '));
+    } catch (e) {
+      // The order is placed, but the install slot couldn't be booked (the
+      // calendar filled up, or the slot was taken between picking and checkout).
+      // Don't strand the order: cancelling it releases the stock and voids the
+      // authorized payment server-side, so the shopper can pick another time.
+      await cancelOrder(order.id).catch(() => {});
+      saveSlotDraft(null);
+      throw new Error('That install time was just taken — please pick another slot. '
+        + 'Your order was not placed and you were not charged.');
+    }
     saveSlotDraft(null);
   }
   return order;
