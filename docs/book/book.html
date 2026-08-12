@@ -3613,6 +3613,132 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Six</div>
+    <h3>Who carries the parcel</h3>
+    <div class="epi">"The shop says physical SIM delivered by Helthjem — what if some
+    CSPs want more options to choose? Like Helthjem, Posten and Bring in Norway, for
+    example." <span class="who">— the operator, naming the next seam</span></div>
+
+    <p class="drop">The logistics seam had shipped months earlier and it worked: a parcel
+    booked, a tracking number minted, a delivery callback that finished the order without a
+    human. But it knew exactly one carrier, and the carrier's name was baked into the
+    deployment. The operator looked at the checkout page, read "delivered by Helthjem," and
+    asked the question that had already reshaped the CMS and would soon reshape payments:
+    what if mine is different? Norway alone runs three parcel networks a telco might sign
+    with. A BSS that hardcodes one is making the operator's logistics decision for them.</p>
+
+    <h2>The menu, then the pick</h2>
+    <p>The answer was the shape we already trusted. A <code>carrier_config</code> table,
+    row-level-scoped like everything else: carrier name, display name, base URL, an API key
+    held as a secret-ref that names an environment variable and never the key itself. A
+    registry that resolves adapters at runtime — Helthjem, Posten/Bring, PostNord — and a
+    router with an honest precedence: the shopper's explicit choice first, then the
+    operator's postcode rule (longest prefix wins, the Nordic way), then the tenant's
+    default, then the deployment's global carrier so a single-carrier install never changes
+    behaviour. Bring brought the pickup point with it — the distinctly Nordic method where
+    the parcel waits at a corner shop — and the delivery choice learned to ride the order's
+    delivery place, the same way a SIM choice already rode its characteristic.</p>
+    <p>Then the other half, because a menu no one can see is not a menu. The cart grew the
+    operator's whole delivery list: one full-width row per carrier and method, "Home
+    delivery · Posten/Bring — delivered to your door by Posten/Bring," a pickup row with
+    the points inlined. The first draft wrapped the options into a tile grid and the
+    operator caught it within a day: pick Posten and "Pickup point · PostNord" sat directly
+    beneath your selection, reading like a caption. The rows went vertical. Every option
+    is unmistakably its own choice now, and the chosen carrier drives the actual booking —
+    the suite proves a PostNord pick books a PostNord consignment while Bring stays
+    default for everyone who doesn't care.</p>
+
+    <h2>What ships, and why it says so</h2>
+    <p>The same week taught a quieter lesson. The operator chose an eSIM — "activates
+    instantly, nothing to ship" — and the delivery block stayed on screen. It looked like a
+    bug and it wasn't: the bundle's phone choice pre-selects a handset so the page is
+    orderable out of the box, and a phone ships no matter which SIM you pick. The
+    contradiction was in the silence, not the logic. So the delivery block learned to name
+    its parcel: "Ships to you: Apple iPhone 17 Pro," and with a physical SIM, "your SIM
+    card" joins the list. A plan-only cart with an eSIM shows no delivery block at all,
+    because nothing ships. The rule underneath is the book's oldest one — when the machine
+    looks wrong while doing right, it owes the human its reasoning.</p>
+    <p>The console got its window too: a Logistics card beside Payment and Content, the
+    menu editable per tenant, a Test button that probes the carrier's health endpoint and
+    says "reachable" or not — never a booking. And the week's operational lesson was
+    written into the runbooks: the demo tenant had been left unbound after a suite's
+    cleanup, so the shop fell back to its single built-in carrier and the operator saw
+    "only Helthjem" — not a bug, an empty menu. The seed script that binds the standing
+    demo menu is now part of the doctrine, re-run after every suite that unbinds.</p>
+
+    <p class="pull edge">The carrier was never the product. The menu is: who delivers,
+    where, for which postcodes, chosen by the operator as data and by the shopper as a
+    row they can read — and a booking that lands on exactly the network they picked.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Seven</div>
+    <h3>Money has no generic connector</h3>
+    <div class="epi">"Does the similar thing work for a payment gateway, like
+    Klarna?" <span class="who">— the operator, one seam later</span></div>
+
+    <p class="drop">Every seam in this book eventually met the same question — CMS, then
+    carriers, then payments — and payments was the one where the easy answer would have
+    been wrong. Content can fail open; a parcel can fall back to a warehouse; money can do
+    neither. The card path had a proper adapter seam already, and its interface even
+    carried a hook nobody exercised: <code>requiresAction</code>, an action URL, built for
+    the day a payment needed the customer to go somewhere and come back. Klarna is that
+    day, industrialised. The redirect became a first-class citizen: a sibling seam beside
+    the card adapters, named adapters only, because money is the one place a generic
+    connector is a liability instead of a feature.</p>
+
+    <h2>The redirect, told honestly</h2>
+    <p>The flow is a different animal from a card charge. The server opens a session; the
+    customer leaves for the provider's approve page; they come back — or they don't, and a
+    webhook speaks instead. Both paths confirm the same session and the payment table's
+    session reference makes the confirm idempotent: the return leg and the webhook can
+    both fire and the money books once. The webhook is HMAC-verified with a per-tenant
+    secret-ref; a forged signature is a 401, proven in the suite. Capture routes by what
+    authorized: a Klarna payment settles through Klarna by its session, a card through the
+    card rail by its authorization code — money always settles where it was held. And
+    because BNPL captures on ship, not at checkout, the existing order-completion capture
+    simply became Klarna-aware; no new trigger, just the old one telling the truth.</p>
+    <p>The subledger had to learn a distinction most demos skip: when Klarna captures, the
+    merchant has not been paid. The books now say so — a BNPL capture debits account 1100,
+    "BNPL / provider clearing," a receivable from the provider, not cash; the
+    reconciliation reports the outstanding receivable apart from the cash line; and when
+    the payout lands, a remittance posting clears 1100 to cash, idempotent by the payout
+    reference so a replayed file books once. PayPal then proved the seam was never
+    Klarna-shaped: a second redirect adapter, auto-registered, settling at capture — so it
+    books as cash, because for PayPal that is the truth.</p>
+
+    <h2>Orchestration, with a scalpel</h2>
+    <p>The last mile was the one we had deliberately refused to rush: choice and failure
+    on the money path itself. For redirect sessions, failover is safe — a session is an
+    invitation, not a charge — so when the chosen provider is unreachable, another
+    configured one serves, and the response names who actually served, because a failover
+    that switches the instrument must never be silent. For cards, the rules are sharper.
+    A routing rule (currency, priority) picks the acquirer. A failover retries the same
+    charge on a backup only when the first acquirer was demonstrably never reached — a
+    connection refused, a name that would not resolve. A decline never retries: the card
+    said no, and asking a second acquirer the same question is how merchants meet fraud
+    teams. An ambiguous timeout never retries either, because the charge may have landed.
+    One idempotency key rides every attempt, and the payment records the provider that
+    actually served. The suite walks all five cases and the single-provider tenant
+    behaves exactly as it always did.</p>
+    <p>The same honesty reached one adjacent wound: a fiber order placed whose install
+    slot was taken in the race lost its appointment and stranded — stock reserved, card
+    authorized, shopper staring at a generic error. Now the checkout compensates:
+    the order cancels, the cancel voids the authorization and frees the stock, and the
+    message says the only thing that matters — pick another time; you were not charged.</p>
+
+    <p class="pull edge">Seven suites now walk the money path end to end — session,
+    webhook, capture, refund, receivable, remittance, failover — and every one of them
+    exists to keep a single sentence true: the books say what actually happened to the
+    money, even when the provider pays later, the acquirer is down, or the customer
+    never comes back.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>

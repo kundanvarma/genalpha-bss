@@ -17,16 +17,17 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 38 ODA components speaking TMF Open APIs natively
-- 87 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- 97 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
 - Two operators run multi-tenant on one deployment; onboarding an MVNO is a form, not a project
 - AI-native with the approval keys kept human: a product copilot (type or speak), an advisor whose every claim carries a receipt, the Hermes digital workforce, agentic commerce off-by-default — all metered, audited, revocable
+- Bring-your-own everything, per tenant: headless CMS/DAM, parcel carriers (Helthjem/Posten-Bring/PostNord with pickup points), and payment providers — Klarna & PayPal redirect flows, card routing rules + idempotency-safe failover, and BNPL settlement booked honestly (a Klarna capture is a receivable, not cash, until the payout clears it)
 - One Helm chart runs it on AWS EKS, Azure AKS, and bare-metal k3s — two flags of difference
 
 
 <details>
-<summary><b>Every feature is verified end-to-end in a real browser</b> — eighty-seven Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — ninety-seven Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
 
-**Every feature is verified end-to-end in a real browser** — eighty-seven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — ninety-seven Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -159,7 +160,23 @@ bills its first customer in ~2 minutes, no image rebuilt — and **operator-as-a
 admin mints a new operator from five console fields, every service live-refreshes the shared
 registry with zero restarts, and `shop.<id>.localhost` wears the new brand the moment the
 gateway notices), the AI-slice
-lead-to-assure loop and BankID step-up against the full stack.
+lead-to-assure loop and BankID step-up against the full stack. The newest epoch made the
+commerce seams **bring-your-own**: **carriers as data** (a per-tenant carrier menu — Helthjem,
+Posten/Bring, PostNord — with pickup points and postcode routing rules; the SHOPPER picks the
+carrier at checkout and the pick rides the order's delivery place to the actual booking; the
+delivery block names its parcel so an eSIM next to a shipping phone never reads as a
+contradiction; suites #90/#92), **bring-your-own PSP** (per-tenant payment providers with the
+redirect/BNPL flow done honestly: session → approve at Klarna/PayPal → return leg AND
+HMAC-verified webhook confirming the same session idempotently; capture-on-ship routes by
+session; the subledger books a Klarna capture as a **receivable** (acct 1100) that the payout's
+remittance clears to cash; PayPal proves the seam generic; suites #91/#93/#94/#97),
+**payment orchestration with a scalpel** (currency/priority routing across a card-acquirer
+pool; failover ONLY on connect-level outages — a decline never retries, an ambiguous timeout
+never retries, one idempotency key rides every attempt; a redirect-provider outage fails over
+and names who served; suite #96), an **install-slot rollback** so a lost technician slot
+cancels the order, voids the card and says so instead of stranding it (suite #95), and the
+recommendation rails learning manners — never suggest the current selection, the cart's
+contents, or another handset for a bundle that already has a phone slot (suite #63).
 
 </details>
 
@@ -403,7 +420,7 @@ node storefront_test.js && node guest_test.js && node console_test.js \
   && node knowledge_test.js && node personalization_test.js && node growth_test.js
 ```
 
-That is the ~10-minute smoke. To run **all 87 suites** serially with one honest
+That is the ~10-minute smoke. To run **all 97 suites** serially with one honest
 receipt (readiness gate, worker-controller choreography, one retry pass), use the
 proof runner — it installs Playwright itself if needed:
 

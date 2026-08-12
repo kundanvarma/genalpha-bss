@@ -914,7 +914,79 @@ is <code>disabledWithoutDocker</code>, so its migration-count assertion drifts s
 add a migration (now 6). (5) A new downstream needs BOTH the config row AND the secret-ref env present in
 compose.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · eighty-nine suites, twenty-five CTKs at zero
+<h2 id="carriers">34 · Bring your own carrier — the delivery menu</h2>
+<p><b>What</b>: a tenant configures its own parcel carriers (Helthjem, Posten/Bring, PostNord) as data,
+and the SHOPPER picks one at checkout — the pick drives the actual booking. Operator half: suite
+<a href="../../ops/e2e/carrier_choice_test.js">carrier_choice_test.js</a> (#90); shopper half:
+<a href="../../ops/e2e/carrier_picker_test.js">carrier_picker_test.js</a> (#92).
+<b>Model</b>: <code>carrier_config</code> (RLS) — carrier, displayName, baseUrl, <code>secretRef</code>
+(env-var NAME, never the key), methods <code>["home","pickupPoint"]</code>, isDefault, postcodePrefix
+rules. Edit via <code>PUT/DELETE /tmf-api/shippingOrderManagement/v4/carrier</code> (ordering:write);
+<code>GET /carrier/deliveryOptions?postcode=</code> is ANONYMOUS (guest checkout reads the menu);
+<code>GET /carrier/pickupPoints</code> searches a carrier's points. <b>Routing precedence</b> (CarrierRouter):
+shopper's explicit carrier → postcode rule (longest prefix wins) → tenant default → global env carrier
+(unbound deployments unchanged). Fail-open: any carrier error degrades to the manual warehouse flow.
+<b>The pick rides the PLACE</b>: checkout writes <code>deliveryMethod</code> + <code>carrier</code> (+
+<code>pickupPointId/Name</code>) onto the order's delivery place — fulfilment reads it off the place when
+minting the shipping order; home delivery carries the chosen carrier too, not just pickup.
+<b>Storefront</b>: the cart renders the WHOLE menu as vertical rows ("🏠 Home delivery · Posten/Bring —
+delivered to your door by Posten/Bring"; pickup rows inline the points), and the delivery block names the
+parcel ("📦 Ships to you: Apple iPhone 17 Pro, your SIM card") — an eSIM-only cart shows NO delivery block.
+<b>Console</b>: Integrations → Logistics card (list/add/remove per tenant + <b>Test</b> = a reachability
+probe of <code>baseUrl/health</code>, never a booking).
+<b>Gotchas that will bite again</b>: (1) an UNBOUND tenant falls back to one hardcoded "Helthjem" home
+option — "the shop only shows Helthjem" means the menu is EMPTY, not broken; re-run
+<code>ops/seed/seed_carriers_psp.py</code> (suites #90/#91/#94 bind then UNBIND their own providers).
+(2) The bundle's phone choice pre-selects a handset (min-1 choice), so delivery legitimately shows with an
+eSIM — the "Ships to you" line is what keeps that from reading as a bug. (3) Option tiles that WRAP read
+as captions of the row above — the delivery options must stay a vertical list. (4) mock ports: logistics
+:8128, bring :8133, postnord :8134 (same image as bring).</p>
+
+<h2 id="byopsp">35 · Bring your own PSP — cards, Klarna/PayPal, orchestration, BNPL books</h2>
+<p><b>What</b>: per-tenant payment providers — card acquirers AND redirect/BNPL (Klarna, PayPal) — with
+routing rules, failover, and settlement accounting that tells the truth. Suites:
+<a href="../../ops/e2e/psp_klarna_test.js">psp_klarna_test.js</a> (#91),
+<a href="../../ops/e2e/psp_bnpl_settlement_test.js">psp_bnpl_settlement_test.js</a> (#93),
+<a href="../../ops/e2e/psp_paypal_test.js">psp_paypal_test.js</a> (#94),
+<a href="../../ops/e2e/install_slot_rollback_test.js">install_slot_rollback_test.js</a> (#95),
+<a href="../../ops/e2e/psp_card_orchestration_test.js">psp_card_orchestration_test.js</a> (#96),
+<a href="../../ops/e2e/psp_bnpl_remittance_test.js">psp_bnpl_remittance_test.js</a> (#97).
+<b>Model</b>: <code>payment_provider_config</code> (RLS) — provider, baseUrl, <code>secretRef</code> +
+<code>webhookSecretRef</code> (env-var NAMES), methods, isDefault, <code>priority</code> (lower tried
+first) + <code>currencies</code> (JSON list, blank = any). Edit via
+<code>PUT/DELETE /tmf-api/paymentManagement/v4/paymentProvider</code>; <code>GET /payment/methods</code>
+is anonymous (the picker). NO generic connector for money — named adapters only (mock, mockbank, stripe,
+klarna, paypal). <b>Redirect flow</b>: <code>POST /payment/session</code> → customer approves at the
+provider → return leg <code>POST /payment/confirm</code> AND webhook
+<code>POST /webhook/{provider}/{tenantId}</code> (HMAC <code>t=,v1=</code>, forged = 401) — BOTH confirm
+the same <code>session_ref</code>, idempotent, so return + webhook never double-book. Capture/refund route
+by what authorized: redirect providers by SESSION, cards by authorization code. Capture-on-ship = the
+existing order-completion capture (parcel delivered → order completes → captures), now Klarna-aware.
+<b>BNPL books</b>: a Klarna capture debits 1100 "BNPL / provider clearing" (a RECEIVABLE — Klarna pays
+later), never 1000 cash; PayPal settles at capture = cash; the payout clears it:
+<code>POST /revenue/v1/remittance</code> (billing:admin; provider+reference+amount; idempotent by payout
+ref) books DEBIT 1000 / CREDIT 1100; reconciliation reports <code>bnplReceivableTotal</code> = NET
+outstanding. <b>Orchestration</b>: redirect sessions fail over to another configured redirect provider
+when the chosen one is unreachable (response carries <code>failedOverFrom</code> — the confirm leg follows
+who SERVED); card charges run the routed pool (currency+priority) and fail over ONLY on connect-level
+errors (ConnectException/UnknownHostException) — a DECLINE never retries (the card said no), an ambiguous
+read-timeout never retries (it may have charged); one idempotency key rides every attempt; the payment
+records the serving provider. <b>Storefront</b>: Card + one button per redirect method from
+<code>/payment/methods</code>; the session is opened FIRST and the SERVED provider + session id stashed
+(<code>bss.shop.redirectpay</code>) so a failover still confirms correctly on return.
+<b>Console</b>: Payment card — providers with prio/currencies on the line, routing fields in the form,
+<b>Test</b> = reachability probe of <code>baseUrl/health</code>, never a payment.
+<b>Install-slot rollback</b> (#95): order placed, appointment 409s (slot lost) → the checkout CANCELS the
+order (cancel voids the card + releases stock) and says "pick another slot — not placed, not charged."
+<b>Gotchas that will bite again</b>: (1) real Klarna/PayPal need merchant sandbox credentials — config
+only (baseUrl + secret-refs), no code change; until then mock-klarna :8135 / mock-paypal :8136 (compose
+sets <code>PUBLIC_BASE</code> so the approve URL is browser-reachable — a relative redirect dies at the
+browser). (2) payment migrations now NINE — <code>PostgresMigrationTest</code> asserts the count, bump it
+with every migration. (3) klarna's config lists methods ["card","klarna"], so it appears among card
+candidates but is filtered out (it has no card adapter) — harmless, by design. (4) suites #91/#94 UNBIND
+their providers on exit — re-seed the demo menu after.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · ninety-seven suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

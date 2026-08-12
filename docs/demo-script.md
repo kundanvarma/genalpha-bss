@@ -54,11 +54,20 @@ plan** → in the cart pick **⚡ eSIM**. Pay with `4242 4242 4242 4242`.
 
 **1b — Physical SIM: two clocks, one plan.** Order the same plan again, this
 time pick **📦 Physical SIM** (a shipping address is required).
-- On **My orders** the line shows **"📦 On its way · HJ… (Helthjem)"** with a
+- The cart shows the **operator's whole delivery menu** — "🏠 Home delivery ·
+  Helthjem / Posten-Bring / PostNord" plus pickup-point rows — and a line naming
+  the parcel: **"📦 Ships to you: your SIM card."** Pick **PostNord**.
+  **"Carriers are per-tenant DATA — the operator configures the menu, the
+  customer picks the network, and the booking lands on exactly that carrier."**
+- On **My orders** the line shows **"📦 On its way · PN… (PostNord)"** with a
   real tracking number. **"Same plan, different fulfilment: the SIM is booked
-  with a carrier and its number is bound before dispatch — no dead SIMs."**
+  with the CHOSEN carrier and its number is bound before dispatch — no dead SIMs."**
 - ~15 seconds later refresh: the parcel is **Delivered**, the line completes.
   **"The carrier reports delivery and the order finishes itself."**
+- Payment aside, if asked: the cart offers **Card, Klarna and PayPal** (the
+  operator's per-tenant PSP menu — suite-proven redirect flows; a Klarna
+  capture books as a *receivable* in the subledger until Klarna's payout
+  clears it — the books tell the BNPL truth).
 
 **1c — The family plan, and the bundle no longer sticks (per-component
 fulfilment).** Click the **Family** tab. **"Same storefront, but organised the

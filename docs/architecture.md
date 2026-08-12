@@ -246,6 +246,19 @@ the acting tenant's machine identity.
 
 ## Boundary notes
 
+- **Commerce seams are bring-your-own, per tenant.** Three provider families follow one config
+  shape — a row-level-scoped config table storing a `secret_ref` (an ENV-VAR name, never the
+  key), a runtime registry of named adapters, and a global-env fallback so unbound deployments
+  never change behaviour: **content** (Sanity by name or any headless CMS via the generic HTTP
+  connector; reference-mode — the shop 302s to the operator's own CDN), **carriers** (the
+  delivery menu — Helthjem/Posten-Bring/PostNord adapters, pickup points, postcode routing;
+  the shopper's pick rides the order's delivery place to the booking), and **payments** — with
+  one deliberate exception: **money has no generic connector.** PSPs are named adapters only;
+  redirect/BNPL providers (Klarna, PayPal) confirm a session idempotently across the return leg
+  AND an HMAC-verified webhook; card charges route by currency/priority and fail over only on
+  connect-level outages (a decline or an ambiguous timeout never retries) under one idempotency
+  key; and the revenue subledger books a BNPL capture as a provider **receivable** (1100) that
+  the payout's remittance clears to cash — the books say when the merchant was actually paid.
 - **The agent channel is gated, not assumed.** AI shopping agents reach only `/acp/*` (the
   product feed and the checkout-session lifecycle), behind the gateway's per-tenant
   `agent-commerce` switch: `off` → 404 (dark), `discovery` → feed only, `full` → delegated
