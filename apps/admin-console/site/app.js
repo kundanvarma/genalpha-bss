@@ -2627,7 +2627,10 @@ async function renderIntegrations() {
         const line = document.createElement('div');
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
-        label.innerHTML = `<b>${ps.displayName || ps.provider}</b>${ps.isDefault ? ' · default' : ''}${ps.enabled === false ? ' · off' : ''}`;
+        // routing facts on the line: priority orders the card pool, currencies scope it
+        const curr = ps.currencies ? ` · ${String(ps.currencies).replace(/[\[\]"]/g, '')}` : '';
+        const prio = ps.priority != null && ps.priority !== 100 ? ` · prio ${ps.priority}` : '';
+        label.innerHTML = `<b>${ps.displayName || ps.provider}</b>${ps.isDefault ? ' · default' : ''}${prio}${curr}${ps.enabled === false ? ' · off' : ''}`;
         const del = document.createElement('button');
         del.textContent = 'Remove';
         del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
@@ -2639,16 +2642,24 @@ async function renderIntegrations() {
     const form = document.createElement('div');
     form.style.cssText = 'display:flex;flex-direction:column;gap:0.35rem;border-top:1px solid var(--line,#eee);padding-top:0.5rem;margin-top:0.2rem';
     const sel = document.createElement('select');
-    [['mock', 'Mock (dev)'], ['stripe', 'Stripe'], ['klarna', 'Klarna'], ['paypal', 'PayPal']].forEach(([v, l]) => sel.append(new Option(l, v)));
+    [['mock', 'Mock (dev)'], ['mockbank', 'MockBank (dev backup)'], ['stripe', 'Stripe'], ['klarna', 'Klarna'], ['paypal', 'PayPal']].forEach(([v, l]) => sel.append(new Option(l, v)));
     const base = document.createElement('input'); base.placeholder = 'PSP API base url (optional)'; base.style.cssText = 'padding:0.3rem 0.4rem';
     const sref = document.createElement('input'); sref.placeholder = 'secret-ref (env var name)'; sref.style.cssText = 'padding:0.3rem 0.4rem';
+    // orchestration routing: lower priority tried first; currencies scope a card
+    // provider to markets (blank = any) — see suite #96
+    const routeRow = document.createElement('div'); routeRow.style.cssText = 'display:flex;gap:0.5rem';
+    const prio = document.createElement('input'); prio.type = 'number'; prio.placeholder = 'priority (100)';
+    prio.title = 'Routing order among card providers — lower is tried first'; prio.style.cssText = 'padding:0.3rem 0.4rem;width:8.5rem';
+    const currs = document.createElement('input'); currs.placeholder = 'currencies e.g. USD,NOK (blank = any)';
+    currs.title = 'Card charges in these currencies route here'; currs.style.cssText = 'padding:0.3rem 0.4rem;flex:1';
+    routeRow.append(prio, currs);
     const defWrap = document.createElement('label'); defWrap.style.cssText = 'font-size:0.85rem;display:flex;gap:0.3rem;align-items:center';
     const defC = document.createElement('input'); defC.type = 'checkbox'; defWrap.append(defC, document.createTextNode('default provider'));
     const addRow = document.createElement('div'); addRow.style.cssText = 'display:flex;gap:0.5rem;align-items:center';
     const add = document.createElement('button'); add.textContent = 'Add / update'; add.style.cssText = 'padding:0.3rem 0.9rem';
     const msg = document.createElement('span'); msg.className = 'dimhint';
     addRow.append(add, msg);
-    form.append(sel, base, sref, defWrap, addRow);
+    form.append(sel, base, sref, routeRow, defWrap, addRow);
     wrap.append(form);
     add.addEventListener('click', async () => {
       msg.textContent = 'saving…';
@@ -2656,6 +2667,8 @@ async function renderIntegrations() {
       const dto = { provider, displayName: sel.options[sel.selectedIndex].text, baseUrl: base.value || null,
         secretRef: sref.value || null,
         methods: (provider === 'klarna' || provider === 'paypal') ? ['card', provider] : ['card'], isDefault: defC.checked };
+      if (prio.value) dto.priority = Number(prio.value);
+      if (currs.value.trim()) dto.currencies = currs.value.split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
       const r = await authFetch(`${PAY}/paymentProvider`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dto) });
       msg.textContent = r.ok ? 'saved' : (r.status === 403 ? 'not authorized' : 'failed (' + r.status + ')');
       if (r.ok) loadPay();
