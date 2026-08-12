@@ -259,6 +259,17 @@ export async function myShipments() {
   return json(await authFetch(`${SHIPPING}/shippingOrder`));
 }
 
+// The order JOURNEY (TMF701): the milestones + a plain-language "why it's in
+// progress", so a customer sees the whole story and never has to phone support.
+const PROCESS = '/tmf-api/processFlowManagement/v4';
+export async function myOrderJourney(orderId) {
+  try {
+    const flows = await json(await authFetch(`${PROCESS}/processFlow?productOrderId=${orderId}`));
+    if (!flows.length) return null;
+    return await json(await authFetch(`${PROCESS}/processFlow/${flows[0].id}`));
+  } catch { return null; }
+}
+
 const PAY = '/tmf-api/paymentManagement/v4';
 /** The payment methods this tenant offers (card + redirect/BNPL) — anonymous. */
 export async function paymentMethods() {

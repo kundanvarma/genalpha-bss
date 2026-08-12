@@ -426,6 +426,50 @@ public class ProcessFlowService {
         return map;
     }
 
+    /** The order's status in one honest sentence — the CSR-call deflector. */
+    private Map<String, Object> summaryOf(String flowState, List<Map<String, Object>> tasks) {
+        int done = 0;
+        Map<String, Object> firstPending = null;
+        Map<String, Object> failed = null;
+        for (Map<String, Object> t : tasks) {
+            String st = String.valueOf(t.get("state"));
+            if ("completed".equals(st)) {
+                done++;
+            } else if (("failed".equals(st) || "held".equals(st)) && failed == null) {
+                failed = t;
+            } else if (firstPending == null && !"completed".equals(st)) {
+                firstPending = t;
+            }
+        }
+        String headline;
+        String why;
+        if ("completed".equals(flowState)) {
+            headline = "Completed";
+            why = "Everything is done — all steps completed.";
+        } else if ("cancelled".equals(flowState)) {
+            headline = "Cancelled";
+            why = "This order was cancelled.";
+        } else if (failed != null) {
+            headline = "Taking longer than expected";
+            // Customer-friendly: the RAW reason stays on the task (agents read it
+            // there); the summary reassures rather than alarms.
+            why = "\"" + failed.get("name") + "\" is taking longer than expected — our team is on it.";
+        } else {
+            Map<String, Object> at = firstPending != null ? firstPending
+                    : (tasks.isEmpty() ? null : tasks.get(tasks.size() - 1));
+            headline = "In progress — " + done + " of " + tasks.size() + " steps done";
+            why = at == null ? "Working on it."
+                    : "Now: " + at.get("name")
+                        + (at.get("message") != null ? " — " + at.get("message") : ".");
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("headline", headline);
+        out.put("why", why);
+        out.put("stepsDone", done);
+        out.put("stepsTotal", tasks.size());
+        return out;
+    }
+
     private Map<String, Object> flowView(ProcessFlow flow, boolean full) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", flow.getId());
@@ -461,6 +505,11 @@ public class ProcessFlowService {
             taskViews.add(tv);
         }
         map.put("taskFlow", taskViews);
+        // A plain-language SUMMARY — the whole point for an agent or a customer:
+        // what stage the order is at, and WHY it is not done yet. Computed from
+        // the task states + their messages so both the console and the shop (and
+        // the customer) read the same sentence and nobody has to phone the desk.
+        map.put("summary", summaryOf(flow.getState(), taskViews));
         if (full) {
             List<Map<String, Object>> timeline = new ArrayList<>();
             for (ProcessEvent e : journal.findAllByTenantIdAndProcessFlowIdOrderByEventTimeAsc(

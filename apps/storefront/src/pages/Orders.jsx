@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { cancelOrder, myAppointments, myOrders, myShipments } from '../api.js';
+import { cancelOrder, myAppointments, myOrderJourney, myOrders, myShipments } from '../api.js';
 
 const TERMINAL = ['completed', 'cancelled'];
 
@@ -27,7 +27,18 @@ export default function Orders() {
   const [orders, setOrders] = useState(null);
   const [visits, setVisits] = useState({}); // order id -> appointment
   const [ships, setShips] = useState({}); // order id -> shipping order
+  const [journeys, setJourneys] = useState({}); // order id -> flow (lazy)
+  const [openJourney, setOpenJourney] = useState(null);
   const [error, setError] = useState(null);
+
+  // The order journey — fetched the first time a customer expands "Why?".
+  function toggleJourney(orderId) {
+    if (openJourney === orderId) { setOpenJourney(null); return; }
+    setOpenJourney(orderId);
+    if (!journeys[orderId]) {
+      myOrderJourney(orderId).then((j) => setJourneys((m) => ({ ...m, [orderId]: j || 'none' })));
+    }
+  }
 
   const load = () => myOrders().then(setOrders).catch((e) => setError(e.message));
   useEffect(() => {
@@ -119,6 +130,34 @@ export default function Orders() {
                     })}
                   </ul>
                 )}
+                {!TERMINAL.includes(o.state) && (
+                  <button className="linkish small" data-testid="why-toggle"
+                          onClick={() => toggleJourney(o.id)}>
+                    {openJourney === o.id ? 'Hide progress ▲' : 'Why is it in progress? ▾'}
+                  </button>
+                )}
+                {openJourney === o.id && (() => {
+                  const j = journeys[o.id];
+                  if (!j) return <div className="dim small journey" data-testid="journey">Loading…</div>;
+                  if (j === 'none') return <div className="dim small journey" data-testid="journey">
+                    We\'re on it — your order is being set up.</div>;
+                  const g = (st) => st === 'completed' ? '✓' : (st === 'failed' || st === 'cancelled') ? '✗'
+                    : st === 'held' ? '⏸' : '⏳';
+                  return (
+                    <div className="journey" data-testid="journey">
+                      <p className="journeywhy"><b>{j.summary?.headline}</b>
+                        {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
+                      <ul className="journeysteps">
+                        {(j.taskFlow || []).map((t) => (
+                          <li key={t.id} className={`jstep ${t.state}`}>
+                            <span className="jglyph">{g(t.state)}</span> {t.name}
+                            {t.message ? <span className="dim small"> — {t.message}</span> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="rowend">
                 <span className={`state ${o.state}`}>{ORDER_LABEL[o.state] || o.state}</span>

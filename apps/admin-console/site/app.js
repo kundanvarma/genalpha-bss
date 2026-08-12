@@ -370,6 +370,26 @@ const RESOURCES = [
       cell.textContent = leaves.map((l) => `${glyph(l.state)} ${l.name}: ${l.state}`).join('  ·  ') || '—';
       cell.title = cell.textContent;
     },
+    // The JOURNEY, expanded in place — WHY the order is where it is, so an agent
+    // reads the whole story on the Orders row instead of phoning provisioning.
+    detail: async (item) => {
+      const g = (st) => st === 'completed' ? '✓' : (st === 'failed' || st === 'cancelled') ? '✗'
+        : st === 'held' ? '⏸' : '⏳';
+      const list = await (await authFetch(`${PROCESS_BASE}/processFlow?productOrderId=${item.id}`)).json();
+      if (!list.length) return [{ Step: '—', Status: 'no journey recorded', Detail: 'this order predates the timeline projection' }];
+      const flow = await (await authFetch(`${PROCESS_BASE}/processFlow/${list[0].id}`)).json();
+      const sum = flow.summary || {};
+      const rows = [{ Step: '▶ ' + (sum.headline || flow.state), Status: '', Detail: sum.why || '' }];
+      for (const t of (flow.taskFlow || [])) {
+        rows.push({ Step: `${g(t.state)} ${t.name}`, Status: t.state, Detail: t.message || '—' });
+      }
+      // the raw event journal underneath, for the agent who wants the receipts
+      for (const e of (flow.timeline || [])) {
+        rows.push({ Step: '⏱ ' + e.eventType, Status: String(e.eventTime || '').slice(0, 19).replace('T', ' '),
+          Detail: (e.sourceTopic || '') });
+      }
+      return rows;
+    },
   },
   {
     path: 'appointment',
