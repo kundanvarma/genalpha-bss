@@ -38,6 +38,8 @@ const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
 const ONBOARDING_BASE = '/onboarding/v1';
 const ADVISOR_BASE = '/advisor/v1';
+const SQM_BASE = '/tmf-api/serviceQualificationManagement/v4';
+const RISK_BASE = '/tmf-api/riskManagement/v4';
 const PAGE_SIZE = 10;
 const REF_PICKLIST_LIMIT = 100;
 
@@ -304,6 +306,37 @@ const RESOURCES = [
       { name: 'postcodePrefix', label: 'Postcode prefix', required: true },
     ],
     columns: ['name', 'productOffering', 'postcodePrefix', 'lastUpdate'],
+  },
+  {
+    // TMF645 coverage-as-data: what the NETWORK delivers per postcode prefix —
+    // the serviceability answer's source of truth (empty prefix = everywhere).
+    path: 'coverageMap',
+    base: SQM_BASE,
+    title: 'Coverage',
+    noEdit: true,
+    fields: [
+      { name: 'technology', label: 'Technology (fiber / vdsl / 5g-fwa)', required: true },
+      { name: 'postcodePrefix', label: 'Postcode prefix (empty = everywhere)' },
+      { name: 'maxDownMbps', label: 'Max down Mbit/s', kind: 'number' },
+      { name: 'maxUpMbps', label: 'Max up Mbit/s', kind: 'number' },
+      { name: 'note', label: 'Note' },
+    ],
+    columns: ['technology', 'postcodePrefix', 'maxDownMbps', 'maxUpMbps', 'note', 'lastUpdate'],
+  },
+  {
+    // TMF696 risk assessments — read-only: the scores the ordering gate consults.
+    path: 'partyRiskAssessment',
+    base: RISK_BASE,
+    title: 'Risk',
+    readOnly: true,
+    fields: [],
+    columns: ['relatedParty', 'risk', 'status'],
+    augmentRow: async (item, cell) => {
+      const r = item.riskAssessmentResult || {};
+      const top = ((r.signal || [])[0] || {}).label || '';
+      cell.textContent = r.overallScore != null
+        ? `${r.overallScore} · ${r.riskLevel}${top ? ' — ' + top : ''}` : '—';
+    },
   },
   {
     path: 'appointment',
@@ -950,6 +983,8 @@ const TAB_ROLE = {
   processFlow: ['workforce:use', 'service:write'],
   runbook: 'ai:admin',
   serviceableArea: 'qualification:write',
+  coverageMap: 'qualification:write',
+  partyRiskAssessment: 'risk:assess',
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
   journey: 'campaign:read',
@@ -991,9 +1026,9 @@ function computeVisible() {
 // suites click by text is untouched.
 const WORKSPACES = [
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
-    'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
+    'productOfferingPrice', 'productStock', 'serviceableArea', 'coverageMap', 'findings', 'copilot'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
-    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied'] },
+    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['campaign', 'journey', 'audiences', 'profile', 'settings',
