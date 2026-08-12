@@ -178,6 +178,45 @@ public class RevenueService {
         return true;
     }
 
+    /** BNPL provider remittance — the provider paid the merchant out, so the
+     * receivable booked at capture clears to cash: DEBIT cash / CREDIT 1100.
+     * Idempotent by the provider's remittance reference (a payout file replayed
+     * twice books once). The amount is the payout total; matching individual
+     * captures inside it is the provider's statement's job, not the ledger's. */
+    @Transactional
+    public Map<String, Object> postRemittance(Map<String, Object> dto) {
+        String tenant = tenantScope.currentTenantId();
+        String provider = dto.get("provider") == null ? null
+                : String.valueOf(dto.get("provider")).toLowerCase();
+        String reference = dto.get("reference") == null ? null : String.valueOf(dto.get("reference"));
+        if (provider == null || provider.isBlank() || reference == null || reference.isBlank()) {
+            throw new IllegalArgumentException("provider and reference are required");
+        }
+        if (!BNPL_PROVIDERS.contains(provider)) {
+            throw new IllegalArgumentException("'" + provider + "' is not a BNPL provider — nothing to clear");
+        }
+        Map<String, Object> amount = castMap(dto.get("amount"));
+        BigDecimal value = money(amount.get("value"));
+        if (value.signum() <= 0) {
+            throw new IllegalArgumentException("amount.value must be positive");
+        }
+        String currency = amount.get("unit") == null ? "EUR" : String.valueOf(amount.get("unit"));
+        String sourceRef = "remittance:" + provider + ":" + reference;
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("sourceRef", sourceRef);
+        if (entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            out.put("posted", false);   // replayed payout file — already booked
+            return out;
+        }
+        List<JournalLine> posting = List.of(
+                line("cash", value, null, reference, "Remittance " + provider + " " + reference),
+                line("bnpl:receivable", null, value, reference, "BNPL receivable cleared"));
+        saveBalanced(tenant, sourceRef, "remittance",
+                "BNPL remittance — " + provider + " " + reference, currency, null, posting);
+        out.put("posted", true);
+        return out;
+    }
+
     /** Refund out the door: debit contra-revenue, credit cash. */
     @Transactional
     public boolean postRefund(Map<String, Object> refund) {
@@ -450,7 +489,8 @@ public class RevenueService {
                     cashDebits = cashDebits.add(debit);
                 }
                 if ("bnpl:receivable".equals(key)) {
-                    bnplDebits = bnplDebits.add(debit);
+                    // NET outstanding: captures debit it, remittances credit it back down
+                    bnplDebits = bnplDebits.add(debit).subtract(credit);
                 }
             }
             if (d.compareTo(c) != 0) {

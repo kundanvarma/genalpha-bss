@@ -91,6 +91,17 @@ public class RevenueController {
         return ResponseEntity.ok(service.closePeriod(String.valueOf(dto.get("through"))));
     }
 
+    /** BNPL payout landed: clear the provider receivable (1100) to cash. Idempotent
+     * by (provider, reference) — a payout file replayed twice books once. */
+    @PostMapping("/remittance")
+    public ResponseEntity<Map<String, Object>> remittance(@RequestBody Map<String, Object> dto) {
+        try {
+            return ResponseEntity.ok(service.postRemittance(dto));
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(e.getMessage());
+        }
+    }
+
     @GetMapping(value = "/reconciliation", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> reconciliation(
             @RequestParam(required = false) String date) {
