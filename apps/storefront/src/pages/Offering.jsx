@@ -430,11 +430,15 @@ export default function Offering() {
 
       {(() => {
         // Filter the rail against what's already chosen: this offering, the
-        // configurator's current picks, added add-ons, and the cart's contents.
+        // configurator's current picks, added add-ons, and the cart's contents —
+        // plus EVERY option of this bundle's choice groups (structural: the
+        // bundle already has a slot for a phone, so recommending other phones
+        // is noise even when they're not the current pick).
         const already = new Set([
           id,
           ...Object.values(chosen).flat(),
           ...Object.entries(extras).filter(([, on]) => on).map(([eid]) => eid),
+          ...choices.flatMap((c) => (c.options || []).map((o) => o.id)),
           ...inCart,
         ]);
         const rail = alsoBoughtItems.filter((it) => !already.has(it.offering.id));

@@ -130,10 +130,11 @@ async function token(request, user, pass) {
   console.log(`OK CART FILTER: with "${pair.name}" in the cart, the phone's rail no longer`
     + ' recommends it — the shop never suggests what the shopper already has');
 
-  /* ---------- 3c. the rail never suggests the configurator's current pick ---------- */
-  // seed co-ownership between the flagship BUNDLE and the Samsung, then on the
-  // bundle's page: with another phone selected the rail may offer the Samsung;
-  // the moment the shopper SELECTS the Samsung, the rail must drop it
+  /* ---------- 3c. the rail never suggests a bundle's own choice options ---------- */
+  // seed co-ownership between the flagship BUNDLE and the Samsung. The ENGINE
+  // sees the pairing (aggregate truth) — but the bundle's page must never
+  // recommend the Samsung: the bundle already HAS a phone choice group, so a
+  // handset in the rail is structural noise, selected or not.
   const bundleOff = (offs2 || []).find((o) => o.name === 'GenAlpha One Home & Mobile');
   if (bundleOff) {
     for (let i = 0; i < 3; i++) {
@@ -142,26 +143,30 @@ async function token(request, user, pass) {
       await own(c, REAL_PHONE.id, REAL_PHONE.name);
     }
     await sleep(6500); // outlast the affinity cache TTL
+    // the engine DOES pair them — the filter is the storefront's, not the engine's
+    const engine = await (await affinityOf(bundleOff.id, 'genalpha')).json();
+    if (!engine.some((x) => x.offering.id === REAL_PHONE.id)) {
+      fail('setup: the affinity engine should pair the bundle with the Samsung');
+    }
     await page.goto(`${API}/shop/offering/${bundleOff.id}`);
     const phoneChoice = page.locator('.choice', { hasText: 'Samsung Galaxy S26' }).first();
     await phoneChoice.waitFor({ timeout: 15000 });
-    // make sure a NON-Samsung phone is selected first
-    await phoneChoice.locator('label.option').filter({ hasNotText: 'Samsung' }).first().click();
     await sleep(1500);
     const railB = page.locator('[data-testid=also-bought]');
-    const withOther = (await railB.count()) ? await railB.textContent() : '';
-    if (!withOther.includes(REAL_PHONE.name)) {
-      fail('setup: the bundle rail should offer the Samsung while another phone is selected');
+    const withDefault = (await railB.count()) ? await railB.textContent() : '';
+    if (withDefault.includes(REAL_PHONE.name)) {
+      fail('the bundle rail recommends a handset although the bundle has a phone choice group');
     }
+    // and picking the Samsung changes nothing — still structurally suppressed
     await page.click('label.option:has-text("Samsung Galaxy S26")');
     await sleep(500);
     const withSamsung = (await railB.count()) ? await railB.textContent() : '';
     if (withSamsung.includes(REAL_PHONE.name)) {
-      fail('the rail still recommends the Samsung although it is the SELECTED option');
+      fail('the rail shows the Samsung after picking it — the structural filter failed');
     }
-    console.log('OK CONFIG FILTER: the bundle rail offered the Samsung while another phone was'
-      + ' selected, and dropped it the moment the shopper picked the Samsung — the rail never'
-      + ' recommends the current selection');
+    console.log('OK STRUCTURAL FILTER: the engine pairs the bundle with the Samsung, but the'
+      + ' bundle\'s page never recommends any handset — it already HAS a phone choice group'
+      + ' (selected or not, a rail phone is noise)');
   }
 
   /* ---------- 4. tenant wall + cold offering ---------- */
