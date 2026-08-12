@@ -270,6 +270,15 @@ export default function Cart() {
   const needsShipping = (lines || []).some((l) =>
     physical[l.offeringId] || (l.selections || []).some((s) => physical[s.offeringId]))
     || (hasMobile && simType === 'physical'); // a physical SIM ships too
+  // WHAT ships — so "eSIM (nothing to ship)" next to a delivery block never
+  // reads as a contradiction: the parcel is the phone, and we say so.
+  const shipNames = [
+    ...new Set((lines || []).flatMap((l) => [
+      ...(physical[l.offeringId] ? [l.name] : []),
+      ...(l.selections || []).filter((s) => physical[s.offeringId]).map((s) => s.name),
+    ])),
+    ...(hasMobile && simType === 'physical' ? ['your SIM card'] : []),
+  ];
   // The operator's delivery menu, split for the picker: a home option per carrier,
   // plus any carrier's pickup points. optKey pairs a carrier with a method.
   const optKey = (o) => `${o.carrier || 'default'}:${o.method}`;
@@ -596,6 +605,9 @@ export default function Cart() {
       {showDeliveryPicker && (
         <div className="delivery-method">
           <h2>Delivery</h2>
+          {shipNames.length > 0 && (
+            <p className="dim small" data-testid="ships-to-you">📦 Ships to you: {shipNames.join(', ')}</p>
+          )}
           <div className="simopts deliveryopts">
             {menuOpts.map((o) => {
               const key = optKey(o);
@@ -623,9 +635,10 @@ export default function Cart() {
         </div>
       )}
       {needsShipping && !showDeliveryPicker && selectedOpt && selectedOpt.carrierName && (
-        // one carrier only — no picker, but still SAY who delivers
+        // one carrier only — no picker, but still SAY who delivers, and of what
         <p className="dim small" data-testid="delivery-by">
-          🚚 Home delivery by {selectedOpt.carrierName} — track it to your door
+          🚚 Home delivery by {selectedOpt.carrierName}
+          {shipNames.length > 0 ? ` — ${shipNames.join(', ')}` : ' — track it to your door'}
         </p>
       )}
 

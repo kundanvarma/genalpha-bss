@@ -109,8 +109,52 @@ const MENU = [
     ok(`PICK → BOOK: the parcel booked via PostNord (${so.trackingRef}), place.carrier=postnord — the shopper's`
       + ' carrier choice overrode the Bring default, all the way to the booking');
 
+    /* ---------- eSIM vs shipping: delivery only when something SHIPS, and it says what ---------- */
+    const offs3 = await (await rc.get(`${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
+    const planOff = (offs3 || []).find((o) => o.name === 'GenAlpha Mobile 50 GB');
+    const bundleOff2 = (offs3 || []).find((o) => o.name === 'GenAlpha One Home & Mobile');
+    if (!planOff || !bundleOff2) fail('catalog fixtures missing (50 GB plan / Home & Mobile bundle)');
+    // a plain plan with an eSIM ships nothing → NO delivery UI at all
+    await page.goto(`${API}/shop/offering/${planOff.id}`);
+    await page.waitForSelector('.pricetable');
+    await page.click('button.primary.big');
+    await page.waitForURL('**/cart');
+    await sleep(2500);
+    if (await page.locator('.delivery-method, [data-testid=delivery-by]').count()) {
+      fail('a plan with an eSIM ships nothing — no delivery UI should render');
+    }
+    ok('ESIM: a plain plan with the default eSIM shows NO delivery block — nothing ships');
+
+    // flip to a physical SIM → delivery appears and NAMES the SIM as the parcel
+    await page.locator('.simopt', { hasText: 'Physical SIM' }).click();
+    await sleep(1500);
+    const shipsSim = page.locator('[data-testid=ships-to-you], [data-testid=delivery-by]');
+    if (!(await page.locator('.delivery-method, [data-testid=delivery-by]').count())) {
+      fail('a physical SIM ships — the delivery UI should appear');
+    }
+    const simTxt = (await shipsSim.count()) ? await shipsSim.first().textContent() : '';
+    if (!simTxt.includes('SIM card')) fail('the delivery block should say the SIM card ships: ' + simTxt);
+    ok(`PHYSICAL SIM: the delivery block appears and names the parcel — "${simTxt.trim().slice(0, 60)}"`);
+
+    // a bundle whose phone choice pre-selects a handset: eSIM chosen, the phone
+    // still ships — and the delivery block SAYS the parcel is the phone, so
+    // "eSIM (nothing to ship)" never reads as a contradiction
+    await page.locator('.simopt', { hasText: 'eSIM' }).first().click();
+    await page.goto(`${API}/shop/offering/${bundleOff2.id}`);
+    await page.waitForSelector('.pricetable');
+    await page.locator('.optprice').first().waitFor({ timeout: 10000 });
+    await page.click('button.primary.big');
+    await page.waitForURL('**/cart');
+    await sleep(2500);
+    const shipsLine = page.locator('[data-testid=ships-to-you]');
+    if (!(await shipsLine.count())) fail('the bundle carries a pre-picked phone — the delivery block should name it');
+    const shipsTxt = await shipsLine.textContent();
+    if (!/iPhone|Samsung|Galaxy/.test(shipsTxt)) fail('ships-to-you should name the handset: ' + shipsTxt);
+    ok(`ESIM + PHONE: with eSIM chosen the delivery block explains itself — "${shipsTxt.trim().slice(0, 70)}"`);
+
     console.log('\nALL CARRIER-PICKER CHECKS PASSED — the storefront shows the operator\'s whole carrier menu,'
-      + ' the shopper picks a carrier for home delivery, and that pick rides the order to the fulfilment booking.');
+      + ' the shopper picks a carrier for home delivery, that pick rides the order to the fulfilment booking,'
+      + ' and the delivery block renders only when something ships — naming exactly what.');
   } finally {
     await browser.close();
   }

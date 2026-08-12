@@ -200,7 +200,11 @@ button:disabled { opacity: 0.5; cursor: default; }
 .simchoice .simopts,
 .delivery-method .simopts,
 .payment .simopts { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
-.deliveryopts .simopt { flex: 1 1 180px; }
+/* Delivery options stack VERTICALLY — one full-width row per carrier×method, so
+   a wrapped tile can never sit under another option looking like its caption. */
+.delivery-method .simopts.deliveryopts { flex-direction: column; gap: 8px; }
+.deliveryopts .simopt { flex: none; width: 100%; flex-direction: row; align-items: baseline; gap: 10px; }
+.deliveryopts .simopt-t { min-width: 240px; }
 .simopt { flex: 1 1 200px; text-align: left; background: none; cursor: pointer;
   border: 1px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
 .simopt.on { border-color: var(--teal); box-shadow: inset 0 0 0 1px var(--teal); }
