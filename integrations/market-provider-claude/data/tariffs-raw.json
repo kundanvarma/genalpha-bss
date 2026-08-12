@@ -1,0 +1,16 @@
+{
+  "asOf": "2026-08-01",
+  "source": "stand-in raw tariff extract — deliberately MESSY (mixed markets, junk rows, inconsistent field names); a real deployment points the loader at a purchased/scraped feed",
+  "rows": [
+    { "id": "no-001", "market": "NO", "operator": "RivalTel", "plan_name": "RivalTel Smart 10", "type": "mobile", "data_gb": 10, "monthly_price": 11.9, "currency": "EUR", "note": "no binding" },
+    { "id": "no-002", "market": "NO", "operator": "RivalTel", "plan_name": "RivalTel Smart 30", "type": "mobile", "data_gb": 30, "monthly_price": 24.0, "currency": "EUR", "note": "no binding" },
+    { "id": "no-003", "market": "NO", "operator": "Nordic Mobile", "plan_name": "Nordic Flex 15", "type": "mobile", "dataGb": 15, "price": 18.0, "currency": "EUR", "note": "rollover; INCONSISTENT field names on purpose" },
+    { "id": "no-004", "market": "NO", "operator": "Nordic Mobile", "plan_name": "Nordic Unlimited", "type": "mobile", "data_gb": 999, "monthly_price": 39.0, "currency": "EUR", "note": "fair use 100GB" },
+    { "id": "no-005", "market": "NO", "operator": "Fjordnet", "plan_name": "Fjordnet Ung 12", "type": "mobile", "data_gb": 12, "monthly_price": 13.5, "currency": "EUR", "note": "youth-only" },
+    { "id": "se-001", "market": "SE", "operator": "SveaTel", "plan_name": "Svea Mix 20", "type": "mobile", "data_gb": 20, "monthly_price": 16.0, "currency": "EUR", "note": "WRONG MARKET — must be dropped for NO" },
+    { "id": "no-006", "market": "NO", "operator": "RivalTel", "plan_name": "RivalTel Fiber 500", "type": "broadband", "data_gb": null, "monthly_price": 44.0, "currency": "EUR", "note": "NOT mobile — must be dropped" },
+    { "id": "no-007", "market": "NO", "operator": "Nordic Mobile", "plan_name": "DRAFT — do not publish", "type": "mobile", "data_gb": 25, "monthly_price": 0, "currency": "EUR", "note": "junk draft row" },
+    { "id": "no-008", "market": "NO", "operator": "BizCom", "plan_name": "BizCom Fleet 100", "type": "mobile-business", "data_gb": 100, "monthly_price": 79.0, "currency": "EUR", "note": "business-only — out of consumer segment" },
+    { "id": "xx-999", "market": "", "operator": "", "plan_name": "", "type": "", "data_gb": "n/a", "monthly_price": "call us", "currency": "", "note": "garbage row" }
+  ]
+}

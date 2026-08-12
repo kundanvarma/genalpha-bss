@@ -656,7 +656,9 @@ services:
       # workforce approvals execute the stored action THROUGH the gateway
       # with the approver's own token
       BSS_WORKFORCE_GATEWAY_BASE_URL: http://gateway:8080
-      MARKET_FEED_URL: http://mock-market:8080
+      # the Advisor's market seam — now served by the Claude provider (same
+      # wire as mock-market; suite #52 is the can't-tell-the-difference proof)
+      MARKET_FEED_URL: ${MARKET_FEED_URL:-http://market-provider-claude:8080}
       # bring-your-own STT (Whisper-shaped) — the copilot mic's server half
       SPEECH_URL: ${SPEECH_URL:-http://mock-whisper:8080}
       SPEECH_TOKEN: ${SPEECH_TOKEN:-dev-whisper-token}
@@ -1803,6 +1805,23 @@ services:
       MOCK_TOKEN: ${SPEECH_TOKEN:-dev-whisper-token}
     ports:
       - "8137:8080"
+
+  # The Claude market provider — an LLM-inside-a-seam adapter behind the SAME
+  # market-feed wire as mock-market. Claude CURATES a messy raw tariff dataset
+  # (selects source-row ids); every emitted number/name is then extracted and
+  # copied from the source by code — never model output. No ANTHROPIC_API_KEY
+  # in the environment = deterministic rule-based curation of the same source
+  # (fail-open, zero cost). Point MARKET_FEED_URL here to feed the Advisor.
+  market-provider-claude:
+    build: ./integrations/market-provider-claude
+    container_name: bss-market-claude
+    restart: unless-stopped
+    environment:
+      MARKET: "NO"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MODEL: ${MARKET_CURATION_MODEL:-claude-haiku-4-5-20251001}
+    ports:
+      - "8138:8080"
 
   # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
   # when proving bring-your-own-CMS without a real Sanity project. Speaks the
