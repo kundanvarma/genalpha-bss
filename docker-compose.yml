@@ -657,6 +657,9 @@ services:
       # with the approver's own token
       BSS_WORKFORCE_GATEWAY_BASE_URL: http://gateway:8080
       MARKET_FEED_URL: http://mock-market:8080
+      # bring-your-own STT (Whisper-shaped) — the copilot mic's server half
+      SPEECH_URL: ${SPEECH_URL:-http://mock-whisper:8080}
+      SPEECH_TOKEN: ${SPEECH_TOKEN:-dev-whisper-token}
       MARKET_FEED_TOKEN: genalpha-market-token
       # aurora runs TIERED models on the mock LLM: cheap for volume,
       # careful for judgment — both at once (genalpha stays on the stub)
@@ -1788,6 +1791,18 @@ services:
       PUBLIC_BASE: http://localhost:8136
     ports:
       - "8136:8080"
+
+  # Whisper-shaped speech-to-text for the bring-your-own STT seam — the copilot
+  # mic posts audio through intelligence's /ai/v1/transcribe proxy to here. A
+  # real Whisper API / whisper.cpp server needs only SPEECH_URL changed.
+  mock-whisper:
+    build: ./integrations/mock-whisper
+    container_name: bss-mock-whisper
+    restart: unless-stopped
+    environment:
+      MOCK_TOKEN: ${SPEECH_TOKEN:-dev-whisper-token}
+    ports:
+      - "8137:8080"
 
   # Stands in for an operator's headless CMS/DAM (reference-mode content seam)
   # when proving bring-your-own-CMS without a real Sanity project. Speaks the

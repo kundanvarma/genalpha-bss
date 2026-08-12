@@ -93,6 +93,8 @@ bss:
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
         market-feed-url: ${MARKET_FEED_URL:}
         market-feed-token: ${MARKET_FEED_TOKEN:}
+        speech-url: ${SPEECH_URL:}
+        speech-token: ${SPEECH_TOKEN:}
         ai-model-fast: ${AI_MODEL_FAST:}
         ai-model-smart: ${AI_MODEL_SMART:}
         ai-provider-fast: ${AI_PROVIDER_FAST:}
@@ -109,6 +111,8 @@ bss:
         machine-client-secret: ${OIDC_CLIENT_SECRET:intelligence-secret}
         market-feed-url: ${MARKET_FEED_URL_NOVA:}
         market-feed-token: ${MARKET_FEED_TOKEN_NOVA:}
+        speech-url: ${SPEECH_URL_NOVA:}
+        speech-token: ${SPEECH_TOKEN_NOVA:}
         ai-model-fast: ${AI_MODEL_FAST_NOVA:}
         ai-model-smart: ${AI_MODEL_SMART_NOVA:}
         ai-provider-fast: ${AI_PROVIDER_FAST_NOVA:}

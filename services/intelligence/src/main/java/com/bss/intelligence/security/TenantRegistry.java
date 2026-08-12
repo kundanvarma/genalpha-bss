@@ -163,6 +163,16 @@ public class TenantRegistry {
         public String getMarketFeedToken() { return marketFeedToken; }
         public void setMarketFeedToken(String v) { this.marketFeedToken = v; }
 
+        /** Bring-your-own speech-to-text (Whisper-shaped) — a per-tenant seam;
+         * blank = no server STT, the console mic falls back to browser speech. */
+        private String speechUrl;
+        private String speechToken;
+
+        public String getSpeechUrl() { return speechUrl; }
+        public void setSpeechUrl(String v) { this.speechUrl = v; }
+        public String getSpeechToken() { return speechToken; }
+        public void setSpeechToken(String v) { this.speechToken = v; }
+
         /** Tiered models: cheap for volume work, careful for judgment —
          * both live at once; blank falls back to ai-model. */
         private String aiModelFast;
