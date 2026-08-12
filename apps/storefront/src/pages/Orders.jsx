@@ -13,6 +13,15 @@ const ORDER_LABEL = {
   held: 'Awaiting approval',
 };
 
+// The product families an order decomposes into, in dependency order — the base
+// connection first, then what rides on it, then mobile, then anything else.
+const FAMILIES = [
+  { type: 'internet', icon: '🌐', label: 'Internet' },
+  { type: 'tv', icon: '📺', label: 'TV & Entertainment' },
+  { type: 'mobile', icon: '📱', label: 'Mobile' },
+  { type: 'other', icon: '📦', label: 'Also in this order' },
+];
+
 // Flatten an order's leaf items (bundle picks are nested children).
 function leafItems(items, into = []) {
   for (const it of items || []) {
@@ -21,6 +30,18 @@ function leafItems(items, into = []) {
     else if (it.productOffering) into.push(it);
   }
   return into;
+}
+
+// Coarse family for a leaf — the decomposition axis. The ordering service stamps
+// componentType; fall back to the offering name so older orders still group.
+function familyOf(item) {
+  if (item.componentType) return item.componentType;
+  const n = (item.productOffering?.name || '').toLowerCase();
+  if (/fiber|fibre|broadband|internet|dsl/.test(n)) return 'internet';
+  if (/\btv\b|stream|sports|entertain|netflix|kids tv/.test(n)) return 'tv';
+  if (/mobile|sim|5g|data|gb\b/.test(n)) return 'mobile';
+  if (/iphone|galaxy|pixel|phone|handset|watch/.test(n)) return 'device';
+  return 'other';
 }
 
 export default function Orders() {
@@ -72,36 +93,111 @@ export default function Orders() {
     }
   }
 
-  // What one item's status reads as, given its state and any parcel/visit.
-  function itemStatus(item, ship, visit) {
-    const st = item.state || 'acknowledged';
-    const physical = !!(item.product && item.product.place);
+  // The SIM/number line for a mobile component — the sub-status the customer cares
+  // about: an eSIM is ready at once; a physical SIM's number is reserved until the
+  // card arrives; a ported number carries its cutover.
+  function mobileLine(item, ship) {
     const chars = (item.product && item.product.productCharacteristic) || [];
-    const simType = (chars.find((c) => c.name === 'simType') || {}).value;
-    if (st === 'completed') {
-      if (simType === 'esim') return { cls: 'ok', text: '✓ eSIM active' };
-      return { cls: 'ok', text: physical ? '✓ Delivered' : '✓ Active' };
+    const c = (name) => (chars.find((x) => x.name === name) || {}).value;
+    const simType = c('simType');
+    const number = c('msisdn') || c('phoneNumber');
+    const num = number ? ` ${number}` : '';
+    const done = item.state === 'completed';
+    if (c('portIn') || c('portingFrom')) {
+      const from = c('portingFrom') || 'your old operator';
+      const when = c('portDate') || c('cutover');
+      return done
+        ? { cls: 'ok', text: `✓ Number${num} ported from ${from}` }
+        : { cls: 'go', text: `⏳ Porting${num} from ${from}${when ? ` — cutover ${when}` : ''}` };
     }
+    if (simType === 'esim') {
+      return done
+        ? { cls: 'ok', text: `✓ Active on eSIM${num}` }
+        : { cls: 'ok', text: `⚡ eSIM ready to install${num}` };
+    }
+    // physical SIM: the number is reserved and activates when the card lands
+    if (simType === 'physical' || (ship && ship.trackingRef)) {
+      if (done) return { cls: 'ok', text: `✓ Active on${num || ' your new number'}` };
+      const via = ship && ship.carrier ? ` (${ship.carrier})` : '';
+      const track = ship && ship.trackingUrl
+        ? { trackUrl: ship.trackingUrl, carrier: ship.carrier || 'the carrier' } : {};
+      if (ship && ship.state === 'delivered') {
+        return { cls: 'ok', text: `✓ SIM delivered — activating on${num || ' your number'}` };
+      }
+      return {
+        cls: 'go',
+        text: `⏳ Number${num || ''} reserved — activates when your SIM arrives${via}`,
+        ...track,
+      };
+    }
+    return done ? { cls: 'ok', text: `✓ Active${num}` } : { cls: 'go', text: 'Activating…' };
+  }
+
+  // What one item's status reads as, given its state, family and any parcel/visit.
+  function itemStatus(item, ship, visit, waitingOn) {
+    const st = item.state || 'acknowledged';
+    const fam = familyOf(item);
+    const physical = !!(item.product && item.product.place);
     if (st === 'cancelled') return { cls: 'no', text: 'Cancelled' };
-    if (simType === 'esim') return { cls: 'ok', text: '⚡ eSIM — ready to activate' };
+
+    if (fam === 'mobile') return mobileLine(item, ship);
+
+    if (fam === 'internet') {
+      if (st === 'completed') return { cls: 'ok', text: '✓ Broadband active' };
+      if (visit) return { cls: 'go', text: '🔧 Install booked' };
+      return { cls: 'go', text: '⏳ Setting up your line' };
+    }
+
+    if (fam === 'tv') {
+      if (st === 'completed') return { cls: 'ok', text: '✓ Ready to watch' };
+      // the dependency, in the customer's words
+      if (waitingOn) return { cls: 'go', text: `⏳ Activates once your ${waitingOn} is live` };
+      return { cls: 'go', text: '⏳ Setting up' };
+    }
+
+    // device / other — the physical goods path (packed → shipped → delivered)
+    if (st === 'completed') return { cls: 'ok', text: physical ? '✓ Delivered' : '✓ Active' };
     if (physical && ship && ship.trackingRef) {
       const via = ship.carrier ? ` (${ship.carrier})` : '';
       const track = ship.trackingUrl
         ? { trackUrl: ship.trackingUrl, carrier: ship.carrier || 'the carrier' } : {};
       if (ship.deliveryMethod === 'pickupPoint' && ship.pickupPoint) {
-        // packed & routed to a pickup point vs already delivered there
         const at = ship.state === 'delivered' ? '✓ Ready for collection at' : '📍 On its way to';
         return { cls: 'go', text: `${at} ${ship.pickupPoint}${via} · ${ship.trackingRef}`, ...track };
       }
-      // packed → shipped → out for delivery → delivered, from the parcel state
       const stageText = ship.state === 'delivered' ? '✓ Delivered'
         : ship.state === 'acknowledged' ? `📦 Packed — preparing to ship · ${ship.trackingRef}${via}`
         : `🚚 Shipped — on its way · ${ship.trackingRef}${via}`;
       return { cls: 'go', text: stageText, ...track };
     }
-    if (physical && visit) return { cls: 'go', text: '🔧 Install booked' };
     if (physical) return { cls: 'go', text: '📦 Packed — preparing to ship' };
     return { cls: 'go', text: 'Activating…' };
+  }
+
+  // Group an order's leaves into product families, folding a handset into Mobile
+  // (the phone belongs with the line), and note each family's reliesOn base.
+  function decompose(order) {
+    const leaves = leafItems(order.productOrderItem);
+    const byId = Object.fromEntries(leaves.map((l) => [l.id, l]));
+    const families = FAMILIES.map((f) => ({ ...f, items: [] }));
+    const mobile = families.find((f) => f.type === 'mobile');
+    for (const leaf of leaves) {
+      const fam = familyOf(leaf);
+      // a handset rides in the Mobile section when there's a line to ride with
+      if (fam === 'device' && mobile) { mobile.items.push({ leaf, kind: 'handset' }); continue; }
+      const target = families.find((f) => f.type === fam) || families.find((f) => f.type === 'other');
+      target.items.push({ leaf, kind: fam });
+    }
+    // the plain-language "waiting on" for a family whose base isn't live yet
+    const waitOn = (leaf) => {
+      const rel = (leaf.orderItemRelationship || [])
+        .find((r) => r.relationshipType === 'reliesOn');
+      if (!rel) return null;
+      const base = byId[rel.id];
+      if (!base || base.state === 'completed') return null;
+      return familyOf(base) === 'internet' ? 'broadband' : (base.productOffering?.name || 'base service');
+    };
+    return { families: families.filter((f) => f.items.length), leaves, byId, waitOn };
   }
 
   return (
@@ -109,15 +205,20 @@ export default function Orders() {
       <h1>My orders</h1>
       <div className="rows">
         {orders.map((o) => {
-          const items = leafItems(o.productOrderItem);
           const ship = ships[o.id];
           const visit = visits[o.id];
+          const { families, leaves, waitOn } = decompose(o);
+          const done = leaves.filter((l) => l.state === 'completed').length;
+          const isMulti = families.length > 1 || leaves.length > 1;
+          const openText = openJourney === o.id ? 'Hide progress ▲' : 'Why is it in progress? ▾';
           return (
             <div className="row orderrow" key={o.id}>
               <div className="ordermain">
                 <strong>{o.description || o.id}</strong>
                 <div className="dim small">
                   {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
+                  {isMulti && !TERMINAL.includes(o.state) && leaves.length > 0
+                    && <> · <b>{done} of {leaves.length}</b> ready</>}
                 </div>
                 {visit && (
                   <div className="small installnote">
@@ -125,57 +226,53 @@ export default function Orders() {
                       { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </div>
                 )}
-                {items.length > 0 && (
-                  <ul className="itemlines">
-                    {items.map((it, i) => {
-                      const s = itemStatus(it, ship, visit);
-                      return (
-                        <li key={it.id || i}>
-                          <span className="itemname">{it.productOffering?.name || 'Item'}</span>
-                          <span className={`itemstatus ${s.cls}`}>{s.text}</span>
-                          {s.trackUrl && (
-                            <a className="tracklink" data-testid="track-link" href={s.trackUrl}
-                               target="_blank" rel="noopener noreferrer">Track with {s.carrier} ↗</a>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
+                {families.length > 0 && (
+                  <div className="components" data-testid="components">
+                    {families.map((fam) => (
+                      <div className="component" data-testid={`component-${fam.type}`} key={fam.type}>
+                        <div className="component-head">
+                          <span className="component-icon">{fam.icon}</span>
+                          <span className="component-label">{fam.label}</span>
+                        </div>
+                        <ul className="component-lines">
+                          {fam.items.map(({ leaf, kind }, i) => {
+                            const waitingOn = kind === 'tv' ? waitOn(leaf) : null;
+                            const s = itemStatus(leaf, ship, visit, waitingOn);
+                            const isHandset = kind === 'handset';
+                            return (
+                              <li key={leaf.id || i} className={isHandset ? 'sub' : ''}>
+                                <span className="itemname">
+                                  {isHandset ? '📦 ' : ''}{leaf.productOffering?.name || 'Item'}
+                                </span>
+                                <span className={`itemstatus ${s.cls}`}>{s.text}</span>
+                                {s.trackUrl && (
+                                  <a className="tracklink" data-testid="track-link" href={s.trackUrl}
+                                     target="_blank" rel="noopener noreferrer">Track with {s.carrier} ↗</a>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {!TERMINAL.includes(o.state) && (
                   <button className="linkish small" data-testid="why-toggle"
                           onClick={() => toggleJourney(o.id)}>
-                    {openJourney === o.id ? 'Hide progress ▲' : 'Why is it in progress? ▾'}
+                    {openText}
                   </button>
                 )}
                 {openJourney === o.id && (() => {
                   const j = journeys[o.id];
                   if (!j) return <div className="dim small journey" data-testid="journey">Loading…</div>;
                   if (j === 'none') return <div className="dim small journey" data-testid="journey">
-                    We\'re on it — your order is being set up.</div>;
-                  // to a CUSTOMER an overdue/held step is "still working", not a
-                  // failure — only a truly cancelled order shows an ✗.
-                  const g = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
-                  // which PACKAGE is still in progress — the per-component answer
-                  const pending = items.filter((it) => (it.state || '') !== 'completed'
-                    && (it.state || '') !== 'cancelled');
+                    We're on it — your order is being set up.</div>;
+                  const g = (state) => state === 'completed' ? '✓' : state === 'cancelled' ? '✗' : '⏳';
                   return (
                     <div className="journey" data-testid="journey">
                       <p className="journeywhy"><b>{j.summary?.headline}</b>
                         {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
-                      {pending.length > 0 && (
-                        <p className="journeywaiting small" data-testid="journey-waiting">
-                          Still finishing: {pending.map((it, k) => {
-                            const ps = itemStatus(it, ship, visit);
-                            return (
-                              <span key={it.id || k}>
-                                {k > 0 ? ', ' : ''}<b>{it.productOffering?.name || 'item'}</b> — {ps.text}
-                                {ps.trackUrl ? <> · <a href={ps.trackUrl} target="_blank" rel="noopener noreferrer">track ↗</a></> : null}
-                              </span>
-                            );
-                          })}
-                        </p>
-                      )}
                       <ul className="journeysteps">
                         {(j.taskFlow || []).map((t) => (
                           <li key={t.id} className={`jstep ${t.state === 'completed' ? 'completed' : 'active'}`}>

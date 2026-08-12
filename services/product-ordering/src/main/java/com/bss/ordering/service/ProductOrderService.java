@@ -589,11 +589,19 @@ public class ProductOrderService {
                 children.add(child);
                 present.add(memberId);
             }
-            // stamp category on every leaf, and let the broadband inclusion inherit
-            // the bundle line's install place (a fiber component installs at the
-            // order's address; TV is digital and needs none)
-            Object parentPlace = item.get("product") instanceof Map<?, ?> pp
-                    ? ((Map<String, Object>) pp).get("place") : null;
+            // The bundle line carries the choices meant for its components: the
+            // install/shipping place, and the SIM choice + picked number the shop
+            // stamped on it (the bundle name matches the storefront's mobile-line
+            // rule). Route each down to the component it belongs to.
+            Map<String, Object> parentProduct = item.get("product") instanceof Map<?, ?> pp
+                    ? (Map<String, Object>) pp : null;
+            Object parentPlace = parentProduct == null ? null : parentProduct.get("place");
+            List<Map<String, Object>> simChars = parentProduct != null
+                    && parentProduct.get("productCharacteristic") instanceof List<?> pc
+                    ? (List<Map<String, Object>>) pc : null;
+            boolean physicalSim = simChars != null && simChars.stream().anyMatch(c ->
+                    "simType".equals(String.valueOf(c.get("name")))
+                            && "physical".equals(String.valueOf(c.get("value"))));
             for (Map<String, Object> child : children) {
                 String childOffering = child.get("productOffering") instanceof Map<?, ?> po
                         && po.get("id") != null ? String.valueOf(po.get("id")) : null;
@@ -603,10 +611,23 @@ public class ProductOrderService {
                 Map<String, Object> childDetail = detailCache.computeIfAbsent(childOffering,
                         id -> catalogClient.findOfferingDetail(id).orElse(null));
                 stampCategory(child, childDetail);
-                if ("internet".equals(child.get("componentType")) && parentPlace != null
+                String type = String.valueOf(child.get("componentType"));
+                if ("internet".equals(type) && parentPlace != null
                         && !(child.get("product") instanceof Map)) {
+                    // a fiber inclusion installs at the order's address
                     Map<String, Object> product = new java.util.LinkedHashMap<>();
                     product.put("place", parentPlace);
+                    child.put("product", product);
+                } else if ("mobile".equals(type) && simChars != null) {
+                    // the mobile line carries the SIM choice + number; a physical
+                    // SIM also ships (place), so the line is reserved until it lands
+                    Map<String, Object> product = child.get("product") instanceof Map<?, ?> cp
+                            ? new java.util.LinkedHashMap<>((Map<String, Object>) cp)
+                            : new java.util.LinkedHashMap<>();
+                    product.put("productCharacteristic", simChars);
+                    if (physicalSim && parentPlace != null) {
+                        product.put("place", parentPlace);
+                    }
                     child.put("product", product);
                 }
             }
