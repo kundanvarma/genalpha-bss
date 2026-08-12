@@ -113,6 +113,7 @@ public class PaymentService {
         // TMF670 seam: a saved method arrives as a reference, never as card
         // data. Resolve it in the vault (machine call), prove it belongs to
         // the payer, and pay with the vault token.
+        String savedType = null;
         if (method != null && method.get("id") != null && method.get("cardNumber") == null) {
             Map<String, Object> saved = paymentMethods.resolve(String.valueOf(method.get("id")));
             if (saved == null) {
@@ -124,7 +125,16 @@ public class PaymentService {
             if (payer != null && !payer.equals(methodOwner)) {
                 throw new BadRequestException("saved payment method not found");
             }
+            savedType = String.valueOf(saved.get("@type"));
             method = (Map<String, Object>) saved.get("details");
+        }
+        // §7a — a vaulted BNPL token pays the bill MERCHANT-INITIATED through
+        // the provider that minted it (Klarna's recurring contract), never the
+        // card pool. The charge reference becomes the payment's session_ref, so
+        // capture/refund route through the SAME provider by session — and the
+        // subledger books it as a BNPL receivable exactly like checkout Klarna.
+        if ("bnplToken".equals(savedType)) {
+            return chargeBnplToken(dto, method);
         }
         // Idempotency: a retried authorization (same correlator, same payer)
         // returns the original payment instead of holding funds twice — the
@@ -316,6 +326,88 @@ public class PaymentService {
     @Transactional
     public PaymentDto confirm(String provider, String sessionId) {
         return confirmSession(tenantScope.currentTenantId(), provider, sessionId);
+    }
+
+    /** §7a — merchant-initiated charge on a vaulted BNPL token (the bill). */
+    private PaymentDto chargeBnplToken(PaymentDto dto, Map<String, Object> details) {
+        String provider = details.get("brand") == null ? null
+                : String.valueOf(details.get("brand")).toLowerCase();   // bnplToken: brand IS the provider
+        String token = details.get("token") == null ? null : String.valueOf(details.get("token"));
+        if (provider == null || token == null) {
+            throw new BadRequestException("saved BNPL method is missing its provider token");
+        }
+        com.bss.payment.psp.RedirectPspAdapter adapter = redirectRegistry.get(provider);
+        if (adapter == null) {
+            throw new BadRequestException("no redirect adapter for '" + provider + "'");
+        }
+        String tenant = tenantScope.currentTenantId();
+        PspConfig cfg = pspConfigs.forTenantAndProvider(tenant, provider)
+                .orElseThrow(() -> new ConflictException("provider '" + provider + "' not configured"));
+        String currency = dto.getAmount().getUnit() == null ? "EUR" : dto.getAmount().getUnit();
+        com.bss.payment.psp.RedirectPspAdapter.Confirmation c =
+                adapter.chargeToken(cfg, token, dto.getAmount().getValue(), currency);
+        if (!c.approved()) {
+            throw new ConflictException(c.declineReason() == null ? "token charge declined" : c.declineReason());
+        }
+        Payment entity = new Payment();
+        entity.setTenantId(tenant);
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setHref(ApiConstants.BASE_PATH + "/payment/" + id);
+        entity.setDescription(dto.getDescription());
+        entity.setStatus(Payment.AUTHORIZED);
+        entity.setAmountValue(dto.getAmount().getValue());
+        entity.setAmountUnit(currency);
+        entity.setMethodType("bnplToken");
+        entity.setMethodLabel(c.methodLabel());
+        entity.setAuthorizationCode(c.authorizationCode());
+        entity.setSessionRef(c.authorizationCode());   // the charge is its own order at the provider
+        entity.setPspProvider(provider);
+        entity.setCorrelatorId(dto.getCorrelatorId());
+        entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
+        entity.setPaymentDate(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        PaymentDto created = toDto(repository.save(entity));
+        events.publish("PaymentCreateEvent", "payment", created);
+        log.info("bnpl token charge via {}: {} {} -> {}", provider, currency, dto.getAmount().getValue(), id);
+        return created;
+    }
+
+    /** §7a — "sign up for Klarna": tokenize an APPROVED session and vault the
+     * provider's recurring token as a TMF670 bnplToken method owned by the
+     * caller. The vault row carries the provider in `brand` and the token in
+     * its psp_token slot; customers never see the token back (list view). */
+    @Transactional
+    public Map<String, Object> vaultRecurring(Map<String, Object> dto) {
+        String provider = dto.get("provider") == null ? null
+                : String.valueOf(dto.get("provider")).toLowerCase();
+        String sessionId = dto.get("sessionId") == null ? null : String.valueOf(dto.get("sessionId"));
+        if (provider == null || sessionId == null) {
+            throw new BadRequestException("provider and sessionId are required");
+        }
+        com.bss.payment.psp.RedirectPspAdapter adapter = redirectRegistry.get(provider);
+        if (adapter == null) {
+            throw new BadRequestException("no redirect adapter for '" + provider + "'");
+        }
+        String tenant = tenantScope.currentTenantId();
+        PspConfig cfg = pspConfigs.forTenantAndProvider(tenant, provider)
+                .orElseThrow(() -> new ConflictException("provider '" + provider + "' not configured"));
+        com.bss.payment.psp.RedirectPspAdapter.TokenGrant grant = adapter.tokenize(cfg, sessionId);
+        if (grant == null || grant.token() == null) {
+            throw new ConflictException("the session could not be tokenized (unknown, or recurring unsupported)");
+        }
+        String owner = partyScope.scopedPartyId()
+                .orElseThrow(() -> new BadRequestException("a customer token is required to vault a method"));
+        Map<String, Object> saved = paymentMethods.save(Map.of(
+                "@type", "bnplToken",
+                "details", Map.of("brand", provider, "token", grant.token()),
+                "relatedParty", List.of(Map.of("id", owner, "role", "customer"))));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", saved == null ? null : saved.get("id"));
+        out.put("label", grant.label());
+        out.put("provider", provider);
+        out.put("@type", "VaultedRecurringMethod");
+        return out;
     }
 
     /** Safe to fail over to a backup PSP? Only when the acquirer was demonstrably

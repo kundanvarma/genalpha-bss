@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 public class CarrierConfigService {
 
-    private static final Set<String> KNOWN = Set.of("helthjem", "bring", "postnord");
+    private static final Set<String> KNOWN = Set.of("helthjem", "bring", "postnord", "http");
 
     private final CarrierConfigRepository repository;
     private final TenantScope tenantScope;

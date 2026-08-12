@@ -640,7 +640,12 @@ public class SomController {
         List<ServiceInstance> rows = deliveryPath != null
                 ? services.findByTenantIdAndDeliveryPath(tenant, deliveryPath)
                 : party != null
-                        ? services.findByTenantIdAndOwnerPartyId(tenant, party)
+                        // newest first — a long-lived customer's fresh line must
+                        // land inside the first page (same fix the order list got)
+                        ? services.findByTenantIdAndOwnerPartyId(tenant, party).stream()
+                                .sorted(java.util.Comparator.comparing(
+                                        ServiceInstance::getCreatedAt).reversed())
+                                .toList()
                         : services.findAll().stream()
                                 .filter(s -> tenant.equals(s.getTenantId()))
                                 .sorted(java.util.Comparator.comparing(
@@ -794,6 +799,16 @@ public class SomController {
         map.put("prefix", pool.getPrefix());
         map.put("@type", "ResourcePool");
         return ResponseEntity.status(HttpStatus.CREATED).body(map);
+    }
+
+    /** Choose-your-number: an ANONYMOUS shortlist of available numbers (the
+     * shop's picker) — previewed from the pool's window, never consumed. */
+    @GetMapping("/tmf-api/resourcePoolManagement/v4/numberOffer")
+    public ResponseEntity<List<Map<String, Object>>> numberOffer(
+            @RequestParam(name = "count", defaultValue = "6") int count,
+            @RequestParam(name = "shuffle", required = false) String shuffle) {
+        return ResponseEntity.ok(orchestration.offerNumbers(
+                tenantScope.currentTenantId(), Math.min(Math.max(count, 1), 12), shuffle));
     }
 
     @GetMapping("/tmf-api/resourcePoolManagement/v4/resourcePool")

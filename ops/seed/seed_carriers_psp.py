@@ -43,9 +43,9 @@ def put(url, body):
 
 CARRIERS = [
     {"carrier": "helthjem", "displayName": "Helthjem", "baseUrl": "http://mock-logistics:8080",
-     "secretRef": "HELTHJEM_API_KEY", "methods": ["home"], "isDefault": False},
+     "secretRef": "HELTHJEM_API_KEY", "methods": ["home"], "isDefault": True},
     {"carrier": "bring", "displayName": "Posten/Bring", "baseUrl": "http://mock-bring:8080",
-     "secretRef": "BRING_API_KEY", "methods": ["home", "pickupPoint"], "isDefault": True},
+     "secretRef": "BRING_API_KEY", "methods": ["home", "pickupPoint"], "isDefault": False},
     {"carrier": "postnord", "displayName": "PostNord", "baseUrl": "http://mock-postnord:8080",
      "secretRef": "POSTNORD_API_KEY", "methods": ["home", "pickupPoint"], "isDefault": False},
 ]

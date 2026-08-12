@@ -690,6 +690,154 @@ public class RevenueService {
         return out;
     }
 
+    /**
+     * The subscription-metrics engine (console P3): an MRR waterfall computed
+     * from the subledger's OWN rows — account 4000 (recurring service revenue)
+     * credited per customer per month. Billed truth, not catalog list price:
+     * a month shows what the billing run actually recognised. Per month, each
+     * customer is classified against the PRIOR month — absent→present = NEW,
+     * up = EXPANSION, down = CONTRACTION, present→absent = CHURNED — so the
+     * waterfall identity holds by construction:
+     * mrr(m) = mrr(m-1) + new + expansion − contraction − churn.
+     * The FIRST month in range has no prior, so it is the baseline (all NEW).
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> subscriptionMetrics(LocalDate from, LocalDate to) {
+        String tenant = tenantScope.currentTenantId();
+        seedDefaults(tenant);
+        String code = codeFor(tenant, "rate:recurringCharge");   // 4000 unless remapped
+        // pull one prior month so the first requested month classifies properly
+        LocalDate pullFrom = from.withDayOfMonth(1).minusMonths(1);
+        Map<String, Map<String, BigDecimal>> byMonth = new TreeMap<>();
+        for (Object[] row : lines.monthlyNetByParty(tenant, code, pullFrom, to)) {
+            String month = String.format("%04d-%02d", ((Number) row[0]).intValue(), ((Number) row[1]).intValue());
+            String party = row[2] == null ? "(unattributed)" : String.valueOf(row[2]);
+            BigDecimal net = bd(row[3]).subtract(bd(row[4]));   // credit − debit
+            if (net.signum() != 0) {
+                byMonth.computeIfAbsent(month, k -> new LinkedHashMap<>()).merge(party, net, BigDecimal::add);
+            }
+        }
+        // walk the REQUESTED months in order, classifying against the prior month
+        List<Map<String, Object>> months = new ArrayList<>();
+        List<Map<String, Object>> drill = new ArrayList<>();
+        String firstMonth = String.format("%04d-%02d", from.getYear(), from.getMonthValue());
+        String lastMonth = String.format("%04d-%02d", to.getYear(), to.getMonthValue());
+        BigDecimal prevMrr = null;
+        for (LocalDate m = from.withDayOfMonth(1); !m.isAfter(to); m = m.plusMonths(1)) {
+            String month = String.format("%04d-%02d", m.getYear(), m.getMonthValue());
+            Map<String, BigDecimal> cur = byMonth.getOrDefault(month, Map.of());
+            String prior = String.format("%04d-%02d", m.minusMonths(1).getYear(), m.minusMonths(1).getMonthValue());
+            Map<String, BigDecimal> prev = byMonth.getOrDefault(prior, Map.of());
+            BigDecimal mrr = BigDecimal.ZERO;
+            BigDecimal newMrr = BigDecimal.ZERO;
+            BigDecimal expansion = BigDecimal.ZERO;
+            BigDecimal contraction = BigDecimal.ZERO;
+            BigDecimal churned = BigDecimal.ZERO;
+            int churnedAccounts = 0;
+            for (Map.Entry<String, BigDecimal> e : cur.entrySet()) {
+                mrr = mrr.add(e.getValue());
+                BigDecimal was = prev.get(e.getKey());
+                String kind;
+                BigDecimal delta;
+                if (was == null) {
+                    kind = "new";
+                    delta = e.getValue();
+                    newMrr = newMrr.add(delta);
+                } else if (e.getValue().compareTo(was) > 0) {
+                    kind = "expansion";
+                    delta = e.getValue().subtract(was);
+                    expansion = expansion.add(delta);
+                } else if (e.getValue().compareTo(was) < 0) {
+                    kind = "contraction";
+                    delta = was.subtract(e.getValue());
+                    contraction = contraction.add(delta);
+                } else {
+                    kind = "flat";
+                    delta = BigDecimal.ZERO;
+                }
+                if (month.equals(lastMonth) && !"flat".equals(kind)) {
+                    drill.add(drillRow(month, e.getKey(), kind, delta, e.getValue()));
+                }
+            }
+            for (Map.Entry<String, BigDecimal> e : prev.entrySet()) {
+                if (!cur.containsKey(e.getKey())) {
+                    churned = churned.add(e.getValue());
+                    churnedAccounts++;
+                    if (month.equals(lastMonth)) {
+                        drill.add(drillRow(month, e.getKey(), "churned", e.getValue(), BigDecimal.ZERO));
+                    }
+                }
+            }
+            int active = cur.size();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("month", month);
+            row.put("mrr", scale(mrr));
+            row.put("newMrr", scale(newMrr));
+            row.put("expansionMrr", scale(expansion));
+            row.put("contractionMrr", scale(contraction));
+            row.put("churnedMrr", scale(churned));
+            row.put("activeAccounts", active);
+            row.put("arpu", active == 0 ? BigDecimal.ZERO
+                    : scale(mrr.divide(BigDecimal.valueOf(active), 2, RoundingMode.HALF_UP)));
+            row.put("churnRatePct", prev.isEmpty() ? null
+                    : scale(BigDecimal.valueOf(churnedAccounts * 100.0 / prev.size())));
+            // NRR: what last month's customers are worth now / what they were worth
+            BigDecimal prevTotal = prev.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+            row.put("nrrPct", prevTotal.signum() == 0 ? null
+                    : scale(mrr.subtract(newMrr).multiply(BigDecimal.valueOf(100))
+                            .divide(prevTotal, 1, RoundingMode.HALF_UP)));
+            row.put("baseline", month.equals(firstMonth) && prev.isEmpty());
+            months.add(row);
+            prevMrr = mrr;
+        }
+        drill.sort((a, b) -> ((BigDecimal) b.get("delta")).compareTo((BigDecimal) a.get("delta")));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("period", Map.of("fromDate", from.toString(), "toDate", to.toString()));
+        out.put("accountCode", code);
+        out.put("note", "billed recurring revenue from the subledger (account " + code
+                + "); a month reflects what the billing run recognised, not catalog list price");
+        out.put("months", months);
+        out.put("drillDown", drill.size() > 100 ? drill.subList(0, 100) : drill);
+        out.put("@type", "SubscriptionMetrics");
+        return out;
+    }
+
+    private static Map<String, Object> drillRow(String month, String party, String kind,
+            BigDecimal delta, BigDecimal nowMrr) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("month", month);
+        r.put("partyId", party);
+        r.put("kind", kind);
+        r.put("delta", scale(delta));
+        r.put("mrr", scale(nowMrr));
+        return r;
+    }
+
+    /** The waterfall as CSV — one row per month, the drill-down appended. */
+    @Transactional(readOnly = true)
+    public String subscriptionMetricsCsv(LocalDate from, LocalDate to) {
+        Map<String, Object> m = subscriptionMetrics(from, to);
+        StringBuilder csv = new StringBuilder(
+                "month,mrr,newMrr,expansionMrr,contractionMrr,churnedMrr,activeAccounts,arpu,churnRatePct,nrrPct\n");
+        for (Object o : (List<?>) m.get("months")) {
+            Map<?, ?> r = (Map<?, ?>) o;
+            csv.append(r.get("month")).append(',').append(r.get("mrr")).append(',')
+                    .append(r.get("newMrr")).append(',').append(r.get("expansionMrr")).append(',')
+                    .append(r.get("contractionMrr")).append(',').append(r.get("churnedMrr")).append(',')
+                    .append(r.get("activeAccounts")).append(',').append(r.get("arpu")).append(',')
+                    .append(r.get("churnRatePct") == null ? "" : r.get("churnRatePct")).append(',')
+                    .append(r.get("nrrPct") == null ? "" : r.get("nrrPct")).append('\n');
+        }
+        csv.append("\nmonth,partyId,kind,delta,mrr\n");
+        for (Object o : (List<?>) m.get("drillDown")) {
+            Map<?, ?> r = (Map<?, ?>) o;
+            csv.append(r.get("month")).append(',').append(r.get("partyId")).append(',')
+                    .append(r.get("kind")).append(',').append(r.get("delta")).append(',')
+                    .append(r.get("mrr")).append('\n');
+        }
+        return csv.toString();
+    }
+
     private Totals totals(String tenant, LocalDate from, LocalDate to,
             Set<String> nonRevenue, String taxCode, String cashCode) {
         BigDecimal revenue = BigDecimal.ZERO;

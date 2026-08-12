@@ -5,7 +5,7 @@ import { beginLogin, isSignedIn } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
-import { checkPromotion, confirmPayment, createPaymentSession, paymentMethods, savePaymentMethod } from '../api.js';
+import { checkPromotion, confirmPayment, createPaymentSession, numberOffers, paymentMethods, savePaymentMethod } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
@@ -35,7 +35,17 @@ export default function Cart() {
   const [slot, setSlot] = useState(loadSlotDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '' });
+  const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '', portDate: '' });
+  // Choose-your-number: a shortlist from the pool; '' = auto-assign (unchanged).
+  const [numberWish, setNumberWish] = useState('');
+  const [numberChoices, setNumberChoices] = useState([]);
+  const [numberShuffle, setNumberShuffle] = useState(0);
+  useEffect(() => {
+    numberOffers(numberShuffle || null).then((offers) => {
+      setNumberChoices((offers || []).map((o) => o.msisdn));
+      setNumberWish((w) => (w && !(offers || []).some((o) => o.msisdn === w) ? '' : w));
+    }).catch(() => setNumberChoices([]));
+  }, [numberShuffle]);
   // C3 — how the customer wants their SIM: eSIM (instant, no parcel) or a
   // physical SIM card shipped by the carrier. Default eSIM.
   const [simType, setSimType] = useState('esim');
@@ -74,7 +84,7 @@ export default function Cart() {
         const payment = await confirmPayment(stash.provider, stash.sessionId);
         const order = await performCheckout(lines, null, stash.promoCode || null,
           stash.keepNumber && stash.keepNumber.on ? stash.keepNumber : null,
-          stash.simType || 'esim', stash.delivery || null, payment);
+          stash.simType || 'esim', stash.delivery || null, payment, stash.numberWish || null);
         localStorage.removeItem('bss.shop.redirectpay');
         window.history.replaceState(null, '', '/shop/cart');
         await markCartCheckedOut(order.id);
@@ -382,13 +392,14 @@ export default function Cart() {
           amount: { value: due.value, unit: due.unit }, returnUrl: `${window.location.origin}/shop/cart` });
         localStorage.setItem('bss.shop.redirectpay', JSON.stringify({
           provider: session.provider, sessionId: session.sessionId,
-          simType: hasMobile ? simType : 'esim', delivery,
+          simType: hasMobile ? simType : 'esim', delivery, numberWish: numberWish || null,
           keepNumber: keepNumber.on ? keepNumber : null, promoCode: promo?.code || null }));
         window.location.href = session.redirectUrl;
         return;
       }
       const order = await performCheckout(lines, due ? card : null, promo?.code || null,
-        keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery);
+        keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery,
+        null, numberWish || null);
       localStorage.removeItem('bss.shop.promo');
       if (due && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
@@ -658,10 +669,35 @@ export default function Cart() {
               <label className="charfield"><span>Current provider</span>
                 <input name="portProvider" value={keepNumber.currentProvider} placeholder="e.g. OtherTelco"
                        onChange={(e) => setKeepNumber({ ...keepNumber, currentProvider: e.target.value })} /></label>
+              <label className="charfield"><span>Port-in date (optional)</span>
+                <input name="portDate" type="date" value={keepNumber.portDate}
+                       min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)}
+                       onChange={(e) => setKeepNumber({ ...keepNumber, portDate: e.target.value })} /></label>
             </div>
           )}
           {keepNumber.on && <p className="dim small">We'll port it in through your country's number
-            registry (NRDB in Norway) and activate your plan on it.</p>}
+            registry (NRDB in Norway) and activate your plan on it.
+            {keepNumber.portDate
+              ? ` Your number moves on ${keepNumber.portDate} — your old plan keeps working until then.`
+              : ' No date picked = as soon as possible.'}</p>}
+          {!keepNumber.on && numberChoices.length > 0 && (
+            <div className="number-choice" data-testid="number-choice">
+              <p className="dim small" style={{ margin: '0.6rem 0 0.3rem' }}>
+                …or pick your new number (optional — none picked = we assign one):</p>
+              <div className="simopts" style={{ gap: 8 }}>
+                {numberChoices.map((n) => (
+                  <button type="button" key={n} data-testid="number-option"
+                          className={`simopt ${numberWish === n ? 'on' : ''}`}
+                          style={{ flex: '0 1 auto', padding: '6px 12px' }}
+                          onClick={() => setNumberWish(numberWish === n ? '' : n)}>
+                    <span className="simopt-t" style={{ fontVariantNumeric: 'tabular-nums' }}>{n}</span>
+                  </button>
+                ))}
+                <button type="button" className="ghost" data-testid="number-shuffle"
+                        onClick={() => setNumberShuffle((x) => x + 1)}>Show me others</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

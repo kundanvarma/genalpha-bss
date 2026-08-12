@@ -48,7 +48,7 @@ async function call(method, path, tok, body) {
   // carrier's delivery completes it machine-driven. (The warehouse PATCH still
   // exists as a staff override; the carrier is the default driver now.)
   const offers = (await call('GET',
-    '/tmf-api/productCatalogManagement/v4/productOffering?limit=50', kai)).body || [];
+    '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', kai)).body || [];
   const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
   if (!plan) fail('no plan in catalog');
   const order = await call('POST', `${ORDERS}/productOrder`, kai, {

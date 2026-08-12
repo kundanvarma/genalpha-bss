@@ -37,7 +37,7 @@ async function token(ctx, realm, user, pass) {
   const staff = await token(ctx, 'fjord', 'demo', 'demo');
   if (!staff) fail('no staff token from the fjord realm');
   const offers = await (await ctx.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`,
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: H(staff) })).json();
   const plan = offers.find((o) => o.name === 'Fjord Mobil Mobile M');
   if (!plan) fail('the seeded fjord offering is missing');

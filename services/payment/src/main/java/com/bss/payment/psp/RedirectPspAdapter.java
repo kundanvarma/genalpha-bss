@@ -27,6 +27,20 @@ public interface RedirectPspAdapter {
     /** Refund a captured order (full or partial). */
     Settlement refund(PspConfig cfg, String sessionId, BigDecimal amount, String currency);
 
+    /** Mint a RECURRING token from an approved session (BNPL "sign up" — §7a).
+     * Default: not supported; only providers with a real tokenised-recurring
+     * contract implement it. */
+    default TokenGrant tokenize(PspConfig cfg, String sessionId) {
+        return null;
+    }
+
+    /** Merchant-initiated charge against a vaulted token — the monthly bill.
+     * Returns a Confirmation whose authorizationCode is the provider's charge
+     * reference (usable for capture/refund routing). */
+    default Confirmation chargeToken(PspConfig cfg, String token, BigDecimal amount, String currency) {
+        return new Confirmation(false, null, null, null, name(), "recurring charges not supported by " + name());
+    }
+
     record Session(String sessionId, String redirectUrl) {
     }
 
@@ -36,5 +50,9 @@ public interface RedirectPspAdapter {
 
     /** Result of a capture/refund — settled + the provider's reference, or why not. */
     record Settlement(boolean ok, String reference, String failureReason) {
+    }
+
+    /** A vaulted recurring token + how the shopper should see it. */
+    record TokenGrant(String token, String label) {
     }
 }

@@ -15,4 +15,7 @@ public interface ResourcePoolRepository extends JpaRepository<ResourcePool, Stri
     /** Locked draw: two activations never get the same number. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ResourcePool> findFirstByTenantIdAndResourceType(String tenantId, String resourceType);
+
+    /** Lock-free read for the number-offer PREVIEW — looking must not lock the draw. */
+    Optional<ResourcePool> findFirstByTenantIdAndResourceTypeOrderByIdAsc(String tenantId, String resourceType);
 }

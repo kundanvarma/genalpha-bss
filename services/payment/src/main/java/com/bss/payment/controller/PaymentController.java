@@ -88,6 +88,14 @@ public class PaymentController {
         return ResponseEntity.ok(service.findById(id));
     }
 
+    /** §7a — "sign up for Klarna": tokenize an approved session and vault the
+     * recurring token as a TMF670 bnplToken method (the customer's, list-safe). */
+    @PostMapping("/vaultRecurring")
+    public ResponseEntity<java.util.Map<String, Object>> vaultRecurring(
+            @RequestBody java.util.Map<String, Object> dto) {
+        return ResponseEntity.ok(service.vaultRecurring(dto));
+    }
+
     @PostMapping
     public ResponseEntity<PaymentDto> create(@Valid @RequestBody PaymentDto dto) {
         PaymentDto created = service.create(dto);

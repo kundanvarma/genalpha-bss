@@ -36,6 +36,7 @@ const PROCESS_BASE = '/tmf-api/processFlowManagement/v4';
 const KNOWLEDGE_BASE = '/tmf-api/knowledgeManagement/v4';
 const PORTING_BASE = '/tmf-api/numberPortingManagement/v1';
 const SALES_BASE = '/tmf-api/salesManagement/v4';
+const ORDERING_BASE = '/tmf-api/productOrderingManagement/v4';
 const ONBOARDING_BASE = '/onboarding/v1';
 const ADVISOR_BASE = '/advisor/v1';
 const SQM_BASE = '/tmf-api/serviceQualificationManagement/v4';
@@ -336,6 +337,26 @@ const RESOURCES = [
       const top = ((r.signal || [])[0] || {}).label || '';
       cell.textContent = r.overallScore != null
         ? `${r.overallScore} · ${r.riskLevel}${top ? ' — ' + top : ''}` : '—';
+    },
+  },
+  {
+    // The back office's raw ORDER LEDGER (demo-found gap: "is the mobile item
+    // done?"). Read-only: state changes belong to the order lifecycle, not a
+    // console edit; Process flows stays the per-phase ops view.
+    path: 'productOrder',
+    base: ORDERING_BASE,
+    title: 'Orders',
+    readOnly: true,
+    fields: [],
+    columns: ['state', 'orderDate', 'relatedParty', 'itemSummary', 'id'],
+    augmentRow: async (item, cell) => {
+      const items = [];
+      const walk = (arr) => (arr || []).forEach((i) => {
+        if ((i.productOrderItem || []).length) walk(i.productOrderItem);
+        else items.push(`${(i.productOffering || {}).name || 'item'}: ${i.state || '?'}`);
+      });
+      walk(item.productOrderItem);
+      cell.textContent = items.join(' · ') || '—';
     },
   },
   {
@@ -985,6 +1006,7 @@ const TAB_ROLE = {
   serviceableArea: 'qualification:write',
   coverageMap: 'qualification:write',
   partyRiskAssessment: 'risk:assess',
+  productOrder: ['ordering:write', 'service:write'],
   appointment: 'appointment:admin',
   campaign: 'campaign:read',
   journey: 'campaign:read',
@@ -1030,7 +1052,7 @@ const WORKSPACES = [
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
-  { label: 'Care & Ops', tabs: ['processFlow', 'appointment', 'numberPortingOrder', 'article'] },
+  { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['campaign', 'journey', 'audiences', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
@@ -1039,6 +1061,10 @@ const WORKSPACES = [
 
 let active = RESOURCES[0];
 let offset = 0;
+// #200: every list tab gets search + sortable columns — one engine, all tabs.
+let listFilter = '';
+let listSortCol = null;
+let listSortDir = 1;
 let editingId = null;
 let controls = {}; // field name -> {get, set, reset}
 
@@ -1077,7 +1103,7 @@ function renderTabs() {
     const b = document.createElement('button');
     b.textContent = r.title;
     b.className = r === active ? 'tab on' : 'tab';
-    b.addEventListener('click', () => { active = r; offset = 0; stopEditing();
+    b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing();
       sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
     return b;
   };
@@ -2483,10 +2509,107 @@ async function renderReporting() {
       table.append(tr);
     }
     body.append(table);
+
+    // ---- P3: the subscription-metrics engine (MRR waterfall / ARPU / churn / NRR) ----
+    try {
+      const smRes = await authFetch(`${REVENUE_BASE}/subscriptionMetrics?toDate=${to.value}`);
+      if (smRes.ok) {
+        const sm = await smRes.json();
+        const months = sm.months || [];
+        const latest = [...months].reverse().find((m) => Number(m.mrr) > 0) || months[months.length - 1];
+        const h2 = document.createElement('h3');
+        h2.textContent = 'Subscription metrics (billed MRR)';
+        h2.style.cssText = 'margin:1.4rem 0 0.4rem';
+        body.append(h2);
+        if (latest) {
+          const row2 = document.createElement('div');
+          row2.style.cssText = 'display:flex;gap:0.8rem;flex-wrap:wrap';
+          row2.append(
+            kpiCard('MRR · ' + latest.month, money(latest.mrr), 'billed recurring revenue (acct 4000) for the month', 'rep-mrr'),
+            kpiCard('ARPU', money(latest.arpu), 'MRR / active billed accounts', 'rep-arpu'),
+            kpiCard('Active accounts', latest.activeAccounts, 'accounts with recurring revenue this month', 'rep-active'),
+            kpiCard('Churn rate', latest.churnRatePct == null ? '—' : latest.churnRatePct + '%', 'accounts billed last month, absent this month', 'rep-churn'),
+            kpiCard('Net revenue retention', latest.nrrPct == null ? '—' : latest.nrrPct + '%', 'what last month\'s customers are worth now vs then', 'rep-nrr'));
+          body.append(row2);
+        }
+        // waterfall table by month
+        const wt = document.createElement('table');
+        wt.style.cssText = 'width:100%;border-collapse:collapse;margin-top:0.6rem';
+        wt.dataset.testid = 'rep-waterfall';
+        const wh = document.createElement('tr');
+        ['Month', 'MRR', 'New', 'Expansion', 'Contraction', 'Churned', 'ARPU', 'NRR %'].forEach((t, i) => {
+          const th = document.createElement('th');
+          th.textContent = t;
+          th.style.cssText = 'text-align:' + (i ? 'right' : 'left') + ';padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#ddd);color:var(--dim,#777);font-size:0.8rem';
+          wh.append(th);
+        });
+        wt.append(wh);
+        for (const m of months) {
+          const tr = document.createElement('tr');
+          [m.month + (m.baseline ? ' (baseline)' : ''), money(m.mrr), '+' + money(m.newMrr), '+' + money(m.expansionMrr),
+            '−' + money(m.contractionMrr), '−' + money(m.churnedMrr), money(m.arpu),
+            m.nrrPct == null ? '—' : m.nrrPct].forEach((v, i) => {
+            const td = document.createElement('td');
+            td.textContent = v;
+            td.style.cssText = 'padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#f0f0f0)' + (i ? ';text-align:right;font-variant-numeric:tabular-nums' : '');
+            tr.append(td);
+          });
+          wt.append(tr);
+        }
+        body.append(wt);
+        // drill-down: who moved the number this month
+        const dd = sm.drillDown || [];
+        if (dd.length) {
+          const h3 = document.createElement('h3');
+          h3.textContent = 'Who moved the number — ' + (latest ? latest.month : '');
+          h3.style.cssText = 'margin:1rem 0 0.4rem';
+          body.append(h3);
+          const dt = document.createElement('table');
+          dt.style.cssText = 'width:100%;border-collapse:collapse';
+          dt.dataset.testid = 'rep-drilldown';
+          const dh = document.createElement('tr');
+          ['Customer', 'Movement', 'Δ MRR', 'MRR now'].forEach((t, i) => {
+            const th = document.createElement('th');
+            th.textContent = t;
+            th.style.cssText = 'text-align:' + (i > 1 ? 'right' : 'left') + ';padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#ddd);color:var(--dim,#777);font-size:0.8rem';
+            dh.append(th);
+          });
+          dt.append(dh);
+          for (const r of dd.slice(0, 15)) {
+            const tr = document.createElement('tr');
+            [r.partyId.slice(0, 12) + '…', r.kind, money(r.delta), money(r.mrr)].forEach((v, i) => {
+              const td = document.createElement('td');
+              td.textContent = v;
+              td.style.cssText = 'padding:0.35rem 0.5rem;border-bottom:1px solid var(--line,#f0f0f0)' + (i > 1 ? ';text-align:right;font-variant-numeric:tabular-nums' : '');
+              tr.append(td);
+            });
+            dt.append(tr);
+          }
+          body.append(dt);
+        }
+        // CSV export — the console's first real download
+        const dl = document.createElement('button');
+        dl.textContent = 'Download CSV';
+        dl.dataset.testid = 'rep-csv';
+        dl.style.cssText = 'margin-top:0.7rem;padding:0.3rem 0.9rem';
+        dl.addEventListener('click', async () => {
+          const r = await authFetch(`${REVENUE_BASE}/subscriptionMetrics?toDate=${to.value}&format=csv`);
+          if (!r.ok) return;
+          const blob = new Blob([await r.text()], { type: 'text/csv' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'subscription-metrics.csv';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        });
+        body.append(dl);
+      }
+    } catch (e) { /* metrics are additive — the summary above stands alone */ }
+
     const note = document.createElement('p');
     note.className = 'dimhint';
     note.style.marginTop = '0.8rem';
-    note.textContent = 'Computed once from the subledger — the source of truth. Orders, AOV, MRR/ARPU and churn arrive with the cross-service metrics engine (P3).';
+    note.textContent = 'Computed once from the subledger — the source of truth. MRR here is BILLED recurring revenue (account 4000) by month; a month shows what the billing run recognised, not catalog list price.';
     body.append(note);
   }
   go.addEventListener('click', load);
@@ -3318,19 +3441,54 @@ async function loadList() {
   if (active !== current) return;   // the user switched tabs while this was loading — drop the stale paint
   const total = Number(res.headers.get('X-Total-Count') || items.length);
 
-  el('total').textContent = `${total} total`;
+  // #200: search filters + header sorting over the loaded page (honest hint —
+  // the fetch is paged, so the box narrows THIS page, not the whole history).
+  let search = document.getElementById('list-search');
+  if (!search) {
+    search = document.createElement('input');
+    search.id = 'list-search';
+    search.placeholder = 'Filter this page…';
+    search.style.cssText = 'margin-left:0.8rem;padding:0.25rem 0.5rem;font-size:0.85rem;width:14rem';
+    el('total').after(search);
+    search.addEventListener('input', () => { listFilter = search.value.trim().toLowerCase(); loadList(); });
+  }
+  search.value = listFilter;
+  const sortVal = (it, c) => {
+    const v = it[c];
+    if (v == null) return '';
+    const t = typeof v === 'object' ? fmtCell(v) : String(v);
+    const n = Number(t);
+    return Number.isFinite(n) && t !== '' ? n : t.toLowerCase();
+  };
+  let shown = !listFilter ? items : items.filter((it) =>
+    active.columns.some((c) => fmtCell(it[c] === undefined ? '' : it[c]).toLowerCase().includes(listFilter)));
+  if (listSortCol && active.columns.includes(listSortCol)) {
+    shown = [...shown].sort((a, b) => {
+      const x = sortVal(a, listSortCol); const y = sortVal(b, listSortCol);
+      return (x < y ? -1 : x > y ? 1 : 0) * listSortDir;
+    });
+  }
+  el('total').textContent = listFilter ? `${shown.length} of ${total} total` : `${total} total`;
   el('listing-head').replaceChildren((() => {
     const tr = document.createElement('tr');
     for (const c of active.columns) {
       const th = document.createElement('th');
-      th.textContent = COLUMN_LABELS[c] || c;
+      th.textContent = (COLUMN_LABELS[c] || c)
+        + (listSortCol === c ? (listSortDir === 1 ? ' ↑' : ' ↓') : '');
+      th.style.cursor = 'pointer';
+      th.title = 'Sort by ' + (COLUMN_LABELS[c] || c);
+      th.addEventListener('click', () => {
+        listSortDir = listSortCol === c ? -listSortDir : 1;
+        listSortCol = c;
+        loadList();
+      });
       tr.append(th);
     }
     tr.append(document.createElement('th'));
     return tr;
   })());
 
-  el('listing-body').replaceChildren(...items.map((item) => {
+  el('listing-body').replaceChildren(...shown.map((item) => {
     const tr = document.createElement('tr');
     for (const c of active.columns) {
       const td = document.createElement('td');
@@ -3487,7 +3645,27 @@ async function main() {
   el('main').hidden = false;
   computeVisible();
   if (!visible.length) {
-    el('tabs').textContent = 'Your account has no back-office areas — ask an admin for a role.';
+    // #199: single sign-on carried a SHOP session into a STAFF portal. Say so
+    // plainly and offer a real switch (logout + prompt=login re-auth) instead
+    // of a bare shell that looks broken.
+    const who = tokenClaims().preferred_username || 'this account';
+    el('tabs').textContent = '';
+    const note = document.createElement('div');
+    note.style.cssText = 'padding:1rem;max-width:34rem';
+    note.dataset.testid = 'wrong-persona';
+    const pEl = document.createElement('p');
+    pEl.innerHTML = `Signed in as <b></b> — carried over from the shop by single sign-on. `
+      + 'This is a staff portal, and this account has no back-office role.';
+    pEl.querySelector('b').textContent = who;
+    const btn = document.createElement('button');
+    btn.textContent = 'Switch to a staff account';
+    btn.dataset.testid = 'switch-account';
+    btn.addEventListener('click', () => {
+      sessionStorage.setItem('bss.console.forceLogin', '1');
+      signOut();
+    });
+    note.append(pEl, btn);
+    el('tabs').append(note);
     return;
   }
   const savedTab = sessionStorage.getItem('bss.console.tab');

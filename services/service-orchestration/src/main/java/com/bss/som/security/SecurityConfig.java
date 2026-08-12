@@ -43,6 +43,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // the shop's number picker: anonymous preview, nothing consumed
+                        .requestMatchers(org.springframework.http.HttpMethod.GET,
+                                "/tmf-api/resourcePoolManagement/v4/numberOffer").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",

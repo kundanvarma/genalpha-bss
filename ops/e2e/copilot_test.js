@@ -118,8 +118,12 @@ async function token(request, client, user, pass) {
     await new Promise((r) => setTimeout(r, 2500));
     const active = await spServices();
     if (active.length > before) {
-      code = (active[active.length - 1].serviceCharacteristic || [])
-        .find((c) => c.name === 'activationCode')?.value;
+      // ANY of the active StreamPlus services may be ours — the party-scoped
+      // list is unsorted, so under load the LAST row is not necessarily the
+      // newest (hermeticity: scan them all for an entitlement code).
+      code = active
+        .map((s) => (s.serviceCharacteristic || []).find((c) => c.name === 'activationCode')?.value)
+        .find(Boolean);
     }
   }
   if (!code) fail('no partner entitlement code — the copilot\'s category did not drive fulfilment');

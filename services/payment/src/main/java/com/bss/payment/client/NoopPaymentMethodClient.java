@@ -14,4 +14,9 @@ public class NoopPaymentMethodClient implements PaymentMethodClient {
     public Map<String, Object> resolve(String paymentMethodId) {
         return null;
     }
+
+    @Override
+    public Map<String, Object> save(Map<String, Object> dto) {
+        throw new IllegalStateException("no payment-method vault in this deployment");
+    }
 }

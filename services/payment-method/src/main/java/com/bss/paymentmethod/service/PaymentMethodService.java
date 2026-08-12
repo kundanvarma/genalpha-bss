@@ -73,7 +73,13 @@ public class PaymentMethodService {
                 : String.valueOf(details.get("lastFourDigits")));
         entity.setExpiry(details.get("expiry") == null ? null : String.valueOf(details.get("expiry")));
         // Dev vault: mint an opaque token. Production: PSP tokenization result.
-        entity.setPspToken("tok_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
+        // EXCEPTION — a bnplToken method's token IS the provider's recurring
+        // token (Klarna minted it; we only hold the reference): keep it.
+        if ("bnplToken".equals(entity.getMethodType()) && details.get("token") != null) {
+            entity.setPspToken(String.valueOf(details.get("token")));
+        } else {
+            entity.setPspToken("tok_" + UUID.randomUUID().toString().replace("-", "").substring(0, 24));
+        }
         entity.setPreferred(Boolean.TRUE.equals(dto.get("preferred")));
         entity.setStatus(PaymentMethod.ACTIVE);
         entity.setCreatedAt(OffsetDateTime.now());

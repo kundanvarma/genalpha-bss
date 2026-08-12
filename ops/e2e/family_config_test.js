@@ -58,7 +58,7 @@ async function token(ctx, realm, client, user, pass) {
 
   /* ---------- A. NOVA flips to the network-wide model — with catalog data ---------- */
   const novaOffers = await (await ctx.get(
-    `${NOVA}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`,
+    `${NOVA}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: H(staff.nova) })).json();
   const novaPlan = novaOffers.find((o) => o.name === 'Nova Smart 15 GB');
   const novaSpec = await (await ctx.post(`${NOVA}/tmf-api/productCatalogManagement/v4/productSpecification`,

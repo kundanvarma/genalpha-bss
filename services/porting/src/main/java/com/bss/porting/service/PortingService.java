@@ -81,6 +81,11 @@ public class PortingService {
         order.setGateway(gateway.name());
         order.setStatus(PortingOrder.REQUESTED);
         order.setRequestedCutover(parseTime(dto.get("requestedCutover")));
+        // The customer's port-in wish date: honest window, never the past.
+        if (order.getRequestedCutover() != null
+                && order.getRequestedCutover().isBefore(OffsetDateTime.now().minusHours(1))) {
+            throw new BadRequestException("requestedCutover cannot be in the past");
+        }
         order.setCreatedAt(OffsetDateTime.now());
         order.setLastUpdate(OffsetDateTime.now());
 
@@ -94,6 +99,14 @@ public class PortingService {
         } else {
             order.setStatus(PortingOrder.SCHEDULED);
             order.setScheduledCutover(parseTime(decision.scheduledCutoverIso()));
+            // The customer's wish date WINS when it is later than the
+            // clearinghouse's earliest window — production agrees a slot on or
+            // after the wish, never before it.
+            if (order.getRequestedCutover() != null
+                    && (order.getScheduledCutover() == null
+                        || order.getRequestedCutover().isAfter(order.getScheduledCutover()))) {
+                order.setScheduledCutover(order.getRequestedCutover());
+            }
         }
         orders.save(order);
         Map<String, Object> result = toMap(order);
@@ -168,6 +181,7 @@ public class PortingService {
         map.put("clearinghouse", o.getGateway());
         map.put("regulator", PortingRules.forCountry(o.getCountry()).regulator());
         if (o.getRejectReason() != null) map.put("rejectReason", o.getRejectReason());
+        if (o.getRequestedCutover() != null) map.put("requestedCutover", o.getRequestedCutover().toString());
         if (o.getScheduledCutover() != null) map.put("scheduledCutover", o.getScheduledCutover().toString());
         if (o.getCompletedAt() != null) map.put("completedAt", o.getCompletedAt().toString());
         if (o.getProductOrderId() != null) map.put("productOrder", Map.of("id", o.getProductOrderId()));

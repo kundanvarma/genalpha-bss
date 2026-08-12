@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 8080;
 // a real Klarna returns its own klarna.com URL, so no equivalent is needed.
 const PUBLIC_BASE = process.env.PUBLIC_BASE || '';
 const sessions = new Map();
+const tokens = new Map(); // recurring_token -> { sessionId }
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -65,6 +66,35 @@ const server = http.createServer((req, res) => {
     if (!sessions.get(ref[1])) return json(404, { error: 'unknown session' });
     console.log(`[mock-klarna] refunded ${ref[1]}`);
     return json(200, { refunded: true, refund_id: 'ref_' + ref[1].slice(3) });
+  }
+
+  // tokenize an APPROVED session -> a recurring token ("sign up for Klarna")
+  const tok = url.pathname.match(/^\/payments\/v1\/sessions\/([^/]+)\/tokenize$/);
+  if (req.method === 'POST' && tok) {
+    req.resume();
+    if (!sessions.get(tok[1])) return json(404, { error: 'unknown session' });
+    const t = 'krt_' + crypto.randomBytes(8).toString('hex');
+    tokens.set(t, { sessionId: tok[1] });
+    console.log(`[mock-klarna] session ${tok[1]} tokenized -> ${t}`);
+    return json(200, { recurring_token: t });
+  }
+  // merchant-initiated charge against a vaulted token (the monthly bill)
+  const chg = url.pathname.match(/^\/payments\/v1\/tokens\/([^/]+)\/charge$/);
+  if (req.method === 'POST' && chg) {
+    if (!tokens.get(chg[1])) { req.resume(); return json(404, { error: 'unknown token' }); }
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => {
+      let body = {};
+      try { body = raw ? JSON.parse(raw) : {}; } catch { return json(400, { error: 'bad json' }); }
+      const id = 'kch_' + crypto.randomBytes(8).toString('hex');
+      // a token charge is its own mini-order: register it so capture/refund by
+      // this reference work exactly like a session's
+      sessions.set(id, { amount: body.amount, currency: body.currency || 'EUR', returnUrl: '/' });
+      console.log(`[mock-klarna] token ${chg[1]} charged ${body.amount} ${body.currency} -> ${id}`);
+      return json(200, { approved: true, charge_id: id, amount: body.amount, currency: body.currency || 'EUR' });
+    });
+    return;
   }
 
   if (req.method === 'POST' && url.pathname === '/payments/v1/sessions') {

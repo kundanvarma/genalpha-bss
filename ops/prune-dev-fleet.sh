@@ -54,6 +54,13 @@ echo "genalpha keeps $(echo "$KEEP_BSS" | wc -l | tr -d ' ') personas; nova keep
 echo "== pruning genalpha"; prune_tenant genalpha "$KEEP_BSS"
 echo "== pruning nova"; prune_tenant nova "$KEEP_NOVA"
 echo "== quarantining non-persona usage"; quarantine_usage "$(printf '%s\n%s' "$KEEP_BSS" "$KEEP_NOVA")"
+# Retire sweep-minted advisor drafts: every proof sweep ADOPTS market findings
+# into 'In study' offerings, growing the catalog until suites' fixed list pages
+# age out (the 2026-08-13 sweep cascade: "no plan in catalog"). Drafts are
+# advisor proposals — re-mintable any time; retiring them keeps list pages young.
+echo "== retiring sweep-minted 'In study' drafts"
+docker exec bss-postgres psql -U postgres -d product_catalog -c \
+  "UPDATE product_offering SET lifecycle_status='Retired' WHERE lifecycle_status='In study';" | tail -1
 docker exec bss-postgres psql -U postgres -d product_inventory -c \
   "SELECT tenant_id, count(DISTINCT owner_party_id) AS owners, count(*) AS active FROM product WHERE status='active' GROUP BY tenant_id;"
 echo "PRUNE COMPLETE — the fleet is young again"

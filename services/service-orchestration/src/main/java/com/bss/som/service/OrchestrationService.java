@@ -150,6 +150,19 @@ public class OrchestrationService {
         for (Map<String, Object> item : items) {
             String itemId = item.get("id") != null ? String.valueOf(item.get("id")) : null;
             boolean deferred = item.get("product") instanceof Map<?, ?> product && product.get("place") != null;
+            // Choose-your-number: the shopper's picked MSISDN rides the item as
+            // a product characteristic — honored below IF still free.
+            String wishNumber = null;
+            if (item.get("product") instanceof Map<?, ?> prod
+                    && prod.get("productCharacteristic") instanceof List<?> chars) {
+                for (Object c : chars) {
+                    if (c instanceof Map<?, ?> ch && "msisdn".equals(String.valueOf(ch.get("name")))
+                            && ch.get("value") != null) {
+                        wishNumber = String.valueOf(ch.get("value"));
+                    }
+                }
+            }
+            final String wish = wishNumber;
             Map<String, Object> offering = (Map<String, Object>) item.get("productOffering");
             // the SERVICE must carry the offering's real name (the product
             // record does, and downstream correlates the two by it) — an
@@ -253,18 +266,37 @@ public class OrchestrationService {
             }
             if (poolType != null)
             pools.findFirstByTenantIdAndResourceType(tenant, poolType).ifPresent(pool -> {
+                // Choose-your-number: the wish wins while it is still FREE; a
+                // lost race (two shoppers, one number) falls back to next-free
+                // — the first pick stands, honestly.
+                String value = null;
+                if (wish != null && ResourcePool.MSISDN.equals(pool.getResourceType())
+                        && assignments.findFirstByTenantIdAndValue(tenant, wish).isEmpty()) {
+                    value = wish;
+                }
+                if (value == null) {
+                    // next FREE — skips any value a wish already consumed from
+                    // the window ahead, so the counter can never mint a dupe
+                    long next = pool.getNextValue();
+                    String candidate = pool.getPrefix() + String.format("%06d", next);
+                    while (assignments.findFirstByTenantIdAndValue(tenant, candidate).isPresent()) {
+                        next++;
+                        candidate = pool.getPrefix() + String.format("%06d", next);
+                    }
+                    value = candidate;
+                    pool.setNextValue(next + 1);
+                    pool.setLastUpdate(OffsetDateTime.now());
+                    pools.save(pool);
+                }
                 ResourceAssignment assignment = new ResourceAssignment();
                 assignment.setId(UUID.randomUUID().toString());
                 assignment.setTenantId(tenant);
                 assignment.setPoolId(pool.getId());
-                assignment.setValue(pool.getPrefix() + String.format("%06d", pool.getNextValue()));
+                assignment.setValue(value);
                 assignment.setServiceId(serviceId);
                 assignment.setOwnerPartyId(instance.getOwnerPartyId());
                 assignment.setAssignedAt(OffsetDateTime.now());
                 assignments.save(assignment);
-                pool.setNextValue(pool.getNextValue() + 1);
-                pool.setLastUpdate(OffsetDateTime.now());
-                pools.save(pool);
             });
             // Every numbered line rides a SIM: minted operator-side with its
             // PUK. The PIN lives on the card — set via the SIM-platform seam.
@@ -621,6 +653,34 @@ public class OrchestrationService {
         } finally {
             tickGuard.release("resume-due");
         }
+    }
+
+    /** Choose-your-number (task #198): a shortlist of AVAILABLE numbers from the
+     * window ahead of the pool counter — previewed, never consumed. The same
+     * shuffle seed returns the same list (stable while the shopper thinks);
+     * a new seed deals a fresh hand, the Verizon-style "show me others". */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> offerNumbers(String tenant, int count, String shuffle) {
+        return pools.findFirstByTenantIdAndResourceTypeOrderByIdAsc(tenant, com.bss.som.entity.ResourcePool.MSISDN)
+                .map(pool -> {
+                    List<Map<String, Object>> out = new java.util.ArrayList<>();
+                    long base = pool.getNextValue();
+                    java.util.Random rnd = new java.util.Random(
+                            java.util.Objects.hash(base, shuffle == null ? "" : shuffle));
+                    java.util.Set<Long> tried = new java.util.HashSet<>();
+                    while (out.size() < count && tried.size() < 400) {
+                        long offset = rnd.nextInt(400);
+                        if (!tried.add(offset)) {
+                            continue;
+                        }
+                        String candidate = pool.getPrefix() + String.format("%06d", base + offset);
+                        if (assignments.findFirstByTenantIdAndValue(tenant, candidate).isEmpty()) {
+                            out.add(Map.of("msisdn", candidate));
+                        }
+                    }
+                    return out;
+                })
+                .orElse(List.of());
     }
 
     /**

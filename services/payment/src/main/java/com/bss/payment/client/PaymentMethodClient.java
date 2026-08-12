@@ -6,4 +6,8 @@ import java.util.Map;
 public interface PaymentMethodClient {
 
     Map<String, Object> resolve(String paymentMethodId);
+
+    /** Save a method INTO the vault (machine) — used to vault a BNPL recurring
+     * token the provider just minted. */
+    Map<String, Object> save(Map<String, Object> dto);
 }

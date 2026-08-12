@@ -82,6 +82,10 @@ async function token(request, user, pass) {
     await guest.goto(`${API}/shop/`);
     await guest.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
     await guest.click('[data-testid=consent-accept]');
+    // the shop went line-of-business tabs: devices live under Devices, not home
+    await guest.locator('.shoptab', { hasText: 'Devices' }).first().waitFor({ timeout: 15000 });
+    await guest.locator('.shoptab', { hasText: 'Devices' }).first().click();
+    await guest.locator('.card', { hasText: 'Samsung' }).first().waitFor({ timeout: 15000 });
     await guest.locator('text=Samsung').first().click();
     await guest.waitForTimeout(1500);
     // under sweep load the browse beacon can die with the navigation

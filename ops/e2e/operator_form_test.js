@@ -71,7 +71,7 @@ async function token(ctx, realm, user, pass) {
     auroraStaff = await token(ctx, 'aurora', 'demo', 'demo');
     if (!auroraStaff) continue;
     const res = await ctx.get(
-      `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`,
+      `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
       { headers: H(auroraStaff) });
     if (res.status() === 200) {
       offers = (await res.json()).filter((o) => (o.name || '').includes('Aurora'));

@@ -227,7 +227,9 @@ export default function Bills() {
                     {savedMethods.map((m) => (
                       <button key={m.id} className="ghost savedcard" data-testid="saved-card"
                               onClick={() => payWithSaved(bill, m)}>
-                        Pay with {m.details.brand} •••• {m.details.lastFourDigits}
+                        Pay with {m.details.lastFourDigits
+                          ? `${m.details.brand} •••• ${m.details.lastFourDigits}`
+                          : (m.details.brand === 'klarna' ? 'Klarna (saved)' : m.details.brand)}
                       </button>
                     ))}
                   </div>

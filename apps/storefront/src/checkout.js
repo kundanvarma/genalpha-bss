@@ -95,7 +95,7 @@ function deliveryPlace(address, delivery) {
 }
 
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,
-    simType = 'esim', delivery = null, preAuthorized = null) {
+    simType = 'esim', delivery = null, preAuthorized = null, wishNumber = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -109,8 +109,12 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   // an eSIM activates instantly with no parcel. Either way the line carries a
   // simType characteristic so provisioning and the shop know which it is.
   const physicalSim = simType === 'physical';
+  // Choose-your-number: the picked MSISDN rides the mobile line as a
+  // characteristic (like simType); porting always wins over a picked number.
+  const wish = keepNumber && keepNumber.on ? null : wishNumber;
   const withSim = (item, name) => isMobileLine(name)
-    ? { ...item, characteristics: { ...(item.characteristics || {}), simType },
+    ? { ...item, characteristics: { ...(item.characteristics || {}), simType,
+          ...(wish ? { msisdn: wish } : {}) },
         physical: item.physical || physicalSim }
     : item;
 
@@ -187,7 +191,8 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   // is placed, so provisioning activates on it instead of drawing from the pool.
   if (keepNumber && keepNumber.number) {
     const me = await myParty();
-    await requestPortIn(me.id, keepNumber.number, keepNumber.currentProvider).catch(() => {});
+    await requestPortIn(me.id, keepNumber.number, keepNumber.currentProvider,
+        keepNumber.portDate || null).catch(() => {});
   }
   const order = await checkoutCart(annotated, needsShipping ? deliveryPlace(address, delivery) : null, paymentRefs,
     promotionCode);

@@ -60,7 +60,7 @@ async function call(method, path, tok, body) {
     ok(`PICKUP POINTS: ${pp.length} near 0150 — e.g. "${pp[0].name}" (${pp[0].address})`);
 
     /* ---------- 3. routing: a physical order books via BRING ---------- */
-    const offers = (await call('GET', '/tmf-api/productCatalogManagement/v4/productOffering?limit=50', kai)).body || [];
+    const offers = (await call('GET', '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', kai)).body || [];
     const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
     if (!plan) fail('no plan in catalog');
     const order = await call('POST', `${ORDERS}/productOrder`, kai, {

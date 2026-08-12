@@ -194,7 +194,7 @@ const run = Date.now();
     return res.status;
   }, portNumber);
   if (portSeed !== 201) fail('porting seed failed: ' + portSeed);
-  await page.locator('.tab', { hasText: 'Porting' }).click();
+  await page.locator('.tab', { hasText: /^Porting$/ }).click();
   const portRow = page.locator('#listing-body tr', { hasText: portNumber });
   await portRow.first().waitFor({ timeout: 10000 });
   const portCells = await portRow.first().locator('td').allTextContents();

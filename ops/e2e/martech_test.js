@@ -40,7 +40,7 @@ async function staffToken(request, realm) {
 
   // --- A digital plan to buy
   const offers = await (await ctx.request.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`,
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`,
     { headers: as(genalpha) })).json();
   const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
   if (!plan) fail('no plan offering in catalog');

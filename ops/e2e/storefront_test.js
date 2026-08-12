@@ -90,7 +90,17 @@ async function apiGet(page, path, token) {
   // TMF667: the card wears real artwork (poll — images decode async).
   const loaded = async (locator) => {
     for (let i = 0; i < 20; i++) {
-      if (await locator.evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false)) return true;
+      // naturalWidth>0 proves a raster loaded; headless Chromium reports 0 for
+      // SVG images even when they render — for those, verify the BYTES are a
+      // real image response instead of trusting the intrinsic-size quirk.
+      if (await locator.evaluate(async (img) => {
+        if (img.complete && img.naturalWidth > 0) return true;
+        if (!img.complete || !img.currentSrc) return false;
+        try {
+          const r = await fetch(img.currentSrc);
+          return r.ok && (r.headers.get('content-type') || '').startsWith('image/');
+        } catch { return false; }
+      }).catch(() => false)) return true;
       await a.waitForTimeout(500);
     }
     return false;

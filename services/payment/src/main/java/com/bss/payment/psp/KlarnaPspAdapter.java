@@ -85,6 +85,38 @@ public class KlarnaPspAdapter implements RedirectPspAdapter {
                 ok ? null : "refund rejected");
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public TokenGrant tokenize(PspConfig cfg, String sessionId) {
+        Map<String, Object> resp = client(cfg).post().uri("/payments/v1/sessions/{id}/tokenize", sessionId)
+                .header("Content-Type", "application/json")
+                .body(Map.of())
+                .retrieve().body(Map.class);
+        if (resp == null || resp.get("recurring_token") == null) {
+            return null;
+        }
+        log.info("klarna session {} tokenized for recurring", sessionId);
+        return new TokenGrant(str(resp.get("recurring_token")), "Klarna (saved)");
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Confirmation chargeToken(PspConfig cfg, String token, BigDecimal amount, String currency) {
+        Map<String, Object> resp = client(cfg).post().uri("/payments/v1/tokens/{token}/charge", token)
+                .header("Content-Type", "application/json")
+                .body(Map.of("amount", amount == null ? 0 : amount,
+                        "currency", currency == null ? "EUR" : currency))
+                .retrieve().body(Map.class);
+        if (resp == null) {
+            return new Confirmation(false, null, null, null, "Klarna", "token charge failed");
+        }
+        boolean approved = Boolean.TRUE.equals(resp.get("approved"));
+        log.info("klarna token charge {} -> {}", token, approved);
+        return new Confirmation(approved, num(resp.get("amount")), str(resp.get("currency")),
+                str(resp.get("charge_id")), "Klarna (saved)",
+                approved ? null : str(resp.get("decline_reason")));
+    }
+
     private RestClient client(PspConfig cfg) {
         RestClient.Builder b = builder.baseUrl(cfg.getBaseUrl() == null ? "https://api.klarna.com" : cfg.getBaseUrl())
                 .requestFactory(new org.springframework.http.client.JdkClientHttpRequestFactory());

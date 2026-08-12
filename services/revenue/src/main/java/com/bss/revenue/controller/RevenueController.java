@@ -102,6 +102,28 @@ public class RevenueController {
         }
     }
 
+    /** Console P3 — the governed subscription-metrics engine: an MRR waterfall
+     * (new/expansion/contraction/churn), ARPU, churn rate and NRR by month,
+     * computed from the subledger's own recurring-revenue rows. ?format=csv
+     * downloads the same numbers. Defaults: the last 6 whole months. */
+    @GetMapping("/subscriptionMetrics")
+    public ResponseEntity<?> subscriptionMetrics(
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String format) {
+        LocalDate to = parseDate(toDate) != null ? parseDate(toDate) : LocalDate.now();
+        LocalDate from = parseDate(fromDate) != null ? parseDate(fromDate)
+                : to.withDayOfMonth(1).minusMonths(5);
+        if ("csv".equalsIgnoreCase(format)) {
+            return ResponseEntity.ok()
+                    .header("Content-Type", "text/csv")
+                    .header("Content-Disposition", "attachment; filename=subscription-metrics-"
+                            + from + "-" + to + ".csv")
+                    .body(service.subscriptionMetricsCsv(from, to));
+        }
+        return ResponseEntity.ok(service.subscriptionMetrics(from, to));
+    }
+
     @GetMapping(value = "/reconciliation", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Map<String, Object>> reconciliation(
             @RequestParam(required = false) String date) {

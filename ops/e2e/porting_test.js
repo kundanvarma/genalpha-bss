@@ -57,7 +57,7 @@ async function staffToken(request) {
 
   // 5. Order a mobile plan → the orchestrator activates on the PORTED number.
   const offers = await (await ctx.request.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`, { headers: H })).json();
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
   const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
   await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H, data: { productOrderItem: [{ action: 'add', productOffering: { id: plan.id } }],
@@ -124,7 +124,7 @@ async function staffToken(request) {
       otherOperator: 'OtherTelco', relatedParty: [{ id: outParty, role: 'customer' }] } })).json();
   await ctx.request.post(`${PORT}/numberPortingOrder/${pin.id}/complete`, { headers: H });
   const offers2 = await (await ctx.request.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=50`, { headers: H })).json();
+    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
   const plan2 = offers2.find((o) => (o.name || '').includes('Unlimited'));
   await ctx.request.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H, data: { productOrderItem: [{ action: 'add', productOffering: { id: plan2.id } }],
@@ -306,6 +306,32 @@ async function staffToken(request) {
   }
   if (!ceasedByAgent) fail('agent cease did not terminate the service');
   console.log('OK agent ceased the service from the CSR console — number released, state terminated');
+
+  // ---- the customer's port-in WISH DATE (task #197) ----
+  // A future-dated port stays SCHEDULED for its window (the date is a promise);
+  // the clearinghouse's earliest window never overrides a LATER wish; and a
+  // past date is refused outright.
+  {
+    const wishDay = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+    const wished = await (await ctx.request.post(`${API}/tmf-api/numberPortingManagement/v1/numberPortingOrder`,
+      { headers: H, data: { direction: 'portIn', phoneNumber: `+4741${String(Date.now()).slice(-6)}`,
+        country: 'NO', otherOperator: 'OtherTelco', requestedCutover: `${wishDay}T08:00:00Z`,
+        relatedParty: [{ id: person.id, role: 'customer' }] } })).json();
+    if (wished.status !== 'scheduled') fail('future-dated port should be scheduled: ' + JSON.stringify(wished).slice(0, 160));
+    if (!(wished.requestedCutover || '').startsWith(wishDay)) fail('wish date not echoed: ' + wished.requestedCutover);
+    if (new Date(wished.scheduledCutover) < new Date(wished.requestedCutover)) {
+      fail(`scheduled window ${wished.scheduledCutover} is BEFORE the customer's wish ${wished.requestedCutover}`);
+    }
+    console.log('OK WISH DATE: a future-dated port-in stays scheduled for ' + wishDay
+      + ' — the customer\'s date wins over the clearinghouse\'s earlier window');
+
+    const past = await ctx.request.post(`${API}/tmf-api/numberPortingManagement/v1/numberPortingOrder`,
+      { headers: H, data: { direction: 'portIn', phoneNumber: `+4742${String(Date.now()).slice(-6)}`,
+        country: 'NO', otherOperator: 'OtherTelco', requestedCutover: '2020-01-01T08:00:00Z',
+        relatedParty: [{ id: person.id, role: 'customer' }] } });
+    if (past.status() !== 400) fail('a past wish date should be 400, got ' + past.status());
+    console.log('OK WISH DATE: a past date is refused — 400');
+  }
 
   await browser.close();
   console.log('\nALL PORTING CHECKS PASSED');

@@ -51,6 +51,12 @@ async function beginLogin() {
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
+  // #199: after "switch account", ask Keycloak for CREDENTIALS instead of
+  // silently reusing the shop's SSO session (one-shot flag).
+  if (sessionStorage.getItem('bss.console.forceLogin')) {
+    sessionStorage.removeItem('bss.console.forceLogin');
+    q.set('prompt', 'login');
+  }
   location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/auth?' + q);
 }
 

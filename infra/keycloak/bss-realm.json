@@ -185,7 +185,7 @@
       },
       {
         "name": "policy:evaluate",
-        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
+        "description": "policy:evaluate — machine scope for the order pipeline"
       },
       {
         "name": "roles:admin",
@@ -299,7 +299,7 @@
       },
       {
         "name": "digital-worker",
-        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs \u2014 nothing more",
+        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs — nothing more",
         "composite": true,
         "composites": {
           "realm": [
@@ -321,7 +321,7 @@
       },
       {
         "name": "risk:assess",
-        "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
+        "description": "Run and read TMF696 risk assessments — a risk score is a credit check, back-office only"
       },
       {
         "name": "finance-staff",
@@ -974,7 +974,8 @@
       "enabled": true,
       "serviceAccountClientId": "bss-payment",
       "realmRoles": [
-        "paymentmethod:read"
+        "paymentmethod:read",
+        "paymentmethod:write"
       ],
       "id": "fa25b513-452f-52be-b0e2-2895de047131"
     },

@@ -32,4 +32,17 @@ public class RestPaymentMethodClient implements PaymentMethodClient {
             throw new IllegalStateException("payment-method vault is unreachable", e);
         }
     }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> save(Map<String, Object> dto) {
+        try {
+            return restClient.post().uri("/tmf-api/paymentMethods/v4/paymentMethod")
+                    .header("Content-Type", "application/json")
+                    .body(dto)
+                    .retrieve().body(Map.class);
+        } catch (RestClientException e) {
+            throw new IllegalStateException("payment-method vault is unreachable", e);
+        }
+    }
 }

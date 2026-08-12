@@ -43,7 +43,7 @@ async function call(method, path, tok, body) {
 
   /* ---------- 1. a completed flow, explained ---------- */
   const offers = (await call('GET',
-    '/tmf-api/productCatalogManagement/v4/productOffering?limit=50', kai)).body || [];
+    '/tmf-api/productCatalogManagement/v4/productOffering?limit=100', kai)).body || [];
   const plan = offers.find((o) => (o.name || '').includes('Unlimited'));
   if (!plan) fail('no digital plan in catalog');
   const order = await call('POST', `${ORDERS}/productOrder`, kai, {
