@@ -40,6 +40,21 @@ public class PspRouter {
                 .orElseGet(this::defaultAdapter);
     }
 
+    /** The ordered card-PSP pool to try for a charge in this currency: the routing
+     * rule (priority + currency) picks and orders them; the authorize path fails
+     * over down the list past an unreachable provider. Never empty — a tenant with
+     * no matching config falls back to the deployment's global PSP (unchanged). */
+    public List<PspAdapter> candidatesFor(String currency) {
+        List<PspAdapter> out = configs.cardCandidates(currency).stream()
+                .map(c -> byName.get(c.getProvider()))
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+        if (out.isEmpty()) {
+            out.add(forCurrentTenant());   // preserves the single-provider / global path exactly
+        }
+        return out;
+    }
+
     /** The PSP that authorized a payment (for capture/refund), by recorded provider. */
     public PspAdapter byProvider(String provider) {
         PspAdapter a = provider == null ? null : byName.get(provider);

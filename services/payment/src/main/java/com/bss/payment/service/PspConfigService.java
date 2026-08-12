@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 public class PspConfigService {
 
-    private static final Set<String> KNOWN = Set.of("mock", "stripe", "klarna", "paypal");
+    private static final Set<String> KNOWN = Set.of("mock", "mockbank", "stripe", "klarna", "paypal");
 
     private final PspConfigRepository repository;
     private final TenantScope tenantScope;
@@ -73,6 +73,10 @@ public class PspConfigService {
         cfg.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
         cfg.setMethods(json(dto.get("methods")));
         cfg.setDefault(Boolean.TRUE.equals(dto.get("isDefault")));
+        if (dto.get("priority") != null) {
+            cfg.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
+        }
+        cfg.setCurrencies(dto.get("currencies") == null ? null : json(dto.get("currencies")));
         cfg.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));
         cfg.setLastUpdate(OffsetDateTime.now());
         if (cfg.isDefault()) {
@@ -113,6 +117,35 @@ public class PspConfigService {
     @Transactional(readOnly = true)
     public List<PspConfig> enabledForTenant(String tenant) {
         return repository.findByTenantIdAndEnabledTrue(tenant);
+    }
+
+    /** The ordered pool of CARD providers that handle a currency, for the current
+     * tenant: priority ascending (the routing rule), the default first on a tie.
+     * The authorize path tries them in order and fails over past an unreachable
+     * one. Empty → the caller uses the deployment's global PSP (unchanged). */
+    @Transactional(readOnly = true)
+    public List<PspConfig> cardCandidates(String currency) {
+        return repository.findByTenantIdAndEnabledTrue(tenantScope.currentTenantId()).stream()
+                .filter(c -> parseMethods(c.getMethods()).contains("card"))
+                .filter(c -> currencyMatches(c, currency))
+                .sorted(Comparator.comparingInt(PspConfig::getPriority)
+                        .thenComparing(c -> c.isDefault() ? 0 : 1)
+                        .thenComparing(c -> String.valueOf(c.getDisplayName())))
+                .toList();
+    }
+
+    /** A provider handles a currency if it lists none (any) or lists this one. */
+    private boolean currencyMatches(PspConfig c, String currency) {
+        if (c.getCurrencies() == null || c.getCurrencies().isBlank() || currency == null) {
+            return true;
+        }
+        try {
+            List<String> codes = mapper.readValue(c.getCurrencies(),
+                    new com.fasterxml.jackson.core.type.TypeReference<List<String>>() { });
+            return codes.isEmpty() || codes.stream().anyMatch(x -> x.equalsIgnoreCase(currency));
+        } catch (Exception e) {
+            return true;   // a malformed filter never blocks a charge
+        }
     }
 
     /** The provider that serves a method for a tenant (e.g. 'klarna' → the klarna PSP). */
@@ -167,6 +200,8 @@ public class PspConfigService {
         if (c.getSecretRef() != null) m.put("secretRef", c.getSecretRef());
         if (c.getMethods() != null) m.put("methods", c.getMethods());
         m.put("isDefault", c.isDefault());
+        m.put("priority", c.getPriority());
+        if (c.getCurrencies() != null) m.put("currencies", c.getCurrencies());
         m.put("enabled", c.isEnabled());
         m.put("@type", "PspConfig");
         return m;

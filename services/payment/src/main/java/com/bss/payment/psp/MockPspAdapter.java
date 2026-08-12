@@ -9,8 +9,10 @@ import java.util.UUID;
 /**
  * Development PSP with Stripe-style test semantics, close enough to exercise
  * the real lifecycle: a card ending 0002 is declined, 3155 triggers a strong-
- * customer-authentication challenge (the BankID/3-D Secure path), everything
- * else authorizes. Capture and refund succeed. Real money never moves.
+ * customer-authentication challenge (the BankID/3-D Secure path), 0009 simulates
+ * an ACQUIRER OUTAGE (a connect-level failure — the orchestration fails over past
+ * it), everything else authorizes. Capture and refund succeed. Real money never
+ * moves.
  */
 @Component
 public class MockPspAdapter implements PspAdapter {
@@ -33,6 +35,12 @@ public class MockPspAdapter implements PspAdapter {
         String label = "bankCard •••• " + last4;
         if (number.endsWith("0002")) {
             return Authorization.declined(label, "card declined");
+        }
+        if (number.endsWith("0009")) {
+            // Acquirer outage: a connect-level failure the acquirer never received,
+            // so the orchestration may safely fail over to a backup provider.
+            throw new org.springframework.web.client.ResourceAccessException(
+                    "mock acquirer unreachable", new java.net.ConnectException("simulated outage"));
         }
         if (number.endsWith("3155")) {
             // The SCA path: the channel must complete the challenge and retry.

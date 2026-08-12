@@ -43,6 +43,13 @@ public class PspConfig {
     @Column(name = "is_default", nullable = false)
     private boolean isDefault;
 
+    /** Orchestration: lower is tried first among the matching card providers. */
+    @Column(nullable = false)
+    private int priority = 100;
+
+    /** JSON array of ISO currency codes this provider handles; null/empty = any. */
+    private String currencies;
+
     @Column(nullable = false)
     private boolean enabled = true;
 
@@ -70,6 +77,10 @@ public class PspConfig {
     public void setMethods(String v) { this.methods = v; }
     public boolean isDefault() { return isDefault; }
     public void setDefault(boolean v) { this.isDefault = v; }
+    public int getPriority() { return priority; }
+    public void setPriority(int v) { this.priority = v; }
+    public String getCurrencies() { return currencies; }
+    public void setCurrencies(String v) { this.currencies = v; }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean v) { this.enabled = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }

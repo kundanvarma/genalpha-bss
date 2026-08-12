@@ -137,9 +137,34 @@ public class PaymentService {
             }
         }
 
-        PspAdapter psp = pspRouter.forCurrentTenant();
-        PspAdapter.Authorization auth = psp.authorize(
-                dto.getAmount().getValue(), currency, method, dto.getCorrelatorId());
+        // Orchestration: try the routed card-PSP pool in order (the routing rule
+        // picks + orders it by currency/priority), failing over past a provider
+        // that is UNREACHABLE — a connect-level error, never a decline (the card
+        // said no; another PSP would too) and never an ambiguous read-timeout
+        // (which could have charged). One stable idempotency key rides every
+        // attempt. A tenant with one provider and no rules behaves exactly as before.
+        String idem = dto.getCorrelatorId() != null ? dto.getCorrelatorId() : UUID.randomUUID().toString();
+        List<PspAdapter> candidates = pspRouter.candidatesFor(currency);
+        PspAdapter psp = null;
+        PspAdapter.Authorization auth = null;
+        for (int i = 0; i < candidates.size(); i++) {
+            PspAdapter attempt = candidates.get(i);
+            try {
+                auth = attempt.authorize(dto.getAmount().getValue(), currency, method, idem);
+                psp = attempt;   // the PSP RESPONDED (approved / declined / challenge) — never fail over past a response
+                if (i > 0) {
+                    log.warn("card authorize failed over from {} to {}",
+                            candidates.get(0).provider(), attempt.provider());
+                }
+                break;
+            } catch (RuntimeException e) {
+                if (!isRetryable(e) || i + 1 >= candidates.size()) {
+                    throw e;   // not safe to retry, or no backup left — surface it (unchanged single-provider behaviour)
+                }
+                log.warn("card authorize via {} unreachable ({}); failing over to the next provider",
+                        attempt.provider(), e.getMessage());
+            }
+        }
         if (auth.requiresAction()) {
             // Strong customer authentication (3-D Secure / BankID): the channel
             // completes the challenge and retries with the same correlator.
@@ -291,6 +316,23 @@ public class PaymentService {
     @Transactional
     public PaymentDto confirm(String provider, String sessionId) {
         return confirmSession(tenantScope.currentTenantId(), provider, sessionId);
+    }
+
+    /** Safe to fail over to a backup PSP? Only when the acquirer was demonstrably
+     * NEVER reached (connect refused / DNS failure) — so no charge can have
+     * happened. An ambiguous read-timeout (the request may have been processed) is
+     * NOT retryable, or a failover could double-charge; a decline is not an
+     * exception at all, so it never reaches here. */
+    private static boolean isRetryable(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.SocketTimeoutException) {
+                return false;   // ambiguous — could have charged
+            }
+            if (t instanceof java.net.ConnectException || t instanceof java.net.UnknownHostException) {
+                return true;    // never reached the acquirer — safe to try another
+            }
+        }
+        return false;
     }
 
     /** Capture via the redirect adapter (Klarna, by session — BNPL captures on ship)
