@@ -112,6 +112,58 @@ async function token(request, user, pass) {
   console.log(`OK ON THE PRODUCT PAGE: the phone's page shows "Customers who bought this also`
     + ` bought" with ${items} real co-purchase link(s) — e.g. ${railText.replace(/Customers.*bought/, '').trim().slice(0, 50)}…`);
 
+  /* ---------- 3b. the rail never suggests what's already in the cart ---------- */
+  // add the recommended pair to the cart, revisit the phone: the rail must
+  // no longer offer what the shopper already picked
+  await page.goto(`${API}/shop/offering/${pair.id}`);
+  await page.locator('button.primary.big').waitFor({ timeout: 10000 });
+  await page.click('button.primary.big'); // Add to cart
+  await page.waitForURL('**/cart');
+  await page.goto(`${API}/shop/offering/${REAL_PHONE.id}`);
+  await page.locator('button.primary.big').waitFor({ timeout: 10000 });
+  await sleep(2000); // rail + cart fetches settle
+  const railAfter = page.locator('[data-testid=also-bought]');
+  const afterTxt = (await railAfter.count()) ? await railAfter.textContent() : '';
+  if (afterTxt.includes(pair.name)) {
+    fail(`the rail still recommends "${pair.name}" although it is already in the cart`);
+  }
+  console.log(`OK CART FILTER: with "${pair.name}" in the cart, the phone's rail no longer`
+    + ' recommends it — the shop never suggests what the shopper already has');
+
+  /* ---------- 3c. the rail never suggests the configurator's current pick ---------- */
+  // seed co-ownership between the flagship BUNDLE and the Samsung, then on the
+  // bundle's page: with another phone selected the rail may offer the Samsung;
+  // the moment the shopper SELECTS the Samsung, the rail must drop it
+  const bundleOff = (offs2 || []).find((o) => o.name === 'GenAlpha One Home & Mobile');
+  if (bundleOff) {
+    for (let i = 0; i < 3; i++) {
+      const c = `aff-cfg-${run}-${i}`;
+      await own(c, bundleOff.id, bundleOff.name);
+      await own(c, REAL_PHONE.id, REAL_PHONE.name);
+    }
+    await sleep(6500); // outlast the affinity cache TTL
+    await page.goto(`${API}/shop/offering/${bundleOff.id}`);
+    const phoneChoice = page.locator('.choice', { hasText: 'Samsung Galaxy S26' }).first();
+    await phoneChoice.waitFor({ timeout: 15000 });
+    // make sure a NON-Samsung phone is selected first
+    await phoneChoice.locator('label.option').filter({ hasNotText: 'Samsung' }).first().click();
+    await sleep(1500);
+    const railB = page.locator('[data-testid=also-bought]');
+    const withOther = (await railB.count()) ? await railB.textContent() : '';
+    if (!withOther.includes(REAL_PHONE.name)) {
+      fail('setup: the bundle rail should offer the Samsung while another phone is selected');
+    }
+    await page.click('label.option:has-text("Samsung Galaxy S26")');
+    await sleep(500);
+    const withSamsung = (await railB.count()) ? await railB.textContent() : '';
+    if (withSamsung.includes(REAL_PHONE.name)) {
+      fail('the rail still recommends the Samsung although it is the SELECTED option');
+    }
+    console.log('OK CONFIG FILTER: the bundle rail offered the Samsung while another phone was'
+      + ' selected, and dropped it the moment the shopper picked the Samsung — the rail never'
+      + ' recommends the current selection');
+  }
+
   /* ---------- 4. tenant wall + cold offering ---------- */
   // the tenant is the HOSTNAME (the gateway rewrites X-Tenant-Id from it),
   // so reaching nova means nova's host — a header on localhost stays genalpha

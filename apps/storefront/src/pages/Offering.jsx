@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { alsoBought, availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
-import { addToCart, ensureInCart } from '../cart.js';
+import { CART_EVENT, addToCart, cartLines, ensureInCart } from '../cart.js';
 import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 
@@ -21,7 +21,20 @@ export default function Offering() {
   const [shot, setShot] = useState(0);                        // gallery index
   const [teasers, setTeasers] = useState([]);                 // deals that mention this offering
   const [alsoBoughtItems, setAlsoBoughtItems] = useState([]); // market-basket affinity
+  const [inCart, setInCart] = useState(new Set());            // offering ids already in the cart
   const [error, setError] = useState(null);
+
+  // The rail must not suggest what the shopper already has in hand — track the
+  // cart's offering ids (lines + their selections), live across cart changes.
+  useEffect(() => {
+    const refresh = () => cartLines()
+      .then((ls) => setInCart(new Set((ls || []).flatMap((l) =>
+        [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))))
+      .catch(() => setInCart(new Set()));
+    refresh();
+    window.addEventListener(CART_EVENT, refresh);
+    return () => window.removeEventListener(CART_EVENT, refresh);
+  }, []);
 
   // TMF620 cardinality: a bundled component with lower limit 0 is optional
   // (an add-on the customer may include); otherwise it is a fixed inclusion.
@@ -415,20 +428,31 @@ export default function Offering() {
         {outOfStock ? t('Out of stock') : t('Add to cart')}
       </button>
 
-      {alsoBoughtItems.length > 0 && (
-        <section data-testid="also-bought" style={{ marginTop: 28 }}>
-          <h2>{t('Customers who bought this also bought')}</h2>
-          <div className="cards">
-            {alsoBoughtItems.map((it) => (
-              <Link key={it.offering.id} to={`/offering/${it.offering.id}`}
-                    className="card" data-testid="also-bought-item"
-                    style={{ textDecoration: 'none' }}>
-                <b>{it.offering.name}</b>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {(() => {
+        // Filter the rail against what's already chosen: this offering, the
+        // configurator's current picks, added add-ons, and the cart's contents.
+        const already = new Set([
+          id,
+          ...Object.values(chosen).flat(),
+          ...Object.entries(extras).filter(([, on]) => on).map(([eid]) => eid),
+          ...inCart,
+        ]);
+        const rail = alsoBoughtItems.filter((it) => !already.has(it.offering.id));
+        return rail.length > 0 && (
+          <section data-testid="also-bought" style={{ marginTop: 28 }}>
+            <h2>{t('Customers who bought this also bought')}</h2>
+            <div className="cards">
+              {rail.map((it) => (
+                <Link key={it.offering.id} to={`/offering/${it.offering.id}`}
+                      className="card" data-testid="also-bought-item"
+                      style={{ textDecoration: 'none' }}>
+                  <b>{it.offering.name}</b>
+                </Link>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
     </div>
   );
 }

@@ -604,10 +604,10 @@ export default function Cart() {
                 <button type="button" key={key} data-testid="delivery-opt"
                         className={`simopt ${deliverySel === key ? 'on' : ''}`}
                         onClick={() => { setDeliverySel(key); if (!pickup) setPickupId(''); }}>
-                  <span className="simopt-t">{pickup ? '📍' : '🏠'} {o.carrierName}</span>
+                  <span className="simopt-t">{pickup ? '📍 Pickup point' : '🏠 Home delivery'} · {o.carrierName}</span>
                   <span className="simopt-d">{pickup
-                    ? 'Collect at a pickup point near you'
-                    : 'Home delivery — track it to your door'}</span>
+                    ? `Collect at a ${o.carrierName} point near you`
+                    : `Delivered to your door by ${o.carrierName}`}</span>
                 </button>
               );
             })}
@@ -621,6 +621,12 @@ export default function Cart() {
             </select>
           )}
         </div>
+      )}
+      {needsShipping && !showDeliveryPicker && selectedOpt && selectedOpt.carrierName && (
+        // one carrier only — no picker, but still SAY who delivers
+        <p className="dim small" data-testid="delivery-by">
+          🚚 Home delivery by {selectedOpt.carrierName} — track it to your door
+        </p>
       )}
 
       {hasMobile && (

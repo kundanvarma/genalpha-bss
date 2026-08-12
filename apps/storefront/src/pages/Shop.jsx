@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { beacon, consentChoice, forYou, getOffering, getSpec, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
+import { CART_EVENT, cartLines } from '../cart.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -17,6 +18,20 @@ export default function Shop() {
   const [planView, setPlanView] = useState('cards');  // Mobile: 'cards' | 'table' (compare is opt-in)
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
   const [planSpecs, setPlanSpecs] = useState({}); // offeringId -> {charName: value}
+  const [inCart, setInCart] = useState(new Set()); // ids already in the cart
+
+  // "Recommended for you" must not recommend what's already in the cart —
+  // track the cart's offering ids (lines + selections), live across changes.
+  useEffect(() => {
+    if (!isSignedIn()) return undefined;
+    const refresh = () => cartLines()
+      .then((ls) => setInCart(new Set((ls || []).flatMap((l) =>
+        [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))))
+      .catch(() => setInCart(new Set()));
+    refresh();
+    window.addEventListener(CART_EVENT, refresh);
+    return () => window.removeEventListener(CART_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     Promise.all([listOfferings(), priceIndex()])
@@ -61,7 +76,9 @@ export default function Shop() {
 
   const bundles = offerings.filter((o) => o.isBundle);
   let singles = offerings.filter((o) => !o.isBundle);
-  const picks = recommended.map((id) => offerings.find((o) => o.id === id)).filter(Boolean);
+  const picks = recommended.map((id) => offerings.find((o) => o.id === id))
+    .filter(Boolean)
+    .filter((o) => !inCart.has(o.id)); // never recommend what's already in the cart
 
   // personalization, honest and gentle: what they looked at leads; an
   // operator experience rule can pin one offering on top of that
