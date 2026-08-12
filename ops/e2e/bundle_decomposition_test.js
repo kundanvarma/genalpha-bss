@@ -52,6 +52,32 @@ function leaves(items, into = []) {
   }
   return into;
 }
+async function form(url, params) {
+  const r = await fetch(url, { method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(params) });
+  return r.json();
+}
+/* A brand-new customer with a clean inventory — so the upgrade leg reads its
+ * one product without fighting a shared persona's capped product page. */
+async function freshCustomer(tag) {
+  const KCB = 'http://localhost:8085';
+  const admin = (await form(`${KCB}/realms/master/protocol/openid-connect/token`,
+    { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' })).access_token;
+  const uname = `e2e-${tag}-${Date.now()}@example.com`;
+  const areq = (m, path, body) => fetch(`${KCB}/admin/realms/bss${path}`, { method: m,
+    headers: { Authorization: `Bearer ${admin}`, 'Content-Type': 'application/json' },
+    ...(body ? { body: JSON.stringify(body) } : {}) });
+  await areq('POST', '/users', { username: uname, email: uname, enabled: true, emailVerified: true,
+    firstName: 'Bundle', lastName: 'Tester', credentials: [{ type: 'password', value: 'Passw0rd!', temporary: false }] });
+  const users = await (await areq('GET', `/users?username=${encodeURIComponent(uname)}`)).json();
+  const roles = await (await areq('GET', '/roles')).json();
+  const cust = roles.find((r) => r.name === 'customer');
+  if (cust) await areq('POST', `/users/${users[0].id}/role-mappings/realm`, [cust]);
+  const tok = (await form(`${KCB}/realms/bss/protocol/openid-connect/token`,
+    { grant_type: 'password', client_id: 'bss-demo', username: uname, password: 'Passw0rd!' })).access_token;
+  await call('POST', '/tmf-api/party/v4/individual', tok, { givenName: 'Bundle', familyName: 'Tester' });
+  return tok;
+}
 
 (async () => {
   const kai = await token('kai@bss.local', 'kai');
@@ -126,8 +152,9 @@ function leaves(items, into = []) {
   ok(`ROLLUP: order is '${order.state}'; the ${fixed.length} fixed components bill THROUGH the bundle, not as separate products`);
 
   /* ---------- 6. UPGRADE: broadband speed is a configurable characteristic ---------- */
+  const cust = await freshCustomer('fiber'); // clean inventory — no capped-page flake
   const fiber = offs.find((o) => o.name === 'GenAlpha Fiber 1000');
-  const buy = await call('POST', ORD, kai, { description: 'fiber 300', productOrderItem: [{
+  const buy = await call('POST', ORD, cust, { description: 'fiber 300', productOrderItem: [{
     id: '1', action: 'add',
     productOffering: { id: fiber.id, name: fiber.name, '@referredType': 'ProductOffering' },
     product: { place: [addr], productCharacteristic: [{ name: 'downloadSpeed', value: 300 }] } }] });
@@ -135,14 +162,14 @@ function leaves(items, into = []) {
   await sleep(3000);
   await call('PATCH', `${ORD}/${buy.body.id}`, staff, { state: 'completed' });
   await sleep(2500);
-  const prods = (await call('GET', INV, kai)).body || [];
+  const prods = (await call('GET', INV, cust)).body || [];
   const prod = prods.filter((p) => p.name === 'GenAlpha Fiber 1000')
     .find((p) => (p.productCharacteristic || []).some((c) => c.name === 'downloadSpeed' && String(c.value) === '300'));
   if (!prod) fail('the fiber product was not provisioned with downloadSpeed=300');
-  const svcs = (await call('GET', SVC, kai)).body || [];
+  const svcs = (await call('GET', SVC, cust)).body || [];
   const svc = (Array.isArray(svcs) ? svcs : []).find((s) => String(s.name).includes('Fiber'));
 
-  const modify = (speed) => call('POST', ORD, kai, { description: 'speed change', productOrderItem: [{
+  const modify = (speed) => call('POST', ORD, cust, { description: 'speed change', productOrderItem: [{
     action: 'modify',
     product: { id: prod.id, productCharacteristic: [{ name: 'downloadSpeed', value: speed }],
       ...(svc ? { realizingService: [{ id: svc.id }] } : {}) },
@@ -151,7 +178,7 @@ function leaves(items, into = []) {
   const up = await modify(1000);
   if (up.status !== 201 && up.status !== 200) fail(`upgrade refused: ${up.status} ${up.text}`);
   await sleep(2500);
-  const after = ((await call('GET', INV, kai)).body || []).find((p) => p.id === prod.id);
+  const after = ((await call('GET', INV, cust)).body || []).find((p) => p.id === prod.id);
   const nowSpeed = (after.productCharacteristic || []).find((c) => c.name === 'downloadSpeed');
   if (!nowSpeed || String(nowSpeed.value) !== '1000') fail(`upgrade did not land: speed is ${nowSpeed && nowSpeed.value}`);
   ok('UPGRADE: broadband 300 -> 1000 via action=modify landed on the subscribed product');

@@ -146,6 +146,16 @@ public class OrchestrationService {
         // place) is reported inProgress and finishes on its own track — the
         // parcel's delivery (C2) or the install (C4). The parent order rolls up
         // to partiallyCompleted and only reaches completed when every item lands.
+        // Which components are being SHIPPED or INSTALLED (they carry a place) —
+        // a dependent (TV) only waits when the base it rides is actually one of
+        // these; when the base activates instantly, so may the dependent.
+        java.util.Set<String> placedItemIds = new java.util.HashSet<>();
+        for (Map<String, Object> it : items) {
+            if (it.get("id") != null && it.get("product") instanceof Map<?, ?> pr
+                    && pr.get("place") != null) {
+                placedItemIds.add(String.valueOf(it.get("id")));
+            }
+        }
         boolean anyUnreported = false;
         for (Map<String, Object> item : items) {
             String itemId = item.get("id") != null ? String.valueOf(item.get("id")) : null;
@@ -198,20 +208,24 @@ public class OrchestrationService {
             boolean internet = "internet".equals(componentType);
             boolean tv = "tv".equals(componentType);
             boolean device = "device".equals(componentType);
-            // broadband always installs — hold it inProgress until fulfilment lands,
-            // even when no place rode the item
-            if (internet) {
-                deferred = true;
-            }
             // Fulfilment dependency (TMF622 "reliesOn"): a component that rides
             // another — TV on the broadband connection — must NOT activate while
-            // its base product is still being set up. Hold it inProgress; it
-            // activates with the deferred fan-out when fulfilment completes, so the
-            // customer never sees TV "done" while the internet it needs is pending.
-            boolean reliesOnSomething = item.get("orderItemRelationship") instanceof List<?> rels
-                    && rels.stream().anyMatch(r -> r instanceof Map<?, ?> rel
-                            && "reliesOn".equals(String.valueOf(rel.get("relationshipType"))));
-            if (reliesOnSomething) {
+            // its base is still being set up. Hold it inProgress ONLY while that
+            // base is actually being installed/shipped (it carries a place); when
+            // the base activates instantly, the dependent may too. It then comes up
+            // with the deferred fan-out, so the customer never sees TV "done" while
+            // the internet it needs is still pending.
+            boolean reliesOnPending = false;
+            if (item.get("orderItemRelationship") instanceof List<?> rels) {
+                for (Object r : rels) {
+                    if (r instanceof Map<?, ?> rel
+                            && "reliesOn".equals(String.valueOf(rel.get("relationshipType")))
+                            && placedItemIds.contains(String.valueOf(rel.get("id")))) {
+                        reliesOnPending = true;
+                    }
+                }
+            }
+            if (reliesOnPending) {
                 deferred = true;
             }
             ServiceOrder so = new ServiceOrder();
