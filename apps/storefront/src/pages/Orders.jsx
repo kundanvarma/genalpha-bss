@@ -86,13 +86,21 @@ export default function Orders() {
     if (simType === 'esim') return { cls: 'ok', text: '⚡ eSIM — ready to activate' };
     if (physical && ship && ship.trackingRef) {
       const via = ship.carrier ? ` (${ship.carrier})` : '';
+      const track = ship.trackingUrl
+        ? { trackUrl: ship.trackingUrl, carrier: ship.carrier || 'the carrier' } : {};
       if (ship.deliveryMethod === 'pickupPoint' && ship.pickupPoint) {
-        return { cls: 'go', text: `📍 To pickup point · ${ship.pickupPoint}${via}` };
+        // packed & routed to a pickup point vs already delivered there
+        const at = ship.state === 'delivered' ? '✓ Ready for collection at' : '📍 On its way to';
+        return { cls: 'go', text: `${at} ${ship.pickupPoint}${via} · ${ship.trackingRef}`, ...track };
       }
-      return { cls: 'go', text: `📦 On its way · ${ship.trackingRef}${via}` };
+      // packed → shipped → out for delivery → delivered, from the parcel state
+      const stageText = ship.state === 'delivered' ? '✓ Delivered'
+        : ship.state === 'acknowledged' ? `📦 Packed — preparing to ship · ${ship.trackingRef}${via}`
+        : `🚚 Shipped — on its way · ${ship.trackingRef}${via}`;
+      return { cls: 'go', text: stageText, ...track };
     }
     if (physical && visit) return { cls: 'go', text: '🔧 Install booked' };
-    if (physical) return { cls: 'go', text: '📦 Preparing shipment' };
+    if (physical) return { cls: 'go', text: '📦 Packed — preparing to ship' };
     return { cls: 'go', text: 'Activating…' };
   }
 
@@ -125,6 +133,10 @@ export default function Orders() {
                         <li key={it.id || i}>
                           <span className="itemname">{it.productOffering?.name || 'Item'}</span>
                           <span className={`itemstatus ${s.cls}`}>{s.text}</span>
+                          {s.trackUrl && (
+                            <a className="tracklink" data-testid="track-link" href={s.trackUrl}
+                               target="_blank" rel="noopener noreferrer">Track with {s.carrier} ↗</a>
+                          )}
                         </li>
                       );
                     })}
@@ -144,10 +156,26 @@ export default function Orders() {
                   // to a CUSTOMER an overdue/held step is "still working", not a
                   // failure — only a truly cancelled order shows an ✗.
                   const g = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
+                  // which PACKAGE is still in progress — the per-component answer
+                  const pending = items.filter((it) => (it.state || '') !== 'completed'
+                    && (it.state || '') !== 'cancelled');
                   return (
                     <div className="journey" data-testid="journey">
                       <p className="journeywhy"><b>{j.summary?.headline}</b>
                         {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
+                      {pending.length > 0 && (
+                        <p className="journeywaiting small" data-testid="journey-waiting">
+                          Still finishing: {pending.map((it, k) => {
+                            const ps = itemStatus(it, ship, visit);
+                            return (
+                              <span key={it.id || k}>
+                                {k > 0 ? ', ' : ''}<b>{it.productOffering?.name || 'item'}</b> — {ps.text}
+                                {ps.trackUrl ? <> · <a href={ps.trackUrl} target="_blank" rel="noopener noreferrer">track ↗</a></> : null}
+                              </span>
+                            );
+                          })}
+                        </p>
+                      )}
                       <ul className="journeysteps">
                         {(j.taskFlow || []).map((t) => (
                           <li key={t.id} className={`jstep ${t.state === 'completed' ? 'completed' : 'active'}`}>

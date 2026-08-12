@@ -339,6 +339,28 @@ public class FulfilmentService {
         return null;
     }
 
+    /** Carrier "track & trace" URL for a parcel — a config-overridable template
+     * ({tracking} substituted), else a well-known Nordic-carrier pattern. */
+    private String trackingUrlFor(ShippingOrder so) {
+        if (so.getTrackingRef() == null || so.getCarrier() == null) {
+            return null;
+        }
+        String ref = so.getTrackingRef();
+        // Well-known Nordic carriers, keyed on the display name. (A per-tenant
+        // config template is a documented follow-up — carrier_config.config.)
+        String c = so.getCarrier().toLowerCase();
+        if (c.contains("bring") || c.contains("posten")) {
+            return "https://tracking.bring.com/tracking/" + ref;
+        }
+        if (c.contains("postnord")) {
+            return "https://www.postnord.no/en/track-and-trace?shipmentId=" + ref;
+        }
+        if (c.contains("helthjem")) {
+            return "https://helthjem.no/sporing?q=" + ref;
+        }
+        return null;
+    }
+
     private Map<String, Object> shippingView(ShippingOrder so) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", so.getId());
@@ -352,6 +374,14 @@ public class FulfilmentService {
         }
         if (so.getCarrier() != null) {
             map.put("carrier", so.getCarrier());
+        }
+        // A real "Track your parcel" deep-link into the carrier's own app, so a
+        // customer follows the parcel where they always would (Posten/Bring &c.).
+        // The carrier_config may override the template; otherwise well-known
+        // Nordic carrier patterns keyed on the display name.
+        String trackUrl = trackingUrlFor(so);
+        if (trackUrl != null) {
+            map.put("trackingUrl", trackUrl);
         }
         if (so.getDeliveryMethod() != null) {
             map.put("deliveryMethod", so.getDeliveryMethod());

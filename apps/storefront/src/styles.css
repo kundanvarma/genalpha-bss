@@ -362,3 +362,6 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 
 /* Staff account carried into the shop by SSO — browse-only, switch to buy */
 .staffbanner { background: #fff4d6; color: #6b4e00; padding: 10px 16px; font-size: 14px; border-bottom: 1px solid #e6cf8a; }
+
+.tracklink { margin-left: 8px; color: var(--teal); font-size: 12.5px; white-space: nowrap; }
+.journeywaiting { margin: 4px 0 8px; }
