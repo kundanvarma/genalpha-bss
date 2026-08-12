@@ -203,6 +203,17 @@ public class OrchestrationService {
             if (internet) {
                 deferred = true;
             }
+            // Fulfilment dependency (TMF622 "reliesOn"): a component that rides
+            // another — TV on the broadband connection — must NOT activate while
+            // its base product is still being set up. Hold it inProgress; it
+            // activates with the deferred fan-out when fulfilment completes, so the
+            // customer never sees TV "done" while the internet it needs is pending.
+            boolean reliesOnSomething = item.get("orderItemRelationship") instanceof List<?> rels
+                    && rels.stream().anyMatch(r -> r instanceof Map<?, ?> rel
+                            && "reliesOn".equals(String.valueOf(rel.get("relationshipType"))));
+            if (reliesOnSomething) {
+                deferred = true;
+            }
             ServiceOrder so = new ServiceOrder();
             String id = UUID.randomUUID().toString();
             so.setId(id);
