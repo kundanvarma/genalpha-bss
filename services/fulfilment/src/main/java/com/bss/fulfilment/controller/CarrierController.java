@@ -52,6 +52,13 @@ public class CarrierController {
         return ResponseEntity.noContent().build();
     }
 
+    /** Test connection — a reachability probe of the configured base URL
+     * (GET /health, short timeout); never books anything. */
+    @org.springframework.web.bind.annotation.PostMapping("/{carrier}/test")
+    public ResponseEntity<Map<String, Object>> test(@PathVariable String carrier) {
+        return ResponseEntity.ok(service.testConnection(carrier));
+    }
+
     /** Pickup points near a postcode for a configured carrier (empty if none). */
     @GetMapping("/pickupPoints")
     public ResponseEntity<List<Map<String, Object>>> pickupPoints(

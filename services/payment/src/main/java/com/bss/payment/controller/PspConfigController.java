@@ -44,4 +44,12 @@ public class PspConfigController {
         service.delete(provider);
         return ResponseEntity.noContent().build();
     }
+
+    /** Test connection — a REACHABILITY probe, never a money call: a configured
+     * base URL is pinged (GET /health with a short timeout); an in-process
+     * adapter (mock/mockbank, or no base URL) reports so honestly. */
+    @org.springframework.web.bind.annotation.PostMapping("/{provider}/test")
+    public ResponseEntity<Map<String, Object>> test(@PathVariable String provider) {
+        return ResponseEntity.ok(service.testConnection(provider));
+    }
 }

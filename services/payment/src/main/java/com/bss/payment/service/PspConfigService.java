@@ -167,6 +167,38 @@ public class PspConfigService {
         }
     }
 
+    /** Test connection: reachability only — never a money operation. Pings the
+     * configured base URL's /health with a short timeout; no base URL means an
+     * in-process (or SDK-default) adapter, reported honestly, not probed. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> testConnection(String provider) {
+        PspConfig cfg = repository.findByTenantIdAndProvider(tenantScope.currentTenantId(), provider)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "provider '" + provider + "' is not configured for this tenant"));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("provider", provider);
+        if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
+            out.put("ok", true);
+            out.put("note", "no base URL configured — in-process/default adapter, nothing to probe");
+            return out;
+        }
+        try {
+            java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(3)).build();
+            java.net.http.HttpResponse<Void> resp = http.send(
+                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(cfg.getBaseUrl() + "/health"))
+                            .timeout(java.time.Duration.ofSeconds(4)).GET().build(),
+                    java.net.http.HttpResponse.BodyHandlers.discarding());
+            out.put("ok", resp.statusCode() < 500);
+            out.put("status", resp.statusCode());
+            out.put("note", "reachability probe of " + cfg.getBaseUrl() + "/health — not a payment");
+        } catch (Exception e) {
+            out.put("ok", false);
+            out.put("note", "unreachable: " + e.getMessage());
+        }
+        return out;
+    }
+
     @Transactional
     public void delete(String provider) {
         repository.findByTenantIdAndProvider(tenantScope.currentTenantId(), provider)

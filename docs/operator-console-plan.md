@@ -1,6 +1,8 @@
 # The Operator Console — integrations marketplace + sales/ops reporting
 
-**Status:** P1 shipped (2026-08-11) · P2–P4 pending · **Depends on:** `apps/admin-console`, the service seams, the revenue/billing/order data already captured
+**Status:** P1 shipped (2026-08-11) · **P2 shipped (2026-08-12)** · P3–P4 pending · **Depends on:** `apps/admin-console`, the service seams, the revenue/billing/order data already captured
+
+> **P2 (per-tenant PSP + logistics config) shipped:** landed across the carrier arc (C-P2: `carrier_config` + Logistics card) and the PSP arc (PSP-P1: `payment_provider_config` + Payment card), then completed here — the Payment card exposes the **routing fields** (`priority`, `currencies` — the suite-#96 orchestration levers) and both cards grew **Test connection**: `POST /paymentProvider/{p}/test` and `POST /carrier/{c}/test`, a reachability probe of the provider's `/health` (3s connect timeout) that is **never a payment or a booking** — a bad base URL reads "✗ unreachable" on the card before checkout ever finds out. Global env stays the fallback throughout. Remaining: P3 (the MRR/ARPU/churn engine), P4 (generic connectors + the encrypted secret store).
 
 > **P1 (visibility) shipped:** `GET /revenue/v1/summary` — a governed sales/finance summary computed once from the subledger (net revenue = credit−debit over revenue-family accounts, tax, cash collected, invoices, prior-period delta, revenue-by-account). Two new console workspaces (data-driven `RESOURCES` entries + custom panels): **Reporting** (KPI tiles + date range + by-account table) and **Integrations** (the seam catalog — the Content/DAM card is *live* per-tenant config via `/contentProvider` GET/PUT/DELETE; PSP/logistics/OCS/AI shown as built-in with P2 notes). Verified live in the console.
 

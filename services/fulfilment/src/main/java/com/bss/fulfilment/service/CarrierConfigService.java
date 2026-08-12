@@ -118,6 +118,37 @@ public class CarrierConfigService {
                 .ifPresent(repository::delete);
     }
 
+    /** Test connection: reachability of the configured base URL's /health with a
+     * short timeout — never a booking. No base URL = nothing to probe, said so. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> testConnection(String carrier) {
+        CarrierConfig cfg = repository.findByTenantIdAndCarrier(tenantScope.currentTenantId(), carrier)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "carrier '" + carrier + "' is not configured for this tenant"));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("carrier", carrier);
+        if (cfg.getBaseUrl() == null || cfg.getBaseUrl().isBlank()) {
+            out.put("ok", true);
+            out.put("note", "no base URL configured — nothing to probe");
+            return out;
+        }
+        try {
+            java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder()
+                    .connectTimeout(java.time.Duration.ofSeconds(3)).build();
+            java.net.http.HttpResponse<Void> resp = http.send(
+                    java.net.http.HttpRequest.newBuilder(java.net.URI.create(cfg.getBaseUrl() + "/health"))
+                            .timeout(java.time.Duration.ofSeconds(4)).GET().build(),
+                    java.net.http.HttpResponse.BodyHandlers.discarding());
+            out.put("ok", resp.statusCode() < 500);
+            out.put("status", resp.statusCode());
+            out.put("note", "reachability probe of " + cfg.getBaseUrl() + "/health — not a booking");
+        } catch (Exception e) {
+            out.put("ok", false);
+            out.put("note", "unreachable: " + e.getMessage());
+        }
+        return out;
+    }
+
     private String json(Object v) {
         if (v == null) {
             return null;

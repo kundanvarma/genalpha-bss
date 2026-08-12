@@ -2601,11 +2601,22 @@ async function renderIntegrations() {
         line.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:0.5rem;font-size:0.9rem';
         const label = document.createElement('span');
         label.innerHTML = `<b>${cr.displayName || cr.carrier}</b>${cr.postcodePrefix ? ' · ' + cr.postcodePrefix + '∗' : ''}${cr.isDefault ? ' · default' : ''}${cr.enabled === false ? ' · off' : ''}`;
+        // Test = reachability probe of the provider's /health — never a booking
+        const tst = document.createElement('button');
+        tst.textContent = 'Test';
+        tst.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
+        tst.addEventListener('click', async () => {
+          tst.textContent = '…';
+          const r = await authFetch(`${SHIP}/carrier/${cr.carrier}/test`, { method: 'POST' });
+          const body = r.ok ? await r.json() : { ok: false };
+          tst.textContent = body.ok ? '✓ reachable' : '✗ unreachable';
+          setTimeout(() => { tst.textContent = 'Test'; }, 4000);
+        });
         const del = document.createElement('button');
         del.textContent = 'Remove';
         del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
         del.addEventListener('click', async () => { await authFetch(`${SHIP}/carrier/${cr.carrier}`, { method: 'DELETE' }); loadLogi(); });
-        line.append(label, del);
+        line.append(label, tst, del);
         wrap.append(line);
       }
     }
@@ -2666,11 +2677,22 @@ async function renderIntegrations() {
         const curr = ps.currencies ? ` · ${String(ps.currencies).replace(/[\[\]"]/g, '')}` : '';
         const prio = ps.priority != null && ps.priority !== 100 ? ` · prio ${ps.priority}` : '';
         label.innerHTML = `<b>${ps.displayName || ps.provider}</b>${ps.isDefault ? ' · default' : ''}${prio}${curr}${ps.enabled === false ? ' · off' : ''}`;
+        // Test = reachability probe of the PSP's /health — never a payment
+        const tst = document.createElement('button');
+        tst.textContent = 'Test';
+        tst.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
+        tst.addEventListener('click', async () => {
+          tst.textContent = '…';
+          const r = await authFetch(`${PAY}/paymentProvider/${ps.provider}/test`, { method: 'POST' });
+          const body = r.ok ? await r.json() : { ok: false };
+          tst.textContent = body.ok ? '✓ reachable' : '✗ unreachable';
+          setTimeout(() => { tst.textContent = 'Test'; }, 4000);
+        });
         const del = document.createElement('button');
         del.textContent = 'Remove';
         del.style.cssText = 'padding:0.2rem 0.6rem;font-size:0.8rem';
         del.addEventListener('click', async () => { await authFetch(`${PAY}/paymentProvider/${ps.provider}`, { method: 'DELETE' }); loadPay(); });
-        line.append(label, del);
+        line.append(label, tst, del);
         wrap.append(line);
       }
     }
