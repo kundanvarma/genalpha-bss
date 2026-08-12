@@ -108,6 +108,13 @@ public class PspConfigService {
         return new java.util.ArrayList<>(methods);
     }
 
+    /** Every enabled provider config for a tenant — the pool orchestration draws
+     * its failover candidates from. */
+    @Transactional(readOnly = true)
+    public List<PspConfig> enabledForTenant(String tenant) {
+        return repository.findByTenantIdAndEnabledTrue(tenant);
+    }
+
     /** The provider that serves a method for a tenant (e.g. 'klarna' → the klarna PSP). */
     @Transactional(readOnly = true)
     public Optional<PspConfig> providerForMethod(String tenant, String method) {

@@ -35,6 +35,8 @@ import java.util.UUID;
 @Service
 public class PaymentService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(PaymentService.class);
+
     private static final String RESOURCE = "Payment";
 
     /** The only legal moves: an authorization is either taken or given back. */
@@ -185,29 +187,62 @@ public class PaymentService {
         return out;
     }
 
-    /** Open a redirect/BNPL session (Klarna): returns where to send the customer. */
+    /** Open a redirect session (Klarna/PayPal): returns where to send the customer.
+     * Orchestration/failover — the method's provider is tried first; if it is
+     * unreachable, any OTHER configured redirect provider takes over so a single
+     * provider outage does not sink checkout. The response names the provider that
+     * ACTUALLY served (and, on failover, the one it replaced), so the confirm leg
+     * and the records stay truthful — a failover can switch the payment instrument
+     * (e.g. Klarna→PayPal), which the caller sees via `failedOverFrom`. */
     @Transactional(readOnly = true)
     public Map<String, Object> createSession(Map<String, Object> dto) {
         String method = String.valueOf(dto.get("method"));
         String tenant = tenantScope.currentTenantId();
-        PspConfig cfg = pspConfigs.providerForMethod(tenant, method)
+        PspConfig primary = pspConfigs.providerForMethod(tenant, method)
                 .orElseThrow(() -> new BadRequestException("no provider configured for method '" + method + "'"));
-        com.bss.payment.psp.RedirectPspAdapter adapter = redirectRegistry.get(cfg.getProvider());
-        if (adapter == null) {
-            throw new BadRequestException("no redirect adapter for '" + cfg.getProvider() + "'");
+        if (redirectRegistry.get(primary.getProvider()) == null) {
+            throw new BadRequestException("no redirect adapter for '" + primary.getProvider() + "'");
         }
         BigDecimal amount = dto.get("amount") instanceof Map<?, ?> a && a.get("value") != null
                 ? new BigDecimal(String.valueOf(a.get("value"))) : BigDecimal.ZERO;
         String currency = dto.get("amount") instanceof Map<?, ?> a2 && a2.get("unit") != null
                 ? String.valueOf(a2.get("unit")) : "EUR";
-        com.bss.payment.psp.RedirectPspAdapter.Session session =
-                adapter.createSession(cfg, amount, currency, String.valueOf(dto.getOrDefault("returnUrl", "")));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("sessionId", session.sessionId());
-        out.put("redirectUrl", session.redirectUrl());
-        out.put("provider", cfg.getProvider());
-        out.put("@type", "PaymentSession");
-        return out;
+        String returnUrl = String.valueOf(dto.getOrDefault("returnUrl", ""));
+
+        // primary first, then every other configured redirect provider as backup
+        List<PspConfig> candidates = new ArrayList<>();
+        candidates.add(primary);
+        for (PspConfig c : pspConfigs.enabledForTenant(tenant)) {
+            if (!c.getProvider().equals(primary.getProvider())
+                    && redirectRegistry.get(c.getProvider()) != null) {
+                candidates.add(c);
+            }
+        }
+        RuntimeException last = null;
+        for (int i = 0; i < candidates.size(); i++) {
+            PspConfig cfg = candidates.get(i);
+            try {
+                com.bss.payment.psp.RedirectPspAdapter.Session session = redirectRegistry.get(cfg.getProvider())
+                        .createSession(cfg, amount, currency, returnUrl);
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("sessionId", session.sessionId());
+                out.put("redirectUrl", session.redirectUrl());
+                out.put("provider", cfg.getProvider());
+                if (i > 0) {
+                    out.put("failedOverFrom", primary.getProvider());
+                    log.warn("payment session for method '{}' failed over from {} to {}",
+                            method, primary.getProvider(), cfg.getProvider());
+                }
+                out.put("@type", "PaymentSession");
+                return out;
+            } catch (RuntimeException e) {
+                last = e;
+                log.warn("createSession via {} failed ({}); {}", cfg.getProvider(), e.getMessage(),
+                        i + 1 < candidates.size() ? "trying the next redirect provider" : "no backup left");
+            }
+        }
+        throw new ConflictException("all redirect providers failed for method '" + method + "'"
+                + (last == null ? "" : ": " + last.getMessage()));
     }
 
     /**

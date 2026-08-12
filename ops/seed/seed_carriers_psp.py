@@ -60,4 +60,9 @@ put(f"{PAY}/paymentProvider", {
     "secretRef": "KLARNA_API_KEY", "webhookSecretRef": "KLARNA_WEBHOOK_SECRET",
     "methods": ["card", "klarna"], "isDefault": False})
 print("payment: Klarna offered alongside card")
+
+put(f"{PAY}/paymentProvider", {
+    "provider": "paypal", "displayName": "PayPal", "baseUrl": "http://mock-paypal:8080",
+    "secretRef": "PAYPAL_API_KEY", "methods": ["paypal"], "isDefault": False})
+print("payment: PayPal offered (second redirect provider)")
 print("done")
