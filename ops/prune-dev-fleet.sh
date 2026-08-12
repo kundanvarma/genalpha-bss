@@ -34,12 +34,26 @@ prune_tenant() {
     "UPDATE product SET status='cancelled' WHERE tenant_id='${tenant}' AND status='active' AND owner_party_id NOT IN (${inlist});" | tail -1
 }
 
+# Quarantine non-persona USAGE too: unrated ('received') usage rows of junk
+# parties are what the billing run grinds through on a fresh period — one
+# pathological account (aff-solo-1784817883752, recorded) once hung a worker
+# 15 minutes. Marking junk rows 'rated' stops them billing; nothing deleted.
+# Persona usage is KEPT received — loyalty's meter derives from it.
+quarantine_usage() {
+  local keep="$1"
+  local inlist
+  inlist=$(echo "$keep" | awk '{printf "'"'"'%s'"'"'," , $0}' | sed 's/,$//')
+  docker exec bss-postgres psql -U postgres -d usage -c \
+    "UPDATE usage_record SET status='rated' WHERE status='received' AND (owner_party_id IS NULL OR owner_party_id='' OR owner_party_id NOT IN (${inlist}));" | tail -1
+}
+
 echo "== resolving persona ids"
 KEEP_BSS=$(subs_for bss $PERSONAS_BSS)
 KEEP_NOVA=$(subs_for nova $PERSONAS_NOVA)
 echo "genalpha keeps $(echo "$KEEP_BSS" | wc -l | tr -d ' ') personas; nova keeps $(echo "$KEEP_NOVA" | wc -l | tr -d ' ')"
 echo "== pruning genalpha"; prune_tenant genalpha "$KEEP_BSS"
 echo "== pruning nova"; prune_tenant nova "$KEEP_NOVA"
+echo "== quarantining non-persona usage"; quarantine_usage "$(printf '%s\n%s' "$KEEP_BSS" "$KEEP_NOVA")"
 docker exec bss-postgres psql -U postgres -d product_inventory -c \
   "SELECT tenant_id, count(DISTINCT owner_party_id) AS owners, count(*) AS active FROM product WHERE status='active' GROUP BY tenant_id;"
 echo "PRUNE COMPLETE — the fleet is young again"
