@@ -348,15 +348,27 @@ const RESOURCES = [
     title: 'Orders',
     readOnly: true,
     fields: [],
-    columns: ['state', 'orderDate', 'relatedParty', 'itemSummary', 'id'],
-    augmentRow: async (item, cell) => {
-      const items = [];
+    columns: ['state', 'orderDate', 'customer', 'progress', 'id'],
+    augmentRow: async (item, cell, col) => {
+      if (col === 'customer') {
+        const p = (item.relatedParty || []).find((r) => r.role === 'customer')
+          || (item.relatedParty || [])[0];
+        cell.textContent = p ? await partyName(p.id) : '—';
+        return;
+      }
+      // 'progress' — per-leaf item state, so an agent sees WHAT is pending and
+      // what is done (a physical device stays inProgress until it is delivered;
+      // an eSIM completes in seconds). Pending items lead, done items follow.
+      const leaves = [];
       const walk = (arr) => (arr || []).forEach((i) => {
         if ((i.productOrderItem || []).length) walk(i.productOrderItem);
-        else items.push(`${(i.productOffering || {}).name || 'item'}: ${i.state || '?'}`);
+        else leaves.push({ name: (i.productOffering || {}).name || 'item', state: i.state || '?' });
       });
       walk(item.productOrderItem);
-      cell.textContent = items.join(' · ') || '—';
+      const glyph = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
+      leaves.sort((a, b) => (a.state === 'completed' ? 1 : 0) - (b.state === 'completed' ? 1 : 0));
+      cell.textContent = leaves.map((l) => `${glyph(l.state)} ${l.name}: ${l.state}`).join('  ·  ') || '—';
+      cell.title = cell.textContent;
     },
   },
   {
@@ -983,6 +995,29 @@ const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.la
 
 const el = (id) => document.getElementById(id);
 
+// Cached party-name lookup — orders carry only a party id, but a back-office
+// agent needs the human's name. TMF632 individual → "Given Family".
+const PARTY_BASE = '/tmf-api/party/v4';
+const _partyNames = new Map();
+async function partyName(id) {
+  if (!id) return '—';
+  if (_partyNames.has(id)) return _partyNames.get(id);
+  let name = id.slice(0, 8) + '…';
+  try {
+    const r = await authFetch(`${PARTY_BASE}/individual/${id}`);
+    if (r.ok) {
+      const p = await r.json();
+      name = [p.givenName, p.familyName].filter(Boolean).join(' ')
+        || p.fullName || p.name || name;
+    } else {
+      const o = await authFetch(`${PARTY_BASE}/organization/${id}`);
+      if (o.ok) { const p = await o.json(); name = p.tradingName || p.name || name; }
+    }
+  } catch { /* keep the id stub */ }
+  _partyNames.set(id, name);
+  return name;
+}
+
 // Role-scoped tabs: the console only shows the areas this operator's token can
 // actually use (the APIs enforce the same roles server-side — hiding a tab is
 // ergonomics, the 403 underneath is the security).
@@ -1032,14 +1067,39 @@ const TAB_ROLE = {
   integrations: ['roles:admin', 'document:write'],
 };
 let visible = RESOURCES;
+// The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
+// shopper's token carries. Staff hold at least one authority BEYOND this set.
+// Per-tab role gates cannot tell staff from customers on their own, because a
+// customer legitimately holds billing:read (their bills), ordering:write (their
+// orders), service:read, paymentmethod:* … — so the console gates the DOOR on
+// "holds a staff authority", not on any single tab's role. This is the security
+// boundary; the APIs are party-scoped underneath regardless.
+const CUSTOMER_BASELINE = new Set([
+  'catalog:read', 'ordering:read', 'ordering:write', 'inventory:read', 'party:read',
+  'party:write', 'payment:read', 'payment:write', 'billing:read', 'billing:write',
+  'appointment:read', 'appointment:write', 'ticket:read', 'ticket:write', 'interaction:read',
+  'communication:read', 'communication:write', 'usage:read', 'agreement:read',
+  'recommendation:read', 'paymentmethod:read', 'paymentmethod:write', 'service:read',
+  'knowledge:read',
+  // marker roles a shopper's token also carries — none of these make them staff
+  'customer', 'default-roles-bss', 'default-roles-nova', 'offline_access', 'uma_authorization',
+]);
+function isStaff() {
+  const roles = (tokenClaims().realm_access || {}).roles || [];
+  return roles.some((r) => !CUSTOMER_BASELINE.has(r));
+}
+
 function computeVisible() {
   const roles = (tokenClaims().realm_access || {}).roles || [];
-  // a tab's gate is one role or an any-of list; no gate = always visible
-  visible = RESOURCES.filter((r) => {
+  // a tab shows only when the token holds a STAFF authority for it — a role in
+  // the tab's gate that is NOT part of the customer baseline (defence in depth
+  // behind the door gate below).
+  visible = isStaff() ? RESOURCES.filter((r) => {
     const need = TAB_ROLE[r.path];
     if (!need) return true;
-    return (Array.isArray(need) ? need : [need]).some((x) => roles.includes(x));
-  });
+    return (Array.isArray(need) ? need : [need])
+      .some((x) => roles.includes(x) && !CUSTOMER_BASELINE.has(x));
+  }) : [];
 }
 
 // WORKSPACES: the console as departments — a group renders only when the
@@ -3494,7 +3554,7 @@ async function loadList() {
       const td = document.createElement('td');
       if (item[c] === undefined && active.augmentRow) {
         td.textContent = '…';
-        active.augmentRow(item, td).catch(() => { td.textContent = '—'; });
+        active.augmentRow(item, td, c).catch(() => { td.textContent = '—'; });
       } else {
         const raw = c === 'triggerEventType' ? (EVENT_LABELS[item[c]] || item[c]) : item[c];
         const text = fmtCell(raw);
@@ -3644,18 +3704,20 @@ async function main() {
   }
   el('main').hidden = false;
   computeVisible();
-  if (!visible.length) {
-    // #199: single sign-on carried a SHOP session into a STAFF portal. Say so
-    // plainly and offer a real switch (logout + prompt=login re-auth) instead
-    // of a bare shell that looks broken.
+  // DOOR GATE (#199, hardened): same-realm SSO can carry a SHOP CUSTOMER session
+  // into this staff portal. A customer holds only baseline roles — refuse them
+  // AT THE DOOR, before any tab or data renders, whatever their baseline roles
+  // would otherwise "match".
+  if (!isStaff()) {
     const who = tokenClaims().preferred_username || 'this account';
     el('tabs').textContent = '';
+    el('username').textContent = '';
     const note = document.createElement('div');
     note.style.cssText = 'padding:1rem;max-width:34rem';
     note.dataset.testid = 'wrong-persona';
     const pEl = document.createElement('p');
     pEl.innerHTML = `Signed in as <b></b> — carried over from the shop by single sign-on. `
-      + 'This is a staff portal, and this account has no back-office role.';
+      + 'This is the staff back office, and this is a customer account. Nothing here is yours to see.';
     pEl.querySelector('b').textContent = who;
     const btn = document.createElement('button');
     btn.textContent = 'Switch to a staff account';
@@ -3666,6 +3728,12 @@ async function main() {
     });
     note.append(pEl, btn);
     el('tabs').append(note);
+    el('logout').hidden = false;
+    el('logout').addEventListener('click', signOut);
+    return;
+  }
+  if (!visible.length) {
+    el('tabs').textContent = 'Your account has no back-office areas — ask an admin for a role.';
     return;
   }
   const savedTab = sessionStorage.getItem('bss.console.tab');

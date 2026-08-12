@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { openProblems } from './api.js';
-import { ensureSignedIn, signOut, tokenClaims, hasRole } from './auth.js';
+import { ensureSignedIn, signOut, tokenClaims, hasRole, isStaff } from './auth.js';
 import Customers from './pages/Customers.jsx';
 import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
@@ -36,6 +36,19 @@ export default function App() {
   }
 
   const claims = tokenClaims();
+  if (!isStaff()) {
+    // DOOR GATE: a shop customer carried in by single sign-on has no business
+    // at the care desk — refuse before any customer data renders.
+    return (
+      <div className="gatepost" data-testid="wrong-persona" style={{ maxWidth: '34rem', margin: '3rem auto', textAlign: 'center' }}>
+        <p>Signed in as <b>{claims.preferred_username || 'this account'}</b> — carried over from the shop
+          by single sign-on. This is the staff care portal, and this is a customer account.</p>
+        <button data-testid="switch-account" onClick={() => {
+          sessionStorage.setItem('bss.csr.forceLogin', '1'); signOut();
+        }}>Switch to a staff account</button>
+      </div>
+    );
+  }
   return (
     <>
       <header className="top">

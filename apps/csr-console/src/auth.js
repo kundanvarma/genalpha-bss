@@ -49,6 +49,10 @@ export async function beginLogin() {
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
+  if (sessionStorage.getItem('bss.csr.forceLogin')) {
+    sessionStorage.removeItem('bss.csr.forceLogin');
+    q.set('prompt', 'login');   // "switch account" asks for credentials, not SSO
+  }
   location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/auth?' + q);
 }
 
@@ -170,4 +174,21 @@ export async function ensureSignedIn() {
 /** Staff-role check from the token — the APIs enforce the same roles server-side. */
 export function hasRole(role) {
   return ((tokenClaims().realm_access || {}).roles || []).includes(role);
+}
+
+// The baseline SHOP-CUSTOMER composite — EXACTLY what a self-registered shopper
+// carries. Same-realm SSO can silently carry a shop session into this staff
+// care portal; a customer must be refused at the door (their baseline roles —
+// billing:read, ticket:read, party:read… — must not open the CSR desk).
+const CUSTOMER_BASELINE = new Set([
+  'catalog:read', 'ordering:read', 'ordering:write', 'inventory:read', 'party:read',
+  'party:write', 'payment:read', 'payment:write', 'billing:read', 'billing:write',
+  'appointment:read', 'appointment:write', 'ticket:read', 'ticket:write', 'interaction:read',
+  'communication:read', 'communication:write', 'usage:read', 'agreement:read',
+  'recommendation:read', 'paymentmethod:read', 'paymentmethod:write', 'service:read',
+  'knowledge:read', 'customer', 'default-roles-bss', 'default-roles-nova',
+  'offline_access', 'uma_authorization',
+]);
+export function isStaff() {
+  return ((tokenClaims().realm_access || {}).roles || []).some((r) => !CUSTOMER_BASELINE.has(r));
 }
