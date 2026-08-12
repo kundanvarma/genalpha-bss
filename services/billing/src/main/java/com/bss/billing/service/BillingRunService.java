@@ -57,6 +57,9 @@ public class BillingRunService {
     private final com.bss.billing.tick.TickGuard tickGuard;
     private final org.springframework.transaction.support.TransactionTemplate newTx;
     private final long accountDelayMs;
+    /** Parties per bulk rateUsage call — bounds one batch request's payload. */
+    private static final int RATE_BATCH_SIZE = 200;
+
     private final int runConcurrency;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
@@ -243,6 +246,37 @@ public class BillingRunService {
             byAccount.computeIfAbsent(deviceOwner, k -> new ArrayList<>());
             membersOf.computeIfAbsent(deviceOwner, k -> new java.util.LinkedHashSet<>()).add(deviceOwner);
         }
+        // THE FRESH-PERIOD BATCH: rate every primary member's usage in a few
+        // chunked round trips BEFORE the pool, instead of one HTTP call per
+        // account inside the workers — the proof run showed the per-account
+        // fan-out, not the rating arithmetic, is what makes a fresh period
+        // slow. The pre-rated map serves only accounts on the DEFAULT period
+        // (anchor-day accounts rate live — their window differs); fail-open:
+        // if the batch face is unavailable, workers fall back per member.
+        Map<String, List<Map<String, Object>>> preRatedTmp = new HashMap<>();
+        try {
+            List<String> toRate = new ArrayList<>();
+            for (Map.Entry<String, java.util.Set<String>> e : membersOf.entrySet()) {
+                for (String member : e.getValue()) {
+                    if (e.getKey().equals(primaryAccountOf.getOrDefault(member, member))) {
+                        toRate.add(member);
+                    }
+                }
+            }
+            for (int i = 0; i < toRate.size(); i += RATE_BATCH_SIZE) {
+                preRatedTmp.putAll(usage.rateForParties(
+                        toRate.subList(i, Math.min(toRate.size(), i + RATE_BATCH_SIZE)),
+                        defaultStart.toString(), defaultEnd.toString()));
+            }
+            log.info("billing run: pre-rated usage for {} member(s) in {} batch call(s)",
+                    toRate.size(), (toRate.size() + RATE_BATCH_SIZE - 1) / RATE_BATCH_SIZE);
+        } catch (RuntimeException batchDown) {
+            log.warn("bulk usage rating unavailable ({}); workers will rate per member",
+                    batchDown.getMessage());
+            preRatedTmp = null;
+        }
+        final Map<String, List<Map<String, Object>>> preRated = preRatedTmp;
+
         // the run's face: a crashed predecessor's RUNNING row becomes
         // superseded evidence; this run gets its own row, committed NOW so
         // even a crash one account in leaves a trace
@@ -286,7 +320,7 @@ public class BillingRunService {
                     Outcome outcome = newTx.execute(tx -> billAccount(tenantId, today,
                             defaultStart, defaultEnd, owner, orgAccounts, membersOf,
                             primaryAccountOf, personalExcess, companyShareOf,
-                            priceCache, unitCache));
+                            priceCache, unitCache, preRated));
                     if (outcome == Outcome.CREATED) {
                         created.incrementAndGet();
                     } else if (outcome == Outcome.SKIPPED) {
@@ -383,7 +417,8 @@ public class BillingRunService {
             Map<String, List<AppliedBillingRate>> personalExcess,
             Map<String, BigDecimal> companyShareOf,
             Map<String, BigDecimal> priceCache,
-            Map<String, String> unitCache) {
+            Map<String, String> unitCache,
+            Map<String, List<Map<String, Object>>> preRated) {
             // PAYDAY ALIGNMENT: the account holder's anchor day (1-28) makes
             // their own period; the clamp below NEVER re-bills a covered day,
             // so an anchor change simply takes effect from the next cycle —
@@ -519,12 +554,18 @@ public class BillingRunService {
             // their primary account — the one carrying their plan — so a
             // member with both a company bill and a personal extras bill is
             // rated exactly once.
+            // the pre-rated batch serves only the DEFAULT period; an anchored
+            // account's own window rates live so the numbers stay correct
+            boolean defaultPeriod = periodStart.equals(defaultStart) && periodEnd.equals(defaultEnd);
             for (String member : membersOf.get(owner.getKey())) {
             if (!owner.getKey().equals(primaryAccountOf.getOrDefault(member, member))) {
                 continue;
             }
-            for (Map<String, Object> usageCharge : usage.rateForParty(
-                    member, periodStart.toString(), periodEnd.toString())) {
+            List<Map<String, Object>> memberCharges = defaultPeriod && preRated != null
+                    && preRated.containsKey(member)
+                    ? preRated.get(member)
+                    : usage.rateForParty(member, periodStart.toString(), periodEnd.toString());
+            for (Map<String, Object> usageCharge : memberCharges) {
                 Map<String, Object> amount = (Map<String, Object>) usageCharge.get("amount");
                 AppliedBillingRate rate = new AppliedBillingRate();
                 rate.setId(UUID.randomUUID().toString());

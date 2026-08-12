@@ -93,17 +93,36 @@ public class RestDownstreamClients {
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.usage-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
-        return (ownerPartyId, periodStart, periodEnd) -> {
-            try {
-                return rest.post().uri("/tmf-api/usageManagement/v4/rateUsage")
-                        .header("Content-Type", "application/json")
-                        .body(Map.of("relatedPartyId", ownerPartyId,
-                                "periodStart", periodStart, "periodEnd", periodEnd))
-                        .retrieve()
-                        .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
-                        });
-            } catch (RestClientException e) {
-                throw new DownstreamException("usage service is unreachable", e);
+        return new DownstreamClients.UsageClient() {
+            @Override
+            public List<Map<String, Object>> rateForParty(String ownerPartyId, String periodStart, String periodEnd) {
+                try {
+                    return rest.post().uri("/tmf-api/usageManagement/v4/rateUsage")
+                            .header("Content-Type", "application/json")
+                            .body(Map.of("relatedPartyId", ownerPartyId,
+                                    "periodStart", periodStart, "periodEnd", periodEnd))
+                            .retrieve()
+                            .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
+                            });
+                } catch (RestClientException e) {
+                    throw new DownstreamException("usage service is unreachable", e);
+                }
+            }
+
+            @Override
+            public Map<String, List<Map<String, Object>>> rateForParties(
+                    List<String> ownerPartyIds, String periodStart, String periodEnd) {
+                try {
+                    return rest.post().uri("/tmf-api/usageManagement/v4/rateUsageBatch")
+                            .header("Content-Type", "application/json")
+                            .body(Map.of("relatedPartyIds", ownerPartyIds,
+                                    "periodStart", periodStart, "periodEnd", periodEnd))
+                            .retrieve()
+                            .body(new org.springframework.core.ParameterizedTypeReference<Map<String, List<Map<String, Object>>>>() {
+                            });
+                } catch (RestClientException e) {
+                    throw new DownstreamException("usage batch rating is unreachable", e);
+                }
             }
         };
     }

@@ -29,6 +29,12 @@ public final class DownstreamClients {
     public interface UsageClient {
         /** Rate a party's usage for the period; returns the period's charges. */
         List<Map<String, Object>> rateForParty(String ownerPartyId, String periodStart, String periodEnd);
+
+        /** Rate MANY parties in one round trip (the fresh-period batch);
+         * partyId -> charges. Throws when the batch face is unavailable —
+         * the caller falls back to per-party calls. */
+        Map<String, List<Map<String, Object>>> rateForParties(
+                List<String> ownerPartyIds, String periodStart, String periodEnd);
     }
 
     public interface PromotionClient {

@@ -124,6 +124,24 @@ public class UsageController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.rateForParty(party, start, end));
     }
 
+    /** One round trip rates MANY parties (partyId → charges) — the billing run's
+     * fresh-period batch; the per-account HTTP fan-out was the slow part, not
+     * the rating arithmetic. Same gate as /rateUsage (usage:write). */
+    @PostMapping(ApiConstants.BASE_PATH + "/rateUsageBatch")
+    public ResponseEntity<Map<String, List<Map<String, Object>>>> rateBatch(
+            @RequestBody Map<String, Object> request) {
+        LocalDate start = LocalDate.parse(String.valueOf(request.get("periodStart")));
+        LocalDate end = LocalDate.parse(String.valueOf(request.get("periodEnd")));
+        Map<String, List<Map<String, Object>>> out = new java.util.LinkedHashMap<>();
+        if (request.get("relatedPartyIds") instanceof List<?> ids) {
+            for (Object p : ids) {
+                String party = String.valueOf(p);
+                out.put(party, service.rateForParty(party, start, end));
+            }
+        }
+        return ResponseEntity.ok(out);
+    }
+
     @GetMapping(ApiConstants.CONSUMPTION_BASE_PATH + "/queryUsageConsumption")
     public ResponseEntity<Map<String, Object>> consumption(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
