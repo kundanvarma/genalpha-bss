@@ -373,15 +373,21 @@ const RESOURCES = [
     // The JOURNEY, expanded in place — WHY the order is where it is, so an agent
     // reads the whole story on the Orders row instead of phoning provisioning.
     detail: async (item) => {
-      const g = (st) => st === 'completed' ? '✓' : (st === 'failed' || st === 'cancelled') ? '✗'
-        : st === 'held' ? '⏸' : '⏳';
+      const g = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗'
+        : (st === 'failed' || st === 'held') ? '⚠' : '⏳';
+      // "failed" from the tracking layer = OVERDUE, not hard-failed — say so plainly.
+      const label = (st) => st === 'failed' ? 'overdue' : st;
       const list = await (await authFetch(`${PROCESS_BASE}/processFlow?productOrderId=${item.id}`)).json();
       if (!list.length) return [{ Step: '—', Status: 'no journey recorded', Detail: 'this order predates the timeline projection' }];
       const flow = await (await authFetch(`${PROCESS_BASE}/processFlow/${list[0].id}`)).json();
       const sum = flow.summary || {};
-      const rows = [{ Step: '▶ ' + (sum.headline || flow.state), Status: '', Detail: sum.why || '' }];
+      const rows = [{ Step: '▶ ' + (sum.headline || flow.state), Status: sum.needsAttention ? 'needs a nudge' : '', Detail: sum.why || '' }];
+      if (sum.needsAttention) {
+        rows.push({ Step: 'ⓘ what "overdue" means', Status: '',
+          Detail: 'a milestone did not arrive within its time window — the order may need a nudge; it does NOT mean the order failed (the service may already be active).' });
+      }
       for (const t of (flow.taskFlow || [])) {
-        rows.push({ Step: `${g(t.state)} ${t.name}`, Status: t.state, Detail: t.message || '—' });
+        rows.push({ Step: `${g(t.state)} ${t.name}`, Status: label(t.state), Detail: t.message || '—' });
       }
       // the raw event journal underneath, for the agent who wants the receipts
       for (const e of (flow.timeline || [])) {

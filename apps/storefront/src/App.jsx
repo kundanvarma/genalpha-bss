@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import { t } from './i18n.js';
-import { beginLogin, handleCallback, isSignedIn, signOut, tokenClaims } from './auth.js';
+import { beginLogin, handleCallback, isCustomer, isSignedIn, signOut, switchAccount, tokenClaims } from './auth.js';
 import { ensureParty, myNotifications, stitchVisitor } from './api.js';
 import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from './cart.js';
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
@@ -83,6 +83,11 @@ export default function App() {
   }
 
   const claims = tokenClaims();
+  // A signed-in identity that is NOT a shopper (a staff session carried in by
+  // SSO) gets the shop as a GUEST plus a switch prompt — never the customer
+  // account UI, and never a checkout under a non-customer identity.
+  const customer = state === 'ready' && isCustomer();
+  const staffInShop = state === 'ready' && !isCustomer();
   return (
     <>
       <header className="top">
@@ -95,7 +100,7 @@ export default function App() {
           <NavLink to="/cart" className="cartlink">
             {t('Cart')}{count > 0 && <span className="badge">{count}</span>}
           </NavLink>
-          {state === 'ready' && (
+          {customer && (
             <>
               <NavLink to="/orders">{t('My orders')}</NavLink>
               <NavLink to="/bills">{t('My bills')}</NavLink>
@@ -107,20 +112,28 @@ export default function App() {
             </>
           )}
           <NavLink to="/support">{t('Support')}</NavLink>
-          {state === 'ready' && <NavLink to="/account">{t('Account')}</NavLink>}
+          {customer && <NavLink to="/account">{t('Account')}</NavLink>}
         </nav>
         <div className="who">
-          {state === 'ready' ? (
+          {customer ? (
             <>
               <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
               <span className="user">{claims.name || claims.preferred_username || ''}</span>
               <button className="ghost" onClick={signOut}>{t('Sign out')}</button>
             </>
+          ) : staffInShop ? (
+            <button className="primary" data-testid="switch-account" onClick={switchAccount}>Switch to a customer account</button>
           ) : (
             <button className="primary" onClick={beginLogin}>{t('Sign in')}</button>
           )}
         </div>
       </header>
+      {staffInShop && (
+        <div className="staffbanner" data-testid="staff-in-shop">
+          You're signed in as <b>{claims.name || claims.preferred_username}</b>, a staff account — not a
+          shopping account. Browse freely, but to buy or manage a subscription, switch to a customer account.
+        </div>
+      )}
       <main>
         <Routes>
           <Route path="/" element={<Shop />} />

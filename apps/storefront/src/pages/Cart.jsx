@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { availabilityFor, checkQualification, deliveryOptions, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots } from '../api.js';
-import { beginLogin, isSignedIn } from '../auth.js';
+import { beginLogin, isCustomer, isSignedIn, switchAccount } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
@@ -372,6 +372,13 @@ export default function Cart() {
       // flag makes the checkout resume automatically after sign-in.
       setPendingCheckout();
       await beginLogin();
+      return;
+    }
+    if (!isCustomer()) {
+      // A staff session carried in by SSO is not a shopper — an order must never
+      // be placed under a non-customer identity. Offer the switch instead.
+      setError('You\'re signed in as a staff account. Switch to a customer account to check out.');
+      switchAccount();
       return;
     }
     setBusy(true);

@@ -70,6 +70,11 @@ async function call(method, path, tok, body) {
     fail('the flow carries no plain-language summary: ' + JSON.stringify(sum));
   }
   ok(`PLAIN LANGUAGE: "${sum.headline}" — ${sum.why} (${sum.stepsDone}/${sum.stepsTotal} steps)`);
+  // the customer-facing why must NEVER carry raw operator jargon
+  if (/owed within|nothing arrived|SLA|\d+s of \d{4}-/.test(sum.why || '')) {
+    fail('the customer-facing "why" leaked raw operator jargon: ' + sum.why);
+  }
+  ok('CUSTOMER-SAFE: the "why" carries no internal SLA/timeout jargon');
 
   /* ---------- 3. milestones + timeline ---------- */
   const steps = full.taskFlow || [];

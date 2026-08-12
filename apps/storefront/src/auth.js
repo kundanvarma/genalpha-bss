@@ -58,6 +58,12 @@ export async function beginLogin() {
     code_challenge: challenge,
     code_challenge_method: 'S256',
   });
+  // "Switch account" asks for credentials instead of silently reusing an
+  // active single-sign-on session (e.g. a staff console session).
+  if (sessionStorage.getItem('bss.shop.forceLogin')) {
+    sessionStorage.removeItem('bss.shop.forceLogin');
+    q.set('prompt', 'login');
+  }
   location.assign(AUTH_CONFIG.issuer + '/protocol/openid-connect/auth?' + q);
 }
 
@@ -145,6 +151,24 @@ export function tokenClaims() {
   } catch {
     return {};
   }
+}
+
+/** Is the signed-in identity a real SHOPPER? A customer has a party_id (the
+ * TMF632 individual behind them) or the baseline customer role. A pure STAFF
+ * account (a console superuser like demo) has neither — same-realm SSO can
+ * carry such a session into the shop, and it must NOT be presented as a
+ * ready-to-shop customer. */
+export function isCustomer() {
+  const c = tokenClaims();
+  const roles = (c.realm_access || {}).roles || [];
+  return Boolean(c.party_id) || roles.includes('customer');
+}
+
+/** Sign out and re-authenticate WITH a prompt — the "switch account" escape for
+ * a staff session that leaked into the shop. */
+export function switchAccount() {
+  sessionStorage.setItem('bss.shop.forceLogin', '1');
+  signOut();
 }
 
 export function signOut() {

@@ -141,17 +141,17 @@ export default function Orders() {
                   if (!j) return <div className="dim small journey" data-testid="journey">Loading…</div>;
                   if (j === 'none') return <div className="dim small journey" data-testid="journey">
                     We\'re on it — your order is being set up.</div>;
-                  const g = (st) => st === 'completed' ? '✓' : (st === 'failed' || st === 'cancelled') ? '✗'
-                    : st === 'held' ? '⏸' : '⏳';
+                  // to a CUSTOMER an overdue/held step is "still working", not a
+                  // failure — only a truly cancelled order shows an ✗.
+                  const g = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
                   return (
                     <div className="journey" data-testid="journey">
                       <p className="journeywhy"><b>{j.summary?.headline}</b>
                         {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
                       <ul className="journeysteps">
                         {(j.taskFlow || []).map((t) => (
-                          <li key={t.id} className={`jstep ${t.state}`}>
+                          <li key={t.id} className={`jstep ${t.state === 'completed' ? 'completed' : 'active'}`}>
                             <span className="jglyph">{g(t.state)}</span> {t.name}
-                            {t.message ? <span className="dim small"> — {t.message}</span> : null}
                           </li>
                         ))}
                       </ul>

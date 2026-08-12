@@ -443,6 +443,7 @@ public class ProcessFlowService {
         }
         String headline;
         String why;
+        boolean needsAttention = false;
         if ("completed".equals(flowState)) {
             headline = "Completed";
             why = "Everything is done — all steps completed.";
@@ -450,10 +451,13 @@ public class ProcessFlowService {
             headline = "Cancelled";
             why = "This order was cancelled.";
         } else if (failed != null) {
+            // A "failed" flow here means the tracking layer expected the next
+            // milestone within its time window and it did not arrive — the order
+            // is STUCK / overdue, NOT hard-failed. Customer sees reassurance; the
+            // raw operator reason stays on the task for the agent.
+            needsAttention = true;
             headline = "Taking longer than expected";
-            // Customer-friendly: the RAW reason stays on the task (agents read it
-            // there); the summary reassures rather than alarms.
-            why = "\"" + failed.get("name") + "\" is taking longer than expected — our team is on it.";
+            why = "\"" + failed.get("name") + "\" is taking longer than usual — we're on it, nothing needed from you.";
         } else {
             Map<String, Object> at = firstPending != null ? firstPending
                     : (tasks.isEmpty() ? null : tasks.get(tasks.size() - 1));
@@ -465,6 +469,7 @@ public class ProcessFlowService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("headline", headline);
         out.put("why", why);
+        out.put("needsAttention", needsAttention);   // agent flag: overdue, may need a nudge
         out.put("stepsDone", done);
         out.put("stepsTotal", tasks.size());
         return out;
