@@ -10,6 +10,10 @@ import { monthlyTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 
+// How a payment method reads to the shopper (the API gives the machine name).
+const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal' };
+const payLabel = (m) => PAY_LABEL[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : 'Card');
+
 export default function Cart() {
   const navigate = useNavigate();
   const [lines, setLines] = useState(null);
@@ -56,19 +60,22 @@ export default function Cart() {
   const [payMethod, setPayMethod] = useState('card');
   const [payMethods, setPayMethods] = useState([{ method: 'card', redirect: false }]);
   useEffect(() => { paymentMethods().then(setPayMethods).catch(() => {}); }, []);
-  // Klarna return leg: the approve page sends us back with ?klarna_session — confirm it and finish.
+  // Redirect return leg (Klarna/PayPal): the provider's approve page sends us back;
+  // the session was stashed before the hop, so confirm it against the provider that
+  // actually served (failover-safe) and finish the order.
   useEffect(() => {
-    const ks = new URLSearchParams(window.location.search).get('klarna_session');
-    if (!ks || !lines || !lines.length) return;
+    let stash = null;
+    try { stash = JSON.parse(localStorage.getItem('bss.shop.redirectpay') || 'null'); } catch { stash = null; }
+    const returned = /[?&](klarna_session|paypal_order|resume)=/.test(window.location.search);
+    if (!stash || !stash.sessionId || !returned || !lines || !lines.length) return;
     (async () => {
       setBusy(true);
       try {
-        const payment = await confirmPayment('klarna', ks);
-        const saved = JSON.parse(localStorage.getItem('bss.shop.klarna') || '{}');
-        const order = await performCheckout(lines, null, saved.promoCode || null,
-          saved.keepNumber && saved.keepNumber.on ? saved.keepNumber : null,
-          saved.simType || 'esim', saved.delivery || null, payment);
-        localStorage.removeItem('bss.shop.klarna');
+        const payment = await confirmPayment(stash.provider, stash.sessionId);
+        const order = await performCheckout(lines, null, stash.promoCode || null,
+          stash.keepNumber && stash.keepNumber.on ? stash.keepNumber : null,
+          stash.simType || 'esim', stash.delivery || null, payment);
+        localStorage.removeItem('bss.shop.redirectpay');
         window.history.replaceState(null, '', '/shop/cart');
         await markCartCheckedOut(order.id);
         navigate('/orders');
@@ -279,9 +286,11 @@ export default function Cart() {
   const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
   const signedIn = isSignedIn();
-  const klarnaOffered = (payMethods || []).some((m) => m.method === 'klarna');
-  const payingKlarna = payMethod === 'klarna' && klarnaOffered;
-  const cardReady = !due || !signedIn || payingKlarna
+  // Any redirect method the operator offers (Klarna, PayPal, …), plus card.
+  const redirectMethods = (payMethods || []).filter((m) => m.redirect);
+  const selectedPay = (payMethods || []).find((m) => m.method === payMethod) || { method: 'card', redirect: false };
+  const payingRedirect = Boolean(selectedPay.redirect);
+  const cardReady = !due || !signedIn || payingRedirect
     || (card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim());
 
   function setField(name, value) {
@@ -355,14 +364,17 @@ export default function Cart() {
         ? { method: 'pickupPoint', carrier: sel.carrier,
           pickupPointId: chosenPoint.id, pickupPointName: chosenPoint.name }
         : { method: 'home', carrier: sel?.carrier || null };
-      if (payingKlarna && due) {
-        // Redirect to Klarna to approve; the choices survive the hop in localStorage,
-        // the cart survives server-side, and the return leg (above) finishes the order.
-        localStorage.setItem('bss.shop.klarna', JSON.stringify({
+      if (payingRedirect && due) {
+        // Redirect to the provider (Klarna/PayPal) to approve. Open the session
+        // first, then stash the SERVED provider + session id (failover may switch
+        // the provider) so the return leg confirms the right one; the choices ride
+        // the hop and the cart survives server-side.
+        const session = await createPaymentSession({ method: payMethod,
+          amount: { value: due.value, unit: due.unit }, returnUrl: `${window.location.origin}/shop/cart` });
+        localStorage.setItem('bss.shop.redirectpay', JSON.stringify({
+          provider: session.provider, sessionId: session.sessionId,
           simType: hasMobile ? simType : 'esim', delivery,
           keepNumber: keepNumber.on ? keepNumber : null, promoCode: promo?.code || null }));
-        const session = await createPaymentSession({ method: 'klarna',
-          amount: { value: due.value, unit: due.unit }, returnUrl: `${window.location.origin}/shop/cart` });
         window.location.href = session.redirectUrl;
         return;
       }
@@ -637,22 +649,24 @@ export default function Cart() {
       {due && (signedIn ? (
         <div className="payment">
           <h2>Payment</h2>
-          {klarnaOffered && (
+          {redirectMethods.length > 0 && (
             <div className="simopts" style={{ marginBottom: '0.8rem' }}>
-              <button type="button" className={`simopt ${!payingKlarna ? 'on' : ''}`}
+              <button type="button" className={`simopt ${payMethod === 'card' ? 'on' : ''}`}
                       onClick={() => setPayMethod('card')}>
                 <span className="simopt-t">💳 Card</span>
                 <span className="simopt-d">Pay the one-time amount now</span>
               </button>
-              <button type="button" className={`simopt ${payingKlarna ? 'on' : ''}`}
-                      onClick={() => setPayMethod('klarna')}>
-                <span className="simopt-t">Klarna</span>
-                <span className="simopt-d">Pay in 3 — approve at Klarna</span>
-              </button>
+              {redirectMethods.map((m) => (
+                <button type="button" key={m.method} className={`simopt ${payMethod === m.method ? 'on' : ''}`}
+                        onClick={() => setPayMethod(m.method)}>
+                  <span className="simopt-t">{payLabel(m.method)}</span>
+                  <span className="simopt-d">Approve at {payLabel(m.method)}</span>
+                </button>
+              ))}
             </div>
           )}
-          {payingKlarna ? (
-            <p className="dim small">You'll approve the payment at Klarna, then come back to finish your order.</p>
+          {payingRedirect ? (
+            <p className="dim small">You'll approve the payment at {payLabel(payMethod)}, then come back to finish your order.</p>
           ) : (
             <>
               <p className="dim small">Your card is charged the one-time amount due now.
@@ -691,7 +705,7 @@ export default function Cart() {
             : !slotReady ? 'Pick an installation slot'
             : !deliveryReady ? 'Choose a pickup point'
             : !cardReady ? 'Enter card details'
-            : payingKlarna && due && signedIn ? `Continue to Klarna · ${due.value.toFixed(2)} ${due.unit}`
+            : payingRedirect && due && signedIn ? `Continue to ${payLabel(payMethod)} · ${due.value.toFixed(2)} ${due.unit}`
             : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
             : t('Checkout')}
         </button>
