@@ -145,6 +145,52 @@ availability per tenant/market. Deferred behind Parts A/B.
 
 ---
 
+## 7. Post-arc design notes (2026-08-12)
+
+### 7a. Recurring / tokenised BNPL for the monthly bill (design, not built)
+Today the monthly bill collects via **saved card** (TMF670 vaulted method → the billing
+payment run charges it). Klarna-on-the-bill is a different contract: Klarna's tokenised
+recurring ("Sign up for Klarna" → a customer token minted at first approval, charged
+merchant-initiated per cycle). Design: (1) the redirect seam's confirm leg optionally
+returns a **recurringToken** (adapter capability flag; Klarna: `intent=tokenize` session);
+(2) store it as a TMF670 payment method of type `bnplToken` (vault-side, secret-ref
+doctrine unchanged — we store the provider's token reference, never credentials); (3) the
+billing collection run treats `bnplToken` like a saved card: charge via the adapter's
+`chargeToken(cfg, token, amount)` (new seam method, named adapters only); (4) settlement
+books per §P3b — receivable at capture, remittance clears. **Deliberately NOT built** until
+an operator asks: it multiplies the money-path surface (mandates, token expiry, per-market
+consent rules) and the demo's story is complete without it.
+
+### 7b. Real Klarna / PayPal sandbox proof — RUNBOOK (blocked on merchant credentials)
+No code change is required — the adapters speak the real shapes; the mocks only stand in
+for the hosts. When sandbox credentials exist: (1) Klarna playground — set the binding's
+`baseUrl` to `https://api.playground.klarna.com`, put the Basic auth (base64 of
+`PK...:shared_secret`) in the env var named by `secretRef` (e.g. `KLARNA_API_KEY` in
+compose/helm secrets — NEVER in the config row), webhook secret likewise; note the real
+Payments API nests amounts (`order_amount`, minor units) — the adapter's mock-shaped
+body mapping is the ONE spot to touch if the playground rejects it, kept in
+`KlarnaPspAdapter` only. (2) PayPal sandbox — `baseUrl=https://api-m.sandbox.paypal.com`,
+an OAuth2 client-credentials bearer in the `secretRef` env var (the adapter sends
+`Bearer`; a refresh sidecar or short-lived env injection is the deployment's job).
+(3) Prove with the EXISTING suites #91/#94 pointed at the sandbox binding — same
+assertions, real hosts; the approve page needs a human click in sandbox, so run the
+API legs only (`session→confirm` will hold at `authorized=false` until approved — the
+suite's redirect-URL leg becomes the manual step). Honesty rule: claim "proven on real
+Klarna/PayPal" only after those runs are on record — mock-proven until then.
+
+### 7c. Hosted always-on demo — RUNBOOK (blocked on cloud spend + DNS approval)
+Everything exists: the Helm chart runs on EKS/AKS/k3s (architecture.md §5), Terraform
+stacks under `infra/`. To stand the public demo up: (1) pick ONE cloud (EKS was the
+smoother soak); (2) `terraform apply` the stack, then the chart with the two documented
+`--set` diffs; (3) real DNS: `demo.<domain>` + wildcard `shop.*.demo.<domain>` for the
+white-label hostnames (the gateway's hostname-tenant routing needs the wildcard);
+(4) TLS via cert-manager/Let's Encrypt (wildcard cert → DNS-01 challenge); (5) seed:
+`demo-reset-catalog` + `seed_carriers_psp` + personas; (6) guard the spend: smallest
+node group ~3×t3.large-class, auto-shutdown schedule if the ask is bursty, and the
+AI seams stay on stub/scenario providers — the REAL model key never ships to a public
+demo. NOT started without explicit owner approval: it costs money daily and publishes
+a URL.
+
 [klarna]: https://docs.klarna.com/payments/web-payments/integrate-with-klarna-payments/integrate-via-sdk/how-to-integrate-klarna-payments/
 [stripe-orch]: https://docs.stripe.com/payments/orchestration
 [pp-orch]: https://www.paypal.com/us/brc/article/what-is-payment-orchestration
