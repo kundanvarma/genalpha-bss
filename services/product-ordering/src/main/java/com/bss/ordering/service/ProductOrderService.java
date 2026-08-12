@@ -156,9 +156,16 @@ public class ProductOrderService {
         if (dto.getState() == null || dto.getState().isBlank()) {
             dto.setState(STATE_ACKNOWLEDGED);
         }
-        // C0: give every item (incl. nested bundle components) a stable id and a
+        // C0a: a bundle order item is a CONTAINER — decompose it into per-component
+        // leaf items (broadband, TV, mobile, device) so each fulfils on its own
+        // clock, and stamp every leaf with its catalog category.
+        expandBundles(dto.getProductOrderItem());
+        // C0b: give every item (incl. nested bundle components) a stable id and a
         // starting state, so each can be fulfilled and completed on its own track.
         stampItemStates(dto.getProductOrderItem());
+        // C0c: now that leaves carry ids, wire the fulfilment dependencies between
+        // them (TV/entertainment relies on the bundle's broadband being live first).
+        linkComponentDependencies(dto.getProductOrderItem());
         ProductOrder entity = mapper.toEntity(dto);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElseGet(() -> customerPartyIn(dto.getRelatedParty())));
@@ -513,6 +520,177 @@ public class ProductOrderService {
     }
 
     /**
+     * Bundle decomposition (TMF622). A bundle order item is a container: its
+     * fixed member offerings (the broadband, TV and mobile a triple-play always
+     * carries) are implicit and never reach fulfilment as their own lines. Expand
+     * them into nested per-component order items so each provisions, tracks and
+     * completes on its own clock. The customer's chosen options and optional
+     * add-ons already arrive as children; we add the fixed inclusions and stamp
+     * every leaf with its catalog category — the UI groups by it, SOM fulfils by it.
+     */
+    @SuppressWarnings("unchecked")
+    private void expandBundles(List<Map<String, Object>> items) {
+        if (items == null) {
+            return;
+        }
+        Map<String, Map<String, Object>> detailCache = new java.util.HashMap<>();
+        for (Map<String, Object> item : items) {
+            if (!(item.get("productOffering") instanceof Map<?, ?> off) || off.get("id") == null) {
+                continue;
+            }
+            String offeringId = String.valueOf(off.get("id"));
+            Map<String, Object> detail = detailCache.computeIfAbsent(offeringId,
+                    id -> catalogClient.findOfferingDetail(id).orElse(null));
+            if (detail == null || !Boolean.TRUE.equals(detail.get("isBundle"))) {
+                // a standalone line — stamp its own category so the UI can group it
+                stampCategory(item, detail);
+                continue;
+            }
+            List<Map<String, Object>> members = detail.get("bundledProductOffering") instanceof List<?> l
+                    ? (List<Map<String, Object>>) l : List.of();
+            List<Map<String, Object>> children = item.get("productOrderItem") instanceof List<?> c
+                    ? new java.util.ArrayList<>((List<Map<String, Object>>) c) : new java.util.ArrayList<>();
+            Set<String> present = new java.util.HashSet<>();
+            for (Map<String, Object> child : children) {
+                if (child.get("productOffering") instanceof Map<?, ?> po && po.get("id") != null) {
+                    present.add(String.valueOf(po.get("id")));
+                }
+            }
+            for (Map<String, Object> member : members) {
+                // a choice group's pick is already a child; a lower=0 optional is
+                // only present if the customer added it (also already a child)
+                if (member.get("options") instanceof List) {
+                    continue;
+                }
+                int lower = member.get("bundledProductOfferingOption") instanceof Map<?, ?> bo
+                        ? intOf(((Map<String, Object>) bo).get("numberRelOfferLowerLimit"), 1) : 1;
+                if (lower == 0) {
+                    continue;
+                }
+                String memberId = member.get("id") == null ? null : String.valueOf(member.get("id"));
+                if (memberId == null || present.contains(memberId)) {
+                    continue;
+                }
+                Map<String, Object> child = new java.util.LinkedHashMap<>();
+                child.put("action", "add");
+                Map<String, Object> memberOffering = new java.util.LinkedHashMap<>();
+                memberOffering.put("id", memberId);
+                memberOffering.put("name", member.getOrDefault("name", "component"));
+                memberOffering.put("@referredType", "ProductOffering");
+                child.put("productOffering", memberOffering);
+                // A fixed inclusion is billed THROUGH the bundle (whose own prices
+                // already carry it — Mobile+Fiber+TV+install+discount). It is
+                // tracked and fulfilled as its own component (SOM makes a service
+                // order, the order rolls up from it, the UI shows it), but it is
+                // NOT a separately-billed inventory product. This flag tells the
+                // ordering-internal flatteners (provision/policy/serviceability) to
+                // pass it by, so billing is unchanged.
+                child.put("decomposedComponent", true);
+                children.add(child);
+                present.add(memberId);
+            }
+            // stamp category on every leaf, and let the broadband inclusion inherit
+            // the bundle line's install place (a fiber component installs at the
+            // order's address; TV is digital and needs none)
+            Object parentPlace = item.get("product") instanceof Map<?, ?> pp
+                    ? ((Map<String, Object>) pp).get("place") : null;
+            for (Map<String, Object> child : children) {
+                String childOffering = child.get("productOffering") instanceof Map<?, ?> po
+                        && po.get("id") != null ? String.valueOf(po.get("id")) : null;
+                if (childOffering == null) {
+                    continue;
+                }
+                Map<String, Object> childDetail = detailCache.computeIfAbsent(childOffering,
+                        id -> catalogClient.findOfferingDetail(id).orElse(null));
+                stampCategory(child, childDetail);
+                if ("internet".equals(child.get("componentType")) && parentPlace != null
+                        && !(child.get("product") instanceof Map)) {
+                    Map<String, Object> product = new java.util.LinkedHashMap<>();
+                    product.put("place", parentPlace);
+                    child.put("product", product);
+                }
+            }
+            item.put("productOrderItem", children);
+        }
+    }
+
+    /** Read the offering's first catalog category and stamp it + a normalized
+     *  component type (internet/tv/mobile/device/other) onto the order item. */
+    @SuppressWarnings("unchecked")
+    private void stampCategory(Map<String, Object> item, Map<String, Object> detail) {
+        if (detail == null || item == null) {
+            return;
+        }
+        String category = null;
+        if (detail.get("category") instanceof List<?> cats && !cats.isEmpty()
+                && cats.get(0) instanceof Map<?, ?> c0 && c0.get("name") != null) {
+            category = String.valueOf(c0.get("name"));
+        }
+        if (category != null) {
+            item.put("category", category);
+            item.put("componentType", componentType(category));
+        }
+    }
+
+    /** Coarse product family from a catalog category name — the axis the order
+     *  view decomposes on, and the class SOM fulfils by. */
+    static String componentType(String category) {
+        String c = category == null ? "" : category.toLowerCase();
+        if (c.contains("broadband") || c.contains("internet") || c.contains("fiber") || c.contains("fibre")) {
+            return "internet";
+        }
+        if (c.contains("tv") || c.contains("entertainment") || c.contains("streaming")) {
+            return "tv";
+        }
+        if (c.contains("mobile")) {
+            return "mobile";
+        }
+        if (c.contains("device") || c.contains("handset") || c.contains("phone")) {
+            return "device";
+        }
+        return "other";
+    }
+
+    /**
+     * Fulfilment sequencing (TMF622 orderItemRelationship "reliesOn"). Within a
+     * decomposed bundle, the entertainment components ride the broadband
+     * connection: TV cannot activate until the internet line is live. Stamp a
+     * reliesOn edge from each TV/entertainment leaf to the bundle's internet leaf,
+     * so orchestration holds the dependents until the base product is active.
+     */
+    @SuppressWarnings("unchecked")
+    private void linkComponentDependencies(List<Map<String, Object>> items) {
+        if (items == null) {
+            return;
+        }
+        for (Map<String, Object> item : items) {
+            List<Map<String, Object>> children = item.get("productOrderItem") instanceof List<?> c
+                    ? (List<Map<String, Object>>) c : null;
+            if (children == null || children.isEmpty()) {
+                continue;
+            }
+            String internetItemId = null;
+            for (Map<String, Object> child : children) {
+                if ("internet".equals(child.get("componentType"))) {
+                    internetItemId = child.get("id") == null ? null : String.valueOf(child.get("id"));
+                    break;
+                }
+            }
+            if (internetItemId == null) {
+                continue;
+            }
+            for (Map<String, Object> child : children) {
+                if (!"tv".equals(child.get("componentType"))) {
+                    continue;
+                }
+                child.put("orderItemRelationship", List.of(new java.util.LinkedHashMap<>(Map.of(
+                        "relationshipType", "reliesOn",
+                        "id", internetItemId))));
+            }
+        }
+    }
+
+    /**
      * Ask the policy component whether a data-authored business rule forbids
      * this order (quantity caps, incompatibilities, eligibility). Rules are
      * configuration, not code — this is how an operator adds "max 2 SIMs per
@@ -598,6 +776,10 @@ public class ProductOrderService {
             return;
         }
         for (Map<String, Object> item : items) {
+            // a fixed bundle component bills through its bundle, never on its own
+            if (Boolean.TRUE.equals(item.get("decomposedComponent"))) {
+                continue;
+            }
             Object offering = item.get("productOffering");
             if (offering instanceof Map<?, ?> ref && ref.get("id") != null) {
                 int quantity = item.get("quantity") instanceof Number n ? n.intValue() : 1;
@@ -1147,7 +1329,11 @@ public class ProductOrderService {
             return;
         }
         for (Map<String, Object> item : items) {
-            into.add(item);
+            // a fixed bundle component is fulfilment-tracked but bills through its
+            // bundle — provisioning, serviceability and the legacy handoff pass it by
+            if (!Boolean.TRUE.equals(item.get("decomposedComponent"))) {
+                into.add(item);
+            }
             if (item.get("productOrderItem") instanceof List<?> children) {
                 collectItemMaps((List<Map<String, Object>>) children, into);
             }

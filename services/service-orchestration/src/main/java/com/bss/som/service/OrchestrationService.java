@@ -190,6 +190,19 @@ public class OrchestrationService {
             }
             boolean partnerService = "Partner services".equals(category);
             boolean securityFeature = "Security".equals(category);
+            // The decomposed component's family decides its fulfilment: a mobile
+            // plan is a network line (number + SIM); broadband installs and never
+            // draws a number; TV is a digital entitlement; a handset ships and is
+            // not a line at all. Unknown/other keeps the historical line behaviour.
+            String componentType = componentType(category);
+            boolean internet = "internet".equals(componentType);
+            boolean tv = "tv".equals(componentType);
+            boolean device = "device".equals(componentType);
+            // broadband always installs — hold it inProgress until fulfilment lands,
+            // even when no place rode the item
+            if (internet) {
+                deferred = true;
+            }
             ServiceOrder so = new ServiceOrder();
             String id = UUID.randomUUID().toString();
             so.setId(id);
@@ -229,8 +242,11 @@ public class OrchestrationService {
             }
             services.save(instance);
 
-            String poolType = partnerService || securityFeature ? null
-                    : isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            // Only a mobile line (or an unknown/other offering, historically) draws
+            // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
+            boolean nonLine = partnerService || securityFeature || isSlice
+                    || internet || tv || device;
+            String poolType = nonLine ? null : isEdgeAi ? "edge-gpu" : ResourcePool.MSISDN;
             if (partnerService) {
                 // the partner's platform owns the account; we hold the code
                 ResourceAssignment entitlement = new ResourceAssignment();
@@ -561,13 +577,36 @@ public class OrchestrationService {
             return;
         }
         for (Map<String, Object> item : items) {
-            if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+            // A bundle order item is a CONTAINER — the ordering service has already
+            // decomposed it into per-component leaf children. Provision only the
+            // leaves (each fulfils on its own clock); a parent that carries children
+            // is never a service of its own.
+            if (item.get("productOrderItem") instanceof List<?> children && !children.isEmpty()) {
+                collectItems((List<Map<String, Object>>) children, into);
+            } else if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
                 into.add(item);
             }
-            if (item.get("productOrderItem") instanceof List<?> children) {
-                collectItems((List<Map<String, Object>>) children, into);
-            }
         }
+    }
+
+    /** Coarse product family from a catalog category — mirrors the ordering
+     *  service's decomposition axis, so SOM fulfils each component by its class
+     *  (a handset never draws a phone number; broadband installs; TV is digital). */
+    static String componentType(String category) {
+        String c = category == null ? "" : category.toLowerCase();
+        if (c.contains("broadband") || c.contains("internet") || c.contains("fiber") || c.contains("fibre")) {
+            return "internet";
+        }
+        if (c.contains("tv") || c.contains("entertainment") || c.contains("streaming")) {
+            return "tv";
+        }
+        if (c.contains("mobile")) {
+            return "mobile";
+        }
+        if (c.contains("device") || c.contains("handset") || c.contains("phone")) {
+            return "device";
+        }
+        return "other";
     }
 
     /**
