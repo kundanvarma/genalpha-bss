@@ -15,6 +15,10 @@ public interface CatalogClient {
     /** The raw offering payload — category and price refs included. */
     Optional<Map<String, Object>> findOfferingDetail(String id);
 
+    /** A TMF620 productSpecification by id (its productSpecCharacteristic carries
+     *  the allowed values a configurable characteristic may take). */
+    Optional<Map<String, Object>> findSpecification(String id);
+
     /** A TMF620 productOfferingPrice by id. */
     Optional<Map<String, Object>> findPrice(String id);
 

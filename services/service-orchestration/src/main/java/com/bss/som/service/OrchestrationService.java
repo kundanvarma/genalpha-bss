@@ -545,6 +545,7 @@ public class OrchestrationService {
      * Owner is checked against the order's party — a mismatching id is skipped,
      * never renamed.
      */
+    @SuppressWarnings("unchecked")
     private void renameModifiedServices(String tenant, List<Map<String, Object>> modifies, String owner) {
         for (Map<String, Object> item : modifies) {
             String newName = item.get("productOffering") instanceof Map<?, ?> o && o.get("name") != null
@@ -558,25 +559,44 @@ public class OrchestrationService {
                 continue;
             }
             final String rename = newName;
+            // the new characteristic values (speed, TV pack) an in-place upgrade
+            // carries — a real network adapter would apply them to the line
+            List<Map<String, Object>> newChars = item.get("product") instanceof Map<?, ?> mp
+                    && ((Map<String, Object>) mp).get("productCharacteristic") instanceof List<?> mc
+                    ? (List<Map<String, Object>>) mc : null;
+            String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
+                    && off.get("id") != null ? String.valueOf(off.get("id")) : null;
             services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
                 if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
-                    log.warn("modify order names service {} owned by another party — rename skipped",
+                    log.warn("modify order names service {} owned by another party — change skipped",
                             instance.getId());
                     return;
                 }
-                if (!rename.equals(instance.getName())) {
+                boolean renamed = !rename.equals(instance.getName());
+                if (renamed) {
                     instance.setName(rename);
                     instance.setLastUpdate(OffsetDateTime.now());
                     services.save(instance);
-                    events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
-                            "id", instance.getId(), "name", rename, "state", instance.getState()));
                     log.info("plan change: service {} renamed to '{}'", instance.getId(), rename);
                     // the OCS follows the plan: swap the rate plan (rollover
                     // carried by the OCS's own policy)
-                    String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
-                            && off.get("id") != null ? String.valueOf(off.get("id")) : null;
                     catalog.chargingSpecOf(modifyOfferingId).ifPresent(chargingSpec ->
                             ocs.changeRatePlan(tenant, instance.getId(), chargingSpec));
+                }
+                // an in-place upgrade/downgrade re-provisions the line to the new
+                // characteristic (broadband speed, TV screens/points) — same
+                // offering, new capability. The mock emits the attribute change a
+                // network adapter would apply; billing rates the conditioned price.
+                if (renamed || newChars != null) {
+                    Map<String, Object> event = new java.util.LinkedHashMap<>();
+                    event.put("id", instance.getId());
+                    event.put("name", instance.getName());
+                    event.put("state", instance.getState());
+                    if (newChars != null) {
+                        event.put("characteristic", newChars);
+                        log.info("re-provision: service {} → {}", instance.getId(), newChars);
+                    }
+                    events.publish("ServiceAttributeValueChangeEvent", "service", event);
                 }
             });
         }

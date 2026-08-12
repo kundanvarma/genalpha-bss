@@ -242,13 +242,121 @@ public class ProductOrderService {
             String currentOfferingId = product.get("productOffering") instanceof Map<?, ?> cur
                     && cur.get("id") != null ? String.valueOf(cur.get("id")) : null;
             if (newOfferingId.equals(currentOfferingId)) {
-                throw new OrderValidationException(
-                        "'" + product.get("name") + "' is already on that plan");
+                // Same offering → a CHARACTERISTIC change: an in-place upgrade or
+                // downgrade (broadband speed, TV screens/points). Allowed when the
+                // item actually changes a configurable characteristic to a value the
+                // spec offers, and the business rules permit it.
+                validateCharacteristicChange(item, product, target, ownerPartyId);
+            } else {
+                requireNoActiveCommitment(ownerPartyId, currentOfferingId,
+                        String.valueOf(product.get("name")));
             }
-            requireNoActiveCommitment(ownerPartyId, currentOfferingId,
-                    String.valueOf(product.get("name")));
         }
         return modifies.size() == items.size();
+    }
+
+    /**
+     * An in-place characteristic change (upgrade/downgrade). The item must name at
+     * least one configurable characteristic whose value differs from the installed
+     * product's, and every changed value must be one the offering's spec allows. A
+     * numeric DOWNGRADE (a lower speed) is blocked while a commitment is open; an
+     * upgrade rides through — more capability is always welcome.
+     */
+    @SuppressWarnings("unchecked")
+    private void validateCharacteristicChange(Map<String, Object> item, Map<String, Object> product,
+            CatalogClient.OfferingRef target, String ownerPartyId) {
+        Map<String, Object> newChars = characteristicsByName(item.get("product") instanceof Map<?, ?> p
+                ? (Map<String, Object>) p : null);
+        Map<String, Object> currentChars = characteristicsByName(product);
+        if (newChars.isEmpty()) {
+            throw new OrderValidationException("'" + product.get("name")
+                    + "' is already on that plan — name the characteristic to change (e.g. downloadSpeed)");
+        }
+        Map<String, List<Object>> allowed = allowedCharacteristicValues(target.id());
+        boolean changed = false;
+        for (Map.Entry<String, Object> entry : newChars.entrySet()) {
+            String name = entry.getKey();
+            Object newValue = entry.getValue();
+            Object currentValue = currentChars.get(name);
+            if (String.valueOf(newValue).equals(String.valueOf(currentValue))) {
+                continue;
+            }
+            changed = true;
+            List<Object> options = allowed.get(name);
+            if (options != null && options.stream().noneMatch(o ->
+                    String.valueOf(o).equals(String.valueOf(newValue)))) {
+                throw new OrderValidationException("'" + name + "' cannot be set to " + newValue
+                        + " — allowed values are " + options);
+            }
+            // a numeric downgrade is gated by any open commitment
+            Double now = asNumber(currentValue);
+            Double next = asNumber(newValue);
+            if (now != null && next != null && next < now) {
+                requireNoActiveCommitment(ownerPartyId, target.id(),
+                        String.valueOf(product.get("name")) + " (" + name + " downgrade)");
+            }
+        }
+        if (!changed) {
+            throw new OrderValidationException("'" + product.get("name") + "' is already on that plan");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> characteristicsByName(Map<String, Object> productLike) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        if (productLike != null && productLike.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> ch && ch.get("name") != null) {
+                    out.put(String.valueOf(ch.get("name")), ch.get("value"));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The allowed value set per configurable characteristic, read from the
+     *  offering's spec — the guardrail an upgrade/downgrade value is checked against. */
+    @SuppressWarnings("unchecked")
+    private Map<String, List<Object>> allowedCharacteristicValues(String offeringId) {
+        Map<String, List<Object>> out = new java.util.LinkedHashMap<>();
+        Map<String, Object> detail = catalogClient.findOfferingDetail(offeringId).orElse(null);
+        String specId = detail != null && detail.get("productSpecification") instanceof Map<?, ?> s
+                && s.get("id") != null ? String.valueOf(s.get("id")) : null;
+        if (specId == null) {
+            return out;
+        }
+        Map<String, Object> spec = catalogClient.findSpecification(specId).orElse(null);
+        if (spec == null || !(spec.get("productSpecCharacteristic") instanceof List<?> chars)) {
+            return out;
+        }
+        for (Object c : chars) {
+            if (!(c instanceof Map<?, ?> ch) || ch.get("name") == null) {
+                continue;
+            }
+            List<Object> values = new ArrayList<>();
+            if (ch.get("productSpecCharacteristicValue") instanceof List<?> vs) {
+                for (Object v : vs) {
+                    if (v instanceof Map<?, ?> vm && vm.get("value") != null) {
+                        values.add(vm.get("value"));
+                    }
+                }
+            }
+            if (!values.isEmpty()) {
+                out.put(String.valueOf(ch.get("name")), values);
+            }
+        }
+        return out;
+    }
+
+    private static Double asNumber(Object o) {
+        if (o instanceof Number n) {
+            return n.doubleValue();
+        }
+        try {
+            return o == null ? null : Double.parseDouble(String.valueOf(o).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -1249,14 +1357,23 @@ public class ProductOrderService {
                 continue;
             }
             if ("modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
-                // Plan change: the existing product swaps its offering in
-                // place — billing rates the new plan from the next run.
+                // Plan change or in-place upgrade/downgrade: the existing product
+                // swaps its offering and/or characteristics in place — billing
+                // rates the new plan (or the characteristic-conditioned price) from
+                // the next run. Carry the new characteristics through so the
+                // subscribed product records the new speed / TV pack.
                 String productId = String.valueOf(((Map<String, Object>) item.get("product")).get("id"));
                 String newName = String.valueOf(offering.get("name") != null
                         ? offering.get("name") : offering.get("id"));
-                inventoryClient.updateProduct(productId, Map.of(
-                        "name", newName,
-                        "productOffering", offering));
+                Map<String, Object> patch = new java.util.LinkedHashMap<>();
+                patch.put("name", newName);
+                patch.put("productOffering", offering);
+                if (item.get("product") instanceof Map<?, ?> mp
+                        && mp.get("productCharacteristic") instanceof List<?> mchars
+                        && !mchars.isEmpty()) {
+                    patch.put("productCharacteristic", mchars);
+                }
+                inventoryClient.updateProduct(productId, patch);
                 provisioned = true;
                 continue;
             }
