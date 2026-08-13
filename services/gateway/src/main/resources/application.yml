@@ -8,6 +8,14 @@ spring:
       # the fleet actually runs on — services rebuild client-visible URLs
       # (e.g. TMF Location headers) from these.
       trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+      # Browse-path edge cache: LocalResponseCache absorbs the campaign-day
+      # catalog surge before it reaches the catalog JVM + Postgres. Route-level
+      # enable (applied only on the product-catalog route), so only the public
+      # price list is cached; it honours the catalog's Cache-Control (no-store for
+      # tokened requests) and Vary: X-Tenant-Id (so a tenant's catalogue never leaks).
+      filter:
+        local-response-cache:
+          enabled: true
       server:
         webflux:
           trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
@@ -58,6 +66,10 @@ spring:
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
             - Path=/tmf-api/productCatalogManagement/**
+          filters:
+            # cache the anonymous price list at the edge (TTL from the catalog's
+            # Cache-Control; only cacheable GETs, keyed by tenant via Vary)
+            - LocalResponseCache=60s,50MB
         # TMF760: the configurator lives WITH the catalog it computes from
         - id: product-configurator
           uri: ${CATALOG_URL:http://localhost:8081}
