@@ -39,6 +39,16 @@ public class CoverageMap {
     @Column(name = "note")
     private String note;
 
+    /** Open access: WHO owns the fibre this row represents. Null = our own
+     *  network (or legacy direct). A value names the wholesale access owner. */
+    @Column(name = "access_owner", length = 64)
+    private String accessOwner;
+
+    /** The access LAYER an owner sells: L2-VULA (we run our own IP) or
+     *  L3-activated (we resell). Null for our own network. */
+    @Column(name = "access_layer", length = 32)
+    private String accessLayer;
+
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
@@ -87,6 +97,22 @@ public class CoverageMap {
 
     public void setMaxDownMbps(Integer maxDownMbps) {
         this.maxDownMbps = maxDownMbps;
+    }
+
+    public String getAccessOwner() {
+        return accessOwner;
+    }
+
+    public void setAccessOwner(String accessOwner) {
+        this.accessOwner = accessOwner;
+    }
+
+    public String getAccessLayer() {
+        return accessLayer;
+    }
+
+    public void setAccessLayer(String accessLayer) {
+        this.accessLayer = accessLayer;
     }
 
     public Integer getMaxUpMbps() {

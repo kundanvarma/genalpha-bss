@@ -60,6 +60,13 @@ public class ServiceQualificationController {
         return ResponseEntity.ok(qualification.query(request));
     }
 
+    /** Open access: "which fibre OWNERS can serve this address, at what layer and
+     * bandwidth?" — the wholesale shortlist a retail ISP buys from. */
+    @PostMapping("/queryAccessOptions")
+    public ResponseEntity<Map<String, Object>> accessOptions(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(qualification.accessOptions(request));
+    }
+
     /* ---- the footprint as data: operator CRUD ---- */
 
     @GetMapping("/coverageMap")

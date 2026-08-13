@@ -215,12 +215,78 @@ public class ServiceQualificationService {
         if (row.getMaxUpMbps() != null) {
             characteristics.add(Map.of("name", "maxUpstreamMbps", "value", row.getMaxUpMbps()));
         }
+        // open access: name the fibre owner + the layer, when this footprint is
+        // served by a wholesaler rather than our own network
+        if (row.getAccessOwner() != null) {
+            characteristics.add(Map.of("name", "accessOwner", "value", row.getAccessOwner()));
+        }
+        if (row.getAccessLayer() != null) {
+            characteristics.add(Map.of("name", "accessLayer", "value", row.getAccessLayer()));
+        }
         Map<String, Object> service = new LinkedHashMap<>();
         service.put("serviceSpecification", Map.of(
                 "name", "broadband-" + row.getTechnology(), "@referredType", "ServiceSpecification"));
         service.put("serviceCharacteristic", characteristics);
         service.put("@type", "Service");
         return service;
+    }
+
+    /* =====================================================================
+     * queryAccessOptions: the WHOLESALE question — "which access owners can
+     * serve this address, at what layer and bandwidth?" Open access turns one
+     * footprint into a shortlist of suppliers a retail ISP can buy from. Only
+     * owner-served rows (access_owner set) are options; our own network is not
+     * a wholesale option. Best bandwidth per (owner, layer), longest prefix.
+     * ===================================================================== */
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> accessOptions(Map<String, Object> request) {
+        Map<String, Object> place = placeOf(request);
+        String postCode = postCodeOf(place);
+        String technology = Optional.ofNullable(requestedTechnology(request))
+                .or(() -> Optional.ofNullable(technologyCriterion(request)))
+                .orElse("fiber");
+        Map<String, CoverageMap> best = new LinkedHashMap<>();
+        for (CoverageMap row : coverage.findByTenantId(tenantScope.currentTenantId())) {
+            if (row.getAccessOwner() == null || !matches(postCode, row)
+                    || !row.getTechnology().equalsIgnoreCase(technology)) {
+                continue;
+            }
+            String key = row.getAccessOwner() + "|" + row.getAccessLayer();
+            CoverageMap current = best.get(key);
+            if (current == null
+                    || row.getPostcodePrefix().length() > current.getPostcodePrefix().length()) {
+                best.put(key, row);
+            }
+        }
+        List<Map<String, Object>> options = new ArrayList<>();
+        for (CoverageMap row : best.values()) {
+            Map<String, Object> option = new LinkedHashMap<>();
+            option.put("accessOwner", row.getAccessOwner());
+            option.put("accessLayer", row.getAccessLayer());
+            option.put("technology", row.getTechnology());
+            option.put("maxDownMbps", row.getMaxDownMbps());
+            if (row.getMaxUpMbps() != null) {
+                option.put("maxUpMbps", row.getMaxUpMbps());
+            }
+            option.put("@type", "WholesaleAccessOption");
+            options.add(option);
+        }
+        options.sort(Comparator.comparingInt((Map<String, Object> o) ->
+                (Integer) o.get("maxDownMbps")).reversed());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("place", place);
+        out.put("technology", technology);
+        out.put("accessOption", options);
+        out.put("@type", "QueryAccessOptions");
+        return out;
+    }
+
+    private static String technologyCriterion(Map<String, Object> request) {
+        if (request.get("searchCriteria") instanceof Map<?, ?> c && c.get("technology") != null) {
+            return String.valueOf(c.get("technology"));
+        }
+        return request.get("technology") == null ? null : String.valueOf(request.get("technology"));
     }
 
     private Map<String, Object> checkView(ServiceQualification row, List<Map<String, Object>> items) {

@@ -19,5 +19,6 @@ echo; echo "== 3/3  product imagery + plan comparison specs =="
 "$PY" "$HERE/seed/seed_lifecycle_characteristics.py" || echo "  (lifecycle-characteristics step skipped — see ops/seed/seed_lifecycle_characteristics.py)"
 "$PY" "$HERE/seed/seed_wholesale_partners.py" || echo "  (wholesale-partners step skipped — see ops/seed/seed_wholesale_partners.py)"
 "$PY" "$HERE/seed/seed_wholesale_access_products.py" || echo "  (wholesale-access-products step skipped — see ops/seed/seed_wholesale_access_products.py)"
+"$PY" "$HERE/seed/seed_wholesale_coverage.py" || echo "  (wholesale-coverage step skipped — see ops/seed/seed_wholesale_coverage.py)"
 
 echo; echo "demo reset complete — the stage is clean and curated."

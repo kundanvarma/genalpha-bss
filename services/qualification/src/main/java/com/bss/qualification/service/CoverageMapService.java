@@ -54,6 +54,9 @@ public class CoverageMapService {
         row.setMaxDownMbps(intOf(dto.get("maxDownMbps"), "maxDownMbps"));
         row.setMaxUpMbps(dto.get("maxUpMbps") == null ? null : intOf(dto.get("maxUpMbps"), "maxUpMbps"));
         row.setNote(dto.get("note") == null ? null : String.valueOf(dto.get("note")));
+        // open access: a third-party fibre owner + the layer they sell
+        row.setAccessOwner(dto.get("accessOwner") == null ? null : String.valueOf(dto.get("accessOwner")));
+        row.setAccessLayer(dto.get("accessLayer") == null ? null : String.valueOf(dto.get("accessLayer")));
         row.setHref("/tmf-api/serviceQualificationManagement/v4/coverageMap/" + row.getId());
         row.setLastUpdate(OffsetDateTime.now());
         repository.save(row);
