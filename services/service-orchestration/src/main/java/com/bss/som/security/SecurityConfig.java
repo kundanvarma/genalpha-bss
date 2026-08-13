@@ -59,6 +59,13 @@ public class SecurityConfig {
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",
                                 "/tmf-api/serviceOrdering/v3/serviceOrder").hasAuthority(WRITE)
+                        // wholesale settlement statements: the fixed-wholesale console reads
+                        // them, so a wholesale operator sees the book with wholesale:admin
+                        // as well as the general service:read.
+                        .requestMatchers(HttpMethod.GET,
+                                ApiConstants.ORDER_BASE + "/wholesaleProviderSettlement",
+                                ApiConstants.ORDER_BASE + "/wholesaleSettlement")
+                                .hasAnyAuthority(READ, "wholesale:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.ORDER_BASE + "/**",
                                 "/tmf-api/serviceOrdering/v3/**",
                                 ApiConstants.INVENTORY_BASE + "/**",
