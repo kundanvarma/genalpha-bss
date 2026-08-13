@@ -656,7 +656,8 @@
       "directAccessGrantsEnabled": true,
       "redirectUris": [
         "http://localhost:8080/biz/*",
-        "http://localhost:8080/dealer-app/*"
+        "http://localhost:8080/dealer-app/*",
+        "http://localhost:8080/partner/*"
       ],
       "webOrigins": [
         "http://localhost:8080"
