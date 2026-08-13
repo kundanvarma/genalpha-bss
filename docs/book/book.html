@@ -3915,6 +3915,60 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Seventy-One</div>
+    <h3>The seller's desk</h3>
+    <div class="epi">"Where do operators create those products? In the catalog of their own
+    tenant?" <span class="who">— the operator, finding the wholesale supply side was seed-only</span></div>
+
+    <p class="drop">The wholesale arc had built the buyer a portal — check an address, buy the L2 or
+    L3 line, see what you owe. The seller had a shell prompt. Every access owner, every wholesale
+    SKU, every stretch of painted coverage came from a Python script; there was no way for an
+    operator to onboard an owner or publish a product without editing code. The question the
+    operator asked was the honest one — where is the desk? — and the honest answer was that there
+    wasn't one yet. So we built it: a Wholesale workspace in the console, five panes, the whole
+    supply side authored as data by anyone holding a single new key.</p>
+
+    <h2>The split the retail catalog never had</h2>
+    <p>The research was unanimous and it pointed somewhere uncomfortable. Every serious catalog —
+    Amdocs, Netcracker, Comarch — models a product in two halves: the commercial thing you sell and
+    the technical service that realises it, a customer-facing service riding a resource-facing one.
+    Our catalog had only ever known the commercial half; the audit had said so plainly, a flat SKU
+    with no service specification underneath. Wholesale access was the place that debt came due,
+    because a wholesale line <em>is</em> that split made concrete: a customer-facing access the
+    seeker consumes, riding a resource-facing bitstream the owner hands over. So the catalog grew
+    its first service catalog — TMF633, a ServiceSpecification with characteristics and a
+    relationship, a CFS that <em>reliesOn</em> its RFS — and the product learned to say it is
+    <em>realised by</em> that CFS. It is the model the whole industry uses, added not for its own
+    sake but because the thing we were selling finally demanded it.</p>
+    <p>Adding a standard path to a fleet that already speaks it is never free. The service-catalog
+    URL was already claimed — the orchestration layer had a small read-only face there, deriving
+    specs from the services inventory actually carried. Two services cannot both own one path
+    through the gateway, so the path went to the catalog, where the authoritative specs now live,
+    and the old derived face — reachable only through that gateway, depended on by no test and no
+    kit — stepped aside. The rule held: check the blast radius before you move a route, and move it
+    only when nothing is standing under it.</p>
+
+    <h2>The bug the browser caught that the API hid</h2>
+    <p>The panes came together fast — onboard an owner and three TMF calls fire in sequence, an
+    organization, a partnership type, an agreement; publish a product and a price, a spec and an
+    offering land in the hidden wholesale category, the spec carrying its CFS. Then the browser
+    suite found what the API tests never could. The coverage pane had shipped a layer dropdown a
+    chapter earlier, and it had been "proven" — by a test that posted straight to the API, past the
+    form entirely. Drive the actual dropdown and it was empty: the console's select builder wanted
+    option objects, a label and a value, and it had been handed bare strings, which rendered as
+    nothing at all. The API had never touched the select, so the API had never seen the hole. Only
+    a test that clicked the real control in a real browser could — and did, on the first run. It is
+    the oldest lesson in this book, arriving once more in a new disguise: the thing you proved is
+    only the thing you actually exercised.</p>
+
+    <p class="pull edge">The seller has a desk now. An operator holding one key onboards an owner,
+    models the service beneath the sale, publishes the line, paints where it reaches, and reads what
+    it earns — all as data, all in the browser, none of it in a script anyone has to run.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>

@@ -1,5 +1,13 @@
 # Fixed wholesale console — the owner's authoring desk
 
+> **STATUS: BUILT & PROVEN 2026-08-13 (suite #91 `fixed_wholesale_console_test.js`, all
+> green).** FC1 coverage authoring, FC2 owners/agreements, FC3+FC5 access-product
+> authoring realised by a **TMF633 CFS/RFS** service catalog, FC4 settlement + CSV, FC6
+> the E2E suite — all shipped. FC5 was built in full (the CFS/RFS was net-new in
+> product-catalog). The one deviation from the sketch below: owners and products are
+> authored via **custom console panes** (sequential TMF POSTs), not the generic engine,
+> because they are multi-object creates.
+
 *Design doc. The fibre open-access arc
 ([wholesale-open-access-plan.md](wholesale-open-access-plan.md)) shipped the buyer's
 side — a partner portal where an access seeker checks coverage and orders L2/L3.

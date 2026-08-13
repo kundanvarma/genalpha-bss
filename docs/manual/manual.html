@@ -84,6 +84,7 @@ beside it.</p>
 36. <a href="#bundledecomp">Bundle decomposition — the several things it is</a><br>
 37. <a href="#wholesale">Wholesale / open-access — selling on a wire you don't own</a><br>
 38. <a href="#browsecache">Browse-path caching — the shop on a surge</a><br>
+39. <a href="#wholesaleconsole">The fixed wholesale console — the owner's authoring desk</a><br>
 </p>
 </div>
 
@@ -1088,7 +1089,40 @@ a bare build silently repackages the stale jar. (3) verify with <code>curl -D-</
 must show <code>no-store</code> (not <code>max-age=299</code>); an anonymous catalog GET shows
 <code>public,max-age=60</code>.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and eleven suites, twenty-five CTKs at zero
+<h2 id="wholesaleconsole">39 · The fixed wholesale console — the owner's authoring desk</h2>
+<p><b>What</b>: the seller side of open-access fibre, authored from the console as data instead of
+seed scripts. An operator holding <code>wholesale:admin</code> gets a <b>Wholesale</b> desk in the
+admin console (<code>/console</code>) with five panes. Suite
+<a href="../../ops/e2e/fixed_wholesale_console_test.js">fixed_wholesale_console_test.js</a> (#91).
+<b>Role</b>: <code>wholesale:admin</code> — a realm role (both realms, file infra+helm + live),
+held by <code>demo</code>. It gates coverage writes (qualification), service-catalog writes
+(product-catalog), and the settlement reads (SOM) — each accepts it <i>alongside</i> the existing
+service role, so a wholesale-only operator needs nothing else.
+<b>Panes</b>: (1) <b>Access owners</b> — a form that onboards an owner as TMF632 Organization +
+TMF668 partnershipType "Wholesale access" (accessProvider/accessSeeker roles) + a TMF651
+partnership agreement, sequential POSTs. (2) <b>Access products</b> — publishes an L2/L3 SKU: a
+recurring price + a productSpecification (chars <code>accessOwner</code>/<code>accessLayer</code>/
+<code>downloadSpeed</code> + a <b>serviceSpecification ref to a CFS</b>) + an offering in the
+shop-excluded <code>Wholesale access</code> category; the CFS dropdown reads the service catalog.
+(3) <b>Service specs (CFS/RFS)</b> — the new <b>TMF633 Service Catalog</b>: a customer-facing CFS
+(access, with layer/speed characteristics) <code>reliesOn</code> a resource-facing RFS (the owner's
+bitstream). (4) <b>Coverage</b> — the FC1 pane, paints footprint by owner×layer×postcode-prefix.
+(5) <b>Settlement</b> — read-only over <code>wholesaleProviderSettlement</code> (what retailers owe
+you) + <code>wholesaleSettlement</code> (what you owe owners) with CSV export.
+<b>TMF633 model</b>: <code>service_specification</code> table (product-catalog, V14 + V15 RLS) at
+<code>/tmf-api/serviceCatalogManagement/v4/serviceSpecification</code> (GET public; write =
+catalog:write OR wholesale:admin); <code>product_specification.service_specification</code> is the
+SID product→service link. The gateway routes <code>serviceCatalogManagement/**</code> to the
+catalog (peeled off the SOM standards bundle — SOM's derived read-only facade was gateway-only and
+depended on by nothing). <b>Gotchas that will bite again</b>: (1) the console's generic
+<code>selectControl</code> needs <code>{label,value}</code> option OBJECTS, not bare strings —
+string options render as <code>undefined</code> (bit FC1's accessLayer; the API-only test missed
+it, the browser suite caught it). (2) owners/products are multi-object creates, so they are CUSTOM
+console panes (sequential POSTs), not generic-engine tabs. (3) a new gateway path prefix
+(serviceCatalogManagement) needs its own route — the SOM bundle had claimed it. (4) the settlement
+pane needs the SOM reads to accept wholesale:admin (done) or a pure-wholesale operator 403s.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and twelve suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 

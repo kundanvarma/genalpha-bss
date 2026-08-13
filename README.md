@@ -17,7 +17,7 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 38 ODA components speaking TMF Open APIs natively
-- 111 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- 112 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
 - Two operators run multi-tenant on one deployment; onboarding an MVNO is a form, not a project
 - AI-native with the approval keys kept human: a product copilot (type or speak), an advisor whose every claim carries a receipt, the Hermes digital workforce, agentic commerce off-by-default — all metered, audited, revocable
 - Bring-your-own everything, per tenant: headless CMS/DAM, parcel carriers (Helthjem/Posten-Bring/PostNord with pickup points), and payment providers — Klarna & PayPal redirect flows, card routing rules + idempotency-safe failover, and BNPL settlement booked honestly (a Klarna capture is a receivable, not cash, until the payout clears it)
@@ -25,9 +25,9 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 
 
 <details>
-<summary><b>Every feature is verified end-to-end in a real browser</b> — one hundred and eleven Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
+<summary><b>Every feature is verified end-to-end in a real browser</b> — one hundred and twelve Playwright suites. Expand the full ledger, one honest paragraph per epoch…</summary>
 
-**Every feature is verified end-to-end in a real browser** — one hundred and eleven Playwright suites drive the
+**Every feature is verified end-to-end in a real browser** — one hundred and twelve Playwright suites drive the
 storefront, guest checkout, the consoles, the mobile app, tenant isolation, role administration,
 campaign journeys with holdout-measured lift, revenue attribution, A/B arms and segment-read
 branch steps, the per-tenant ESP email seam with delivery receipts and bounce suppression,
@@ -194,7 +194,14 @@ upstream COGS booked to the revenue GL; `wholesale_open_access_test.js`, `wholes
 and the campaign-day **browse-path edge cache** (anonymous catalog GETs served from a per-tenant
 `LocalResponseCache` so a Black-Friday surge is absorbed before it reaches the JVM or Postgres —
 keyed by `X-Tenant-Id`, scoped to the catalog route alone so carts, orders and bills are never
-served stale; `browse_cache_test.js`).
+served stale; `browse_cache_test.js`). Then the wholesale supply side got its **owner's desk**:
+a console **Wholesale workspace** (`wholesale:admin`) where an operator runs open access as data —
+onboard access owners (party + TMF668 partnership + TMF651 agreement), model the SID commercial/
+technical split as a real **TMF633 Service Catalog** (a customer-facing CFS reliesOn a
+resource-facing RFS — the catalog's first service specs), publish L2/L3 access products *realised
+by* the CFS into the shop-excluded Wholesale category, paint coverage by owner×layer×postcode, and
+read settlement both ways with CSV — no seed script, proven in a real browser
+(`fixed_wholesale_console_test.js`).
 
 </details>
 
@@ -353,7 +360,7 @@ color** theme every channel from the tenant manifest)
 | business-console | `/biz` | **B2B self-care, two faces by role.** The company admin manages their own organization: add people **with a real sign-in minted on the spot** (TMF672 invitation; the party is pinned to the new token subject), order subscriptions for them **and change a member's plan in place** (same line, same number), see every member's live lines, browse **Plans & your company pricing** (list price vs the org's **negotiated price** — a pricing rule conditioned on `organizationId`/`memberCount`, authored as data, applied on the consolidated invoice too), and read the **consolidated company invoice** with per-person line attribution. **Split billing**: every product bills to its **payer** — orders the admin places are payer-stamped to the company at ordering time; anything a member buys themselves stays on their own personal bill. The admin also sets a **Company policy**: a configurable **device allowance** — the company pays a device's monthly charge up to the cap, and the excess lands on the employee's personal bill as its own labelled line ("above company allowance"). An invited **member** signs in to the same channel and gets their **my-page**: their work line, usage meters, SIM self-care (PUK, PIN reset), the "billed to your company" note — and their **personal bill** (self-bought services + device co-pay excess) right below it. **Localized like the storefront**: the tenant manifest drives language and currency — Nova's business console is Norwegian with NOK invoices |
 | dealer-console | `/dealer-app` | **The retail partner's desk** (the CSP + external-retail model — think Elkjøp/Power): a clerk whose org holds a dealer agreement sells at the counter (order stamped with the dealer attribution), mints **starter kits** for the shelf (activation code + the SIM in the box + attribution baked in), and watches **commission** accrue pending → earned — or claw back when a customer uses their angrerett. The same `/dealer/v1` machine API serves chains with their own POS (per-partner OAuth2 client, per-partner rate limits at the edge, the chain's own phone riding the sale as context). The **Telesales desk** on the same console serves outbound partners: pull the consented, DNC-washed dial list ("1 reserved excluded" said out loud), record warm and cold offers (a cold prospect's code rides the partner's own SMS), and watch the pipeline in its honest states — offered, confirmed, expired |
 | csr-console | `/csr` | Assisted service with **role-scoped powers**: customer 360, ticket queue, AI copilot (`ai:use`), number-porting cutover (`porting:write`), service cease (`service:write`), Stock view (`stock:read`) — a junior agent sees the 360 without any of them |
-| admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, the **Product Copilot** (chat → proposal card → "Yes — create it"), a **Product advisor tab** (findings with their receipts, "Adopt as draft…" as the row action), an **Operators tab** (operator-as-a-form: five fields mint a tenant on the running fleet), the billing back office (Bill formats, Deliveries, Unapplied cash, Disputes, Dunning), and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
+| admin-console | `/console` | Back office with **role-scoped tabs**: catalog, stock, campaigns, business Rules (with dry-run), porting, AI audit, the **Product Copilot** (chat → proposal card → "Yes — create it"), a **Product advisor tab** (findings with their receipts, "Adopt as draft…" as the row action), an **Operators tab** (operator-as-a-form: five fields mint a tenant on the running fleet), the billing back office (Bill formats, Deliveries, Unapplied cash, Disputes, Dunning), a **Wholesale desk** (`wholesale:admin`) where the operator runs the open-access supply side as data — onboard access **owners** (party + TMF668 partnership + TMF651 agreement), publish **L2/L3 access products** realised by a **TMF633 CFS/RFS** service spec, paint **coverage** by owner × layer × postcode, and read **settlement** both ways with CSV — no seed script (suite `fixed_wholesale_console_test.js`), and a **Staff tab** (TMF672) where a tenant admin grants/revokes whole areas per operator — no IdP console needed. Each area appears only for operators holding its staff role |
 | mobile-app | `/app` | React Native (Expo): the modular LOB app — adaptive Home, one-tap plans, saved-card bill pay, **SIM self-care (PUK/PIN) and one-tap data top-ups on the line card, partner entitlement codes, locale-aware money from the tenant manifest**, and the **Family card** (household payers accept requests, order onto a dependent's line, mint child accounts; dependents see "paid for by …" and can leave); web today, iOS/Android from the same code |
 | partner-console | `/partner` | **The wholesale / open-access partner desk.** When the platform sells retail broadband on top of a third party's fibre (open access, opening now across the Nordics), a partner works here: **check an address** to see *which owners serve it and at what layer* (L2 VULA / L3 activated bitstream), browse the **wholesale access catalogue** (the L2/L3 SKUs, priced per line), place a **wholesale access order** that rides **MEF LSO Sonata** to the owner's OSS, and read **what you owe** per owner (settlement + margin). White-labeled and tenant-routed like every channel — the same operator can be an access *seeker* on one tenant and an access *provider* on another, and the two meet **cross-tenant through the Sonata face** (suites `wholesale_open_access_test.js`, `wholesale_provider_test.js`) |
 
