@@ -1039,6 +1039,9 @@ services:
       WHOLESALE_OSS: sonata
       SONATA_NORDACCESS_URL: http://mock-sonata-nordaccess:8080
       SONATA_FJORDFIBER_URL: http://mock-sonata-fjordfiber:8080
+      # NOVAFIBRE is nova, another operator on THIS platform — its Sonata face is
+      # our own SOM, reached cross-tenant (X-Tenant-Id: nova)
+      SONATA_NOVAFIBRE_URL: http://service-orchestration:8080
       WHOLESALE_CALLBACK_BASE: http://service-orchestration:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.

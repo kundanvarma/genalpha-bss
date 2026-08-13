@@ -66,6 +66,9 @@ bss:
     sonata:
       nordaccess: ${SONATA_NORDACCESS_URL:http://localhost:8134}
       fjordfiber: ${SONATA_FJORDFIBER_URL:http://localhost:8135}
+      # an on-platform owner (another operator/tenant): our own SOM, X-Tenant-Id
+      novafibre: ${SONATA_NOVAFIBRE_URL:http://localhost:8104}
+      novafibre-tenant: ${SONATA_NOVAFIBRE_TENANT:nova}
     callback-base: ${WHOLESALE_CALLBACK_BASE:http://localhost:8080}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}

@@ -31,12 +31,21 @@ public class SonataWholesaleAccessClient implements WholesaleAccessClient {
     private final Map<String, String> ownerUrls;
     private final String callbackBase;
 
+    /** Owners that are OTHER OPERATORS on our own platform — the order rides
+     *  X-Tenant-Id to their provider tenant instead of an external host. */
+    private final Map<String, String> ownerTenants;
+
     public SonataWholesaleAccessClient(RestClient.Builder builder,
             @Value("${bss.wholesale.sonata.nordaccess:http://localhost:8134}") String nordUrl,
             @Value("${bss.wholesale.sonata.fjordfiber:http://localhost:8135}") String fjordUrl,
+            @Value("${bss.wholesale.sonata.novafibre:http://localhost:8104}") String novaUrl,
+            @Value("${bss.wholesale.sonata.novafibre-tenant:nova}") String novaTenant,
             @Value("${bss.wholesale.callback-base:http://localhost:8080}") String callbackBase) {
         this.builder = builder;
-        this.ownerUrls = Map.of("NORDACCESS", nordUrl, "FJORDFIBER", fjordUrl);
+        this.ownerUrls = Map.of("NORDACCESS", nordUrl, "FJORDFIBER", fjordUrl, "NOVAFIBRE", novaUrl);
+        // NOVAFIBRE is nova, another operator on this very platform: the same
+        // Sonata face, reached cross-tenant via the header rather than a host.
+        this.ownerTenants = Map.of("NOVAFIBRE", novaTenant);
         this.callbackBase = callbackBase;
     }
 
@@ -59,9 +68,14 @@ public class SonataWholesaleAccessClient implements WholesaleAccessClient {
         body.put("externalId", buyerRef);
         body.put("callbackUrl", callbackUrl);
         body.put("serviceOrderItem", List.of(Map.of("action", "add", "service", service)));
+        String providerTenant = ownerTenants.get(accessOwner);
         try {
-            Map<String, Object> resp = builder.clone().baseUrl(base).build()
-                    .post().uri(ORDER).header("Content-Type", "application/json")
+            RestClient client = builder.clone().baseUrl(base).build();
+            Map<String, Object> resp = client.post().uri(ORDER)
+                    .header("Content-Type", "application/json")
+                    // an on-platform owner is reached cross-tenant by the header;
+                    // an external owner ignores it
+                    .headers(h -> { if (providerTenant != null) { h.set("X-Tenant-Id", providerTenant); } })
                     .body(body).retrieve().body(Map.class);
             String id = resp == null ? null : String.valueOf(resp.get("id"));
             log.info("Sonata: {} acknowledged access order {} (buyerRef {})", accessOwner, id, buyerRef);
