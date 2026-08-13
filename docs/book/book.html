@@ -3739,6 +3739,182 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Eight</div>
+    <h3>The several things it is</h3>
+    <div class="epi">"It says <em>completed</em> and <em>in progress</em> at the same time — which
+    one is it?" <span class="who">— the operator, at the demo, pointing at one order line</span></div>
+
+    <p class="drop">The bundle looked finished and unfinished at once. "GenAlpha One Home &amp;
+    Mobile" — fiber, a TV pack, an unlimited mobile plan, a chosen phone, an optional sports
+    add-on — arrived in the shop as a single line that read <em>Order completed</em> nested inside
+    <em>In progress</em>, and no one could say what was true. The honest answer was that the line
+    was a lie of compression: five different things, fulfilling on five different clocks, folded
+    into one word. The phone was in a van. The SIM was in the post. The fiber needed a technician.
+    And the television could not turn on at all until the broadband under it was live — a fact the
+    single line had no way to tell.</p>
+
+    <h2>The black box, opened</h2>
+    <p>Underneath, the order had been provisioning the bundle as one service — one MSISDN, one
+    state, one completion. So the work was to make the order admit what it contained. A bundle now
+    <em>decomposes</em>: it expands into a leaf item per component — Internet, TV, Mobile, the
+    device — each stamped with its category so the machinery downstream knows a broadband line from
+    a handset, and each running its own fulfilment track. The parent no longer provisions; it
+    presides. The order rolls up to <em>partiallyCompleted</em> from the states of its children,
+    so "some of this is live and some of it is coming" becomes a thing the system can say instead
+    of hide.</p>
+    <p>The one thing that could not change was the money. The bundle carried its own five prices —
+    the plan, the fiber, an install fee, a discount, the TV pack — and the fixed components were
+    never separate products to bill; they billed <em>through</em> the bundle. So the decomposed
+    fixed leaves are flagged, and the billing run skips the flag: the tracking became honest and
+    the invoice stayed byte-identical, proven by counting the charges before and after and finding
+    the same number. Decomposition changed what the customer could <em>see</em>, not what they
+    paid.</p>
+
+    <h2>reliesOn, and the number that waits</h2>
+    <p>Two domain truths the operator insisted we get right before building. The first: television
+    depends on the internet. Broadband is the base product; IPTV rides the line and cannot activate
+    until it is live. TM Forum already had the word for it — an order-item relationship typed
+    <code>reliesOn</code> — so the TV leaf now <em>reliesOn</em> the broadband leaf, and the
+    orchestrator reads that and holds the dependent until its base is actually being installed, not
+    a moment before and not on some invented schedule. The second truth was quieter and easy to get
+    wrong: a physical SIM cannot carry a number until it exists. An eSIM downloads over Wi-Fi and
+    activates in seconds; a physical SIM line is <em>reserved</em> at order and completes only when
+    the card is delivered and bound to the number. So the mobile leaf learned to wait for its own
+    parcel, and the shop learned to say why: <em>"Number reserved — activates when your SIM
+    arrives."</em> The storefront's <em>My orders</em> became a family tree — Internet, TV, Mobile,
+    the handset nested under Mobile — each with the honest little sentence that a call-centre used
+    to have to give: <em>"Activates once your broadband is live," "N of M ready."</em></p>
+
+    <h2>Change without a rebuild</h2>
+    <p>And a third truth, forward-looking, so we would not build this twice: a subscription's
+    variable attributes belong on the subscribed product, not baked into the offering's name. A
+    fiber line's speed is a characteristic now — a value from an allowed set, 100, 300, 500, 1000 —
+    and an upgrade is not a new SKU but a <code>modify</code> on the same line, the same identity,
+    the same number underneath. The gate is the business rule spoken plainly: an off-menu speed is
+    refused by the allowed set, and a downgrade is refused while a commitment still runs. A
+    television's packs are the same shape. The lesson the operator was really teaching was about
+    the future: model the thing so its lifecycle is free, and the day the pricing changes you edit
+    data, not code.</p>
+
+    <p class="pull edge">A bundle is a convenience for buying and a fiction for tracking. The order
+    now tells the truth underneath the convenience — five things, five clocks, one of them waiting
+    politely for another — and the customer watches it happen instead of wondering.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Sixty-Nine</div>
+    <h3>Selling on a wire we do not own</h3>
+    <div class="epi">"When the fibre opens, I want to sell broadband on a network I don't own — and
+    later, maybe, be the one who owns it." <span class="who">— the operator, reading the
+    market</span></div>
+
+    <p class="drop">The map of the Nordics was redrawing itself. Fibre networks that had been
+    closed gardens were being opened to third parties — regulation in one country, commercial
+    choice in another — and that turned a wall into a market. A retail ISP could sell broadband on
+    top of an infrastructure owner's fibre without laying a single metre of it. The question the
+    operator asked was not "can we build fibre" but "can this platform sell someone else's, and one
+    day rent out ours." Wholesale was not an extension of the retail BSS; it was a new product line
+    with its own vocabulary, and the honest audit said we had none of it — the word "wholesale"
+    returned zero functional hits across the whole repository.</p>
+
+    <h2>Two layers, two roles</h2>
+    <p>The market splits by how much of the network you take on. At <strong>Layer 2</strong> the
+    owner hands you an Ethernet bitstream and you run your own IP, your own routing, your own
+    value-add — maximum differentiation, heavier to operate. At <strong>Layer 3</strong> the owner
+    delivers a finished IP service and you resell, bill and support it — the lowest barrier, the
+    right place to prove the plumbing cheaply. The platform had to hold both as products, so the
+    catalogue grew wholesale access SKUs by owner and layer, and the coverage map — which until now
+    knew only <em>technology</em> — learned two new columns: which <em>owner</em> serves an address,
+    and at which <em>layer</em>. A serviceability check stopped being "is there fibre here" and
+    became "who sells it here, and how much of it do you want to run yourself." The owners in the
+    demo wear invented names — a fibre wholesaler, a bitstream provider, a network that is itself
+    another tenant on this platform — because the shape is the point, not the brand.</p>
+
+    <h2>The order that leaves the building</h2>
+    <p>A retail broadband order, once decomposed, has a fiber component that <em>reliesOn</em>
+    something new: a wholesale access input bought from an owner. Buying it means an order that
+    leaves our four walls and lands at another operator's system, and the industry already had the
+    grammar for that conversation — <strong>MEF LSO Sonata</strong>, the operator-to-operator
+    standard for serviceability, ordering, and settlement, TM&nbsp;Forum-aligned by design. So the
+    access seeker got an adapter shaped to Sonata — one implementation per owner, a real
+    asynchronous handshake with a callback that says "your line is live" in its own time, and a
+    mock owner standing in for a real one in dev, because the wire is config, not code. When the
+    line comes up, the cost of it books to the ledger honestly: a wholesale cost of goods debited,
+    a payable to the owner credited — the margin between what we pay the owner and what we charge
+    the customer made visible instead of assumed.</p>
+
+    <h2>Being the owner</h2>
+    <p>Then the mirror. If we can be the seeker, the platform's own multi-tenancy means we can be
+    the <em>provider</em> — the fibre owner opening up — without a second system. A sibling tenant
+    plays the owner: it stands up the other side of the Sonata face, accepts an inbound
+    <code>serviceOrder</code>, activates the line on its own clock, notifies the retailer through
+    the callback, and settles per line. Seeker and provider are two tenants on one deployment, and
+    they meet <em>across</em> the tenant boundary — the single deliberate cross-tenant path in a
+    system otherwise built, lock by lock, to keep tenants apart. It runs through the same gateway
+    and the same tenant header as everything else, never around the row-level security, because a
+    marketplace that punched a hole in the isolation to work would not be worth having. Partners
+    do all of this from a portal of their own — the wholesale desk at <code>/partner</code>: check
+    an address to see which owners serve it and at what layer, buy the L2 or L3 product, and read,
+    plainly, what you owe.</p>
+
+    <p class="pull edge">The same binary can be the retailer buying access and the owner selling it,
+    at the same time, to itself across a tenant line — and every euro of it, the cost from the owner
+    and the margin over it, lands in the books where an accountant can find it.</p>
+  </section>
+
+  <hr class="soft">
+
+  <section class="chapter">
+    <div class="num">Chapter Seventy</div>
+    <h3>The shop on a surge</h3>
+    <div class="epi">"We don't have a cache. On Black Friday, will the shop even be served to
+    everyone?" <span class="who">— the operator, before the surge</span></div>
+
+    <p class="drop">The honest answer that day was <em>no</em>. One anonymous glance at the shop
+    fanned out into a dozen or more calls to the catalogue — the offering list, each offering, each
+    specification, the prices — and every one of them travelled the whole way down: gateway,
+    catalogue JVM, Postgres, row-level security and all. It was fine for a browsing afternoon and a
+    catastrophe waiting for a campaign, when thousands of prospects, none of them logged in, would
+    all ask for the identical page against a price list that changes maybe once a day. The crowd
+    was anonymous and the page was the same for all of them; that was the whole opportunity.</p>
+
+    <h2>One page, twenty questions</h2>
+    <p>The design was belt-and-suspenders and tenant-safe. First the catalogue learned to state its
+    own terms: on an anonymous browse it sets <code>Cache-Control: public</code> with a short life
+    and a <code>Vary</code> on the tenant header, and the instant a request carries a token it says
+    <code>no-store</code> instead — so a logged-in response can never fall into a shared box, and
+    the anonymous box is keyed purely by tenant. Then the gateway kept a small local cache in front
+    of the catalogue route and honoured those terms. A surge of sixty identical requests now lands
+    on the edge and never wakes the database; one tenant's price list, keyed by its own header, is
+    never handed to another. Personalization was left untouched on purpose — it is a separate,
+    per-visitor call, never the shared list — and stock levels, the "only two left" that must never
+    lie, were left uncached by name.</p>
+
+    <h2>The cache that cached too much</h2>
+    <p>And then the cache nearly gave away the shop. The first proof of it passed; the regression
+    that followed did not. A customer configured the bundle, added it to the basket, and the basket
+    rendered <em>empty</em> — the item plainly saved on the server, the page insisting there was
+    nothing there. The trap was in the framework's smallest print. Turning on the per-route cache
+    also turned on a <em>global</em> one, because the flag that governs it defaults to on the moment
+    the feature exists; and the global cache, indifferent to routes, had begun caching every
+    authenticated GET it saw — carts, orders, bills — and serving each customer a five-minute-old
+    snapshot of their own basket. The empty cart was the cache handing back a picture of the basket
+    taken before the item was added. The fix was a single honest line — disable the global filter,
+    keep only the one bound to the catalogue route — and the deeper fix was in the test: a new leg
+    that adds to a cart and demands the very next read shows it, so the day anyone re-enables the
+    global cache by accident, a suite goes red instead of a customer's basket going blank.</p>
+
+    <p class="pull edge">A cache is a promise to serve the same answer twice, and the danger is
+    serving it to someone who deserved a fresh one. The shield now covers exactly the page every
+    stranger shares — and stops, deliberately, at the door of anything a person could call their
+    own.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>

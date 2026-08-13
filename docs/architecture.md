@@ -24,6 +24,18 @@ execute no JavaScript) get a third face of the same catalog: the gateway dual-se
 by User-Agent into bot-readable HTML with schema.org JSON-LD, behind a per-tenant
 `ai-visibility: open | search-only | dark` switch executed at robots.txt (suite #68).
 
+The platform also reaches **operator-to-operator**. On **open-access fibre** (opening now across
+the Nordics) a retail order's fiber component can ride a third party's network: the orchestrator
+buys the **wholesale access input** the component `reliesOn` from the owner over a **MEF LSO
+Sonata** adapter (async callback), and the same platform can be the owner on the *other* side —
+a **sibling tenant** accepts inbound Sonata `serviceOrder`s, activates, notifies the retailer and
+settles, so seeker and provider meet **cross-tenant through the Sonata face**. Partners work this
+from the **`partner-console`** channel. And because a campaign-day crowd is all anonymous and all
+identical, the gateway carries a **browse-path edge cache**: anonymous catalog GETs are served
+from a per-tenant `LocalResponseCache` (keyed by `X-Tenant-Id`, honouring the catalog's
+`Cache-Control`/`no-store` contract) and the cache is **scoped to the catalog route alone** — a
+logged-in cart, order or bill is never cached.
+
 ```mermaid
 flowchart TB
     subgraph Channels["Engagement — channels (white-labeled per tenant by hostname)"]
@@ -33,6 +45,7 @@ flowchart TB
         ADMIN["admin-console /console"]
         APP["mobile-app /app\n(Expo RN: web + iOS/Android)"]
         DEALER["dealer-app /dealer-app\n(retail + telesales)"]
+        PARTNER["partner-console /partner\n(wholesale / open-access:\naccess-seeker + provider desk)"]
     end
 
     AGENTS(["AI shopping agents\nChatGPT/Perplexity (ACP) · Claude (MCP)\nfeed + delegated checkout"])
@@ -43,7 +56,7 @@ flowchart TB
 
     WCTL["worker-controller\n(opt-in workforce package —\nthe ONLY holder of spawn-rights)"]
 
-    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nagent-commerce gate (off|discovery|full)\nper-channel tenant-config.js"]
+    GW["API Gateway :8080\nHost → tenant (X-Tenant-Id)\ntwo-ring rate limit (Redis)\nagent-commerce gate (off|discovery|full)\nbrowse-path edge cache (catalog route only)\nper-channel tenant-config.js"]
 
     subgraph Party["Party management"]
         PARTY["party-account\nTMF632/666/669 · GDPR export/erase"]
@@ -95,13 +108,15 @@ TMF642/656"]
         CAMP["campaign (martech)\nevent-triggered journeys · A/B · lift"]
     end
 
+    WHOLESALE(["Wholesale access OWNER\n(third-party fibre — MEF LSO Sonata)\nseeker: a mock/real OSS · provider:\nANOTHER tenant on this platform"])
+
     FLOW["flow — Live Flow\n(read-only event observability)"]
     KAFKA[("Kafka\nbss.*.events\ntransactional outbox")]
     IDP[("OIDC IdPs\none issuer per tenant\n(Keycloak realms in dev)")]
     LEGACY[("A wrapped LEGACY BSS\n(per-tenant overlay seams —\nempty = native mode)")]
     PG[("PostgreSQL\nDB per component\ntenant_id + RLS")]
 
-    SHOP & BIZ & CSR & ADMIN & APP & DEALER --> GW
+    SHOP & BIZ & CSR & ADMIN & APP & DEALER & PARTNER --> GW
     AGENTS -->|"/acp/* — per-tenant gate\noff → 404 · discovery → feed only"| GW
     CRAWLERS -->|"DUAL-SERVE by User-Agent:\nbot HTML + JSON-LD from TMF620\nrobots.txt per ai-visibility switch"| GW
     WORKERS -->|"digital-worker badge (revocable)\nworkforce queue + TMF doors;\nrefunds/cease only as approvals"| GW
@@ -117,6 +132,9 @@ TMF642/656"]
     REC -.-> CAT & INV
     QUOTE -.-> CAT & AI
     SOM -.-> PORT
+    SOM -.->|"wholesale access-SEEKER: buys the\nL2/L3 input a fiber component reliesOn,\nover a Sonata adapter (async callback)"| WHOLESALE
+    WHOLESALE -.->|"PROVIDER side (a sibling tenant):\ninbound Sonata serviceOrder →\nactivate → notify retailer → settle"| GW
+    QUAL -.->|"multi-owner coverage: which\nowner serves this address at L2/L3"| WHOLESALE
     CAMP -.->|"delivers via\nmachine identity"| COMM
     SHOP & APP -.->|"consent + beacons\n· For-you rail"| INSIGHT & AI
     INSIGHT -.->|experience rules| POLICY
@@ -304,6 +322,32 @@ the acting tenant's machine identity.
   alarm intake (a simulator in dev), critical alarms auto-minting one open TMF656 service
   problem per affected object, resolution clearing the alarms — and agents see open outages
   as a banner across the CSR console.
+- **A bundle fulfils as the several things it is.** A triple-play order decomposes into
+  per-component leaf items (Internet / TV / Mobile / device) carrying `orderItemRelationship:
+  reliesOn` — TV waits for the broadband it rides; a physical-SIM line stays *reserved* until the
+  SIM lands; each leaf runs on its own clock and the order rolls up `partiallyCompleted`, never
+  one opaque state. Fixed components are flagged so they bill **through** the bundle (billing is
+  byte-identical — decomposition changed the *tracking*, not the money), and a same-offering
+  characteristic change (a broadband speed tier) is an in-place TMF622 `modify`, gated: numeric
+  downgrades are refused while a commitment is live, off-menu values are refused by the spec's
+  allowed set.
+- **Wholesale / open-access is a product line, not a mode (honest boundary).** As an **access
+  seeker** the orchestrator buys the L2/L3 access a fiber component `reliesOn` from an owner over
+  a **MEF LSO Sonata** adapter — one impl per owner, async callback, with a bundled `mock-sonata`
+  standing in for a real owner's OSS in dev (the real adapter is config, not code). As an **access
+  provider** a *sibling tenant* runs the owner side: it accepts inbound Sonata `serviceOrder`s at
+  `/mefApi/serviceOrdering/v1`, activates, notifies the retailer and settles per line, and the
+  upstream COGS books to the revenue GL (DR wholesale-COGS / CR AP-wholesale). Seeker and provider
+  meet **cross-tenant** — the one cross-tenant path in a system otherwise built to keep tenants
+  apart, and it runs through the same gateway + X-Tenant-Id, never around RLS.
+- **The browse cache is anonymous-only and route-scoped (staleness stated).** The gateway's
+  `LocalResponseCache` caches only the catalog route's **token-absent** GETs (the catalog emits
+  `Cache-Control: public, max-age=N` + `Vary: X-Tenant-Id`, and `no-store` the instant an
+  `Authorization` header appears), so a logged-in cart/order/bill is never cached and one tenant's
+  price list never serves another. Freshness is bounded by the short TTL, not actively invalidated
+  — a price change propagates within `max-age` (seconds), the honest trade for absorbing a
+  campaign-day surge before it reaches the JVM or Postgres. Stock ("only N left") and
+  personalization are deliberately **never** cached.
 - **Composability is real**: cross-component calls go through conditional clients with Noop
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).

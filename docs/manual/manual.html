@@ -78,6 +78,12 @@ beside it.</p>
 30. <a href="#proofrun">The proof run &amp; fleet-age runbooks</a><br>
 31. <a href="#shopknows">The shop that knows you</a><br>
 32. <a href="#ctkcampaign">The CTK campaign — twenty-five kits, the closed list</a><br>
+33. <a href="#byocms">Bring your own CMS/DAM — reference-mode content</a><br>
+34. <a href="#carriers">Bring your own carrier — the delivery menu</a><br>
+35. <a href="#byopsp">Bring your own PSP — cards, Klarna/PayPal, BNPL books</a><br>
+36. <a href="#bundledecomp">Bundle decomposition — the several things it is</a><br>
+37. <a href="#wholesale">Wholesale / open-access — selling on a wire you don't own</a><br>
+38. <a href="#browsecache">Browse-path caching — the shop on a surge</a><br>
 </p>
 </div>
 
@@ -986,7 +992,103 @@ with every migration. (3) klarna's config lists methods ["card","klarna"], so it
 candidates but is filtered out (it has no card adapter) — harmless, by design. (4) suites #91/#94 UNBIND
 their providers on exit — re-seed the demo menu after.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · ninety-seven suites, twenty-five CTKs at zero
+<h2 id="bundledecomp">36 · Bundle decomposition — the several things it is</h2>
+<p><b>What</b>: a triple-play order (Fiber + TV + Mobile + a chosen phone + optional add-on)
+decomposes into <b>per-component leaf items</b> that fulfil on independent clocks; <b>TV reliesOn
+Internet</b>; a <b>physical-SIM line stays reserved</b> until the SIM lands; a broadband speed tier
+<b>upgrades/downgrades in place</b> with no rebuild. Suite
+<a href="../../ops/e2e/bundle_decomposition_test.js">bundle_decomposition_test.js</a>.
+<b>Decompose</b>: <code>ProductOrderService.expandBundles()</code> mints a leaf child per component
+stamped with <code>category</code> + <code>componentType</code> (internet/tv/mobile/device);
+<code>linkComponentDependencies()</code> adds a TMF622 <code>orderItemRelationship: reliesOn</code>
+(TV→internet). <b>Billing stays byte-identical</b>: fixed components are flagged
+<code>decomposedComponent:true</code> and skipped by <code>collectItems</code>/<code>collectItemMaps</code>,
+so provision, policy and serviceability are unchanged and the bundle's own prices still bill THROUGH
+the bundle (proven +0 charges before/after). <b>SOM</b>: <code>OrchestrationService</code> provisions
+LEAVES only, fulfilment is category-aware (only mobile draws MSISDN/SIM), and deferral is
+place-aware — <code>deferred = hasPlace</code>, and a <code>reliesOn</code> dependent is held only
+while its predecessor is actually placed for install. <b>Lifecycle</b>: a fiber line's
+<code>downloadSpeed</code> is a configurable characteristic with an allowed set (100/300/500/1000,
+<code>seed_lifecycle_characteristics.py</code>); an upgrade is <code>TMF622 action=modify</code> on
+the same product, validated by <code>validateCharacteristicChange</code> (off-menu value refused by
+the allowed set; numeric downgrade refused while a commitment is live);
+<code>renameModifiedServices</code> emits a <code>ServiceAttributeValueChangeEvent</code> to
+re-provision. <b>Storefront</b>: <code>Orders.jsx</code> renders an Internet/TV/Mobile family tree
+with honest per-component status ("Activates once your broadband is live," "Number reserved —
+activates when your SIM arrives," "N of M ready"); the handset nests under Mobile.
+<b>Gotchas that will bite again</b>: (1) the <code>decomposedComponent</code> flag is what keeps a
+bundle from double-charging — a fixed leaf that loses it bills TWICE. (2) Deferral keys off PLACE:
+forcing internet deferred with no place breaks a no-place bundle (e.g. a plan-change modify) — the
+rule is <code>deferred=hasPlace</code>, dependent held only if the predecessor is placed.</p>
+
+<h2 id="wholesale">37 · Wholesale / open-access — selling on a wire you don't own</h2>
+<p><b>What</b>: a new product line — sell retail broadband on top of a third party's fibre (open
+access), split by access layer <b>L2 VULA / L3 activated bitstream</b>, ordered and settled
+operator-to-operator over <b>MEF LSO Sonata</b>. The platform plays BOTH roles: <b>access seeker</b>
+(we are the retail ISP buying access) and <b>access provider</b> (a sibling tenant is the fibre owner
+selling it) — meeting <b>cross-tenant</b>. Suites
+<a href="../../ops/e2e/wholesale_open_access_test.js">wholesale_open_access_test.js</a> (seeker) +
+<a href="../../ops/e2e/wholesale_provider_test.js">wholesale_provider_test.js</a> (provider). Portal:
+<b>partner-console at <code>/partner</code></b> (<code>PARTNER_URL</code> :8138) — check an address
+(which owners serve it, at which layer), browse the L2/L3 access catalogue, place a wholesale order,
+read what you owe. <b>Parties/catalogue</b>: <code>seed_wholesale_partners.py</code> mints owners as
+Organization parties (a fibre wholesaler at L3, a bitstream provider at L2 — invented names) with
+TMF668 partnershipType + TMF651 agreements; <code>seed_wholesale_access_products.py</code> puts the
+L2/L3 SKUs in a "Wholesale access" category auto-excluded from the shop grid. <b>Coverage</b>:
+<code>CoverageMap</code> gains <code>accessOwner</code> + <code>accessLayer</code>;
+<code>ServiceQualificationService.accessOptions()</code> answers <code>queryAccessOptions</code>
+(anonymous). <b>Seeker order</b>: <code>WholesaleAccessOrder</code> (RLS); <code>WholesaleAccessClient</code>
+→ <code>MockWholesaleAccessClient</code> or <code>SonataWholesaleAccessClient</code>
+(<code>@ConditionalOnProperty bss.wholesale.oss=sonata</code>, async — the owner calls back
+<code>POST .../wholesaleAccessOrder/notification</code>); <code>OrchestrationService.provisionWholesaleAccess</code>/<code>activateWholesaleAccess</code>.
+<b>Settlement + COGS</b>: <code>wholesaleSettlement</code> reports owed-per-owner + margin; revenue's
+<code>WholesaleEventListener</code> books the upstream cost (DR 5100 wholesale-COGS / CR 2100
+AP-wholesale). <b>Provider side</b>: <code>ProviderAccessOrder</code> (RLS) +
+<code>WholesaleProviderService</code> (acceptOrder → <code>@Scheduled</code> activationTick →
+notifyRetailer → providerSettlement, L3=22/L2=15); <code>WholesaleProviderController</code> exposes
+<code>POST /mefApi/serviceOrdering/v1/serviceOrder</code> (anonymous) + provider views; the gateway
+routes <code>/mefApi/**</code>; the seeker's <code>SonataWholesaleAccessClient</code> maps an owner
+→ its tenant (e.g. the NovaFibre owner → the <code>nova</code> tenant) and calls it with that
+tenant's <code>X-Tenant-Id</code> — the one deliberate cross-tenant path, through the gateway, never
+around RLS. <b>Config</b>: <code>bss.wholesale.oss=sonata</code> (compose default,
+<code>WHOLESALE_OSS</code>). <b>Gotchas that will bite again</b>: (1) <code>mock-sonata</code> is
+INTERNAL-only (no host ports — 8134/8135 belong to postnord/klarna). (2) a new downstream client
+needs BOTH an <code>application.yml</code> prop AND a compose env var (a missing base-URL fails open
+with a WARN). (3) cross-tenant needs the tenant HOST resolvable — <code>curl --resolve</code> in
+tests; the owner tenant's hosts live in the MOUNTED <code>infra/tenants/tenants.yml</code>, never the
+gateway's own yml. (4) unqualified Java refs can compile stale — always confirm <code>mvn</code>
+BUILD_OK before trusting a deploy.</p>
+
+<h2 id="browsecache">38 · Browse-path caching — the shop on a surge</h2>
+<p><b>What</b>: on a campaign day (Black Friday) thousands of anonymous prospects load the SAME
+catalog pages; this serves them from a gateway edge cache so the surge never reaches the catalog JVM
+or Postgres. Suite <a href="../../ops/e2e/browse_cache_test.js">browse_cache_test.js</a>. <b>Two
+layers</b>: (1) the catalog emits the contract — <code>CacheControlFilter</code> sets
+<code>Cache-Control: public, max-age=${bss.catalog.browse-cache.ttl-seconds:60}</code> +
+<code>Vary: X-Tenant-Id</code> on token-absent GETs of the catalog base path, and
+<code>no-store</code> the instant an <code>Authorization</code> header is present (dial
+<code>bss.catalog.browse-cache.enabled</code>). (2) the gateway caches at the edge — Spring Cloud
+Gateway <code>LocalResponseCache</code> (needs BOTH <code>caffeine</code> AND
+<code>spring-boot-starter-cache</code> on the classpath), filter <code>LocalResponseCache=60s,50MB</code>
+on the <code>product-catalog</code> route only. The <code>TenantHostFilter</code> stamps
+<code>X-Tenant-Id</code>, the cache keys by it (via <code>Vary</code>), so genalpha's catalogue is
+never served to nova. <b>Deliberately NOT cached</b>: <code>productStock</code> ("only N left"),
+<code>/insight/experience</code>, <code>/ai/**</code>, and the cart — all per-visitor or volatile.
+<b>Gotchas that will bite again — this one nearly shipped a bug</b>: (1) enabling
+<code>filter.local-response-cache.enabled</code> ALSO turns on the GLOBAL response-cache filter
+(its <code>global-filter.local-response-cache.enabled</code> flag is <code>matchIfMissing=true</code>),
+which caches EVERY authenticated route — carts, orders, bills — stale for the 5-minute default TTL.
+The symptom was a cart that rendered EMPTY (the empty-cart snapshot cached before the add). FIX:
+<code>spring.cloud.gateway.server.webflux.global-filter.local-response-cache.enabled: false</code> —
+and it MUST be the <code>server.webflux</code> namespace (SCG 4.3), because the legacy
+<code>spring.cloud.gateway.*</code> alias has no migration for that key. (2) the gateway jar is
+HOST-BUILT (Dockerfile copies <code>target/*.jar</code>) — run <code>mvn package</code> FIRST
+(<code>JAVA_HOME=/opt/homebrew/opt/openjdk@17</code>) then <code>docker compose build gateway</code>;
+a bare build silently repackages the stale jar. (3) verify with <code>curl -D-</code>: a cart GET
+must show <code>no-store</code> (not <code>max-age=299</code>); an anonymous catalog GET shows
+<code>public,max-age=60</code>.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and eleven suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
