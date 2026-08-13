@@ -58,6 +58,9 @@ public class OrchestrationService {
     private final com.bss.som.security.TenantRegistry tenants;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.tick.TickGuard tickGuard;
+    private final com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders;
+    private final com.bss.som.client.WholesaleQualificationClient wholesaleQualification;
+    private final com.bss.som.client.WholesaleAccessClient wholesaleAccess;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -74,7 +77,13 @@ public class OrchestrationService {
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.security.TenantRegistry tenants,
             com.bss.som.repository.NumberQuarantineRepository quarantine,
-            com.bss.som.tick.TickGuard tickGuard) {
+            com.bss.som.tick.TickGuard tickGuard,
+            com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders,
+            com.bss.som.client.WholesaleQualificationClient wholesaleQualification,
+            com.bss.som.client.WholesaleAccessClient wholesaleAccess) {
+        this.wholesaleOrders = wholesaleOrders;
+        this.wholesaleQualification = wholesaleQualification;
+        this.wholesaleAccess = wholesaleAccess;
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -266,6 +275,15 @@ public class OrchestrationService {
                 instance.setDeliveryPath("fibre-route-stadium-north");
             }
             services.save(instance);
+
+            // OPEN ACCESS: a broadband component may be delivered over a THIRD-PARTY
+            // owner's fibre. If owners serve this address, place the access-seeker
+            // order UPSTREAM and realize the retail line over it — instead of our own
+            // install. The owner OSS activates it (mock: instantly), so the retail
+            // line comes up here rather than waiting on a workOrder of ours.
+            if (internet && provisionWholesaleAccess(tenant, item, serviceId, owner, productOrderId)) {
+                deferred = false;
+            }
 
             // Only a mobile line (or an unknown/other offering, historically) draws
             // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
@@ -632,6 +650,149 @@ public class OrchestrationService {
                 into.add(item);
             }
         }
+    }
+
+    /**
+     * Open access: realize a broadband component over a third-party owner's fibre.
+     * Ask the qualification service which owners serve this address; if any do,
+     * pick one, place the access-seeker order upstream (MEF Sonata shape; mock in
+     * dev) and record it. Returns true when wholesale access was placed and active
+     * — the retail line is then realized over it, not over our own network.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean provisionWholesaleAccess(String tenant, Map<String, Object> item,
+            String serviceId, String owner, String productOrderId) {
+        String postCode = postCodeOf(item);
+        if (postCode == null || postCode.isBlank()) {
+            return false;
+        }
+        List<Map<String, Object>> options = wholesaleQualification.accessOptions(postCode, "fiber");
+        if (options.isEmpty()) {
+            return false; // our own network here — nothing to buy
+        }
+        int requested = requestedBandwidth(item);
+        Map<String, Object> pick = pickAccessOption(options, item, requested);
+        if (pick == null) {
+            return false;
+        }
+        String accessOwner = String.valueOf(pick.get("accessOwner"));
+        String accessLayer = pick.get("accessLayer") == null ? null : String.valueOf(pick.get("accessLayer"));
+        Integer bandwidth = pick.get("maxDownMbps") instanceof Number nb ? nb.intValue() : requested;
+        com.bss.som.client.WholesaleAccessClient.AccessOrderResult res =
+                wholesaleAccess.order(accessOwner, accessLayer, bandwidth, postCode, serviceId);
+
+        com.bss.som.entity.WholesaleAccessOrder wo = new com.bss.som.entity.WholesaleAccessOrder();
+        wo.setId(UUID.randomUUID().toString());
+        wo.setTenantId(tenant);
+        wo.setProductOrderId(productOrderId);
+        wo.setServiceId(serviceId);
+        wo.setOwnerPartyId(owner);
+        wo.setAccessOwner(accessOwner);
+        wo.setAccessLayer(accessLayer);
+        wo.setBandwidthMbps(bandwidth);
+        wo.setPostCode(postCode);
+        wo.setExternalId(res.externalId());
+        wo.setState(res.state());
+        wo.setCreatedAt(OffsetDateTime.now());
+        if (com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(res.state())) {
+            wo.setActivatedAt(OffsetDateTime.now());
+        }
+        wo.setLastUpdate(OffsetDateTime.now());
+        wholesaleOrders.save(wo);
+        events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", Map.of(
+                "id", wo.getId(), "accessOwner", accessOwner,
+                "accessLayer", accessLayer == null ? "" : accessLayer,
+                "state", wo.getState(), "productOrderId", productOrderId,
+                "externalId", res.externalId()));
+        log.info("wholesale access {}: {} {} {} Mbit/s for retail line {} (owner ref {})",
+                wo.getState(), accessOwner, accessLayer, bandwidth, serviceId, res.externalId());
+        return com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState());
+    }
+
+    /** The install/service postcode carried on the component's place. */
+    @SuppressWarnings("unchecked")
+    private static String postCodeOf(Map<String, Object> item) {
+        if (!(item.get("product") instanceof Map<?, ?> product) || product.get("place") == null) {
+            return null;
+        }
+        Object place = product.get("place");
+        if (place instanceof List<?> list && !list.isEmpty()) {
+            place = list.get(0);
+        }
+        return place instanceof Map<?, ?> m && m.get("postCode") != null
+                ? String.valueOf(m.get("postCode")).replaceAll("\\s", "") : null;
+    }
+
+    /** The retail speed the line is sold at — the downloadSpeed characteristic,
+     *  else the biggest number in the offering name, else 1000. */
+    @SuppressWarnings("unchecked")
+    private static int requestedBandwidth(Map<String, Object> item) {
+        if (item.get("product") instanceof Map<?, ?> product
+                && product.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> ch && "downloadSpeed".equals(String.valueOf(ch.get("name")))
+                        && ch.get("value") != null) {
+                    try {
+                        return (int) Double.parseDouble(String.valueOf(ch.get("value")));
+                    } catch (NumberFormatException ignored) {
+                        // fall through
+                    }
+                }
+            }
+        }
+        if (item.get("productOffering") instanceof Map<?, ?> off && off.get("name") != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{2,4})")
+                    .matcher(String.valueOf(off.get("name")));
+            int best = 0;
+            while (m.find()) {
+                best = Math.max(best, Integer.parseInt(m.group(1)));
+            }
+            if (best > 0) {
+                return best;
+            }
+        }
+        return 1000;
+    }
+
+    /**
+     * Choose the access owner. If the order names a preferred owner (a productChar
+     * accessOwner — the retailer's pick), honour it; otherwise the efficient
+     * allocation: the SMALLEST bandwidth tier that still meets the retail speed
+     * (headroom without waste), falling back to the biggest available if none reach it.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> pickAccessOption(List<Map<String, Object>> options,
+            Map<String, Object> item, int requested) {
+        String preferred = null;
+        if (item.get("product") instanceof Map<?, ?> product
+                && product.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> ch && "accessOwner".equals(String.valueOf(ch.get("name")))
+                        && ch.get("value") != null) {
+                    preferred = String.valueOf(ch.get("value"));
+                }
+            }
+        }
+        if (preferred != null) {
+            for (Map<String, Object> o : options) {
+                if (preferred.equalsIgnoreCase(String.valueOf(o.get("accessOwner")))) {
+                    return o;
+                }
+            }
+        }
+        Map<String, Object> meets = null;
+        Map<String, Object> biggest = null;
+        for (Map<String, Object> o : options) {
+            int bw = o.get("maxDownMbps") instanceof Number n ? n.intValue() : 0;
+            if (biggest == null || bw > (Integer) biggest.getOrDefault("maxDownMbps", 0)) {
+                biggest = o;
+            }
+            if (bw >= requested && (meets == null
+                    || bw < (Integer) meets.getOrDefault("maxDownMbps", Integer.MAX_VALUE))) {
+                meets = o;
+            }
+        }
+        return meets != null ? meets : biggest;
     }
 
     /** Coarse product family from a catalog category — mirrors the ordering

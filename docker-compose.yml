@@ -1035,6 +1035,8 @@ services:
       BSS_SOM_TELESALES_EXPIRY_MS: "15000"
       BSS_SOM_TELESALES_TICK_MS: "5000"
       PORTING_BASE_URL: http://porting:8080
+      QUALIFICATION_BASE_URL: http://qualification:8080
+      WHOLESALE_OSS: mock
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: som_app
