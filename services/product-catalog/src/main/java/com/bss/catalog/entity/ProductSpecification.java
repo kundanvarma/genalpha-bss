@@ -37,6 +37,10 @@ public class ProductSpecification {
     @Column(name = "product_spec_characteristic", length = 4000)
     private String productSpecCharacteristicJson;
 
+    /** JSON array of TMF633 ServiceSpecification refs (the CFS this product is realised by). */
+    @Column(name = "service_specification", length = 2000)
+    private String serviceSpecificationJson;
+
     public ProductSpecification() {
     }
 
@@ -94,6 +98,14 @@ public class ProductSpecification {
 
     public void setProductSpecCharacteristicJson(String productSpecCharacteristicJson) {
         this.productSpecCharacteristicJson = productSpecCharacteristicJson;
+    }
+
+    public String getServiceSpecificationJson() {
+        return serviceSpecificationJson;
+    }
+
+    public void setServiceSpecificationJson(String serviceSpecificationJson) {
+        this.serviceSpecificationJson = serviceSpecificationJson;
     }
 
     public String getTenantId() {

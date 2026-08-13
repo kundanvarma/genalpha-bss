@@ -31,6 +31,7 @@ public class ProductSpecificationMapper {
         dto.setLifecycleStatus(entity.getLifecycleStatus());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setProductSpecCharacteristic(readJsonObjectList(entity.getProductSpecCharacteristicJson()));
+        dto.setServiceSpecification(readJsonObjectList(entity.getServiceSpecificationJson()));
         dto.setType("ProductSpecification");
         return dto;
     }
@@ -44,6 +45,7 @@ public class ProductSpecificationMapper {
         entity.setLifecycleStatus(dto.getLifecycleStatus());
         entity.setLastUpdate(dto.getLastUpdate());
         entity.setProductSpecCharacteristicJson(writeJsonObjectList(dto.getProductSpecCharacteristic()));
+        entity.setServiceSpecificationJson(writeJsonObjectList(dto.getServiceSpecification()));
         return entity;
     }
 
@@ -59,6 +61,9 @@ public class ProductSpecificationMapper {
         }
         if (patch.getProductSpecCharacteristic() != null) {
             entity.setProductSpecCharacteristicJson(writeJsonObjectList(patch.getProductSpecCharacteristic()));
+        }
+        if (patch.getServiceSpecification() != null) {
+            entity.setServiceSpecificationJson(writeJsonObjectList(patch.getServiceSpecification()));
         }
     }
 

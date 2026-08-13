@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SecurityConfig {
 
     private static final String WRITE = "catalog:write";
+    private static final String WHOLESALE_ADMIN = "wholesale:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -55,6 +56,13 @@ public class SecurityConfig {
                         // catalog rows they compute from
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/productConfigurationManagement/v5/**").permitAll()
+                        // TMF633 Service Catalog: browse is public like the product
+                        // catalog; authoring the CFS/RFS specs is a wholesale/catalog
+                        // back-office act — accepts catalog:write OR wholesale:admin so
+                        // a wholesale operator can model access without the full catalog role.
+                        .requestMatchers(HttpMethod.GET, ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**").permitAll()
+                        .requestMatchers(ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**")
+                                .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

@@ -33,6 +33,10 @@ public class ProductSpecificationDto {
     @JsonProperty("productSpecCharacteristic")
     private List<Map<String, Object>> productSpecCharacteristic;
 
+    /** TMF633 CFS this product is realised by (the SID product→service link). */
+    @JsonProperty("serviceSpecification")
+    private List<Map<String, Object>> serviceSpecification;
+
     @JsonProperty("@type")
     private String type = "ProductSpecification";
 
@@ -101,5 +105,13 @@ public class ProductSpecificationDto {
 
     public void setProductSpecCharacteristic(List<Map<String, Object>> productSpecCharacteristic) {
         this.productSpecCharacteristic = productSpecCharacteristic;
+    }
+
+    public List<Map<String, Object>> getServiceSpecification() {
+        return serviceSpecification;
+    }
+
+    public void setServiceSpecification(List<Map<String, Object>> serviceSpecification) {
+        this.serviceSpecification = serviceSpecification;
     }
 }
