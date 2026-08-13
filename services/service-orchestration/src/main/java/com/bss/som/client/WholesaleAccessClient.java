@@ -11,7 +11,7 @@ public interface WholesaleAccessClient {
 
     /** Place an access-seeker order with the owner; returns its reference + state. */
     AccessOrderResult order(String accessOwner, String accessLayer, Integer bandwidthMbps,
-            String postCode, String serviceId);
+            String postCode, String serviceId, String buyerRef);
 
     record AccessOrderResult(String externalId, String state) {
     }

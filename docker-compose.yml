@@ -1036,7 +1036,10 @@ services:
       BSS_SOM_TELESALES_TICK_MS: "5000"
       PORTING_BASE_URL: http://porting:8080
       QUALIFICATION_BASE_URL: http://qualification:8080
-      WHOLESALE_OSS: mock
+      WHOLESALE_OSS: sonata
+      SONATA_NORDACCESS_URL: http://mock-sonata-nordaccess:8080
+      SONATA_FJORDFIBER_URL: http://mock-sonata-fjordfiber:8080
+      WHOLESALE_CALLBACK_BASE: http://service-orchestration:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: som_app
@@ -1746,6 +1749,25 @@ services:
       CARRIER_NAME: Helthjem
     ports:
       - "8128:8080"
+
+  # Open access: the fibre owners' OSS, MEF LSO Sonata-shaped. Accepts our
+  # access-seeker orders and fires an async completion callback — the wholesale
+  # line comes up on the owner's own clock, not instantly. Internal-only (SOM
+  # reaches them by name); no host port needed.
+  mock-sonata-nordaccess:
+    build: ./integrations/mock-sonata
+    container_name: bss-mock-sonata-nordaccess
+    restart: unless-stopped
+    environment:
+      ACTIVATE_AFTER_MS: "5000"
+      OWNER_NAME: NORDACCESS
+  mock-sonata-fjordfiber:
+    build: ./integrations/mock-sonata
+    container_name: bss-mock-sonata-fjordfiber
+    restart: unless-stopped
+    environment:
+      ACTIVATE_AFTER_MS: "5000"
+      OWNER_NAME: FJORDFIBER
 
   # The second carrier for per-tenant carrier choice (C-P2): Bring/Posten-shaped,
   # with a Pickup Point API (the distinctive Nordic delivery method).

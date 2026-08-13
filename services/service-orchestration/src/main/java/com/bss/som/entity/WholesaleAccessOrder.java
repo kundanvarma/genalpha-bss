@@ -39,6 +39,10 @@ public class WholesaleAccessOrder {
     @Column(name = "service_id", length = 36)
     private String serviceId;
 
+    /** The retail order item the async owner callback completes. */
+    @Column(name = "order_item_id", length = 64)
+    private String orderItemId;
+
     @Column(name = "owner_party_id", length = 64)
     private String ownerPartyId;
 
@@ -78,6 +82,8 @@ public class WholesaleAccessOrder {
     public void setProductOrderId(String productOrderId) { this.productOrderId = productOrderId; }
     public String getServiceId() { return serviceId; }
     public void setServiceId(String serviceId) { this.serviceId = serviceId; }
+    public String getOrderItemId() { return orderItemId; }
+    public void setOrderItemId(String orderItemId) { this.orderItemId = orderItemId; }
     public String getOwnerPartyId() { return ownerPartyId; }
     public void setOwnerPartyId(String ownerPartyId) { this.ownerPartyId = ownerPartyId; }
     public String getAccessOwner() { return accessOwner; }

@@ -59,9 +59,14 @@ bss:
     ocs-base-url: ${OCS_BASE_URL:}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8080}
   wholesale:
-    # open access: which owner-OSS integration to use (mock in dev). A real
-    # adapter (MEF LSO Sonata per owner) plugs in here.
+    # open access: which owner-OSS integration to use — 'mock' activates instantly
+    # in-process; 'sonata' places a real HTTP order on the owner's MEF LSO Sonata
+    # endpoint and activates on its async callback.
     oss: ${WHOLESALE_OSS:mock}
+    sonata:
+      nordaccess: ${SONATA_NORDACCESS_URL:http://localhost:8134}
+      fjordfiber: ${SONATA_FJORDFIBER_URL:http://localhost:8135}
+    callback-base: ${WHOLESALE_CALLBACK_BASE:http://localhost:8080}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}
     enabled: ${PORTING_ENABLED:true}

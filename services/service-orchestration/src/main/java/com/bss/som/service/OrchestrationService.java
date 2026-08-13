@@ -681,14 +681,18 @@ public class OrchestrationService {
         String accessOwner = String.valueOf(pick.get("accessOwner"));
         String accessLayer = pick.get("accessLayer") == null ? null : String.valueOf(pick.get("accessLayer"));
         Integer bandwidth = pick.get("maxDownMbps") instanceof Number nb ? nb.intValue() : requested;
+        String woId = UUID.randomUUID().toString();
+        // the async owner callback (Sonata) references OUR order id, so mint it
+        // first and hand it over as the buyer reference
         com.bss.som.client.WholesaleAccessClient.AccessOrderResult res =
-                wholesaleAccess.order(accessOwner, accessLayer, bandwidth, postCode, serviceId);
+                wholesaleAccess.order(accessOwner, accessLayer, bandwidth, postCode, serviceId, woId);
 
         com.bss.som.entity.WholesaleAccessOrder wo = new com.bss.som.entity.WholesaleAccessOrder();
-        wo.setId(UUID.randomUUID().toString());
+        wo.setId(woId);
         wo.setTenantId(tenant);
         wo.setProductOrderId(productOrderId);
         wo.setServiceId(serviceId);
+        wo.setOrderItemId(item.get("id") == null ? null : String.valueOf(item.get("id")));
         wo.setOwnerPartyId(owner);
         wo.setAccessOwner(accessOwner);
         wo.setAccessLayer(accessLayer);
@@ -721,6 +725,75 @@ public class OrchestrationService {
         log.info("wholesale access {}: {} {} {} Mbit/s for retail line {} (owner ref {})",
                 wo.getState(), accessOwner, accessLayer, bandwidth, serviceId, res.externalId());
         return com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState());
+    }
+
+    /**
+     * The owner's OSS confirmed activation (MEF Sonata notification). Flip the
+     * access order active, complete the retail fibre service order + order item so
+     * the line comes up and the order rolls up, and publish the active event so
+     * revenue books the COGS. Anonymous callback: read across tenants, then act as
+     * the order's own tenant. Idempotent — a replayed notification is a no-op.
+     */
+    @Transactional
+    public boolean activateWholesaleAccess(String woId, String sonataOrderId) {
+        com.bss.som.entity.WholesaleAccessOrder wo;
+        try (var ignored = com.bss.som.security.TenantContext.actAsSystem()) {
+            wo = wholesaleOrders.findById(woId).orElse(null);
+        }
+        if (wo == null || com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState())) {
+            return false;
+        }
+        try (var ignored = com.bss.som.security.TenantContext.actAs(wo.getTenantId())) {
+            wo.setState(com.bss.som.entity.WholesaleAccessOrder.ACTIVE);
+            wo.setActivatedAt(OffsetDateTime.now());
+            if (sonataOrderId != null && wo.getExternalId() == null) {
+                wo.setExternalId(sonataOrderId);
+            }
+            wo.setLastUpdate(OffsetDateTime.now());
+            wholesaleOrders.save(wo);
+            // the retail line's service order completes — the provisioned milestone
+            if (wo.getServiceId() != null) {
+                services.findByIdAndTenantId(wo.getServiceId(), wo.getTenantId()).ifPresent(inst -> {
+                    if (inst.getServiceOrderId() != null) {
+                        serviceOrders.findByIdAndTenantId(inst.getServiceOrderId(), wo.getTenantId())
+                                .ifPresent(so -> {
+                                    if (!ServiceOrder.COMPLETED.equals(so.getState())) {
+                                        so.setState(ServiceOrder.COMPLETED);
+                                        so.setCompletedAt(OffsetDateTime.now());
+                                        so.setLastUpdate(OffsetDateTime.now());
+                                        serviceOrders.save(so);
+                                        events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                                                "id", so.getId(), "state", so.getState(),
+                                                "productOrderId", wo.getProductOrderId()));
+                                    }
+                                });
+                    }
+                });
+            }
+            // the retail order item completes — the order rolls up
+            if (wo.getProductOrderId() != null && wo.getOrderItemId() != null) {
+                ordering.updateItemState(wo.getProductOrderId(), wo.getOrderItemId(), "completed");
+            }
+            // active event → revenue books the wholesale COGS
+            com.bss.som.client.WholesaleRateCardClient.Rate rate =
+                    wholesaleRateCard.rateCard().get(wo.getAccessOwner());
+            Map<String, Object> event = new java.util.LinkedHashMap<>();
+            event.put("id", wo.getId());
+            event.put("accessOwner", wo.getAccessOwner());
+            event.put("accessLayer", wo.getAccessLayer() == null ? "" : wo.getAccessLayer());
+            event.put("state", wo.getState());
+            event.put("productOrderId", wo.getProductOrderId());
+            event.put("serviceId", wo.getServiceId());
+            event.put("externalId", wo.getExternalId());
+            if (rate != null) {
+                event.put("ratePerLine", rate.perLine());
+                event.put("currency", "EUR");
+            }
+            events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", event);
+            log.info("wholesale access ACTIVATED by owner callback: {} for order {} (line {})",
+                    wo.getAccessOwner(), wo.getProductOrderId(), wo.getServiceId());
+        }
+        return true;
     }
 
     /** The install/service postcode carried on the component's place. */

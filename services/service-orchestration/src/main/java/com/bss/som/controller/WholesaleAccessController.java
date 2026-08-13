@@ -5,8 +5,12 @@ import com.bss.som.client.WholesaleRateCardClient;
 import com.bss.som.entity.WholesaleAccessOrder;
 import com.bss.som.repository.WholesaleAccessOrderRepository;
 import com.bss.som.security.TenantScope;
+import com.bss.som.service.OrchestrationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -29,12 +33,29 @@ public class WholesaleAccessController {
     private final WholesaleAccessOrderRepository wholesaleOrders;
     private final TenantScope tenantScope;
     private final WholesaleRateCardClient rateCard;
+    private final OrchestrationService orchestration;
 
     public WholesaleAccessController(WholesaleAccessOrderRepository wholesaleOrders,
-            TenantScope tenantScope, WholesaleRateCardClient rateCard) {
+            TenantScope tenantScope, WholesaleRateCardClient rateCard, OrchestrationService orchestration) {
         this.wholesaleOrders = wholesaleOrders;
         this.tenantScope = tenantScope;
         this.rateCard = rateCard;
+        this.orchestration = orchestration;
+    }
+
+    /**
+     * The owner OSS's activation callback (MEF Sonata notification): the wholesale
+     * access line is live. Anonymous — the owner is an external system, not a fleet
+     * identity; the order id in the path is the correlation. Idempotent.
+     */
+    @PostMapping(ApiConstants.ORDER_BASE + "/wholesaleAccessOrder/{id}/notification")
+    public ResponseEntity<Map<String, Object>> notify(@PathVariable("id") String id,
+            @RequestBody(required = false) Map<String, Object> body) {
+        String sonataOrderId = body == null ? null
+                : body.get("sonataOrderId") != null ? String.valueOf(body.get("sonataOrderId"))
+                : body.get("id") != null ? String.valueOf(body.get("id")) : null;
+        boolean activated = orchestration.activateWholesaleAccess(id, sonataOrderId);
+        return ResponseEntity.ok(Map.of("id", id, "activated", activated));
     }
 
     /**

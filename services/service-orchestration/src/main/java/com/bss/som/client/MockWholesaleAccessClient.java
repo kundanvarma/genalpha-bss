@@ -23,7 +23,7 @@ public class MockWholesaleAccessClient implements WholesaleAccessClient {
 
     @Override
     public AccessOrderResult order(String accessOwner, String accessLayer, Integer bandwidthMbps,
-            String postCode, String serviceId) {
+            String postCode, String serviceId, String buyerRef) {
         SecureRandom random = new SecureRandom();
         StringBuilder ref = new StringBuilder("SO-").append(accessOwner).append('-');
         for (int i = 0; i < 6; i++) {

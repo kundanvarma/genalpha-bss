@@ -101,13 +101,18 @@ async function call(method, path, tok, body) {
   const waoFor = async (oid) => (await call('GET', `${WAO}?productOrderId=${oid}`, staff)).body || [];
 
   const o1 = await orderFibre('5020', 1000);
+  // the owner OSS activates on its own clock (async, MEF Sonata) — wait for it
   let w1 = [];
-  for (let i = 0; i < 12 && !w1.length; i++) { await sleep(2000); w1 = await waoFor(o1.id); }
-  if (!w1.length) fail('a retail fibre sale placed NO upstream access order');
-  if (w1[0].accessOwner !== 'NORDACCESS' || w1[0].state !== 'active') {
-    fail('the upstream order did not go active to NordAccess: ' + JSON.stringify(w1[0]));
+  for (let i = 0; i < 25; i++) {
+    await sleep(1500); w1 = await waoFor(o1.id);
+    if (w1.length && w1[0].state === 'active') break;
   }
-  if (!String(w1[0].externalId).startsWith('SO-')) fail('no owner OSS reference on the upstream order');
+  if (!w1.length) fail('a retail fibre sale placed NO upstream access order');
+  if (w1[0].accessOwner !== 'NORDACCESS') {
+    fail('the upstream order did not go to NordAccess: ' + JSON.stringify(w1[0]));
+  }
+  if (w1[0].state !== 'active') fail('the upstream order never went active (owner callback missing)');
+  if (!/^(SO|SON)-/.test(String(w1[0].externalId))) fail('no owner OSS reference on the upstream order');
   ok(`UPSTREAM ORDER: fibre 1000 at 5020 -> access-seeker order to ${w1[0].accessOwner} ${w1[0].accessLayer} (${w1[0].externalId}), active`);
 
   const own = await orderFibre('1110', 1000);
@@ -119,7 +124,10 @@ async function call(method, path, tok, body) {
   /* ---------- 5. EFFICIENT PICK (W4) ---------- */
   const o3 = await orderFibre('5020', 300);
   let w3 = [];
-  for (let i = 0; i < 12 && !w3.length; i++) { await sleep(2000); w3 = await waoFor(o3.id); }
+  for (let i = 0; i < 25; i++) {
+    await sleep(1500); w3 = await waoFor(o3.id);
+    if (w3.length && w3[0].state === 'active') break;
+  }
   if (!w3.length || w3[0].accessOwner !== 'FJORDFIBER') {
     fail('a 300 Mbit/s plan did not take the smallest tier that meets it (FjordFiber L2 500): '
       + JSON.stringify(w3[0]));
