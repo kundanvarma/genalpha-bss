@@ -320,9 +320,14 @@ const RESOURCES = [
       { name: 'postcodePrefix', label: 'Postcode prefix (empty = everywhere)' },
       { name: 'maxDownMbps', label: 'Max down Mbit/s', kind: 'number' },
       { name: 'maxUpMbps', label: 'Max up Mbit/s', kind: 'number' },
+      // Wholesale footprint: paint WHICH owner sells access here and at WHICH layer.
+      // Leave both blank for the operator's OWN network (a normal serviceability row).
+      { name: 'accessOwner', label: 'Access owner code (blank = own network)' },
+      { name: 'accessLayer', label: 'Access layer', kind: 'select',
+        options: ['', 'L2-VULA', 'L3-activated'] },
       { name: 'note', label: 'Note' },
     ],
-    columns: ['technology', 'postcodePrefix', 'maxDownMbps', 'maxUpMbps', 'note', 'lastUpdate'],
+    columns: ['technology', 'postcodePrefix', 'maxDownMbps', 'maxUpMbps', 'accessOwner', 'accessLayer', 'note', 'lastUpdate'],
   },
   {
     // TMF696 risk assessments — read-only: the scores the ordering gate consults.
@@ -1065,7 +1070,7 @@ const TAB_ROLE = {
   processFlow: ['workforce:use', 'service:write'],
   runbook: 'ai:admin',
   serviceableArea: 'qualification:write',
-  coverageMap: 'qualification:write',
+  coverageMap: ['qualification:write', 'wholesale:admin'],
   partyRiskAssessment: 'risk:assess',
   productOrder: ['ordering:write', 'service:write'],
   appointment: 'appointment:admin',

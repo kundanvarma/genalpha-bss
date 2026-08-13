@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SecurityConfig {
 
     private static final String WRITE = "qualification:write";
+    private static final String WHOLESALE_ADMIN = "wholesale:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -56,6 +57,13 @@ public class SecurityConfig {
                                 "/tmf-api/serviceQualificationManagement/v4/queryAccessOptions").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification/*").permitAll()
+                        // Wholesale footprint authoring: a wholesale operator paints the
+                        // coverage map (which owner sells here at which layer) from the
+                        // console — coverage CRUD accepts wholesale:admin as well as the
+                        // qualification write role. Other v4 writes stay qualification:write.
+                        .requestMatchers("/tmf-api/serviceQualificationManagement/v4/coverageMap",
+                                "/tmf-api/serviceQualificationManagement/v4/coverageMap/**")
+                                .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
                         .requestMatchers("/tmf-api/serviceQualificationManagement/v4/**").hasAuthority(WRITE)
                         .requestMatchers("/tmf-api/serviceQualificationManagement/v3/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()

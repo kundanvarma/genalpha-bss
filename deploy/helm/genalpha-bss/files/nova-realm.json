@@ -58,6 +58,9 @@
         "name": "qualification:write"
       },
       {
+        "name": "wholesale:admin"
+      },
+      {
         "name": "appointment:read"
       },
       {
@@ -804,6 +807,7 @@
         "billing:write",
         "qualification:read",
         "qualification:write",
+        "wholesale:admin",
         "appointment:read",
         "appointment:write",
         "ticket:read",
