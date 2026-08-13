@@ -10,15 +10,33 @@ spring:
       trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
       # Browse-path edge cache: LocalResponseCache absorbs the campaign-day
       # catalog surge before it reaches the catalog JVM + Postgres. Route-level
-      # enable (applied only on the product-catalog route), so only the public
-      # price list is cached; it honours the catalog's Cache-Control (no-store for
-      # tokened requests) and Vary: X-Tenant-Id (so a tenant's catalogue never leaks).
-      filter:
-        local-response-cache:
-          enabled: true
+      # ONLY (applied via the LocalResponseCache filter on the product-catalog
+      # route), so only the public price list is cached; it honours the catalog's
+      # Cache-Control (no-store for tokened requests) and Vary: X-Tenant-Id (so a
+      # tenant's catalogue never leaks).
+      #
+      # CRITICAL: `filter.local-response-cache.enabled` registers the per-route
+      # filter factory, but it ALSO turns on the GLOBAL response-cache filter
+      # (its `global-filter.local-response-cache.enabled` flag is matchIfMissing
+      # =true). The global filter caches EVERY route — including authenticated
+      # carts/orders/bills, which carry no Cache-Control and would be served
+      # stale for the 5-minute default TTL. We MUST disable it explicitly and
+      # rely on the per-route filter alone.
+      #
+      # In SCG 4.3 (Spring Cloud 2025.0.x) these flags live under the
+      # `server.webflux` namespace (below). The legacy `spring.cloud.gateway.*`
+      # aliases only migrate for SOME keys — the global-filter toggle has no
+      # legacy alias, so it MUST be set in the new namespace or the global cache
+      # silently stays on.
       server:
         webflux:
           trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+          filter:
+            local-response-cache:
+              enabled: true       # registers the per-route LocalResponseCache filter
+          global-filter:
+            local-response-cache:
+              enabled: false      # keep the cache OFF everywhere except the catalog route
       routes:
         # Agentic commerce (ACP): the feed lives with the catalog, the
         # checkout-session lifecycle with the cart. AgentCommerceGateFilter

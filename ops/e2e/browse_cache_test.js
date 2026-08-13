@@ -75,7 +75,31 @@ const maxAge = (cc) => { const m = /max-age=(\d+)/.exec(cc || ''); return m ? Nu
   if (cached < N * 0.8) fail(`surge: only ${cached}/${N} were cache-served — the cache did not absorb the burst`);
   ok(`SURGE: ${N} concurrent anonymous browses in ${ms}ms, all 200, ${cached}/${N} served from the edge cache — the catalog is shielded`);
 
+  /* ---------- 5. GLOBAL CACHE OFF: only the catalog route is cached ----------
+   * The edge cache is enabled route-by-route. If it were ever switched on
+   * globally (SCG's LocalResponseCache defaults the global filter to ON the
+   * moment the per-route filter is enabled), it would cache EVERY authenticated
+   * GET — carts, orders, bills — and serve them stale for minutes. This leg
+   * proves a write to a dynamic resource is visible on the very next read:
+   * create a cart, add a line, and confirm the reread reflects it. */
+  const CART = '/tmf-api/shoppingCart/v4/shoppingCart';
+  const authHead = { Authorization: `Bearer ${staff.access_token}`, 'Content-Type': 'application/json' };
+  const cart = await (await fetch(API + CART, { method: 'POST', headers: authHead, body: '{}' })).json();
+  await head(`${CART}/${cart.id}`, { Authorization: `Bearer ${staff.access_token}` }); // a read that a global cache would snapshot
+  const cc = (await head(`${CART}/${cart.id}`, { Authorization: `Bearer ${staff.access_token}` })).cc;
+  if (/public/.test(cc) || maxAge(cc) > 0) fail(`a non-catalog authed route was edge-cached: "${cc}"`);
+  await fetch(`${API}${CART}/${cart.id}`, { method: 'PATCH', headers: authHead,
+    body: JSON.stringify({ cartItem: [{ id: 'probe#a#b', key: 'probe#a#b',
+      offeringId: '00000000-0000-0000-0000-000000000001', name: 'Probe', quantity: 1, selections: [] }] }) });
+  const after = await (await fetch(`${API}${CART}/${cart.id}`,
+    { headers: { Authorization: `Bearer ${staff.access_token}` } })).json();
+  if ((after.cartItem || []).length !== 1) {
+    fail('a cart write was NOT visible on the next read — the gateway cache is caching dynamic routes globally');
+  }
+  ok('GLOBAL CACHE OFF: a cart write is visible immediately; only the catalog route is edge-cached, never carts/orders/bills');
+
   console.log('\nALL BROWSE-CACHE CHECKS PASSED — the campaign-day shop is served from the edge: the'
     + ' anonymous price list is cached per-tenant, a burst is absorbed before it reaches the catalog or'
-    + ' the database, one tenant never sees another\'s catalogue, and a logged-in browse is never cached.');
+    + ' the database, one tenant never sees another\'s catalogue, a logged-in browse is never cached, and'
+    + ' the cache is scoped to the catalog route alone — dynamic state is never served stale.');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });
