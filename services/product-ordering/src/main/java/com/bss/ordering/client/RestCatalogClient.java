@@ -51,6 +51,21 @@ public class RestCatalogClient implements CatalogClient {
 
     @Override
     @SuppressWarnings("unchecked")
+    public Optional<java.util.Map<String, Object>> findSpecification(String id) {
+        try {
+            return Optional.ofNullable(restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", id)
+                    .retrieve()
+                    .body(java.util.Map.class));
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        } catch (RestClientException e) {
+            throw new DownstreamException("product-catalog is unreachable", e);
+        }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public Optional<java.util.Map<String, Object>> findPrice(String id) {
         try {
             return Optional.ofNullable(restClient.get()

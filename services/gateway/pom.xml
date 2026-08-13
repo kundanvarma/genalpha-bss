@@ -40,6 +40,17 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway</artifactId>
         </dependency>
+        <!-- browse-path edge cache: LocalResponseCache needs BOTH Caffeine and
+             the cache starter (versions from the Boot BOM) — absorbs the
+             campaign-day catalog surge -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-cache</artifactId>
+        </dependency>
         <!-- shared rate-limit buckets (RateLimitStore seam); version from the Boot BOM -->
         <dependency>
             <groupId>io.lettuce</groupId>

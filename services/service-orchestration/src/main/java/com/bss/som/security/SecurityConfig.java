@@ -46,6 +46,15 @@ public class SecurityConfig {
                         // the shop's number picker: anonymous preview, nothing consumed
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/tmf-api/resourcePoolManagement/v4/numberOffer").permitAll()
+                        // the fibre owner's OSS activation callback: an external
+                        // system, not a fleet identity; the order id is the correlation
+                        .requestMatchers(HttpMethod.POST,
+                                "/tmf-api/serviceOrdering/v4/wholesaleAccessOrder/*/notification").permitAll()
+                        // our OWN Sonata provider face: a retailer's BSS places an
+                        // access-seeker order here. Anonymous; the tenant (which
+                        // owner we are) rides X-Tenant-Id, validated by the registry.
+                        .requestMatchers(HttpMethod.POST,
+                                "/mefApi/serviceOrdering/v1/serviceOrder").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",

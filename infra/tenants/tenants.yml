@@ -100,7 +100,7 @@ bss:
         currency: NOK
         agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
         ai-visibility: ${AI_VISIBILITY_NOVA:search-only}
-        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
+        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
         analytics-provider: ${ANALYTICS_PROVIDER_NOVA:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_NOVA:https://www.google-analytics.com}
         analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_NOVA:}

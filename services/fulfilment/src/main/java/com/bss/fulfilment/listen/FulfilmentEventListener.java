@@ -54,22 +54,15 @@ public class FulfilmentEventListener {
                     : Map.of();
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 if ("ProductOrderCreateEvent".equals(eventType)) {
+                    // A bundle order is a tree: the shippable goods (a handset, a
+                    // physical SIM) are LEAF components, not top-level items. Walk to
+                    // the leaves so each parcels on its own — never the bundle as one.
                     List<Map<String, Object>> physicalItems = new ArrayList<>();
-                    Object place = null;
                     if (resource.get("productOrderItem") instanceof List<?> items) {
-                        for (Object o : items) {
-                            if (o instanceof Map<?, ?> item
-                                    && item.get("product") instanceof Map<?, ?> product
-                                    && product.get("place") != null
-                                    && !installsRatherThanShips(item)) {
-                                // installs (fiber/broadband) carry a place for the
-                                // ENGINEER, not a parcel — they go via the workOrder,
-                                // not the carrier. Only shippable goods get a parcel.
-                                physicalItems.add((Map<String, Object>) item);
-                                place = product.get("place");
-                            }
-                        }
+                        collectShippableLeaves((List<Map<String, Object>>) items, physicalItems);
                     }
+                    Object place = physicalItems.isEmpty() ? null
+                            : ((Map<String, Object>) physicalItems.get(0).get("product")).get("place");
                     if (!physicalItems.isEmpty() && resource.get("id") != null) {
                         service.onPhysicalOrder(String.valueOf(resource.get("id")),
                                 partyOf(resource), physicalItems, place);
@@ -93,6 +86,33 @@ public class FulfilmentEventListener {
             }
         } catch (Exception e) {
             log.warn("fulfilment: skipping unprocessable event: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Walk a decomposed order to its shippable leaf components. A leaf that
+     * carries a place and is not an install (fiber/broadband go via a workOrder,
+     * not a parcel) is a physical good to dispatch; a container (a bundle with
+     * children) is never shipped itself.
+     */
+    @SuppressWarnings("unchecked")
+    private static void collectShippableLeaves(List<Map<String, Object>> items,
+            List<Map<String, Object>> into) {
+        if (items == null) {
+            return;
+        }
+        for (Object o : items) {
+            if (!(o instanceof Map<?, ?> item)) {
+                continue;
+            }
+            Object kids = item.get("productOrderItem");
+            if (kids instanceof List<?> children && !children.isEmpty()) {
+                collectShippableLeaves((List<Map<String, Object>>) children, into);
+            } else if (item.get("product") instanceof Map<?, ?> product
+                    && product.get("place") != null
+                    && !installsRatherThanShips((Map<String, Object>) item)) {
+                into.add((Map<String, Object>) item);
+            }
         }
     }
 

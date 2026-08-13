@@ -16,6 +16,28 @@ const None = () => <span className="secnone"> — none</span>;
 const dt = (v) => v ? new Date(v).toLocaleString(undefined,
   { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 
+// A bundle order decomposes into product families — the agent sees the same
+// component tree the customer does, so "why is it in progress" answers itself.
+const FAMILY_ICON = { internet: '🌐', tv: '📺', mobile: '📱', device: '📦', other: '•' };
+function orderLeaves(items, into = []) {
+  for (const it of items || []) {
+    const kids = it.productOrderItem || [];
+    if (kids.length) orderLeaves(kids, into);
+    else if (it.productOffering) into.push(it);
+  }
+  return into;
+}
+function familyOf(item) {
+  if (item.componentType) return item.componentType;
+  const n = (item.productOffering?.name || '').toLowerCase();
+  if (/fiber|fibre|broadband|internet|dsl/.test(n)) return 'internet';
+  if (/\btv\b|stream|sports|entertain|kids tv/.test(n)) return 'tv';
+  if (/mobile|sim|5g|data|gb\b/.test(n)) return 'mobile';
+  if (/iphone|galaxy|pixel|phone|handset|watch/.test(n)) return 'device';
+  return 'other';
+}
+const leafGlyph = (st) => st === 'completed' ? '✓' : st === 'cancelled' ? '✗' : '⏳';
+
 // TMF683 channel is an array of channel references; render it safely whether
 // the backend returns the TMF array shape or a plain string.
 const chan = (c) => Array.isArray(c)
@@ -187,11 +209,36 @@ export default function Customer360() {
         <section>
           <h2>Orders{!orders.length && <None />}</h2>
           <div className="rows">
-            {orders.map((o) => (
+            {orders.map((o) => {
+              const leaves = orderLeaves(o.productOrderItem);
+              const multi = leaves.length > 1;
+              const doneCount = leaves.filter((l) => l.state === 'completed').length;
+              return (
               <div className="row" key={o.id}>
                 <div>
                   <strong>{o.description || o.id}</strong>
-                  <div className="dim small">{dt(o.orderDate)}</div>
+                  <div className="dim small">{dt(o.orderDate)}
+                    {multi && o.state === 'partiallyCompleted'
+                      && <> · {doneCount}/{leaves.length} components ready</>}</div>
+                  {multi && (
+                    <ul className="ordercomponents" data-testid="order-components">
+                      {leaves.map((l, i) => {
+                        const rel = (l.orderItemRelationship || [])
+                          .find((r) => r.relationshipType === 'reliesOn');
+                        const base = rel && leaves.find((x) => x.id === rel.id);
+                        const waiting = base && base.state !== 'completed' && l.state !== 'completed';
+                        return (
+                          <li key={l.id || i}>
+                            <span className="ocfam">{FAMILY_ICON[familyOf(l)] || '•'}</span>
+                            <span className="ocname">{l.productOffering?.name || 'component'}</span>
+                            <span className={`ocstate ${l.state}`}>{leafGlyph(l.state)} {l.state}
+                              {waiting && <span className="dim"> · waiting on {familyOf(base) === 'internet'
+                                ? 'broadband' : (base.productOffering?.name || 'base')}</span>}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
                 </div>
                 <div className="rowend">
                   <span className={`state ${o.state}`}>{o.state}</span>
@@ -207,7 +254,8 @@ export default function Customer360() {
                   )}
                 </div>
               </div>
-            ))}
+              );
+            })}
                       </div>
 
           <h2>Services{!products.length && !activeServices.length && <None />}</h2>

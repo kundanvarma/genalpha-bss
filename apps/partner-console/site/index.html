@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wholesale partner portal</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .phead { display: flex; align-items: baseline; gap: 10px; margin: 4px 0 6px; }
+  .phead h1 { margin: 0; font-size: 22px; }
+  .phead .sub { color: var(--dim, #8a979c); font-size: 13px; }
+  section.card { background: var(--card, #fff); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 18px; }
+  section.card h2 { margin: 0 0 10px; font-size: 15px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 8px 4px;
+    border-bottom: 1px solid var(--line); font-size: 13.5px; }
+  .row:last-child { border-bottom: none; }
+  .row .code { font-family: ui-monospace, Menlo, monospace; color: var(--teal); }
+  .row .dim { color: var(--dim, #8a979c); font-size: 12px; }
+  .row .end { margin-left: auto; font-family: ui-monospace, Menlo, monospace; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+  .addrow input, .addrow select { flex: 1; min-width: 120px; }
+  .layer { font-size: 11.5px; padding: 2px 8px; border-radius: 9px; background: #eef3f3; color: #1a7a6d; }
+  .state { font-size: 11.5px; padding: 2px 8px; border-radius: 9px; background: #eef3f3; }
+  .state.active { color: #1a7a6d; }
+  .state.inProgress, .state.acknowledged { color: #a07a1a; }
+  .state.failed { color: #b64a3a; }
+  .ok { color: var(--teal); font-size: 12.5px; }
+  .err { color: #b64a3a; font-size: 12.5px; }
+  .gate { max-width: 520px; margin: 16vh auto; text-align: center; color: var(--dim, #8a979c); }
+  .money { display: flex; gap: 22px; font-size: 14px; margin: 6px 0 2px; }
+  .money b { font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="mark">WHOLESALE</span></div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:10px">
+    <span id="username" style="font-family:ui-monospace,Menlo,monospace;font-size:12px"></span>
+    <button id="signout" class="ghost" style="display:none">Sign out</button>
+  </div>
+</header>
+
+<main id="app" style="display:none">
+  <div class="phead">
+    <h1>Wholesale partner portal</h1>
+    <span class="sub">buy open-access fibre &mdash; the L2/L3 SKUs, serviceability, your orders and what you owe</span>
+  </div>
+
+  <section class="card">
+    <h2>Check an address</h2>
+    <div class="addrow">
+      <input id="pc" placeholder="Postcode (e.g. 5020 Bergen, 7010 Trondheim)">
+      <button id="check" class="primary">Which owners serve it?</button>
+    </div>
+    <div id="options"></div>
+  </section>
+
+  <section class="card">
+    <h2>Access catalogue &mdash; the L2/L3 products</h2>
+    <div id="catalog" class="dim">Loading&hellip;</div>
+  </section>
+
+  <section class="card">
+    <h2>My access orders</h2>
+    <div id="orders" class="dim">Loading&hellip;</div>
+  </section>
+
+  <section class="card">
+    <h2>What I owe the owners</h2>
+    <div id="settlement" class="dim">Loading&hellip;</div>
+  </section>
+</main>
+
+<div id="gate" class="gate">
+  <h1>Wholesale partner portal</h1>
+  <p>Sign in to buy open-access fibre.</p>
+  <button id="signin" class="primary">Sign in</button>
+</div>
+
+<script src="auth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

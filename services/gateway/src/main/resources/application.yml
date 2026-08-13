@@ -8,9 +8,35 @@ spring:
       # the fleet actually runs on — services rebuild client-visible URLs
       # (e.g. TMF Location headers) from these.
       trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+      # Browse-path edge cache: LocalResponseCache absorbs the campaign-day
+      # catalog surge before it reaches the catalog JVM + Postgres. Route-level
+      # ONLY (applied via the LocalResponseCache filter on the product-catalog
+      # route), so only the public price list is cached; it honours the catalog's
+      # Cache-Control (no-store for tokened requests) and Vary: X-Tenant-Id (so a
+      # tenant's catalogue never leaks).
+      #
+      # CRITICAL: `filter.local-response-cache.enabled` registers the per-route
+      # filter factory, but it ALSO turns on the GLOBAL response-cache filter
+      # (its `global-filter.local-response-cache.enabled` flag is matchIfMissing
+      # =true). The global filter caches EVERY route — including authenticated
+      # carts/orders/bills, which carry no Cache-Control and would be served
+      # stale for the 5-minute default TTL. We MUST disable it explicitly and
+      # rely on the per-route filter alone.
+      #
+      # In SCG 4.3 (Spring Cloud 2025.0.x) these flags live under the
+      # `server.webflux` namespace (below). The legacy `spring.cloud.gateway.*`
+      # aliases only migrate for SOME keys — the global-filter toggle has no
+      # legacy alias, so it MUST be set in the new namespace or the global cache
+      # silently stays on.
       server:
         webflux:
           trusted-proxies: "10\\..*|172\\..*|192\\.168\\..*|127\\..*"
+          filter:
+            local-response-cache:
+              enabled: true       # registers the per-route LocalResponseCache filter
+          global-filter:
+            local-response-cache:
+              enabled: false      # keep the cache OFF everywhere except the catalog route
       routes:
         # Agentic commerce (ACP): the feed lives with the catalog, the
         # checkout-session lifecycle with the cart. AgentCommerceGateFilter
@@ -58,6 +84,10 @@ spring:
           uri: ${CATALOG_URL:http://localhost:8081}
           predicates:
             - Path=/tmf-api/productCatalogManagement/**
+          filters:
+            # cache the anonymous price list at the edge (TTL from the catalog's
+            # Cache-Control; only cacheable GETs, keyed by tenant via Vary)
+            - LocalResponseCache=60s,50MB
         # TMF760: the configurator lives WITH the catalog it computes from
         - id: product-configurator
           uri: ${CATALOG_URL:http://localhost:8081}
@@ -243,6 +273,11 @@ spring:
           uri: ${SOM_URL:http://localhost:8104}
           predicates:
             - Path=/tmf-api/serviceOrdering/**,/tmf-api/serviceInventory/**,/tmf-api/resourcePoolManagement/**,/tmf-api/intentManagement/**,/tmf-api/serviceTestManagement/**,/tmf-api/resourceInventoryManagement/**,/tmf-api/serviceCatalogManagement/**
+        - id: som-sonata-provider
+          # our MEF LSO Sonata provider face — retailers order wholesale access here
+          uri: ${SOM_URL:http://localhost:8104}
+          predicates:
+            - Path=/mefApi/**
         - id: dealer-channel
           # the retail dealer channel: kits, counter sales, commission
           uri: ${SOM_URL:http://localhost:8104}
@@ -285,6 +320,13 @@ spring:
           uri: ${DEALER_URL:http://localhost:8113}
           predicates:
             - Path=/dealer-app/**
+          filters:
+            - StripPrefix=1
+        - id: partner-console
+          # the wholesale partner portal — retailers buy open-access fibre here
+          uri: ${PARTNER_URL:http://localhost:8138}
+          predicates:
+            - Path=/partner/**
           filters:
             - StripPrefix=1
         - id: storefront
@@ -335,7 +377,7 @@ bss:
         locale: "no"
         currency: NOK
         agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
-        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost]
+        hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
 
 management:
   endpoints:

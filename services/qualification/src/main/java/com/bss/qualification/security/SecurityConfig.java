@@ -52,7 +52,8 @@ public class SecurityConfig {
                         // back-office and fall through to the write gate below.
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification",
-                                "/tmf-api/serviceQualificationManagement/v4/queryServiceQualification").permitAll()
+                                "/tmf-api/serviceQualificationManagement/v4/queryServiceQualification",
+                                "/tmf-api/serviceQualificationManagement/v4/queryAccessOptions").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/tmf-api/serviceQualificationManagement/v4/checkServiceQualification/*").permitAll()
                         .requestMatchers("/tmf-api/serviceQualificationManagement/v4/**").hasAuthority(WRITE)

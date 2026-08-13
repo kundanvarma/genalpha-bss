@@ -58,6 +58,10 @@ public class OrchestrationService {
     private final com.bss.som.security.TenantRegistry tenants;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.tick.TickGuard tickGuard;
+    private final com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders;
+    private final com.bss.som.client.WholesaleQualificationClient wholesaleQualification;
+    private final com.bss.som.client.WholesaleAccessClient wholesaleAccess;
+    private final com.bss.som.client.WholesaleRateCardClient wholesaleRateCard;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -74,7 +78,15 @@ public class OrchestrationService {
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.security.TenantRegistry tenants,
             com.bss.som.repository.NumberQuarantineRepository quarantine,
-            com.bss.som.tick.TickGuard tickGuard) {
+            com.bss.som.tick.TickGuard tickGuard,
+            com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders,
+            com.bss.som.client.WholesaleQualificationClient wholesaleQualification,
+            com.bss.som.client.WholesaleAccessClient wholesaleAccess,
+            com.bss.som.client.WholesaleRateCardClient wholesaleRateCard) {
+        this.wholesaleOrders = wholesaleOrders;
+        this.wholesaleQualification = wholesaleQualification;
+        this.wholesaleAccess = wholesaleAccess;
+        this.wholesaleRateCard = wholesaleRateCard;
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -146,6 +158,16 @@ public class OrchestrationService {
         // place) is reported inProgress and finishes on its own track — the
         // parcel's delivery (C2) or the install (C4). The parent order rolls up
         // to partiallyCompleted and only reaches completed when every item lands.
+        // Which components are being SHIPPED or INSTALLED (they carry a place) —
+        // a dependent (TV) only waits when the base it rides is actually one of
+        // these; when the base activates instantly, so may the dependent.
+        java.util.Set<String> placedItemIds = new java.util.HashSet<>();
+        for (Map<String, Object> it : items) {
+            if (it.get("id") != null && it.get("product") instanceof Map<?, ?> pr
+                    && pr.get("place") != null) {
+                placedItemIds.add(String.valueOf(it.get("id")));
+            }
+        }
         boolean anyUnreported = false;
         for (Map<String, Object> item : items) {
             String itemId = item.get("id") != null ? String.valueOf(item.get("id")) : null;
@@ -190,6 +212,34 @@ public class OrchestrationService {
             }
             boolean partnerService = "Partner services".equals(category);
             boolean securityFeature = "Security".equals(category);
+            // The decomposed component's family decides its fulfilment: a mobile
+            // plan is a network line (number + SIM); broadband installs and never
+            // draws a number; TV is a digital entitlement; a handset ships and is
+            // not a line at all. Unknown/other keeps the historical line behaviour.
+            String componentType = componentType(category);
+            boolean internet = "internet".equals(componentType);
+            boolean tv = "tv".equals(componentType);
+            boolean device = "device".equals(componentType);
+            // Fulfilment dependency (TMF622 "reliesOn"): a component that rides
+            // another — TV on the broadband connection — must NOT activate while
+            // its base is still being set up. Hold it inProgress ONLY while that
+            // base is actually being installed/shipped (it carries a place); when
+            // the base activates instantly, the dependent may too. It then comes up
+            // with the deferred fan-out, so the customer never sees TV "done" while
+            // the internet it needs is still pending.
+            boolean reliesOnPending = false;
+            if (item.get("orderItemRelationship") instanceof List<?> rels) {
+                for (Object r : rels) {
+                    if (r instanceof Map<?, ?> rel
+                            && "reliesOn".equals(String.valueOf(rel.get("relationshipType")))
+                            && placedItemIds.contains(String.valueOf(rel.get("id")))) {
+                        reliesOnPending = true;
+                    }
+                }
+            }
+            if (reliesOnPending) {
+                deferred = true;
+            }
             ServiceOrder so = new ServiceOrder();
             String id = UUID.randomUUID().toString();
             so.setId(id);
@@ -229,8 +279,20 @@ public class OrchestrationService {
             }
             services.save(instance);
 
-            String poolType = partnerService || securityFeature ? null
-                    : isEdgeAi ? "edge-gpu" : isSlice ? null : ResourcePool.MSISDN;
+            // OPEN ACCESS: a broadband component may be delivered over a THIRD-PARTY
+            // owner's fibre. If owners serve this address, place the access-seeker
+            // order UPSTREAM and realize the retail line over it — instead of our own
+            // install. The owner OSS activates it (mock: instantly), so the retail
+            // line comes up here rather than waiting on a workOrder of ours.
+            if (internet && provisionWholesaleAccess(tenant, item, serviceId, owner, productOrderId)) {
+                deferred = false;
+            }
+
+            // Only a mobile line (or an unknown/other offering, historically) draws
+            // an MSISDN + SIM. Broadband, TV and handsets are not phone lines.
+            boolean nonLine = partnerService || securityFeature || isSlice
+                    || internet || tv || device;
+            String poolType = nonLine ? null : isEdgeAi ? "edge-gpu" : ResourcePool.MSISDN;
             if (partnerService) {
                 // the partner's platform owns the account; we hold the code
                 ResourceAssignment entitlement = new ResourceAssignment();
@@ -518,6 +580,7 @@ public class OrchestrationService {
      * Owner is checked against the order's party — a mismatching id is skipped,
      * never renamed.
      */
+    @SuppressWarnings("unchecked")
     private void renameModifiedServices(String tenant, List<Map<String, Object>> modifies, String owner) {
         for (Map<String, Object> item : modifies) {
             String newName = item.get("productOffering") instanceof Map<?, ?> o && o.get("name") != null
@@ -531,25 +594,44 @@ public class OrchestrationService {
                 continue;
             }
             final String rename = newName;
+            // the new characteristic values (speed, TV pack) an in-place upgrade
+            // carries — a real network adapter would apply them to the line
+            List<Map<String, Object>> newChars = item.get("product") instanceof Map<?, ?> mp
+                    && ((Map<String, Object>) mp).get("productCharacteristic") instanceof List<?> mc
+                    ? (List<Map<String, Object>>) mc : null;
+            String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
+                    && off.get("id") != null ? String.valueOf(off.get("id")) : null;
             services.findByIdAndTenantId(serviceId, tenant).ifPresent(instance -> {
                 if (owner != null && !owner.equals(instance.getOwnerPartyId())) {
-                    log.warn("modify order names service {} owned by another party — rename skipped",
+                    log.warn("modify order names service {} owned by another party — change skipped",
                             instance.getId());
                     return;
                 }
-                if (!rename.equals(instance.getName())) {
+                boolean renamed = !rename.equals(instance.getName());
+                if (renamed) {
                     instance.setName(rename);
                     instance.setLastUpdate(OffsetDateTime.now());
                     services.save(instance);
-                    events.publish("ServiceAttributeValueChangeEvent", "service", Map.of(
-                            "id", instance.getId(), "name", rename, "state", instance.getState()));
                     log.info("plan change: service {} renamed to '{}'", instance.getId(), rename);
                     // the OCS follows the plan: swap the rate plan (rollover
                     // carried by the OCS's own policy)
-                    String modifyOfferingId = item.get("productOffering") instanceof Map<?, ?> off
-                            && off.get("id") != null ? String.valueOf(off.get("id")) : null;
                     catalog.chargingSpecOf(modifyOfferingId).ifPresent(chargingSpec ->
                             ocs.changeRatePlan(tenant, instance.getId(), chargingSpec));
+                }
+                // an in-place upgrade/downgrade re-provisions the line to the new
+                // characteristic (broadband speed, TV screens/points) — same
+                // offering, new capability. The mock emits the attribute change a
+                // network adapter would apply; billing rates the conditioned price.
+                if (renamed || newChars != null) {
+                    Map<String, Object> event = new java.util.LinkedHashMap<>();
+                    event.put("id", instance.getId());
+                    event.put("name", instance.getName());
+                    event.put("state", instance.getState());
+                    if (newChars != null) {
+                        event.put("characteristic", newChars);
+                        log.info("re-provision: service {} → {}", instance.getId(), newChars);
+                    }
+                    events.publish("ServiceAttributeValueChangeEvent", "service", event);
                 }
             });
         }
@@ -561,13 +643,263 @@ public class OrchestrationService {
             return;
         }
         for (Map<String, Object> item : items) {
-            if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+            // A bundle order item is a CONTAINER — the ordering service has already
+            // decomposed it into per-component leaf children. Provision only the
+            // leaves (each fulfils on its own clock); a parent that carries children
+            // is never a service of its own.
+            if (item.get("productOrderItem") instanceof List<?> children && !children.isEmpty()) {
+                collectItems((List<Map<String, Object>>) children, into);
+            } else if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
                 into.add(item);
             }
-            if (item.get("productOrderItem") instanceof List<?> children) {
-                collectItems((List<Map<String, Object>>) children, into);
+        }
+    }
+
+    /**
+     * Open access: realize a broadband component over a third-party owner's fibre.
+     * Ask the qualification service which owners serve this address; if any do,
+     * pick one, place the access-seeker order upstream (MEF Sonata shape; mock in
+     * dev) and record it. Returns true when wholesale access was placed and active
+     * — the retail line is then realized over it, not over our own network.
+     */
+    @SuppressWarnings("unchecked")
+    private boolean provisionWholesaleAccess(String tenant, Map<String, Object> item,
+            String serviceId, String owner, String productOrderId) {
+        String postCode = postCodeOf(item);
+        if (postCode == null || postCode.isBlank()) {
+            return false;
+        }
+        List<Map<String, Object>> options = wholesaleQualification.accessOptions(postCode, "fiber");
+        if (options.isEmpty()) {
+            return false; // our own network here — nothing to buy
+        }
+        int requested = requestedBandwidth(item);
+        Map<String, Object> pick = pickAccessOption(options, item, requested);
+        if (pick == null) {
+            return false;
+        }
+        String accessOwner = String.valueOf(pick.get("accessOwner"));
+        String accessLayer = pick.get("accessLayer") == null ? null : String.valueOf(pick.get("accessLayer"));
+        Integer bandwidth = pick.get("maxDownMbps") instanceof Number nb ? nb.intValue() : requested;
+        String woId = UUID.randomUUID().toString();
+        // the async owner callback (Sonata) references OUR order id, so mint it
+        // first and hand it over as the buyer reference
+        com.bss.som.client.WholesaleAccessClient.AccessOrderResult res =
+                wholesaleAccess.order(accessOwner, accessLayer, bandwidth, postCode, serviceId, woId);
+
+        com.bss.som.entity.WholesaleAccessOrder wo = new com.bss.som.entity.WholesaleAccessOrder();
+        wo.setId(woId);
+        wo.setTenantId(tenant);
+        wo.setProductOrderId(productOrderId);
+        wo.setServiceId(serviceId);
+        wo.setOrderItemId(item.get("id") == null ? null : String.valueOf(item.get("id")));
+        wo.setOwnerPartyId(owner);
+        wo.setAccessOwner(accessOwner);
+        wo.setAccessLayer(accessLayer);
+        wo.setBandwidthMbps(bandwidth);
+        wo.setPostCode(postCode);
+        wo.setExternalId(res.externalId());
+        wo.setState(res.state());
+        wo.setCreatedAt(OffsetDateTime.now());
+        if (com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(res.state())) {
+            wo.setActivatedAt(OffsetDateTime.now());
+        }
+        wo.setLastUpdate(OffsetDateTime.now());
+        wholesaleOrders.save(wo);
+        // the per-line wholesale rate (fail-soft) rides the event so revenue can
+        // book the COGS without its own rate lookup
+        com.bss.som.client.WholesaleRateCardClient.Rate rate = wholesaleRateCard.rateCard().get(accessOwner);
+        Map<String, Object> event = new java.util.LinkedHashMap<>();
+        event.put("id", wo.getId());
+        event.put("accessOwner", accessOwner);
+        event.put("accessLayer", accessLayer == null ? "" : accessLayer);
+        event.put("state", wo.getState());
+        event.put("productOrderId", productOrderId);
+        event.put("serviceId", serviceId);
+        event.put("externalId", res.externalId());
+        if (rate != null) {
+            event.put("ratePerLine", rate.perLine());
+            event.put("currency", "EUR");
+        }
+        events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", event);
+        log.info("wholesale access {}: {} {} {} Mbit/s for retail line {} (owner ref {})",
+                wo.getState(), accessOwner, accessLayer, bandwidth, serviceId, res.externalId());
+        return com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState());
+    }
+
+    /**
+     * The owner's OSS confirmed activation (MEF Sonata notification). Flip the
+     * access order active, complete the retail fibre service order + order item so
+     * the line comes up and the order rolls up, and publish the active event so
+     * revenue books the COGS. Anonymous callback: read across tenants, then act as
+     * the order's own tenant. Idempotent — a replayed notification is a no-op.
+     */
+    @Transactional
+    public boolean activateWholesaleAccess(String woId, String sonataOrderId) {
+        com.bss.som.entity.WholesaleAccessOrder wo;
+        try (var ignored = com.bss.som.security.TenantContext.actAsSystem()) {
+            wo = wholesaleOrders.findById(woId).orElse(null);
+        }
+        if (wo == null || com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState())) {
+            return false;
+        }
+        try (var ignored = com.bss.som.security.TenantContext.actAs(wo.getTenantId())) {
+            wo.setState(com.bss.som.entity.WholesaleAccessOrder.ACTIVE);
+            wo.setActivatedAt(OffsetDateTime.now());
+            if (sonataOrderId != null && wo.getExternalId() == null) {
+                wo.setExternalId(sonataOrderId);
+            }
+            wo.setLastUpdate(OffsetDateTime.now());
+            wholesaleOrders.save(wo);
+            // the retail line's service order completes — the provisioned milestone
+            if (wo.getServiceId() != null) {
+                services.findByIdAndTenantId(wo.getServiceId(), wo.getTenantId()).ifPresent(inst -> {
+                    if (inst.getServiceOrderId() != null) {
+                        serviceOrders.findByIdAndTenantId(inst.getServiceOrderId(), wo.getTenantId())
+                                .ifPresent(so -> {
+                                    if (!ServiceOrder.COMPLETED.equals(so.getState())) {
+                                        so.setState(ServiceOrder.COMPLETED);
+                                        so.setCompletedAt(OffsetDateTime.now());
+                                        so.setLastUpdate(OffsetDateTime.now());
+                                        serviceOrders.save(so);
+                                        events.publish("ServiceOrderStateChangeEvent", "serviceOrder", Map.of(
+                                                "id", so.getId(), "state", so.getState(),
+                                                "productOrderId", wo.getProductOrderId()));
+                                    }
+                                });
+                    }
+                });
+            }
+            // the retail order item completes — the order rolls up
+            if (wo.getProductOrderId() != null && wo.getOrderItemId() != null) {
+                ordering.updateItemState(wo.getProductOrderId(), wo.getOrderItemId(), "completed");
+            }
+            // active event → revenue books the wholesale COGS
+            com.bss.som.client.WholesaleRateCardClient.Rate rate =
+                    wholesaleRateCard.rateCard().get(wo.getAccessOwner());
+            Map<String, Object> event = new java.util.LinkedHashMap<>();
+            event.put("id", wo.getId());
+            event.put("accessOwner", wo.getAccessOwner());
+            event.put("accessLayer", wo.getAccessLayer() == null ? "" : wo.getAccessLayer());
+            event.put("state", wo.getState());
+            event.put("productOrderId", wo.getProductOrderId());
+            event.put("serviceId", wo.getServiceId());
+            event.put("externalId", wo.getExternalId());
+            if (rate != null) {
+                event.put("ratePerLine", rate.perLine());
+                event.put("currency", "EUR");
+            }
+            events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", event);
+            log.info("wholesale access ACTIVATED by owner callback: {} for order {} (line {})",
+                    wo.getAccessOwner(), wo.getProductOrderId(), wo.getServiceId());
+        }
+        return true;
+    }
+
+    /** The install/service postcode carried on the component's place. */
+    @SuppressWarnings("unchecked")
+    private static String postCodeOf(Map<String, Object> item) {
+        if (!(item.get("product") instanceof Map<?, ?> product) || product.get("place") == null) {
+            return null;
+        }
+        Object place = product.get("place");
+        if (place instanceof List<?> list && !list.isEmpty()) {
+            place = list.get(0);
+        }
+        return place instanceof Map<?, ?> m && m.get("postCode") != null
+                ? String.valueOf(m.get("postCode")).replaceAll("\\s", "") : null;
+    }
+
+    /** The retail speed the line is sold at — the downloadSpeed characteristic,
+     *  else the biggest number in the offering name, else 1000. */
+    @SuppressWarnings("unchecked")
+    private static int requestedBandwidth(Map<String, Object> item) {
+        if (item.get("product") instanceof Map<?, ?> product
+                && product.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> ch && "downloadSpeed".equals(String.valueOf(ch.get("name")))
+                        && ch.get("value") != null) {
+                    try {
+                        return (int) Double.parseDouble(String.valueOf(ch.get("value")));
+                    } catch (NumberFormatException ignored) {
+                        // fall through
+                    }
+                }
             }
         }
+        if (item.get("productOffering") instanceof Map<?, ?> off && off.get("name") != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{2,4})")
+                    .matcher(String.valueOf(off.get("name")));
+            int best = 0;
+            while (m.find()) {
+                best = Math.max(best, Integer.parseInt(m.group(1)));
+            }
+            if (best > 0) {
+                return best;
+            }
+        }
+        return 1000;
+    }
+
+    /**
+     * Choose the access owner. If the order names a preferred owner (a productChar
+     * accessOwner — the retailer's pick), honour it; otherwise the efficient
+     * allocation: the SMALLEST bandwidth tier that still meets the retail speed
+     * (headroom without waste), falling back to the biggest available if none reach it.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> pickAccessOption(List<Map<String, Object>> options,
+            Map<String, Object> item, int requested) {
+        String preferred = null;
+        if (item.get("product") instanceof Map<?, ?> product
+                && product.get("productCharacteristic") instanceof List<?> chars) {
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> ch && "accessOwner".equals(String.valueOf(ch.get("name")))
+                        && ch.get("value") != null) {
+                    preferred = String.valueOf(ch.get("value"));
+                }
+            }
+        }
+        if (preferred != null) {
+            for (Map<String, Object> o : options) {
+                if (preferred.equalsIgnoreCase(String.valueOf(o.get("accessOwner")))) {
+                    return o;
+                }
+            }
+        }
+        Map<String, Object> meets = null;
+        Map<String, Object> biggest = null;
+        for (Map<String, Object> o : options) {
+            int bw = o.get("maxDownMbps") instanceof Number n ? n.intValue() : 0;
+            if (biggest == null || bw > (Integer) biggest.getOrDefault("maxDownMbps", 0)) {
+                biggest = o;
+            }
+            if (bw >= requested && (meets == null
+                    || bw < (Integer) meets.getOrDefault("maxDownMbps", Integer.MAX_VALUE))) {
+                meets = o;
+            }
+        }
+        return meets != null ? meets : biggest;
+    }
+
+    /** Coarse product family from a catalog category — mirrors the ordering
+     *  service's decomposition axis, so SOM fulfils each component by its class
+     *  (a handset never draws a phone number; broadband installs; TV is digital). */
+    static String componentType(String category) {
+        String c = category == null ? "" : category.toLowerCase();
+        if (c.contains("broadband") || c.contains("internet") || c.contains("fiber") || c.contains("fibre")) {
+            return "internet";
+        }
+        if (c.contains("tv") || c.contains("entertainment") || c.contains("streaming")) {
+            return "tv";
+        }
+        if (c.contains("mobile")) {
+            return "mobile";
+        }
+        if (c.contains("device") || c.contains("handset") || c.contains("phone")) {
+            return "device";
+        }
+        return "other";
     }
 
     /**

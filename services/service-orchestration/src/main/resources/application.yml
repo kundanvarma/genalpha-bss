@@ -57,6 +57,19 @@ bss:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     ocs-base-url: ${OCS_BASE_URL:}
+    qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8080}
+  wholesale:
+    # open access: which owner-OSS integration to use — 'mock' activates instantly
+    # in-process; 'sonata' places a real HTTP order on the owner's MEF LSO Sonata
+    # endpoint and activates on its async callback.
+    oss: ${WHOLESALE_OSS:mock}
+    sonata:
+      nordaccess: ${SONATA_NORDACCESS_URL:http://localhost:8134}
+      fjordfiber: ${SONATA_FJORDFIBER_URL:http://localhost:8135}
+      # an on-platform owner (another operator/tenant): our own SOM, X-Tenant-Id
+      novafibre: ${SONATA_NOVAFIBRE_URL:http://localhost:8104}
+      novafibre-tenant: ${SONATA_NOVAFIBRE_TENANT:nova}
+    callback-base: ${WHOLESALE_CALLBACK_BASE:http://localhost:8080}
   porting:
     base-url: ${PORTING_BASE_URL:http://localhost:8112}
     enabled: ${PORTING_ENABLED:true}

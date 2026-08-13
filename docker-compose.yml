@@ -1035,6 +1035,14 @@ services:
       BSS_SOM_TELESALES_EXPIRY_MS: "15000"
       BSS_SOM_TELESALES_TICK_MS: "5000"
       PORTING_BASE_URL: http://porting:8080
+      QUALIFICATION_BASE_URL: http://qualification:8080
+      WHOLESALE_OSS: sonata
+      SONATA_NORDACCESS_URL: http://mock-sonata-nordaccess:8080
+      SONATA_FJORDFIBER_URL: http://mock-sonata-fjordfiber:8080
+      # NOVAFIBRE is nova, another operator on THIS platform — its Sonata face is
+      # our own SOM, reached cross-tenant (X-Tenant-Id: nova)
+      SONATA_NOVAFIBRE_URL: http://service-orchestration:8080
+      WHOLESALE_CALLBACK_BASE: http://service-orchestration:8080
       DB_URL: jdbc:postgresql://postgres:5432/service_om
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: som_app
@@ -1617,6 +1625,7 @@ services:
       CONSOLE_URL: http://console:8080
       BIZ_URL: http://business-console:8080
       DEALER_URL: http://dealer-console:8080
+      PARTNER_URL: http://partner-console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
       PIM_URL: http://mock-pim:8080
@@ -1744,6 +1753,25 @@ services:
       CARRIER_NAME: Helthjem
     ports:
       - "8128:8080"
+
+  # Open access: the fibre owners' OSS, MEF LSO Sonata-shaped. Accepts our
+  # access-seeker orders and fires an async completion callback — the wholesale
+  # line comes up on the owner's own clock, not instantly. Internal-only (SOM
+  # reaches them by name); no host port needed.
+  mock-sonata-nordaccess:
+    build: ./integrations/mock-sonata
+    container_name: bss-mock-sonata-nordaccess
+    restart: unless-stopped
+    environment:
+      ACTIVATE_AFTER_MS: "5000"
+      OWNER_NAME: NORDACCESS
+  mock-sonata-fjordfiber:
+    build: ./integrations/mock-sonata
+    container_name: bss-mock-sonata-fjordfiber
+    restart: unless-stopped
+    environment:
+      ACTIVATE_AFTER_MS: "5000"
+      OWNER_NAME: FJORDFIBER
 
   # The second carrier for per-tenant carrier choice (C-P2): Bring/Posten-shaped,
   # with a Pickup Point API (the distinctive Nordic delivery method).
@@ -1881,6 +1909,11 @@ services:
   dealer-console:
     build: ./apps/dealer-console
     container_name: bss-dealer-console
+    restart: unless-stopped
+
+  partner-console:
+    build: ./apps/partner-console
+    container_name: bss-partner-console
     restart: unless-stopped
 
   mobile-app:
