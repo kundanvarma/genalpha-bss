@@ -61,6 +61,7 @@ public class OrchestrationService {
     private final com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders;
     private final com.bss.som.client.WholesaleQualificationClient wholesaleQualification;
     private final com.bss.som.client.WholesaleAccessClient wholesaleAccess;
+    private final com.bss.som.client.WholesaleRateCardClient wholesaleRateCard;
 
     public OrchestrationService(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services, com.bss.som.client.PortingClient porting,
             ResourcePoolRepository pools, ResourceAssignmentRepository assignments,
@@ -80,10 +81,12 @@ public class OrchestrationService {
             com.bss.som.tick.TickGuard tickGuard,
             com.bss.som.repository.WholesaleAccessOrderRepository wholesaleOrders,
             com.bss.som.client.WholesaleQualificationClient wholesaleQualification,
-            com.bss.som.client.WholesaleAccessClient wholesaleAccess) {
+            com.bss.som.client.WholesaleAccessClient wholesaleAccess,
+            com.bss.som.client.WholesaleRateCardClient wholesaleRateCard) {
         this.wholesaleOrders = wholesaleOrders;
         this.wholesaleQualification = wholesaleQualification;
         this.wholesaleAccess = wholesaleAccess;
+        this.wholesaleRateCard = wholesaleRateCard;
         this.serviceOrders = serviceOrders;
         this.services = services;
         this.porting = porting;
@@ -699,11 +702,22 @@ public class OrchestrationService {
         }
         wo.setLastUpdate(OffsetDateTime.now());
         wholesaleOrders.save(wo);
-        events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", Map.of(
-                "id", wo.getId(), "accessOwner", accessOwner,
-                "accessLayer", accessLayer == null ? "" : accessLayer,
-                "state", wo.getState(), "productOrderId", productOrderId,
-                "externalId", res.externalId()));
+        // the per-line wholesale rate (fail-soft) rides the event so revenue can
+        // book the COGS without its own rate lookup
+        com.bss.som.client.WholesaleRateCardClient.Rate rate = wholesaleRateCard.rateCard().get(accessOwner);
+        Map<String, Object> event = new java.util.LinkedHashMap<>();
+        event.put("id", wo.getId());
+        event.put("accessOwner", accessOwner);
+        event.put("accessLayer", accessLayer == null ? "" : accessLayer);
+        event.put("state", wo.getState());
+        event.put("productOrderId", productOrderId);
+        event.put("serviceId", serviceId);
+        event.put("externalId", res.externalId());
+        if (rate != null) {
+            event.put("ratePerLine", rate.perLine());
+            event.put("currency", "EUR");
+        }
+        events.publish("WholesaleAccessOrderStateChangeEvent", "wholesaleAccessOrder", event);
         log.info("wholesale access {}: {} {} {} Mbit/s for retail line {} (owner ref {})",
                 wo.getState(), accessOwner, accessLayer, bandwidth, serviceId, res.externalId());
         return com.bss.som.entity.WholesaleAccessOrder.ACTIVE.equals(wo.getState());

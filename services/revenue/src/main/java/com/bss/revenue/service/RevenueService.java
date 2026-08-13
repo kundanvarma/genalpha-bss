@@ -65,6 +65,10 @@ public class RevenueService {
         DEFAULT_CHART.put("loyalty:expense", new String[] {"6100", "Loyalty program expense"});
         // config_value on 'loyalty:liability' = currency per point (0/absent = control number only)
         DEFAULT_CHART.put("loyalty:liability", new String[] {"2400", "Loyalty points liability"});
+        // open access: the wholesale fibre we buy is a cost of sale; what we owe
+        // the owner is a payable until the settlement clears
+        DEFAULT_CHART.put("wholesale:cogs", new String[] {"5100", "Wholesale access (COGS)"});
+        DEFAULT_CHART.put("wholesale:payable", new String[] {"2100", "Accounts payable — wholesale"});
     }
 
     /** PSPs whose capture is a receivable (deferred settlement), not immediate cash.
@@ -175,6 +179,39 @@ public class RevenueService {
                 (bnpl ? "BNPL receivable — " : "Cash received — ") + paymentId, currency,
                 payment.get("ownerPartyId") == null ? partyOf(payment) : String.valueOf(payment.get("ownerPartyId")),
                 posting);
+        return true;
+    }
+
+    /**
+     * Open access: a wholesale access line went live, so the fibre we buy from the
+     * owner is a cost of sale. Accrue it — DEBIT wholesale COGS / CREDIT accounts
+     * payable to the owner — so the retail margin (revenue minus this) is real in
+     * the ledger, not just the settlement view. Idempotent by the access-order id;
+     * the owner is carried on the line for a per-owner payable breakdown.
+     */
+    @Transactional
+    public boolean postWholesaleCogs(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "wholesale:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("ratePerLine") == null) {
+            return false; // no rate on the event — nothing to book (fail-soft)
+        }
+        BigDecimal rate = money(event.get("ratePerLine"));
+        if (rate.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String owner = String.valueOf(event.getOrDefault("accessOwner", "owner"));
+        String layer = String.valueOf(event.getOrDefault("accessLayer", ""));
+        String desc = "Wholesale access " + owner + (layer.isBlank() ? "" : " (" + layer + ")");
+        List<JournalLine> posting = List.of(
+                line("wholesale:cogs", rate, null, id, desc + " — monthly"),
+                line("wholesale:payable", null, rate, id, "Payable to " + owner));
+        saveBalanced(tenant, sourceRef, "wholesaleCogs", desc + " — " + id, currency, null, posting);
         return true;
     }
 
