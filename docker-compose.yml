@@ -1625,6 +1625,7 @@ services:
       CONSOLE_URL: http://console:8080
       BIZ_URL: http://business-console:8080
       DEALER_URL: http://dealer-console:8080
+      PARTNER_URL: http://partner-console:8080
       STOREFRONT_URL: http://storefront:8080
       APP_URL: http://mobile-app:8080
       PIM_URL: http://mock-pim:8080
@@ -1908,6 +1909,11 @@ services:
   dealer-console:
     build: ./apps/dealer-console
     container_name: bss-dealer-console
+    restart: unless-stopped
+
+  partner-console:
+    build: ./apps/partner-console
+    container_name: bss-partner-console
     restart: unless-stopped
 
   mobile-app:

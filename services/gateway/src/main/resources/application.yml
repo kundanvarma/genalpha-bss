@@ -292,6 +292,13 @@ spring:
             - Path=/dealer-app/**
           filters:
             - StripPrefix=1
+        - id: partner-console
+          # the wholesale partner portal — retailers buy open-access fibre here
+          uri: ${PARTNER_URL:http://localhost:8138}
+          predicates:
+            - Path=/partner/**
+          filters:
+            - StripPrefix=1
         - id: storefront
           uri: ${STOREFRONT_URL:http://localhost:8091}
           predicates:
