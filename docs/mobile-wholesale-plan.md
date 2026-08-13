@@ -52,16 +52,33 @@ to most independent:
 - **Capacity / tiered** — a committed volume at a blended price, overage above it.
 - **Revenue share** — the host takes a percentage of the MVNO's retail revenue.
 
+**SIM / IMSI provisioning.** The IMSI is the subscriber identity on the SIM; a host
+lends an MVNO an **IMSI range**. The modern shape is **GSMA RSP (Remote SIM
+Provisioning, SGP.32)** — eSIM profiles pushed OTA, with multi-IMSI routing — rather
+than batch physical-SIM files. We model IMSI-range *allocation* as a resource (like the
+MSISDN pool) and keep real SIM personalisation / RSP behind a seam, the same honest
+boundary the retail SIM layer already draws.
+
+**Wholesale reconciliation / revenue assurance.** The point every MVNO platform stresses:
+the wholesale settlement must **cross-check the MVNO's usage against what the host
+billed** — reconcile CDRs to the settlement statement, flag discrepancies, prove the
+numbers. So W-M4 is not just "sum the ledger and invoice"; it carries a reconciliation
+view (rated wholesale units vs settled amount, anomalies surfaced), the same
+receipts-first discipline the revenue subledger already applies.
+
 **Standards, honestly.** Unlike fibre — where **MEF LSO Sonata** gives a clean
-inter-operator ordering API — mobile wholesale has **no single equivalent**. Host↔MVNO
-deals are bilateral rate cards plus **CDR-based settlement**; the nearest standardised
-cousin is GSMA **TAP3 / BCE** for *roaming* settlement, a different domain. So the
-adapter targets a **generic wholesale-settlement shape** (rate card in, rated CDR
-statement out), not a named wire — and we say so.
+inter-operator ordering API — mobile wholesale has **no single equivalent**. There is no
+TM Forum "MVNO wholesale" API; the platform reuses the standards it already runs —
+**TMF635/677 usage** for CDR intake + rating, **TMF678 billing**, **TMF651 agreement**
+for the wholesale terms, **TMF632/668** for the host/MVNO parties. Host↔MVNO deals are
+bilateral rate cards plus **CDR-based settlement**; the nearest standardised cousin is
+GSMA **TAP3 / BCE** for *roaming* settlement, a different domain. So the adapter targets
+a **generic wholesale-settlement shape** (rate card in, reconciled CDR statement out),
+not a named wire — and we say so.
 
 - flolive, *What is an MVNE (2026)*; *5 MVNO types compared*
-- Tridens, *MVNO Billing Software (2026)*; EarnBill, *MVNO Billing*
-- CelloIP, *MVNO BSS/OSS Platform Architecture*; Yozzo, *MVNO Wholesale Models*
+- Tridens, *MVNO Billing Software (2026)*; Spenza, *OSS/BSS Checklist for 2026 MVNO Launches*
+- CelloIP, *MVNO BSS/OSS Platform Architecture*; Yozzo, *MVNO Wholesale Models*; GSMA RSP (SGP.32)
 
 ## 3. Where we stand today (honest audit)
 
@@ -123,10 +140,12 @@ pass aggregates per MVNO per period into a settlement statement.
 - **W-M3 — Wholesale usage rating (the core).** A second rating pass in `usage` that
   rates an MVNO's CDRs at the host's wholesale rates into a **wholesale usage ledger**,
   keyed by MVNO + period. Idempotent, replay-safe (the ledger is the checkpoint).
-- **W-M4 — Settlement + books.** Aggregate the ledger per period → a wholesale
-  settlement statement; the host invoices the MVNO; the MVNO books COGS (DR
-  mobile-wholesale-COGS / CR AP), the host books the receivable — reusing the fibre
-  `WholesaleEventListener` → revenue-GL pattern. Cross-tenant host↔MVNO like fibre.
+- **W-M4 — Settlement, reconciliation + books.** Aggregate the ledger per period → a
+  wholesale settlement statement **with a reconciliation view** (rated wholesale units
+  vs settled amount, discrepancies flagged — revenue assurance, not just a sum); the
+  host invoices the MVNO; the MVNO books COGS (DR mobile-wholesale-COGS / CR AP), the
+  host books the receivable — reusing the fibre `WholesaleEventListener` → revenue-GL
+  pattern. Cross-tenant host↔MVNO like fibre.
 - **W-M5 — The desks.** Partner-console gains a **mobile wholesale** view (the MVNO:
   my traffic this period vs what I owe; statements). The host/MVNE gets a provider
   view (my MVNOs, their aggregate traffic, what each owes). *Extends `partner-console`.*
