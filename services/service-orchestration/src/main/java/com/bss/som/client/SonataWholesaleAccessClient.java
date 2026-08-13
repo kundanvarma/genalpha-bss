@@ -67,6 +67,8 @@ public class SonataWholesaleAccessClient implements WholesaleAccessClient {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("externalId", buyerRef);
         body.put("callbackUrl", callbackUrl);
+        // who we are — the owner bills this operator for the access it sells us
+        body.put("buyerId", com.bss.som.security.TenantContext.current());
         body.put("serviceOrderItem", List.of(Map.of("action", "add", "service", service)));
         String providerTenant = ownerTenants.get(accessOwner);
         try {

@@ -70,6 +70,22 @@ public class WholesaleProviderController {
         return ResponseEntity.ok(provider.list().stream().map(this::view).toList());
     }
 
+    /** What each retailer owes US for the access live on our network — the wholesale
+     *  bill we raise as the fibre owner (accounts receivable). */
+    @GetMapping("/tmf-api/serviceOrdering/v4/wholesaleProviderSettlement")
+    public ResponseEntity<Map<String, Object>> settlement() {
+        List<Map<String, Object>> retailers = provider.providerSettlement();
+        double total = retailers.stream()
+                .mapToDouble(r -> ((Number) r.getOrDefault("totalMonthlyCharge", 0)).doubleValue()).sum();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("@type", "WholesaleProviderSettlement");
+        out.put("periodType", "month");
+        out.put("retailer", retailers);
+        out.put("totalMonthlyRevenue", Math.round(total * 100.0) / 100.0);
+        out.put("currency", "EUR");
+        return ResponseEntity.ok(out);
+    }
+
     private Map<String, Object> view(ProviderAccessOrder o) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", o.getId());
