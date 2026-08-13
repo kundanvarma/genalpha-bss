@@ -180,6 +180,27 @@ URL: `http://localhost:8080/csr/` as `agent-anna` / `agent`
   → the copilot summarizes it → work a ticket. **"The agent sees everything,
   the AI drafts, the human sends."**
 
+### Optional scene — Wholesale / open-access (strategy or wholesale audiences) · ~3 min
+URL: `http://localhost:8080/partner/` as `demo` / `demo`
+
+- **"The Nordic fibre networks are opening to third parties. Same platform, a
+  different hat — a retail ISP buying wholesale access to sell broadband on a
+  network it doesn't own."**
+- **Check an address** → postcode `5020` (Bergen). **"It answers which owners serve
+  this address, and at what layer — L2, where we'd run our own IP, or L3, where we
+  resell the owner's finished service."**
+- Open the **access catalogue** (the L2/L3 SKUs, priced per line) → place a
+  **wholesale access order**. **"That order just left the building — it rides MEF
+  LSO Sonata, the operator-to-operator standard, to the owner's system, and comes
+  back active on its own clock."**
+- **What you owe** → settlement per owner, and the margin. **"Every euro we pay the
+  owner books to the ledger as wholesale cost; the margin is visible, not assumed."**
+- The punchline: postcode `7010` (Trondheim) is served by **Nova** — the second
+  operator from Scene 5, now playing the fibre **owner**. **"Seeker and provider,
+  the same platform, meeting across the tenant line — the one deliberate
+  cross-tenant path, and it still goes through the gateway, never around the
+  isolation."**
+
 ---
 
 ## 2. Persona & URL cheat-sheet
@@ -195,6 +216,7 @@ URL: `http://localhost:8080/csr/` as `agent-anna` / `agent`
 | Guided demo (safety net) | `localhost:8080/flow/demo.html` | `demo` / `demo` |
 | Nova storefront (NO/NOK) | `shop.nova.localhost:8080/shop/` | `nils@nova.local` / `nils` |
 | Nova business console | `biz.nova.localhost:8080/biz/` | `birgit@fjellheim.no` / `birgit` |
+| Wholesale partner portal | `localhost:8080/partner/` | `demo` / `demo` (access seeker; Bergen `5020` / Trondheim `7010`) |
 
 Demo card: `4242 4242 4242 4242` pays, `…0002` declines. Promo: `WELCOME10`.
 Fibre postcodes: 111 / 222 / 333.
@@ -276,10 +298,12 @@ TMF APIs, and it's AI-native from day one rather than retrofitted. It runs as
 a full BSS for a smaller operator/MVNO, or as a layer on top of what you have."*
 
 **"Is it production-ready?"**
-*"The core is proven — 87 end-to-end suites, 25 conformance kits at zero,
+*"The core is proven — 111 end-to-end suites, 25 conformance kits at zero,
 crash-resumable billing, GDPR endpoints, runs on three clouds off one Helm
-chart. And it's honest about the gaps: the charging system is a seam (bring
-your own OCS), no tax engine, no ERP integration, no third-party pen test yet.
+chart. A campaign-day browse cache absorbs a Black-Friday surge at the gateway
+before it reaches the database. And it's honest about the gaps: the charging
+system is a seam (bring your own OCS), no tax engine, no ERP integration, no
+third-party pen test yet.
 The capability map lists every gap as an integration plan, not a surprise."*
 
 **"How much did this cost to build?"**

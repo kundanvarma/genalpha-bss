@@ -40,6 +40,12 @@
 ### ⑥ (optional) CSR'S DAY — `localhost:8080/csr/` → `agent-anna`/`agent`
 > *[search customer → 360 → copilot summary → work ticket]* "The agent sees everything, the AI drafts, the human sends."
 
+### ⑦ (optional) WHOLESALE / OPEN-ACCESS — `localhost:8080/partner/` → `demo`/`demo`
+> "Same platform, a retail ISP buying fibre it doesn't own — the Nordic open-access play."
+> *[Check address → `5020` Bergen → owners at L2/L3 → open access catalogue → buy an L2/L3 SKU]* "Order rides MEF Sonata to the owner, comes back active on its own clock."
+> *[What you owe → settlement + margin]* "Wholesale cost books to the ledger; the margin is visible."
+> *[`7010` Trondheim = served by **Nova**]* "Nova (Scene ⑤) is the fibre OWNER — seeker + provider, one platform, cross-tenant."
+
 ---
 
 ### PRODUCT BY HAND (if asked — `localhost:8080/console/` → `pat`/`pat`, no AI)
@@ -59,5 +65,5 @@ Drop photos in `ops/demo-assets/devices/` (gitignored), then
 
 ### THE THREE QUESTIONS
 - **vs Amdocs/Netcracker?** "Not competing on feature count — vendor-neutral, composable, AI-native from day one. Full BSS for a smaller operator, or a layer on what you have."
-- **Production-ready?** "Core is proven — 87 E2E suites, 25 CTKs at zero, crash-resumable billing, three clouds. Honest gaps: OCS is a seam, no tax engine, no ERP, no pen test yet — all in the capability map."
+- **Production-ready?** "Core is proven — 111 E2E suites, 25 CTKs at zero, crash-resumable billing, three clouds, a campaign-day browse cache for the Black-Friday surge. Honest gaps: OCS is a seam, no tax engine, no ERP, no pen test yet — all in the capability map."
 - **Cost to build?** "One person, ~2 months, with an AI pair. ~10.6B tokens processed, ~24M generated — flat subscription, no API bills."
