@@ -1062,6 +1062,14 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'growthCopilot',
+    title: 'Growth Copilot',
+    growthCopilot: true, // conversational journey/campaign authoring
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -1196,6 +1204,7 @@ const TAB_ROLE = {
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
+  growthCopilot: 'campaign:write',
   staff: 'roles:admin',
   audit: 'ai:use',
   workforce: ['workforce:use', 'ai:admin'],
@@ -1251,7 +1260,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['campaign', 'journey', 'audiences', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audiences', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
@@ -2613,6 +2622,97 @@ function copilotProposalCard(reply, context, log) {
     actions.append(fix);
   }
   card.append(actions);
+  return card;
+}
+
+/* --------- Growth Copilot: chat about an outreach, create the journey/campaign --------- */
+async function renderGrowthCopilot() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  const intro = document.createElement('p');
+  intro.className = 'dim';
+  intro.style.cssText = 'font-size:13px;margin:6px 0 10px';
+  intro.textContent = 'Describe the outreach you want — the copilot asks what it needs, then proposes '
+    + 'a journey or a campaign and creates it when you confirm. It proposes; you decide.';
+  const log = document.createElement('div'); log.id = 'growth-copilot-log';
+  const bar = document.createElement('div'); bar.className = 'staffbar';
+  const input = document.createElement('input');
+  input.id = 'growth-copilot-input'; input.style.flex = '1';
+  input.placeholder = 'e.g. welcome new customers when they sign up…';
+  const send = document.createElement('button');
+  send.className = 'primary'; send.id = 'growth-copilot-send'; send.textContent = 'Send';
+  bar.append(input, send);
+  panel.append(intro, log, bar);
+
+  const chat = [];
+  const bubble = (cls, text) => {
+    const b = document.createElement('div'); b.className = 'copilot-msg ' + cls; b.textContent = text;
+    log.append(b); log.scrollTop = log.scrollHeight; return b;
+  };
+  async function submit() {
+    const text = input.value.trim(); if (!text) return;
+    input.value = ''; bubble('copilot-user', text); chat.push({ role: 'owner', content: text });
+    const thinking = bubble('copilot-ai', '…');
+    try {
+      const res = await authFetch('/ai/v1/journeyCopilot', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chat }),
+      });
+      if (!res.ok) { const pr = await res.json().catch(() => null); throw new Error(pr?.message || ('copilot unavailable (HTTP ' + res.status + ')')); }
+      const reply = await res.json();
+      thinking.textContent = reply.message;
+      chat.push({ role: 'assistant', content: reply.message });
+      if (reply.kind === 'proposal' && reply.proposal) { log.append(growthProposalCard(reply, bubble)); log.scrollTop = log.scrollHeight; }
+    } catch (e) { thinking.textContent = e.message; thinking.classList.add('copilot-warn'); }
+  }
+  send.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  input.focus();
+}
+
+/** A human-readable card for a journey/campaign proposal, with Create = apply. */
+function growthProposalCard(reply, bubble) {
+  const p = reply.proposal; const isJourney = p.artifact === 'journey';
+  const obj = isJourney ? p.journey : p.campaign;
+  const card = document.createElement('div'); card.className = 'panel'; card.dataset.testid = 'growth-proposal';
+  card.style.cssText = 'margin:8px 0;padding:12px 14px';
+  const h = document.createElement('div'); h.style.cssText = 'font-weight:600;margin-bottom:4px';
+  h.textContent = (isJourney ? 'Journey — ' : 'Campaign — ') + (obj.name || '');
+  const meta = document.createElement('div'); meta.className = 'dim'; meta.style.fontSize = '12.5px';
+  meta.textContent = (obj.triggerEventType ? 'Trigger: ' + obj.triggerEventType
+    : obj.segmentName ? 'Segment: ' + obj.segmentName : '')
+    + (obj.holdoutPercent != null ? ' · holdout ' + obj.holdoutPercent + '%' : '')
+    + (isJourney && obj.steps ? ' · ' + obj.steps.length + ' steps' : '');
+  card.append(h, meta);
+  if (isJourney && Array.isArray(obj.steps)) {
+    const ul = document.createElement('ul'); ul.style.cssText = 'margin:8px 0;padding-left:18px;font-size:12.5px';
+    obj.steps.forEach((s) => {
+      const li = document.createElement('li');
+      li.textContent = (s.stage ? '[' + s.stage + '] ' : '')
+        + (s.type === 'message' ? 'message: ' + (s.subject || '')
+          : s.type === 'wait' ? 'wait ' + (s.days ? s.days + 'd' : (s.hours || '') + 'h') : s.type);
+      ul.append(li);
+    });
+    card.append(ul);
+  } else if (!isJourney && obj.message) {
+    const m = document.createElement('div'); m.style.cssText = 'font-size:12.5px;margin:6px 0';
+    m.textContent = '“' + (obj.message.subject || '') + '” — ' + (obj.message.content || '');
+    card.append(m);
+  }
+  const create = document.createElement('button'); create.className = 'primary';
+  create.dataset.testid = 'growth-create'; create.textContent = 'Create';
+  create.addEventListener('click', async () => {
+    create.disabled = true; create.textContent = 'Creating…';
+    try {
+      const url = CAMPAIGN_BASE + (isJourney ? '/journey' : '/campaign');
+      const res = await authFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(obj) });
+      if (!res.ok) { const pr = await res.json().catch(() => null); throw new Error(pr?.message || ('HTTP ' + res.status)); }
+      create.textContent = '✓ Created';
+      bubble('copilot-ai', 'Created the ' + (isJourney ? 'journey' : 'campaign')
+        + '. Open the ' + (isJourney ? 'Journeys' : 'Campaigns') + ' tab to see it, tune it or view its funnel.');
+    } catch (e) { create.disabled = false; create.textContent = 'Create'; bubble('copilot-ai', 'Could not create: ' + e.message).classList.add('copilot-warn'); }
+  });
+  card.append(create);
   return card;
 }
 
@@ -4205,6 +4305,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderProductCopilot();
+    return;
+  }
+  if (active.growthCopilot) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderGrowthCopilot();
     return;
   }
   if (active.staff) {
