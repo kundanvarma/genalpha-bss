@@ -38,16 +38,18 @@ public class CommunicationMessageService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final com.bss.communication.client.EspForwarder esp;
+    private final com.bss.communication.client.ChannelDispatcher channels;
     private final MessageTemplateService templates;
 
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp,
-            MessageTemplateService templates) {
+            com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.esp = esp;
+        this.channels = channels;
         this.templates = templates;
     }
 
@@ -139,8 +141,9 @@ public class CommunicationMessageService {
         entity.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = toMap(repository.save(entity));
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
-        esp.forward(entity.getTenantId(), entity.getId(), receiver,
-                entity.getSubject(), entity.getContent());
+        // route to the channel's delivery seam (email/sms/push); inApp is the inbox
+        channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
+                entity.getSubject(), entity.getContent(), entity.getMessageType());
         return created;
     }
 

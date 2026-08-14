@@ -1165,6 +1165,8 @@ services:
       OIDC_CLIENT_ID: bss-communication
       OIDC_CLIENT_SECRET: communication-secret
       DB_URL: jdbc:postgresql://postgres:5432/communication
+      # SMS delivery seam — the mock A2P gateway (Twilio wire shape)
+      SMS_GATEWAY_URL: http://mock-sms:8080
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: communication_app
       DB_PASSWORD: communication_app
@@ -1517,7 +1519,7 @@ services:
     container_name: bss-mock-legacy
     restart: unless-stopped
     ports:
-      - "8130:8080"
+      - "8139:8080"
 
   mock-llm:
     build: ./integrations/mock-llm
@@ -1553,6 +1555,13 @@ services:
       WEBHOOK_URL: http://communication:8080/esp/v1/event
     ports:
       - "8121:8080"
+
+  mock-sms:
+    build: ./integrations/mock-sms
+    container_name: bss-mock-sms
+    restart: unless-stopped
+    ports:
+      - "8139:8080"
 
   insight:
     build: ./services/insight

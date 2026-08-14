@@ -48,6 +48,10 @@ springdoc:
 bss:
   downstream:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
+    # SMS/push delivery seams — unset means in-app only (no gateway wired)
+    sms-gateway-url: ${SMS_GATEWAY_URL:}
+    sms-from: ${SMS_FROM:+100000000}
+    push-gateway-url: ${PUSH_GATEWAY_URL:}
   notify:
     consumer-enabled: ${NOTIFY_CONSUMER_ENABLED:true}
     topics: ${NOTIFY_TOPICS:bss.ordering.events,bss.billing.events,bss.ticket.events,bss.appointment.events,bss.cart.events,bss.usage.events,bss.som.events,bss.payment.events,bss.party.events}
