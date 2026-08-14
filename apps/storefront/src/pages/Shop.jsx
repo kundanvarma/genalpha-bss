@@ -318,6 +318,7 @@ export default function Shop() {
  * the console (qualify → opportunity → quote).
  */
 function TalkToSales() {
+  const [open, setOpen] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState(null);
   const submit = async (e) => {
@@ -336,6 +337,19 @@ function TalkToSales() {
       <section className="lobcard" data-testid="sales-thanks" style={{ marginTop: 24 }}>
         <p style={{ margin: 0 }}>✅ {t('Thanks — our sales team will be in touch shortly.')}</p>
       </section>
+    );
+  }
+  // Consumer-first: sits quiet as a small link until someone with a fleet
+  // in mind reaches for it, then opens the lead form in place.
+  if (!open) {
+    return (
+      <p className="dim" style={{ marginTop: 24, fontSize: '0.9em' }}>
+        {t('For business?')}{' '}
+        <a href="#business" data-testid="talk-to-sales-link"
+          onClick={(e) => { e.preventDefault(); setOpen(true); }}>
+          {t('Talk to sales →')}
+        </a>
+      </p>
     );
   }
   return (

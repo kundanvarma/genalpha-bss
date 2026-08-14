@@ -29,7 +29,10 @@ async function token(ctx, realm, user, pass) {
 
   /* ---------- the prospect knocks: storefront form, no account ---------- */
   await page.goto('http://localhost:8080/shop/');
-  await page.waitForSelector('[data-testid="talk-to-sales"]', { timeout: 30000 });
+  // The B2B ask sits as a quiet "For business?" link until a prospect opens it.
+  await page.waitForSelector('[data-testid="talk-to-sales-link"]', { timeout: 30000 });
+  await page.click('[data-testid="talk-to-sales-link"]');
+  await page.waitForSelector('[data-testid="talk-to-sales"]', { timeout: 15000 });
   await page.fill('[data-testid="sales-name"]', 'Pia Prospect');
   await page.fill('[data-testid="sales-email"]', `pia-${run}@vanco.example`);
   await page.fill('[data-testid="sales-company"]', 'VanCo Logistics');
