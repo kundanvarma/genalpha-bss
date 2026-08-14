@@ -4,9 +4,11 @@ import com.bss.insight.api.ApiConstants;
 import com.bss.insight.client.AnalyticsForwarder;
 import com.bss.insight.entity.Audience;
 import com.bss.insight.entity.PartyTrait;
+import com.bss.insight.entity.Prospect;
 import com.bss.insight.entity.VisitorProfile;
 import com.bss.insight.repository.AudienceRepository;
 import com.bss.insight.repository.PartyTraitRepository;
+import com.bss.insight.repository.ProspectRepository;
 import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
@@ -37,17 +39,19 @@ public class AudienceService {
     private final VisitorProfileRepository profiles;
     private final VisitorEventRepository events;
     private final PartyTraitRepository traits;
+    private final ProspectRepository prospects;
     private final AnalyticsForwarder analytics;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public AudienceService(AudienceRepository audiences, VisitorProfileRepository profiles,
-            VisitorEventRepository events, PartyTraitRepository traits, AnalyticsForwarder analytics,
-            TenantScope tenantScope, ObjectMapper objectMapper) {
+            VisitorEventRepository events, PartyTraitRepository traits, ProspectRepository prospects,
+            AnalyticsForwarder analytics, TenantScope tenantScope, ObjectMapper objectMapper) {
         this.audiences = audiences;
         this.profiles = profiles;
         this.events = events;
         this.traits = traits;
+        this.prospects = prospects;
         this.analytics = analytics;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
@@ -65,6 +69,7 @@ public class AudienceService {
         a.setTenantId(tenantScope.currentTenantId());
         a.setName(String.valueOf(dto.get("name")));
         a.setCriteria(serialize(dto.get("criteria")));
+        a.setPopulation("prospect".equals(dto.get("population")) ? "prospect" : "customer");
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
         return toMap(audiences.save(a));
@@ -105,8 +110,12 @@ public class AudienceService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> members(String id) {
-        Object criteria = parse(load(id).getCriteria());
+        Audience audience = load(id);
+        Object criteria = parse(audience.getCriteria());
         String tenantId = tenantScope.currentTenantId();
+        if ("prospect".equals(audience.getPopulation())) {
+            return prospectMembers(criteria, tenantId);
+        }
         // consented browser profiles, one per party (behaviour signals live here)
         Map<String, VisitorProfile> profileByParty = new LinkedHashMap<>();
         for (VisitorProfile p : profiles.findByTenantIdAndPartyIdIsNotNull(tenantId)) {
@@ -134,6 +143,32 @@ public class AudienceService {
             }
             if (matches(criteria, interests, ga4, traitSet)) {
                 out.add(Map.of("partyId", partyId));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Resolve a PROSPECT audience: consented prospects matching the source tree.
+     * The consent gate is here and absolute — an {@code unconsented} prospect (a
+     * bought list, an unverified import) is NEVER returned, so a downstream send
+     * can only ever reach a contact the operator may lawfully message.
+     */
+    private List<Map<String, Object>> prospectMembers(Object criteria, String tenantId) {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        boolean emptyTree = !(criteria instanceof Map<?, ?> m)
+                || (!(m.get("all") instanceof List<?> a && !a.isEmpty())
+                    && !(m.get("any") instanceof List<?> o && !o.isEmpty()) && m.get("not") == null && m.get("type") == null);
+        for (Prospect p : prospects.findByTenantId(tenantId)) {
+            if (!Prospect.CONSENTED.equals(p.getConsent())) {
+                continue; // the consent gate — captured, not reachable
+            }
+            Set<String> facts = new LinkedHashSet<>();
+            if (p.getSource() != null) facts.add("source=" + p.getSource());
+            if (p.getConsent() != null) facts.add("consent=" + p.getConsent());
+            if (emptyTree || matches(criteria, Set.of(), List.of(), facts)) {
+                out.add(Map.of("prospectId", p.getId(), "email", p.getEmail() == null ? "" : p.getEmail(),
+                        "consent", p.getConsent()));
             }
         }
         return out;
@@ -170,6 +205,8 @@ public class AudienceService {
             case "interest" -> interests.contains(value);            // first-party behaviour
             case "audience" -> ga4.contains(value);                  // analytics-computed audience
             case "trait" -> traitSet.contains(m.get("key") + "=" + value); // BSS-native customer data
+            case "source" -> traitSet.contains("source=" + value);   // prospect: where the lead came from
+            case "consent" -> traitSet.contains("consent=" + value); // prospect: consent state
             default -> false;                                         // unknown leaf never matches
         };
     }
@@ -202,6 +239,7 @@ public class AudienceService {
         map.put("id", a.getId());
         map.put("href", a.getHref());
         map.put("name", a.getName());
+        map.put("population", a.getPopulation() == null ? "customer" : a.getPopulation());
         try {
             map.put("criteria", objectMapper.readValue(a.getCriteria() == null ? "{}" : a.getCriteria(), OBJECT));
         } catch (Exception e) {

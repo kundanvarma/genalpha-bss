@@ -103,6 +103,43 @@ public class EspForwarder {
         });
     }
 
+    /**
+     * Reach a NOT-yet-customer by a raw email address — a prospect the marketing
+     * team may lawfully contact (consent is enforced upstream, at the prospect
+     * audience). Still honours the suppression list: an unsubscribe/complaint
+     * silences even a consented prospect.
+     */
+    public void forwardToEmail(String tenantId, String messageId, String email,
+            String subject, String content) {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant == null || !"esp".equalsIgnoreCase(tenant.getDeliveryProvider())
+                || tenant.getEspUrl() == null || tenant.getEspUrl().isBlank()
+                || subject == null || email == null || email.isBlank()) {
+            return;
+        }
+        CompletableFuture.runAsync(() -> {
+            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                if (suppressions.existsByTenantIdAndEmail(tenantId, email)) {
+                    log.info("esp suppressed (prospect): {} opted out — not sent", email);
+                    return;
+                }
+                Map<String, Object> mail = new java.util.LinkedHashMap<>();
+                mail.put("personalizations", List.of(Map.of("to", List.of(Map.of("email", email)))));
+                mail.put("from", Map.of("email", tenant.getEspFrom() == null
+                        ? "no-reply@" + tenantId + ".example" : tenant.getEspFrom()));
+                mail.put("subject", subject);
+                mail.put("content", List.of(Map.of("type", "text/plain", "value", content == null ? "" : content)));
+                mail.put("custom_args", Map.of("messageId", messageId, "tenant", tenantId));
+                espClient.post().uri(tenant.getEspUrl() + "/v3/mail/send")
+                        .header("Authorization", "Bearer " + tenant.getEspApiKey())
+                        .body(mail)
+                        .retrieve().toBodilessEntity();
+            } catch (Exception e) {
+                log.debug("esp prospect forward skipped: {}", e.getMessage());
+            }
+        });
+    }
+
     @SuppressWarnings("unchecked")
     private String emailOf(String tenantId, String partyId) {
         Map<String, Object> person = partyClient.get()

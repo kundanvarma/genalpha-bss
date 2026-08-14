@@ -62,6 +62,10 @@ public class SecurityConfig {
                                 .hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/audience/**")
                                 .hasAuthority("insight:read")
+                        // prospect capture + list import (back-office marketing)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/prospect").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/prospect/import")
+                                .hasAuthority("insight:read")
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

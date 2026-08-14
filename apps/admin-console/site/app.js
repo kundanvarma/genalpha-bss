@@ -3007,11 +3007,20 @@ async function renderAudienceBuilder() {
   const nameRow = document.createElement('div'); nameRow.className = 'staffbar';
   const name = document.createElement('input');
   name.id = 'audience-name'; name.placeholder = 'Audience name — e.g. Fibre holders at churn risk'; name.style.flex = '1';
+  const popSel = document.createElement('select'); popSel.id = 'audience-population'; popSel.dataset.testid = 'audience-population';
+  for (const [v, l] of [['customer', 'Customers'], ['prospect', 'Prospects (not customers yet)']]) {
+    const o = document.createElement('option'); o.value = v; o.textContent = l; popSel.append(o);
+  }
   const matchSel = document.createElement('select'); matchSel.id = 'audience-match';
   for (const [v, l] of [['all', 'Match ALL conditions'], ['any', 'Match ANY condition']]) {
     const o = document.createElement('option'); o.value = v; o.textContent = l; matchSel.append(o);
   }
-  nameRow.append(name, matchSel);
+  nameRow.append(name, popSel, matchSel);
+  // leaf types differ by population: customers have BSS/behaviour data,
+  // prospects are filtered by where the lead came from.
+  const leafTypes = () => popSel.value === 'prospect'
+    ? [['source', 'Lead source']]
+    : [['trait', 'Customer data (BSS)'], ['interest', 'Behaviour (browsing)'], ['audience', 'Analytics audience']];
 
   const conds = document.createElement('div'); conds.id = 'audience-conditions'; conds.style.cssText = 'margin:12px 0';
   const addCondition = () => {
@@ -3023,7 +3032,7 @@ async function renderAudienceBuilder() {
     const notBox = document.createElement('input'); notBox.type = 'checkbox'; notBox.dataset.testid = 'aud-cond-not';
     not.append(notBox, document.createTextNode('exclude'));
     const type = document.createElement('select'); type.dataset.testid = 'aud-cond-type';
-    for (const [v, l] of [['trait', 'Customer data (BSS)'], ['interest', 'Behaviour (browsing)'], ['audience', 'Analytics audience']]) {
+    for (const [v, l] of leafTypes()) {
       const o = document.createElement('option'); o.value = v; o.textContent = l; type.append(o);
     }
     const valueWrap = document.createElement('span');
@@ -3041,7 +3050,9 @@ async function renderAudienceBuilder() {
         valueWrap.append(key, val);
       } else {
         const val = document.createElement('input'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
-        val.placeholder = type.value === 'interest' ? 'interest category, e.g. Devices' : 'analytics audience name';
+        val.placeholder = type.value === 'interest' ? 'interest category, e.g. Devices'
+          : type.value === 'source' ? 'lead source, e.g. web-coverage or purchased:acme'
+          : 'analytics audience name';
         valueWrap.append(val);
       }
     };
@@ -3052,6 +3063,7 @@ async function renderAudienceBuilder() {
     conds.append(row);
   };
   addCondition();
+  popSel.addEventListener('change', () => { conds.replaceChildren(); addCondition(); }); // leaf types change with population
 
   const actions = document.createElement('div'); actions.className = 'staffbar'; actions.style.marginTop = '4px';
   const addBtn = document.createElement('button'); addBtn.className = 'ghost'; addBtn.type = 'button';
@@ -3083,7 +3095,7 @@ async function renderAudienceBuilder() {
     note.textContent = 'saving…';
     const res = await authFetch('/insight/v1/audience', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: nm, criteria }),
+      body: JSON.stringify({ name: nm, criteria, population: popSel.value }),
     });
     if (res.ok) { note.textContent = 'saved ✓'; name.value = ''; conds.replaceChildren(); addCondition(); loadSaved(); }
     else { note.textContent = 'save failed (HTTP ' + res.status + ')'; }
@@ -3132,7 +3144,41 @@ async function renderAudienceBuilder() {
   };
   loadSaved();
 
-  panel.append(intro, card, savedWrap);
+  /* ---------- import prospects (a captured list, a bought list, a lead-form) ---------- */
+  const importCard = document.createElement('div');
+  importCard.className = 'panel'; importCard.dataset.testid = 'import-card';
+  importCard.style.cssText = 'padding:14px 16px;margin-bottom:16px';
+  const ih = document.createElement('h3'); ih.textContent = 'Import prospects (leads / lists)';
+  ih.style.cssText = 'font-size:14px;margin:0 0 6px';
+  const ihint = document.createElement('p'); ihint.className = 'dim'; ihint.style.cssText = 'font-size:12px;margin:0 0 10px';
+  ihint.textContent = 'One per line: email, name (name optional). A lawful basis makes them reachable; leave it '
+    + 'blank for a bought/unverified list — they are captured but NOT messaged until consented.';
+  const emails = document.createElement('textarea'); emails.dataset.testid = 'prospect-emails';
+  emails.rows = 4; emails.style.cssText = 'width:100%;box-sizing:border-box';
+  emails.placeholder = 'ada@example.com, Ada Byrne\ngrace@example.com';
+  const irow = document.createElement('div'); irow.className = 'staffbar'; irow.style.marginTop = '8px';
+  const src = document.createElement('input'); src.dataset.testid = 'prospect-source'; src.placeholder = 'source, e.g. web-coverage'; src.style.flex = '1';
+  const basis = document.createElement('input'); basis.dataset.testid = 'prospect-basis'; basis.placeholder = 'lawful basis (blank = unconsented)'; basis.style.flex = '1';
+  const imp = document.createElement('button'); imp.className = 'primary'; imp.textContent = 'Import'; imp.dataset.testid = 'prospect-import';
+  const ires = document.createElement('span'); ires.className = 'dim'; ires.dataset.testid = 'prospect-import-result'; ires.style.cssText = 'font-size:12px;margin-left:8px';
+  irow.append(src, basis, imp, ires);
+  imp.addEventListener('click', async () => {
+    const rows = emails.value.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+      const [email, ...rest] = l.split(',').map((s) => s.trim());
+      return { email, name: rest.join(', ') || undefined, source: src.value.trim() || 'import', lawfulBasis: basis.value.trim() || undefined };
+    }).filter((p) => p.email);
+    if (!rows.length) { ires.textContent = 'paste at least one email'; return; }
+    ires.textContent = 'importing…';
+    const res = await authFetch('/insight/v1/prospect/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prospects: rows, source: src.value.trim() || 'import' }),
+    });
+    if (res.ok) { const r = await res.json(); ires.textContent = `${r.imported} new, ${r.reachable} reachable, ${r.heldUnconsented} held (unconsented)`; emails.value = ''; }
+    else { ires.textContent = 'import failed (HTTP ' + res.status + ')'; }
+  });
+  importCard.append(ih, ihint, emails, irow);
+
+  panel.append(intro, importCard, card, savedWrap);
   name.focus();
 }
 

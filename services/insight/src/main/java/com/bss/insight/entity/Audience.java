@@ -31,6 +31,10 @@ public class Audience {
     @Column(length = 8000)
     private String criteria;
 
+    /** customer (default) | prospect — which population the tree resolves over. */
+    @Column(name = "population")
+    private String population;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -47,6 +51,8 @@ public class Audience {
     public void setName(String name) { this.name = name; }
     public String getCriteria() { return criteria; }
     public void setCriteria(String criteria) { this.criteria = criteria; }
+    public String getPopulation() { return population; }
+    public void setPopulation(String population) { this.population = population; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

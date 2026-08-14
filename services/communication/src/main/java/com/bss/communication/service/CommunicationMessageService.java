@@ -121,6 +121,13 @@ public class CommunicationMessageService {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("customers receive messages; sending is back-office");
         }
+        // A PROSPECT reach: a not-yet-customer addressed by raw email (no party).
+        // Consent is enforced upstream (the prospect audience only yields
+        // consented contacts); the suppression list still applies at the ESP.
+        String toEmail = dto.get("toEmail") == null ? null : String.valueOf(dto.get("toEmail")).trim();
+        if (toEmail != null && !toEmail.isBlank() && receiverIn(dto) == null) {
+            return sendToProspect(toEmail, dto);
+        }
         String target = receiverIn(dto);
         if (target == null) {
             throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
@@ -161,6 +168,32 @@ public class CommunicationMessageService {
             if (firstCreated == null) firstCreated = created;
         }
         return firstCreated;
+    }
+
+    /** Reach a prospect by email — the not-yet-customer path. Email only (no
+     * inbox/account); brand + event tokens still render. */
+    private Map<String, Object> sendToProspect(String email, Map<String, Object> dto) {
+        String tenantId = tenantScope.currentTenantId();
+        Map<String, Object> rendered = templates.renderInline(null, dto);
+        if (rendered.get("subject") == null) {
+            throw new BadRequestException("subject and toEmail are required for a prospect reach");
+        }
+        CommunicationMessage entity = new CommunicationMessage();
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setTenantId(tenantId);
+        entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
+        entity.setSubject(String.valueOf(rendered.get("subject")));
+        entity.setContent(rendered.get("content") == null ? null : String.valueOf(rendered.get("content")));
+        entity.setMessageType("email");
+        entity.setStatus(CommunicationMessage.SENT);
+        entity.setReceiverPartyId("prospect:" + email);
+        entity.setCreatedAt(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        Map<String, Object> created = toMap(repository.save(entity));
+        events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
+        esp.forwardToEmail(tenantId, id, email, entity.getSubject(), entity.getContent());
+        return created;
     }
 
     /** The one legal change: the receiver marking their message read. */
