@@ -261,3 +261,43 @@ th { border-bottom-color: var(--line); }
   width: 100%; margin-top: 6px; font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
   color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px;
 }
+
+/* Step builder — List / Canvas toggle */
+.sbtoolbar { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+.sbtab { background: transparent; color: var(--dim); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.sbtab.on { color: var(--teal-text); border-color: var(--teal); background: var(--teal-soft); font-weight: 600; }
+.sbtoolbar .ghost { margin-left: auto; }
+
+/* Freeform drag-connect canvas */
+.jcanvas-edit { display: flex; flex-direction: column; gap: 10px; }
+.cpalette { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.cpalette .chint { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); }
+.cpalette button { padding: 4px 10px; font-size: 12.5px; }
+.csurface { position: relative; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--paper); background-image: radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 22px 22px; overflow: auto; }
+.csurface svg.cedges { position: absolute; inset: 0; pointer-events: none; overflow: visible; z-index: 0; }
+.cedge { fill: none; stroke: var(--teal); stroke-width: 2; }
+.cedge.tmp { stroke-dasharray: 5 3; opacity: 0.7; }
+.cnode { position: absolute; width: 172px; z-index: 1; background: var(--card);
+  border: 1px solid var(--line); border-left: 3px solid var(--teal); border-radius: 10px;
+  padding: 7px 9px 9px; box-shadow: var(--shadow); cursor: grab; user-select: none; }
+.cnode.sel { outline: 2px solid var(--teal); outline-offset: 1px; }
+.cnode-wait, .cnode-waitForEvent { border-left-color: var(--dim); }
+.cnode-exit { border-left-color: var(--danger); }
+.cnhead { display: flex; align-items: center; justify-content: space-between; }
+.cntype { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 9.5px;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); }
+.cndel { border: none; background: none; color: var(--dim); cursor: pointer; font-size: 12px; padding: 0 2px; }
+.cndel:hover { color: var(--danger); }
+.cnlabel { font-size: 12.5px; color: var(--ink); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cport { position: absolute; width: 13px; height: 13px; border-radius: 50%;
+  background: var(--card); border: 2px solid var(--teal); left: 50%; transform: translateX(-50%); z-index: 2; }
+.cport.in { top: -8px; }
+.cport.out { bottom: -8px; cursor: crosshair; }
+.cport.out:hover { background: var(--teal); }
+.cpanel { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card); }
+.cpanel-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin-bottom: 8px; }
+.cpanel { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cpanel .cpanel-title { grid-column: 1 / -1; }
