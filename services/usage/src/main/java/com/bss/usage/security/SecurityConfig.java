@@ -46,6 +46,19 @@ public class SecurityConfig {
                         // TMF654: balances read like usage, top-ups write like usage
                         .requestMatchers(HttpMethod.GET, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.POST, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:write")
+                        // Mobile wholesale (MVNE): the wholesale rating pass, ledger,
+                        // settlement, rate card and IMSI ranges accept wholesale:admin
+                        // as well as the usage roles, so a wholesale operator manages the
+                        // MVNO's wholesale book without the full usage grant.
+                        .requestMatchers(HttpMethod.GET,
+                                ApiConstants.BASE_PATH + "/wholesaleUsageLedger",
+                                ApiConstants.BASE_PATH + "/mobileWholesaleSettlement",
+                                ApiConstants.BASE_PATH + "/wholesaleRateCard",
+                                ApiConstants.BASE_PATH + "/imsiRange").hasAnyAuthority("usage:read", "wholesale:admin")
+                        .requestMatchers(HttpMethod.POST,
+                                ApiConstants.BASE_PATH + "/rateWholesale",
+                                ApiConstants.BASE_PATH + "/wholesaleRateCard",
+                                ApiConstants.BASE_PATH + "/imsiRange").hasAnyAuthority("usage:write", "wholesale:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.GET, ApiConstants.CONSUMPTION_BASE_PATH + "/**").hasAuthority("usage:read")
                         // gifting is customer self-service: their data, their call

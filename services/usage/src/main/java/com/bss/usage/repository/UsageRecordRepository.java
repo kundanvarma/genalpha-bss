@@ -18,4 +18,9 @@ public interface UsageRecordRepository extends JpaRepository<UsageRecord, String
 
     Optional<UsageRecord> findByIdAndTenantId(String id, String tenantId);
     List<UsageRecord> findByTenantId(String tenantId);
+
+    // Tenant-wide CDRs in a period — the wholesale rating pass rates the whole
+    // MVNO's traffic, not one subscriber's.
+    List<UsageRecord> findByTenantIdAndUsageDateBetween(
+            String tenantId, OffsetDateTime from, OffsetDateTime to);
 }

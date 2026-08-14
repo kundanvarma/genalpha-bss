@@ -69,6 +69,8 @@ public class RevenueService {
         // the owner is a payable until the settlement clears
         DEFAULT_CHART.put("wholesale:cogs", new String[] {"5100", "Wholesale access (COGS)"});
         DEFAULT_CHART.put("wholesale:payable", new String[] {"2100", "Accounts payable — wholesale"});
+        DEFAULT_CHART.put("mobile-wholesale:cogs", new String[] {"5110", "Mobile wholesale usage (COGS)"});
+        DEFAULT_CHART.put("mobile-wholesale:payable", new String[] {"2110", "Accounts payable — mobile wholesale"});
     }
 
     /** PSPs whose capture is a receivable (deferred settlement), not immediate cash.
@@ -212,6 +214,37 @@ public class RevenueService {
                 line("wholesale:cogs", rate, null, id, desc + " — monthly"),
                 line("wholesale:payable", null, rate, id, "Payable to " + owner));
         saveBalanced(tenant, sourceRef, "wholesaleCogs", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
+     * Mobile wholesale (MVNE): a wholesale usage-ledger row is what the MVNO owes
+     * its host for a usage type this period — a usage-metered cost of sale. Booked
+     * as COGS + a payable to the host, keyed on the ledger id so replays are free.
+     */
+    @Transactional
+    public boolean postMobileWholesaleCogs(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "mobile-wholesale:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("amount") == null) {
+            return false; // no amount on the event — nothing to book (fail-soft)
+        }
+        BigDecimal amount = money(event.get("amount"));
+        if (amount.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String spec = String.valueOf(event.getOrDefault("usageSpecName", "usage"));
+        String period = String.valueOf(event.getOrDefault("periodStart", ""));
+        String desc = "Mobile wholesale " + spec + (period.isBlank() ? "" : " " + period);
+        List<JournalLine> posting = List.of(
+                line("mobile-wholesale:cogs", amount, null, id, desc),
+                line("mobile-wholesale:payable", null, amount, id, "Payable to host MNO"));
+        saveBalanced(tenant, sourceRef, "mobileWholesaleCogs", desc + " — " + id, currency, null, posting);
         return true;
     }
 
