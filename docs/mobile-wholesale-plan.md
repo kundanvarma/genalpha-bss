@@ -1,5 +1,13 @@
 # Mobile wholesale / MVNE — hosting MVNOs on the network we run
 
+> **STATUS: BUILT & PROVEN 2026-08-14 (suite #92 `mobile_wholesale_test.js`, all
+> green incl. a console leg).** W-M1 host/MVNO parties + agreement + tier + rate card
+> + IMSI (seed), W-M2 rate card + IMSI, W-M3 the wholesale usage-rating pass, W-M4
+> settlement + reconciliation + COGS to the GL (DR 5110 / CR 2110), W-M5 the console
+> Mobile-wholesale pane, W-M6 the suite. Design realised as planned, seeker-first: the
+> **MVNO is a tenant**, so the pass runs in-tenant over its own CDRs — the fibre seeker
+> settlement, usage-metered. The provider (host-side AR across tenants) stays a boundary.
+
 *Design doc. The mobile sibling to the fibre open-access arc
 ([wholesale-open-access-plan.md](wholesale-open-access-plan.md)): sell **wholesale
 mobile** access to virtual operators (MVNOs) and settle it usage-by-usage —

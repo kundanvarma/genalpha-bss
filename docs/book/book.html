@@ -3969,6 +3969,55 @@
 
   <hr class="soft">
 
+  <section class="chapter">
+    <div class="num">Chapter Seventy-Two</div>
+    <h3>The meter that owes upward</h3>
+    <div class="epi">"Then go to mobile wholesale." <span class="who">— the operator, once the fibre
+    side was done both ways</span></div>
+
+    <p class="drop">Fibre wholesale had settled per line — a flat monthly fee for each access we
+    bought. Mobile is a different animal, and the difference is the whole story: mobile wholesale
+    settles per <em>unit</em>. A virtual operator rides a host network, its subscribers burn
+    megabytes and minutes and messages, and every one of them is owed to the host at a wholesale
+    rate. The retail bill the subscriber pays and the wholesale bill the operator owes the host are
+    two different sums drawn from the same events. The question was where that second sum should
+    come from without disturbing the first.</p>
+
+    <h2>An MVNO is a tenant</h2>
+    <p>The insight that made it simple was already in the architecture. This platform is
+    multi-tenant to its bones — every operator that runs on it is a tenant, walled off by
+    row-level security. A mobile virtual operator is exactly that: a retail brand running its whole
+    business on someone else's radio. So we did not need a new notion of "reseller" bolted onto a
+    subscriber; the operator <em>is</em> the tenant, and the traffic to re-rate is simply that
+    tenant's own call records. The platform plays a light MVNO owing a host, and the wholesale
+    rating runs in the tenant's own context over its own usage — the same seeker settlement the
+    fibre side already had, only counted in gigabytes instead of lines.</p>
+    <p>The rating itself is a second pass, and the discipline was to make it truly second — to touch
+    nothing the retail pass owns. Retail rating consumes a record by flipping its status; the
+    wholesale pass only reads, sums the month's usage by type, multiplies by the host's rate card,
+    and writes its own ledger, one row per period and per usage type, unique so that running it
+    twice books once. The subledger picks the ledger up the way it picks up everything — a Klarna
+    capture, a fibre line, now a month of mobile traffic — and books the cost honestly: a cost of
+    goods sold, and a payable to the host, so the retail margin is real in the accounts and not
+    only in a settlement screen.</p>
+
+    <h2>The number that stopped matching</h2>
+    <p>The piece the operators kept asking for was the one that admits doubt. A wholesale statement
+    that only sums is a statement you cannot trust; the reconciliation is what gives it teeth. So
+    the settlement carries two numbers side by side — the units the ledger was rated on, and the
+    units the call records show <em>now</em> — and when a late record lands after the month was
+    rated, the line stops reconciling and says so. The test proves it on purpose: rate ten
+    gigabytes, drop a five-gigabyte record in afterward, and the statement reads ten rated against
+    fifteen live, unreconciled, flagged. Revenue assurance is not a feature you add; it is the
+    refusal to pretend the first count was final.</p>
+
+    <p class="pull edge">Fibre owed by the line; mobile owes by the megabyte — but both are the same
+    honesty, that the traffic a virtual operator sells its customers is bought from someone, counted
+    where the counting can be checked, and booked as the cost it truly is.</p>
+  </section>
+
+  <hr class="soft">
+
   <!-- Appendix -->
   <section class="chapter" id="appendix">
     <div class="num">Appendix C</div>

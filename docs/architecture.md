@@ -339,7 +339,12 @@ the acting tenant's machine identity.
   `/mefApi/serviceOrdering/v1`, activates, notifies the retailer and settles per line, and the
   upstream COGS books to the revenue GL (DR wholesale-COGS / CR AP-wholesale). Seeker and provider
   meet **cross-tenant** — the one cross-tenant path in a system otherwise built to keep tenants
-  apart, and it runs through the same gateway + X-Tenant-Id, never around RLS.
+  apart, and it runs through the same gateway + X-Tenant-Id, never around RLS. **Mobile wholesale
+  (MVNE)** is the usage-metered sibling: an MVNO is a tenant, so a second rating pass re-rates its
+  own CDRs at a host's per-unit wholesale rate card into a per-period ledger (retail rating
+  untouched), the settlement carries a reconciliation (rated vs live units), and revenue books the
+  cost as COGS + a payable to the host (DR 5110 / CR 2110) — the fibre *seeker* settlement, by the
+  megabyte instead of the line.
 - **The browse cache is anonymous-only and route-scoped (staleness stated).** The gateway's
   `LocalResponseCache` caches only the catalog route's **token-absent** GETs (the catalog emits
   `Cache-Control: public, max-age=N` + `Vary: X-Tenant-Id`, and `no-store` the instant an

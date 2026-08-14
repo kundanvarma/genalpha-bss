@@ -85,6 +85,7 @@ beside it.</p>
 37. <a href="#wholesale">Wholesale / open-access — selling on a wire you don't own</a><br>
 38. <a href="#browsecache">Browse-path caching — the shop on a surge</a><br>
 39. <a href="#wholesaleconsole">The fixed wholesale console — the owner's authoring desk</a><br>
+40. <a href="#mobilewholesale">Mobile wholesale / MVNE — usage-metered settlement</a><br>
 </p>
 </div>
 
@@ -1122,7 +1123,38 @@ console panes (sequential POSTs), not generic-engine tabs. (3) a new gateway pat
 (serviceCatalogManagement) needs its own route — the SOM bundle had claimed it. (4) the settlement
 pane needs the SOM reads to accept wholesale:admin (done) or a pure-wholesale operator 403s.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and twelve suites, twenty-five CTKs at zero
+<h2 id="mobilewholesale">40 · Mobile wholesale / MVNE — usage-metered settlement</h2>
+<p><b>What</b>: the mobile sibling of open-access fibre. As a light <b>MVNO</b> the platform owes a
+host MNO for the traffic its subscribers burn; a <b>second rating pass</b> re-rates the same CDRs at
+a per-unit wholesale rate card into a per-period ledger — usage-metered, vs fibre's flat per-line.
+Suite <a href="../../ops/e2e/mobile_wholesale_test.js">mobile_wholesale_test.js</a> (#92); seed
+<code>ops/seed/seed_mobile_wholesale.py</code> (host MNO party + TMF668/TMF651 agreement + rate card
++ IMSI + Light-MVNO tier).
+<b>Design</b>: the MVNO IS a tenant, so the pass runs IN-tenant over its own CDRs — the fibre
+SEEKER settlement, usage-metered. The provider (host-side AR across tenants) is a deliberate
+boundary. <b>usage service</b> (V11 table, V12 RLS): <code>wholesale_rate_card</code> (per
+usage-type per-unit rate), <code>wholesale_usage_ledger</code> (unique on tenant+period+type),
+<code>imsi_range</code>. <code>WholesaleUsageService.rateWholesale(periodStart,periodEnd)</code>
+sums usage_records by type × the rate card → ledger; <b>idempotent</b> (one row per period+type, so
+re-running never double-books and revenue never double-posts). It <b>never flips usage_record
+status</b>, so retail rating is untouched. <b>Endpoints</b> (under the usage BASE_PATH, accept
+<code>wholesale:admin</code> alongside usage:read/write): <code>POST /rateWholesale</code>,
+<code>GET /mobileWholesaleSettlement</code> (statement + a <b>reconciliation</b>: rated units vs
+live CDRs — a late CDR is flagged, revenue assurance), <code>GET/POST /wholesaleRateCard</code>,
+<code>GET/POST /imsiRange</code>, <code>GET /wholesaleUsageLedger</code>.
+<b>Books</b> (revenue): a <code>WholesaleUsageEventListener</code> on <code>bss.usage.events</code>
+books <code>postMobileWholesaleCogs</code> — DR <code>mobile-wholesale:cogs</code> (5110) / CR
+<code>mobile-wholesale:payable</code> (2110), amount off the event, idempotent by
+<code>sourceRef=mobile-wholesale:&lt;ledger-id&gt;</code>.
+<b>Console</b>: a <b>Mobile wholesale</b> pane on the Wholesale desk (settlement with the
+reconciliation badge, rate card, IMSI ranges, a period picker + "Rate this period").
+<b>Gotchas that will bite again</b>: (1) a suite that rates a shared period picks up OTHER runs'
+CDRs — isolate by unique usage-type names per run (the suite does). (2) revenue's journalEntry
+detail returns lines under <code>lines</code>, not <code>journalLine</code>. (3) the tenant-wide
+CDR query (findByTenantIdAndUsageDateBetween) is new on UsageRecordRepository — the pass rates the
+whole MVNO, not one subscriber.</p>
+
+<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and thirteen suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
