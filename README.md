@@ -17,7 +17,8 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 **At a glance**
 
 - Catalog → order → activate → bill → cash, complete — 38 ODA components speaking TMF Open APIs natively
-- 114 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- 115 end-to-end browser suites, all green; 25 official TM Forum CTKs at zero failures — every published kit that matches a served capability
+- Accessibility enforced in CI: axe-core runs the full WCAG 2.2 AA ruleset across every channel at zero violations, and each tenant's brand colour is auto-shaded to stay legible — accessibility that can't silently rot between releases
 - Two operators run multi-tenant on one deployment; onboarding an MVNO is a form, not a project
 - AI-native with the approval keys kept human: a product copilot (type or speak), an advisor whose every claim carries a receipt, the Hermes digital workforce, agentic commerce off-by-default — all metered, audited, revocable
 - Bring-your-own everything, per tenant: headless CMS/DAM, parcel carriers (Helthjem/Posten-Bring/PostNord with pickup points), and payment providers — Klarna & PayPal redirect flows, card routing rules + idempotency-safe failover, and BNPL settlement booked honestly (a Klarna capture is a receivable, not cash, until the payout clears it)
