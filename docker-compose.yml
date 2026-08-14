@@ -1596,6 +1596,8 @@ services:
       # acquisition seam: audiences push OUT as ad/social Custom Audiences (hashed)
       SOCIAL_API_URL: http://mock-social:8080
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
+      # also ingest foreign-BSS events normalized by the bridge (add-on mode)
+      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.bridge.events
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
@@ -1992,6 +1994,23 @@ services:
       - ./infra/tenants:/config:ro
     ports:
       - "8129:8080"
+
+  # The martech add-on's ONE integration surface: a foreign BSS posts its own
+  # events here; the bridge normalizes them onto the martech ingress topic
+  # (bss.bridge.events), which the trait listener consumes — no fulfilment
+  # pipeline side effects, no change to any martech service.
+  bss-bridge:
+    build: ./services/bss-bridge
+    container_name: bss-bridge
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=96m"
+    depends_on:
+      kafka:
+        condition: service_started
+    ports:
+      - "8140:8080"
 
 volumes:
   ollama-models:

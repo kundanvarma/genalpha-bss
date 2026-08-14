@@ -52,5 +52,6 @@
         <module>services/assurance</module>
         <module>services/party-account</module>
         <module>services/gateway</module>
+        <module>services/bss-bridge</module>
     </modules>
 </project>
