@@ -353,6 +353,7 @@ const RESOURCES = [
   { path: 'wholesaleOwners', title: 'Access owners', wholesaleOwners: true },
   { path: 'accessProduct', title: 'Access products', accessProduct: true },
   { path: 'wholesaleSettlement', title: 'Settlement', wholesaleSettlement: true },
+  { path: 'mobileWholesale', title: 'Mobile wholesale', mobileWholesale: true },
   {
     // TMF696 risk assessments — read-only: the scores the ordering gate consults.
     path: 'partyRiskAssessment',
@@ -1099,6 +1100,7 @@ const TAB_ROLE = {
   wholesaleOwners: 'wholesale:admin',
   accessProduct: 'wholesale:admin',
   wholesaleSettlement: 'wholesale:admin',
+  mobileWholesale: 'wholesale:admin',
   partyRiskAssessment: 'risk:assess',
   productOrder: ['ordering:write', 'service:write'],
   appointment: 'appointment:admin',
@@ -1169,7 +1171,7 @@ const WORKSPACES = [
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
-    'coverageMap', 'wholesaleSettlement'] },
+    'coverageMap', 'wholesaleSettlement', 'mobileWholesale'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
@@ -3726,6 +3728,96 @@ async function renderWholesaleSettlement() {
   });
 }
 
+// W-M5 — mobile wholesale (MVNE): what the MVNO owes its host for the traffic its
+// subscribers burned, rated at the wholesale rate card, with a reconciliation check.
+const USAGE_BASE_C = '/tmf-api/usageManagement/v4';
+async function renderMobileWholesale(periodStart, periodEnd) {
+  const panel = panelFor('wholesale-panel');
+  if (!periodStart) {
+    const now = new Date();
+    const y = now.getFullYear(); const mi = now.getMonth();
+    periodStart = `${y}-${String(mi + 1).padStart(2, '0')}-01`;
+    periodEnd = `${y}-${String(mi + 1).padStart(2, '0')}-${String(new Date(y, mi + 1, 0).getDate()).padStart(2, '0')}`;
+  }
+  panel.innerHTML = '<div class="editor"><h2>Mobile wholesale</h2><p class="dim">Loading…</p></div>';
+  const q = `periodStart=${periodStart}&periodEnd=${periodEnd}`;
+  const [cards, imsi, s] = await Promise.all([
+    authFetch(`${USAGE_BASE_C}/wholesaleRateCard`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    authFetch(`${USAGE_BASE_C}/imsiRange`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    authFetch(`${USAGE_BASE_C}/mobileWholesaleSettlement?${q}`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const lines = (s && s.line) || [];
+  let html = '<div class="editor"><h2>Mobile wholesale (MVNE)</h2>'
+    + '<p class="dim small">As a light MVNO, we owe a host MNO for the traffic our subscribers burn, '
+    + 'rated at the wholesale rate card. The reconciliation check compares the rated units against the '
+    + 'live CDRs — a late CDR is flagged.</p>'
+    + `<div class="actions" style="align-items:center">Period `
+    + `<input id="mw-start" value="${esc(periodStart)}" style="width:9rem">`
+    + `<input id="mw-end" value="${esc(periodEnd)}" style="width:9rem">`
+    + `<button class="ghost" id="mw-refresh">Refresh</button>`
+    + `<button class="primary" id="mw-rate">Rate this period</button>`
+    + `<span id="mw-msg" class="dim"></span></div>`;
+  // settlement
+  html += '<h2 style="font-size:1rem;margin-top:1rem">Settlement — what we owe the host</h2>';
+  if (!lines.length) {
+    html += '<p class="dim">Nothing rated for this period yet — press “Rate this period”.</p>';
+  } else {
+    const badge = s.reconciled
+      ? '<span style="color:var(--teal)">✓ reconciled</span>'
+      : '<span style="color:var(--danger,#b64a3a)">⚠ a late CDR is unreconciled</span>';
+    html += '<div class="table-wrap"><table><thead><tr><th>Usage type</th><th>Rated units</th>'
+      + '<th>Live units</th><th>Rate</th><th>Amount</th><th>Reconciled</th></tr></thead><tbody>';
+    for (const l of lines) {
+      html += `<tr><td>${esc(l.usageSpecName)}</td><td>${esc(l.ratedUnits)} ${esc(l.unit)}</td>`
+        + `<td>${esc(l.liveUnits)} ${esc(l.unit)}</td><td>${esc(l.wholesaleRate)}</td>`
+        + `<td>${esc(l.amount)} ${esc(l.currency)}</td><td>${l.reconciled ? '✓' : '⚠'}</td></tr>`;
+    }
+    html += `</tbody></table></div><p><b>Total owed: ${esc(s.totalOwed)} ${esc(s.currency)}</b> · ${badge}</p>`;
+  }
+  // rate card
+  html += '<h2 style="font-size:1rem;margin-top:1.5rem">Wholesale rate card</h2>';
+  if (!cards.length) {
+    html += '<p class="dim">No rate card — run ops/seed/seed_mobile_wholesale.py or add rows via the API.</p>';
+  } else {
+    html += '<div class="table-wrap"><table><thead><tr><th>Usage type</th><th>Rate</th><th>Unit</th>'
+      + '<th>Host</th></tr></thead><tbody>';
+    for (const c of cards) {
+      html += `<tr><td>${esc(c.usageSpecName)}</td><td>${esc(c.wholesaleRate)}</td>`
+        + `<td>${esc(c.unit)}</td><td>${esc(c.hostName)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  // IMSI
+  html += '<h2 style="font-size:1rem;margin-top:1.5rem">IMSI ranges (lent by the host)</h2>';
+  if (!imsi.length) {
+    html += '<p class="dim">None allocated.</p>';
+  } else {
+    html += '<div class="table-wrap"><table><thead><tr><th>Prefix</th><th>From</th><th>To</th>'
+      + '<th>Capacity</th><th>Host</th></tr></thead><tbody>';
+    for (const r of imsi) {
+      html += `<tr><td>${esc(r.prefix)}</td><td>${esc(r.fromImsi)}</td><td>${esc(r.toImsi)}</td>`
+        + `<td>${esc(r.capacity)}</td><td>${esc(r.hostName)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.querySelector('#mw-refresh').addEventListener('click', () =>
+    renderMobileWholesale(panel.querySelector('#mw-start').value.trim(), panel.querySelector('#mw-end').value.trim()));
+  panel.querySelector('#mw-rate').addEventListener('click', async () => {
+    const msg = panel.querySelector('#mw-msg');
+    const ps = panel.querySelector('#mw-start').value.trim();
+    const pe = panel.querySelector('#mw-end').value.trim();
+    msg.textContent = 'Rating…'; msg.className = 'dim';
+    try {
+      const r = await authFetch(`${USAGE_BASE_C}/rateWholesale?periodStart=${ps}&periodEnd=${pe}`, { method: 'POST' });
+      if (!r.ok) { const p = await r.json().catch(() => ({})); throw new Error(p.message || `HTTP ${r.status}`); }
+      msg.textContent = 'Rated ✓'; msg.className = 'ok';
+      setTimeout(() => renderMobileWholesale(ps, pe), 500);
+    } catch (e) { msg.textContent = e.message; msg.className = 'error'; }
+  });
+}
+
 async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
@@ -3773,7 +3865,7 @@ async function loadList() {
     if (active.reporting) renderReporting(); else renderIntegrations();
     return;
   }
-  if (active.wholesaleOwners || active.accessProduct || active.wholesaleSettlement) {
+  if (active.wholesaleOwners || active.accessProduct || active.wholesaleSettlement || active.mobileWholesale) {
     el('editor').hidden = true;
     el('total').textContent = '';
     el('listing-head').replaceChildren();
@@ -3781,6 +3873,7 @@ async function loadList() {
     document.querySelector('.pager')?.setAttribute('hidden', '');
     if (active.wholesaleOwners) renderWholesaleOwners();
     else if (active.accessProduct) renderAccessProduct();
+    else if (active.mobileWholesale) renderMobileWholesale();
     else renderWholesaleSettlement();
     return;
   }

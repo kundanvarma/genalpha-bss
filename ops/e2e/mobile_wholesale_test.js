@@ -116,6 +116,28 @@ const P = (s) => `MW${run % 100000} ${s}`;   // unique usage-spec names for this
   if (!ranges.some((r) => r.prefix === '242011')) fail('allocated IMSI range not listed');
   ok('IMSI: the host lent the MVNO an IMSI range (242011…, 100k) — a modeled pool resource');
 
+  /* ---------- 8. CONSOLE (W-M5): the operator sees the book ---------- */
+  const cctx = await browser.newContext();
+  const page = await cctx.newPage();
+  await page.goto(`${API}/console/`);
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.fill('input[name="username"]', 'demo');
+  await page.fill('input[name="password"]', 'demo');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+  await page.locator('#tabs .tab', { hasText: 'Mobile wholesale' }).first().click();
+  await page.waitForSelector('#mw-rate', { timeout: 10000 });
+  await page.click('#mw-rate');   // rate the current period from the console
+  await page.waitForFunction(() =>
+    /Total owed/.test(document.querySelector('#wholesale-panel')?.textContent || ''), { timeout: 15000 });
+  const shownTotal = await page.evaluate(() => {
+    const m = (document.querySelector('#wholesale-panel')?.textContent || '').match(/Total owed:\s*([\d.]+)/);
+    return m ? Number(m[1]) : 0;
+  });
+  if (!(shownTotal > 0)) fail(`console Mobile wholesale pane shows no total owed (${shownTotal})`);
+  await cctx.close();
+  ok(`CONSOLE: the operator ran the wholesale rating from the console and sees the book — total owed €${shownTotal}`);
+
   await ctx.close();
   await browser.close();
   console.log('\nALL MOBILE-WHOLESALE CHECKS PASSED — the platform is a light MVNO: its subscribers\''
