@@ -344,7 +344,12 @@ the acting tenant's machine identity.
   own CDRs at a host's per-unit wholesale rate card into a per-period ledger (retail rating
   untouched), the settlement carries a reconciliation (rated vs live units), and revenue books the
   cost as COGS + a payable to the host (DR 5110 / CR 2110) — the fibre *seeker* settlement, by the
-  megabyte instead of the line.
+  megabyte instead of the line. The **provider face** completes it: the host bills *external* MVNOs
+  (own-BSS) at a **per-MVNO rate card** (the SLA/tier lever), exposing a consolidated per-MVNO
+  settlement + a per-MVNO statement their BSS pulls, and booking wholesale *revenue* (DR 1210 / CR
+  4020) — so mobile, like fibre, supports **both** MVNO types. Both wholesale supply sides are
+  authored from the console's **Wholesale desk** (owners, L2/L3 products realised by a **TMF633
+  CFS/RFS** service catalog, coverage, and mobile rate cards), gated by `wholesale:admin`.
 - **The browse cache is anonymous-only and route-scoped (staleness stated).** The gateway's
   `LocalResponseCache` caches only the catalog route's **token-absent** GETs (the catalog emits
   `Cache-Control: public, max-age=N` + `Vary: X-Tenant-Id`, and `no-store` the instant an

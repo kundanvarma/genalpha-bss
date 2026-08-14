@@ -45,6 +45,8 @@
 > *[Check address → `5020` Bergen → owners at L2/L3 → open access catalogue → buy an L2/L3 SKU]* "Order rides MEF Sonata to the owner, comes back active on its own clock."
 > *[What you owe → settlement + margin]* "Wholesale cost books to the ledger; the margin is visible."
 > *[`7010` Trondheim = served by **Nova**]* "Nova (Scene ⑤) is the fibre OWNER — seeker + provider, one platform, cross-tenant."
+> **Owner's desk:** *[`console/` → **Wholesale** desk]* onboard owner · publish L2/L3 product *realised by* a **TMF633 CFS/RFS** · paint coverage · settlement — "buyer has a portal, seller has a desk, no scripts."
+> **Mobile (MVNE):** *[Wholesale desk → **Mobile wholesale**]* "light MVNO owes a host — 2nd rating pass over the same CDRs, reconciled." *[**Mobile — host (provider)**]* "we host other MVNOs at a PER-MVNO rate card (the SLA lever); COGS when we owe, revenue when we're owed. Both MVNO types."
 
 ---
 

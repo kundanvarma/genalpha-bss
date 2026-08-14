@@ -200,6 +200,20 @@ URL: `http://localhost:8080/partner/` as `demo` / `demo`
   the same platform, meeting across the tenant line — the one deliberate
   cross-tenant path, and it still goes through the gateway, never around the
   isolation."**
+- **The owner's desk (console).** `localhost:8080/console/` → the **Wholesale**
+  desk. **"The buyer has a portal; the seller has a desk — and the supply side is
+  authored as data, no scripts."** Onboard an access **owner**, publish an **L2/L3
+  product** *realised by* a **TMF633 CFS/RFS** service spec (the SID commercial/
+  technical split the retail catalog never had), paint **coverage**, read
+  **settlement**.
+- **Mobile wholesale (MVNE).** Same platform, mobile. **Wholesale** desk → **Mobile
+  wholesale**: **"As a light MVNO we owe a host MNO for the traffic our subscribers
+  burn — a second rating pass over the same call records at a wholesale rate card,
+  reconciled against the live meters."** Then **Mobile — host (provider)**: **"And we
+  host OTHER MVNOs who run their own BSS — billed at a PER-MVNO rate card, the SLA
+  lever: a premium MVNO pays more than a budget one for the same gigabyte."**
+  **"Both MVNO types, both directions, booked honestly — COGS when we owe, revenue
+  when we're owed."**
 
 ---
 
