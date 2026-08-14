@@ -3249,8 +3249,38 @@ async function renderSocialListening() {
     note.textContent = `pulled ${res.ingested} new mention(s)`;
     load();
   });
+  /* ---------- organic publishing: put a post OUT on the brand handle ---------- */
+  const pub = document.createElement('div'); pub.className = 'panel'; pub.dataset.testid = 'publish-card';
+  pub.style.cssText = 'padding:14px 16px;margin:14px 0';
+  const ph = document.createElement('h3'); ph.textContent = 'Publish to the brand handle'; ph.style.cssText = 'font-size:14px;margin:0 0 8px';
+  const pt = document.createElement('textarea'); pt.dataset.testid = 'publish-text'; pt.rows = 3;
+  pt.style.cssText = 'width:100%;box-sizing:border-box'; pt.placeholder = "What's new? — an organic post to your followers";
+  const pbar = document.createElement('div'); pbar.className = 'staffbar'; pbar.style.marginTop = '8px';
+  const pbtn = document.createElement('button'); pbtn.className = 'primary'; pbtn.textContent = 'Publish'; pbtn.dataset.testid = 'publish-btn';
+  const pnote = document.createElement('span'); pnote.className = 'dim'; pnote.style.cssText = 'font-size:12px;margin-left:8px'; pnote.dataset.testid = 'publish-note';
+  pbar.append(pbtn, pnote);
+  const pfeed = document.createElement('div'); pfeed.dataset.testid = 'publish-feed'; pfeed.style.marginTop = '8px';
+  const loadPosts = async () => {
+    const list = await (await authFetch('/insight/v1/social/posts')).json().catch(() => []);
+    pfeed.replaceChildren();
+    for (const p of list.slice(-10).reverse()) {
+      const c = document.createElement('div'); c.className = 'dim'; c.style.cssText = 'font-size:12px;padding:4px 0;border-top:1px solid rgba(128,128,128,.2)';
+      c.textContent = '↗ ' + (p.message || ''); pfeed.append(c);
+    }
+  };
+  pbtn.addEventListener('click', async () => {
+    const content = pt.value.trim(); if (!content) { pnote.textContent = 'write something first'; return; }
+    pnote.textContent = 'publishing…';
+    const r = await authFetch('/insight/v1/social/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) });
+    const res = r.ok ? await r.json() : { published: false };
+    pnote.textContent = res.published ? 'published ✓' : 'publish unavailable';
+    if (res.published) { pt.value = ''; loadPosts(); }
+  });
+  pub.append(ph, pt, pbar, pfeed);
+  loadPosts();
+
   load();
-  panel.append(intro, bar, summaryWrap, feed);
+  panel.append(intro, pub, bar, summaryWrap, feed);
 }
 
 function staffPanel() {

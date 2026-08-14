@@ -73,6 +73,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/listening/**").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/listening/sync")
                                 .hasAuthority("insight:read")
+                        // organic publishing (post to the brand handle)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/social/posts").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/social/publish")
+                                .hasAuthority("insight:read")
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

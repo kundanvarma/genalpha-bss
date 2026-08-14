@@ -25,6 +25,9 @@ let leadSeq = 1000;
  *  social listening (the BSS pulls these in and scores sentiment). */
 const mentions = new Map();
 let mentionSeq = 5000;
+/** account -> [{id, message, created_time}] — organic posts the brand published */
+const published = new Map();
+let postSeq = 9000;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -83,6 +86,25 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET') {
       if (!authed()) return json(401, { error: { message: 'access token required' } });
       return json(200, { data: leadForms.get(leads[1]) || [] });
+    }
+  }
+
+  // Organic publishing: posts the brand puts OUT on its own handle.
+  const posts = url.pathname.match(/^\/v1\/([^/]+)\/posts$/);
+  if (posts) {
+    if (!authed()) return json(401, { error: { message: 'access token required' } });
+    if (req.method === 'POST') {
+      return readBody((payload) => {
+        const bucket = published.get(posts[1]) || [];
+        const p = { id: String(postSeq++), message: String(payload.message || ''),
+          created_time: new Date().toISOString() };
+        bucket.push(p);
+        published.set(posts[1], bucket);
+        json(200, { id: p.id, permalink: `https://social.example/${posts[1]}/${p.id}` });
+      });
+    }
+    if (req.method === 'GET') {
+      return json(200, { data: published.get(posts[1]) || [] });
     }
   }
 
