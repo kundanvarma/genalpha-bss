@@ -212,3 +212,23 @@ th { border-bottom-color: var(--line); }
 }
 .tabgroup:has(.tab.on) { border-color: var(--teal); }
 .tabgroup:has(.tab.on) .tabgroup-label { color: var(--teal); }
+
+/* BB1 — journey canvas: a vertical node-flow with live per-node counts */
+.jcanvas { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 0; }
+.jnode {
+  width: 260px; max-width: 90%; background: var(--card); border: 1px solid var(--line);
+  border-left: 3px solid var(--teal); border-radius: 8px; padding: 8px 12px;
+}
+.jnode-wait, .jnode-waitForEvent { border-left-color: var(--dim); }
+.jnode-exit { border-left-color: var(--danger); }
+.jnode .jtype {
+  font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim);
+}
+.jnode .jstage {
+  display: inline-block; font-size: 10.5px; color: var(--teal-text);
+  background: var(--teal-soft); border-radius: 999px; padding: 1px 8px; margin: 2px 0;
+}
+.jnode .jlabel { font-size: 13.5px; color: var(--ink); margin-top: 2px; }
+.jnode .jcount { display: block; font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+.jarrow { color: var(--dim); font-size: 14px; line-height: 1; }

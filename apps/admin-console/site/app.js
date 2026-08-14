@@ -485,6 +485,43 @@ const RESOURCES = [
       label: () => 'Enroll segment',
       apply: (item) => authFetch(`${CAMPAIGN_BASE}/journey/${item.id}/enroll`, { method: 'POST' }),
     },
+    // BB1 — the visual canvas: the SAME journey object the API serves, drawn as
+    // a node flow with live per-node counts (reached · active) from the funnel.
+    // No draw-vs-run drift: what you see is exactly what runs.
+    canvas: async (item) => {
+      const s = await (await authFetch(`${CAMPAIGN_BASE}/journey/${item.id}/stats`)).json();
+      const funnel = s.funnel || [];
+      const steps = Array.isArray(item.steps) ? item.steps : [];
+      const wrap = document.createElement('div');
+      wrap.className = 'jcanvas';
+      wrap.dataset.testid = 'journey-canvas';
+      const waitLabel = (st) => ['days', 'hours', 'minutes', 'seconds']
+        .filter((u) => st[u]).map((u) => `${st[u]} ${u}`).join(' ') || 'a while';
+      const labelOf = (st) => st.type === 'message' ? esc(st.subject || 'message')
+        : st.type === 'wait' ? `wait ${waitLabel(st)}`
+        : st.type === 'waitForEvent' ? `wait for ${esc(st.event || 'event')}`
+        : (st.type === 'branch' || st.type === 'decision') ? `decision: ${esc(st.inSegment || '')}`
+        : st.type === 'exit' ? 'exit' : esc(st.type || 'step');
+      steps.forEach((st, i) => {
+        const f = funnel[i] || {};
+        const sends = st.type === 'message' || st.type === 'branch' || st.type === 'decision';
+        const node = document.createElement('div');
+        node.className = 'jnode jnode-' + (st.type || 'step');
+        node.dataset.testid = 'canvas-node';
+        node.innerHTML = `<div class="jtype">${esc(st.type || '')}</div>`
+          + (st.stage ? `<span class="jstage">${esc(st.stage)}</span>` : '')
+          + `<div class="jlabel">${labelOf(st)}</div>`
+          + (sends ? `<span class="jcount" data-testid="canvas-count">reached ${f.reached ?? 0} · active ${f.active ?? 0}</span>` : '');
+        wrap.append(node);
+        if (i < steps.length - 1) {
+          const arrow = document.createElement('div');
+          arrow.className = 'jarrow';
+          arrow.textContent = '↓';
+          wrap.append(arrow);
+        }
+      });
+      return wrap;
+    },
   },
   {
     path: 'campaign',
@@ -4099,6 +4136,35 @@ async function loadList() {
         }
       });
       td.append(view);
+    }
+    if (active.canvas) {
+      // a visual node-flow of the journey, with live per-node counts
+      const canvasBtn = document.createElement('button');
+      canvasBtn.textContent = 'Canvas';
+      canvasBtn.className = 'ghost';
+      canvasBtn.dataset.testid = 'row-canvas';
+      canvasBtn.addEventListener('click', async () => {
+        const existing = tr.nextElementSibling;
+        if (existing && existing.classList.contains('canvasrow')) {
+          existing.remove();
+          canvasBtn.textContent = 'Canvas';
+          return;
+        }
+        canvasBtn.textContent = 'Hide';
+        const cr = document.createElement('tr');
+        cr.className = 'canvasrow';
+        const cell = document.createElement('td');
+        cell.colSpan = active.columns.length + 1;
+        cell.textContent = 'loading…';
+        cr.append(cell);
+        tr.after(cr);
+        try {
+          cell.replaceChildren(await active.canvas(item));
+        } catch (e) {
+          cell.textContent = 'could not load: ' + e.message;
+        }
+      });
+      td.append(canvasBtn);
     }
     if (active.readOnly) {
       tr.append(td);
