@@ -1593,6 +1593,9 @@ services:
       ANALYTICS_DATA_URL_NOVA: http://mock-analytics:8080
       ANALYTICS_PROPERTY_ID_NOVA: "123456"
       ANALYTICS_DATA_TOKEN_NOVA: nova-data-token
+      # acquisition seam: audiences push OUT as ad/social Custom Audiences (hashed)
+      SOCIAL_API_URL: http://mock-social:8080
+      SOCIAL_ACCESS_TOKEN: genalpha-social-token
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"

@@ -21,9 +21,11 @@ import java.util.Map;
 public class AudienceController {
 
     private final AudienceService service;
+    private final com.bss.insight.service.ActivationService activation;
 
-    public AudienceController(AudienceService service) {
+    public AudienceController(AudienceService service, com.bss.insight.service.ActivationService activation) {
         this.service = service;
+        this.activation = activation;
     }
 
     @PostMapping
@@ -56,5 +58,13 @@ public class AudienceController {
     @GetMapping("/facets")
     public ResponseEntity<List<Map<String, Object>>> facets() {
         return ResponseEntity.ok(service.facets());
+    }
+
+    /** Push this audience OUT to an ad/social platform as a Custom Audience —
+     * seed (lookalike source) or suppress (paid-spend exclusion). */
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Map<String, Object>> activate(@PathVariable String id,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(activation.activate(id, body));
     }
 }

@@ -33,20 +33,36 @@ public class BssTraitListener {
         this.objectMapper = objectMapper;
     }
 
-    @KafkaListener(topics = "#{'${bss.insight.trait-topics:bss.ordering.events}'.split(',')}",
+    @KafkaListener(topics = "#{'${bss.insight.trait-topics:bss.ordering.events,bss.party.events}'.split(',')}",
             groupId = "insight-traits")
     @SuppressWarnings("unchecked")
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON);
             String eventType = String.valueOf(envelope.get("eventType"));
-            if (!"ProductOrderStateChangeEvent".equals(eventType)) {
-                return;
-            }
             String tenantId = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? (Map<String, Object>) m : Map.of();
+            // A customer's email, denormalised for BATCH activation (no per-row
+            // party lookup when exporting an audience to an ad platform).
+            if ("IndividualCreateEvent".equals(eventType)
+                    || "IndividualAttributeValueChangeEvent".equals(eventType)) {
+                if (event.get("individual") instanceof Map<?, ?> ind) {
+                    Map<String, Object> individual = (Map<String, Object>) ind;
+                    String partyId = individual.get("id") == null ? null : String.valueOf(individual.get("id"));
+                    String email = emailOf(individual);
+                    if (partyId != null && email != null) {
+                        try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                            traits.upsert(partyId, "email", email);
+                        }
+                    }
+                }
+                return;
+            }
+            if (!"ProductOrderStateChangeEvent".equals(eventType)) {
+                return;
+            }
             if (!(event.get("productOrder") instanceof Map<?, ?> poRaw)) {
                 return;
             }
@@ -67,6 +83,20 @@ public class BssTraitListener {
         } catch (Exception e) {
             log.warn("skipping unprocessable order event for traits: {}", e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private String emailOf(Map<String, Object> individual) {
+        if (!(individual.get("contactMedium") instanceof List<?> media)) {
+            return null;
+        }
+        for (Object m : media) {
+            if (m instanceof Map<?, ?> medium && "email".equalsIgnoreCase(String.valueOf(medium.get("mediumType")))
+                    && medium.get("characteristic") instanceof Map<?, ?> c && c.get("emailAddress") != null) {
+                return String.valueOf(c.get("emailAddress"));
+            }
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

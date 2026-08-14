@@ -116,6 +116,10 @@ public class AudienceService {
         if ("prospect".equals(audience.getPopulation())) {
             return prospectMembers(criteria, tenantId);
         }
+        // Only touch the signals the tree actually references — a pure trait
+        // audience must not pay for per-row browsing/GA4 work.
+        boolean usesBehaviour = treeUses(criteria, "interest");
+        boolean usesGa4 = treeUses(criteria, "audience");
         // consented browser profiles, one per party (behaviour signals live here)
         Map<String, VisitorProfile> profileByParty = new LinkedHashMap<>();
         for (VisitorProfile p : profiles.findByTenantIdAndPartyIdIsNotNull(tenantId)) {
@@ -123,29 +127,49 @@ public class AudienceService {
                 profileByParty.putIfAbsent(p.getPartyId(), p);
             }
         }
+        // Traits in ONE query, grouped in memory — not a query per candidate (N+1).
+        // (At CDP scale this becomes a set-based SQL segment + optional materialized
+        // membership; the shape here is deliberately push-down-ready.)
+        Map<String, Set<String>> traitsByParty = new LinkedHashMap<>();
+        for (PartyTrait t : traits.findByTenantId(tenantId)) {
+            traitsByParty.computeIfAbsent(t.getPartyId(), k -> new LinkedHashSet<>())
+                    .add(t.getTraitKey() + "=" + t.getTraitValue());
+        }
         // candidate base = trait-carrying customers ∪ consented profiles
-        Set<String> candidates = new LinkedHashSet<>(traits.distinctPartyIds(tenantId));
+        Set<String> candidates = new LinkedHashSet<>(traitsByParty.keySet());
         candidates.addAll(profileByParty.keySet());
         List<Map<String, Object>> out = new java.util.ArrayList<>();
         for (String partyId : candidates) {
             Set<String> interests = new LinkedHashSet<>();
             List<String> ga4 = List.of();
             VisitorProfile prof = profileByParty.get(partyId);
-            if (prof != null) {
+            if (prof != null && usesBehaviour) {
                 for (Object[] row : events.interestsOf(tenantId, prof.getVisitorId())) {
                     if (row.length > 0 && row[0] != null) interests.add(String.valueOf(row[0]));
                 }
+            }
+            if (prof != null && usesGa4) {
                 ga4 = analytics.audiencesOf(tenantId, prof.getVisitorId());
             }
-            Set<String> traitSet = new LinkedHashSet<>();
-            for (PartyTrait t : traits.findByTenantIdAndPartyId(tenantId, partyId)) {
-                traitSet.add(t.getTraitKey() + "=" + t.getTraitValue());
-            }
+            Set<String> traitSet = traitsByParty.getOrDefault(partyId, Set.of());
             if (matches(criteria, interests, ga4, traitSet)) {
                 out.add(Map.of("partyId", partyId));
             }
         }
         return out;
+    }
+
+    /** Does the criteria tree reference a leaf of this type anywhere? Lets member
+     * resolution skip signals no rule uses (no per-row browsing/GA4 fan-out). */
+    @SuppressWarnings("unchecked")
+    private boolean treeUses(Object node, String leafType) {
+        if (!(node instanceof Map<?, ?> m)) {
+            return false;
+        }
+        if (m.get("all") instanceof List<?> all) return all.stream().anyMatch(c -> treeUses(c, leafType));
+        if (m.get("any") instanceof List<?> any) return any.stream().anyMatch(c -> treeUses(c, leafType));
+        if (m.get("not") != null) return treeUses(m.get("not"), leafType);
+        return leafType.equals(String.valueOf(m.get("type")));
     }
 
     /**

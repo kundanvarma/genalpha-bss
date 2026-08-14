@@ -15,6 +15,10 @@ public interface PartyTraitRepository extends JpaRepository<PartyTrait, String> 
 
     List<PartyTrait> findByTenantId(String tenantId);
 
+    /** One query for a whole trait key — e.g. every party's email, for a batch
+     * activation export (no per-member lookup). */
+    List<PartyTrait> findByTenantIdAndTraitKey(String tenantId, String traitKey);
+
     /** Distinct party ids that carry any trait — the BSS-native candidate base. */
     @Query("select distinct t.partyId from PartyTrait t where t.tenantId = ?1")
     List<String> distinctPartyIds(String tenantId);
