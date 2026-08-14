@@ -177,7 +177,7 @@ export default function Shop() {
           { key: 'Security', label: t('Security'), items: singles.filter((o) => ['Security', 'Insurance'].includes(catOf(o))) },
           { key: 'Top-ups', label: t('Top-ups'), items: singles.filter((o) => catOf(o) === 'Top-ups') },
         ].filter((l) => l.items.length);
-        if (!LOB.length) return <TalkToSales />;
+        if (!LOB.length) return brand.businessSales ? <TalkToSales /> : <p className="dim">{t('No offers available right now.')}</p>;
         const active = LOB.find((l) => l.key === tab) || LOB[0];
 
         // Baymard telco UX: compare plans (data/price) and filter the device shop.
@@ -307,7 +307,7 @@ export default function Shop() {
           </>
         );
       })()}
-      <TalkToSales />
+      {brand.businessSales && <TalkToSales />}
     </>
   );
 }

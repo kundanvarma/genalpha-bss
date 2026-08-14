@@ -62,6 +62,12 @@ public class TenantHosts {
          * Defaults to off: being shopped by agents is opt-in, never assumed.
          */
         private String agentCommerce = "off";
+        /**
+         * Whether the consumer storefront shows the B2B lead-capture ("Something
+         * bigger in mind? — fleets, offices, IoT"). Off by default: an operator
+         * with no business line shouldn't advertise one on its consumer shop.
+         */
+        private boolean businessSales = false;
         private List<String> hosts = new ArrayList<>();
 
         public String getId() {
@@ -126,6 +132,14 @@ public class TenantHosts {
 
         public void setAgentCommerce(String agentCommerce) {
             this.agentCommerce = agentCommerce;
+        }
+
+        public boolean isBusinessSales() {
+            return businessSales;
+        }
+
+        public void setBusinessSales(boolean businessSales) {
+            this.businessSales = businessSales;
         }
 
         public List<String> getHosts() {

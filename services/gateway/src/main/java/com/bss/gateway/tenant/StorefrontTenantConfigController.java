@@ -46,6 +46,7 @@ public class StorefrontTenantConfigController {
         manifest.put("locale", tenant.getLocale() == null ? "en" : tenant.getLocale());
         manifest.put("currency", tenant.getCurrency() == null ? "EUR" : tenant.getCurrency());
         manifest.put("logoUrl", logoUrlOf(tenant));
+        manifest.put("businessSales", tenant.isBusinessSales());
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
     }
 
@@ -69,12 +70,14 @@ public class StorefrontTenantConfigController {
         String brandColor = tenant != null && tenant.getBrandColor() != null ? tenant.getBrandColor() : "";
         String locale = tenant != null && tenant.getLocale() != null ? tenant.getLocale() : "en";
         String currency = tenant != null && tenant.getCurrency() != null ? tenant.getCurrency() : "EUR";
+        boolean businessSales = tenant != null && tenant.isBusinessSales();
         String body = "window." + global + " = { issuer: '" + issuer
                 + "', logoUrl: '" + logoUrlOf(tenant)
                 + "', brandName: '" + brandName
                 + "', brandColor: '" + brandColor
                 + "', locale: '" + locale
-                + "', currency: '" + currency + "' };\n";
+                + "', currency: '" + currency
+                + "', businessSales: " + businessSales + " };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")

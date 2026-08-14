@@ -30,6 +30,9 @@ bss:
         brand-color: "#0E7C7B"
         locale: en
         currency: EUR
+        # Show the B2B lead-capture on the consumer shop (this operator has a
+        # business line). Off by default — an MVNO with no B2B never advertises one.
+        business-sales: true
         # Agentic commerce exposure: off (dark to agents) | discovery
         # (findable, no agent checkout) | full. New tenants default OFF —
         # being shopped by AI agents is opt-in, never assumed.
@@ -98,6 +101,7 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
+        business-sales: true
         agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
         ai-visibility: ${AI_VISIBILITY_NOVA:search-only}
         hosts: [shop.nova.localhost, csr.nova.localhost, console.nova.localhost, biz.nova.localhost, sonata.nova.localhost, partner.nova.localhost]
