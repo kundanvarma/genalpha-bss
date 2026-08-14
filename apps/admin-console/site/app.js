@@ -566,8 +566,8 @@ const RESOURCES = [
       { name: 'triggerState', label: 'State filter', placeholder: 'e.g. completed (optional)' },
       { name: 'promotionCode', label: 'Promo code to include', kind: 'codepick',
         base: PROMOTION_BASE, resource: 'promotion', attribute: 'code' },
-      { name: 'messageSubject', label: 'Message subject', required: true },
-      { name: 'messageContent', label: 'Message — {code} inserts the promo code', kind: 'longtext', required: true },
+      { name: 'messageSubject', label: 'Message subject — type {{ for a name', required: true, tokens: true },
+      { name: 'messageContent', label: 'Message — {{ inserts a name, {code} the promo code', kind: 'longtext', required: true, tokens: true },
       { name: 'messageVariants', label: 'A/B arms (JSON, optional) — 2-4 of {name, subject, content}; treated customers split evenly and stats read per arm', kind: 'jsontext',
         placeholder: '[{"name":"A","subject":"…","content":"…"},{"name":"B","subject":"…","content":"…"}]' },
       { name: 'holdoutPercent', label: 'Holdout % — a control group that gets NO message, so lift can be measured', kind: 'number', placeholder: '0' },
@@ -1457,6 +1457,77 @@ function longTextControl(field) {
  * same object still reaches the API. This is how a marketer builds a journey;
  * the JSON is just the wire format, never the authoring surface.
  */
+/* Personalization tokens a message can carry — offered as chips and as a
+ * {{-autocomplete, so a marketer inserts "First name" without knowing the
+ * {{party.firstName}} syntax. Resolved per-customer at send time. */
+const MSG_TOKENS = [
+  { token: 'party.firstName', label: 'First name' },
+  { token: 'party.lastName', label: 'Last name' },
+  { token: 'brand.name', label: 'Brand' },
+  { token: 'promotion.code', label: 'Promo code' },
+];
+
+function insertAtCaret(el, text, replaceFrom) {
+  const end = el.selectionEnd ?? el.value.length;
+  const start = replaceFrom != null ? replaceFrom : (el.selectionStart ?? end);
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  const pos = start + text.length;
+  el.setSelectionRange(pos, pos);
+  el.dispatchEvent(new Event('input', { bubbles: true })); // drives serialize()
+  el.focus();
+}
+
+function attachTokenAutocomplete(el) {
+  if (el._tok) return; el._tok = true;
+  let dd = null;
+  const close = () => { if (dd) { dd.remove(); dd = null; } };
+  const check = () => {
+    const pos = el.selectionStart ?? el.value.length;
+    const before = el.value.slice(0, pos);
+    const m = before.match(/\{\{\s*([\w.]*)$/); // an open {{ (optionally a partial), not yet closed
+    if (!m) { close(); return; }
+    const q = m[1].toLowerCase();
+    const matches = MSG_TOKENS.filter((t) => t.token.toLowerCase().includes(q) || t.label.toLowerCase().includes(q));
+    close();
+    if (!matches.length) return;
+    dd = document.createElement('div'); dd.className = 'tokendrop'; dd.dataset.testid = 'token-drop';
+    const r = el.getBoundingClientRect();
+    dd.style.left = (r.left + window.scrollX) + 'px';
+    dd.style.top = (r.bottom + window.scrollY + 3) + 'px';
+    dd.style.minWidth = Math.max(180, r.width) + 'px';
+    matches.forEach((t) => {
+      const it = document.createElement('div'); it.className = 'tokenitem'; it.dataset.testid = 'tokenopt-' + t.token;
+      it.innerHTML = '<code>{{' + t.token + '}}</code><span>' + t.label + '</span>';
+      it.addEventListener('mousedown', (ev) => {
+        ev.preventDefault();
+        const start = before.lastIndexOf('{{');
+        insertAtCaret(el, '{{' + t.token + '}}', start);
+        close();
+      });
+      dd.append(it);
+    });
+    document.body.append(dd);
+  };
+  el.addEventListener('input', check);
+  el.addEventListener('click', check);
+  el.addEventListener('keyup', (e) => { if (e.key === 'Escape') close(); });
+  el.addEventListener('blur', () => setTimeout(close, 150));
+}
+
+function tokenChips(el) {
+  attachTokenAutocomplete(el);
+  const strip = document.createElement('div'); strip.className = 'tokenchips';
+  const lbl = document.createElement('span'); lbl.className = 'tokenlbl'; lbl.textContent = 'Insert:';
+  strip.append(lbl);
+  MSG_TOKENS.forEach((t) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'tokenchip';
+    b.textContent = t.label; b.dataset.testid = 'token-' + t.token; b.title = '{{' + t.token + '}}';
+    b.addEventListener('mousedown', (ev) => { ev.preventDefault(); insertAtCaret(el, '{{' + t.token + '}}'); });
+    strip.append(b);
+  });
+  return strip;
+}
+
 function stepBuilderControl(field) {
   const TYPES = ['message', 'wait', 'waitForEvent', 'decision', 'exit'];
   const SVGNS = 'http://www.w3.org/2000/svg';
@@ -1516,12 +1587,14 @@ function stepBuilderControl(field) {
   function nodeFields(node) {
     const rows = [];
     const bind = (key, el) => el.addEventListener('input', () => { node[key] = el.value.trim() || undefined; serialize(); refreshLabels(); });
+    // a message-bearing row also gets the personalization token chips + {{ autocomplete
+    const msgRow = (label, el, wide) => { const r = row(label, el, wide); r.append(tokenChips(el)); return r; };
     const t = node.type;
     if (t !== 'exit') { const i = inp('e.g. Welcome', node.stage); bind('stage', i); rows.push(row('Stage (label)', i)); }
     if (t === 'message') {
       const ch = selEl(['inApp', 'email', 'sms', 'push'], node.channel || 'inApp'); ch.addEventListener('change', () => { node.channel = ch.value; serialize(); }); rows.push(row('Channel', ch));
-      const su = inp('Subject line', node.subject); bind('subject', su); rows.push(row('Subject', su));
-      const co = ta('Message body — {code} inserts a promo code', node.content); bind('content', co); rows.push(row('Message', co, true));
+      const su = inp('Subject line — type {{ for a name', node.subject); bind('subject', su); rows.push(msgRow('Subject', su));
+      const co = ta('Message body — {{ inserts a name, {code} a promo code', node.content); bind('content', co); rows.push(msgRow('Message', co, true));
     } else if (t === 'wait') {
       const d = inp('Days', node.days); bind('days', d); const h = inp('Hours (optional)', node.hours); bind('hours', h);
       rows.push(row('Wait — days', d), row('Wait — hours', h));
@@ -1531,14 +1604,14 @@ function stepBuilderControl(field) {
       const d = inp('Timeout — days', node.days); bind('days', d);
       const ts = inp('If it never comes — subject', node.tsub); bind('tsub', ts);
       const tc = ta('If it never comes — message', node.tcon); bind('tcon', tc);
-      rows.push(row('Wait for event', ev), row('State', st), row('Timeout (days)', d), row('On timeout — subject', ts), row('On timeout — message', tc, true));
+      rows.push(row('Wait for event', ev), row('State', st), row('Timeout (days)', d), msgRow('On timeout — subject', ts), msgRow('On timeout — message', tc, true));
     } else if (t === 'decision') {
       const sg = inp('Insight segment, e.g. Devices', node.inSegment); bind('inSegment', sg);
       const ts = inp('If in segment — subject', node.tsub); bind('tsub', ts);
       const tc = ta('If in segment — message', node.tcon); bind('tcon', tc);
       const es = inp('Otherwise — subject', node.esub); bind('esub', es);
       const ec = ta('Otherwise — message', node.econ); bind('econ', ec);
-      rows.push(row('Decide on segment', sg), row('Then — subject', ts), row('Then — message', tc, true), row('Else — subject', es), row('Else — message', ec, true));
+      rows.push(row('Decide on segment', sg), msgRow('Then — subject', ts), msgRow('Then — message', tc, true), msgRow('Otherwise — subject', es), msgRow('Otherwise — message', ec, true));
     }
     return rows;
   }
@@ -2091,6 +2164,9 @@ function renderEditor() {
       f.kind === 'codepick' ? codePickControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');
     wrap.append(caption, ...parts);
+    if (f.tokens && parts[0] && (parts[0].tagName === 'INPUT' || parts[0].tagName === 'TEXTAREA')) {
+      wrap.append(tokenChips(parts[0])); // personalization chips + {{ autocomplete
+    }
     wrap.dataset.field = f.name;
     return wrap;
   }));
