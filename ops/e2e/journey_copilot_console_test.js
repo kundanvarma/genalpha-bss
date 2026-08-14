@@ -37,6 +37,15 @@ async function token(ctx, client, user, pass) {
   await page.waitForSelector('#growth-copilot-input', { timeout: 10000 });
   console.log('OK the Growth workspace has a Growth Copilot chat');
 
+  /* ---------- a mic to speak the outreach instead of typing it ---------- */
+  // genalpha binds a Whisper-shaped STT seam, so the server-seam mic renders
+  // even in headless Chromium (which has no Web Speech). It fills the input;
+  // the human still presses Send.
+  await page.waitForSelector('[data-testid="copilot-mic"]', { timeout: 10000 });
+  const micTitle = await page.locator('[data-testid="copilot-mic"]').getAttribute('title');
+  if (!/speak/i.test(micTitle || '')) fail('the Growth Copilot mic is missing its speak affordance');
+  console.log('OK the Growth Copilot has a mic — you can speak the outreach, not just type it');
+
   /* ---------- describe onboarding -> a clarifying question ---------- */
   await page.fill('#growth-copilot-input', `welcome new customers ${run} when they sign up`);
   await page.click('#growth-copilot-send');

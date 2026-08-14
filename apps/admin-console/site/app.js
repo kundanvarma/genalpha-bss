@@ -2362,6 +2362,82 @@ function copilotRemember() {
   sessionStorage.setItem('bss.console.copilotChat', JSON.stringify(copilotChat.slice(-40)));
 }
 
+// THE MIC (shared by both copilots): "by talking", literally — speech-to-text
+// fills the input and STOPS there. The human reads the transcript and presses
+// Send; voice changes the keyboard, never the approval. Two engines, one rule:
+// browser Web Speech where the browser has one; otherwise the TENANT's
+// bring-your-own STT seam (/ai/v1/transcribe — Whisper-shaped provider, audio
+// recorded here, transcribed server-side). Neither bound = no mic shown.
+// Inserts the mic button before sendBtn inside bar.
+function attachCopilotMic(input, bar, sendBtn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SR) {
+    const mic = document.createElement('button');
+    mic.className = 'ghost'; mic.id = 'copilot-mic'; mic.type = 'button';
+    mic.textContent = '\u{1F3A4}';
+    mic.title = 'Speak instead of typing — the transcript lands here, you still press Send';
+    mic.dataset.testid = 'copilot-mic';
+    let rec = null;
+    mic.addEventListener('click', () => {
+      if (rec) { rec.stop(); return; } // second tap = stop listening
+      rec = new SR();
+      rec.lang = document.documentElement.lang || 'en-US';
+      rec.interimResults = true; rec.continuous = false;
+      mic.textContent = '● listening'; mic.classList.add('mic-live');
+      rec.onresult = (e) => {
+        input.value = Array.from(e.results)
+          .map((r) => (r[0] && r[0].transcript ? r[0].transcript : ''))
+          .join(' ').replace(/\s+/g, ' ').trim();
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          input.placeholder = 'microphone blocked — type instead';
+        }
+      };
+      rec.onend = () => {
+        mic.textContent = '\u{1F3A4}'; mic.classList.remove('mic-live'); rec = null; input.focus();
+      };
+      rec.start();
+    });
+    bar.insertBefore(mic, sendBtn);
+    return;
+  }
+  // no browser recognizer — offer the server seam if this tenant bound one
+  authFetch('/ai/v1/transcribe/available').then((r) => (r.ok ? r.json() : { available: false }))
+    .then(({ available }) => {
+      if (!available || !navigator.mediaDevices) return;
+      const smic = document.createElement('button');
+      smic.className = 'ghost'; smic.id = 'copilot-mic'; smic.type = 'button';
+      smic.textContent = '\u{1F3A4}';
+      smic.title = 'Speak instead of typing (transcribed by your STT provider) — you still press Send';
+      smic.dataset.testid = 'copilot-mic';
+      let recorder = null;
+      smic.addEventListener('click', async () => {
+        if (recorder) { recorder.stop(); return; } // second tap = stop
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const chunks = [];
+          recorder = new MediaRecorder(stream);
+          smic.textContent = '● listening'; smic.classList.add('mic-live');
+          recorder.ondataavailable = (e) => chunks.push(e.data);
+          recorder.onstop = async () => {
+            stream.getTracks().forEach((t) => t.stop());
+            smic.textContent = '\u{1F3A4}'; smic.classList.remove('mic-live'); recorder = null;
+            const form = new FormData();
+            form.append('audio', new Blob(chunks, { type: 'audio/webm' }), 'speech.webm');
+            const res = await authFetch('/ai/v1/transcribe', { method: 'POST', body: form });
+            if (res.ok) { const { text } = await res.json(); input.value = text || input.value; }
+            else { input.placeholder = 'transcription failed — type instead'; }
+            input.focus();
+          };
+          recorder.start();
+          setTimeout(() => { if (recorder) recorder.stop(); }, 15000); // hard stop at 15s
+        } catch { input.placeholder = 'microphone blocked — type instead'; }
+      });
+      bar.insertBefore(smic, sendBtn);
+    }).catch(() => {});
+}
+
 function copilotPanel() {
   let panel = document.getElementById('copilot-panel');
   if (!panel) {
@@ -2753,6 +2829,7 @@ async function renderGrowthCopilot() {
   }
   send.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  attachCopilotMic(input, bar, send); // speak the outreach instead of typing it
   input.focus();
 }
 
@@ -2886,98 +2963,8 @@ async function renderProductCopilot() {
   send.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
 
-  // THE MIC: "by talking", literally — speech-to-text fills the input and
-  // stops there. The human reads the transcript and presses Send; voice
-  // changes the keyboard, never the approval. Two engines, one rule:
-  // browser Web Speech where the browser has one; otherwise the TENANT's
-  // bring-your-own STT seam (/ai/v1/transcribe — Whisper-shaped provider,
-  // audio recorded here, transcribed server-side). Neither bound = no mic.
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    // no browser recognizer — offer the server seam if this tenant bound one
-    authFetch('/ai/v1/transcribe/available').then((r) => (r.ok ? r.json() : { available: false }))
-      .then(({ available }) => {
-        if (!available || !navigator.mediaDevices) return;
-        const smic = document.createElement('button');
-        smic.className = 'ghost';
-        smic.id = 'copilot-mic';
-        smic.type = 'button';
-        smic.textContent = '\u{1F3A4}';
-        smic.title = 'Speak instead of typing (transcribed by your STT provider) — you still press Send';
-        smic.dataset.testid = 'copilot-mic';
-        let recorder = null;
-        smic.addEventListener('click', async () => {
-          if (recorder) { recorder.stop(); return; } // second tap = stop
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const chunks = [];
-            recorder = new MediaRecorder(stream);
-            smic.textContent = '● listening';
-            smic.classList.add('mic-live');
-            recorder.ondataavailable = (e) => chunks.push(e.data);
-            recorder.onstop = async () => {
-              stream.getTracks().forEach((t) => t.stop());
-              smic.textContent = '\u{1F3A4}';
-              smic.classList.remove('mic-live');
-              recorder = null;
-              const form = new FormData();
-              form.append('audio', new Blob(chunks, { type: 'audio/webm' }), 'speech.webm');
-              const res = await authFetch('/ai/v1/transcribe', { method: 'POST', body: form });
-              if (res.ok) {
-                const { text } = await res.json();
-                input.value = text || input.value;
-              } else {
-                input.placeholder = 'transcription failed — type instead';
-              }
-              input.focus();
-            };
-            recorder.start();
-            setTimeout(() => { if (recorder) recorder.stop(); }, 15000); // hard stop at 15s
-          } catch {
-            input.placeholder = 'microphone blocked — type instead';
-          }
-        });
-        bar.insertBefore(smic, send);
-      }).catch(() => {});
-  }
-  let mic = null;
-  if (SR) {
-    mic = document.createElement('button');
-    mic.className = 'ghost';
-    mic.id = 'copilot-mic';
-    mic.type = 'button';
-    mic.textContent = '\u{1F3A4}';
-    mic.title = 'Speak instead of typing — the transcript lands here, you still press Send';
-    mic.dataset.testid = 'copilot-mic';
-    let rec = null;
-    mic.addEventListener('click', () => {
-      if (rec) { rec.stop(); return; } // second tap = stop listening
-      rec = new SR();
-      rec.lang = document.documentElement.lang || 'en-US';
-      rec.interimResults = true;
-      rec.continuous = false;
-      mic.textContent = '\u25CF listening';
-      mic.classList.add('mic-live');
-      rec.onresult = (e) => {
-        input.value = Array.from(e.results)
-          .map((r) => r[0] && r[0].transcript ? r[0].transcript : '')
-          .join(' ').replace(/\s+/g, ' ').trim();
-      };
-      rec.onerror = (e) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          input.placeholder = 'microphone blocked — type instead';
-        }
-      };
-      rec.onend = () => {
-        mic.textContent = '\u{1F3A4}';
-        mic.classList.remove('mic-live');
-        rec = null;
-        input.focus();
-      };
-      rec.start();
-    });
-  }
-  bar.append(input, ...(mic ? [mic] : []), send, clear);
+  bar.append(input, send, clear);
+  attachCopilotMic(input, bar, send); // speak the product idea instead of typing it
   panel.append(intro, log, bar);
   input.focus();
 }
