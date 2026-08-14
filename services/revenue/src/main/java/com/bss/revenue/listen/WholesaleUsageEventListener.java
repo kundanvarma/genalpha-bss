@@ -39,14 +39,21 @@ public class WholesaleUsageEventListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"WholesaleUsageRatedEvent".equals(String.valueOf(envelope.get("eventType")))) {
-                return;
-            }
-            Map<String, Object> row = BillingEventListener.resource(envelope, "wholesaleUsageLedger");
+            String type = String.valueOf(envelope.get("eventType"));
             String tenantId = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
-            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                revenue.postMobileWholesaleCogs(row);
+            if ("WholesaleUsageRatedEvent".equals(type)) {
+                // seeker side: the MVNO owes its host — book COGS
+                Map<String, Object> row = BillingEventListener.resource(envelope, "wholesaleUsageLedger");
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    revenue.postMobileWholesaleCogs(row);
+                }
+            } else if ("ProviderWholesaleRatedEvent".equals(type)) {
+                // provider side (W-M7): the host earns from an external MVNO — book revenue
+                Map<String, Object> row = BillingEventListener.resource(envelope, "providerUsageLedger");
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    revenue.postMobileWholesaleRevenue(row);
+                }
             }
         } catch (Exception e) {
             log.warn("revenue: skipping unprocessable mobile-wholesale usage event: {}", e.getMessage());

@@ -71,6 +71,8 @@ public class RevenueService {
         DEFAULT_CHART.put("wholesale:payable", new String[] {"2100", "Accounts payable — wholesale"});
         DEFAULT_CHART.put("mobile-wholesale:cogs", new String[] {"5110", "Mobile wholesale usage (COGS)"});
         DEFAULT_CHART.put("mobile-wholesale:payable", new String[] {"2110", "Accounts payable — mobile wholesale"});
+        DEFAULT_CHART.put("mobile-wholesale:receivable", new String[] {"1210", "Accounts receivable — mobile wholesale"});
+        DEFAULT_CHART.put("mobile-wholesale:revenue", new String[] {"4020", "Mobile wholesale revenue"});
     }
 
     /** PSPs whose capture is a receivable (deferred settlement), not immediate cash.
@@ -245,6 +247,38 @@ public class RevenueService {
                 line("mobile-wholesale:cogs", amount, null, id, desc),
                 line("mobile-wholesale:payable", null, amount, id, "Payable to host MNO"));
         saveBalanced(tenant, sourceRef, "mobileWholesaleCogs", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
+     * Mobile wholesale PROVIDER side (W-M7): the host earns wholesale revenue from
+     * an external MVNO's traffic — booked as a receivable + wholesale revenue,
+     * keyed on the provider-ledger id so replays are free. The mirror of the
+     * seeker's COGS: seeker owes (COGS), host earns (revenue).
+     */
+    @Transactional
+    public boolean postMobileWholesaleRevenue(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "mobile-wholesale-rev:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("amount") == null) {
+            return false;
+        }
+        BigDecimal amount = money(event.get("amount"));
+        if (amount.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String mvno = String.valueOf(event.getOrDefault("mvnoName", event.getOrDefault("mvnoPartyId", "MVNO")));
+        String spec = String.valueOf(event.getOrDefault("usageSpecName", "usage"));
+        String desc = "Mobile wholesale — " + mvno + " " + spec;
+        List<JournalLine> posting = List.of(
+                line("mobile-wholesale:receivable", amount, null, id, "Receivable from " + mvno),
+                line("mobile-wholesale:revenue", null, amount, id, desc));
+        saveBalanced(tenant, sourceRef, "mobileWholesaleRevenue", desc + " — " + id, currency, null, posting);
         return true;
     }
 

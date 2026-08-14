@@ -54,11 +54,16 @@ public class SecurityConfig {
                                 ApiConstants.BASE_PATH + "/wholesaleUsageLedger",
                                 ApiConstants.BASE_PATH + "/mobileWholesaleSettlement",
                                 ApiConstants.BASE_PATH + "/wholesaleRateCard",
-                                ApiConstants.BASE_PATH + "/imsiRange").hasAnyAuthority("usage:read", "wholesale:admin")
+                                ApiConstants.BASE_PATH + "/imsiRange",
+                                ApiConstants.BASE_PATH + "/mobileWholesaleProviderSettlement",
+                                ApiConstants.BASE_PATH + "/mobileWholesaleStatement",
+                                ApiConstants.BASE_PATH + "/providerRateCard").hasAnyAuthority("usage:read", "wholesale:admin")
                         .requestMatchers(HttpMethod.POST,
                                 ApiConstants.BASE_PATH + "/rateWholesale",
                                 ApiConstants.BASE_PATH + "/wholesaleRateCard",
-                                ApiConstants.BASE_PATH + "/imsiRange").hasAnyAuthority("usage:write", "wholesale:admin")
+                                ApiConstants.BASE_PATH + "/imsiRange",
+                                ApiConstants.BASE_PATH + "/mobileWholesaleProviderUsage",
+                                ApiConstants.BASE_PATH + "/providerRateCard").hasAnyAuthority("usage:write", "wholesale:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.GET, ApiConstants.CONSUMPTION_BASE_PATH + "/**").hasAuthority("usage:read")
                         // gifting is customer self-service: their data, their call

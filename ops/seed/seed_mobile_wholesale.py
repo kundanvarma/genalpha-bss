@@ -104,4 +104,26 @@ if not by_name("productOffering", "Light MVNO (NordMobile host)", f"{CAT}/produc
         "productOfferingPrice": [{"id": price["id"], "name": price["name"], "@referredType": "ProductOfferingPrice"}]})
     print("product: Light MVNO (NordMobile host)")
 
+# 7. PROVIDER face (W-M7): we ALSO host external MVNOs who run their own BSS.
+#    Two of them, on different tiers — the per-MVNO rate card is the SLA lever.
+for mvno_name, code, prem in [("Aurora Mobile", "AURORA", True), ("Fjord Mobile", "FJORD", False)]:
+    org = by_name("organization", mvno_name, f"{PARTY}/organization")
+    if not org:
+        org = req("POST", f"{PARTY}/organization",
+                  {"name": mvno_name, "tradingName": code, "@type": "Organization"})
+        print(f"MVNO party: {mvno_name} ({org['id'][:8]})")
+    if prem:  # a per-MVNO override (premium tier pays more)
+        cards = req("GET", f"{USAGE}/providerRateCard")
+        if not any(c.get("mvnoPartyId") == org["id"] and c.get("usageSpecName") == "Mobile data" for c in cards):
+            req("POST", f"{USAGE}/providerRateCard",
+                {"mvnoPartyId": org["id"], "mvnoName": mvno_name, "usageSpecName": "Mobile data",
+                 "rate": 2.50, "unit": "GB"})
+            print(f"provider rate (premium): {mvno_name} Mobile data @ 2.50/GB")
+# default provider rates (any MVNO without an override)
+for spec, rate, unit in [("Mobile data", 2.00, "GB"), ("Mobile voice", 0.015, "min"), ("Mobile SMS", 0.008, "sms")]:
+    cards = req("GET", f"{USAGE}/providerRateCard")
+    if not any(c.get("mvnoPartyId") is None and c.get("usageSpecName") == spec for c in cards):
+        req("POST", f"{USAGE}/providerRateCard", {"usageSpecName": spec, "rate": rate, "unit": unit})
+        print(f"provider rate (default): {spec} @ {rate}/{unit}")
+
 print("mobile-wholesale seed complete.")
