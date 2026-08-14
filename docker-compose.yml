@@ -1748,6 +1748,10 @@ services:
     build: ./integrations/mock-ocs
     container_name: bss-mock-ocs
     restart: unless-stopped
+    environment:
+      # Northbound: the OCS tells the BSS when a line crosses a usage threshold.
+      OCS_NOTIFY_URL: http://usage:8080/internal/ocs/usageThreshold
+      OCS_THRESHOLDS: "0.8"
     ports:
       - "8115:8080"
 

@@ -67,7 +67,9 @@ public class JourneyCopilotService {
                 Include only the artifact you propose (journey OR campaign). \
                 PERSONALIZE the copy with tokens resolved per-customer at send time: \
                 {{party.firstName}} (greet by name), {{brand.name}}, and — when the trigger \
-                carries them — {{order.id}} and {{tracking.url}} (e.g. a shipped-handset message). \
+                carries them — {{order.id}}, {{tracking.url}} (a shipped-handset message), \
+                {{usage.remaining}}/{{usage.percentUsed}} (a UsageThresholdBreachedEvent "running \
+                low" message), and {{organization.name}} for a B2B account's company name. \
                 Prefer greeting by first name in the opening line.
                 Ask a QUESTION when the ask is ambiguous (who is it for? what triggers it? one \
                 message or a series?); give ADVICE when they want to understand; PROPOSE when \

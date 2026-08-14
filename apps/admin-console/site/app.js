@@ -61,6 +61,7 @@ const TRIGGER_EVENTS = [
   { value: 'IndividualCreateEvent', label: 'New customer registered (onboarding)' },
   { value: 'ShippingOrderStateChangeEvent', label: 'Parcel/handset shipped or delivered' },
   { value: 'BucketBalanceChangeEvent', label: 'Data balance topped up (top-up bought / loyalty data gifted)' },
+  { value: 'UsageThresholdBreachedEvent', label: 'Data running low (OCS usage threshold, e.g. 80% used)' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the
@@ -1469,6 +1470,9 @@ const MSG_TOKENS = [
   { token: 'order.id', label: 'Order number' },
   { token: 'tracking.url', label: 'Tracking link' },
   { token: 'tracking.carrier', label: 'Carrier' },
+  { token: 'usage.remaining', label: 'Data remaining (GB)' },
+  { token: 'usage.percentUsed', label: 'Percent used' },
+  { token: 'organization.name', label: 'Company (B2B)' },
 ];
 
 function insertAtCaret(el, text, replaceFrom) {

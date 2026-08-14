@@ -40,10 +40,12 @@ public class CommunicationMessageService {
     private final com.bss.communication.client.EspForwarder esp;
     private final com.bss.communication.client.ChannelDispatcher channels;
     private final MessageTemplateService templates;
+    private final com.bss.communication.client.PartyLookupClient parties;
 
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp,
-            com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates) {
+            com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates,
+            com.bss.communication.client.PartyLookupClient parties) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
@@ -51,6 +53,7 @@ public class CommunicationMessageService {
         this.esp = esp;
         this.channels = channels;
         this.templates = templates;
+        this.parties = parties;
     }
 
     /** Consumer path: idempotent on the source event id (at-least-once upstream). */
@@ -118,36 +121,46 @@ public class CommunicationMessageService {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("customers receive messages; sending is back-office");
         }
-        String receiver = receiverIn(dto);
-        // A templated send carries a templateRef instead of subject/content:
-        // resolve it to concrete, personalized copy before the usual checks.
-        // An inline send with {{tokens}} is personalized the same way.
-        if (dto.get("templateRef") != null) {
-            dto = templates.materialize(receiver, dto);
-        } else {
-            dto = templates.renderInline(receiver, dto);
-        }
-        if (receiver == null || dto.get("subject") == null) {
+        String target = receiverIn(dto);
+        if (target == null) {
             throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
         }
-        CommunicationMessage entity = new CommunicationMessage();
-        String id = UUID.randomUUID().toString();
-        entity.setId(id);
-        entity.setTenantId(tenantScope.currentTenantId());
-        entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
-        entity.setSubject(String.valueOf(dto.get("subject")));
-        entity.setContent(dto.get("content") == null ? null : String.valueOf(dto.get("content")));
-        entity.setMessageType(dto.get("messageType") == null ? "inApp" : String.valueOf(dto.get("messageType")));
-        entity.setStatus(CommunicationMessage.SENT);
-        entity.setReceiverPartyId(receiver);
-        entity.setCreatedAt(OffsetDateTime.now());
-        entity.setLastUpdate(OffsetDateTime.now());
-        Map<String, Object> created = toMap(repository.save(entity));
-        events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
-        // route to the channel's delivery seam (email/sms/push); inApp is the inbox
-        channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
-                entity.getSubject(), entity.getContent(), entity.getMessageType());
-        return created;
+        String tenantId = tenantScope.currentTenantId();
+        boolean templated = dto.get("templateRef") != null;
+        // B2B: an Organization account fans out to its member Individuals — the
+        // humans who read mail — so "notify the account" reaches a person. A B2C
+        // individual is simply its own single recipient (unchanged behaviour).
+        List<String> recipients = parties.recipientsOf(tenantId, target);
+        Map<String, Object> firstCreated = null;
+        for (String receiver : recipients) {
+            // Personalize per recipient: the contact's own name, plus the org
+            // tokens ({{organization.name}}) resolved from the company they're on.
+            Map<String, Object> rendered = templated
+                    ? templates.materialize(receiver, dto)
+                    : templates.renderInline(receiver, dto);
+            if (rendered.get("subject") == null) {
+                throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
+            }
+            CommunicationMessage entity = new CommunicationMessage();
+            String id = UUID.randomUUID().toString();
+            entity.setId(id);
+            entity.setTenantId(tenantId);
+            entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
+            entity.setSubject(String.valueOf(rendered.get("subject")));
+            entity.setContent(rendered.get("content") == null ? null : String.valueOf(rendered.get("content")));
+            entity.setMessageType(rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType")));
+            entity.setStatus(CommunicationMessage.SENT);
+            entity.setReceiverPartyId(receiver);
+            entity.setCreatedAt(OffsetDateTime.now());
+            entity.setLastUpdate(OffsetDateTime.now());
+            Map<String, Object> created = toMap(repository.save(entity));
+            events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
+            // route to the channel's delivery seam (email/sms/push); inApp is the inbox
+            channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
+                    entity.getSubject(), entity.getContent(), entity.getMessageType());
+            if (firstCreated == null) firstCreated = created;
+        }
+        return firstCreated;
     }
 
     /** The one legal change: the receiver marking their message read. */

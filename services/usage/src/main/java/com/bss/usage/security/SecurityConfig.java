@@ -43,6 +43,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // OCS → BSS threshold notifications: internal-only, off the
+                        // gateway; the OCS reaches it by service name on the private net.
+                        .requestMatchers(HttpMethod.POST, "/internal/ocs/**").permitAll()
                         // TMF654: balances read like usage, top-ups write like usage
                         .requestMatchers(HttpMethod.GET, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:read")
                         .requestMatchers(HttpMethod.POST, "/tmf-api/prepayBalanceManagement/v4/**").hasAuthority("usage:write")

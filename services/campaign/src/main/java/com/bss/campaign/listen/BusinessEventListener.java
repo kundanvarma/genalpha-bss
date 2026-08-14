@@ -87,6 +87,10 @@ public class BusinessEventListener {
         if (resource.get("trackingUrl") != null) ctx.put("tracking.url", resource.get("trackingUrl"));
         if (resource.get("trackingRef") != null) ctx.put("tracking.number", resource.get("trackingRef"));
         if (resource.get("carrier") != null) ctx.put("tracking.carrier", resource.get("carrier"));
+        // Usage-threshold (OCS "running low"): what's left, how far in, which bucket.
+        if (resource.get("remainingGB") != null) ctx.put("usage.remaining", resource.get("remainingGB"));
+        if (resource.get("percentUsed") != null) ctx.put("usage.percentUsed", resource.get("percentUsed"));
+        if (resource.get("bucketName") != null) ctx.put("usage.bucket", resource.get("bucketName"));
         return ctx;
     }
 

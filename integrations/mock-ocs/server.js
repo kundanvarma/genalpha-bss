@@ -16,6 +16,53 @@ const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
 
+/* Northbound notification: a real OCS tells the BSS when a subscriber crosses a
+ * usage threshold ("running low"). Blank URL = no BSS to notify (standalone). */
+const NOTIFY_URL = process.env.OCS_NOTIFY_URL || '';
+const THRESHOLDS = (process.env.OCS_THRESHOLDS || '0.8')
+  .split(',').map((s) => Number(s.trim())).filter((n) => n > 0 && n <= 1).sort((a, b) => a - b);
+
+/* Fire-and-forget POST of a threshold breach to the BSS notification door. The
+ * OCS owns the balance; it only tells the BSS a line is running low — the BSS
+ * decides what (if anything) to say to the customer, per brand. */
+function notifyBss(payload) {
+  if (!NOTIFY_URL) return;
+  try {
+    const u = new URL(NOTIFY_URL);
+    const body = JSON.stringify(payload);
+    const req = http.request({
+      hostname: u.hostname, port: u.port || 80, path: u.pathname, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    });
+    req.on('error', (e) => console.error('mock-ocs: BSS notify failed:', e.message));
+    req.write(body);
+    req.end();
+  } catch (e) {
+    console.error('mock-ocs: bad OCS_NOTIFY_URL:', e.message);
+  }
+}
+
+/* After usage lands, emit a breach for each newly-crossed threshold. Idempotent
+ * per cycle: a threshold notifies ONCE until a top-up or cycle re-arms it. */
+function checkThresholds(sub) {
+  const bucket = sub.buckets[0];
+  const total = bucket.totalGB + (bucket.rolloverGB || 0);
+  if (total <= 0) return;
+  const fraction = bucket.usedGB / total;
+  for (const t of THRESHOLDS) {
+    if (fraction >= t && !sub.notified.has(t)) {
+      sub.notified.add(t);
+      const remainingGB = Number(Math.max(0, total - bucket.usedGB).toFixed(3));
+      notifyBss({
+        tenantId: sub.tenantId, partyId: sub.partyId, serviceId: sub.serviceId,
+        ratePlanId: sub.ratePlanId, bucketName: bucket.name,
+        totalGB: total, usedGB: bucket.usedGB, remainingGB,
+        percentUsed: Math.round(fraction * 100), threshold: t, units: 'GB',
+      });
+    }
+  }
+}
+
 /* The OCS's own reference data: rate plans built in ITS tooling. The catalog
  * references these by id — never contains them. */
 const RATE_PLANS = {
@@ -64,6 +111,7 @@ const server = http.createServer((req, res) => {
         id: 'sub-' + Math.random().toString(36).slice(2, 10),
         tenantId: body.tenantId, partyId: body.partyId, serviceId: body.serviceId,
         ratePlanId: body.ratePlanId, buckets: [bucketFor(plan, body.ratePlanId)],
+        notified: new Set(), // thresholds already notified this cycle
       };
       subscribers.set(sub.id, sub);
       return send(201, sub);
@@ -89,12 +137,14 @@ const server = http.createServer((req, res) => {
         if (sub.status === 'suspended') return send(409, { error: 'line is suspended' });
         const bucket = sub.buckets[0];
         bucket.usedGB = Number((bucket.usedGB + Number(body.gb || 0)).toFixed(3));
+        checkThresholds(sub); // "running low" notifications, once per threshold per cycle
         return send(200, sub);
       }
-      // a top-up credits the counter
+      // a top-up credits the counter — a bigger balance re-arms the low alerts
       if (req.method === 'POST' && m[2] === 'credit') {
         const bucket = sub.buckets[0];
         bucket.totalGB = Number((bucket.totalGB + Number(body.gb || 0)).toFixed(3));
+        sub.notified.clear();
         return send(200, sub);
       }
       // plan change: swap the rate plan, keep earned rollover
@@ -125,6 +175,7 @@ const server = http.createServer((req, res) => {
             : 0;
           bucket.usedGB = 0;
         }
+        sub.notified.clear(); // a fresh cycle re-arms the running-low alerts
       }
       return send(200, { cycled: subscribers.size });
     }

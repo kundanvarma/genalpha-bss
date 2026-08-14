@@ -183,6 +183,34 @@ public class UsageService {
                 .stream().map(this::chargeMap).toList();
     }
 
+    /**
+     * The OCS's northbound notification seam: the Online Charging System owns
+     * real-time balance, and when a subscriber crosses a usage threshold it
+     * tells the BSS. We do NOT compute the breach here (that would be a second
+     * charging truth) — we relay the OCS's notification onto the event bus as a
+     * UsageThresholdBreachedEvent, tenant-stamped, so the growth engine can run
+     * a per-brand "running low" journey. Idempotence is the OCS's (it notifies
+     * once per threshold per cycle); the journey engine dedupes re-enrolment.
+     */
+    @Transactional
+    public void notifyUsageThreshold(Map<String, Object> n) {
+        String tenantId = n.get("tenantId") != null && !String.valueOf(n.get("tenantId")).isBlank()
+                ? String.valueOf(n.get("tenantId")) : tenantScope.currentTenantId();
+        String partyId = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
+        if (partyId == null) {
+            throw new BadRequestException("partyId is required on an OCS usage-threshold notification");
+        }
+        Map<String, Object> resource = new LinkedHashMap<>();
+        resource.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
+        if (n.get("bucketName") != null) resource.put("bucketName", n.get("bucketName"));
+        if (n.get("remainingGB") != null) resource.put("remainingGB", n.get("remainingGB"));
+        if (n.get("percentUsed") != null) resource.put("percentUsed", n.get("percentUsed"));
+        if (n.get("threshold") != null) resource.put("threshold", n.get("threshold"));
+        if (n.get("serviceId") != null) resource.put("serviceId", n.get("serviceId"));
+        resource.put("units", n.get("units") == null ? "GB" : n.get("units"));
+        events.publish("UsageThresholdBreachedEvent", "bucket", resource, tenantId);
+    }
+
     /** TMF677: this month's buckets for the calling customer (or a named party for staff). */
     @Transactional(readOnly = true)
     public Map<String, Object> consumptionReport(String requestedPartyId) {
