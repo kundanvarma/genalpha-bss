@@ -121,8 +121,11 @@ public class CommunicationMessageService {
         String receiver = receiverIn(dto);
         // A templated send carries a templateRef instead of subject/content:
         // resolve it to concrete, personalized copy before the usual checks.
+        // An inline send with {{tokens}} is personalized the same way.
         if (dto.get("templateRef") != null) {
             dto = templates.materialize(receiver, dto);
+        } else {
+            dto = templates.renderInline(receiver, dto);
         }
         if (receiver == null || dto.get("subject") == null) {
             throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");

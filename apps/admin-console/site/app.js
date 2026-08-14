@@ -59,6 +59,7 @@ const TRIGGER_EVENTS = [
   { value: 'ChurnRiskDetectedEvent', label: 'Churn risk detected (AI scorer)' },
   { value: 'LoyaltyTierChangedEvent', label: 'Loyalty tier changed' },
   { value: 'IndividualCreateEvent', label: 'New customer registered (onboarding)' },
+  { value: 'ShippingOrderStateChangeEvent', label: 'Parcel/handset shipped or delivered' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the
@@ -464,6 +465,7 @@ const RESOURCES = [
         { label: 'Archived', value: 'archived' },
       ] },
       { name: 'triggerEventType', label: 'Trigger event (leave blank for segment journeys)' },
+      { name: 'triggerState', label: 'State filter — only fire on this state (optional), e.g. completed / shipped', placeholder: 'e.g. completed' },
       { name: 'segmentName', label: 'Segment (from Insight — enroll with the row action)' },
       { name: 'steps', label: 'Steps — build the journey stage by stage (add a message, a wait, a decision…). Edit as JSON under Advanced.', kind: 'stepbuilder', required: true },
       { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },

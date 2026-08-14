@@ -128,6 +128,28 @@ public class MessageTemplateService {
         return out;
     }
 
+    /**
+     * Personalize an INLINE message (no templateRef): if the subject/content
+     * carry {{tokens}}, resolve the party's name and render them in place — so
+     * "Hi {{party.firstName}}" works in any plain message box, no template
+     * needed. A no-op when there are no tokens.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> renderInline(String partyId, Map<String, Object> dto) {
+        String subject = dto.get("subject") == null ? "" : String.valueOf(dto.get("subject"));
+        String content = dto.get("content") == null ? "" : String.valueOf(dto.get("content"));
+        if (!subject.contains("{{") && !content.contains("{{")) {
+            return dto;
+        }
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("brand.name", tenantScope.currentTenantId());
+        if (partyId != null) ctx.putAll(parties.nameTokens(tenantScope.currentTenantId(), partyId));
+        Map<String, Object> out = new LinkedHashMap<>(dto);
+        if (dto.get("subject") != null) out.put("subject", renderer.substitute(subject, ctx));
+        if (dto.get("content") != null) out.put("content", renderer.substitute(content, ctx));
+        return out;
+    }
+
     private MessageTemplate load(String id) {
         return repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));

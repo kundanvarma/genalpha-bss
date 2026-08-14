@@ -58,7 +58,9 @@ public class TemplateRenderer {
         return byLocale.keySet().stream().findFirst().orElse(null);
     }
 
-    private String substitute(String text, Map<String, Object> context) {
+    /** Substitute {{token}} placeholders from a flat, dotted context. Public so
+     *  inline (non-template) copy can be personalized the same way. */
+    public String substitute(String text, Map<String, Object> context) {
         if (text == null) return "";
         Matcher m = TOKEN.matcher(text);
         StringBuilder sb = new StringBuilder();
