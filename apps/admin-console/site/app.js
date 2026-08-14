@@ -456,12 +456,38 @@ const RESOURCES = [
     noDelete: true,
     fields: [
       { name: 'name', label: 'Name', required: true },
+      { name: 'status', label: 'Status — only Active runs; Draft/Scheduled sit before go-live, Archived hides it', kind: 'select', options: [
+        { label: 'Active', value: 'active' },
+        { label: 'Draft', value: 'draft' },
+        { label: 'Scheduled', value: 'scheduled' },
+        { label: 'Paused', value: 'paused' },
+        { label: 'Archived', value: 'archived' },
+      ] },
       { name: 'triggerEventType', label: 'Trigger event (leave blank for segment journeys)' },
       { name: 'segmentName', label: 'Segment (from Insight — enroll with the row action)' },
-      { name: 'steps', label: 'Steps — JSON: [{"type":"message","subject":"…","content":"…"},{"type":"wait","days":3},{"type":"branch","inSegment":"Devices","then":{…},"else":{…}}, …]', kind: 'longtext', required: true },
+      { name: 'steps', label: 'Steps — JSON: [{"type":"message","stage":"Welcome","subject":"…","content":"…"},{"type":"wait","days":3},{"type":"waitForEvent","event":"ProductOrderStateChangeEvent","state":"completed","days":7,"onTimeout":{…}},{"type":"decision","inSegment":"Devices","then":{…},"else":{…}},{"type":"exit"}]', kind: 'longtext', required: true },
       { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },
       { name: 'holdoutPercent', label: 'Holdout % — control group, no messages, measurable lift', kind: 'number', placeholder: '0' },
+      { name: 'priority', label: 'Priority — NBA arbitration (0 = always-on; higher wins when journeys compete for the same customer)', kind: 'number', placeholder: '0' },
     ],
+    // Describe the journey and the copilot drafts the staged steps + copy into
+    // the Steps box (governed + audited); the marketer reviews and Creates.
+    aiAssist: {
+      placeholder: 'Describe the journey, e.g. "welcome new fibre customers and nudge them to activate"',
+      draft: async (brief) => {
+        const res = await authFetch('/ai/v1/journeyDraft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brief, brandName: BRAND.brandName || undefined }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
+        const draft = await res.json();
+        controls.name?.set({ name: draft.name });
+        controls.triggerEventType?.set({ triggerEventType: draft.triggerEventType });
+        controls.holdoutPercent?.set({ holdoutPercent: draft.holdoutPercent });
+        controls.steps.set({ steps: JSON.stringify(draft.steps, null, 2) });
+      },
+    },
     assemble: (body) => {
       let steps = body.steps;
       try { steps = JSON.parse(body.steps); } catch { /* the API rejects with a clear message */ }
