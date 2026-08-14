@@ -85,8 +85,10 @@ public class JourneyService {
         for (Map<String, Object> step : steps) {
             String type = String.valueOf(step.get("type"));
             if ("message".equals(type)) {
-                if (step.get("subject") == null || step.get("content") == null) {
-                    throw new BadRequestException("message steps need subject and content");
+                // a message is either inline (subject+content) or a templateRef
+                if (step.get("templateRef") == null
+                        && (step.get("subject") == null || step.get("content") == null)) {
+                    throw new BadRequestException("message steps need subject and content, or a templateRef");
                 }
             } else if ("wait".equals(type)) {
                 if (waitSeconds(step) <= 0) {
@@ -105,9 +107,10 @@ public class JourneyService {
                         continue;
                     }
                     if (!(step.get(path) instanceof Map<?, ?> m)
-                            || m.get("subject") == null || m.get("content") == null) {
+                            || (m.get("templateRef") == null
+                                && (m.get("subject") == null || m.get("content") == null))) {
                         throw new BadRequestException(
-                                "branch '" + path + "' must be a message {subject, content}");
+                                "branch '" + path + "' must be a message {subject, content} or {templateRef}");
                     }
                     anyPath = true;
                 }
@@ -366,11 +369,23 @@ public class JourneyService {
                     journey.getName(), enrollment.getPartyId());
             return false;
         }
-        String content = String.valueOf(message.get("content"));
-        if (message.get("promotionCode") != null) {
-            content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
+        if (message.get("templateRef") != null) {
+            // Reusable template: communication renders the localized, tokenized
+            // copy; we pass the channel and any promo code as context.
+            Map<String, Object> context = new java.util.LinkedHashMap<>();
+            if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
+            communication.sendTemplated(enrollment.getPartyId(),
+                    String.valueOf(message.get("templateRef")),
+                    message.get("locale") == null ? null : String.valueOf(message.get("locale")),
+                    message.get("channel") == null ? null : String.valueOf(message.get("channel")),
+                    context);
+        } else {
+            String content = String.valueOf(message.get("content"));
+            if (message.get("promotionCode") != null) {
+                content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
+            }
+            communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content);
         }
-        communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content);
         frequency.record(enrollment.getPartyId(), "journey");
         return true;
     }

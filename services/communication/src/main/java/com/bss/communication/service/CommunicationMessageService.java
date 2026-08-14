@@ -38,14 +38,17 @@ public class CommunicationMessageService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final com.bss.communication.client.EspForwarder esp;
+    private final MessageTemplateService templates;
 
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp) {
+            PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp,
+            MessageTemplateService templates) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.esp = esp;
+        this.templates = templates;
     }
 
     /** Consumer path: idempotent on the source event id (at-least-once upstream). */
@@ -114,6 +117,11 @@ public class CommunicationMessageService {
             throw new BadRequestException("customers receive messages; sending is back-office");
         }
         String receiver = receiverIn(dto);
+        // A templated send carries a templateRef instead of subject/content:
+        // resolve it to concrete, personalized copy before the usual checks.
+        if (dto.get("templateRef") != null) {
+            dto = templates.materialize(receiver, dto);
+        }
         if (receiver == null || dto.get("subject") == null) {
             throw new BadRequestException("subject and receiver (relatedParty role 'customer') are required");
         }
