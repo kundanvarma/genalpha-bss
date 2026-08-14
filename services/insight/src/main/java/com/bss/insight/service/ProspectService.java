@@ -85,6 +85,36 @@ public class ProspectService {
         return out;
     }
 
+    /**
+     * Capture a first-party LEAD as a reachable prospect — a social lead-form
+     * entry or an inbound enquiry the operator itself received. Unlike a bulk
+     * list import, a captured lead is consented by nature (the person engaged
+     * you), so it lands reachable with a recorded basis. Idempotent per email.
+     */
+    @Transactional
+    public void captureLead(String email, String name, String source, String lawfulBasis) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        String tenantId = tenantScope.currentTenantId();
+        String key = email.trim().toLowerCase();
+        Prospect p = prospects.findByTenantIdAndEmail(tenantId, key).orElse(null);
+        boolean isNew = p == null;
+        if (isNew) {
+            p = new Prospect();
+            p.setId(UUID.randomUUID().toString());
+            p.setTenantId(tenantId);
+            p.setEmail(key);
+            p.setCreatedAt(OffsetDateTime.now());
+        }
+        if (name != null && !name.isBlank()) p.setName(name);
+        if (p.getSource() == null) p.setSource(source == null ? "lead" : source);
+        p.setConsent(Prospect.CONSENTED);
+        if (p.getLawfulBasis() == null) p.setLawfulBasis(lawfulBasis == null ? "inbound-lead" : lawfulBasis);
+        p.setUpdatedAt(OffsetDateTime.now());
+        prospects.save(p);
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list(Map<String, String> filters) {
         String tenantId = tenantScope.currentTenantId();
