@@ -1082,6 +1082,14 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'socialListening',
+    title: 'Social listening',
+    socialListening: true, // inbound: brand mentions + sentiment
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -1214,6 +1222,7 @@ const TAB_ROLE = {
   salesOpportunity: 'quote:read',
   audiences: 'insight:read',
   audienceBuilder: 'insight:read',
+  socialListening: 'insight:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
@@ -1273,7 +1282,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'audiences', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'socialListening', 'audiences', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
@@ -3182,6 +3191,68 @@ async function renderAudienceBuilder() {
   name.focus();
 }
 
+// SOCIAL LISTENING: the inbound half of social — what's said ABOUT the brand.
+// Pull mentions, see the mood (sentiment) and where it's happening (platform),
+// read the feed. Outbound campaigns are elsewhere; this is the ear.
+async function renderSocialListening() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'social-listening';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'What people say ABOUT the brand — pulled from social, scored for sentiment. '
+    + 'Sync to refresh; the mood and the feed are the ear on the market.';
+  const bar = document.createElement('div'); bar.className = 'staffbar';
+  const sync = document.createElement('button'); sync.className = 'primary'; sync.textContent = 'Sync mentions';
+  sync.dataset.testid = 'listening-sync';
+  const note = document.createElement('span'); note.className = 'dim'; note.style.cssText = 'font-size:12px;margin-left:8px';
+  bar.append(sync, note);
+  const summaryWrap = document.createElement('div'); summaryWrap.dataset.testid = 'listening-summary'; summaryWrap.style.margin = '14px 0';
+  const feed = document.createElement('div'); feed.dataset.testid = 'listening-feed';
+
+  const chip = (label, n, color) => {
+    const s = document.createElement('span');
+    s.style.cssText = `display:inline-block;margin:0 8px 6px 0;padding:3px 10px;border-radius:12px;font-size:12px;background:${color};color:#fff`;
+    s.textContent = `${label}: ${n}`; return s;
+  };
+  const load = async () => {
+    const sum = await (await authFetch('/insight/v1/listening/summary')).json().catch(() => ({ total: 0, sentiment: {}, byPlatform: {} }));
+    summaryWrap.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = `Mentions: ${sum.total || 0}`; h.style.cssText = 'font-size:15px;margin:0 0 8px';
+    const s = sum.sentiment || {};
+    const row = document.createElement('div');
+    row.append(chip('Positive', s.positive || 0, '#2e7d32'), chip('Neutral', s.neutral || 0, '#607d8b'), chip('Negative', s.negative || 0, '#c62828'));
+    const plat = document.createElement('div'); plat.className = 'dim'; plat.style.cssText = 'font-size:12px;margin-top:4px';
+    plat.textContent = 'By platform: ' + (Object.entries(sum.byPlatform || {}).map(([k, v]) => `${k} ${v}`).join(' · ') || '—');
+    summaryWrap.append(h, row, plat);
+
+    const list = await (await authFetch('/insight/v1/listening/mentions')).json().catch(() => []);
+    feed.replaceChildren();
+    const fh = document.createElement('h3'); fh.textContent = 'Recent mentions'; fh.style.cssText = 'font-size:14px;margin:6px 0';
+    feed.append(fh);
+    if (!list.length) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = 'No mentions yet — Sync to pull them in.'; feed.append(p); return; }
+    for (const m of list.slice(0, 50)) {
+      const card = document.createElement('div'); card.className = 'panel'; card.dataset.testid = 'mention-row';
+      card.style.cssText = 'padding:8px 12px;margin:6px 0';
+      const col = { positive: '#2e7d32', negative: '#c62828', neutral: '#607d8b' }[m.sentiment] || '#607d8b';
+      const meta = document.createElement('div'); meta.style.cssText = 'font-size:12px;margin-bottom:2px';
+      meta.innerHTML = `<span style="color:${col};font-weight:600">${m.sentiment || 'neutral'}</span> · `
+        + `<span class="dim">${(m.platform || '')} · @${(m.author || '')}</span>`;
+      const txt = document.createElement('div'); txt.textContent = m.text || ''; txt.style.fontSize = '13px';
+      card.append(meta, txt); feed.append(card);
+    }
+  };
+  sync.addEventListener('click', async () => {
+    note.textContent = 'syncing…';
+    const r = await authFetch('/insight/v1/listening/sync', { method: 'POST' });
+    const res = r.ok ? await r.json() : { ingested: 0 };
+    note.textContent = `pulled ${res.ingested} new mention(s)`;
+    load();
+  });
+  load();
+  panel.append(intro, bar, summaryWrap, feed);
+}
+
 function staffPanel() {
   let panel = document.getElementById('staff-panel');
   if (!panel) {
@@ -4609,6 +4680,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderAudienceBuilder();
+    return;
+  }
+  if (active.socialListening) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderSocialListening();
     return;
   }
   if (active.staff) {

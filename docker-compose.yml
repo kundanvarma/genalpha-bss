@@ -1596,6 +1596,7 @@ services:
       # acquisition seam: audiences push OUT as ad/social Custom Audiences (hashed)
       SOCIAL_API_URL: http://mock-social:8080
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
+      SOCIAL_ACCOUNT_ID: genalpha-brand
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
       BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.bridge.events
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092

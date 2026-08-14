@@ -69,6 +69,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/prospect").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/prospect/import")
                                 .hasAuthority("insight:read")
+                        // social listening (mentions + sentiment)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/listening/**").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/listening/sync")
+                                .hasAuthority("insight:read")
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

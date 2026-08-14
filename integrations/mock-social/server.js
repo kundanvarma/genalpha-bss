@@ -21,6 +21,10 @@ const audiences = new Map();
 /** formId -> [{id, created_time, field_data}] */
 const leadForms = new Map();
 let leadSeq = 1000;
+/** account -> [{id, platform, author, text, created_time}] — brand mentions for
+ *  social listening (the BSS pulls these in and scores sentiment). */
+const mentions = new Map();
+let mentionSeq = 5000;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -79,6 +83,30 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET') {
       if (!authed()) return json(401, { error: { message: 'access token required' } });
       return json(200, { data: leadForms.get(leads[1]) || [] });
+    }
+  }
+
+  // Social listening: brand mentions on an account's handle.
+  const ment = url.pathname.match(/^\/v1\/([^/]+)\/mentions$/);
+  if (ment) {
+    if (req.method === 'POST') { // seed a mention (test convenience / webhook)
+      return readBody((payload) => {
+        const bucket = mentions.get(ment[1]) || [];
+        const m = {
+          id: String(mentionSeq++),
+          platform: payload.platform || 'x',
+          author: payload.author || 'someone',
+          text: String(payload.text || ''),
+          created_time: new Date().toISOString(),
+        };
+        bucket.push(m);
+        mentions.set(ment[1], bucket);
+        json(200, { id: m.id });
+      });
+    }
+    if (req.method === 'GET') {
+      if (!authed()) return json(401, { error: { message: 'access token required' } });
+      return json(200, { data: mentions.get(ment[1]) || [] });
     }
   }
 
