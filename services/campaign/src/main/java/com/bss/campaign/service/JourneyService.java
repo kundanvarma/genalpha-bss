@@ -417,6 +417,12 @@ public class JourneyService {
         return (Map<String, Object>) m;
     }
 
+    /** The furthest node an enrollment reached: a completed run passed every
+     *  node; anyone else got as far as their current step. */
+    private int effectiveStep(JourneyEnrollment e, int stepCount) {
+        return "completed".equals(e.getStatus()) ? stepCount : e.getStepIndex();
+    }
+
     /** The guarded send every journey message goes through: quiet hours
      * park to the window's end, a spent budget postpones an hour.
      * @return false when parked (the enrollment was saved with a new time). */
@@ -495,6 +501,25 @@ public class JourneyService {
         stats.put("heldOut", heldOut);
         stats.put("activeAtStep", atStep);
         if (!byStage.isEmpty()) stats.put("stageFunnel", byStage);
+        // BB2 — Journey Insights: a per-node funnel. For each node, how many
+        // enrollments REACHED it (are at or beyond it) and how many are ACTIVE
+        // there right now. The drop between consecutive nodes is where people
+        // fall out — the number a journey owner reads to find the leak.
+        List<Map<String, Object>> funnel = new java.util.ArrayList<>();
+        for (int i = 0; i < steps.size(); i++) {
+            final int idx = i;
+            long reached = all.stream().filter(e -> effectiveStep(e, steps.size()) >= idx).count();
+            long activeHere = all.stream()
+                    .filter(e -> "active".equals(e.getStatus()) && e.getStepIndex() == idx).count();
+            Map<String, Object> node = new LinkedHashMap<>();
+            node.put("index", idx);
+            node.put("type", steps.get(idx).get("type"));
+            if (steps.get(idx).get("stage") != null) node.put("stage", steps.get(idx).get("stage"));
+            node.put("reached", reached);
+            node.put("active", activeHere);
+            funnel.add(node);
+        }
+        stats.put("funnel", funnel);
         stats.put("completedUnconverted",
                 all.stream().filter(e -> "completed".equals(e.getStatus())).count());
         stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
