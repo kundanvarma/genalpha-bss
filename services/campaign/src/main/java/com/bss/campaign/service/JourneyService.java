@@ -94,12 +94,19 @@ public class JourneyService {
                 if (waitSeconds(step) <= 0) {
                     throw new BadRequestException("wait steps need seconds/minutes/hours/days > 0");
                 }
-            } else if ("branch".equals(type)) {
+            } else if ("waitForEvent".equals(type)) {
+                if (step.get("event") == null || String.valueOf(step.get("event")).isBlank()) {
+                    throw new BadRequestException("waitForEvent steps need an event to wait for");
+                }
+            } else if ("exit".equals(type)) {
+                // a bare goal/exit node — no fields required
+                continue;
+            } else if ("branch".equals(type) || "decision".equals(type)) {
                 // the journey READS the customer before speaking: an insight
                 // segment decides which of two messages (either may be
                 // omitted = say nothing on that side)
                 if (step.get("inSegment") == null || String.valueOf(step.get("inSegment")).isBlank()) {
-                    throw new BadRequestException("branch steps need inSegment (an insight segment name)");
+                    throw new BadRequestException("decision/branch steps need inSegment (an insight segment name)");
                 }
                 boolean anyPath = false;
                 for (String path : List.of("then", "else")) {
@@ -118,7 +125,8 @@ public class JourneyService {
                     throw new BadRequestException("a branch needs at least one of then/else");
                 }
             } else {
-                throw new BadRequestException("step type must be 'message', 'wait' or 'branch'");
+                throw new BadRequestException("step type must be 'message', 'wait', 'decision'/'branch', "
+                        + "'waitForEvent' or 'exit'");
             }
         }
         Journey entity = new Journey();
@@ -230,6 +238,24 @@ public class JourneyService {
                         enrollment.getVariant(), value);
             }
         }
+        // waitForEvent nodes: an enrollment parked on this event advances now
+        // (conversion above already ran, so a converted enrollment is skipped)
+        for (JourneyEnrollment enrollment
+                : enrollments.findByTenantIdAndPartyIdAndStatus(tenant, partyId, "active")) {
+            if (enrollment.getAwaitEvent() == null) {
+                continue;
+            }
+            String[] want = enrollment.getAwaitEvent().split(":", 2);
+            if (want[0].equals(eventType) && (want.length < 2 || want[1].equals(state))) {
+                Journey journey = journeys.findByIdAndTenantId(enrollment.getJourneyId(), tenant).orElse(null);
+                if (journey == null || !Journey.ACTIVE.equals(journey.getStatus())) {
+                    continue;
+                }
+                enrollment.setAwaitEvent(null);
+                enrollment.setStepIndex(enrollment.getStepIndex() + 1); // past the waitForEvent node
+                advance(journey, enrollment);
+            }
+        }
     }
 
     private boolean enroll(Journey journey, String partyId) {
@@ -299,12 +325,39 @@ public class JourneyService {
         while (index < steps.size()) {
             Map<String, Object> step = steps.get(index);
             String type = String.valueOf(step.get("type"));
-            if ("message".equals(type) || "branch".equals(type)) {
+            if ("message".equals(type) || "branch".equals(type) || "decision".equals(type)) {
                 Map<String, Object> message = "message".equals(type) ? step
                         : branchMessage(journey, enrollment, step);
                 if (message != null && !"holdout".equals(enrollment.getVariant())
                         && !sendGuarded(journey, enrollment, message)) {
                     return; // parked by quiet hours or the frequency cap
+                }
+                index++;
+            } else if ("exit".equals(type)) {
+                // an explicit early goal/exit — stop the journey here, converted-clean
+                enrollment.setStepIndex(index + 1);
+                enrollment.setStatus("completed");
+                enrollment.setNextActionAt(null);
+                enrollment.setAwaitEvent(null);
+                enrollments.save(enrollment);
+                return;
+            } else if ("waitForEvent".equals(type)) {
+                if (enrollment.getAwaitEvent() == null) {
+                    // first arrival: park until the awaited event (or the timeout)
+                    String await = String.valueOf(step.get("event"))
+                            + (step.get("state") != null ? ":" + step.get("state") : "");
+                    long timeout = waitSeconds(step);
+                    enrollment.setAwaitEvent(await);
+                    enrollment.setStepIndex(index);
+                    enrollment.setNextActionAt(timeout > 0 ? OffsetDateTime.now().plusSeconds(timeout) : null);
+                    enrollments.save(enrollment);
+                    return;
+                }
+                // reached here via the tick = the timeout fired: optional nudge, move on
+                enrollment.setAwaitEvent(null);
+                if (step.get("onTimeout") instanceof Map<?, ?> m && !"holdout".equals(enrollment.getVariant())
+                        && !sendGuarded(journey, enrollment, castMessage(m))) {
+                    return; // the nudge itself got parked
                 }
                 index++;
             } else { // wait

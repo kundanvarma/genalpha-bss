@@ -33,6 +33,11 @@ public class JourneyEnrollment {
     @Column(name = "step_index")
     private int stepIndex;
 
+    /** When parked at a waitForEvent node: the event (type or type:state) that
+     *  advances this enrollment before its timeout. */
+    @Column(name = "await_event", length = 160)
+    private String awaitEvent;
+
     @Column(name = "next_action_at")
     private OffsetDateTime nextActionAt;
 
@@ -60,6 +65,8 @@ public class JourneyEnrollment {
     public void setStatus(String status) { this.status = status; }
     public int getStepIndex() { return stepIndex; }
     public void setStepIndex(int stepIndex) { this.stepIndex = stepIndex; }
+    public String getAwaitEvent() { return awaitEvent; }
+    public void setAwaitEvent(String awaitEvent) { this.awaitEvent = awaitEvent; }
     public OffsetDateTime getNextActionAt() { return nextActionAt; }
     public void setNextActionAt(OffsetDateTime v) { this.nextActionAt = v; }
     public OffsetDateTime getEnrolledAt() { return enrolledAt; }
