@@ -1,0 +1,250 @@
+<title>Growth for BSS — the real-time martech module</title>
+<style>
+  :root{
+    --ink:#0c1420; --ink-2:#16212f; --paper:#f7f5f0; --paper-2:#efece4;
+    --fg:#0c1420; --fg-soft:#465061; --line:#dcd7cc;
+    --teal:#0fae9e; --teal-deep:#0a7d72; --amber:#e0912a; --card:#ffffff;
+    --hero-ink:#0a1119;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --paper:#0c1420; --paper-2:#0f1a28; --fg:#eef2f7; --fg-soft:#9aa7b8;
+      --line:#22303f; --card:#121e2c; --teal:#2bd4c0; --teal-deep:#0fae9e; }
+  }
+  :root[data-theme="light"]{ --paper:#f7f5f0; --paper-2:#efece4; --fg:#0c1420; --fg-soft:#465061;
+    --line:#dcd7cc; --card:#ffffff; --teal:#0fae9e; --teal-deep:#0a7d72; }
+  :root[data-theme="dark"]{ --paper:#0c1420; --paper-2:#0f1a28; --fg:#eef2f7; --fg-soft:#9aa7b8;
+    --line:#22303f; --card:#121e2c; --teal:#2bd4c0; --teal-deep:#0fae9e; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--fg);font-family:var(--sans);
+    line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  h1,h2,h3{text-wrap:balance;line-height:1.08;margin:0}
+  p{margin:0}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--teal-deep);font-weight:600}
+  a{color:inherit}
+
+  /* HERO */
+  .hero{background:var(--hero-ink);color:#eef2f7;position:relative;overflow:hidden;
+    border-bottom:1px solid #1b2836}
+  .hero .wrap{padding:88px 24px 76px;position:relative;z-index:2}
+  .hero .eyebrow{color:var(--teal)}
+  .hero h1{font-size:clamp(34px,6vw,62px);font-weight:680;letter-spacing:-.02em;margin:18px 0 0;max-width:16ch}
+  .hero h1 em{font-style:normal;color:var(--teal)}
+  .hero .lede{margin-top:22px;max-width:60ch;font-size:clamp(16px,2.1vw,20px);color:#b9c6d6}
+  .pills{margin-top:30px;display:flex;flex-wrap:wrap;gap:10px}
+  .pill{font-family:var(--mono);font-size:12px;letter-spacing:.02em;padding:7px 12px;border-radius:999px;
+    border:1px solid #24384a;color:#cdd9e6;background:#0f1c29}
+  .pill b{color:var(--teal);font-weight:600}
+  /* animated signal line */
+  .signal{position:absolute;inset:0;z-index:1;opacity:.5}
+  .signal path{fill:none;stroke:var(--teal);stroke-width:1.5;
+    stroke-dasharray:6 10;animation:flow 5s linear infinite}
+  .signal path.b{stroke:#284a5a;opacity:.6;animation:none}
+  @keyframes flow{to{stroke-dashoffset:-160}}
+  @media (prefers-reduced-motion:reduce){.signal path{animation:none}}
+
+  section{padding:64px 0}
+  .kicker{max-width:64ch}
+  .kicker h2{font-size:clamp(24px,3.4vw,34px);font-weight:640;letter-spacing:-.015em;margin-top:12px}
+  .kicker p{margin-top:14px;color:var(--fg-soft);font-size:17px}
+
+  /* problem / difference */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:36px}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:24px 24px 26px}
+  .panel h3{font-size:19px;font-weight:640}
+  .panel .tag{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .panel.old .tag{color:#b0663a}
+  .panel.new{border-color:color-mix(in srgb,var(--teal) 40%,var(--line))}
+  .panel.new .tag{color:var(--teal-deep)}
+  .panel p{margin-top:12px;color:var(--fg-soft);font-size:15.5px}
+  .panel ul{margin:14px 0 0;padding:0;list-style:none}
+  .panel li{padding:7px 0 7px 24px;position:relative;font-size:15px;border-top:1px solid var(--line)}
+  .panel li:before{content:"";position:absolute;left:2px;top:15px;width:8px;height:8px;border-radius:50%}
+  .panel.old li:before{background:#c07a4a}
+  .panel.new li:before{background:var(--teal)}
+
+  /* stat strip */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:34px}
+  .stat{border-left:2px solid var(--teal);padding:4px 0 4px 16px}
+  .stat .n{font-size:clamp(26px,3.6vw,36px);font-weight:680;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat .l{color:var(--fg-soft);font-size:13.5px;margin-top:4px}
+  .stats .src{grid-column:1/-1;color:var(--fg-soft);font-size:12px;font-family:var(--mono)}
+
+  /* capabilities grid */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:36px}
+  .cap{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;
+    transition:transform .16s ease,border-color .16s ease}
+  .cap:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--teal) 45%,var(--line))}
+  .cap .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal-deep);font-size:18px}
+  .cap h3{font-size:16.5px;font-weight:640;margin-top:14px}
+  .cap p{margin-top:8px;color:var(--fg-soft);font-size:14px}
+
+  /* bridge / add-on */
+  .bridge{background:var(--paper-2);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .flow{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:14px;align-items:center;margin-top:34px}
+  .node{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;text-align:center}
+  .node .t{font-weight:640;font-size:15px}
+  .node .s{color:var(--fg-soft);font-size:12.5px;margin-top:4px;font-family:var(--mono)}
+  .node.accent{border-color:var(--teal);box-shadow:0 0 0 3px color-mix(in srgb,var(--teal) 14%,transparent)}
+  .arrow{color:var(--teal-deep);font-size:22px;text-align:center}
+  @media (max-width:760px){.flow{grid-template-columns:1fr;text-align:center}.arrow{transform:rotate(90deg)}}
+
+  /* proof */
+  .proof{display:flex;flex-wrap:wrap;gap:10px;margin-top:30px}
+  .chip{font-family:var(--mono);font-size:12.5px;padding:8px 13px;border-radius:8px;border:1px solid var(--line);
+    background:var(--card);color:var(--fg-soft)}
+  .chip b{color:var(--teal-deep);font-weight:600}
+
+  footer{background:var(--hero-ink);color:#9fb0c0;padding:40px 0;border-top:1px solid #1b2836}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center}
+  footer .mono{font-family:var(--mono);font-size:12.5px}
+  footer b{color:#eef2f7}
+
+  @media (max-width:760px){.split,.stats,.grid{grid-template-columns:1fr}}
+</style>
+
+<header class="hero">
+  <svg class="signal" viewBox="0 0 1200 400" preserveAspectRatio="none" aria-hidden="true">
+    <path class="b" d="M0 300 Q150 300 220 300 T400 230 Q470 180 560 200 T760 150 Q900 120 1000 170 T1200 140"/>
+    <path d="M0 300 Q150 300 220 300 T400 230 Q470 180 560 200 T760 150 Q900 120 1000 170 T1200 140"/>
+  </svg>
+  <div class="wrap">
+    <span class="eyebrow">Growth · a module for the modern BSS</span>
+    <h1>The martech brain your BSS <em>already earned</em>.</h1>
+    <p class="lede">Audiences, journeys, acquisition and social — built on the operator's own
+      first-party data, in real time. No dump to a marketing tool. No reverse-ETL round-trip to a
+      warehouse and back. Open-source, TM Forum–native, and AI-native.</p>
+    <div class="pills">
+      <span class="pill"><b>Real-time</b> · event-bus native</span>
+      <span class="pill"><b>TMF Open APIs</b> · runs on any BSS</span>
+      <span class="pill"><b>Consent-enforced</b> · GDPR/ePrivacy</span>
+      <span class="pill"><b>AI-native</b> · copilot · churn · NBA</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">
+      <span class="eyebrow">The problem</span>
+      <h2>Your customer truth lives in the BSS. Your marketing tools make you ship it out and wait.</h2>
+      <p>The standard stack dumps BSS data into a marketing app or warehouse, builds an audience there,
+        and syncs it back for activation. Every segment is a round-trip across vendor boundaries — measured
+        in hours, not seconds — before anything reaches a customer or a model can learn.</p>
+    </div>
+    <div class="split">
+      <div class="panel old">
+        <span class="tag">The round-trip</span>
+        <h3>Dump → build → sync back</h3>
+        <ul>
+          <li>BSS → warehouse/marketing tool → audience → reverse-ETL → activation</li>
+          <li>Batch latency on every refresh; the AI feedback loop is split across vendors</li>
+          <li>A second copy of the customer to secure, govern and reconcile</li>
+        </ul>
+      </div>
+      <div class="panel new">
+        <span class="tag">BSS-native</span>
+        <h3>The event bus <em>is</em> the feed</h3>
+        <ul>
+          <li>Orders, party, usage, billing → customer traits, as they happen</li>
+          <li>Audiences resolve in-house; owned-channel activation is instant</li>
+          <li>The BSS is already the store, the identity, the channels and the AI</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">15–60<span style="font-size:.5em"> min</span></div>
+        <div class="l">typical reverse-ETL sync latency the BSS-native path removes</div></div>
+      <div class="stat"><div class="n">25–50×</div>
+        <div class="l">the cost premium of frequent audience refreshes in a composable stack</div></div>
+      <div class="stat"><div class="n">2–5×</div>
+        <div class="l">campaign lift of behavioural/predictive segments over static CRM lists</div></div>
+      <div class="src">Industry figures (CDP.com, mParticle, BlueConic), cited for context — not vendor benchmarks.</div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:8px">
+  <div class="wrap">
+    <div class="kicker">
+      <span class="eyebrow">What's inside</span>
+      <h2>A complete acquisition-to-retention CDP, embedded in the BSS.</h2>
+    </div>
+    <div class="grid">
+      <div class="cap"><div class="ic">◎</div><h3>BSS-native audiences</h3>
+        <p>A rule-tree builder over the operator's own data — a product held, a plan, a churn band.
+          Traits are projected from domain events in real time.</p></div>
+      <div class="cap"><div class="ic">✦</div><h3>Prospects, consent-gated</h3>
+        <p>Import a list (Excel, social lead-form) and reach not-yet-customers. A bought list is
+          captured but never messaged without a lawful basis — the law is enforced, not wished for.</p></div>
+      <div class="cap"><div class="ic">➔</div><h3>Acquisition activation</h3>
+        <p>Push audiences OUT as hashed Custom Audiences — seed lookalikes from your best customers,
+          suppress the ones you already have. PII never leaves in clear.</p></div>
+      <div class="cap"><div class="ic">◕</div><h3>Social, both ways</h3>
+        <p>Listen (mentions + sentiment), capture (lead-forms → nurture prospects), and broadcast
+          (organic posts) — inbound and outbound in one place.</p></div>
+      <div class="cap"><div class="ic">⟿</div><h3>Journeys &amp; next-best-action</h3>
+        <p>A visual node-and-edge journey engine, lifecycle-governed, with real-time arbitration so
+          each customer gets the single best message.</p></div>
+      <div class="cap"><div class="ic">✲</div><h3>AI-native authoring</h3>
+        <p>A copilot that drafts journeys and campaigns from a sentence — by voice or text — plus a
+          churn scorer feeding predictive audiences. Every AI turn metered and audited.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="bridge">
+  <div class="wrap">
+    <div class="kicker">
+      <span class="eyebrow">The add-on</span>
+      <h2>Already run a BSS? The module runs on top of it — through one adapter.</h2>
+      <p>The martech services depend on a tiny event envelope, not on this BSS. A thin, config-driven
+        bridge normalizes a foreign BSS's own events onto the ingress topic. Onboarding a new BSS is a
+        mapping config and a deploy — never a code fork.</p>
+    </div>
+    <div class="flow">
+      <div class="node"><div class="t">Any BSS</div><div class="s">its own event shapes</div></div>
+      <div class="arrow">→</div>
+      <div class="node accent"><div class="t">bss-bridge</div><div class="s">normalize · config-driven</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="t">Growth module</div><div class="s">traits · audiences · activation</div></div>
+    </div>
+    <p style="margin-top:22px;color:var(--fg-soft);font-size:14px;max-width:62ch">
+      Reads via TM Forum Open APIs, writes to owned channels — a martech brain on top of the incumbent
+      billing system, not a rip-and-replace. Consent, suppression and DNC travel with every send.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="kicker">
+      <span class="eyebrow">Built honestly</span>
+      <h2>Every capability is proven end-to-end, not slideware.</h2>
+      <p>Each piece ships with a browser-level test that drives the real APIs and the real console —
+        audiences, prospects, activation, social, and the foreign-BSS bridge.</p>
+    </div>
+    <div class="proof">
+      <span class="chip"><b>E2E-tested</b> · real APIs + console</span>
+      <span class="chip"><b>Multi-tenant</b> · brand = tenant, isolated</span>
+      <span class="chip"><b>Consent + DNC</b> · enforced at send</span>
+      <span class="chip"><b>Hashed activation</b> · SHA-256, no raw PII</span>
+      <span class="chip"><b>WCAG 2.2 AA</b> · console, zero violations</span>
+      <span class="chip"><b>Scale-ready</b> · set-based, batched, push-down</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <div style="font-weight:640;color:#eef2f7;font-size:16px">Growth — martech for the modern BSS</div>
+      <div class="mono" style="margin-top:6px">Open-source · TM Forum ODA · real-time · AI-native</div>
+    </div>
+    <div class="mono">The operational event bus <b>is</b> the audience feed.</div>
+  </div>
+</footer>
