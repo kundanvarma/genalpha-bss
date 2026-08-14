@@ -124,8 +124,11 @@ public class JourneyService {
                     }
                     anyPath = true;
                 }
-                if (!anyPath) {
-                    throw new BadRequestException("a branch needs at least one of then/else");
+                // a decision is valid if it says something (then/else message) OR
+                // routes somewhere (thenNext/elseNext to another node's id)
+                if (!anyPath && step.get("thenNext") == null && step.get("elseNext") == null) {
+                    throw new BadRequestException(
+                            "a decision needs a then/else message or a thenNext/elseNext route");
                 }
             } else {
                 throw new BadRequestException("step type must be 'message', 'wait', 'decision'/'branch', "
@@ -276,7 +279,11 @@ public class JourneyService {
                     continue;
                 }
                 enrollment.setAwaitEvent(null);
-                enrollment.setStepIndex(enrollment.getStepIndex() + 1); // past the waitForEvent node
+                // follow the waitForEvent node's out-edge (an explicit 'next' or the next node)
+                List<Map<String, Object>> steps = parseSteps(journey.getSteps());
+                Map<String, Integer> ids = idIndex(steps);
+                int i = enrollment.getStepIndex();
+                enrollment.setStepIndex(i >= 0 && i < steps.size() ? nextIndex(steps.get(i), ids, i) : i + 1);
                 advance(journey, enrollment);
             }
         }
@@ -416,20 +423,31 @@ public class JourneyService {
     /** Run steps from where they stand until a wait parks them or the end. */
     private void advance(Journey journey, JourneyEnrollment enrollment) {
         List<Map<String, Object>> steps = parseSteps(journey.getSteps());
+        Map<String, Integer> ids = idIndex(steps);
         int index = enrollment.getStepIndex();
-        while (index < steps.size()) {
+        int guard = 0; // a mis-wired graph can cycle; bound one advance pass
+        while (index >= 0 && index < steps.size() && guard++ < 500) {
             Map<String, Object> step = steps.get(index);
             String type = String.valueOf(step.get("type"));
-            if ("message".equals(type) || "branch".equals(type) || "decision".equals(type)) {
-                Map<String, Object> message = "message".equals(type) ? step
-                        : branchMessage(journey, enrollment, step);
-                if (message != null && !"holdout".equals(enrollment.getVariant())
-                        && !sendGuarded(journey, enrollment, message)) {
+            if ("message".equals(type)) {
+                if (!"holdout".equals(enrollment.getVariant()) && !sendGuarded(journey, enrollment, step)) {
                     return; // parked by quiet hours or the frequency cap
                 }
-                index++;
+                index = nextIndex(step, ids, index);
+            } else if ("branch".equals(type) || "decision".equals(type)) {
+                // read the customer ONCE — it picks the inline message AND the route
+                boolean member = inSegment(journey, enrollment, step);
+                Object chosen = member ? step.get("then") : step.get("else");
+                Map<String, Object> message = chosen instanceof Map<?, ?> m ? castMessage(m) : null;
+                if (message != null && !"holdout".equals(enrollment.getVariant())
+                        && !sendGuarded(journey, enrollment, message)) {
+                    return;
+                }
+                // TRUE branching: a decision can route each side to a different node
+                Object route = member ? step.get("thenNext") : step.get("elseNext");
+                index = route != null && ids.containsKey(String.valueOf(route))
+                        ? ids.get(String.valueOf(route)) : nextIndex(step, ids, index);
             } else if ("exit".equals(type)) {
-                // an explicit early goal/exit — stop the journey here, converted-clean
                 enrollment.setStepIndex(index + 1);
                 enrollment.setStatus("completed");
                 enrollment.setNextActionAt(null);
@@ -438,7 +456,6 @@ public class JourneyService {
                 return;
             } else if ("waitForEvent".equals(type)) {
                 if (enrollment.getAwaitEvent() == null) {
-                    // first arrival: park until the awaited event (or the timeout)
                     String await = String.valueOf(step.get("event"))
                             + (step.get("state") != null ? ":" + step.get("state") : "");
                     long timeout = waitSeconds(step);
@@ -448,25 +465,53 @@ public class JourneyService {
                     enrollments.save(enrollment);
                     return;
                 }
-                // reached here via the tick = the timeout fired: optional nudge, move on
                 enrollment.setAwaitEvent(null);
                 if (step.get("onTimeout") instanceof Map<?, ?> m && !"holdout".equals(enrollment.getVariant())
                         && !sendGuarded(journey, enrollment, castMessage(m))) {
-                    return; // the nudge itself got parked
+                    return;
                 }
-                index++;
+                index = nextIndex(step, ids, index);
             } else { // wait
-                index++;
-                enrollment.setStepIndex(index);
+                int nx = nextIndex(step, ids, index);
+                enrollment.setStepIndex(nx);
                 enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(waitSeconds(step)));
                 enrollments.save(enrollment);
                 return;
             }
         }
-        enrollment.setStepIndex(index);
+        enrollment.setStepIndex(index < 0 ? steps.size() : index);
         enrollment.setStatus("completed");
         enrollment.setNextActionAt(null);
         enrollments.save(enrollment);
+    }
+
+    /** Nodes may carry an id; edges reference it. Absent ids just fall through. */
+    private Map<String, Integer> idIndex(List<Map<String, Object>> steps) {
+        Map<String, Integer> m = new java.util.HashMap<>();
+        for (int i = 0; i < steps.size(); i++) {
+            Object id = steps.get(i).get("id");
+            if (id != null) m.putIfAbsent(String.valueOf(id), i);
+        }
+        return m;
+    }
+
+    /** The default out-edge: an explicit 'next' id, else the following node. */
+    private int nextIndex(Map<String, Object> step, Map<String, Integer> ids, int i) {
+        Object nx = step.get("next");
+        return nx != null && ids.containsKey(String.valueOf(nx)) ? ids.get(String.valueOf(nx)) : i + 1;
+    }
+
+    /** Read the customer against an insight segment; unreachable insight = 'else'. */
+    private boolean inSegment(Journey journey, JourneyEnrollment enrollment, Map<String, Object> step) {
+        String segment = String.valueOf(step.get("inSegment"));
+        try {
+            return insight.segmentMembers(segment).stream()
+                    .anyMatch(m -> enrollment.getPartyId().equals(String.valueOf(m.get("partyId"))));
+        } catch (Exception e) {
+            log.warn("journey '{}' decision on '{}' could not read insight — taking 'else': {}",
+                    journey.getName(), segment, e.getMessage());
+            return false;
+        }
     }
 
     /**
@@ -475,23 +520,6 @@ public class JourneyService {
      * An unreachable insight fails SAFE to the 'else' side: the generic
      * message beats a wrong one.
      */
-    private Map<String, Object> branchMessage(Journey journey, JourneyEnrollment enrollment,
-            Map<String, Object> step) {
-        String segment = String.valueOf(step.get("inSegment"));
-        boolean member = false;
-        try {
-            member = insight.segmentMembers(segment).stream()
-                    .anyMatch(m -> enrollment.getPartyId().equals(String.valueOf(m.get("partyId"))));
-        } catch (Exception e) {
-            log.warn("journey '{}' branch on '{}' could not read insight — taking 'else': {}",
-                    journey.getName(), segment, e.getMessage());
-        }
-        Object chosen = member ? step.get("then") : step.get("else");
-        log.info("journey '{}' branch on '{}': party {} is {}",
-                journey.getName(), segment, enrollment.getPartyId(), member ? "IN" : "OUT");
-        return chosen instanceof Map<?, ?> m ? castMessage(m) : null;
-    }
-
     @SuppressWarnings("unchecked")
     private Map<String, Object> castMessage(Map<?, ?> m) {
         return (Map<String, Object>) m;
