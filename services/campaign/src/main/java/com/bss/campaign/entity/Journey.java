@@ -52,6 +52,11 @@ public class Journey {
     @Column(name = "holdout_percent")
     private int holdoutPercent;
 
+    /** Arbitration policy: when two journeys would message the same customer
+     *  in the same moment, the higher priority wins and the other is held. */
+    @Column(name = "priority")
+    private int priority;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -80,6 +85,8 @@ public class Journey {
     public void setConversionEvent(String v) { this.conversionEvent = v; }
     public int getHoldoutPercent() { return holdoutPercent; }
     public void setHoldoutPercent(int v) { this.holdoutPercent = v; }
+    public int getPriority() { return priority; }
+    public void setPriority(int v) { this.priority = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

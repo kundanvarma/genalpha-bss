@@ -48,6 +48,13 @@ public class JourneyController {
         return ResponseEntity.noContent().build();
     }
 
+    /** The NBA receipt log: every next-best-action decision, newest first. */
+    @GetMapping("/arbitrationDecisions")
+    public ResponseEntity<List<Map<String, Object>>> arbitrationDecisions(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String partyId) {
+        return ResponseEntity.ok(service.arbitrationDecisions(partyId));
+    }
+
     /** Enroll everyone in the journey's insight segment, once. */
     @PostMapping("/{id}/enroll")
     public ResponseEntity<Map<String, Object>> enroll(@PathVariable String id) {

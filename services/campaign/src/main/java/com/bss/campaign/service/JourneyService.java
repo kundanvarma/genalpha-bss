@@ -53,12 +53,14 @@ public class JourneyService {
     private final FrequencyGuard frequency;
     private final com.bss.campaign.client.CatalogClient catalog;
     private final com.bss.campaign.tick.TickGuard tickGuard;
+    private final com.bss.campaign.repository.ArbitrationDecisionRepository arbitration;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
             TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper,
             FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog,
-            com.bss.campaign.tick.TickGuard tickGuard) {
+            com.bss.campaign.tick.TickGuard tickGuard,
+            com.bss.campaign.repository.ArbitrationDecisionRepository arbitration) {
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -69,6 +71,7 @@ public class JourneyService {
         this.frequency = frequency;
         this.catalog = catalog;
         this.tickGuard = tickGuard;
+        this.arbitration = arbitration;
     }
 
     // ---------------- authoring ----------------
@@ -147,6 +150,9 @@ public class JourneyService {
             }
             entity.setHoldoutPercent(holdout);
         }
+        if (dto.get("priority") != null) {
+            entity.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
+        }
         try {
             entity.setSteps(objectMapper.writeValueAsString(steps));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -171,6 +177,9 @@ public class JourneyService {
                 .orElseThrow(() -> NotFoundException.forResource("Journey", id));
         if (patch.get("status") != null) {
             entity.setStatus(requireLifecycle(patch.get("status")));
+        }
+        if (patch.get("priority") != null) {
+            entity.setPriority(Integer.parseInt(String.valueOf(patch.get("priority"))));
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(journeys.save(entity));
@@ -319,18 +328,89 @@ public class JourneyService {
 
     @Transactional
     public void tickTenant(String tenantId) {
-        for (JourneyEnrollment enrollment : enrollments
+        List<JourneyEnrollment> due = enrollments
                 .findTop200ByTenantIdAndStatusAndNextActionAtBefore(
-                        tenantId, "active", OffsetDateTime.now())) {
-            Journey journey = journeys.findByIdAndTenantId(enrollment.getJourneyId(), tenantId).orElse(null);
-            if (journey == null) {
-                continue;
+                        tenantId, "active", OffsetDateTime.now());
+        // Resolve each enrollment's journey once, dropping the dead/paused ones.
+        Map<String, Journey> byId = new LinkedHashMap<>();
+        List<JourneyEnrollment> live = new java.util.ArrayList<>();
+        for (JourneyEnrollment e : due) {
+            Journey j = byId.computeIfAbsent(e.getJourneyId(),
+                    id -> journeys.findByIdAndTenantId(id, tenantId).orElse(null));
+            if (j != null && Journey.ACTIVE.equals(j.getStatus())) {
+                live.add(e);
             }
-            if (!Journey.ACTIVE.equals(journey.getStatus())) {
-                continue; // paused journeys stop the clock, they don't lose people
+        }
+        // NBA arbitration: process highest-priority journeys first, so the best
+        // action per customer runs; a second message to the same customer in
+        // this same tick is HELD, and the decision is logged with its reason.
+        live.sort((a, b) -> Integer.compare(byId.get(b.getJourneyId()).getPriority(),
+                byId.get(a.getJourneyId()).getPriority()));
+        Map<String, String> wonBy = new java.util.HashMap<>(); // partyId -> winning journeyId
+        for (JourneyEnrollment enrollment : live) {
+            Journey journey = byId.get(enrollment.getJourneyId());
+            // Arbitration is opt-in: only journeys given a priority (> 0) compete
+            // for the customer's single best action. A priority-0 journey is
+            // always-on and never held — a human enrols a journey into the NBA
+            // pool by assigning it a priority.
+            if (journey.getPriority() > 0 && isSendingNode(journey, enrollment)) {
+                String winner = wonBy.get(enrollment.getPartyId());
+                if (winner != null && !winner.equals(enrollment.getJourneyId())) {
+                    holdForArbitration(tenantId, journey, enrollment, byId.get(winner));
+                    continue;
+                }
+                wonBy.put(enrollment.getPartyId(), enrollment.getJourneyId());
             }
             advance(journey, enrollment);
         }
+    }
+
+    /** True when the enrollment's next node actually sends a message (and so
+     *  competes for the customer's attention this tick). */
+    private boolean isSendingNode(Journey journey, JourneyEnrollment enrollment) {
+        List<Map<String, Object>> steps = parseSteps(journey.getSteps());
+        int i = enrollment.getStepIndex();
+        if (i < 0 || i >= steps.size()) {
+            return false;
+        }
+        String type = String.valueOf(steps.get(i).get("type"));
+        return "message".equals(type) || "branch".equals(type) || "decision".equals(type);
+    }
+
+    /** Hold the losing journey a short while and record the NBA decision. */
+    private void holdForArbitration(String tenantId, Journey held, JourneyEnrollment enrollment,
+            Journey winner) {
+        enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
+        enrollments.save(enrollment);
+        com.bss.campaign.entity.ArbitrationDecision d = new com.bss.campaign.entity.ArbitrationDecision();
+        d.setId(UUID.randomUUID().toString());
+        d.setTenantId(tenantId);
+        d.setPartyId(enrollment.getPartyId());
+        d.setWinnerJourneyId(winner == null ? null : winner.getId());
+        d.setHeldJourneyId(held.getId());
+        d.setReason("held '" + held.getName() + "' (priority " + held.getPriority() + ") — '"
+                + (winner == null ? "?" : winner.getName()) + "' (priority "
+                + (winner == null ? "?" : winner.getPriority()) + ") is the next-best-action this moment");
+        d.setDecidedAt(OffsetDateTime.now());
+        arbitration.save(d);
+        log.info("NBA: party {} — held '{}' for '{}'", enrollment.getPartyId(),
+                held.getName(), winner == null ? "?" : winner.getName());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> arbitrationDecisions(String partyId) {
+        List<com.bss.campaign.entity.ArbitrationDecision> rows = partyId == null
+                ? arbitration.findTop200ByTenantIdOrderByDecidedAtDesc(tenantScope.currentTenantId())
+                : arbitration.findByTenantIdAndPartyIdOrderByDecidedAtDesc(tenantScope.currentTenantId(), partyId);
+        return rows.stream().map(d -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("partyId", d.getPartyId());
+            m.put("winnerJourneyId", d.getWinnerJourneyId());
+            m.put("heldJourneyId", d.getHeldJourneyId());
+            m.put("reason", d.getReason());
+            m.put("decidedAt", d.getDecidedAt());
+            return m;
+        }).toList();
     }
 
     /** Run steps from where they stand until a wait parks them or the end. */
@@ -605,6 +685,7 @@ public class JourneyService {
         if (j.getSegmentName() != null) map.put("segmentName", j.getSegmentName());
         if (j.getConversionEvent() != null) map.put("conversionEvent", j.getConversionEvent());
         map.put("holdoutPercent", j.getHoldoutPercent());
+        map.put("priority", j.getPriority());
         try {
             map.put("steps", objectMapper.readValue(j.getSteps(), STEP_LIST));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
