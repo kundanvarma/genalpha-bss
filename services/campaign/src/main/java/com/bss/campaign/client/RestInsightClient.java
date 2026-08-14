@@ -40,4 +40,17 @@ public class RestInsightClient implements InsightClient {
             return List.of();
         }
     }
+
+    /** Fails CLOSED, same as segmentMembers: an unreachable audience is empty. */
+    @Override
+    public List<Map<String, Object>> audienceMembers(String audienceId) {
+        try {
+            String body = restClient.get()
+                    .uri("/insight/v1/audience/{id}/members", audienceId)
+                    .retrieve().body(String.class);
+            return body == null ? List.of() : objectMapper.readValue(body, JSON_LIST);
+        } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
+            return List.of();
+        }
+    }
 }

@@ -55,6 +55,13 @@ public class SecurityConfig {
                                 ApiConstants.BASE_PATH + "/partyProfile",
                                 ApiConstants.BASE_PATH + "/segmentMembers",
                                 ApiConstants.BASE_PATH + "/audiences").hasAuthority("insight:read")
+                        // saved audiences (authoring + member resolution) are back-office
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/audience/**")
+                                .hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/audience")
+                                .hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/audience/**")
+                                .hasAuthority("insight:read")
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2

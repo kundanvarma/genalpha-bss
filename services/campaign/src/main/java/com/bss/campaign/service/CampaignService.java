@@ -71,12 +71,13 @@ public class CampaignService {
         Map<?, ?> message = dto.get("message") instanceof Map<?, ?> m ? m
                 : arms != null ? arms.get(0) : null;
         if (dto.get("name") == null
-                || (dto.get("triggerEventType") == null && dto.get("segmentName") == null)
+                || (dto.get("triggerEventType") == null && dto.get("segmentName") == null
+                    && dto.get("audienceRef") == null)
                 || message == null
                 || message.get("subject") == null || message.get("content") == null) {
             throw new BadRequestException(
                     "name, message {subject, content} (or messageVariants) and a trigger"
-                    + " (triggerEventType or segmentName) are required");
+                    + " (triggerEventType, segmentName or audienceRef) are required");
         }
         Campaign entity = new Campaign();
         String id = UUID.randomUUID().toString();
@@ -89,6 +90,8 @@ public class CampaignService {
                 : String.valueOf(dto.get("triggerEventType")));
         entity.setSegmentName(dto.get("segmentName") == null ? null
                 : String.valueOf(dto.get("segmentName")));
+        entity.setAudienceRef(dto.get("audienceRef") == null ? null
+                : String.valueOf(dto.get("audienceRef")));
         entity.setTriggerState(dto.get("triggerState") == null ? null : String.valueOf(dto.get("triggerState")));
         entity.setMessageSubject(String.valueOf(message.get("subject")));
         entity.setMessageContent(String.valueOf(message.get("content")));
@@ -324,19 +327,25 @@ public class CampaignService {
     public Map<String, Object> executeSegment(String campaignId) {
         Campaign campaign = campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
-        if (campaign.getSegmentName() == null || campaign.getSegmentName().isBlank()) {
-            throw new BadRequestException("this campaign has no segment — it runs on events");
+        boolean hasAudience = campaign.getAudienceRef() != null && !campaign.getAudienceRef().isBlank();
+        if ((campaign.getSegmentName() == null || campaign.getSegmentName().isBlank()) && !hasAudience) {
+            throw new BadRequestException("this campaign has no segment or audience — it runs on events");
         }
         if (!Campaign.ACTIVE.equals(campaign.getStatus())) {
             throw new BadRequestException("only an active campaign can be executed");
         }
+        // a saved Audience (rule tree) takes precedence over the bare segment string
+        List<Map<String, Object>> members = hasAudience
+                ? insight.audienceMembers(campaign.getAudienceRef())
+                : insight.segmentMembers(campaign.getSegmentName());
         int reached = 0;
-        for (Map<String, Object> member : insight.segmentMembers(campaign.getSegmentName())) {
+        for (Map<String, Object> member : members) {
             if (reach(campaign, String.valueOf(member.get("partyId")))) {
                 reached++;
             }
         }
-        return Map.of("campaignId", campaignId, "segment", campaign.getSegmentName(),
+        return Map.of("campaignId", campaignId,
+                "audience", hasAudience ? campaign.getAudienceRef() : campaign.getSegmentName(),
                 "reached", reached);
     }
 
@@ -493,6 +502,7 @@ public class CampaignService {
         map.put("message", Map.of("subject", c.getMessageSubject(), "content", c.getMessageContent()));
         if (c.getPromotionCode() != null) map.put("promotionCode", c.getPromotionCode());
         if (c.getSegmentName() != null) map.put("segmentName", c.getSegmentName());
+        if (c.getAudienceRef() != null) map.put("audienceRef", c.getAudienceRef());
         List<Map<String, Object>> arms = armsOf(c);
         if (arms != null) map.put("messageVariants", arms);
         map.put("holdoutPercent", c.getHoldoutPercent());

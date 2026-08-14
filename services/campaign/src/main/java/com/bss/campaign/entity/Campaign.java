@@ -37,6 +37,11 @@ public class Campaign {
     @Column(name = "segment_name", length = 128)
     private String segmentName;
 
+    /** A saved insight Audience (rule tree) — the typed alternative to the
+     *  bare segment string. When set, the blast resolves members from it. */
+    @Column(name = "audience_ref", length = 64)
+    private String audienceRef;
+
     /** 'EventType' or 'EventType:state'; null = completed orders. */
     @Column(name = "conversion_event", length = 128)
     private String conversionEvent;
@@ -82,6 +87,8 @@ public class Campaign {
     public void setStatus(String status) { this.status = status; }
     public String getSegmentName() { return segmentName; }
     public void setSegmentName(String v) { this.segmentName = v; }
+    public String getAudienceRef() { return audienceRef; }
+    public void setAudienceRef(String v) { this.audienceRef = v; }
     public String getConversionEvent() { return conversionEvent; }
     public void setConversionEvent(String v) { this.conversionEvent = v; }
     public int getConversionWindowDays() { return conversionWindowDays; }

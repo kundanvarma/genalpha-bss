@@ -7,4 +7,7 @@ import java.util.Map;
 public interface InsightClient {
 
     List<Map<String, Object>> segmentMembers(String segment);
+
+    /** Members of a saved audience (a rule tree), consent-aware. */
+    List<Map<String, Object>> audienceMembers(String audienceId);
 }
