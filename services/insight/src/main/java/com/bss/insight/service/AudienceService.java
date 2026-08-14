@@ -3,8 +3,10 @@ package com.bss.insight.service;
 import com.bss.insight.api.ApiConstants;
 import com.bss.insight.client.AnalyticsForwarder;
 import com.bss.insight.entity.Audience;
+import com.bss.insight.entity.PartyTrait;
 import com.bss.insight.entity.VisitorProfile;
 import com.bss.insight.repository.AudienceRepository;
+import com.bss.insight.repository.PartyTraitRepository;
 import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
@@ -34,16 +36,18 @@ public class AudienceService {
     private final AudienceRepository audiences;
     private final VisitorProfileRepository profiles;
     private final VisitorEventRepository events;
+    private final PartyTraitRepository traits;
     private final AnalyticsForwarder analytics;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public AudienceService(AudienceRepository audiences, VisitorProfileRepository profiles,
-            VisitorEventRepository events, AnalyticsForwarder analytics, TenantScope tenantScope,
-            ObjectMapper objectMapper) {
+            VisitorEventRepository events, PartyTraitRepository traits, AnalyticsForwarder analytics,
+            TenantScope tenantScope, ObjectMapper objectMapper) {
         this.audiences = audiences;
         this.profiles = profiles;
         this.events = events;
+        this.traits = traits;
         this.analytics = analytics;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
@@ -87,52 +91,86 @@ public class AudienceService {
     }
 
     /**
-     * Evaluate the criteria tree against every consented, stitched profile and
-     * return the matching parties — the same consent spine as segmentMembers:
-     * a campaign can never reach someone consent does not cover.
+     * Resolve the audience: evaluate the criteria tree over the BSS-native
+     * candidate base — every party the BSS holds a TRAIT about (its own
+     * customers), UNIONED with every consented, stitched browser profile.
+     *
+     * <p>This is the point of BSS-native audiences: a customer who matches on
+     * first-party BSS data (a product they hold, a churn band) is reachable
+     * WITHOUT ever having browsed or been exported to a marketing tool. Behaviour
+     * signals (interest/audience leaves) still ride the personalization-consent
+     * spine — they only have values for a consented profile. Marketing consent
+     * and DNC are enforced again at SEND (communication + DNC), so the resolved
+     * set is "who matches", not "who may be messaged regardless".
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> members(String id) {
         Object criteria = parse(load(id).getCriteria());
         String tenantId = tenantScope.currentTenantId();
-        Set<String> parties = new LinkedHashSet<>();
+        // consented browser profiles, one per party (behaviour signals live here)
+        Map<String, VisitorProfile> profileByParty = new LinkedHashMap<>();
         for (VisitorProfile p : profiles.findByTenantIdAndPartyIdIsNotNull(tenantId)) {
-            if (!p.isPersonalizationConsent() || parties.contains(p.getPartyId())) {
-                continue;
-            }
-            Set<String> interests = new LinkedHashSet<>();
-            for (Object[] row : events.interestsOf(tenantId, p.getVisitorId())) {
-                if (row.length > 0 && row[0] != null) interests.add(String.valueOf(row[0]));
-            }
-            List<String> ga4 = analytics.audiencesOf(tenantId, p.getVisitorId());
-            if (matches(criteria, interests, ga4)) {
-                parties.add(p.getPartyId());
+            if (p.isPersonalizationConsent()) {
+                profileByParty.putIfAbsent(p.getPartyId(), p);
             }
         }
-        return parties.stream().map(pid -> Map.<String, Object>of("partyId", pid)).toList();
+        // candidate base = trait-carrying customers ∪ consented profiles
+        Set<String> candidates = new LinkedHashSet<>(traits.distinctPartyIds(tenantId));
+        candidates.addAll(profileByParty.keySet());
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (String partyId : candidates) {
+            Set<String> interests = new LinkedHashSet<>();
+            List<String> ga4 = List.of();
+            VisitorProfile prof = profileByParty.get(partyId);
+            if (prof != null) {
+                for (Object[] row : events.interestsOf(tenantId, prof.getVisitorId())) {
+                    if (row.length > 0 && row[0] != null) interests.add(String.valueOf(row[0]));
+                }
+                ga4 = analytics.audiencesOf(tenantId, prof.getVisitorId());
+            }
+            Set<String> traitSet = new LinkedHashSet<>();
+            for (PartyTrait t : traits.findByTenantIdAndPartyId(tenantId, partyId)) {
+                traitSet.add(t.getTraitKey() + "=" + t.getTraitValue());
+            }
+            if (matches(criteria, interests, ga4, traitSet)) {
+                out.add(Map.of("partyId", partyId));
+            }
+        }
+        return out;
     }
 
-    /** Recursive evaluation: {all|any:[..]} | {not:{..}} | {type,value} leaf. */
+    /** The facets a builder can offer as real choices: the BSS traits this
+     * tenant actually holds, grouped so the UI can present key -> values. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> facets() {
+        String tenantId = tenantScope.currentTenantId();
+        return traits.distinctKeyValues(tenantId).stream()
+                .map(kv -> Map.<String, Object>of("key", kv[0], "value", kv[1]))
+                .toList();
+    }
+
+    /** Recursive evaluation: {all|any:[..]} | {not:{..}} | {type,key?,value} leaf. */
     @SuppressWarnings("unchecked")
-    private boolean matches(Object node, Set<String> interests, List<String> ga4) {
+    private boolean matches(Object node, Set<String> interests, List<String> ga4, Set<String> traitSet) {
         if (!(node instanceof Map<?, ?> m)) {
             return false;
         }
         if (m.get("all") instanceof List<?> all) {
-            return all.stream().allMatch(c -> matches(c, interests, ga4));
+            return all.stream().allMatch(c -> matches(c, interests, ga4, traitSet));
         }
         if (m.get("any") instanceof List<?> any) {
-            return any.stream().anyMatch(c -> matches(c, interests, ga4));
+            return any.stream().anyMatch(c -> matches(c, interests, ga4, traitSet));
         }
         if (m.get("not") != null) {
-            return !matches(m.get("not"), interests, ga4);
+            return !matches(m.get("not"), interests, ga4, traitSet);
         }
         String type = String.valueOf(m.get("type"));
         String value = String.valueOf(m.get("value"));
         return switch (type) {
-            case "interest" -> interests.contains(value);       // first-party behaviour
-            case "audience" -> ga4.contains(value);             // analytics-computed audience
-            default -> false;                                    // unknown leaf never matches
+            case "interest" -> interests.contains(value);            // first-party behaviour
+            case "audience" -> ga4.contains(value);                  // analytics-computed audience
+            case "trait" -> traitSet.contains(m.get("key") + "=" + value); // BSS-native customer data
+            default -> false;                                         // unknown leaf never matches
         };
     }
 

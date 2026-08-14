@@ -1074,6 +1074,14 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'audienceBuilder',
+    title: 'Audience builder',
+    audienceBuilder: true, // BSS-native rule-tree audiences (no CDP round-trip)
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -1205,6 +1213,7 @@ const TAB_ROLE = {
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   audiences: 'insight:read',
+  audienceBuilder: 'insight:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
@@ -1264,7 +1273,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audiences', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'audiences', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
@@ -2969,6 +2978,164 @@ async function renderProductCopilot() {
   input.focus();
 }
 
+// THE AUDIENCE RULE-TREE BUILDER: compose an audience from a criteria tree,
+// over the operator's OWN BSS data (a product held, later a churn band) — no
+// dump to a marketing tool, no reverse-ETL round-trip to a warehouse and back.
+// Behaviour (browsing interest) and analytics (GA4) leaves are here too, but
+// the star is "Customer data": traits the BSS already knows, offered as real
+// choices. Save -> POST /insight/v1/audience; Preview -> resolve members live.
+async function renderAudienceBuilder() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'audience-builder';
+  const intro = document.createElement('p');
+  intro.className = 'dim';
+  intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'Build an audience from a rule tree over your OWN BSS data — a product held, '
+    + 'a plan, a behaviour — no export to a marketing tool, no round-trip. Save it, then a campaign or '
+    + 'journey targets it by name; Preview resolves the members live.';
+
+  // BSS traits this tenant actually holds, grouped key -> [values], for real dropdowns.
+  let facets = [];
+  try { const r = await authFetch('/insight/v1/audience/facets'); if (r.ok) facets = await r.json(); } catch { /* offer free-text */ }
+  const traitKeys = [...new Set(facets.map((f) => f.key))];
+  const valuesFor = (k) => facets.filter((f) => f.key === k).map((f) => f.value);
+
+  /* ---------- the builder card ---------- */
+  const card = document.createElement('div');
+  card.className = 'panel'; card.style.cssText = 'padding:14px 16px;margin-bottom:16px';
+  const nameRow = document.createElement('div'); nameRow.className = 'staffbar';
+  const name = document.createElement('input');
+  name.id = 'audience-name'; name.placeholder = 'Audience name — e.g. Fibre holders at churn risk'; name.style.flex = '1';
+  const matchSel = document.createElement('select'); matchSel.id = 'audience-match';
+  for (const [v, l] of [['all', 'Match ALL conditions'], ['any', 'Match ANY condition']]) {
+    const o = document.createElement('option'); o.value = v; o.textContent = l; matchSel.append(o);
+  }
+  nameRow.append(name, matchSel);
+
+  const conds = document.createElement('div'); conds.id = 'audience-conditions'; conds.style.cssText = 'margin:12px 0';
+  const addCondition = () => {
+    const row = document.createElement('div');
+    row.className = 'aud-cond'; row.dataset.testid = 'aud-cond';
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap';
+    const not = document.createElement('label');
+    not.style.cssText = 'display:flex;gap:4px;align-items:center;font-size:12px';
+    const notBox = document.createElement('input'); notBox.type = 'checkbox'; notBox.dataset.testid = 'aud-cond-not';
+    not.append(notBox, document.createTextNode('exclude'));
+    const type = document.createElement('select'); type.dataset.testid = 'aud-cond-type';
+    for (const [v, l] of [['trait', 'Customer data (BSS)'], ['interest', 'Behaviour (browsing)'], ['audience', 'Analytics audience']]) {
+      const o = document.createElement('option'); o.value = v; o.textContent = l; type.append(o);
+    }
+    const valueWrap = document.createElement('span');
+    valueWrap.style.cssText = 'display:flex;gap:8px;flex:1;min-width:220px';
+    const renderValue = () => {
+      valueWrap.replaceChildren();
+      if (type.value === 'trait') {
+        const key = document.createElement('select'); key.dataset.testid = 'aud-cond-key';
+        if (traitKeys.length) {
+          for (const k of traitKeys) { const o = document.createElement('option'); o.value = k; o.textContent = k; key.append(o); }
+        } else { const o = document.createElement('option'); o.value = ''; o.textContent = '(no BSS traits yet)'; key.append(o); }
+        const val = document.createElement('select'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
+        const fillVals = () => { val.replaceChildren(); for (const v of valuesFor(key.value)) { const o = document.createElement('option'); o.value = v; o.textContent = v; val.append(o); } };
+        key.addEventListener('change', fillVals); fillVals();
+        valueWrap.append(key, val);
+      } else {
+        const val = document.createElement('input'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
+        val.placeholder = type.value === 'interest' ? 'interest category, e.g. Devices' : 'analytics audience name';
+        valueWrap.append(val);
+      }
+    };
+    type.addEventListener('change', renderValue); renderValue();
+    const rm = document.createElement('button'); rm.className = 'ghost'; rm.type = 'button'; rm.textContent = '✕';
+    rm.title = 'remove condition'; rm.addEventListener('click', () => row.remove());
+    row.append(not, type, valueWrap, rm);
+    conds.append(row);
+  };
+  addCondition();
+
+  const actions = document.createElement('div'); actions.className = 'staffbar'; actions.style.marginTop = '4px';
+  const addBtn = document.createElement('button'); addBtn.className = 'ghost'; addBtn.type = 'button';
+  addBtn.textContent = '+ Add condition'; addBtn.dataset.testid = 'aud-add-cond';
+  addBtn.addEventListener('click', addCondition);
+  const save = document.createElement('button'); save.className = 'primary'; save.textContent = 'Save audience';
+  save.dataset.testid = 'aud-save';
+  const note = document.createElement('span'); note.className = 'dim'; note.style.cssText = 'font-size:12px;margin-left:8px';
+  actions.append(addBtn, save, note);
+
+  const collectCriteria = () => {
+    const leaves = [];
+    for (const row of conds.querySelectorAll('.aud-cond')) {
+      const t = row.querySelector('[data-testid=aud-cond-type]').value;
+      const value = (row.querySelector('[data-testid=aud-cond-value]').value || '').trim();
+      if (!value) continue;
+      let leaf = t === 'trait'
+        ? { type: 'trait', key: row.querySelector('[data-testid=aud-cond-key]').value, value }
+        : { type: t, value };
+      if (row.querySelector('[data-testid=aud-cond-not]').checked) leaf = { not: leaf };
+      leaves.push(leaf);
+    }
+    return { [matchSel.value]: leaves };
+  };
+  save.addEventListener('click', async () => {
+    const nm = name.value.trim();
+    const criteria = collectCriteria();
+    if (!nm || !criteria[matchSel.value].length) { note.textContent = 'name and at least one condition are required'; return; }
+    note.textContent = 'saving…';
+    const res = await authFetch('/insight/v1/audience', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nm, criteria }),
+    });
+    if (res.ok) { note.textContent = 'saved ✓'; name.value = ''; conds.replaceChildren(); addCondition(); loadSaved(); }
+    else { note.textContent = 'save failed (HTTP ' + res.status + ')'; }
+  });
+  card.append(nameRow, conds, actions);
+
+  /* ---------- saved audiences, with live member preview ---------- */
+  const savedWrap = document.createElement('div'); savedWrap.dataset.testid = 'aud-saved';
+  const summarize = (crit) => {
+    const join = (arr, sep) => arr.map(one).join(sep);
+    const one = (n) => {
+      if (n.all) return '(' + join(n.all, ' AND ') + ')';
+      if (n.any) return '(' + join(n.any, ' OR ') + ')';
+      if (n.not) return 'NOT ' + one(n.not);
+      if (n.type === 'trait') return n.key + '=' + n.value;
+      return (n.type || '?') + ':' + n.value;
+    };
+    try { return one(typeof crit === 'string' ? JSON.parse(crit) : crit); } catch { return '—'; }
+  };
+  const loadSaved = async () => {
+    savedWrap.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = 'Saved audiences'; h.style.cssText = 'font-size:14px;margin:8px 0';
+    savedWrap.append(h);
+    let list = [];
+    try { const r = await authFetch('/insight/v1/audience'); if (r.ok) list = await r.json(); } catch { /* empty */ }
+    if (!list.length) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = 'No saved audiences yet.'; savedWrap.append(p); return; }
+    for (const a of list) {
+      const row = document.createElement('div'); row.className = 'panel'; row.dataset.testid = 'aud-row';
+      row.style.cssText = 'padding:10px 12px;margin:6px 0;display:flex;gap:10px;align-items:center;justify-content:space-between';
+      const left = document.createElement('div');
+      const nm = document.createElement('strong'); nm.textContent = a.name; nm.dataset.testid = 'aud-row-name';
+      const sm = document.createElement('div'); sm.className = 'dim'; sm.style.fontSize = '12px'; sm.textContent = summarize(a.criteria);
+      left.append(nm, sm);
+      const prev = document.createElement('button'); prev.className = 'ghost'; prev.type = 'button';
+      prev.textContent = 'Preview members'; prev.dataset.testid = 'aud-preview';
+      const count = document.createElement('span'); count.className = 'dim'; count.style.cssText = 'font-size:12px;margin-left:8px';
+      prev.addEventListener('click', async () => {
+        count.textContent = '…';
+        const r = await authFetch(`/insight/v1/audience/${a.id}/members`);
+        const m = r.ok ? await r.json() : [];
+        count.textContent = m.length + (m.length === 1 ? ' member' : ' members');
+      });
+      const right = document.createElement('div'); right.append(prev, count);
+      row.append(left, right); savedWrap.append(row);
+    }
+  };
+  loadSaved();
+
+  panel.append(intro, card, savedWrap);
+  name.focus();
+}
+
 function staffPanel() {
   let panel = document.getElementById('staff-panel');
   if (!panel) {
@@ -4387,6 +4554,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderGrowthCopilot();
+    return;
+  }
+  if (active.audienceBuilder) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderAudienceBuilder();
     return;
   }
   if (active.staff) {

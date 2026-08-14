@@ -51,4 +51,10 @@ public class AudienceController {
     public ResponseEntity<List<Map<String, Object>>> members(@PathVariable String id) {
         return ResponseEntity.ok(service.members(id));
     }
+
+    /** The BSS traits this tenant holds — real key/value choices for a builder. */
+    @GetMapping("/facets")
+    public ResponseEntity<List<Map<String, Object>>> facets() {
+        return ResponseEntity.ok(service.facets());
+    }
 }
