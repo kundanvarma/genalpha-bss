@@ -38,6 +38,9 @@ public class StubAdapter implements LlmAdapter {
         if (system.contains("product copilot")) {
             return productCopilot(user);
         }
+        if (system.contains("journey & campaign copilot")) {
+            return journeyCopilot(user);
+        }
         if (system.contains("next best offer adviser")) {
             // deterministic: first candidate, reason grounded in the lines given
             String name = null, id = null, interest = null, holding = null;
@@ -253,6 +256,60 @@ public class StubAdapter implements LlmAdapter {
                 + " a device, a partner service (like streaming), or a bundle of several?"
                 + " (Stub provider — configure a real model for open-ended modeling.)\","
                 + "\"proposal\":null}";
+    }
+
+    /**
+     * Deterministic journey/campaign-copilot scenarios: enough conversation
+     * shape to prove chat -> question -> proposal -> confirm -> created, with
+     * no model. A real provider handles the open-ended asks.
+     */
+    private String journeyCopilot(String user) {
+        String convo = user.toLowerCase();
+        String lastOwner = convo;
+        int idx = convo.lastIndexOf("owner:");
+        if (idx >= 0) {
+            int end = convo.indexOf("copilot:", idx);
+            lastOwner = end > idx ? convo.substring(idx, end) : convo.substring(idx);
+        }
+        boolean churn = lastOwner.contains("win back") || lastOwner.contains("win-back")
+                || lastOwner.contains("winback") || lastOwner.contains("churn") || lastOwner.contains("at risk");
+        if (churn) {
+            return "{\"kind\":\"proposal\",\"message\":\"A win-back CAMPAIGN that fires when the AI"
+                    + " churn scorer flags a customer at risk, offering their loyalty points. One"
+                    + " message, measured against a 10% holdout. Review and Create.\","
+                    + "\"proposal\":{\"artifact\":\"campaign\",\"campaign\":{"
+                    + "\"name\":\"Churn save — your points are waiting\","
+                    + "\"triggerEventType\":\"ChurnRiskDetectedEvent\",\"holdoutPercent\":10,"
+                    + "\"message\":{\"subject\":\"A little thank-you from us\","
+                    + "\"content\":\"Your loyalty points are waiting — redeem them for extra data or a voucher.\"}}}}";
+        }
+        boolean answered = lastOwner.contains("series") || lastOwner.contains("3 day")
+                || lastOwner.contains("nudge") || lastOwner.contains("week") || lastOwner.contains("yes")
+                || lastOwner.contains("activate");
+        boolean onboarding = convo.contains("welcome") || convo.contains("onboard")
+                || convo.contains("new customer") || convo.contains("sign up") || convo.contains("register");
+        if (onboarding && !answered) {
+            return "{\"kind\":\"question\",\"message\":\"Onboarding fires the moment a customer"
+                    + " registers (IndividualCreateEvent). Do you want a single welcome, or a short"
+                    + " SERIES — a welcome now, an activation nudge in 3 days, and a check-in after a"
+                    + " week?\",\"proposal\":null}";
+        }
+        // answered, or a generic create ask -> a full onboarding JOURNEY proposal
+        return "{\"kind\":\"proposal\",\"message\":\"Here's a 3-stage onboarding JOURNEY: a welcome"
+                + " on sign-up, an activation nudge after 3 days, and a check-in after a week. A 10%"
+                + " holdout measures the lift. Review and Create.\","
+                + "\"proposal\":{\"artifact\":\"journey\",\"journey\":{"
+                + "\"name\":\"New-customer onboarding\",\"triggerEventType\":\"IndividualCreateEvent\","
+                + "\"holdoutPercent\":10,\"priority\":0,\"steps\":["
+                + "{\"type\":\"message\",\"stage\":\"Welcome\",\"channel\":\"email\","
+                + "\"subject\":\"Welcome aboard!\",\"content\":\"You're in — here's how to get started.\"},"
+                + "{\"type\":\"wait\",\"stage\":\"Activate\",\"days\":3},"
+                + "{\"type\":\"message\",\"stage\":\"Activate\",\"channel\":\"email\","
+                + "\"subject\":\"Ready to activate?\",\"content\":\"Add your first service in a couple of taps.\"},"
+                + "{\"type\":\"wait\",\"stage\":\"Check-in\",\"days\":4},"
+                + "{\"type\":\"message\",\"stage\":\"Check-in\",\"channel\":\"inApp\","
+                + "\"subject\":\"How's it going?\",\"content\":\"Anything we can help with?\"},"
+                + "{\"type\":\"exit\"}]}}}";
     }
 
     @Override
