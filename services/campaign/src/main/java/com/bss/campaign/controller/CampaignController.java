@@ -3,6 +3,7 @@ package com.bss.campaign.controller;
 import com.bss.campaign.api.ApiConstants;
 import com.bss.campaign.service.CampaignService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +41,12 @@ public class CampaignController {
     public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
             @RequestBody Map<String, Object> patch) {
         return ResponseEntity.ok(service.patch(id, patch));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
     }
 
     /** Segment blast: reach everyone in the campaign's insight segment, once. */

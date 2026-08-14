@@ -23,4 +23,6 @@ public interface JourneyEnrollmentRepository extends JpaRepository<JourneyEnroll
             String tenantId, String status, OffsetDateTime cutoff);
 
     java.util.List<JourneyEnrollment> findByTenantIdAndPartyId(String tenantId, String partyId);
+
+    void deleteByTenantIdAndJourneyId(String tenantId, String journeyId);
 }

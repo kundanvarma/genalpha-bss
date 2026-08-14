@@ -34,7 +34,10 @@ import java.util.UUID;
 public class CampaignService {
 
     private static final Logger log = LoggerFactory.getLogger(CampaignService.class);
-    private static final Set<String> STATUSES = Set.of(Campaign.ACTIVE, Campaign.PAUSED);
+    // Full lifecycle; only ACTIVE triggers/executes. archived = soft delete.
+    private static final String ARCHIVED = "archived";
+    private static final Set<String> STATUSES =
+            Set.of("draft", "scheduled", Campaign.ACTIVE, Campaign.PAUSED, ARCHIVED);
 
     private static final com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>
             ARM_LIST = new com.fasterxml.jackson.core.type.TypeReference<>() { };
@@ -123,8 +126,10 @@ public class CampaignService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> findAll() {
-        return campaigns.findByTenantId(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+        // archived campaigns are a soft delete: hidden from the default list
+        return campaigns.findByTenantId(tenantScope.currentTenantId()).stream()
+                .filter(c -> !ARCHIVED.equals(c.getStatus()))
+                .map(this::toMap).toList();
     }
 
     @Transactional
@@ -136,6 +141,15 @@ public class CampaignService {
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(campaigns.save(entity));
+    }
+
+    /** Delete a campaign and its execution ledger. */
+    @Transactional
+    public void delete(String id) {
+        Campaign entity = campaigns.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Campaign", id));
+        executions.deleteByTenantIdAndCampaignId(tenantScope.currentTenantId(), id);
+        campaigns.delete(entity);
     }
 
     /**

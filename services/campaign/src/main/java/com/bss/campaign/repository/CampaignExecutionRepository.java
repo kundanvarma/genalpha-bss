@@ -11,6 +11,8 @@ public interface CampaignExecutionRepository extends JpaRepository<CampaignExecu
 
     List<CampaignExecution> findByTenantIdAndCampaignId(String tenantId, String campaignId);
 
+    void deleteByTenantIdAndCampaignId(String tenantId, String campaignId);
+
     java.util.List<com.bss.campaign.entity.CampaignExecution>
             findByTenantIdAndPartyIdAndConvertedAtIsNull(String tenantId, String partyId);
 }

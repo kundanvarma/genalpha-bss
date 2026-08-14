@@ -135,7 +135,7 @@ public class JourneyService {
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/journey/" + id);
         entity.setName(String.valueOf(dto.get("name")));
-        entity.setStatus(dto.get("status") == null ? Journey.ACTIVE : String.valueOf(dto.get("status")));
+        entity.setStatus(dto.get("status") == null ? Journey.ACTIVE : requireLifecycle(dto.get("status")));
         entity.setTriggerEventType(str(dto.get("triggerEventType")));
         entity.setTriggerState(str(dto.get("triggerState")));
         entity.setSegmentName(str(dto.get("segmentName")));
@@ -159,8 +159,10 @@ public class JourneyService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> findAll() {
-        return journeys.findByTenantId(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+        // archived journeys are a soft delete: hidden from the default list
+        return journeys.findByTenantId(tenantScope.currentTenantId()).stream()
+                .filter(j -> !Journey.ARCHIVED.equals(j.getStatus()))
+                .map(this::toMap).toList();
     }
 
     @Transactional
@@ -168,14 +170,27 @@ public class JourneyService {
         Journey entity = journeys.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", id));
         if (patch.get("status") != null) {
-            String status = String.valueOf(patch.get("status"));
-            if (!Journey.ACTIVE.equals(status) && !Journey.PAUSED.equals(status)) {
-                throw new BadRequestException("status must be active or paused");
-            }
-            entity.setStatus(status);
+            entity.setStatus(requireLifecycle(patch.get("status")));
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(journeys.save(entity));
+    }
+
+    /** Delete a journey and its enrollment ledger. */
+    @Transactional
+    public void delete(String id) {
+        Journey entity = journeys.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Journey", id));
+        enrollments.deleteByTenantIdAndJourneyId(tenantScope.currentTenantId(), id);
+        journeys.delete(entity);
+    }
+
+    private String requireLifecycle(Object status) {
+        String value = String.valueOf(status);
+        if (!Journey.LIFECYCLE.contains(value)) {
+            throw new BadRequestException("status must be one of " + Journey.LIFECYCLE);
+        }
+        return value;
     }
 
     // ---------------- enrollment ----------------
