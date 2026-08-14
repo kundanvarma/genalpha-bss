@@ -50,6 +50,14 @@ public class BusinessEventListener {
                     .filter(v -> v instanceof Map).map(v -> (Map<String, Object>) v)
                     .findFirst().orElse(Map.of());
             String party = partyOf(resource);
+            if (party == null && eventType != null && eventType.startsWith("Individual")
+                    && resource.get("id") != null) {
+                // Registration/identity events carry the party AS the resource
+                // (no relatedParty) — the individual's own id is the party. This
+                // is what lets an onboarding journey trigger the moment someone
+                // signs up.
+                party = String.valueOf(resource.get("id"));
+            }
             if (party == null) {
                 return;
             }

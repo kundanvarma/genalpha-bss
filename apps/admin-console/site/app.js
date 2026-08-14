@@ -58,11 +58,21 @@ const TRIGGER_EVENTS = [
   { value: 'AgreementCreateEvent', label: 'Agreement started' },
   { value: 'ChurnRiskDetectedEvent', label: 'Churn risk detected (AI scorer)' },
   { value: 'LoyaltyTierChangedEvent', label: 'Loyalty tier changed' },
+  { value: 'IndividualCreateEvent', label: 'New customer registered (onboarding)' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the
 // form below (trigger + message) — everything stays editable before Save.
 const CAMPAIGN_RECIPES = [
+  { value: 'welcome', label: 'Onboarding: welcome a new customer the moment they register', fill: {
+    name: 'Welcome — new customer',
+    triggerEventType: 'IndividualCreateEvent',
+    messageSubject: 'Welcome aboard!',
+    messageContent: 'You\'re in — welcome! Your account is ready. Take a look at'
+      + ' your My page to add services, and here\'s a little something to get'
+      + ' started: attach a promo code above and {code} drops it into this'
+      + ' message. (Tip: turn this into a multi-step Journey to greet on day 0,'
+      + ' nudge to activate on day 3, and check in on day 7.)' } },
   { value: 'churn-save', label: 'Churn save: a loyalty offer to at-risk customers', fill: {
     name: 'Churn save — your points are waiting',
     triggerEventType: 'ChurnRiskDetectedEvent',

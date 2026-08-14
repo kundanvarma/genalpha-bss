@@ -392,12 +392,26 @@ public class JourneyService {
         Map<String, Long> atStep = new LinkedHashMap<>();
         all.stream().filter(e -> "active".equals(e.getStatus()))
                 .forEach(e -> atStep.merge("step" + e.getStepIndex(), 1L, Long::sum));
+        // Named-stage funnel: how many active enrollments sit in each named
+        // stage ("Welcome" vs "Activate" vs "Day-7"), in step order. This is
+        // what turns positional steps into a stage view a journey owner reads.
+        List<Map<String, Object>> steps = parseSteps(journey.getSteps());
+        Map<String, Long> byStage = new LinkedHashMap<>();
+        for (Map<String, Object> step : steps) {
+            if (step.get("stage") != null) byStage.putIfAbsent(String.valueOf(step.get("stage")), 0L);
+        }
+        all.stream().filter(e -> "active".equals(e.getStatus())).forEach(e -> {
+            int idx = e.getStepIndex();
+            String stage = idx >= 0 && idx < steps.size() ? str(steps.get(idx).get("stage")) : null;
+            if (stage != null) byStage.merge(stage, 1L, Long::sum);
+        });
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("journeyId", journeyId);
         stats.put("entered", (long) all.size());
         stats.put("treated", treated);
         stats.put("heldOut", heldOut);
         stats.put("activeAtStep", atStep);
+        if (!byStage.isEmpty()) stats.put("stageFunnel", byStage);
         stats.put("completedUnconverted",
                 all.stream().filter(e -> "completed".equals(e.getStatus())).count());
         stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
