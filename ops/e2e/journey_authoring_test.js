@@ -41,23 +41,28 @@ async function token(ctx, client, user, pass) {
   if (!(await page.locator('[name="status"]').count())) fail('the Status field is missing from the form');
   console.log('OK the form now has Priority (NBA) and Status (lifecycle) fields');
 
-  /* ---------- piece 1: describe it, the copilot fills the Steps box ---------- */
+  /* ---------- the step builder replaces raw JSON: it starts with a card ---------- */
+  if (!(await page.locator('[data-testid="step-card"]').count())) fail('the step builder shows no step cards');
+  console.log('OK the Steps field is a stage-by-stage builder (step cards), not a raw JSON box');
+
+  /* ---------- piece 1: describe it, the copilot fills the builder ---------- */
   const brief = `welcome new fibre customers ${run} and nudge them to activate`;
   await page.fill('#ai-brief', brief);
   await page.click('#ai-draft');
-  let stepsJson = '';
-  for (let i = 0; i < 20; i++) {
-    stepsJson = await page.inputValue('[name="steps"]');
-    if (stepsJson && stepsJson.includes('message')) break;
+  let parsed = [];
+  for (let i = 0; i < 25; i++) {
+    try { parsed = JSON.parse(await page.inputValue('[name="steps"]')); } catch { parsed = []; }
+    if (parsed.filter((s) => s.type === 'message').length >= 2) break;
     await page.waitForTimeout(1000);
   }
-  let parsed;
-  try { parsed = JSON.parse(stepsJson); } catch { fail('the drafted Steps box is not valid JSON: ' + stepsJson); }
   const msgs = parsed.filter((s) => s.type === 'message');
-  if (msgs.length < 2) fail('the AI draft did not fill multiple stage messages: ' + stepsJson);
+  if (msgs.length < 2) fail('the AI draft did not fill multiple stage messages: ' + JSON.stringify(parsed));
+  // the draft populated the visual builder, not just the JSON
+  const cardCount = await page.locator('[data-testid="step-card"]').count();
+  if (cardCount < msgs.length) fail(`the builder shows ${cardCount} cards for ${msgs.length} drafted messages`);
   const draftedName = await page.inputValue('[name="name"]');
   if (!draftedName) fail('the draft did not fill the Name');
-  console.log(`OK "✨ Draft" filled the Steps box with a ${msgs.length}-stage journey and a name`);
+  console.log(`OK "✨ Draft" filled the builder with ${cardCount} step cards (${msgs.length} stage messages) and a name`);
 
   /* ---------- set priority + status, then Create ---------- */
   const before = new Set((await (await apictx.get(JOURNEY, { headers: H(staff) })).json()).map((j) => j.id));

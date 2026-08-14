@@ -465,7 +465,7 @@ const RESOURCES = [
       ] },
       { name: 'triggerEventType', label: 'Trigger event (leave blank for segment journeys)' },
       { name: 'segmentName', label: 'Segment (from Insight — enroll with the row action)' },
-      { name: 'steps', label: 'Steps — JSON: [{"type":"message","stage":"Welcome","subject":"…","content":"…"},{"type":"wait","days":3},{"type":"waitForEvent","event":"ProductOrderStateChangeEvent","state":"completed","days":7,"onTimeout":{…}},{"type":"decision","inSegment":"Devices","then":{…},"else":{…}},{"type":"exit"}]', kind: 'longtext', required: true },
+      { name: 'steps', label: 'Steps — build the journey stage by stage (add a message, a wait, a decision…). Edit as JSON under Advanced.', kind: 'stepbuilder', required: true },
       { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },
       { name: 'holdoutPercent', label: 'Holdout % — control group, no messages, measurable lift', kind: 'number', placeholder: '0' },
       { name: 'priority', label: 'Priority — NBA arbitration (0 = always-on; higher wins when journeys compete for the same customer)', kind: 'number', placeholder: '0' },
@@ -1439,6 +1439,142 @@ function longTextControl(field) {
   return [input];
 }
 
+/**
+ * Step builder: author a journey stage by stage — add / reorder / remove step
+ * cards, each with the fields its type needs — instead of hand-writing JSON.
+ * The JSON is kept in sync underneath (and editable under Advanced), so the
+ * same object still reaches the API. This is how a marketer builds a journey;
+ * the JSON is just the wire format, never the authoring surface.
+ */
+function stepBuilderControl(field) {
+  const TYPES = ['message', 'wait', 'waitForEvent', 'decision', 'exit'];
+  const container = document.createElement('div');
+  container.className = 'stepbuilder';
+  const cards = document.createElement('div');
+  cards.className = 'stepcards';
+  const hidden = document.createElement('textarea'); // JSON mirror = source of truth for get()
+  hidden.name = field.name;
+  hidden.style.display = 'none';
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button'; addBtn.className = 'ghost'; addBtn.textContent = '＋ Add step';
+  addBtn.dataset.testid = 'add-step';
+  const adv = document.createElement('details'); adv.className = 'stepjson';
+  const sum = document.createElement('summary'); sum.textContent = 'Advanced: edit as JSON';
+  const jsonArea = document.createElement('textarea'); jsonArea.rows = 6; jsonArea.dataset.testid = 'steps-json';
+  adv.append(sum, jsonArea);
+  container.append(cards, addBtn, adv, hidden);
+
+  const inp = (ph, v) => { const i = document.createElement('input'); i.placeholder = ph; i.value = v ?? ''; return i; };
+  const ta = (ph, v) => { const t = document.createElement('textarea'); t.rows = 2; t.placeholder = ph; t.value = v ?? ''; return t; };
+  const row = (label, el, wide) => {
+    const l = document.createElement('label'); l.className = 'stepfield' + (wide ? ' wide' : '');
+    const s = document.createElement('span'); s.textContent = label;
+    l.append(s, el); return l;
+  };
+
+  function renderBody(card, step) {
+    const body = card.querySelector('.stepbody');
+    const t = card.querySelector('.steptype').value;
+    const F = {}; card._fields = F; body.replaceChildren();
+    if (t !== 'exit') { F.stage = inp('e.g. Welcome', step.stage); body.append(row('Stage (label)', F.stage)); }
+    if (t === 'message') {
+      F.channel = document.createElement('select');
+      for (const c of ['inApp', 'email', 'sms', 'push']) F.channel.append(new Option(c, c));
+      if (step.channel) F.channel.value = step.channel;
+      F.subject = inp('Subject line', step.subject);
+      F.content = ta('Message body — {code} inserts a promo code', step.content);
+      body.append(row('Channel', F.channel), row('Subject', F.subject), row('Message', F.content, true));
+    } else if (t === 'wait') {
+      F.days = inp('Days', step.days); F.hours = inp('Hours (optional)', step.hours);
+      body.append(row('Wait — days', F.days), row('Wait — hours', F.hours));
+    } else if (t === 'waitForEvent') {
+      F.event = inp('e.g. ProductOrderStateChangeEvent', step.event);
+      F.state = inp('e.g. completed (optional)', step.state);
+      F.days = inp('Timeout — days', step.days);
+      F.tsub = inp('If it never comes — subject', step.onTimeout && step.onTimeout.subject);
+      F.tcon = ta('If it never comes — message', step.onTimeout && step.onTimeout.content);
+      body.append(row('Wait for event', F.event), row('State', F.state), row('Timeout (days)', F.days),
+        row('On timeout — subject', F.tsub), row('On timeout — message', F.tcon, true));
+    } else if (t === 'decision') {
+      F.inSegment = inp('Insight segment, e.g. Devices', step.inSegment);
+      F.tsub = inp('If in segment — subject', step.then && step.then.subject);
+      F.tcon = ta('If in segment — message', step.then && step.then.content);
+      F.esub = inp('Otherwise — subject', step.else && step.else.subject);
+      F.econ = ta('Otherwise — message', step.else && step.else.content);
+      body.append(row('Decide on segment', F.inSegment), row('Then — subject', F.tsub),
+        row('Then — message', F.tcon, true), row('Else — subject', F.esub), row('Else — message', F.econ, true));
+    }
+    body.querySelectorAll('input, textarea, select').forEach((e) => e.addEventListener('input', sync));
+  }
+
+  function cardToStep(card) {
+    const t = card.querySelector('.steptype').value; const F = card._fields || {};
+    const g = (k) => (F[k] && F[k].value.trim() ? F[k].value.trim() : undefined);
+    const step = { type: t };
+    if (g('stage')) step.stage = g('stage');
+    if (t === 'message') { step.channel = F.channel && F.channel.value; step.subject = g('subject'); step.content = g('content'); }
+    else if (t === 'wait') { if (g('days')) step.days = Number(g('days')); if (g('hours')) step.hours = Number(g('hours')); }
+    else if (t === 'waitForEvent') {
+      step.event = g('event'); if (g('state')) step.state = g('state'); if (g('days')) step.days = Number(g('days'));
+      if (g('tsub') || g('tcon')) step.onTimeout = { subject: g('tsub'), content: g('tcon') };
+    } else if (t === 'decision') {
+      step.inSegment = g('inSegment');
+      if (g('tsub') || g('tcon')) step.then = { subject: g('tsub'), content: g('tcon') };
+      if (g('esub') || g('econ')) step.else = { subject: g('esub'), content: g('econ') };
+    }
+    return step;
+  }
+
+  function sync() {
+    const steps = [...cards.children].map(cardToStep);
+    hidden.value = JSON.stringify(steps);
+    jsonArea.value = JSON.stringify(steps, null, 2);
+  }
+
+  function addCard(step) {
+    step = step || { type: 'message' };
+    const card = document.createElement('div'); card.className = 'stepcard'; card.dataset.testid = 'step-card';
+    const head = document.createElement('div'); head.className = 'stephead';
+    const sel = document.createElement('select'); sel.className = 'steptype';
+    for (const t of TYPES) sel.append(new Option(t, t));
+    sel.value = step.type || 'message';
+    sel.addEventListener('change', () => { renderBody(card, {}); sync(); });
+    const mk = (txt, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost' + (cls || ''); b.textContent = txt; b.addEventListener('click', fn); return b; };
+    const up = mk('↑', '', () => { const p = card.previousElementSibling; if (p) { cards.insertBefore(card, p); sync(); } });
+    const down = mk('↓', '', () => { const n = card.nextElementSibling; if (n) { cards.insertBefore(n, card); sync(); } });
+    const rm = mk('✕', ' danger', () => { card.remove(); sync(); }); rm.dataset.testid = 'remove-step';
+    head.append(sel, up, down, rm);
+    const body = document.createElement('div'); body.className = 'stepbody';
+    card.append(head, body);
+    cards.append(card);
+    renderBody(card, step);
+    return card;
+  }
+
+  function rebuild(steps, keepJson) {
+    cards.replaceChildren();
+    (Array.isArray(steps) ? steps : []).forEach((st) => addCard(st));
+    hidden.value = JSON.stringify(Array.isArray(steps) ? steps : []);
+    if (!keepJson) jsonArea.value = JSON.stringify(Array.isArray(steps) ? steps : [], null, 2);
+  }
+
+  addBtn.addEventListener('click', () => { addCard(); sync(); });
+  jsonArea.addEventListener('input', () => {
+    try { const arr = JSON.parse(jsonArea.value); if (Array.isArray(arr)) rebuild(arr, true); } catch { /* mid-typing */ }
+  });
+
+  controls[field.name] = {
+    get: () => hidden.value.trim() || undefined,
+    set: (item) => {
+      let steps = item[field.name];
+      if (typeof steps === 'string') { try { steps = JSON.parse(steps); } catch { steps = []; } }
+      rebuild(steps);
+    },
+  };
+  addCard(); sync(); // start with one message card so the form is never empty
+  return [container];
+}
+
 /** Picklist over an API resource whose chosen value is one plain attribute. */
 function codePickControl(field) {
   const select = document.createElement('select');
@@ -1855,7 +1991,7 @@ function renderEditor() {
   el('editor').hidden = Boolean(active.readOnly);
   el('fields').replaceChildren(...active.fields.map((f) => {
     const wrap = document.createElement('label');
-    wrap.className = f.kind === 'checkbox' ? 'field check' : 'field';
+    wrap.className = 'field' + (f.kind === 'checkbox' ? ' check' : '') + ' field-' + (f.kind || 'text');
     const caption = document.createElement('span');
     caption.textContent = f.label + (f.required ? ' *' : '');
     const parts =
@@ -1868,6 +2004,7 @@ function renderEditor() {
       f.kind === 'artwork' ? artworkControl(f) :
       f.kind === 'bundlecomposer' ? bundleComposerControl(f) :
       f.kind === 'jsontext' ? jsonTextControl(f) :
+      f.kind === 'stepbuilder' ? stepBuilderControl(f) :
       f.kind === 'select' ? selectControl(f) :
       f.kind === 'recipe' ? recipeControl(f) :
       f.kind === 'longtext' ? longTextControl(f) :
