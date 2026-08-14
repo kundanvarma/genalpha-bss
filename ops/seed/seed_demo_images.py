@@ -95,10 +95,16 @@ def svg(inner, bg1, bg2):
             f'<rect width="640" height="440" fill="url(#g)"/>{inner}</svg>')
 
 
+def xesc(s):
+    # SVG is XML: a raw & (or <, >) in a product name makes the whole document
+    # unparseable, so the browser renders nothing. Escape it. (Bit "Home & Mobile".)
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
 def txt(x, y, s, size, weight=700, fill="#fff", anchor="middle", opacity=1):
     return (f'<text x="{x}" y="{y}" font-family="Inter,Segoe UI,Helvetica,Arial,'
             f'sans-serif" font-size="{size}" font-weight="{weight}" fill="{fill}" '
-            f'text-anchor="{anchor}" opacity="{opacity}">{s}</text>')
+            f'text-anchor="{anchor}" opacity="{opacity}">{xesc(s)}</text>')
 
 
 def plan_tile(name, hero):
@@ -111,7 +117,7 @@ def plan_tile(name, hero):
     return svg(
         txt(50, 90, "GenAlpha", 30, 800, "#fff", "start", 0.85)
         + txt(50, 250, hero, big, 800, "#fff", "start")
-        + txt(52, 300, "per month, unlimited calls &amp; texts", 26, 500, "#fff", "start", 0.85)
+        + txt(52, 300, "per month, unlimited calls & texts", 26, 500, "#fff", "start", 0.85)
         + signal, BRAND, "#0a5c5b")
 
 
