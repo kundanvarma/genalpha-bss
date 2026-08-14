@@ -1169,7 +1169,10 @@ mirror of the seeker's COGS): <code>postMobileWholesaleRevenue</code> DR <code>1
 / CR <code>4020</code> mobile-wholesale revenue, idempotent by
 <code>sourceRef=mobile-wholesale-rev:&lt;id&gt;</code>; the same usage-topic listener handles the
 <code>ProviderWholesaleRatedEvent</code>. Seed adds two external MVNOs (Aurora premium, Fjord
-default). <b>Boundary</b>: external-MVNO auth is gated by wholesale:admin for the demo — a real
+default). <b>Console</b>: a <b>Mobile — host (provider)</b> pane on the Wholesale desk enters
+per-MVNO rate cards (MVNO dropdown from the party service; blank = default) and shows the host's
+per-MVNO settlement + total wholesale revenue. <b>Boundary</b>: external-MVNO auth is gated by
+wholesale:admin for the demo — a real
 deployment issues each MVNO a scoped machine credential for its own statement.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and fourteen suites, twenty-five CTKs at zero

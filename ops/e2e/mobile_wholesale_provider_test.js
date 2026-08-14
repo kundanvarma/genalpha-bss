@@ -89,6 +89,33 @@ const FJORD = `fjord-${run}`;
   if (afterN !== before) fail(`re-reporting double-booked: ${before} -> ${afterN}`);
   ok('IDEMPOTENT: a repeated usage report rates once and books once — the ledger is the checkpoint');
 
+  /* ---------- 7. CONSOLE: enter a provider rate card + see the host book ---------- */
+  const cctx = await browser.newContext();
+  const page = await cctx.newPage();
+  await page.goto(`${API}/console/`);
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.fill('input[name="username"]', 'demo');
+  await page.fill('input[name="password"]', 'demo');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
+  await page.locator('#tabs .tab', { hasText: 'Mobile — host (provider)' }).first().click();
+  await page.waitForSelector('#pr-add', { timeout: 10000 });
+  // enter a default rate card via the form
+  const cSpec = `CONMW${run % 100000} data`;
+  await page.fill('#pr-spec', cSpec);
+  await page.fill('#pr-rate', '3.33');
+  await page.fill('#pr-unit', 'GB');
+  await page.click('#pr-add');
+  await page.waitForFunction(() => /Saved/.test(document.querySelector('#pr-msg')?.textContent || ''), { timeout: 10000 });
+  await page.waitForFunction((sp) =>
+    [...document.querySelectorAll('#wholesale-panel td')].some((td) => td.textContent.includes(sp)), cSpec, { timeout: 10000 });
+  // the settlement renders the host book (this run's Aurora/Fjord are in the period)
+  const hasTotal = await page.evaluate(() =>
+    /Total wholesale revenue/.test(document.querySelector('#wholesale-panel')?.textContent || ''));
+  if (!hasTotal) fail('provider pane shows no settlement total');
+  await cctx.close();
+  ok('CONSOLE: entered a provider rate card from the browser and see the host book — settlement with per-MVNO totals');
+
   await ctx.close();
   await browser.close();
   console.log('\nALL MOBILE-WHOLESALE-PROVIDER CHECKS PASSED — the platform is also the host MNE: an'

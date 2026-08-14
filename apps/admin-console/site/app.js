@@ -354,6 +354,7 @@ const RESOURCES = [
   { path: 'accessProduct', title: 'Access products', accessProduct: true },
   { path: 'wholesaleSettlement', title: 'Settlement', wholesaleSettlement: true },
   { path: 'mobileWholesale', title: 'Mobile wholesale', mobileWholesale: true },
+  { path: 'mobileWholesaleProvider', title: 'Mobile — host (provider)', mobileWholesaleProvider: true },
   {
     // TMF696 risk assessments — read-only: the scores the ordering gate consults.
     path: 'partyRiskAssessment',
@@ -1101,6 +1102,7 @@ const TAB_ROLE = {
   accessProduct: 'wholesale:admin',
   wholesaleSettlement: 'wholesale:admin',
   mobileWholesale: 'wholesale:admin',
+  mobileWholesaleProvider: 'wholesale:admin',
   partyRiskAssessment: 'risk:assess',
   productOrder: ['ordering:write', 'service:write'],
   appointment: 'appointment:admin',
@@ -1171,7 +1173,7 @@ const WORKSPACES = [
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
-    'coverageMap', 'wholesaleSettlement', 'mobileWholesale'] },
+    'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
@@ -3818,6 +3820,94 @@ async function renderMobileWholesale(periodStart, periodEnd) {
   });
 }
 
+// W-M7 — mobile wholesale PROVIDER: as the host MNE, bill external MVNOs. Per-MVNO
+// rate cards are the SLA/tier lever; the settlement is the host's per-MVNO book.
+async function renderMobileWholesaleProvider(periodStart) {
+  const panel = panelFor('wholesale-panel');
+  if (!periodStart) {
+    const now = new Date();
+    periodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  }
+  panel.innerHTML = '<div class="editor"><h2>Mobile wholesale — host (provider)</h2><p class="dim">Loading…</p></div>';
+  const [cards, orgs, s] = await Promise.all([
+    authFetch(`${USAGE_BASE_C}/providerRateCard`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    authFetch(`${PARTY_BASE}/organization?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    authFetch(`${USAGE_BASE_C}/mobileWholesaleProviderSettlement?periodStart=${periodStart}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null),
+  ]);
+  const orgOpts = (orgs || []).map((o) => `<option value="${esc(o.id)}|${esc(o.name)}">${esc(o.name)}</option>`).join('');
+  const mvnos = (s && s.mvno) || [];
+  let html = '<div class="editor"><h2>Mobile wholesale — host (provider)</h2>'
+    + '<p class="dim small">As the host MNE we bill external MVNOs (who run their own BSS) for the '
+    + 'traffic they carry. A <b>per-MVNO rate</b> overrides the default — the SLA/tier lever: a premium '
+    + 'MVNO pays more than a budget one for the same usage.</p>'
+    // rate card form
+    + '<div class="fields">'
+    + `<label class="field"><span>MVNO (blank = default rate for all)</span><select id="pr-mvno"><option value="">— default —</option>${orgOpts}</select></label>`
+    + '<label class="field"><span>Usage type *</span><input id="pr-spec" placeholder="Mobile data"></label>'
+    + '<label class="field"><span>Rate *</span><input id="pr-rate" type="number" step="0.001" placeholder="2.50"></label>'
+    + '<label class="field"><span>Unit</span><input id="pr-unit" placeholder="GB"></label>'
+    + '</div><div class="actions"><button class="primary" id="pr-add">Set rate</button>'
+    + '<span id="pr-msg" class="dim"></span></div>';
+  // rate card table
+  html += '<h2 style="font-size:1rem;margin-top:1.25rem">Provider rate card</h2>';
+  if (!cards.length) {
+    html += '<p class="dim">No rates yet — add one above (a default, plus per-MVNO overrides).</p>';
+  } else {
+    html += '<div class="table-wrap"><table><thead><tr><th>MVNO</th><th>Usage type</th><th>Rate</th>'
+      + '<th>Unit</th></tr></thead><tbody>';
+    for (const c of cards) {
+      html += `<tr><td>${c.mvnoPartyId ? esc(c.mvnoName || c.mvnoPartyId) : '<i>default</i>'}</td>`
+        + `<td>${esc(c.usageSpecName)}</td><td>${esc(c.rate)}</td><td>${esc(c.unit)}</td></tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  // settlement
+  html += `<div class="actions" style="align-items:center;margin-top:1.25rem">Period `
+    + `<input id="pr-period" value="${esc(periodStart)}" style="width:9rem">`
+    + `<button class="ghost" id="pr-refresh">Refresh</button></div>`
+    + '<h2 style="font-size:1rem">Settlement — what each MVNO owes you</h2>';
+  if (!mvnos.length) {
+    html += '<p class="dim">No external-MVNO usage rated for this period yet.</p>';
+  } else {
+    html += '<div class="table-wrap"><table><thead><tr><th>MVNO</th><th>Usage type</th>'
+      + '<th>Units</th><th>Rate</th><th>Amount</th></tr></thead><tbody>';
+    for (const m of mvnos) {
+      const lines = m.line || [];
+      lines.forEach((l, i) => {
+        html += `<tr><td>${i === 0 ? esc(m.mvnoName || m.mvnoPartyId) : ''}</td>`
+          + `<td>${esc(l.usageSpecName)}</td><td>${esc(l.totalUnits)} ${esc(l.unit)}</td>`
+          + `<td>${esc(l.rate)}</td><td>${esc(l.amount)} ${esc(l.currency)}</td></tr>`;
+      });
+      html += `<tr><td colspan="4" style="text-align:right"><b>${esc(m.mvnoName || m.mvnoPartyId)} total</b></td>`
+        + `<td><b>${esc(m.total)}</b></td></tr>`;
+    }
+    html += `</tbody></table></div><p><b>Total wholesale revenue: ${esc(s.totalRevenue)} ${esc(s.currency)}</b></p>`;
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.querySelector('#pr-refresh').addEventListener('click', () =>
+    renderMobileWholesaleProvider(panel.querySelector('#pr-period').value.trim()));
+  panel.querySelector('#pr-add').addEventListener('click', async () => {
+    const msg = panel.querySelector('#pr-msg');
+    const spec = panel.querySelector('#pr-spec').value.trim();
+    const rate = panel.querySelector('#pr-rate').value.trim();
+    const unit = panel.querySelector('#pr-unit').value.trim();
+    const mvnoRaw = panel.querySelector('#pr-mvno').value;
+    if (!spec || !rate) { msg.textContent = 'Fill usage type + rate.'; msg.className = 'error'; return; }
+    const body = { usageSpecName: spec, rate: Number(rate), unit: unit || null };
+    if (mvnoRaw) { const [id, name] = mvnoRaw.split('|'); body.mvnoPartyId = id; body.mvnoName = name; }
+    msg.textContent = 'Saving…'; msg.className = 'dim';
+    try {
+      const r = await authFetch(`${USAGE_BASE_C}/providerRateCard`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) { const p = await r.json().catch(() => ({})); throw new Error(p.message || `HTTP ${r.status}`); }
+      msg.textContent = 'Saved ✓'; msg.className = 'ok';
+      setTimeout(() => renderMobileWholesaleProvider(panel.querySelector('#pr-period')?.value.trim()), 500);
+    } catch (e) { msg.textContent = e.message; msg.className = 'error'; }
+  });
+}
+
 async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
@@ -3865,7 +3955,8 @@ async function loadList() {
     if (active.reporting) renderReporting(); else renderIntegrations();
     return;
   }
-  if (active.wholesaleOwners || active.accessProduct || active.wholesaleSettlement || active.mobileWholesale) {
+  if (active.wholesaleOwners || active.accessProduct || active.wholesaleSettlement
+      || active.mobileWholesale || active.mobileWholesaleProvider) {
     el('editor').hidden = true;
     el('total').textContent = '';
     el('listing-head').replaceChildren();
@@ -3874,6 +3965,7 @@ async function loadList() {
     if (active.wholesaleOwners) renderWholesaleOwners();
     else if (active.accessProduct) renderAccessProduct();
     else if (active.mobileWholesale) renderMobileWholesale();
+    else if (active.mobileWholesaleProvider) renderMobileWholesaleProvider();
     else renderWholesaleSettlement();
     return;
   }
