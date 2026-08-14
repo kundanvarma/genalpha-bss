@@ -1,0 +1,9 @@
+{
+  "name": "bss-e2e",
+  "private": true,
+  "description": "Browser E2E + accessibility suites for the BSS channels (run with node <suite>.js).",
+  "dependencies": {
+    "axe-core": "^4.13.0",
+    "playwright": "^1.62.1"
+  }
+}

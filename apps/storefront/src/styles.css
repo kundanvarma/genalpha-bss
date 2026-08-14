@@ -1,9 +1,12 @@
 :root {
   --paper: #FAFBFA;
   --ink: #16272C;
-  --dim: #5A7176;
+  --dim: #495D61;
   --teal: #0E7C7B;
   --teal-soft: #0E7C7B18;
+  /* AA-safe (>=4.5:1) shade of the brand for small text on the soft tint;
+     overridden per-tenant at runtime in main.jsx so any brand stays legible. */
+  --teal-text: #0A6260;
   --line: #D8E1E1;
   --card: #FFFFFF;
   --danger: #A94425;
@@ -16,6 +19,7 @@
     --dim: #7E959B;
     --teal: #45AFAC;
     --teal-soft: #45AFAC1F;
+    --teal-text: #5CC8C4;
     --line: #24363B;
     --card: #132126;
     --danger: #E08A55;
@@ -46,7 +50,7 @@ body {
   color: var(--dim); text-decoration: none; padding: 6px 12px; font-size: 13.5px;
   border: 1px solid transparent;
 }
-.nav a.active { color: var(--teal); border-color: var(--teal); background: var(--teal-soft); font-weight: 600; }
+.nav a.active { color: var(--teal-text); border-color: var(--teal); background: var(--teal-soft); font-weight: 600; }
 .who { display: flex; align-items: center; gap: 12px; }
 .user { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--dim); }
 
@@ -112,7 +116,7 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .card p { margin: 0 0 8px; font-size: 13.5px; }
 .tag {
   font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px;
-  text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal);
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal-text);
   background: var(--teal-soft); padding: 2px 8px;
 }
 .includes { margin: 0 0 10px; padding-left: 18px; font-size: 13px; color: var(--dim); }

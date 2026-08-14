@@ -1,9 +1,11 @@
 :root {
   --paper: #FAFBFA;
   --ink: #16272C;
-  --dim: #5A7176;
+  --dim: #495D61;
   --teal: #0E7C7B;
   --teal-soft: #0E7C7B18;
+  /* AA-safe (>=4.5:1) brand shade for small text on the soft tint. */
+  --teal-text: #0A6260;
   --line: #D8E1E1;
   --card: #FFFFFF;
   --danger: #A94425;
@@ -15,6 +17,7 @@
     --dim: #7E959B;
     --teal: #45AFAC;
     --teal-soft: #45AFAC1F;
+    --teal-text: #5CC8C4;
     --line: #24363B;
     --card: #132126;
     --danger: #E08A55;
@@ -48,7 +51,7 @@ main { max-width: 1000px; margin: 0 auto; padding: 26px; }
   padding: 7px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
 }
 .tab:hover { border-color: var(--teal); }
-.tab.on { border-color: var(--teal); color: var(--teal); font-weight: 600; background: var(--teal-soft); }
+.tab.on { border-color: var(--teal); color: var(--teal-text); font-weight: 600; background: var(--teal-soft); }
 
 .panel { border: 1px solid var(--line); background: var(--card); padding: 20px 24px 24px; }
 .panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
