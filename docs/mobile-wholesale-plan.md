@@ -6,7 +6,12 @@
 > settlement + reconciliation + COGS to the GL (DR 5110 / CR 2110), W-M5 the console
 > Mobile-wholesale pane, W-M6 the suite. Design realised as planned, seeker-first: the
 > **MVNO is a tenant**, so the pass runs in-tenant over its own CDRs — the fibre seeker
-> settlement, usage-metered. The provider (host-side AR across tenants) stays a boundary.
+> settlement, usage-metered. **W-M7 the PROVIDER face** (suite #93
+> `mobile_wholesale_provider_test.js`): the host/MVNE bills EXTERNAL MVNOs (who run their
+> own BSS) at a **per-MVNO rate card** (the SLA/tier lever — a premium MVNO pays more), with
+> a consolidated per-MVNO settlement (host AR), a per-MVNO statement the external BSS pulls,
+> and revenue booked DR 1210 / CR 4020. So mobile now supports **both MVNO types**, like
+> open-access fibre: an MVNO on our BSS (a tenant) AND an external MVNO we host.
 
 *Design doc. The mobile sibling to the fibre open-access arc
 ([wholesale-open-access-plan.md](wholesale-open-access-plan.md)): sell **wholesale

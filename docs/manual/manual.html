@@ -1153,8 +1153,26 @@ CDRs — isolate by unique usage-type names per run (the suite does). (2) revenu
 detail returns lines under <code>lines</code>, not <code>journalLine</code>. (3) the tenant-wide
 CDR query (findByTenantIdAndUsageDateBetween) is new on UsageRecordRepository — the pass rates the
 whole MVNO, not one subscriber.</p>
+<p><b>W-M7 — the PROVIDER face</b> (suite
+<a href="../../ops/e2e/mobile_wholesale_provider_test.js">mobile_wholesale_provider_test.js</a>, #93):
+the OTHER MVNO type — one that runs its <b>own BSS</b>, which we host and bill wholesale. So mobile
+now supports both types, like fibre. <code>provider_rate_card</code> (V13/V14) is what the host
+charges an MVNO per unit; a <b>per-MVNO row overrides the default</b> (mvnoPartyId=null) — the
+<b>SLA/tier lever</b>: a premium MVNO pays more than a budget one for the same traffic.
+<code>ProviderWholesaleService.recordProviderUsage</code> takes the network's per-MVNO usage feed →
+rates it at that MVNO's card → <code>provider_usage_ledger</code> (idempotent, one row per
+mvno+period+type). <b>Endpoints</b>: <code>POST /mobileWholesaleProviderUsage</code>,
+<code>GET /mobileWholesaleProviderSettlement</code> (the host's consolidated per-MVNO book = AR),
+<code>GET /mobileWholesaleStatement?mvnoPartyId=</code> (one MVNO's own view — the machine face its
+external BSS reconciles against), <code>GET/POST /providerRateCard</code>. <b>Books</b> (revenue,
+mirror of the seeker's COGS): <code>postMobileWholesaleRevenue</code> DR <code>1210</code> receivable
+/ CR <code>4020</code> mobile-wholesale revenue, idempotent by
+<code>sourceRef=mobile-wholesale-rev:&lt;id&gt;</code>; the same usage-topic listener handles the
+<code>ProviderWholesaleRatedEvent</code>. Seed adds two external MVNOs (Aurora premium, Fjord
+default). <b>Boundary</b>: external-MVNO auth is gated by wholesale:admin for the demo — a real
+deployment issues each MVNO a scoped machine credential for its own statement.</p>
 
-<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and thirteen suites, twenty-five CTKs at zero
+<p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and fourteen suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is
 docs/book/tmf-reference.md</p>
 
