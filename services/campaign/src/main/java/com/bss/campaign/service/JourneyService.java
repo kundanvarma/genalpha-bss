@@ -220,7 +220,7 @@ public class JourneyService {
         }
         int enrolled = 0;
         for (Map<String, Object> member : insight.segmentMembers(journey.getSegmentName())) {
-            if (enroll(journey, String.valueOf(member.get("partyId")))) {
+            if (enroll(journey, String.valueOf(member.get("partyId")), java.util.Map.of())) {
                 enrolled++;
             }
         }
@@ -232,13 +232,18 @@ public class JourneyService {
     @Transactional
     public void onEvent(String eventType, String state, String partyId,
             List<String> offeringIds) {
+        onEvent(eventType, state, partyId, offeringIds, java.util.Map.of());
+    }
+
+    public void onEvent(String eventType, String state, String partyId,
+            List<String> offeringIds, Map<String, Object> context) {
         String tenant = tenantScope.currentTenantId();
         for (Journey journey : journeys.findByTenantIdAndStatusAndTriggerEventType(
                 tenant, Journey.ACTIVE, eventType)) {
             if (journey.getTriggerState() != null && !journey.getTriggerState().equals(state)) {
                 continue;
             }
-            enroll(journey, partyId);
+            enroll(journey, partyId, context);
         }
         // the always-on exit rule: a matching conversion event converts every
         // ACTIVE enrollment whose journey names it — out from any step
@@ -289,7 +294,7 @@ public class JourneyService {
         }
     }
 
-    private boolean enroll(Journey journey, String partyId) {
+    private boolean enroll(Journey journey, String partyId, Map<String, Object> context) {
         String tenant = tenantScope.currentTenantId();
         if (enrollments.existsByTenantIdAndJourneyIdAndPartyId(tenant, journey.getId(), partyId)) {
             return false;
@@ -304,6 +309,9 @@ public class JourneyService {
         enrollment.setVariant(holdout ? "holdout" : "treated");
         enrollment.setEnrolledAt(OffsetDateTime.now());
         enrollment.setNextActionAt(OffsetDateTime.now());
+        if (context != null && !context.isEmpty()) {
+            try { enrollment.setContextJson(objectMapper.writeValueAsString(context)); } catch (Exception ignore) { /* best-effort */ }
+        }
         try {
             enrollments.save(enrollment);
             return true;
@@ -551,11 +559,17 @@ public class JourneyService {
                     journey.getName(), enrollment.getPartyId());
             return false;
         }
+        // tokens captured from the triggering event ({{order.id}}, {{tracking.url}}…)
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        if (enrollment.getContextJson() != null) {
+            try {
+                Map<String, Object> saved = objectMapper.readValue(enrollment.getContextJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                context.putAll(saved);
+            } catch (Exception ignore) { /* best-effort */ }
+        }
+        if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
         if (message.get("templateRef") != null) {
-            // Reusable template: communication renders the localized, tokenized
-            // copy; we pass the channel and any promo code as context.
-            Map<String, Object> context = new java.util.LinkedHashMap<>();
-            if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
             communication.sendTemplated(enrollment.getPartyId(),
                     String.valueOf(message.get("templateRef")),
                     message.get("locale") == null ? null : String.valueOf(message.get("locale")),
@@ -566,7 +580,7 @@ public class JourneyService {
             if (message.get("promotionCode") != null) {
                 content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
             }
-            communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content);
+            communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content, context);
         }
         frequency.record(enrollment.getPartyId(), "journey");
         return true;

@@ -38,6 +38,11 @@ public class JourneyEnrollment {
     @Column(name = "await_event", length = 160)
     private String awaitEvent;
 
+    /** Tokens captured from the triggering event (order.id, tracking.url…),
+     *  so a message sent days later can still reference why they entered. */
+    @Column(name = "context_json", length = 2000)
+    private String contextJson;
+
     @Column(name = "next_action_at")
     private OffsetDateTime nextActionAt;
 
@@ -67,6 +72,8 @@ public class JourneyEnrollment {
     public void setStepIndex(int stepIndex) { this.stepIndex = stepIndex; }
     public String getAwaitEvent() { return awaitEvent; }
     public void setAwaitEvent(String awaitEvent) { this.awaitEvent = awaitEvent; }
+    public String getContextJson() { return contextJson; }
+    public void setContextJson(String contextJson) { this.contextJson = contextJson; }
     public OffsetDateTime getNextActionAt() { return nextActionAt; }
     public void setNextActionAt(OffsetDateTime v) { this.nextActionAt = v; }
     public OffsetDateTime getEnrolledAt() { return enrolledAt; }

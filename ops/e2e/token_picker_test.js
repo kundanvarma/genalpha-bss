@@ -36,6 +36,18 @@ const CONSOLE = 'http://localhost:8080/console/';
   }
   console.log('OK a "First name" chip inserted {{party.firstName}} into the message — no syntax to memorize');
 
+  /* ---------- event-context chips (the order/tracking that brought them in) ---------- */
+  for (const t of ['order.id', 'tracking.url', 'tracking.carrier']) {
+    if (!(await msgRow.locator(`[data-testid="token-${t}"]`).count())) fail(`no "${t}" chip on the message field`);
+  }
+  await msgRow.locator('.stepbody textarea, textarea').first().click();
+  await msgRow.locator('[data-testid="token-order.id"]').click();
+  await page.waitForTimeout(200);
+  if (!((await steps())[0].content || '').includes('{{order.id}}')) {
+    fail('the Order-number chip did not insert {{order.id}}: ' + JSON.stringify((await steps())[0]));
+  }
+  console.log('OK an "Order number" chip inserted {{order.id}} — a message can reference the order that triggered it');
+
   /* ---------- typing {{ opens an autocomplete ---------- */
   const subj = page.locator('.stepbody .stepfield').filter({ hasText: 'Subject' }).locator('input').first();
   await subj.click();

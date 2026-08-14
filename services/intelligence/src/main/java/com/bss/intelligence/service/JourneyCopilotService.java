@@ -65,6 +65,10 @@ public class JourneyCopilotService {
                 "campaign": {"name","triggerEventType"?,"segmentName"?,"holdoutPercent",\
                 "message":{"subject","content"},"promotionCode"?}}}
                 Include only the artifact you propose (journey OR campaign). \
+                PERSONALIZE the copy with tokens resolved per-customer at send time: \
+                {{party.firstName}} (greet by name), {{brand.name}}, and — when the trigger \
+                carries them — {{order.id}} and {{tracking.url}} (e.g. a shipped-handset message). \
+                Prefer greeting by first name in the opening line.
                 Ask a QUESTION when the ask is ambiguous (who is it for? what triggers it? one \
                 message or a series?); give ADVICE when they want to understand; PROPOSE when \
                 they have answered or asked you to create. Keep copy short and warm; default a \

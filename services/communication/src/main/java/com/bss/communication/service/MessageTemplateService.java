@@ -143,6 +143,9 @@ public class MessageTemplateService {
         }
         Map<String, Object> ctx = new LinkedHashMap<>();
         ctx.put("brand.name", tenantScope.currentTenantId());
+        if (dto.get("context") instanceof Map<?, ?> passed) {
+            passed.forEach((k, v) -> ctx.put(String.valueOf(k), v)); // event tokens: order.id, tracking.url…
+        }
         if (partyId != null) ctx.putAll(parties.nameTokens(tenantScope.currentTenantId(), partyId));
         Map<String, Object> out = new LinkedHashMap<>(dto);
         if (dto.get("subject") != null) out.put("subject", renderer.substitute(subject, ctx));

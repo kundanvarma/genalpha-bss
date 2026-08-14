@@ -45,6 +45,14 @@ async function token(ctx, client, user, pass) {
   if (p.proposal.journey.triggerEventType !== 'IndividualCreateEvent') fail('the proposed journey lost the onboarding trigger');
   console.log(`OK the copilot proposed a ${p.proposal.journey.steps.length}-step journey on IndividualCreateEvent`);
 
+  /* ---------- the copilot personalizes its own copy (greets by name) ---------- */
+  const copy = p.proposal.journey.steps.filter((s) => s.type === 'message')
+    .map((s) => `${s.subject || ''} ${s.content || ''}`).join(' ');
+  if (!copy.includes('{{party.firstName}}')) {
+    fail('the copilot proposed messages with no {{party.firstName}} personalization: ' + copy.slice(0, 200));
+  }
+  console.log('OK the copilot personalized its proposed copy with {{party.firstName}} — greets by name out of the box');
+
   /* ---------- confirm = apply: the proposal creates a real journey ---------- */
   const jr = p.proposal.journey;
   const created = await (await ctx.post(JOURNEY, { headers: H(staff), data: {

@@ -19,15 +19,17 @@ public class RestCommunicationClient implements CommunicationClient {
     }
 
     @Override
-    public void send(String partyId, String subject, String content) {
+    public void send(String partyId, String subject, String content, Map<String, Object> context) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("subject", subject);
+        body.put("content", content);
+        body.put("messageType", "inApp");
+        if (context != null && !context.isEmpty()) body.put("context", context);
+        body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
             restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
                     .header("Content-Type", "application/json")
-                    .body(Map.of(
-                            "subject", subject,
-                            "content", content,
-                            "messageType", "inApp",
-                            "relatedParty", List.of(Map.of("id", partyId, "role", "customer"))))
+                    .body(body)
                     .retrieve().toBodilessEntity();
         } catch (RestClientException e) {
             throw new IllegalStateException("communication rejected the campaign message", e);

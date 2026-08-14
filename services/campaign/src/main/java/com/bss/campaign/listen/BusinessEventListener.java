@@ -64,13 +64,30 @@ public class BusinessEventListener {
             String state = resource.get("state") != null ? String.valueOf(resource.get("state"))
                     : resource.get("status") != null ? String.valueOf(resource.get("status")) : null;
             List<String> offeringIds = offeringsOf(resource);
+            Map<String, Object> context = contextOf(eventType, resource);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 campaigns.onEvent(eventType, state, party, offeringIds);
-                journeys.onEvent(eventType, state, party, offeringIds);
+                journeys.onEvent(eventType, state, party, offeringIds, context);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());
         }
+    }
+
+    /**
+     * A few well-known tokens lifted from the triggering event's resource, so a
+     * message can say "your order {{order.id}} shipped — track it {{tracking.url}}".
+     * Stored on the enrollment; resolved at send time.
+     */
+    private Map<String, Object> contextOf(String eventType, Map<String, Object> resource) {
+        Map<String, Object> ctx = new java.util.LinkedHashMap<>();
+        Object orderId = resource.get("productOrderId") != null ? resource.get("productOrderId")
+                : (eventType != null && eventType.startsWith("ProductOrder") ? resource.get("id") : null);
+        if (orderId != null) ctx.put("order.id", orderId);
+        if (resource.get("trackingUrl") != null) ctx.put("tracking.url", resource.get("trackingUrl"));
+        if (resource.get("trackingRef") != null) ctx.put("tracking.number", resource.get("trackingRef"));
+        if (resource.get("carrier") != null) ctx.put("tracking.carrier", resource.get("carrier"));
+        return ctx;
     }
 
     /** What the event's order added — the raw material of attributed revenue. */

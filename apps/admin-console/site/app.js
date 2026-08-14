@@ -60,6 +60,7 @@ const TRIGGER_EVENTS = [
   { value: 'LoyaltyTierChangedEvent', label: 'Loyalty tier changed' },
   { value: 'IndividualCreateEvent', label: 'New customer registered (onboarding)' },
   { value: 'ShippingOrderStateChangeEvent', label: 'Parcel/handset shipped or delivered' },
+  { value: 'BucketBalanceChangeEvent', label: 'Data balance topped up (top-up bought / loyalty data gifted)' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the
@@ -1465,6 +1466,9 @@ const MSG_TOKENS = [
   { token: 'party.lastName', label: 'Last name' },
   { token: 'brand.name', label: 'Brand' },
   { token: 'promotion.code', label: 'Promo code' },
+  { token: 'order.id', label: 'Order number' },
+  { token: 'tracking.url', label: 'Tracking link' },
+  { token: 'tracking.carrier', label: 'Carrier' },
 ];
 
 function insertAtCaret(el, text, replaceFrom) {

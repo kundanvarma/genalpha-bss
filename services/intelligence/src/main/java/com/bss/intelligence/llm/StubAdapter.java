@@ -302,13 +302,15 @@ public class StubAdapter implements LlmAdapter {
                 + "\"name\":\"New-customer onboarding\",\"triggerEventType\":\"IndividualCreateEvent\","
                 + "\"holdoutPercent\":10,\"priority\":0,\"steps\":["
                 + "{\"type\":\"message\",\"stage\":\"Welcome\",\"channel\":\"email\","
-                + "\"subject\":\"Welcome aboard!\",\"content\":\"You're in — here's how to get started.\"},"
+                + "\"subject\":\"Welcome aboard, {{party.firstName}}!\","
+                + "\"content\":\"Hi {{party.firstName}}, you're in — here's how to get started.\"},"
                 + "{\"type\":\"wait\",\"stage\":\"Activate\",\"days\":3},"
                 + "{\"type\":\"message\",\"stage\":\"Activate\",\"channel\":\"email\","
-                + "\"subject\":\"Ready to activate?\",\"content\":\"Add your first service in a couple of taps.\"},"
+                + "\"subject\":\"Ready to activate, {{party.firstName}}?\","
+                + "\"content\":\"Hi {{party.firstName}}, add your first service in a couple of taps.\"},"
                 + "{\"type\":\"wait\",\"stage\":\"Check-in\",\"days\":4},"
                 + "{\"type\":\"message\",\"stage\":\"Check-in\",\"channel\":\"inApp\","
-                + "\"subject\":\"How's it going?\",\"content\":\"Anything we can help with?\"},"
+                + "\"subject\":\"How's it going, {{party.firstName}}?\",\"content\":\"Anything we can help with?\"},"
                 + "{\"type\":\"exit\"}]}}}";
     }
 
