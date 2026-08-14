@@ -20,14 +20,16 @@ const PORT = process.env.PORT || 8080;
 const audiences = new Map();
 /** formId -> [{id, created_time, field_data}] */
 const leadForms = new Map();
-let leadSeq = 1000;
+// Seq bases are time-seeded so a RESTARTED mock never reissues ids that
+// downstream services already persisted (else idempotency dedupes them away).
+let leadSeq = Date.now();
 /** account -> [{id, platform, author, text, created_time}] — brand mentions for
  *  social listening (the BSS pulls these in and scores sentiment). */
 const mentions = new Map();
-let mentionSeq = 5000;
+let mentionSeq = Date.now() + 1;
 /** account -> [{id, message, created_time}] — organic posts the brand published */
 const published = new Map();
-let postSeq = 9000;
+let postSeq = Date.now() + 2;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
