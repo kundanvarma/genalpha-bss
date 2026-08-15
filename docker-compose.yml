@@ -1611,7 +1611,9 @@ services:
       COMMUNICATION_BASE_URL: http://communication:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
-      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+      # Metaspace raised 112m->224m: the CDP grew (visitor population, social
+      # care, paginated/searchable ledger) and 112m OOM'd on class metadata.
+      JAVA_OPTS: "-Xmx256m -XX:MaxMetaspaceSize=224m"
     volumes:
       - ./infra/tenants:/config:ro
     ports:
