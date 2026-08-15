@@ -165,7 +165,40 @@ public class AudienceService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> members(String id) {
-        return resolve(id).members();
+        List<Map<String, Object>> raw = resolve(id).members();
+        // Enrich party members with a human label (email) so the console shows WHO
+        // is in the audience, not just an opaque id. One query for all emails, then a map.
+        boolean needsLabel = raw.stream().anyMatch(m -> m.get("partyId") != null && m.get("email") == null);
+        if (!needsLabel) {
+            return raw;
+        }
+        Map<String, String> emailByParty = new java.util.HashMap<>();
+        for (com.bss.insight.entity.PartyTrait t
+                : traits.findByTenantIdAndTraitKey(tenantScope.currentTenantId(), "email")) {
+            emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
+        }
+        List<Map<String, Object>> out = new java.util.ArrayList<>(raw.size());
+        for (Map<String, Object> m : raw) {
+            Map<String, Object> copy = new LinkedHashMap<>(m);
+            Object pid = copy.get("partyId");
+            if (pid != null && copy.get("email") == null) {
+                String email = emailByParty.get(String.valueOf(pid));
+                if (email != null) {
+                    copy.put("email", email);
+                }
+            }
+            out.add(copy);
+        }
+        return out;
+    }
+
+    /** Delete a saved audience (and its snapshot), so the list stays clean —
+     * audiences pile up otherwise. Tenant-scoped: load() 404s on a foreign id. */
+    @Transactional
+    public void delete(String id) {
+        Audience a = load(id);
+        snapshots.deleteByTenantIdAndAudienceId(tenantScope.currentTenantId(), id);
+        audiences.delete(a);
     }
 
     /** Same resolution, but reports WHICH path ran (sql | memory | prospect) —

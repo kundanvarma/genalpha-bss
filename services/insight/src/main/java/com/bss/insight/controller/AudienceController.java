@@ -49,6 +49,12 @@ public class AudienceController {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/members")
     public ResponseEntity<?> members(@PathVariable String id,
             @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean explain,

@@ -853,12 +853,25 @@ const RESOURCES = [
     path: 'audience',
     base: '/insight/v1',
     title: 'Saved audiences',
-    // The saved BSS-native audiences (built in Audience builder): a read-only
-    // overview with population and materialized member count. (The GA4/analytics
-    // catalog is a separate seam, per-tenant and only when a provider is bound.)
+    // The saved BSS-native audiences (built in Audience builder): overview with
+    // population + member count. View expands the actual members (who's in it);
+    // Delete keeps the list from cluttering. (The GA4/analytics catalog is a
+    // separate seam, per-tenant and only when a provider is bound.)
     readOnly: true,
+    allowDelete: true,
     fields: [],
     columns: ['name', 'population', 'memberCount'],
+    detail: async (item) => {
+      const res = await authFetch(`/insight/v1/audience/${item.id}/members`);
+      const members = res.ok ? await res.json() : [];
+      if (!members.length) return [{ member: 'no members yet' }];
+      const rows = members.slice(0, 200).map((m) => ({
+        who: m.email || m.name || m.partyId || m.visitorId || m.id || '—',
+        id: m.partyId || m.visitorId || '',
+      }));
+      if (members.length > rows.length) rows.push({ who: `…and ${members.length - rows.length} more`, id: '' });
+      return rows;
+    },
   },
   {
     path: 'profile',
@@ -5152,6 +5165,19 @@ async function loadList() {
       td.append(canvasBtn);
     }
     if (active.readOnly) {
+      // A read-only tab can still opt into Delete (e.g. Saved audiences —
+      // authored elsewhere, but prune-able so the list doesn't clutter).
+      if (active.allowDelete) {
+        const del = document.createElement('button');
+        del.textContent = 'Delete';
+        del.className = 'ghost danger';
+        del.addEventListener('click', async () => {
+          if (!confirm(`Delete "${item.name || item.id}"?`)) return;
+          await authFetch(`${active.base || API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
+          loadList();
+        });
+        td.append(del);
+      }
       tr.append(td);
       return tr;
     }
