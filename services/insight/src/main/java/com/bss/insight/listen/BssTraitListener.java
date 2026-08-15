@@ -105,6 +105,20 @@ public class BssTraitListener {
                 }
                 return;
             }
+            // The NETWORK's device truth (EIR/device-detection) becomes a trait —
+            // single-valued, so a device swap REPLACES it and audiences re-home. This
+            // is what "customers on an iPhone 15" means live, incl. BYOD (no purchase).
+            if ("DeviceDetectedEvent".equals(eventType)) {
+                Map<String, Object> r = resourceOf(event);
+                String party = r == null || r.get("partyId") == null ? null : String.valueOf(r.get("partyId"));
+                String model = r == null || r.get("deviceModel") == null ? null : String.valueOf(r.get("deviceModel"));
+                if (party != null && model != null && !model.isBlank()) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        traits.setTrait(party, "deviceModel", model);
+                    }
+                }
+                return;
+            }
             if ("LoyaltyTierChangedEvent".equals(eventType)) {
                 setFrom(event, tenantId, "loyaltyTier", r -> str(r.get("tier")));
                 return;
