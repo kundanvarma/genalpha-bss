@@ -1123,6 +1123,31 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'landing',
+    base: '/insight/v1',
+    title: 'Landing pages',
+    // Author a standalone campaign landing page + consent-first lead form. POST
+    // upserts by slug, so re-submitting the same slug edits it (hence noEdit).
+    noEdit: true,
+    fields: [
+      { name: 'headline', label: 'Headline', required: true },
+      { name: 'subhead', label: 'Subhead — one line under the headline', kind: 'longtext' },
+      { name: 'ctaLabel', label: 'Button label', placeholder: 'Get the offer' },
+      { name: 'utmSource', label: 'Campaign (utm_source) — captured leads are stamped with this', required: true },
+      { name: 'slug', label: 'URL slug (optional — derived from the headline)' },
+      { name: 'logoUrl', label: 'Logo URL (optional)' },
+      { name: 'heroImageUrl', label: 'Hero image URL (optional)' },
+      { name: 'brandColor', label: 'Brand colour #hex (optional)', placeholder: '#0f766e' },
+      { name: 'ctaUrl', label: 'Secondary "learn more" link (optional)' },
+      { name: 'privacyUrl', label: 'Privacy link URL (optional)' },
+    ],
+    columns: ['slug', 'headline', 'utmSource', 'url'],
+    rowAction: {
+      label: () => 'Open page',
+      apply: (item) => { window.open(item.url, '_blank', 'noopener'); return Promise.resolve(); },
+    },
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -1261,6 +1286,7 @@ const TAB_ROLE = {
   socialListening: 'insight:read',
   socialCare: 'insight:read',
   attribution: 'campaign:read',
+  landing: 'insight:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
@@ -1320,7 +1346,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth

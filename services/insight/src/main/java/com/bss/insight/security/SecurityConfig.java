@@ -55,6 +55,7 @@ public class SecurityConfig {
                         // authoring landing pages is back-office
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/landing").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/landing").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/landing/*").hasAuthority("insight:read")
                         // the stitch needs a verified token — the subject IS the party
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/stitch").authenticated()
                         // the raw profile is back-office only

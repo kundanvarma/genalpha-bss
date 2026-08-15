@@ -53,4 +53,10 @@ public class LandingPageController {
             @RequestBody Map<String, Object> body) {
         return ResponseEntity.ok(service.captureLead(slug, body));
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable String id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
 }

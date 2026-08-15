@@ -63,6 +63,12 @@ public class LandingPageService {
                 .stream().map(LandingPageService::toMap).toList();
     }
 
+    /** Delete a page (RLS scopes findById to the caller's tenant, so a foreign id is a no-op). */
+    @Transactional
+    public void delete(String id) {
+        pages.findById(id).ifPresent(pages::delete);
+    }
+
     /** Capture a consented lead → a CONSENTED prospect stamped with the campaign. */
     @Transactional
     public Map<String, Object> captureLead(String slug, Map<String, Object> body) {
