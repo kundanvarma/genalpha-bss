@@ -3201,7 +3201,36 @@ async function renderAudienceBuilder() {
   });
   importCard.append(ih, ihint, emails, irow);
 
-  panel.append(intro, importCard, card, savedWrap);
+  /* ---------- ops: auto-refresh status + controls (pause without a restart) ---------- */
+  const sched = document.createElement('div'); sched.className = 'panel'; sched.dataset.testid = 'scheduler-card';
+  sched.style.cssText = 'padding:12px 16px;margin-top:16px';
+  const sh = document.createElement('h3'); sh.textContent = 'Audience auto-refresh'; sh.style.cssText = 'font-size:14px;margin:0 0 6px';
+  const sstat = document.createElement('div'); sstat.dataset.testid = 'scheduler-status'; sstat.style.cssText = 'font-size:12.5px;line-height:1.7';
+  const sbar = document.createElement('div'); sbar.className = 'staffbar'; sbar.style.marginTop = '8px';
+  const pauseBtn = document.createElement('button'); pauseBtn.className = 'ghost'; pauseBtn.type = 'button'; pauseBtn.textContent = 'Pause'; pauseBtn.dataset.testid = 'scheduler-pause';
+  const resumeBtn = document.createElement('button'); resumeBtn.className = 'ghost'; resumeBtn.type = 'button'; resumeBtn.textContent = 'Resume'; resumeBtn.dataset.testid = 'scheduler-resume';
+  const runBtn = document.createElement('button'); runBtn.className = 'ghost'; runBtn.type = 'button'; runBtn.textContent = 'Run now'; runBtn.dataset.testid = 'scheduler-run';
+  sbar.append(pauseBtn, resumeBtn, runBtn);
+  const paintSched = (s) => {
+    if (!s) { sstat.textContent = 'status unavailable'; return; }
+    const badge = s.enabled
+      ? '<span data-testid="scheduler-enabled" style="color:#2e7d32;font-weight:600">● running</span>'
+      : '<span data-testid="scheduler-enabled" style="color:#c62828;font-weight:600">● paused</span>';
+    const last = s.lastRunAt ? new Date(s.lastRunAt).toLocaleTimeString() : '—';
+    sstat.innerHTML = `${badge} · every ${Math.round((s.intervalMs || 0) / 1000)}s · cap ${s.maxPerRun}/run<br>`
+      + `runs ${s.totalRuns} · refreshed ${s.totalRefreshed} · errors ${s.totalErrors} · last ${last} (${s.lastDurationMs}ms)<br>`
+      + `<span class="dim">JVM heap ${s.heapUsedMb} / ${s.heapMaxMb} MB — watch this against runs to spot a memory climb</span>`;
+    pauseBtn.disabled = !s.enabled; resumeBtn.disabled = s.enabled;
+  };
+  const loadSched = async () => { try { const r = await authFetch('/insight/v1/refresh/status'); paintSched(r.ok ? await r.json() : null); } catch { paintSched(null); } };
+  const act = (path) => async () => { const r = await authFetch('/insight/v1/refresh/' + path, { method: 'POST' }); paintSched(r.ok ? await r.json() : null); };
+  pauseBtn.addEventListener('click', act('pause'));
+  resumeBtn.addEventListener('click', act('resume'));
+  runBtn.addEventListener('click', act('run'));
+  loadSched();
+  sched.append(sh, sstat, sbar);
+
+  panel.append(intro, importCard, card, savedWrap, sched);
   name.focus();
 }
 
