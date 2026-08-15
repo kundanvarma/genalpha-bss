@@ -41,6 +41,23 @@ public class LandingPage {
     @Column(name = "utm_source")
     private String utmSource;
 
+    // --- brand / customization ---
+    @Column(name = "logo_url", length = 512)
+    private String logoUrl;
+
+    @Column(name = "hero_image_url", length = 512)
+    private String heroImageUrl;
+
+    @Column(name = "brand_color", length = 16)
+    private String brandColor;
+
+    /** Optional secondary link (e.g. "learn more") rendered beside the form. */
+    @Column(name = "cta_url", length = 512)
+    private String ctaUrl;
+
+    @Column(name = "privacy_url", length = 512)
+    private String privacyUrl;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -58,6 +75,16 @@ public class LandingPage {
     public void setCtaLabel(String ctaLabel) { this.ctaLabel = ctaLabel; }
     public String getUtmSource() { return utmSource; }
     public void setUtmSource(String utmSource) { this.utmSource = utmSource; }
+    public String getLogoUrl() { return logoUrl; }
+    public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public String getHeroImageUrl() { return heroImageUrl; }
+    public void setHeroImageUrl(String heroImageUrl) { this.heroImageUrl = heroImageUrl; }
+    public String getBrandColor() { return brandColor; }
+    public void setBrandColor(String brandColor) { this.brandColor = brandColor; }
+    public String getCtaUrl() { return ctaUrl; }
+    public void setCtaUrl(String ctaUrl) { this.ctaUrl = ctaUrl; }
+    public String getPrivacyUrl() { return privacyUrl; }
+    public void setPrivacyUrl(String privacyUrl) { this.privacyUrl = privacyUrl; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
 }

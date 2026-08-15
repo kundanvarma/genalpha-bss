@@ -47,6 +47,13 @@ public class LandingPageService {
         p.setSubhead(str(dto.get("subhead"), null));
         p.setCtaLabel(str(dto.get("ctaLabel"), "Get the offer"));
         p.setUtmSource(str(dto.get("utmSource"), slug));
+        // Customization — URLs and the colour are sanitized so a page can never
+        // become an injection vector (only http/https/relative URLs, only #hex).
+        p.setLogoUrl(safeUrl(str(dto.get("logoUrl"), null)));
+        p.setHeroImageUrl(safeUrl(str(dto.get("heroImageUrl"), null)));
+        p.setBrandColor(safeColor(str(dto.get("brandColor"), null)));
+        p.setCtaUrl(safeUrl(str(dto.get("ctaUrl"), null)));
+        p.setPrivacyUrl(safeUrl(str(dto.get("privacyUrl"), null)));
         return toMap(pages.save(p));
     }
 
@@ -85,10 +92,19 @@ public class LandingPageService {
     public String renderHtml(String slug, String utmOverride) {
         LandingPage page = pages.findByTenantIdAndSlug(tenantScope.currentTenantId(), slug).orElse(null);
         if (page == null) {
-            return htmlShell("Not found", "<p>This page isn't available.</p>");
+            return htmlShell("Not found", "<p>This page isn't available.</p>", null);
         }
         String utm = utmOverride != null && !utmOverride.isBlank() ? utmOverride : page.getUtmSource();
-        String body = "<h1>" + esc(page.getHeadline()) + "</h1>"
+        String accent = page.getBrandColor() != null ? page.getBrandColor() : "#0f766e";
+        String logo = page.getLogoUrl() == null ? ""
+                : "<img class=\"logo\" alt=\"logo\" src=\"" + esc(page.getLogoUrl()) + "\">";
+        String hero = page.getHeroImageUrl() == null ? ""
+                : "<img class=\"hero\" alt=\"\" src=\"" + esc(page.getHeroImageUrl()) + "\">";
+        String secondary = page.getCtaUrl() == null ? ""
+                : "<a class=\"secondary\" href=\"" + esc(page.getCtaUrl()) + "\">Learn more →</a>";
+        String footer = page.getPrivacyUrl() == null ? ""
+                : "<p class=\"footer\"><a href=\"" + esc(page.getPrivacyUrl()) + "\">Privacy</a></p>";
+        String body = logo + hero + "<h1>" + esc(page.getHeadline()) + "</h1>"
                 + (page.getSubhead() == null ? "" : "<p class=\"sub\">" + esc(page.getSubhead()) + "</p>")
                 + "<form id=\"lead\" onsubmit=\"return submitLead(event)\">"
                 + "<input name=\"name\" placeholder=\"Your name\" autocomplete=\"name\">"
@@ -103,26 +119,32 @@ public class LandingPageService {
                 + "headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});var j=await r.json();"
                 + "document.getElementById('msg').textContent=j.captured?'Thanks — check your inbox!':"
                 + "(j.reason||'Something went wrong.');if(j.captured)f.querySelector('button').disabled=true;"
-                + "return false;}</script>";
-        return htmlShell(page.getHeadline(), body);
+                + "return false;}</script>" + secondary + footer;
+        return htmlShell(page.getHeadline(), body, accent);
     }
 
-    private static String htmlShell(String title, String body) {
+    private static String htmlShell(String title, String body, String accent) {
+        String a = accent == null ? "#0f766e" : accent;
         return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
                 + "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>" + esc(title)
-                + "</title><style>body{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#20262b;"
-                + "background:linear-gradient(160deg,#0f766e0d,#fff);margin:0}"
-                + ".wrap{max-width:34rem;margin:0 auto;padding:4rem 1.25rem}"
-                + "h1{font-size:2rem;line-height:1.2;color:#0f766e;margin:.2rem 0 .6rem}"
+                + "</title><style>:root{--accent:" + a + "}"
+                + "body{font:16px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;color:#20262b;"
+                + "background:linear-gradient(160deg,color-mix(in srgb,var(--accent) 6%,#fff),#fff);margin:0}"
+                + ".wrap{max-width:34rem;margin:0 auto;padding:3rem 1.25rem}"
+                + ".logo{max-height:44px;margin:0 0 1.4rem;display:block}"
+                + ".hero{width:100%;border-radius:14px;margin:0 0 1.4rem;object-fit:cover}"
+                + "h1{font-size:2rem;line-height:1.2;color:var(--accent);margin:.2rem 0 .6rem}"
                 + ".sub{color:#55606a;font-size:1.1rem;margin:0 0 1.6rem}"
                 + "form{display:flex;flex-direction:column;gap:.7rem;background:#fff;padding:1.4rem;"
-                + "border:1px solid #e3e8ea;border-radius:14px;box-shadow:0 6px 24px #0f766e14}"
+                + "border:1px solid #e3e8ea;border-radius:14px;box-shadow:0 6px 24px #00000010}"
                 + "input[type=text],input[type=email],input:not([type]){padding:.7rem .8rem;font-size:1rem;"
                 + "border:1px solid #cbd5d8;border-radius:8px}"
                 + ".consent{display:flex;gap:.5rem;align-items:flex-start;font-size:.85rem;color:#55606a}"
-                + "button{padding:.75rem 1rem;font-size:1rem;font-weight:600;color:#fff;background:#0f766e;"
+                + "button{padding:.75rem 1rem;font-size:1rem;font-weight:600;color:#fff;background:var(--accent);"
                 + "border:0;border-radius:8px;cursor:pointer}button:disabled{opacity:.5}"
-                + ".msg{margin:.2rem 0 0;font-size:.9rem;color:#0f766e}</style></head>"
+                + ".msg{margin:.2rem 0 0;font-size:.9rem;color:var(--accent)}"
+                + ".secondary{display:inline-block;margin:1rem 0 0;color:var(--accent);text-decoration:none;font-weight:600}"
+                + ".footer{margin:2rem 0 0;font-size:.8rem}.footer a{color:#8894a0}</style></head>"
                 + "<body><div class=\"wrap\">" + body + "</div></body></html>";
     }
 
@@ -134,9 +156,32 @@ public class LandingPageService {
         m.put("subhead", p.getSubhead());
         m.put("ctaLabel", p.getCtaLabel());
         m.put("utmSource", p.getUtmSource());
+        m.put("logoUrl", p.getLogoUrl());
+        m.put("heroImageUrl", p.getHeroImageUrl());
+        m.put("brandColor", p.getBrandColor());
+        m.put("ctaUrl", p.getCtaUrl());
+        m.put("privacyUrl", p.getPrivacyUrl());
         m.put("url", "/insight/v1/landing/" + p.getSlug() + "/view");
         m.put("createdAt", p.getCreatedAt());
         return m;
+    }
+
+    /** Only http(s) or root-relative URLs — never javascript:/data: (XSS via src/href). */
+    private static String safeUrl(String url) {
+        if (url == null) {
+            return null;
+        }
+        String u = url.trim();
+        return (u.startsWith("https://") || u.startsWith("http://") || u.startsWith("/")) ? u : null;
+    }
+
+    /** Only a #hex colour — so the accent can't inject arbitrary CSS. */
+    private static String safeColor(String color) {
+        if (color == null) {
+            return null;
+        }
+        String c = color.trim();
+        return c.matches("#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?") ? c : null;
     }
 
     private static String slugify(String s) {

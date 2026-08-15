@@ -29,18 +29,28 @@ async function token(ctx) {
   const page = await (await ctx.post(LANDING, { headers: H, data: {
     slug, headline: 'Upgrade to the iPhone 17 — €0 upfront',
     subhead: 'Trade in your old phone and switch in minutes.', ctaLabel: 'Claim the offer',
-    utmSource: CAMPAIGN } })).json();
+    utmSource: CAMPAIGN,
+    // customization: logo, brand colour, a secondary link, a privacy link
+    logoUrl: 'https://cdn.example/logo.png', brandColor: '#7c3aed',
+    ctaUrl: 'https://example.com/iphone17', privacyUrl: 'https://example.com/privacy',
+    heroImageUrl: 'javascript:alert(1)' } })).json(); // hero is a bad URL — must be dropped
   if (!page.url || page.slug !== slug) fail('landing page not created: ' + JSON.stringify(page));
-  console.log(`OK a standalone landing page was authored at ${page.url}`);
+  if (page.brandColor !== '#7c3aed' || page.logoUrl !== 'https://cdn.example/logo.png') fail('customization not saved: ' + JSON.stringify(page));
+  if (page.heroImageUrl) fail('an unsafe (javascript:) URL was not rejected: ' + page.heroImageUrl);
+  console.log(`OK a standalone, BRANDED landing page was authored at ${page.url} (unsafe URL rejected)`);
 
-  // the PUBLIC page renders — no auth — with the headline + a lead form
+  // the PUBLIC page renders — no auth — branded, with the headline + a lead form
   const view = await ctx.get(`${LANDING}/${slug}/view`); // note: no Authorization header
   const html = await view.text();
   if (view.status() !== 200) fail('public landing view was not accessible: HTTP ' + view.status());
   if (!html.includes('iPhone 17') || !html.includes('<form') || !html.includes('type="checkbox"')) {
     fail('landing page HTML is missing the headline or the consent form');
   }
-  console.log('OK the landing page is publicly reachable and renders the headline + a consent-first form');
+  if (!html.includes('cdn.example/logo.png') || !html.includes('#7c3aed') || !html.includes('example.com/privacy')) {
+    fail('the customization (logo / brand colour / privacy link) did not render');
+  }
+  if (html.includes('javascript:alert')) fail('an unsafe URL leaked into the rendered page');
+  console.log('OK the page renders branded — logo, brand colour and privacy link present; the unsafe URL is gone');
 
   // a submit WITHOUT consent captures nothing
   const noConsent = await (await ctx.post(`${LANDING}/${slug}/lead`,
