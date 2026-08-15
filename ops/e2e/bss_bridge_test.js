@@ -79,6 +79,12 @@ async function token(ctx, realm, user, pass) {
   const ext = `ca-foreign-${run}`;
   const act = await (await ctx.post(`${AUDIENCE}/${aud.id}/activate`, { headers: H(staff),
     data: { externalAudienceId: ext, mode: 'seed' } })).json();
+  if (!act.jobId) fail('activation was not queued: ' + JSON.stringify(act));
+  for (let i = 0; i < 40; i++) { // async job: wait for the export to finish
+    const j = await (await ctx.get(`${AUDIENCE}/activation/${act.jobId}`, { headers: H(staff) })).json();
+    if (j.status === 'done' || j.status === 'error') break;
+    await sleep(500);
+  }
   const pushed = await (await ctx.get(`${SOCIAL}/v1/${ext}/users`, { headers: { Authorization: 'Bearer x' } })).json();
   if (!pushed.includes(sha256(email))) fail('the foreign customer did not reach the ad platform (hashed): ' + JSON.stringify(act));
   console.log('OK the foreign customer activated to a Custom Audience (email denormalized via the bridge, hashed)');

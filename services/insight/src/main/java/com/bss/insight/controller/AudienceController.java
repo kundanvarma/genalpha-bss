@@ -74,10 +74,17 @@ public class AudienceController {
     }
 
     /** Push this audience OUT to an ad/social platform as a Custom Audience —
-     * seed (lookalike source) or suppress (paid-spend exclusion). */
+     * seed (lookalike source) or suppress (paid-spend exclusion). Async: returns
+     * a job; the export runs in the background. */
     @PostMapping("/{id}/activate")
     public ResponseEntity<Map<String, Object>> activate(@PathVariable String id,
             @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(activation.activate(id, body));
+        return ResponseEntity.accepted().body(activation.activate(id, body));
+    }
+
+    /** Poll an activation job: queued -> running -> done|error, with counts. */
+    @GetMapping("/activation/{jobId}")
+    public ResponseEntity<Map<String, Object>> activationJob(@PathVariable String jobId) {
+        return ResponseEntity.ok(activation.jobStatus(jobId));
     }
 }

@@ -850,15 +850,15 @@ const RESOURCES = [
     }],
   },
   {
-    path: 'audiences',
+    path: 'audience',
     base: '/insight/v1',
-    title: 'Audiences',
-    // What the tenant's OWN analytics computed, imported live through the
-    // GA4 Data API wire shape — these names are usable as campaign and
-    // journey segments.
+    title: 'Saved audiences',
+    // The saved BSS-native audiences (built in Audience builder): a read-only
+    // overview with population and materialized member count. (The GA4/analytics
+    // catalog is a separate seam, per-tenant and only when a provider is bound.)
     readOnly: true,
     fields: [],
-    columns: ['name', 'size', 'source'],
+    columns: ['name', 'population', 'memberCount'],
   },
   {
     path: 'profile',
@@ -1220,7 +1220,7 @@ const TAB_ROLE = {
   'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
-  audiences: 'insight:read',
+  audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
   profile: 'insight:read',
@@ -1282,7 +1282,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'socialListening', 'audiences', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'socialListening', 'audience', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },

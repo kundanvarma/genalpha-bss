@@ -42,10 +42,21 @@ async function token(ctx, realm, user, pass) {
   const seedAud = await (await ctx.post(AUDIENCE, { headers: H(staff), data: {
     name: `Seed ${run}`, population: 'prospect', criteria: { all: [{ type: 'source', value: src }] } } })).json();
 
+  const pollJob = async (jobId) => {
+    for (let i = 0; i < 40; i++) {
+      const j = await (await ctx.get(`${AUDIENCE}/activation/${jobId}`, { headers: H(staff) })).json();
+      if (j.status === 'done' || j.status === 'error') return j;
+      await sleep(500);
+    }
+    return { status: 'timeout' };
+  };
+
   const extSeed = `ca-seed-${run}`;
   const act = await (await ctx.post(`${AUDIENCE}/${seedAud.id}/activate`, { headers: H(staff),
     data: { externalAudienceId: extSeed, mode: 'seed' } })).json();
-  if (act.mode !== 'seed' || act.pushed !== 2) fail('seed activation did not push 2 hashed emails: ' + JSON.stringify(act));
+  if (act.status !== 'queued' || !act.jobId) fail('seed activation was not queued: ' + JSON.stringify(act));
+  const seedJob = await pollJob(act.jobId);
+  if (seedJob.status !== 'done' || seedJob.pushed !== 2) fail('seed job did not push 2 hashed emails: ' + JSON.stringify(seedJob));
 
   const pushed = await (await ctx.get(`${SOCIAL}/v1/${extSeed}/users`, { headers: { Authorization: 'Bearer x' } })).json();
   if (!pushed.includes(sha256(p1)) || !pushed.includes(sha256(p2))) {
@@ -77,7 +88,9 @@ async function token(ctx, realm, user, pass) {
   const extSupp = `ca-suppress-${run}`;
   const sact = await (await ctx.post(`${AUDIENCE}/${suppAud.id}/activate`, { headers: H(staff),
     data: { externalAudienceId: extSupp, mode: 'suppress' } })).json();
-  if (sact.mode !== 'suppress' || sact.pushed < 1) fail('suppress activation did not push the customer: ' + JSON.stringify(sact));
+  if (sact.mode !== 'suppress' || !sact.jobId) fail('suppress activation was not queued: ' + JSON.stringify(sact));
+  const suppJob = await pollJob(sact.jobId);
+  if (suppJob.status !== 'done' || suppJob.pushed < 1) fail('suppress job did not push the customer: ' + JSON.stringify(suppJob));
 
   const suppUsers = await (await ctx.get(`${SOCIAL}/v1/${extSupp}/users`, { headers: { Authorization: 'Bearer x' } })).json();
   if (!suppUsers.includes(sha256(cEmail))) fail('the customer hash is not in the suppression audience: ' + JSON.stringify(suppUsers).slice(0, 200));

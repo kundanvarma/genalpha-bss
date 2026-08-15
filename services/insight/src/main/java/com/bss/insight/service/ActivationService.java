@@ -3,45 +3,47 @@ package com.bss.insight.service;
 import com.bss.insight.client.SocialAudienceClient;
 import com.bss.insight.entity.PartyTrait;
 import com.bss.insight.repository.PartyTraitRepository;
+import com.bss.insight.security.TenantContext;
 import com.bss.insight.security.TenantScope;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * Activate an audience OUT to an ad/social platform — the acquisition half of
- * marketing. Two modes, one mechanism:
- * <ul>
- *   <li><b>seed</b> — push a high-value first-party audience so the platform
- *       builds a LOOKALIKE and finds strangers who resemble them.</li>
- *   <li><b>suppress</b> — push existing customers so paid spend EXCLUDES people
- *       you already have.</li>
- * </ul>
- * Emails resolve from the member set with no per-row fan-out: a prospect carries
- * its own address; a customer's email is read from the denormalised trait store
- * in one query. Hashing + batching live in {@link SocialAudienceClient}.
+ * Activate an audience OUT to an ad/social platform — ASYNC. The request creates
+ * a job and returns immediately; the (potentially huge) hashed export runs in
+ * the background so nothing blocks. Two modes: seed (lookalike source) and
+ * suppress (paid-spend exclusion). Emails resolve with no per-row fan-out — a
+ * prospect carries its own; a customer's is read from the denormalised trait
+ * store in one query. Hashing + batching live in {@link SocialAudienceClient}.
  */
 @Service
 public class ActivationService {
 
+    private static final Logger log = LoggerFactory.getLogger(ActivationService.class);
+
     private final AudienceService audiences;
     private final SocialAudienceClient social;
     private final PartyTraitRepository traits;
+    private final ActivationJobService jobs;
     private final TenantScope tenantScope;
 
     public ActivationService(AudienceService audiences, SocialAudienceClient social,
-            PartyTraitRepository traits, TenantScope tenantScope) {
+            PartyTraitRepository traits, ActivationJobService jobs, TenantScope tenantScope) {
         this.audiences = audiences;
         this.social = social;
         this.traits = traits;
+        this.jobs = jobs;
         this.tenantScope = tenantScope;
     }
 
-    @Transactional(readOnly = true)
+    /** Queue the export and return the job — the push runs in the background. */
     public Map<String, Object> activate(String audienceId, Map<String, Object> body) {
         String externalAudienceId = body.get("externalAudienceId") == null
                 ? null : String.valueOf(body.get("externalAudienceId"));
@@ -49,37 +51,56 @@ public class ActivationService {
         if (externalAudienceId == null || externalAudienceId.isBlank()) {
             throw new IllegalArgumentException("externalAudienceId (the platform Custom Audience id) is required");
         }
-        List<Map<String, Object>> members = audiences.members(audienceId);
-        // Customer members carry a partyId; resolve their emails in ONE query.
-        Map<String, String> emailByParty = null;
-        List<String> emails = new ArrayList<>();
-        for (Map<String, Object> m : members) {
-            Object email = m.get("email");
-            if (email != null && !String.valueOf(email).isBlank()) {
-                emails.add(String.valueOf(email));
-                continue;
+        String jobId = jobs.createQueued(audienceId, externalAudienceId, mode);
+        String tenantId = tenantScope.currentTenantId();
+        CompletableFuture.runAsync(() -> {
+            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                runJob(jobId, audienceId, externalAudienceId);
             }
-            Object partyId = m.get("partyId");
-            if (partyId != null) {
-                if (emailByParty == null) {
-                    emailByParty = new LinkedHashMap<>();
-                    for (PartyTrait t : traits.findByTenantIdAndTraitKey(tenantScope.currentTenantId(), "email")) {
-                        emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
-                    }
-                }
-                String e = emailByParty.get(String.valueOf(partyId));
-                if (e != null) emails.add(e);
-            }
-        }
-        int pushed = social.pushCustomAudience(externalAudienceId, emails);
+        });
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("audienceId", audienceId);
-        out.put("externalAudienceId", externalAudienceId);
-        out.put("mode", mode);                 // seed = lookalike source, suppress = exclusion
-        out.put("members", members.size());
-        out.put("pushed", pushed);             // hashed identifiers accepted by the platform
-        out.put("skipped", members.size() - emails.size()); // members with no resolvable email
+        out.put("jobId", jobId);
+        out.put("mode", mode);
+        out.put("status", "queued");
         out.put("enabled", social.enabled());
         return out;
+    }
+
+    public Map<String, Object> jobStatus(String jobId) {
+        return jobs.status(jobId);
+    }
+
+    /** Background worker: resolve the audience, hash+push, record the outcome.
+     * Each state transition commits on its own so a poller sees running->done. */
+    private void runJob(String jobId, String audienceId, String externalAudienceId) {
+        jobs.markRunning(jobId);
+        try {
+            List<Map<String, Object>> members = audiences.members(audienceId);
+            Map<String, String> emailByParty = null;
+            List<String> emails = new ArrayList<>();
+            for (Map<String, Object> m : members) {
+                Object email = m.get("email");
+                if (email != null && !String.valueOf(email).isBlank()) {
+                    emails.add(String.valueOf(email));
+                    continue;
+                }
+                Object partyId = m.get("partyId");
+                if (partyId != null) {
+                    if (emailByParty == null) {
+                        emailByParty = new LinkedHashMap<>();
+                        for (PartyTrait t : traits.findByTenantIdAndTraitKey(tenantScope.currentTenantId(), "email")) {
+                            emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
+                        }
+                    }
+                    String e = emailByParty.get(String.valueOf(partyId));
+                    if (e != null) emails.add(e);
+                }
+            }
+            int pushed = social.pushCustomAudience(externalAudienceId, emails);
+            jobs.complete(jobId, members.size(), pushed, members.size() - emails.size());
+        } catch (Exception e) {
+            log.warn("activation job {} failed: {}", jobId, e.getMessage());
+            jobs.fail(jobId, e.getMessage());
+        }
     }
 }
