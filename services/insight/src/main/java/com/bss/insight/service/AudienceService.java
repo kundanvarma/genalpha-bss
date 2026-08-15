@@ -44,6 +44,9 @@ public class AudienceService {
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager em;
+
     public AudienceService(AudienceRepository audiences, VisitorProfileRepository profiles,
             VisitorEventRepository events, PartyTraitRepository traits, ProspectRepository prospects,
             AnalyticsForwarder analytics, TenantScope tenantScope, ObjectMapper objectMapper) {
@@ -110,12 +113,114 @@ public class AudienceService {
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> members(String id) {
+        return resolve(id).members();
+    }
+
+    /** Same resolution, but reports WHICH path ran (sql | memory | prospect) —
+     * so ops (and a test) can confirm a trait-only audience takes the scalable
+     * set-based SQL path rather than the in-memory fallback. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> membersExplain(String id) {
+        Resolved r = resolve(id);
+        return Map.of("path", r.path(), "count", r.members().size(), "members", r.members());
+    }
+
+    private Resolved resolve(String id) {
         Audience audience = load(id);
         Object criteria = parse(audience.getCriteria());
         String tenantId = tenantScope.currentTenantId();
         if ("prospect".equals(audience.getPopulation())) {
-            return prospectMembers(criteria, tenantId);
+            return new Resolved("prospect", prospectMembers(criteria, tenantId));
         }
+        // A trait-ONLY tree compiles to set-based SQL over party_trait — indexed,
+        // INTERSECT/UNION/EXCEPT, scales to millions. Behavioural trees (interest/
+        // GA4) still use the in-memory path over the bounded consented-profile set.
+        if (traitOnly(criteria)) {
+            return new Resolved("sql", setBasedMembers(criteria, tenantId));
+        }
+        return new Resolved("memory", inMemoryMembers(criteria, tenantId));
+    }
+
+    /** Every leaf is a trait leaf (so the tree is a pure BSS-data segment). */
+    @SuppressWarnings("unchecked")
+    private boolean traitOnly(Object node) {
+        if (!(node instanceof Map<?, ?> m)) {
+            return false;
+        }
+        if (m.get("all") instanceof List<?> l) return !l.isEmpty() && l.stream().allMatch(this::traitOnly);
+        if (m.get("any") instanceof List<?> l) return !l.isEmpty() && l.stream().allMatch(this::traitOnly);
+        if (m.get("not") != null) return traitOnly(m.get("not"));
+        return "trait".equals(String.valueOf(m.get("type")));
+    }
+
+    /**
+     * Set-based membership: compile the trait tree to native SQL over party_trait
+     * (leaf → indexed SELECT of party_ids; all → INTERSECT; any → UNION; not →
+     * all-trait-parties EXCEPT child). One query, no per-row loop — the real
+     * scale path. RLS + an explicit tenant filter keep it tenant-scoped.
+     */
+    private List<Map<String, Object>> setBasedMembers(Object criteria, String tenantId) {
+        SqlCtx ctx = new SqlCtx();
+        String sql = "SELECT DISTINCT party_id FROM " + compile(criteria, ctx) + " AS seg";
+        jakarta.persistence.Query q = em.createNativeQuery(sql);
+        q.setParameter("t", tenantId);
+        ctx.params.forEach(q::setParameter);
+        List<?> rows = q.getResultList();
+        List<Map<String, Object>> out = new java.util.ArrayList<>(rows.size());
+        for (Object r : rows) {
+            out.add(Map.of("partyId", String.valueOf(r)));
+        }
+        return out;
+    }
+
+    private String allTraitParties() {
+        return "(SELECT DISTINCT party_id FROM party_trait WHERE tenant_id = :t)";
+    }
+
+    @SuppressWarnings("unchecked")
+    private String compile(Object node, SqlCtx ctx) {
+        Map<String, Object> m = (Map<String, Object>) node;
+        if (m.get("all") instanceof List<?> l) {
+            return "(" + l.stream().map(c -> compile(c, ctx)).reduce((a, b) -> a + " INTERSECT " + b).orElse(allTraitParties()) + ")";
+        }
+        if (m.get("any") instanceof List<?> l) {
+            return "(" + l.stream().map(c -> compile(c, ctx)).reduce((a, b) -> a + " UNION " + b).orElse(allTraitParties()) + ")";
+        }
+        if (m.get("not") != null) {
+            return "(" + allTraitParties() + " EXCEPT " + compile(m.get("not"), ctx) + ")";
+        }
+        int i = ctx.n++;
+        String key = String.valueOf(m.get("key"));
+        String op = m.get("op") == null ? "eq" : String.valueOf(m.get("op"));
+        String value = String.valueOf(m.get("value"));
+        ctx.params.put("k" + i, key);
+        if ("eq".equals(op) || op.isBlank()) {
+            ctx.params.put("v" + i, value);
+            return "(SELECT party_id FROM party_trait WHERE tenant_id = :t AND trait_key = :k" + i
+                    + " AND trait_value = :v" + i + ")";
+        }
+        String cmp = switch (op) {
+            case "gte" -> ">="; case "lte" -> "<="; case "gt" -> ">"; case "lt" -> "<"; default -> null;
+        };
+        if (cmp == null || num(value) == null) {
+            return "(SELECT party_id FROM party_trait WHERE 1 = 0)"; // malformed op → matches nobody
+        }
+        ctx.params.put("v" + i, num(value));
+        // '?'-free regex (a native-query '?' would be read as a positional param);
+        // NULL-guarded cast so a non-numeric value for this key never errors.
+        return "(SELECT party_id FROM party_trait WHERE tenant_id = :t AND trait_key = :k" + i
+                + " AND CAST(CASE WHEN trait_value ~ '^[-]{0,1}[0-9]+([.][0-9]+){0,1}$'"
+                + " THEN trait_value ELSE NULL END AS DOUBLE PRECISION) " + cmp + " :v" + i + ")";
+    }
+
+    private static final class SqlCtx {
+        int n = 0;
+        final Map<String, Object> params = new LinkedHashMap<>();
+    }
+
+    private record Resolved(String path, List<Map<String, Object>> members) { }
+
+    private List<Map<String, Object>> inMemoryMembers(Object criteria, String tenantId) {
         // Only touch the signals the tree actually references — a pure trait
         // audience must not pay for per-row browsing/GA4 work.
         boolean usesBehaviour = treeUses(criteria, "interest");

@@ -50,8 +50,11 @@ public class AudienceController {
     }
 
     @GetMapping("/{id}/members")
-    public ResponseEntity<List<Map<String, Object>>> members(@PathVariable String id) {
-        return ResponseEntity.ok(service.members(id));
+    public ResponseEntity<?> members(@PathVariable String id,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean explain) {
+        return Boolean.TRUE.equals(explain)
+                ? ResponseEntity.ok(service.membersExplain(id))
+                : ResponseEntity.ok(service.members(id));
     }
 
     /** The BSS traits this tenant holds — real key/value choices for a builder. */
