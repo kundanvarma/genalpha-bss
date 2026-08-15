@@ -91,7 +91,7 @@ public class ActivationService {
     private void runJob(String jobId, String audienceId, String externalAudienceId, String destination) {
         jobs.markRunning(jobId);
         try {
-            List<Map<String, Object>> members = audiences.members(audienceId);
+            List<Map<String, Object>> members = audiences.members(audienceId, null);
             Map<String, String> emailByParty = null;
             List<String> emails = new ArrayList<>();
             for (Map<String, Object> m : members) {

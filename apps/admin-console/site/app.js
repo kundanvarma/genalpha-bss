@@ -862,7 +862,7 @@ const RESOURCES = [
     fields: [],
     columns: ['name', 'population', 'memberCount'],
     detail: async (item) => {
-      const res = await authFetch(`/insight/v1/audience/${item.id}/members`);
+      const res = await authFetch(`/insight/v1/audience/${item.id}/members?limit=200`);
       const members = res.ok ? await res.json() : [];
       if (!members.length) return [{ member: 'no members yet' }];
       const rows = members.slice(0, 200).map((m) => ({

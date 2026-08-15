@@ -20,6 +20,11 @@ public interface PartyTraitRepository extends JpaRepository<PartyTrait, String> 
      * activation export (no per-member lookup). */
     List<PartyTrait> findByTenantIdAndTraitKey(String tenantId, String traitKey);
 
+    /** A trait value for a SPECIFIC set of parties — index-driven (tenant, party_id),
+     * so member enrichment stays O(members) instead of O(whole-tenant). */
+    List<PartyTrait> findByTenantIdAndTraitKeyAndPartyIdIn(
+            String tenantId, String traitKey, java.util.Collection<String> partyIds);
+
     /** Clear a single-valued trait before writing the new value (tier, band, spend).
      * Bulk DML so the DELETE executes immediately — a derived delete marks rows in
      * the persistence context and Hibernate flushes the follow-up INSERT first,

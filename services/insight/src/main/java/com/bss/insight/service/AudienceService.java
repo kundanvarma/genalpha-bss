@@ -164,18 +164,30 @@ public class AudienceService {
      * set is "who matches", not "who may be messaged regardless".
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> members(String id) {
-        List<Map<String, Object>> raw = resolve(id).members();
+    public List<Map<String, Object>> members(String id, Integer limit) {
+        List<Map<String, Object>> resolved = resolve(id).members();
+        // A preview (console drill-down) bounds the work: only enrich what it shows,
+        // never a million rows. limit == null means the full set (activation export).
+        List<Map<String, Object>> raw = limit != null && limit > 0 && resolved.size() > limit
+                ? resolved.subList(0, limit) : resolved;
         // Enrich party members with a human label (email) so the console shows WHO
         // is in the audience, not just an opaque id. One query for all emails, then a map.
-        boolean needsLabel = raw.stream().anyMatch(m -> m.get("partyId") != null && m.get("email") == null);
-        if (!needsLabel) {
+        java.util.List<String> partyIds = raw.stream()
+                .filter(m -> m.get("partyId") != null && m.get("email") == null)
+                .map(m -> String.valueOf(m.get("partyId"))).distinct().toList();
+        if (partyIds.isEmpty()) {
             return raw;
         }
+        // Fetch emails for ONLY these members, chunked — index-driven, O(members),
+        // not a whole-tenant scan (so it stays fast as the trait store grows).
+        String tenantId = tenantScope.currentTenantId();
         Map<String, String> emailByParty = new java.util.HashMap<>();
-        for (com.bss.insight.entity.PartyTrait t
-                : traits.findByTenantIdAndTraitKey(tenantScope.currentTenantId(), "email")) {
-            emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
+        for (int i = 0; i < partyIds.size(); i += 1000) {
+            List<String> chunk = partyIds.subList(i, Math.min(i + 1000, partyIds.size()));
+            for (com.bss.insight.entity.PartyTrait t
+                    : traits.findByTenantIdAndTraitKeyAndPartyIdIn(tenantId, "email", chunk)) {
+                emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
+            }
         }
         List<Map<String, Object>> out = new java.util.ArrayList<>(raw.size());
         for (Map<String, Object> m : raw) {

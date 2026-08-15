@@ -58,13 +58,14 @@ public class AudienceController {
     @GetMapping("/{id}/members")
     public ResponseEntity<?> members(@PathVariable String id,
             @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean explain,
-            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean snapshot) {
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean snapshot,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Integer limit) {
         if (Boolean.TRUE.equals(snapshot)) {
             return ResponseEntity.ok(service.snapshotMembers(id)); // frozen set, instant
         }
         return Boolean.TRUE.equals(explain)
                 ? ResponseEntity.ok(service.membersExplain(id))
-                : ResponseEntity.ok(service.members(id));
+                : ResponseEntity.ok(service.members(id, limit));
     }
 
     /** Materialize the audience — freeze its members into a snapshot. */
