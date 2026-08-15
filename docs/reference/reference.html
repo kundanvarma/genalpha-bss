@@ -289,7 +289,16 @@ console (or via the APIs) and stored as rows — no redeploy to change a campaig
 <tr><td>Lift &amp; incremental revenue</td><td>Growth → <b>Attribution</b> · <code>GET /campaign/attribution</code></td></tr>
 <tr><td>Brand mentions + mood</td><td>Growth → Social listening · <code>POST /insight/v1/listening/sync</code></td></tr>
 <tr><td>Inbound DMs → tickets</td><td>Growth → Social care · <code>POST /insight/v1/care/sync</code></td></tr>
+<tr><td>Read the consent ledger</td><td>Console → <b>Insight</b> tab · <code>GET /insight/v1/profile</code> — who is tracked, under which consent, and what was learned (read-only)</td></tr>
 </table>
+<div class="rule"><b>Two kinds of consent, kept apart.</b> The Insight tab's flags —
+<code>analyticsConsent</code> (gates storing breadcrumbs) and <code>personalizationConsent</code>
+(gates using them on-site) — are <b>first-party tracking/personalization</b> consent, the cookie-banner
+family. Permission to <em>contact</em> someone is a <b>separate</b> consent: a prospect's
+<code>consent</code> + <code>lawfulBasis</code> and the do-not-contact suppression ledger, filtered at
+every send and activation. The law treats them differently, and so does the system. Reading the Insight
+tab and the tracking-vs-contact distinction is walked through in the
+<a href="../martech-guide.md">Martech &amp; CDP guide</a> §8.</div>
 
 <h3>Verify</h3>
 <p>The suites that are the specification for this module:</p>

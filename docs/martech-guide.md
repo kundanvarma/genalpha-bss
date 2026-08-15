@@ -162,7 +162,40 @@ change. That's the product thesis: *composable, but the core is the BSS you alre
 
 ---
 
-## 8. Quick reference
+## 8. The consent ledger — reading the Insight tab
+
+Console → **Insight** is the **consent ledger**: *who the shop is watching, under which consent, and
+what it learned.* It's **read-only by design** — the visitor owns the data; the operator only gets to
+*see* what it holds. This is your accountability surface (show me everything we hold on this browser)
+and your personalization debugger (why does this person see X, or nothing).
+
+**List columns:** `visitorId · partyId · analyticsConsent · personalizationConsent · utmSource · lastUpdate`.
+**Row detail** adds: the two consent flags, the **event count**, the **interests** with view counts
+(e.g. `Devices (3), Plans (1)`), and the **campaign source**.
+
+**How to read a row:**
+
+| You see… | It means… |
+|---|---|
+| `analyticsConsent = no`, `events = 0` | The visitor declined storage — nothing was kept. Correct, not a bug: reject = zero rows. |
+| `partyId` empty | Anonymous browser, not signed in (this is the **visitor** population from §5). |
+| `partyId` populated | Stitched to a customer at sign-in — written from the verified token, only under personalization consent. |
+| `interests: Devices (3)` | Three consented views in that category — the behavioural signal audiences read. |
+| `utmSource` set | Arrived from that campaign — the attribution source. |
+
+> **Two consents here — and they are NOT "marketing consent."** The flags on this tab are
+> **first-party tracking + personalization** consent (the cookie-banner family): `analyticsConsent`
+> gates *storing* breadcrumbs, `personalizationConsent` gates *using* them for the on-site experience.
+> **Permission to *contact* someone is a separate consent, kept elsewhere** — a prospect's
+> `consent` + `lawfulBasis` (§2; a bought list is captured but unreachable until a lawful basis is
+> recorded) and the **do-not-contact / suppression ledger** filtered at every send and activation.
+> Keeping tracking-consent and contact-consent apart is deliberate: the law treats them differently,
+> and so does this system.
+
+*Full first-party personalization walkthrough (guest loop, reject-honestly, stitch, GA4 seam): see the
+[Personalization guide](personalization-guide.md).*
+
+## 9. Quick reference
 
 ### Populations
 
