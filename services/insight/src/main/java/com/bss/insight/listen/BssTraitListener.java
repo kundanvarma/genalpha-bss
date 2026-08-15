@@ -81,6 +81,19 @@ public class BssTraitListener {
                 setFrom(event, tenantId, "monthlySpend", BssTraitListener::billAmount);
                 return;
             }
+            // Engagement feedback loop: opens/clicks become an audience-able trait
+            // (keyed by the engagement resource's partyId, not relatedParty).
+            if ("EmailEngagedEvent".equals(eventType)) {
+                Map<String, Object> r = resourceOf(event);
+                String party = r == null || r.get("partyId") == null ? null : String.valueOf(r.get("partyId"));
+                String eng = r == null || r.get("engagement") == null ? null : String.valueOf(r.get("engagement"));
+                if (party != null && eng != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        traits.setTrait(party, "emailEngagement", "click".equals(eng) ? "clicked" : "opened");
+                    }
+                }
+                return;
+            }
             // DNC ledger projection: a suppressed address, for activation filtering.
             if ("EmailSuppressedEvent".equals(eventType)) {
                 Map<String, Object> r = resourceOf(event);

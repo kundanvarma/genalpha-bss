@@ -100,6 +100,12 @@ public class EspReceiptService {
                     message.setDeliveryStatus(verdict.length() > 32 ? verdict.substring(0, 32) : verdict);
                     message.setLastUpdate(OffsetDateTime.now());
                     messages.save(message);
+                    // Engagement feedback: an open/click becomes a signal the martech
+                    // side turns into a trait ("opened recently" vs "dormant").
+                    if (("open".equals(verdict) || "click".equals(verdict)) && message.getReceiverPartyId() != null) {
+                        events.publish("EmailEngagedEvent", "engagement",
+                                java.util.Map.of("partyId", message.getReceiverPartyId(), "engagement", verdict), tenantId);
+                    }
                 }
                 if (SUPPRESSING.contains(verdict) && email != null
                         && !suppressions.existsByTenantIdAndEmail(tenantId, email)) {
