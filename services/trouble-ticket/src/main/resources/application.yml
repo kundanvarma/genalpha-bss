@@ -11,6 +11,13 @@ spring:
     producer:
       properties:
         max.block.ms: 2000
+    consumer:
+      # Social-care ingest: consume insight's events as raw JSON and parse in
+      # the listener (same shape as every other consumer in the BSS).
+      group-id: trouble-ticket-social-care
+      auto-offset-reset: latest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   jpa:
     hibernate:
       ddl-auto: validate
@@ -50,6 +57,9 @@ bss:
     default-org: ${DEFAULT_ORG:genalpha-retail}
   events:
     topic: bss.ticket.events
+  social-care:
+    # insight emits SocialCareTicketRequested here when an inbound DM needs a human.
+    source-topic: ${BSS_SOCIAL_CARE_SOURCE_TOPIC:bss.insight.events}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

@@ -30,6 +30,11 @@ let mentionSeq = Date.now() + 1;
 /** account -> [{id, message, created_time}] — organic posts the brand published */
 const published = new Map();
 let postSeq = Date.now() + 2;
+/** account -> [{id, platform, author, handle, text, created_time}] — inbound
+ *  direct messages: private support conversations the care team must answer
+ *  (distinct from public mentions). The BSS pulls these and opens tickets. */
+const dms = new Map();
+let dmSeq = Date.now() + 3;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -155,6 +160,32 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET') {
       if (!authed()) return json(401, { error: { message: 'access token required' } });
       return json(200, { data: mentions.get(ment[1]) || [] });
+    }
+  }
+
+  // Social care: inbound DIRECT MESSAGES on an account's handle — private
+  // 1:1 conversations (support asks, complaints) the care team must triage.
+  const dm = url.pathname.match(/^\/v1\/([^/]+)\/dms$/);
+  if (dm) {
+    if (req.method === 'POST') { // seed a DM (test convenience / webhook)
+      return readBody((payload) => {
+        const bucket = dms.get(dm[1]) || [];
+        const m = {
+          id: String(dmSeq++),
+          platform: payload.platform || 'x',
+          author: payload.author || 'someone',
+          handle: payload.handle || ('@' + (payload.author || 'someone')),
+          text: String(payload.text || ''),
+          created_time: new Date().toISOString(),
+        };
+        bucket.push(m);
+        dms.set(dm[1], bucket);
+        json(200, { id: m.id });
+      });
+    }
+    if (req.method === 'GET') {
+      if (!authed()) return json(401, { error: { message: 'access token required' } });
+      return json(200, { data: dms.get(dm[1]) || [] });
     }
   }
 

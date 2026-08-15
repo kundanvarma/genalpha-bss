@@ -12,4 +12,7 @@ public interface TroubleTicketRepository extends JpaRepository<TroubleTicket, St
     java.util.List<TroubleTicket> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 
     java.util.List<TroubleTicket> findByStatusInAndLastUpdateBefore(java.util.List<String> statuses, java.time.OffsetDateTime cutoff);
+
+    /** Idempotency for event-sourced tickets: has this source already opened one? */
+    boolean existsByTenantIdAndRelatedEntityJsonContaining(String tenantId, String needle);
 }
