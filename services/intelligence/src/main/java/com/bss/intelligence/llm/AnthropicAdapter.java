@@ -37,12 +37,25 @@ public class AnthropicAdapter implements LlmAdapter {
                 .header("Content-Type", "application/json")
                 .body(Map.of(
                         "model", model,
-                        "max_tokens", 1024,
+                        // Headroom for a full journey/campaign proposal JSON — 1024 truncates
+                        // richer models (Sonnet/Opus) mid-object, breaking the JSON contract.
+                        "max_tokens", 4096,
                         "system", system,
                         "messages", List.of(Map.of("role", "user", "content", user))))
                 .retrieve().body(Map.class);
+        // Concatenate every TEXT block (skip any thinking/tool blocks a model may emit),
+        // rather than assuming the answer is content[0].
         List<Map<String, Object>> content = (List<Map<String, Object>>) response.get("content");
-        return String.valueOf(content.get(0).get("text"));
+        StringBuilder text = new StringBuilder();
+        if (content != null) {
+            for (Map<String, Object> block : content) {
+                Object t = block.get("text");
+                if (t != null) {
+                    text.append(t);
+                }
+            }
+        }
+        return text.toString();
     }
 
     @Override
