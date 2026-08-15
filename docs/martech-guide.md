@@ -164,10 +164,14 @@ change. That's the product thesis: *composable, but the core is the BSS you alre
 
 ## 8. The consent ledger — reading the Visitor consent tab
 
-Console → **Visitor consent** is the **consent ledger**: *who the shop is watching, under which consent, and
-what it learned.* It's **read-only by design** — the visitor owns the data; the operator only gets to
-*see* what it holds. This is your accountability surface (show me everything we hold on this browser)
-and your personalization debugger (why does this person see X, or nothing).
+Console → **Privacy & governance → Visitor consent** is the **consent ledger**: *who the shop is
+watching, under which consent, and what it learned.* It's **read-only by design** — the visitor owns
+the data; the operator only gets to *see* what it holds. This is your accountability surface (show me
+everything we hold on this browser) and your personalization debugger (why does this person see X, or
+nothing). It's a **real ledger** — paginated (not a recent-100 window) with **search across all
+visitors by id** (the box queries the server, not just the loaded page). It lives under *Privacy &
+governance*, not Growth: it's a consent/accountability surface, not a growth lever — Growth links to
+it for debugging.
 
 **List columns:** `visitorId · partyId · analyticsConsent · personalizationConsent · utmSource · lastUpdate`.
 **Row detail** adds: the two consent flags, the **event count**, the **interests** with view counts

@@ -62,7 +62,7 @@ own choice on the shop's consent card ("Privacy choices" reopens it):
 | `POST /event` | anonymous | breadcrumb; dropped without consent, 204 either way (consent never leaks) |
 | `GET /experience?visitorId=` | anonymous | "what should this person see" — interests + policy rule decision + channel + segments |
 | `POST /stitch` | signed-in | visitor → party, from the verified token |
-| `GET /profile` / `?visitorId=` | `insight:read` | the consent ledger (console Visitor consent tab) |
+| `GET /profile?offset=&limit=&q=` / `?visitorId=` | `insight:read` | the consent ledger — paginated + searchable by id, X-Total-Count (console → Privacy & governance → Visitor consent); or one profile by id |
 | `GET /partyProfile?partyId=` | `insight:read` | a customer's merged interests (recommendation fusion, NBO) |
 
 ## 2. Where do audiences live? (what `localhost:8120/audiences` is)

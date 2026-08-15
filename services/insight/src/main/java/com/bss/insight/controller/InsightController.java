@@ -79,10 +79,20 @@ public class InsightController {
         return ResponseEntity.ok(service.audienceCatalog());
     }
 
-    /** Back-office window (insight:read): one profile, or the recent ledger. */
+    /** Back-office (insight:read): one profile by id, or the paginated + searchable
+     * consent ledger. Emits X-Total-Count so the console pager works at scale. */
     @GetMapping("/profile")
-    public ResponseEntity<?> profile(@RequestParam(required = false) String visitorId) {
-        return ResponseEntity.ok(visitorId == null || visitorId.isBlank()
-                ? service.recentProfiles() : service.profileOf(visitorId));
+    public ResponseEntity<?> profile(@RequestParam(required = false) String visitorId,
+            @RequestParam(defaultValue = "0") long offset,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(required = false) String q) {
+        if (visitorId != null && !visitorId.isBlank()) {
+            return ResponseEntity.ok(service.profileOf(visitorId));
+        }
+        com.bss.insight.api.PagedResult<java.util.Map<String, Object>> page =
+                service.profilePage(offset, Math.min(Math.max(limit, 1), 200), q);
+        return ResponseEntity.ok()
+                .header("X-Total-Count", String.valueOf(page.totalCount()))
+                .body(page.items());
     }
 }

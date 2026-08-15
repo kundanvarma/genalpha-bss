@@ -259,17 +259,34 @@ public class InsightService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> recentProfiles() {
         return profiles.findTop100ByTenantIdOrderByLastUpdateDesc(tenantScope.currentTenantId())
-                .stream().map(p -> {
-                    Map<String, Object> m = new LinkedHashMap<String, Object>();
-                    m.put("id", p.getVisitorId());
-                    m.put("visitorId", p.getVisitorId());
-                    m.put("partyId", p.getPartyId());
-                    m.put("analyticsConsent", p.isAnalyticsConsent());
-                    m.put("personalizationConsent", p.isPersonalizationConsent());
-                    m.put("utmSource", p.getUtmSource());
-                    m.put("lastUpdate", p.getLastUpdate());
-                    return m;
-                }).toList();
+                .stream().map(InsightService::profileRow).toList();
+    }
+
+    /** The consent ledger, paginated and searchable — a real browsable ledger,
+     * not a fixed recent-100 window. {@code q} matches visitor id or party id. */
+    @Transactional(readOnly = true)
+    public com.bss.insight.api.PagedResult<Map<String, Object>> profilePage(long offset, int limit, String q) {
+        String tenant = tenantScope.currentTenantId();
+        var page = new com.bss.insight.api.OffsetPageRequest(offset, limit,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastUpdate"));
+        org.springframework.data.domain.Page<com.bss.insight.entity.VisitorProfile> result =
+                (q == null || q.isBlank())
+                        ? profiles.findByTenantId(tenant, page)
+                        : profiles.search(tenant, "%" + q.trim().toLowerCase() + "%", page);
+        List<Map<String, Object>> rows = result.getContent().stream().map(InsightService::profileRow).toList();
+        return new com.bss.insight.api.PagedResult<>(rows, result.getTotalElements());
+    }
+
+    private static Map<String, Object> profileRow(com.bss.insight.entity.VisitorProfile p) {
+        Map<String, Object> m = new LinkedHashMap<String, Object>();
+        m.put("id", p.getVisitorId());
+        m.put("visitorId", p.getVisitorId());
+        m.put("partyId", p.getPartyId());
+        m.put("analyticsConsent", p.isAnalyticsConsent());
+        m.put("personalizationConsent", p.isPersonalizationConsent());
+        m.put("utmSource", p.getUtmSource());
+        m.put("lastUpdate", p.getLastUpdate());
+        return m;
     }
 
     /** Back-office window (and the E2E's honesty probe): the raw profile. */

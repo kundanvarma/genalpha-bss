@@ -19,4 +19,16 @@ public interface VisitorProfileRepository extends JpaRepository<VisitorProfile, 
 
     /** All profiles (incl. anonymous, partyId null) — the visitor-population base. */
     java.util.List<VisitorProfile> findByTenantId(String tenantId);
+
+    /** The consent ledger, paginated (newest first via the Pageable's sort). */
+    org.springframework.data.domain.Page<VisitorProfile> findByTenantId(
+            String tenantId, org.springframework.data.domain.Pageable pageable);
+
+    /** Search the ledger by visitor id or party id (q is a lowercased %like% term). */
+    @org.springframework.data.jpa.repository.Query("SELECT p FROM VisitorProfile p WHERE p.tenantId = :t"
+            + " AND (LOWER(p.visitorId) LIKE :q OR LOWER(COALESCE(p.partyId, '')) LIKE :q)")
+    org.springframework.data.domain.Page<VisitorProfile> search(
+            @org.springframework.data.repository.query.Param("t") String tenantId,
+            @org.springframework.data.repository.query.Param("q") String q,
+            org.springframework.data.domain.Pageable pageable);
 }

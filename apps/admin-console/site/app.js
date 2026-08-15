@@ -870,6 +870,7 @@ const RESOURCES = [
     // TRACKING/personalization consents (cookie family), NOT contact consent
     // (that lives in prospect consent/lawfulBasis + the DNC suppression ledger).
     readOnly: true,
+    serverSearch: true, // the box searches ALL visitors (by id) server-side, not just this page
     fields: [],
     columns: ['visitorId', 'partyId', 'analyticsConsent', 'personalizationConsent', 'utmSource', 'lastUpdate'],
     detail: async (item) => {
@@ -1306,9 +1307,12 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
+  // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
+  // lever — it lives with governance, and Growth links to it for debugging.
+  { label: 'Privacy & governance', tabs: ['profile'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
 ];
 
@@ -4984,7 +4988,8 @@ async function loadList() {
     return;
   }
   renderEditor();
-  const res = await authFetch(`${active.base || API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}`);
+  const q = active.serverSearch && listFilter ? `&q=${encodeURIComponent(listFilter)}` : '';
+  const res = await authFetch(`${active.base || API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}${q}`);
   const items = await res.json();
   if (active !== current) return;   // the user switched tabs while this was loading — drop the stale paint
   const total = Number(res.headers.get('X-Total-Count') || items.length);
@@ -4995,11 +5000,21 @@ async function loadList() {
   if (!search) {
     search = document.createElement('input');
     search.id = 'list-search';
-    search.placeholder = 'Filter this page…';
     search.style.cssText = 'margin-left:0.8rem;padding:0.25rem 0.5rem;font-size:0.85rem;width:14rem';
     el('total').after(search);
-    search.addEventListener('input', () => { listFilter = search.value.trim().toLowerCase(); loadList(); });
+    // serverSearch tabs debounce and re-query from page 1; page-filter tabs are instant + local.
+    let t = null;
+    search.addEventListener('input', () => {
+      listFilter = search.value.trim().toLowerCase();
+      if (active.serverSearch) {
+        clearTimeout(t);
+        t = setTimeout(() => { offset = 0; loadList(); }, 250);
+      } else {
+        loadList();
+      }
+    });
   }
+  search.placeholder = active.serverSearch ? 'Search all visitors by id…' : 'Filter this page…';
   search.value = listFilter;
   const sortVal = (it, c) => {
     const v = it[c];
@@ -5008,7 +5023,8 @@ async function loadList() {
     const n = Number(t);
     return Number.isFinite(n) && t !== '' ? n : t.toLowerCase();
   };
-  let shown = !listFilter ? items : items.filter((it) =>
+  // serverSearch tabs already filtered on the server — don't re-filter locally.
+  let shown = (!listFilter || active.serverSearch) ? items : items.filter((it) =>
     active.columns.some((c) => fmtCell(it[c] === undefined ? '' : it[c]).toLowerCase().includes(listFilter)));
   if (listSortCol && active.columns.includes(listSortCol)) {
     shown = [...shown].sort((a, b) => {

@@ -289,7 +289,7 @@ console (or via the APIs) and stored as rows — no redeploy to change a campaig
 <tr><td>Lift &amp; incremental revenue</td><td>Growth → <b>Attribution</b> · <code>GET /campaign/attribution</code></td></tr>
 <tr><td>Brand mentions + mood</td><td>Growth → Social listening · <code>POST /insight/v1/listening/sync</code></td></tr>
 <tr><td>Inbound DMs → tickets</td><td>Growth → Social care · <code>POST /insight/v1/care/sync</code></td></tr>
-<tr><td>Read the consent ledger</td><td>Console → <b>Visitor consent</b> tab · <code>GET /insight/v1/profile</code> — who is tracked, under which consent, and what was learned (read-only)</td></tr>
+<tr><td>Read the consent ledger</td><td>Console → <b>Privacy &amp; governance → Visitor consent</b> · <code>GET /insight/v1/profile?offset=&amp;limit=&amp;q=</code> — paginated + searchable-by-id (X-Total-Count), read-only; who is tracked, under which consent, and what was learned</td></tr>
 </table>
 <div class="rule"><b>Two kinds of consent, kept apart.</b> The Visitor-consent tab's flags —
 <code>analyticsConsent</code> (gates storing breadcrumbs) and <code>personalizationConsent</code>
