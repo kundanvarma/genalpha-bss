@@ -48,6 +48,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/consent",
                                 ApiConstants.BASE_PATH + "/event").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/experience").permitAll()
+                        // a landing page + its lead form are PUBLIC (an anonymous visitor
+                        // from an ad/email); consent is enforced in the capture, not a login
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/landing/*/view").permitAll()
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/landing/*/lead").permitAll()
+                        // authoring landing pages is back-office
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/landing").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/landing").hasAuthority("insight:read")
                         // the stitch needs a verified token — the subject IS the party
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/stitch").authenticated()
                         // the raw profile is back-office only
