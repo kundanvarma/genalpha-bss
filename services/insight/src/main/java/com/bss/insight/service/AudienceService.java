@@ -123,7 +123,8 @@ public class AudienceService {
         a.setName(String.valueOf(dto.get("name")));
         a.setCriteria(serialize(dto.get("criteria")));
         a.setPopulation("prospect".equals(dto.get("population")) ? "prospect"
-                : "organization".equals(dto.get("population")) ? "organization" : "customer");
+                : "organization".equals(dto.get("population")) ? "organization"
+                : "visitor".equals(dto.get("population")) ? "visitor" : "customer");
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
         return toMap(audiences.save(a));
@@ -182,6 +183,9 @@ public class AudienceService {
         String tenantId = tenantScope.currentTenantId();
         if ("prospect".equals(audience.getPopulation())) {
             return new Resolved("prospect", prospectMembers(criteria, tenantId));
+        }
+        if ("visitor".equals(audience.getPopulation())) {
+            return new Resolved("visitor", visitorMembers(criteria, tenantId));
         }
         // B2B: resolve over ORGANIZATIONS only — the org marker is always ANDed,
         // plus the user's (trait-only) tree over org attributes (industry…).
@@ -358,6 +362,35 @@ public class AudienceService {
             if (emptyTree || matches(criteria, Set.of(), List.of(), facts)) {
                 out.add(Map.of("prospectId", p.getId(), "email", p.getEmail() == null ? "" : p.getEmail(),
                         "consent", p.getConsent()));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Resolve a VISITOR audience: consented browser profiles (incl. anonymous)
+     * matching the interest tree — a retargeting segment keyed by visitorId, no
+     * account required. The identifier is a cookie/device id (not email), so this
+     * feeds on-site personalization + web retargeting lists, not email export.
+     */
+    private List<Map<String, Object>> visitorMembers(Object criteria, String tenantId) {
+        boolean emptyTree = !(criteria instanceof Map<?, ?> m)
+                || (!(m.get("all") instanceof List<?> a && !a.isEmpty())
+                    && !(m.get("any") instanceof List<?> o && !o.isEmpty()) && m.get("not") == null && m.get("type") == null);
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (VisitorProfile p : profiles.findByTenantId(tenantId)) {
+            if (!p.isPersonalizationConsent()) {
+                continue; // retargeting rides the personalization-consent spine
+            }
+            Set<String> interests = new LinkedHashSet<>();
+            for (Object[] row : events.interestsOf(tenantId, p.getVisitorId())) {
+                if (row.length > 0 && row[0] != null) interests.add(String.valueOf(row[0]));
+            }
+            if (emptyTree || matches(criteria, interests, List.of(), Map.of())) {
+                Map<String, Object> mem = new LinkedHashMap<>();
+                mem.put("visitorId", p.getVisitorId());
+                if (p.getPartyId() != null) mem.put("partyId", p.getPartyId());
+                out.add(mem);
             }
         }
         return out;
