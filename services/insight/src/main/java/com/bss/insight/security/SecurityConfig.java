@@ -64,6 +64,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/audience/*/activate",
                                 ApiConstants.BASE_PATH + "/audience/*/refresh")
                                 .hasAuthority("insight:read")
+                        // auto-refresh scheduler ops surface (status/pause/resume/run)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/refresh/status").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/refresh/**").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/audience/**")
                                 .hasAuthority("insight:read")
                         // prospect capture + list import (back-office marketing)

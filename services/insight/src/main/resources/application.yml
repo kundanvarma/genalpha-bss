@@ -48,6 +48,12 @@ springdoc:
 bss:
   events:
     topic: bss.insight.events
+  insight:
+    # Auto-refresh scheduler for materialized audiences — bounded + controllable.
+    refresh:
+      enabled: ${INSIGHT_REFRESH_ENABLED:true}
+      interval-ms: ${INSIGHT_REFRESH_INTERVAL_MS:300000}
+      max-per-run: ${INSIGHT_REFRESH_MAX_PER_RUN:25}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.
