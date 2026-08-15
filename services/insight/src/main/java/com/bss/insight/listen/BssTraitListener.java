@@ -58,10 +58,26 @@ public class BssTraitListener {
                     Map<String, Object> individual = (Map<String, Object>) ind;
                     String partyId = individual.get("id") == null ? null : String.valueOf(individual.get("id"));
                     String email = emailOf(individual);
-                    if (partyId != null && email != null) {
+                    String region = individual.get("region") == null ? null : String.valueOf(individual.get("region"));
+                    if (partyId != null) {
                         try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                            traits.upsert(partyId, "email", email);
+                            if (email != null) traits.upsert(partyId, "email", email);
+                            if (region != null && !region.isBlank()) traits.setTrait(partyId, "region", region);
                         }
+                    }
+                }
+                return;
+            }
+            // B2B: an organization becomes an org-population candidate with its
+            // own traits (industry…), marked so org audiences resolve only orgs.
+            if ("OrganizationCreateEvent".equals(eventType) || "OrganizationAttributeValueChangeEvent".equals(eventType)) {
+                Map<String, Object> org = resourceOf(event);
+                String orgId = org == null || org.get("id") == null ? null : String.valueOf(org.get("id"));
+                if (orgId != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        traits.setTrait(orgId, "_entity", "organization");
+                        if (org.get("industry") != null) traits.setTrait(orgId, "industry", String.valueOf(org.get("industry")));
+                        if (org.get("tradingName") != null) traits.setTrait(orgId, "orgName", String.valueOf(org.get("tradingName")));
                     }
                 }
                 return;

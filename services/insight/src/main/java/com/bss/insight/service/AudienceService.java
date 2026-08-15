@@ -122,7 +122,8 @@ public class AudienceService {
         a.setTenantId(tenantScope.currentTenantId());
         a.setName(String.valueOf(dto.get("name")));
         a.setCriteria(serialize(dto.get("criteria")));
-        a.setPopulation("prospect".equals(dto.get("population")) ? "prospect" : "customer");
+        a.setPopulation("prospect".equals(dto.get("population")) ? "prospect"
+                : "organization".equals(dto.get("population")) ? "organization" : "customer");
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
         return toMap(audiences.save(a));
@@ -181,6 +182,14 @@ public class AudienceService {
         String tenantId = tenantScope.currentTenantId();
         if ("prospect".equals(audience.getPopulation())) {
             return new Resolved("prospect", prospectMembers(criteria, tenantId));
+        }
+        // B2B: resolve over ORGANIZATIONS only — the org marker is always ANDed,
+        // plus the user's (trait-only) tree over org attributes (industry…).
+        if ("organization".equals(audience.getPopulation())) {
+            java.util.List<Object> clauses = new java.util.ArrayList<>();
+            clauses.add(Map.of("type", "trait", "key", "_entity", "value", "organization"));
+            if (traitOnly(criteria)) clauses.add(criteria);
+            return new Resolved("sql", setBasedMembers(Map.of("all", clauses), tenantId));
         }
         // A trait-ONLY tree compiles to set-based SQL over party_trait — indexed,
         // INTERSECT/UNION/EXCEPT, scales to millions. Behavioural trees (interest/

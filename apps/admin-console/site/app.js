@@ -3017,7 +3017,7 @@ async function renderAudienceBuilder() {
   const name = document.createElement('input');
   name.id = 'audience-name'; name.placeholder = 'Audience name — e.g. Fibre holders at churn risk'; name.style.flex = '1';
   const popSel = document.createElement('select'); popSel.id = 'audience-population'; popSel.dataset.testid = 'audience-population';
-  for (const [v, l] of [['customer', 'Customers'], ['prospect', 'Prospects (not customers yet)']]) {
+  for (const [v, l] of [['customer', 'Customers'], ['prospect', 'Prospects (not customers yet)'], ['organization', 'Organizations (B2B)']]) {
     const o = document.createElement('option'); o.value = v; o.textContent = l; popSel.append(o);
   }
   const matchSel = document.createElement('select'); matchSel.id = 'audience-match';
@@ -3029,6 +3029,8 @@ async function renderAudienceBuilder() {
   // prospects are filtered by where the lead came from.
   const leafTypes = () => popSel.value === 'prospect'
     ? [['source', 'Lead source']]
+    : popSel.value === 'organization'
+    ? [['trait', 'Company data (BSS)']]
     : [['trait', 'Customer data (BSS)'], ['interest', 'Behaviour (browsing)'], ['audience', 'Analytics audience']];
 
   const conds = document.createElement('div'); conds.id = 'audience-conditions'; conds.style.cssText = 'margin:12px 0';
