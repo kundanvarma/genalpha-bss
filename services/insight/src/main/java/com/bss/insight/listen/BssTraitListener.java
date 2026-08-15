@@ -60,6 +60,21 @@ public class BssTraitListener {
                 }
                 return;
             }
+            // Single-valued BSS traits that CHANGE over a lifetime — replace, so
+            // an audience never matches a stale value. Real topics (loyalty,
+            // intelligence, billing) or the bridge (foreign BSS) both land here.
+            if ("LoyaltyTierChangedEvent".equals(eventType)) {
+                setFrom(event, tenantId, "loyaltyTier", r -> str(r.get("tier")));
+                return;
+            }
+            if ("ChurnRiskDetectedEvent".equals(eventType)) {
+                setFrom(event, tenantId, "churnRisk", r -> str(r.get("band") != null ? r.get("band") : r.get("riskLevel")));
+                return;
+            }
+            if ("CustomerBillCreateEvent".equals(eventType)) {
+                setFrom(event, tenantId, "monthlySpend", BssTraitListener::billAmount);
+                return;
+            }
             if (!"ProductOrderStateChangeEvent".equals(eventType)) {
                 return;
             }
@@ -83,6 +98,45 @@ public class BssTraitListener {
         } catch (Exception e) {
             log.warn("skipping unprocessable order event for traits: {}", e.getMessage());
         }
+    }
+
+    /** Extract a single-valued trait from an event's (only) resource and store it. */
+    private void setFrom(Map<String, Object> event, String tenantId, String key,
+            java.util.function.Function<Map<String, Object>, String> valueFn) {
+        Map<String, Object> resource = resourceOf(event);
+        if (resource == null) {
+            return;
+        }
+        String party = customerOf(resource);
+        String value = valueFn.apply(resource);
+        if (party != null && value != null && !value.isBlank()) {
+            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                traits.setTrait(party, key, value);
+            }
+        }
+    }
+
+    /** The single resource an event envelope carries (event = {resourceKey: resource}). */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resourceOf(Map<String, Object> event) {
+        for (Object v : event.values()) {
+            if (v instanceof Map<?, ?> m) return (Map<String, Object>) m;
+        }
+        return null;
+    }
+
+    private static String str(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    /** A bill's amount, from amountDue.value (TMF) or a flat amount field. */
+    @SuppressWarnings("unchecked")
+    private static String billAmount(Map<String, Object> bill) {
+        if (bill.get("amountDue") instanceof Map<?, ?> m && m.get("value") != null) {
+            return String.valueOf(m.get("value"));
+        }
+        if (bill.get("amount") != null) return String.valueOf(bill.get("amount"));
+        return null;
     }
 
     @SuppressWarnings("unchecked")

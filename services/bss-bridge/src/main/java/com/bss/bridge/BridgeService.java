@@ -33,7 +33,14 @@ public class BridgeService {
                     "ORDER_COMPLETED", new EventMap("ProductOrderStateChangeEvent", "bss.bridge.events",
                             "productOrder", "order", Map.of("customerId", "account.ref", "items", "lines", "itemName", "sku")),
                     "CUSTOMER_CREATED", new EventMap("IndividualCreateEvent", "bss.bridge.events",
-                            "individual", "individual", Map.of("id", "account.ref", "firstName", "account.firstName", "email", "account.mail"))
+                            "individual", "individual", Map.of("id", "account.ref", "firstName", "account.firstName", "email", "account.mail")),
+                    // single-valued BSS signals — relatedParty + one field, mapped generically
+                    "LOYALTY_TIER", new EventMap("LoyaltyTierChangedEvent", "bss.bridge.events",
+                            "loyaltyMember", "kv", Map.of("customerId", "account.ref", "tier", "tier")),
+                    "CHURN_SCORED", new EventMap("ChurnRiskDetectedEvent", "bss.bridge.events",
+                            "churnRisk", "kv", Map.of("customerId", "account.ref", "band", "band")),
+                    "BILL_ISSUED", new EventMap("CustomerBillCreateEvent", "bss.bridge.events",
+                            "customerBill", "kv", Map.of("customerId", "account.ref", "amount", "amount"))
             )));
 
     private final KafkaTemplate<String, String> kafka;
@@ -54,8 +61,11 @@ public class BridgeService {
         if (em == null) {
             return Map.of("status", "ignored", "reason", "unmapped foreign event type '" + foreignType + "'");
         }
-        Map<String, Object> resource = "order".equals(em.transform())
-                ? buildOrder(em, foreign) : buildIndividual(em, foreign);
+        Map<String, Object> resource = switch (em.transform()) {
+            case "order" -> buildOrder(em, foreign);
+            case "individual" -> buildIndividual(em, foreign);
+            default -> buildKv(em, foreign); // relatedParty + one flat field
+        };
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUID.randomUUID().toString());
         envelope.put("eventTime", OffsetDateTime.now().toString());
@@ -104,6 +114,20 @@ public class BridgeService {
                     "characteristic", Map.of("emailAddress", String.valueOf(email)))));
         }
         return ind;
+    }
+
+    /** Generic: a customer-scoped event with relatedParty + flat fields copied
+     * from configured paths (loyalty tier, churn band, bill amount…). */
+    private Map<String, Object> buildKv(EventMap em, Map<String, Object> foreign) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("relatedParty", List.of(Map.of("id", String.valueOf(path(foreign, em.paths().get("customerId"))),
+                "role", "customer")));
+        for (Map.Entry<String, String> e : em.paths().entrySet()) {
+            if ("customerId".equals(e.getKey())) continue;
+            Object v = path(foreign, e.getValue());
+            if (v != null) r.put(e.getKey(), v);
+        }
+        return r;
     }
 
     /** Resolve a dot-path (a.b.c) against nested maps. */

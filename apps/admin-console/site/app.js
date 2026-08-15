@@ -3053,10 +3053,23 @@ async function renderAudienceBuilder() {
         if (traitKeys.length) {
           for (const k of traitKeys) { const o = document.createElement('option'); o.value = k; o.textContent = k; key.append(o); }
         } else { const o = document.createElement('option'); o.value = ''; o.textContent = '(no BSS traits yet)'; key.append(o); }
-        const val = document.createElement('select'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
-        const fillVals = () => { val.replaceChildren(); for (const v of valuesFor(key.value)) { const o = document.createElement('option'); o.value = v; o.textContent = v; val.append(o); } };
-        key.addEventListener('change', fillVals); fillVals();
-        valueWrap.append(key, val);
+        const op = document.createElement('select'); op.dataset.testid = 'aud-cond-op'; op.style.maxWidth = '64px';
+        for (const [v, l] of [['eq', '='], ['gte', '≥'], ['lte', '≤']]) { const o = document.createElement('option'); o.value = v; o.textContent = l; op.append(o); }
+        const valBox = document.createElement('span'); valBox.style.cssText = 'display:flex;flex:1';
+        const renderVal = () => {
+          valBox.replaceChildren();
+          if (op.value === 'eq') { // exact match: a dropdown of the values held
+            const val = document.createElement('select'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
+            for (const v of valuesFor(key.value)) { const o = document.createElement('option'); o.value = v; o.textContent = v; val.append(o); }
+            valBox.append(val);
+          } else { // numeric compare: a number to compare against (e.g. spend >= 50)
+            const val = document.createElement('input'); val.dataset.testid = 'aud-cond-value'; val.type = 'number';
+            val.placeholder = 'number, e.g. 50'; val.style.flex = '1'; valBox.append(val);
+          }
+        };
+        key.addEventListener('change', () => { if (op.value === 'eq') renderVal(); });
+        op.addEventListener('change', renderVal); renderVal();
+        valueWrap.append(key, op, valBox);
       } else {
         const val = document.createElement('input'); val.dataset.testid = 'aud-cond-value'; val.style.flex = '1';
         val.placeholder = type.value === 'interest' ? 'interest category, e.g. Devices'
@@ -3090,7 +3103,8 @@ async function renderAudienceBuilder() {
       const value = (row.querySelector('[data-testid=aud-cond-value]').value || '').trim();
       if (!value) continue;
       let leaf = t === 'trait'
-        ? { type: 'trait', key: row.querySelector('[data-testid=aud-cond-key]').value, value }
+        ? { type: 'trait', key: row.querySelector('[data-testid=aud-cond-key]').value,
+            op: (row.querySelector('[data-testid=aud-cond-op]') || {}).value || 'eq', value }
         : { type: t, value };
       if (row.querySelector('[data-testid=aud-cond-not]').checked) leaf = { not: leaf };
       leaves.push(leaf);

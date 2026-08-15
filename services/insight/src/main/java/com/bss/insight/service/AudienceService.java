@@ -127,13 +127,14 @@ public class AudienceService {
                 profileByParty.putIfAbsent(p.getPartyId(), p);
             }
         }
-        // Traits in ONE query, grouped in memory — not a query per candidate (N+1).
-        // (At CDP scale this becomes a set-based SQL segment + optional materialized
-        // membership; the shape here is deliberately push-down-ready.)
-        Map<String, Set<String>> traitsByParty = new LinkedHashMap<>();
+        // Traits in ONE query, grouped party -> key -> values (not a query per
+        // candidate). A behavioural tree uses this in-memory path; a trait-ONLY
+        // tree goes through set-based SQL (see members()'s SQL branch).
+        Map<String, Map<String, Set<String>>> traitsByParty = new LinkedHashMap<>();
         for (PartyTrait t : traits.findByTenantId(tenantId)) {
-            traitsByParty.computeIfAbsent(t.getPartyId(), k -> new LinkedHashSet<>())
-                    .add(t.getTraitKey() + "=" + t.getTraitValue());
+            traitsByParty.computeIfAbsent(t.getPartyId(), k -> new LinkedHashMap<>())
+                    .computeIfAbsent(t.getTraitKey(), k -> new LinkedHashSet<>())
+                    .add(t.getTraitValue());
         }
         // candidate base = trait-carrying customers ∪ consented profiles
         Set<String> candidates = new LinkedHashSet<>(traitsByParty.keySet());
@@ -151,8 +152,8 @@ public class AudienceService {
             if (prof != null && usesGa4) {
                 ga4 = analytics.audiencesOf(tenantId, prof.getVisitorId());
             }
-            Set<String> traitSet = traitsByParty.getOrDefault(partyId, Set.of());
-            if (matches(criteria, interests, ga4, traitSet)) {
+            Map<String, Set<String>> byKey = traitsByParty.getOrDefault(partyId, Map.of());
+            if (matches(criteria, interests, ga4, byKey)) {
                 out.add(Map.of("partyId", partyId));
             }
         }
@@ -187,9 +188,9 @@ public class AudienceService {
             if (!Prospect.CONSENTED.equals(p.getConsent())) {
                 continue; // the consent gate — captured, not reachable
             }
-            Set<String> facts = new LinkedHashSet<>();
-            if (p.getSource() != null) facts.add("source=" + p.getSource());
-            if (p.getConsent() != null) facts.add("consent=" + p.getConsent());
+            Map<String, Set<String>> facts = new LinkedHashMap<>();
+            if (p.getSource() != null) facts.put("source", Set.of(p.getSource()));
+            if (p.getConsent() != null) facts.put("consent", Set.of(p.getConsent()));
             if (emptyTree || matches(criteria, Set.of(), List.of(), facts)) {
                 out.add(Map.of("prospectId", p.getId(), "email", p.getEmail() == null ? "" : p.getEmail(),
                         "consent", p.getConsent()));
@@ -208,31 +209,74 @@ public class AudienceService {
                 .toList();
     }
 
-    /** Recursive evaluation: {all|any:[..]} | {not:{..}} | {type,key?,value} leaf. */
+    /** Recursive evaluation: {all|any:[..]} | {not:{..}} | {type,key?,op?,value} leaf. */
     @SuppressWarnings("unchecked")
-    private boolean matches(Object node, Set<String> interests, List<String> ga4, Set<String> traitSet) {
+    private boolean matches(Object node, Set<String> interests, List<String> ga4,
+            Map<String, Set<String>> traitsByKey) {
         if (!(node instanceof Map<?, ?> m)) {
             return false;
         }
         if (m.get("all") instanceof List<?> all) {
-            return all.stream().allMatch(c -> matches(c, interests, ga4, traitSet));
+            return all.stream().allMatch(c -> matches(c, interests, ga4, traitsByKey));
         }
         if (m.get("any") instanceof List<?> any) {
-            return any.stream().anyMatch(c -> matches(c, interests, ga4, traitSet));
+            return any.stream().anyMatch(c -> matches(c, interests, ga4, traitsByKey));
         }
         if (m.get("not") != null) {
-            return !matches(m.get("not"), interests, ga4, traitSet);
+            return !matches(m.get("not"), interests, ga4, traitsByKey);
         }
         String type = String.valueOf(m.get("type"));
         String value = String.valueOf(m.get("value"));
         return switch (type) {
             case "interest" -> interests.contains(value);            // first-party behaviour
             case "audience" -> ga4.contains(value);                  // analytics-computed audience
-            case "trait" -> traitSet.contains(m.get("key") + "=" + value); // BSS-native customer data
-            case "source" -> traitSet.contains("source=" + value);   // prospect: where the lead came from
-            case "consent" -> traitSet.contains("consent=" + value); // prospect: consent state
+            case "trait" -> matchesTrait(traitsByKey.get(String.valueOf(m.get("key"))),
+                    m.get("op") == null ? "eq" : String.valueOf(m.get("op")), value); // BSS-native customer data
+            case "source" -> hasValue(traitsByKey.get("source"), value);   // prospect: where the lead came from
+            case "consent" -> hasValue(traitsByKey.get("consent"), value); // prospect: consent state
             default -> false;                                         // unknown leaf never matches
         };
+    }
+
+    private static boolean hasValue(Set<String> values, String value) {
+        return values != null && values.contains(value);
+    }
+
+    /** A trait leaf honours a comparison OP: eq (default, membership) or a
+     * numeric gte/lte/gt/lt (e.g. monthlySpend >= 50). Non-numeric values never
+     * satisfy a numeric op. */
+    private static boolean matchesTrait(Set<String> values, String op, String value) {
+        if (values == null || values.isEmpty()) {
+            return false;
+        }
+        if (op == null || op.isBlank() || "eq".equals(op)) {
+            return values.contains(value);
+        }
+        Double target = num(value);
+        if (target == null) {
+            return false;
+        }
+        for (String v : values) {
+            Double n = num(v);
+            if (n == null) continue;
+            boolean ok = switch (op) {
+                case "gte" -> n >= target;
+                case "lte" -> n <= target;
+                case "gt" -> n > target;
+                case "lt" -> n < target;
+                default -> false;
+            };
+            if (ok) return true;
+        }
+        return false;
+    }
+
+    private static Double num(String s) {
+        try {
+            return Double.valueOf(s);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Audience load(String id) {

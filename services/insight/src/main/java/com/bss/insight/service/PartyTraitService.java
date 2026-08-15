@@ -25,6 +25,29 @@ public class PartyTraitService {
         this.tenantScope = tenantScope;
     }
 
+    /**
+     * A SINGLE-valued trait (a tier, a churn band, monthly spend): replace any
+     * prior value so an audience never matches a stale one — "was gold, now
+     * bronze" must stop matching gold. Distinct from {@link #upsert}, which is
+     * additive for multi-valued traits (a party holds several products).
+     */
+    @Transactional
+    public void setTrait(String partyId, String key, String value) {
+        if (partyId == null || partyId.isBlank() || value == null || value.isBlank()) {
+            return;
+        }
+        String tenantId = tenantScope.currentTenantId();
+        traits.deleteByTenantIdAndPartyIdAndTraitKey(tenantId, partyId, key);
+        PartyTrait t = new PartyTrait();
+        t.setId(UUID.randomUUID().toString());
+        t.setTenantId(tenantId);
+        t.setPartyId(partyId);
+        t.setTraitKey(key);
+        t.setTraitValue(value);
+        t.setUpdatedAt(OffsetDateTime.now());
+        traits.save(t);
+    }
+
     @Transactional
     public void upsert(String partyId, String key, String value) {
         if (partyId == null || partyId.isBlank() || value == null || value.isBlank()) {
