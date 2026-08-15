@@ -60,8 +60,9 @@ public class SecurityConfig {
                                 .hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/audience")
                                 .hasAuthority("insight:read")
-                        // audience activation (push to ad/social Custom Audiences)
-                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/audience/*/activate")
+                        // audience activation + materialization
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/audience/*/activate",
+                                ApiConstants.BASE_PATH + "/audience/*/refresh")
                                 .hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/audience/**")
                                 .hasAuthority("insight:read")

@@ -35,6 +35,12 @@ public class Audience {
     @Column(name = "population")
     private String population;
 
+    @Column(name = "materialized_at")
+    private OffsetDateTime materializedAt;
+
+    @Column(name = "member_count")
+    private Integer memberCount;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -53,6 +59,10 @@ public class Audience {
     public void setCriteria(String criteria) { this.criteria = criteria; }
     public String getPopulation() { return population; }
     public void setPopulation(String population) { this.population = population; }
+    public OffsetDateTime getMaterializedAt() { return materializedAt; }
+    public void setMaterializedAt(OffsetDateTime v) { this.materializedAt = v; }
+    public Integer getMemberCount() { return memberCount; }
+    public void setMemberCount(Integer memberCount) { this.memberCount = memberCount; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

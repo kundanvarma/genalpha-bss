@@ -3,6 +3,7 @@ package com.bss.insight.service;
 import com.bss.insight.api.ApiConstants;
 import com.bss.insight.client.AnalyticsForwarder;
 import com.bss.insight.entity.Audience;
+import com.bss.insight.entity.AudienceSnapshot;
 import com.bss.insight.entity.PartyTrait;
 import com.bss.insight.entity.Prospect;
 import com.bss.insight.entity.VisitorProfile;
@@ -40,6 +41,7 @@ public class AudienceService {
     private final VisitorEventRepository events;
     private final PartyTraitRepository traits;
     private final ProspectRepository prospects;
+    private final com.bss.insight.repository.AudienceSnapshotRepository snapshots;
     private final AnalyticsForwarder analytics;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
@@ -49,15 +51,63 @@ public class AudienceService {
 
     public AudienceService(AudienceRepository audiences, VisitorProfileRepository profiles,
             VisitorEventRepository events, PartyTraitRepository traits, ProspectRepository prospects,
+            com.bss.insight.repository.AudienceSnapshotRepository snapshots,
             AnalyticsForwarder analytics, TenantScope tenantScope, ObjectMapper objectMapper) {
         this.audiences = audiences;
         this.profiles = profiles;
         this.events = events;
         this.traits = traits;
         this.prospects = prospects;
+        this.snapshots = snapshots;
         this.analytics = analytics;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+    }
+
+    /**
+     * Materialize the audience: freeze its resolved members into a snapshot so
+     * hot audiences read instantly (no recompute) and membership is stable
+     * between refreshes. On-demand here; a cron or the console drives it on a
+     * cadence in production.
+     */
+    @Transactional
+    public Map<String, Object> refresh(String id) {
+        Resolved r = resolve(id);
+        Audience a = load(id);
+        String tenantId = tenantScope.currentTenantId();
+        snapshots.deleteByTenantIdAndAudienceId(tenantId, id);
+        OffsetDateTime now = OffsetDateTime.now();
+        for (Map<String, Object> m : r.members()) {
+            AudienceSnapshot s = new AudienceSnapshot();
+            s.setId(UUID.randomUUID().toString());
+            s.setTenantId(tenantId);
+            s.setAudienceId(id);
+            s.setPartyId(m.get("partyId") == null ? null : String.valueOf(m.get("partyId")));
+            s.setEmail(m.get("email") == null ? null : String.valueOf(m.get("email")));
+            s.setCreatedAt(now);
+            snapshots.save(s);
+        }
+        a.setMaterializedAt(now);
+        a.setMemberCount(r.members().size());
+        audiences.save(a);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("audienceId", id);
+        out.put("path", r.path());
+        out.put("memberCount", r.members().size());
+        out.put("materializedAt", now);
+        return out;
+    }
+
+    /** The frozen member set — instant, no recompute. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> snapshotMembers(String id) {
+        return snapshots.findByTenantIdAndAudienceId(tenantScope.currentTenantId(), id).stream()
+                .map(s -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    if (s.getPartyId() != null) m.put("partyId", s.getPartyId());
+                    if (s.getEmail() != null) m.put("email", s.getEmail());
+                    return m;
+                }).toList();
     }
 
     @Transactional
@@ -413,6 +463,8 @@ public class AudienceService {
         map.put("href", a.getHref());
         map.put("name", a.getName());
         map.put("population", a.getPopulation() == null ? "customer" : a.getPopulation());
+        if (a.getMaterializedAt() != null) map.put("materializedAt", a.getMaterializedAt());
+        if (a.getMemberCount() != null) map.put("memberCount", a.getMemberCount());
         try {
             map.put("criteria", objectMapper.readValue(a.getCriteria() == null ? "{}" : a.getCriteria(), OBJECT));
         } catch (Exception e) {

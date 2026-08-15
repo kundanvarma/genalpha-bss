@@ -51,10 +51,20 @@ public class AudienceController {
 
     @GetMapping("/{id}/members")
     public ResponseEntity<?> members(@PathVariable String id,
-            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean explain) {
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean explain,
+            @org.springframework.web.bind.annotation.RequestParam(required = false) Boolean snapshot) {
+        if (Boolean.TRUE.equals(snapshot)) {
+            return ResponseEntity.ok(service.snapshotMembers(id)); // frozen set, instant
+        }
         return Boolean.TRUE.equals(explain)
                 ? ResponseEntity.ok(service.membersExplain(id))
                 : ResponseEntity.ok(service.members(id));
+    }
+
+    /** Materialize the audience — freeze its members into a snapshot. */
+    @PostMapping("/{id}/refresh")
+    public ResponseEntity<Map<String, Object>> refresh(@PathVariable String id) {
+        return ResponseEntity.ok(service.refresh(id));
     }
 
     /** The BSS traits this tenant holds — real key/value choices for a builder. */
