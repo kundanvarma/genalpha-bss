@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genalpha-bss — The Definitive Guide</title>
+<style>
+  :root { --teal:#147673; --ink:#20262b; --dim:#6b7680; --line:#e3e8ea; --bg:#fff; --card:#f7f9f9; --amber:#8a6d1f; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.65 Georgia, 'Times New Roman', serif; color:var(--ink); background:var(--bg); }
+  .page { max-width:54rem; margin:0 auto; padding:2rem 1.4rem 6rem; }
+  h1 { font-size:2.1rem; margin:.2rem 0 .4rem; }
+  h2 { font-size:1.35rem; margin:2.6rem 0 .6rem; color:var(--teal); border-bottom:1px solid var(--line); padding-bottom:.3rem; }
+  h3 { font-size:1.05rem; margin:1.6rem 0 .4rem; }
+  h4 { font-family:-apple-system,sans-serif; font-size:.82rem; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); margin:1.3rem 0 .35rem; }
+  .sub { color:var(--dim); font-style:italic; }
+  .kicker { font-family:-apple-system,sans-serif; font-size:.72rem; letter-spacing:.16em; color:var(--teal); text-transform:uppercase; }
+  code, pre { font-family:ui-monospace, Menlo, monospace; font-size:.86em; }
+  code { background:var(--card); padding:.08em .35em; border-radius:4px; }
+  pre { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:.8rem 1rem; overflow-x:auto; }
+  pre code { background:none; padding:0; }
+  table { border-collapse:collapse; width:100%; margin:.6rem 0 1rem; font-size:.92em; }
+  th, td { text-align:left; padding:.42rem .6rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-family:-apple-system,sans-serif; font-size:.78rem; letter-spacing:.04em; color:var(--dim); text-transform:uppercase; }
+  .rule { background:var(--card); border-left:3px solid var(--teal); padding:.6rem 1rem; margin:.9rem 0; }
+  .floor { background:#fbf8ef; border-left:3px solid var(--amber); padding:.6rem 1rem; margin:.9rem 0; }
+  .floor b { color:var(--amber); }
+  .toc { font-family:-apple-system,sans-serif; font-size:.92rem; }
+  .toc a { color:var(--ink); text-decoration:none; }
+  .toc a:hover { color:var(--teal); }
+  .toc .part { font-weight:700; color:var(--teal); margin:1rem 0 .3rem; text-transform:uppercase; letter-spacing:.04em; font-size:.8rem; }
+  .toc .row { display:flex; justify-content:space-between; gap:1rem; padding:.15rem 0; border-bottom:1px dotted var(--line); }
+  .toc .row .scope { color:var(--dim); font-size:.86rem; font-style:italic; text-align:right; flex:1; }
+  .tag { font-family:-apple-system,sans-serif; font-size:.66rem; letter-spacing:.06em; text-transform:uppercase; padding:.05em .45em; border-radius:4px; vertical-align:middle; }
+  .tag.done { background:#e6f2f1; color:var(--teal); }
+  .tag.plan { background:#f0f2f3; color:var(--dim); }
+  a { color:var(--teal); }
+  .dim { color:var(--dim); }
+  .skel { font-family:-apple-system,sans-serif; font-size:.88rem; }
+  .skel b { color:var(--teal); }
+  hr.soft { border:none; border-top:1px solid var(--line); margin:2.4rem 0; }
+  .chapter-meta { font-family:-apple-system,sans-serif; font-size:.82rem; color:var(--dim); margin:.2rem 0 1rem; }
+  @media print { .page { max-width:none; } h2 { break-after:avoid; } table, pre, .rule, .floor { break-inside:avoid; } }
+  @page { size:A4; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="kicker">Reference · genalpha-bss</div>
+<h1>The Definitive Guide</h1>
+<p class="sub">Architecture, modules, and how to run them — whole, or one piece at a time. The third
+book in the set: <em>The Honest Machine</em> tells how it was built and why; <em>The Operator's
+Manual</em> tells an operator which button and which endpoint, by role; <b>this book</b> is the
+engineer's and the adopter's reference — organized by module, so you can read only the chapters for
+the part you want and stand it up.</p>
+
+<div class="rule"><b>Status — a living book.</b> This is the down-payment: the full outline (the
+book's shape and every chapter's scope), the orientation, and one <b>fully written exemplar
+chapter — Martech &amp; the CDP</b> — which locks the template. Each remaining chapter is written as
+its module completes a hardening pass, so the book documents stable behaviour, never a moving target.
+Chapters are marked <span class="tag done">written</span> or <span class="tag plan">planned</span>
+below.</p>
+
+<!-- ============================ OUTLINE ============================ -->
+<h2 id="toc">Contents</h2>
+<div class="toc">
+
+  <div class="part">Part 0 · Orientation</div>
+  <div class="row"><a href="#o1">0.1 What this is</a><span class="scope">the composable premise — whole or a piece <span class="tag done">written</span></span></div>
+  <div class="row"><a href="#o2">0.2 How to read this book</a><span class="scope">the chapter skeleton + dependency-floor convention <span class="tag done">written</span></span></div>
+  <div class="row"><a href="#o3">0.3 Run it now</a><span class="scope">compose up · two operators · the one discipline <span class="tag done">written</span></span></div>
+
+  <div class="part">Part 1 · Foundations — the substrate every module needs</div>
+  <div class="row"><a href="#f1">F1 The gateway &amp; routing</a><span class="scope">one edge, per-route auth, edge cache <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#f2">F2 Identity, tenancy &amp; isolation</a><span class="scope">issuer-per-tenant · RLS · the two locks <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#f3">F3 The event backbone</a><span class="scope">TMF688 envelope · outbox · at-least-once <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#f4">F4 Data &amp; migrations</a><span class="scope">Flyway common vs vendor · RLS policies <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#f5">F5 Deployment</a><span class="scope">compose · Helm · EKS/AKS/k3s <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#f6">F6 Observability &amp; operations</a><span class="scope">health · Prometheus · ticks · backups <span class="tag plan">planned</span></span></div>
+
+  <div class="part">Part 2 · The modules — one chapter each, same skeleton</div>
+  <div class="row"><a href="#m1">M1 Product catalog</a><span class="scope">offering/spec/price · rules-as-data <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m2">M2 Ordering &amp; fulfilment</a><span class="scope">TMF622 · orchestration · decomposition <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m3">M3 Billing &amp; revenue</a><span class="scope">bills · dunning · subledger · PSP/BNPL <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m4">M4 Party, accounts &amp; identity</a><span class="scope">individuals/orgs · household/B2B · roles <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m5">M5 Martech &amp; the CDP</a><span class="scope">audiences from the bus · activation · attribution <span class="tag done">written</span></span></div>
+  <div class="row"><a href="#m6">M6 Assurance &amp; care</a><span class="scope">trouble ticket · service problem · incident agent <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m7">M7 Wholesale &amp; open access</a><span class="scope">fibre + mobile MVNE · both faces <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m8">M8 AI &amp; the digital workforce</a><span class="scope">control plane · copilots · Hermes · agentic commerce <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m9">M9 Channels</a><span class="scope">shop · app · biz · csr · dealer · partner <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#m10">M10 Knowledge, loyalty &amp; recommendations</a><span class="scope">the engagement satellites <span class="tag plan">planned</span></span></div>
+
+  <div class="part">Part 3 · Cross-cutting concerns</div>
+  <div class="row"><a href="#x1">X1 Security</a><span class="scope">authz · secret gate · rate limits · PQC <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#x2">X2 Privacy &amp; GDPR</a><span class="scope">passport · erasure · retention <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#x3">X3 Scale &amp; load</a><span class="scope">k6 · HPA · billing partitioning · the soak <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#x4">X4 Standards &amp; conformance</a><span class="scope">TMF Open APIs · the 25 CTKs <span class="tag plan">planned</span></span></div>
+
+  <div class="part">Appendices</div>
+  <div class="row"><a href="#a1">A · The seam catalog</a><span class="scope">BYO CMS/carrier/PSP/ESP/analytics <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#a2">B · Environment &amp; ports reference</a><span class="scope">clocks · ports · demo data <span class="tag plan">planned</span></span></div>
+  <div class="row"><a href="#a3">C · Glossary</a><span class="scope">TMF vocabulary → tmf-reference.md <span class="tag plan">planned</span></span></div>
+
+</div>
+
+<hr class="soft">
+
+<!-- ============================ PART 0 ============================ -->
+<h2 id="o1">0.1 · What this is</h2>
+<p class="drop">genalpha-bss is a telecom <b>Business Support System</b> built as <b>38 composable ODA
+components</b> — Spring Boot microservices, each exposing a TM Forum Open API — behind one gateway,
+plus a set of channels (storefront, mobile app, B2B and staff consoles, partner desks). Nothing is
+operator-specific: any OIDC identity provider, any PostgreSQL, any Kafka-protocol broker. Two demo
+operators run side by side on a single deployment to prove the multi-tenancy is real.</p>
+<p>The premise of <em>this</em> book is the premise of ODA itself: <b>you can adopt the whole thing,
+or one module.</b> A greenfield operator runs the full stack. An incumbent with its own BSS might
+take only the martech/CDP module, or only wholesale settlement, and wire it to the estate it already
+runs. This book is organized so either reader finds what they need: read <b>Part 1 (Foundations)</b>
+once — it is the substrate no module can do without — then read the <b>module chapter(s)</b> you
+actually want. Each module chapter is otherwise self-contained.</p>
+
+<h2 id="o2">0.2 · How to read this book</h2>
+<p>Every module chapter follows the <b>same seven-part skeleton</b>, so you always know where to look:</p>
+<p class="skel">
+<b>Why</b> — the problem the module solves and the design stance it takes.<br>
+<b>What</b> — the functional capabilities, in an operator's language.<br>
+<b>How</b> — the technical shape: components, the TMF APIs it serves, the events it emits and consumes.<br>
+<b>Deploy</b> — the compose / Helm subset to run it, <em>and its dependency floor</em>.<br>
+<b>Configure</b> — the environment variables, seams, and data-as-config that tune it.<br>
+<b>Use</b> — the day-to-day, by console tab and by API.<br>
+<b>Verify</b> — the end-to-end suites that prove it, so behaviour is never a claim.
+</p>
+<div class="floor"><b>The dependency-floor convention.</b> "Adopt one module" is only <em>true</em> for
+some modules. Martech runs standalone (a bridge feeds it a foreign BSS's events); billing
+structurally needs party + catalog + the event bus. So every module chapter opens with a
+<span style="color:var(--amber)">▟ Dependency floor</span> box that states, plainly, what the module
+cannot run without. This is the honest core of "composable" — it tells an integrator exactly what
+they are buying into. A book that hid it would be selling a lie.</p>
+
+<h2 id="o3">0.3 · Run it now</h2>
+<pre><code>mvn -q package -DskipTests &amp;&amp; docker compose build &amp;&amp; docker compose up -d
+open http://localhost:8080/shop/    # the storefront (guest browsing works)</code></pre>
+<p>The gateway is <code>:8080</code>; Keycloak is <code>:8085</code> (admin/admin). Two seed
+operators run side by side — <b>genalpha</b> (EN/EUR, realm <code>bss</code>) and <b>nova</b>
+(NO/NOK, realm <code>nova</code>). Back office is <code>/console/</code> (<code>demo</code> /
+<code>demo</code>).</p>
+<div class="rule"><b>The one discipline.</b> Every capability in this book has an end-to-end Playwright
+suite in <code>ops/e2e/</code>. When behaviour is in doubt, the suite is the specification:
+<code>node ops/e2e/&lt;name&gt;_test.js</code> runs it against the live stack. The <b>Verify</b> section
+of each chapter names the suites that prove it.</p>
+
+<hr class="soft">
+
+<!-- ============================ M5 — THE EXEMPLAR ============================ -->
+<h2 id="m5">M5 · Martech &amp; the CDP</h2>
+<p class="chapter-meta">Module family: <code>insight</code> (CDP brain) + <code>campaign</code> (orchestration &amp; measurement) + <code>communication</code> (delivery) · Console workspace: <b>Growth</b> · This is the reference book's exemplar chapter — the template every other module chapter follows.</p>
+
+<div class="floor"><b>▟ Dependency floor.</b> The martech module needs, at minimum: <b>the event
+backbone</b> (F3 — Kafka; the audience feed and the ticket hand-off both ride it), <b>a PostgreSQL</b>
+(F4 — trait/audience/job stores with RLS), and <b>identity</b> (F2 — to scope reads per tenant and
+authorize the console). It does <em>not</em> need this BSS's own catalog, ordering, or billing: it
+consumes whatever domain events it is fed. On a foreign BSS it runs against the <b>bss-bridge</b>
+(§How), which maps that estate's events onto the martech envelope — so martech is the one module
+that genuinely stands alone. For <em>measurement</em> (attribution) it additionally needs a source of
+conversion + revenue events; on this stack that's <code>campaign</code> consuming
+<code>bss.ordering.events</code>, but a bridged estate can supply its own.</div>
+
+<h3>Why</h3>
+<p>A normal customer-data platform is a <em>second</em> database you copy your customers into on a
+schedule — reverse-ETL out of the BSS, into a marketing cloud, and back. That copy is always stale
+(research puts reverse-ETL latency at 15–60 minutes, and near-real-time refresh at ~25–50× the cost),
+always a second identity graph to reconcile, and always a place your consent decisions can drift out
+of sync. This module takes the opposite stance: <b>the operational event bus you already run is the
+audience feed.</b> An order completes, a bill is issued, a loyalty tier changes — and the trait is
+<em>already</em> there, in the same database, under the same consent. No export, no round-trip, no
+second copy. The BSS <em>is</em> the CDP.</p>
+<p>The second stance is <b>honesty about outcomes</b>. Marketing tools are structurally tempted to
+claim credit for revenue that would have arrived anyway. This module measures with a <b>holdout</b>
+by default and reports <b>incremental</b> revenue — and refuses to report lift for any program that
+kept no control group.</p>
+
+<h3>What</h3>
+<table>
+<tr><th>Capability</th><th>What it does</th></tr>
+<tr><td><b>BSS-native traits</b></td><td>A live per-party feature store fed straight off domain events — <code>product=Fibre 500</code>, <code>loyaltyTier=gold</code>, <code>region=Oslo</code>, <code>churnRisk=high</code>, <code>monthlySpend=620</code>. You never import these; the bus fills them.</td></tr>
+<tr><td><b>Audiences</b></td><td>Saved rule trees (<code>all</code>/<code>any</code>/<code>not</code> over trait/behaviour leaves, numeric operators) resolved to members on demand, across four <b>populations</b>: customer · prospect · organization · visitor.</td></tr>
+<tr><td><b>Prospects</b></td><td>Not-yet-customers. A bought list lands <em>captured but not reachable</em>; it becomes targetable only when an explicit lawful basis records consent. The gate is absolute.</td></tr>
+<tr><td><b>Activation</b></td><td>Push an audience to an ad platform (Meta Custom Audiences, Google Customer Match) as a SHA-256-hashed, DNC-filtered match list — to <em>seed</em> lookalikes or <em>suppress</em> paid spend. One connector, many destinations, async jobs.</td></tr>
+<tr><td><b>Visitor retargeting</b></td><td>Anonymous consented browsers, keyed by <code>visitorId</code>, resolved by browsing interest — the on-site-personalization / web-retarget population (device-keyed, not the email path).</td></tr>
+<tr><td><b>Social listening</b></td><td>Pull brand mentions, score sentiment, show share-of-mood.</td></tr>
+<tr><td><b>Social care</b></td><td>Inbound DMs triaged for sentiment + support intent; the ones that need a human become TMF621 trouble tickets, event-driven.</td></tr>
+<tr><td><b>Attribution</b></td><td>Per-program and portfolio-wide holdout-vs-treated lift and <b>incremental</b> revenue, with a hard no-holdout-no-claim rule.</td></tr>
+</table>
+
+<h3>How</h3>
+<h4>Components &amp; the standards they serve</h4>
+<table>
+<tr><th>Service</th><th>Port</th><th>Role</th></tr>
+<tr><td><code>insight</code></td><td>8119</td><td>The CDP brain: trait store, audiences, prospects, activation, social listening + care. Consumes the bus; serves <code>/insight/v1/*</code>.</td></tr>
+<tr><td><code>campaign</code></td><td>8108</td><td>Journeys + campaigns + measurement; owns holdout, conversion attribution, and the portfolio report. Serves <code>/tmf-api/campaignManagement/v4/*</code>.</td></tr>
+<tr><td><code>communication</code></td><td>8095</td><td>TMF681 delivery over the per-tenant ESP seam; emits engagement + suppression events back.</td></tr>
+<tr><td><code>bss-bridge</code></td><td>8140</td><td>Optional: maps a <em>foreign</em> BSS's event shapes onto the martech envelope (<code>bss.bridge.events</code>) so the module runs on any estate.</td></tr>
+</table>
+<p>TMF surfaces: TMF688 (the event envelope), TMF620/GA4 (analytics audiences), TMF621 (trouble
+tickets, via the care hand-off), TMF699 (social lead → sales funnel), TMF683 (the interaction
+record every message writes to).</p>
+
+<h4>The trait feed — events in</h4>
+<p><code>insight</code>'s <code>BssTraitListener</code> subscribes to the operational topics
+(<code>bss.ordering.events</code>, <code>bss.party.events</code>, <code>bss.loyalty.events</code>,
+<code>bss.billing.events</code>, <code>bss.intelligence.events</code>, and — on a foreign estate —
+<code>bss.bridge.events</code>). Each event type maps to one trait branch: a completed order writes
+<code>product</code> holdings; <code>IndividualCreateEvent</code> writes <code>email</code> +
+<code>region</code>; <code>LoyaltyTierChangedEvent</code> replaces <code>loyaltyTier</code>;
+<code>CustomerBillCreateEvent</code> writes <code>monthlySpend</code>. Adding a trait is one more
+listener branch, not a new pipeline. Traits land in <code>party_trait</code> (RLS by tenant).</p>
+
+<h4>Audience resolution — the scale path</h4>
+<p>A trait-only <em>customer</em> audience compiles to <b>one set-based SQL query</b> over the indexed
+<code>party_trait</code> table (leaf → <code>SELECT</code>; <code>all</code> → <code>INTERSECT</code>;
+<code>any</code> → <code>UNION</code>; <code>not</code> → all-parties <code>EXCEPT</code> child) — this
+carries to millions of rows on Postgres alone. Behavioural trees (browsing interest, GA4) keep an
+in-memory path; prospects, organizations and visitors have dedicated resolvers.
+<code>GET /audience/{id}/members?explain=true</code> reports which path ran (<code>sql</code> ·
+<code>memory</code> · <code>prospect</code> · <code>visitor</code> · <code>organization</code>).
+Materialized snapshots (<code>POST /audience/{id}/refresh</code>) freeze a set for instant reads; a
+bounded scheduler re-materializes the stalest.</p>
+
+<h4>Activation — events out, to the ad platforms</h4>
+<p>The connector is an <code>AdDestination</code> interface with per-platform implementations
+(<code>MetaDestination</code> → <code>schema:[EMAIL_SHA256]</code>/<code>data</code>;
+<code>GoogleDestination</code> → <code>operations:[{create:{hashed_email}}]</code>). Emails are
+hashed once (<code>Hashing.sha256</code>), the do-not-contact ledger is filtered out, and the list is
+pushed in batches. Activation is <b>asynchronous</b>: <code>POST /audience/{id}/activate
+{externalAudienceId, mode, destination}</code> returns <code>202 {jobId, status:"queued"}</code> and
+the export runs under <code>TenantContext.actAs</code>; poll <code>GET /audience/activation/{jobId}</code>
+for <code>queued → running → done</code>.</p>
+
+<h4>Social care — the event-driven ticket hand-off</h4>
+<p>The clean pattern to study: <code>insight</code> has <em>no</em> ticket-write scope, and shouldn't.
+<code>SocialCareService.sync</code> scores each DM and, for the ones needing a human, <b>emits</b>
+<code>SocialCareTicketRequested</code> on <code>bss.insight.events</code>. <code>trouble-ticket</code>'s
+<code>SocialCareTicketListener</code> consumes it and opens a <code>socialCare</code> ticket inside
+<code>TenantContext.actAs(tenantId)</code> — the RLS datasource reads that thread-local and sets the
+Postgres session tenant, so the consumer writes correctly-scoped rows with no cross-service auth on the
+hot path. Idempotent per source DM (dedup on <code>relatedEntity</code>), so an at-least-once
+re-delivery never double-opens a case.</p>
+
+<h4>Attribution — the honest number</h4>
+<p>Each campaign/journey keeps its own holdout-vs-treated measurement.
+<code>AttributionService.report()</code> (behind <code>GET /campaign/attribution</code>) rolls every
+program up: per-program lift, a blended portfolio, and <b>incremental revenue = (treated-per-head −
+holdout-per-head) × heads reached</b>. A program with <code>heldOut == 0</code> reports reach and gross
+but its incremental is <code>null</code> — you cannot measure a lift you never left room to see.</p>
+
+<h3>Deploy</h3>
+<p>Full stack: the module is already in <code>docker compose up -d</code>. To run <b>martech alone
+against a foreign BSS</b>, the minimal set is:</p>
+<pre><code>docker compose up -d \
+  postgres kafka keycloak gateway \   # F2/F3/F4 foundations
+  insight campaign communication \    # the module
+  bss-bridge mock-social mock-esp     # foreign-event adapter + dev seams</code></pre>
+<p>Point the bridge at the source estate (map its event shapes in <code>BridgeService</code>), and
+insight consumes the normalized events with zero martech-service changes. On Kubernetes the Helm
+chart's per-component toggles let you install just these subcharts; see F5.</p>
+
+<h3>Configure</h3>
+<table>
+<tr><th>Variable (service)</th><th>Sets</th></tr>
+<tr><td><code>BSS_INSIGHT_TRAIT_TOPICS</code> (insight)</td><td>Which event topics become traits — add <code>bss.bridge.events</code> for a foreign estate.</td></tr>
+<tr><td><code>SOCIAL_API_URL</code> / <code>SOCIAL_ACCESS_TOKEN</code> / <code>SOCIAL_ACCOUNT_ID</code> (insight)</td><td>The Meta-shaped platform + brand handle for activation, listening, care.</td></tr>
+<tr><td><code>GOOGLE_API_URL</code> / <code>GOOGLE_ACCESS_TOKEN</code> (insight)</td><td>The Google Customer Match destination (production: OAuth from the tenant's secret store).</td></tr>
+<tr><td><code>INSIGHT_REFRESH_ENABLED</code> / <code>_INTERVAL_MS</code> / <code>_MAX_PER_RUN</code> (insight)</td><td>The bounded snapshot auto-refresh scheduler.</td></tr>
+<tr><td><code>FREQUENCY_CAP_MAX</code> / <code>FREQUENCY_CAP_WINDOW_HOURS</code> (communication)</td><td>The per-tenant send guardrail every message obeys.</td></tr>
+<tr><td><code>BSS_SOCIAL_CARE_SOURCE_TOPIC</code> (trouble-ticket)</td><td>Where the ticket service listens for care requests (default <code>bss.insight.events</code>).</td></tr>
+</table>
+<p>Data-as-config, not env: audiences, holdout %, conversion window, and A/B arms are authored in the
+console (or via the APIs) and stored as rows — no redeploy to change a campaign.</p>
+
+<h3>Use</h3>
+<p>Everything lives in the console under <b>Growth</b>. The step-by-step operator walkthrough is the
+<a href="../martech-guide.md">Martech &amp; CDP guide</a>; in brief:</p>
+<table>
+<tr><th>Task</th><th>Console tab / API</th></tr>
+<tr><td>Build &amp; resolve audiences</td><td>Growth → Audience builder · Saved audiences · <code>POST /insight/v1/audience</code></td></tr>
+<tr><td>Import prospects (consent-gated)</td><td>Audience builder (population = Prospects) · <code>POST /insight/v1/prospect/import</code></td></tr>
+<tr><td>Push to ad platforms</td><td>Saved audiences → Activate · <code>POST /insight/v1/audience/{id}/activate</code></td></tr>
+<tr><td>Lift &amp; incremental revenue</td><td>Growth → <b>Attribution</b> · <code>GET /campaign/attribution</code></td></tr>
+<tr><td>Brand mentions + mood</td><td>Growth → Social listening · <code>POST /insight/v1/listening/sync</code></td></tr>
+<tr><td>Inbound DMs → tickets</td><td>Growth → Social care · <code>POST /insight/v1/care/sync</code></td></tr>
+</table>
+
+<h3>Verify</h3>
+<p>The suites that are the specification for this module:</p>
+<p class="skel"><code>audience_native_test</code> · <code>audience_sql_test</code> ·
+<code>audience_snapshot_test</code> · <code>audience_scheduler_test</code> ·
+<code>audience_activation_test</code> · <code>audience_async_activation_test</code> ·
+<code>connector_multidest_test</code> · <code>visitor_retargeting_test</code> ·
+<code>traits_region_org_test</code> · <code>frequency_dnc_test</code> · <code>engagement_test</code> ·
+<code>prospect_reach_test</code> · <code>social_listening_test</code> · <code>social_publish_test</code> ·
+<code>social_lead_test</code> · <code>social_care_test</code> · <code>attribution_report_test</code> ·
+<code>bss_bridge_test</code> (the "runs on any BSS" proof).</p>
+<div class="rule"><b>Read this chapter as the template.</b> Every module chapter that follows — billing,
+ordering, wholesale, and the rest — is written to this same seven-part shape, opens with its own
+dependency-floor box, and ends with the suites that prove it. When a module finishes its hardening
+pass, its chapter is a fill-in, not a fresh design.</div>
+
+<hr class="soft">
+
+<!-- ============================ PLANNED CHAPTERS ============================ -->
+<h2 id="planned">Planned chapters</h2>
+<p class="dim">The chapters below are outlined and will be written to the M5 template as each module
+completes its hardening pass. Until then, the <em>Operator's Manual</em> and
+<code>docs/architecture.md</code> cover this ground operationally; this book will add the
+module-axis, why→verify treatment.</p>
+
+<h3 id="f1">Part 1 · Foundations</h3>
+<p class="skel"><b>F1 Gateway &amp; routing</b> · <b>F2 Identity, tenancy &amp; isolation</b> ·
+<b>F3 The event backbone</b> · <b>F4 Data &amp; migrations</b> · <b>F5 Deployment</b> ·
+<b>F6 Observability &amp; operations</b>. These are read once and depended on by every module chapter's
+dependency floor.</p>
+
+<h3 id="m1">Part 2 · The other modules</h3>
+<p class="skel"><b>M1 Product catalog</b> · <b>M2 Ordering &amp; fulfilment</b> ·
+<b>M3 Billing &amp; revenue</b> · <b>M4 Party, accounts &amp; identity</b> ·
+<b>M6 Assurance &amp; care</b> · <b>M7 Wholesale &amp; open access</b> ·
+<b>M8 AI &amp; the digital workforce</b> · <b>M9 Channels</b> ·
+<b>M10 Knowledge, loyalty &amp; recommendations</b>. Each: Why · What · How · Deploy (+ dependency
+floor) · Configure · Use · Verify.</p>
+
+<h3 id="x1">Part 3 · Cross-cutting &amp; appendices</h3>
+<p class="skel"><b>X1 Security</b> · <b>X2 Privacy &amp; GDPR</b> · <b>X3 Scale &amp; load</b> ·
+<b>X4 Standards &amp; conformance</b> · <b>A</b> Seam catalog · <b>B</b> Environment reference ·
+<b>C</b> Glossary (→ <a href="../book/tmf-reference.md">tmf-reference.md</a>).</p>
+
+<div style="height:4rem"></div>
+</div>
+</body>
+</html>
