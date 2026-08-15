@@ -50,6 +50,30 @@ const server = http.createServer((req, res) => {
     return json(200, { status: 'UP' });
   }
 
+  // Google Customer Match shape: POST /google/v1/{listId}/members with
+  // {operations:[{create:{hashed_email}}]} — a different wire shape to prove the
+  // BSS speaks more than one ad platform through one connector abstraction.
+  const gmembers = url.pathname.match(/^\/google\/v1\/([^/]+)\/members$/);
+  if (gmembers) {
+    if (!authed()) return json(401, { error: { message: 'access token required' } });
+    if (req.method === 'POST') {
+      return readBody((payload) => {
+        if (!Array.isArray(payload.operations)) {
+          return json(400, { error: { message: 'operations[] required (Customer Match)' } });
+        }
+        const bucket = audiences.get('g:' + gmembers[1]) || new Set();
+        let n = 0;
+        for (const op of payload.operations) {
+          const h = op && op.create && op.create.hashed_email;
+          if (h) { bucket.add(String(h)); n++; }
+        }
+        audiences.set('g:' + gmembers[1], bucket);
+        json(200, { listId: gmembers[1], received: n });
+      });
+    }
+    if (req.method === 'GET') return json(200, [...(audiences.get('g:' + gmembers[1]) || [])]);
+  }
+
   const users = url.pathname.match(/^\/v1\/([^/]+)\/users$/);
   if (users) {
     if (!authed()) return json(401, { error: { message: 'access token required' } });

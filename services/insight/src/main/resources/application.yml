@@ -62,9 +62,13 @@ bss:
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
     # the ESP suppression list — filtered out before an ad-platform export
     communication-base-url: ${COMMUNICATION_BASE_URL:}
-    # acquisition seam: push audiences OUT as ad/social Custom Audiences (hashed)
+    # acquisition seams: push audiences OUT as ad/social Custom Audiences (hashed).
+    # Meta shape:
     social-api-url: ${SOCIAL_API_URL:}
     social-access-token: ${SOCIAL_ACCESS_TOKEN:}
+    # Google Customer Match shape (a second destination through one connector):
+    google-api-url: ${GOOGLE_API_URL:}
+    google-access-token: ${GOOGLE_ACCESS_TOKEN:}
     # social listening: the brand's own handle to pull mentions for
     social-account-id: ${SOCIAL_ACCOUNT_ID:}
   tenants:

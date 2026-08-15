@@ -32,6 +32,9 @@ public class ActivationJob {
     @Column(name = "mode")
     private String mode;
 
+    @Column(name = "destination")
+    private String destination;
+
     @Column(name = "status")
     private String status;
 
@@ -63,6 +66,8 @@ public class ActivationJob {
     public void setExternalAudienceId(String externalAudienceId) { this.externalAudienceId = externalAudienceId; }
     public String getMode() { return mode; }
     public void setMode(String mode) { this.mode = mode; }
+    public String getDestination() { return destination; }
+    public void setDestination(String destination) { this.destination = destination; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Integer getMembers() { return members; }

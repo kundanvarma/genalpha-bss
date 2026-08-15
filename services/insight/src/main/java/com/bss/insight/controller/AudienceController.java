@@ -87,4 +87,10 @@ public class AudienceController {
     public ResponseEntity<Map<String, Object>> activationJob(@PathVariable String jobId) {
         return ResponseEntity.ok(activation.jobStatus(jobId));
     }
+
+    /** The ad destinations an audience can activate to, and whether configured. */
+    @GetMapping("/destinations")
+    public ResponseEntity<Map<String, Object>> destinations() {
+        return ResponseEntity.ok(activation.availableDestinations());
+    }
 }

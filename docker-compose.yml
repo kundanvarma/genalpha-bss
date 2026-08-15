@@ -1600,6 +1600,9 @@ services:
       SOCIAL_API_URL: http://mock-social:8080
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
       SOCIAL_ACCOUNT_ID: genalpha-brand
+      # second ad destination (Google Customer Match shape) through the same connector
+      GOOGLE_API_URL: http://mock-social:8080
+      GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
       BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events
       # auto-refresh materialized audiences — short interval in dev (prod: minutes)

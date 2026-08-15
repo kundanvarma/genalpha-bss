@@ -29,13 +29,14 @@ public class ActivationJobService {
     }
 
     @Transactional
-    public String createQueued(String audienceId, String externalAudienceId, String mode) {
+    public String createQueued(String audienceId, String externalAudienceId, String mode, String destination) {
         ActivationJob j = new ActivationJob();
         j.setId(UUID.randomUUID().toString());
         j.setTenantId(tenantScope.currentTenantId());
         j.setAudienceId(audienceId);
         j.setExternalAudienceId(externalAudienceId);
         j.setMode(mode);
+        j.setDestination(destination);
         j.setStatus(ActivationJob.QUEUED);
         j.setCreatedAt(OffsetDateTime.now());
         jobs.save(j);
@@ -86,6 +87,7 @@ public class ActivationJobService {
         m.put("audienceId", j.getAudienceId());
         m.put("externalAudienceId", j.getExternalAudienceId());
         m.put("mode", j.getMode());
+        m.put("destination", j.getDestination());
         m.put("status", j.getStatus());
         m.put("members", j.getMembers());
         m.put("pushed", j.getPushed());

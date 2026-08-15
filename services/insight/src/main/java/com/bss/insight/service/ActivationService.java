@@ -1,6 +1,5 @@
 package com.bss.insight.service;
 
-import com.bss.insight.client.SocialAudienceClient;
 import com.bss.insight.entity.PartyTrait;
 import com.bss.insight.repository.PartyTraitRepository;
 import com.bss.insight.security.TenantContext;
@@ -29,17 +28,19 @@ public class ActivationService {
     private static final Logger log = LoggerFactory.getLogger(ActivationService.class);
 
     private final AudienceService audiences;
-    private final SocialAudienceClient social;
+    private final Map<String, com.bss.insight.client.AdDestination> destinations;
     private final PartyTraitRepository traits;
     private final ActivationJobService jobs;
     private final com.bss.insight.repository.EmailSuppressionRepository suppressions;
     private final TenantScope tenantScope;
 
-    public ActivationService(AudienceService audiences, SocialAudienceClient social,
+    public ActivationService(AudienceService audiences,
+            List<com.bss.insight.client.AdDestination> destinations,
             PartyTraitRepository traits, ActivationJobService jobs,
             com.bss.insight.repository.EmailSuppressionRepository suppressions, TenantScope tenantScope) {
         this.audiences = audiences;
-        this.social = social;
+        this.destinations = new LinkedHashMap<>();
+        for (com.bss.insight.client.AdDestination d : destinations) this.destinations.put(d.name(), d);
         this.traits = traits;
         this.jobs = jobs;
         this.suppressions = suppressions;
@@ -51,21 +52,26 @@ public class ActivationService {
         String externalAudienceId = body.get("externalAudienceId") == null
                 ? null : String.valueOf(body.get("externalAudienceId"));
         String mode = "suppress".equals(body.get("mode")) ? "suppress" : "seed";
+        String destination = body.get("destination") == null ? "meta" : String.valueOf(body.get("destination"));
         if (externalAudienceId == null || externalAudienceId.isBlank()) {
             throw new IllegalArgumentException("externalAudienceId (the platform Custom Audience id) is required");
         }
-        String jobId = jobs.createQueued(audienceId, externalAudienceId, mode);
+        if (!destinations.containsKey(destination)) {
+            throw new IllegalArgumentException("unknown destination '" + destination + "' — known: " + destinations.keySet());
+        }
+        String jobId = jobs.createQueued(audienceId, externalAudienceId, mode, destination);
         String tenantId = tenantScope.currentTenantId();
         CompletableFuture.runAsync(() -> {
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                runJob(jobId, audienceId, externalAudienceId);
+                runJob(jobId, audienceId, externalAudienceId, destination);
             }
         });
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("jobId", jobId);
         out.put("mode", mode);
+        out.put("destination", destination);
         out.put("status", "queued");
-        out.put("enabled", social.enabled());
+        out.put("enabled", destinations.get(destination).enabled());
         return out;
     }
 
@@ -73,9 +79,16 @@ public class ActivationService {
         return jobs.status(jobId);
     }
 
+    /** The activatable destinations (platform keys) and whether each is configured. */
+    public Map<String, Object> availableDestinations() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        destinations.forEach((k, v) -> out.put(k, v.enabled()));
+        return out;
+    }
+
     /** Background worker: resolve the audience, hash+push, record the outcome.
      * Each state transition commits on its own so a poller sees running->done. */
-    private void runJob(String jobId, String audienceId, String externalAudienceId) {
+    private void runJob(String jobId, String audienceId, String externalAudienceId, String destination) {
         jobs.markRunning(jobId);
         try {
             List<Map<String, Object>> members = audiences.members(audienceId);
@@ -109,7 +122,10 @@ public class ActivationService {
             if (!dnc.isEmpty()) {
                 emails.removeIf(e -> dnc.contains(e.trim().toLowerCase()));
             }
-            int pushed = social.pushCustomAudience(externalAudienceId, emails);
+            // Hash once (SHA-256), then format per the chosen platform's wire shape.
+            List<String> hashes = new ArrayList<>(emails.size());
+            for (String e : emails) hashes.add(com.bss.insight.client.Hashing.sha256(e));
+            int pushed = destinations.get(destination).push(externalAudienceId, hashes);
             jobs.complete(jobId, members.size(), pushed, members.size() - emails.size());
             if (beforeDnc != emails.size()) {
                 log.info("activation {}: DNC-filtered {} suppressed address(es) before export", jobId, beforeDnc - emails.size());
