@@ -1126,9 +1126,9 @@ const RESOURCES = [
     path: 'landing',
     base: '/insight/v1',
     title: 'Landing pages',
-    // Author a standalone campaign landing page + consent-first lead form. POST
-    // upserts by slug, so re-submitting the same slug edits it (hence noEdit).
-    noEdit: true,
+    // Author a standalone campaign landing page + consent-first lead form. Create
+    // POSTs (upsert by slug); Edit pre-fills the form and PATCHes by id (the slug,
+    // the page's public URL, stays fixed on edit).
     fields: [
       { name: 'headline', label: 'Headline', required: true },
       { name: 'subhead', label: 'Subhead — one line under the headline', kind: 'longtext' },

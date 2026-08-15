@@ -63,6 +63,24 @@ public class LandingPageService {
                 .stream().map(LandingPageService::toMap).toList();
     }
 
+    /** Edit an existing page by id — the console's pre-filled edit form saves here.
+     * The slug (the page's public URL/identity) is deliberately not changed. */
+    @Transactional
+    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+        LandingPage p = pages.findById(id)
+                .orElseThrow(() -> com.bss.insight.exception.NotFoundException.forResource("LandingPage", id));
+        p.setHeadline(str(dto.get("headline"), p.getHeadline()));
+        p.setSubhead(str(dto.get("subhead"), null));
+        p.setCtaLabel(str(dto.get("ctaLabel"), p.getCtaLabel()));
+        p.setUtmSource(str(dto.get("utmSource"), p.getUtmSource()));
+        p.setLogoUrl(safeUrl(str(dto.get("logoUrl"), null)));
+        p.setHeroImageUrl(safeUrl(str(dto.get("heroImageUrl"), null)));
+        p.setBrandColor(safeColor(str(dto.get("brandColor"), null)));
+        p.setCtaUrl(safeUrl(str(dto.get("ctaUrl"), null)));
+        p.setPrivacyUrl(safeUrl(str(dto.get("privacyUrl"), null)));
+        return toMap(pages.save(p));
+    }
+
     /** Delete a page (RLS scopes findById to the caller's tenant, so a foreign id is a no-op). */
     @Transactional
     public void delete(String id) {
