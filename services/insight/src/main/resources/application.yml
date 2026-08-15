@@ -60,6 +60,8 @@ bss:
   downstream:
     # experience rules authored as data live in the policy component
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    # the ESP suppression list — filtered out before an ad-platform export
+    communication-base-url: ${COMMUNICATION_BASE_URL:}
     # acquisition seam: push audiences OUT as ad/social Custom Audiences (hashed)
     social-api-url: ${SOCIAL_API_URL:}
     social-access-token: ${SOCIAL_ACCESS_TOKEN:}

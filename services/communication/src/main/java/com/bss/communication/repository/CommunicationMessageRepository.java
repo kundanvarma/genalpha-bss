@@ -12,4 +12,8 @@ public interface CommunicationMessageRepository extends JpaRepository<Communicat
     boolean existsByTenantIdAndSourceEventId(String tenantId, String sourceEventId);
 
     java.util.List<CommunicationMessage> findByTenantIdAndReceiverPartyId(String tenantId, String receiverPartyId);
+
+    /** Contact-frequency governor: how many messages this party got recently. */
+    long countByTenantIdAndReceiverPartyIdAndCreatedAtAfter(
+            String tenantId, String receiverPartyId, java.time.OffsetDateTime since);
 }

@@ -1178,6 +1178,9 @@ services:
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       PARTY_BASE_URL: http://party-account:8080
+      # Contact-frequency governor (dev: 5 per party per hour; prod: tune).
+      FREQUENCY_CAP_MAX: "5"
+      FREQUENCY_CAP_WINDOW_HOURS: "1"
       # ESP delivery seam: nova's customer messages ALSO leave via "their"
       # email provider (the SendGrid-shaped mock); genalpha stays in-app
       # only — same binary, per-tenant config.
@@ -1598,9 +1601,11 @@ services:
       SOCIAL_ACCESS_TOKEN: genalpha-social-token
       SOCIAL_ACCOUNT_ID: genalpha-brand
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
-      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.bridge.events
+      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events
       # auto-refresh materialized audiences — short interval in dev (prod: minutes)
       INSIGHT_REFRESH_INTERVAL_MS: "8000"
+      # DNC-at-activation: filter the ESP suppression list before an export
+      COMMUNICATION_BASE_URL: http://communication:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"

@@ -32,14 +32,17 @@ public class ActivationService {
     private final SocialAudienceClient social;
     private final PartyTraitRepository traits;
     private final ActivationJobService jobs;
+    private final com.bss.insight.repository.EmailSuppressionRepository suppressions;
     private final TenantScope tenantScope;
 
     public ActivationService(AudienceService audiences, SocialAudienceClient social,
-            PartyTraitRepository traits, ActivationJobService jobs, TenantScope tenantScope) {
+            PartyTraitRepository traits, ActivationJobService jobs,
+            com.bss.insight.repository.EmailSuppressionRepository suppressions, TenantScope tenantScope) {
         this.audiences = audiences;
         this.social = social;
         this.traits = traits;
         this.jobs = jobs;
+        this.suppressions = suppressions;
         this.tenantScope = tenantScope;
     }
 
@@ -96,8 +99,21 @@ public class ActivationService {
                     if (e != null) emails.add(e);
                 }
             }
+            // DNC: never export a suppressed (bounced/complained/unsubscribed) address.
+            // Projected locally from communication's EmailSuppressedEvent — a fast
+            // local lookup, no cross-service call on the export path.
+            java.util.Set<String> dnc = suppressions.findByTenantId(tenantScope.currentTenantId()).stream()
+                    .map(s -> s.getEmail() == null ? "" : s.getEmail().trim().toLowerCase())
+                    .collect(java.util.stream.Collectors.toSet());
+            int beforeDnc = emails.size();
+            if (!dnc.isEmpty()) {
+                emails.removeIf(e -> dnc.contains(e.trim().toLowerCase()));
+            }
             int pushed = social.pushCustomAudience(externalAudienceId, emails);
             jobs.complete(jobId, members.size(), pushed, members.size() - emails.size());
+            if (beforeDnc != emails.size()) {
+                log.info("activation {}: DNC-filtered {} suppressed address(es) before export", jobId, beforeDnc - emails.size());
+            }
         } catch (Exception e) {
             log.warn("activation job {} failed: {}", jobId, e.getMessage());
             jobs.fail(jobId, e.getMessage());

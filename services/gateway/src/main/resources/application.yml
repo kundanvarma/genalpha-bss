@@ -158,6 +158,11 @@ spring:
           uri: ${COMMUNICATION_URL:http://localhost:8095}
           predicates:
             - Path=/tmf-api/communicationManagement/**
+        - id: communication-esp
+          uri: ${COMMUNICATION_URL:http://localhost:8095}
+          predicates:
+            # the ESP webhook (X-Esp-Token auth) + the suppression ledger read
+            - Path=/esp/v1/**
         - id: shopping-cart
           uri: ${CART_URL:http://localhost:8096}
           predicates:

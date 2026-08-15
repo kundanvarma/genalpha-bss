@@ -26,10 +26,16 @@ public class BssTraitListener {
     private static final TypeReference<Map<String, Object>> JSON = new TypeReference<>() { };
 
     private final PartyTraitService traits;
+    private final com.bss.insight.repository.EmailSuppressionRepository suppressions;
+    private final com.bss.insight.security.TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
-    public BssTraitListener(PartyTraitService traits, ObjectMapper objectMapper) {
+    public BssTraitListener(PartyTraitService traits,
+            com.bss.insight.repository.EmailSuppressionRepository suppressions,
+            com.bss.insight.security.TenantScope tenantScope, ObjectMapper objectMapper) {
         this.traits = traits;
+        this.suppressions = suppressions;
+        this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
     }
 
@@ -73,6 +79,26 @@ public class BssTraitListener {
             }
             if ("CustomerBillCreateEvent".equals(eventType)) {
                 setFrom(event, tenantId, "monthlySpend", BssTraitListener::billAmount);
+                return;
+            }
+            // DNC ledger projection: a suppressed address, for activation filtering.
+            if ("EmailSuppressedEvent".equals(eventType)) {
+                Map<String, Object> r = resourceOf(event);
+                String email = r == null || r.get("email") == null ? null
+                        : String.valueOf(r.get("email")).trim().toLowerCase();
+                if (email != null && !email.isBlank()) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        if (!suppressions.existsByTenantIdAndEmail(tenantId, email)) {
+                            com.bss.insight.entity.EmailSuppression s = new com.bss.insight.entity.EmailSuppression();
+                            s.setId(java.util.UUID.randomUUID().toString());
+                            s.setTenantId(tenantId);
+                            s.setEmail(email);
+                            s.setReason(r.get("reason") == null ? null : String.valueOf(r.get("reason")));
+                            s.setCreatedAt(java.time.OffsetDateTime.now());
+                            suppressions.save(s);
+                        }
+                    }
+                }
                 return;
             }
             if (!"ProductOrderStateChangeEvent".equals(eventType)) {

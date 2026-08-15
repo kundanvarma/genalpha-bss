@@ -46,6 +46,10 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  communication:
+    # Contact-frequency governor on the martech send door (0 = off).
+    frequency-cap-max: ${FREQUENCY_CAP_MAX:0}
+    frequency-cap-window-hours: ${FREQUENCY_CAP_WINDOW_HOURS:24}
   downstream:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
     # SMS/push delivery seams — unset means in-app only (no gateway wired)

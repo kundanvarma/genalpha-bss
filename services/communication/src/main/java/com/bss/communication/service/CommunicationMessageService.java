@@ -42,10 +42,15 @@ public class CommunicationMessageService {
     private final MessageTemplateService templates;
     private final com.bss.communication.client.PartyLookupClient parties;
 
+    private final int freqCapMax;
+    private final int freqCapWindowHours;
+
     public CommunicationMessageService(CommunicationMessageRepository repository, DomainEventPublisher events,
             PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp,
             com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates,
-            com.bss.communication.client.PartyLookupClient parties) {
+            com.bss.communication.client.PartyLookupClient parties,
+            @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-max:0}") int freqCapMax,
+            @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-window-hours:24}") int freqCapWindowHours) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
@@ -54,6 +59,8 @@ public class CommunicationMessageService {
         this.channels = channels;
         this.templates = templates;
         this.parties = parties;
+        this.freqCapMax = freqCapMax;
+        this.freqCapWindowHours = freqCapWindowHours;
     }
 
     /** Consumer path: idempotent on the source event id (at-least-once upstream). */
@@ -139,7 +146,16 @@ public class CommunicationMessageService {
         // individual is simply its own single recipient (unchanged behaviour).
         List<String> recipients = parties.recipientsOf(tenantId, target);
         Map<String, Object> firstCreated = null;
+        int capped = 0;
         for (String receiver : recipients) {
+            // FREQUENCY CAP: the martech door governs contact frequency — a party
+            // over the cap in the window is skipped, so campaigns/journeys can't
+            // over-message. Transactional mail (mint) never runs through here.
+            if (freqCapMax > 0 && repository.countByTenantIdAndReceiverPartyIdAndCreatedAtAfter(
+                    tenantId, receiver, OffsetDateTime.now().minusHours(freqCapWindowHours)) >= freqCapMax) {
+                capped++;
+                continue;
+            }
             // Personalize per recipient: the contact's own name, plus the org
             // tokens ({{organization.name}}) resolved from the company they're on.
             Map<String, Object> rendered = templated
@@ -166,6 +182,10 @@ public class CommunicationMessageService {
             channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
                     entity.getSubject(), entity.getContent(), entity.getMessageType());
             if (firstCreated == null) firstCreated = created;
+        }
+        if (firstCreated == null && capped > 0) {
+            return Map.of("status", "capped", "capped", capped,
+                    "reason", "frequency cap reached for all recipients in the window");
         }
         return firstCreated;
     }

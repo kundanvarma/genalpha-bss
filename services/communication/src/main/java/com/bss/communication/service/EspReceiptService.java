@@ -42,15 +42,18 @@ public class EspReceiptService {
     private final SuppressionRepository suppressions;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
+    private final com.bss.communication.events.DomainEventPublisher events;
     private final org.springframework.transaction.support.TransactionTemplate transactions;
 
     public EspReceiptService(CommunicationMessageRepository messages,
             SuppressionRepository suppressions, TenantRegistry tenants, TenantScope tenantScope,
+            com.bss.communication.events.DomainEventPublisher events,
             org.springframework.transaction.PlatformTransactionManager txManager) {
         this.messages = messages;
         this.suppressions = suppressions;
         this.tenants = tenants;
         this.tenantScope = tenantScope;
+        this.events = events;
         this.transactions = new org.springframework.transaction.support.TransactionTemplate(txManager);
     }
 
@@ -107,6 +110,10 @@ public class EspReceiptService {
                     s.setReason(verdict);
                     s.setCreatedAt(OffsetDateTime.now());
                     suppressions.save(s);
+                    // Broadcast so the martech side (insight) can DNC-filter exports —
+                    // outbox insert rides this same transaction, so it's durable.
+                    events.publish("EmailSuppressedEvent", "suppression",
+                            java.util.Map.of("email", email, "reason", verdict), tenantId);
                     log.info("suppressed {} for tenant '{}' ({})", email, tenantId, verdict);
                 }
             });
