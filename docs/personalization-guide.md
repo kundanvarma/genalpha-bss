@@ -62,7 +62,7 @@ own choice on the shop's consent card ("Privacy choices" reopens it):
 | `POST /event` | anonymous | breadcrumb; dropped without consent, 204 either way (consent never leaks) |
 | `GET /experience?visitorId=` | anonymous | "what should this person see" — interests + policy rule decision + channel + segments |
 | `POST /stitch` | signed-in | visitor → party, from the verified token |
-| `GET /profile` / `?visitorId=` | `insight:read` | the consent ledger (console Insight tab) |
+| `GET /profile` / `?visitorId=` | `insight:read` | the consent ledger (console Visitor consent tab) |
 | `GET /partyProfile?partyId=` | `insight:read` | a customer's merged interests (recommendation fusion, NBO) |
 
 ## 2. Where do audiences live? (what `localhost:8120/audiences` is)
@@ -103,7 +103,7 @@ test data. Steps in order:
    consent card → *Yes, personalize* → open **Samsung Galaxy S26** → back
    home → "✨ Because you were looking at Devices", Devices rail first.
 2. **Reject honestly** — another private window → *No thanks* → browse
-   the same phone → home stays default; console → Insight tab shows the
+   the same phone → home stays default; console → Visitor consent tab shows the
    profile with `analytics: no` and 0 events.
 3. **Operator rule** — console (demo/demo) → **Rules** → enable the
    seeded **"Example: device browsers see the 60 GB pitch"** → reload the
@@ -113,7 +113,7 @@ test data. Steps in order:
    `paula@family.example`/`paula` (the stitch runs). CSR console
    (`agent-anna`/`agent`) → search *paula* → 360 → **🎯 Next best offer**:
    "Samsung Galaxy S26 — they have been browsing Devices…".
-5. **The consent ledger** — console → **Insight**: every profile, its
+5. **The consent ledger** — console → **Visitor consent**: every profile, its
    consent flags, interests with view counts, campaign source.
 6. **Nova's GA4 seam** — browse `shop.nova.localhost:8080/shop/` with
    consent, then:

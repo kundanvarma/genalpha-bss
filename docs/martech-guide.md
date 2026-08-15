@@ -162,9 +162,9 @@ change. That's the product thesis: *composable, but the core is the BSS you alre
 
 ---
 
-## 8. The consent ledger — reading the Insight tab
+## 8. The consent ledger — reading the Visitor consent tab
 
-Console → **Insight** is the **consent ledger**: *who the shop is watching, under which consent, and
+Console → **Visitor consent** is the **consent ledger**: *who the shop is watching, under which consent, and
 what it learned.* It's **read-only by design** — the visitor owns the data; the operator only gets to
 *see* what it holds. This is your accountability surface (show me everything we hold on this browser)
 and your personalization debugger (why does this person see X, or nothing).

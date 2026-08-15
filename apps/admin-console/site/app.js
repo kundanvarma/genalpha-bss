@@ -863,18 +863,21 @@ const RESOURCES = [
   {
     path: 'profile',
     base: '/insight/v1',
-    title: 'Insight',
+    title: 'Visitor consent',
     // The consent ledger: WHO the shop is watching, under WHICH consent —
     // and what it learned. Read-only by design; the visitor owns the data,
-    // the operator only gets to SEE what it holds.
+    // the operator only gets to SEE what it holds. NB: these are first-party
+    // TRACKING/personalization consents (cookie family), NOT contact consent
+    // (that lives in prospect consent/lawfulBasis + the DNC suppression ledger).
     readOnly: true,
     fields: [],
     columns: ['visitorId', 'partyId', 'analyticsConsent', 'personalizationConsent', 'utmSource', 'lastUpdate'],
     detail: async (item) => {
       const res = await authFetch(`/insight/v1/profile?visitorId=${item.visitorId}`);
       const full = await res.json();
+      const yn = (v) => (v ? 'granted' : 'declined');
       return [{
-        consent: `analytics: ${full.analyticsConsent} · personalization: ${full.personalizationConsent}`,
+        consent: `Analytics: ${yn(full.analyticsConsent)} · Personalization: ${yn(full.personalizationConsent)}`,
         events: full.eventCount,
         interests: (full.interests || []).map((i) => `${i.category} (${i.views})`).join(', ') || '—',
         campaign: full.utmSource || '—',
@@ -1164,6 +1167,9 @@ const COLUMN_LABELS = {
   customizationId: 'Customization', profileId: 'Profile', paymentReference: 'Payment ref',
   buyerStatus: 'Buyer says', lastError: 'Last error', sentAt: 'Sent', batchRef: 'Batch',
   receivedAt: 'Received',
+  // Visitor-consent ledger (was "Insight"): human headers for the raw fields.
+  visitorId: 'Visitor', partyId: 'Customer', analyticsConsent: 'Analytics consent',
+  personalizationConsent: 'Personalization consent', utmSource: 'Campaign source',
 };
 const EVENT_LABELS = Object.fromEntries(TRIGGER_EVENTS.map((t) => [t.value, t.label]));
 
@@ -5038,7 +5044,9 @@ async function loadList() {
         td.textContent = '…';
         active.augmentRow(item, td, c).catch(() => { td.textContent = '—'; });
       } else {
-        const raw = c === 'triggerEventType' ? (EVENT_LABELS[item[c]] || item[c]) : item[c];
+        const raw = c === 'triggerEventType' ? (EVENT_LABELS[item[c]] || item[c])
+          : (c === 'analyticsConsent' || c === 'personalizationConsent') ? (item[c] ? 'Granted' : 'Declined')
+          : item[c];
         const text = fmtCell(raw);
         // Long machine values (JSON-logic conditions) get truncated with the
         // full value on hover, so the table never explodes.
