@@ -85,6 +85,26 @@ public class BssTraitListener {
             // Single-valued BSS traits that CHANGE over a lifetime — replace, so
             // an audience never matches a stale value. Real topics (loyalty,
             // intelligence, billing) or the bridge (foreign BSS) both land here.
+            // A product the customer GAVE UP retracts its holding trait — so an
+            // audience stops matching a plan they cancelled (product holdings were
+            // add-only before this). Inventory is the source of truth for holdings.
+            if ("ProductDeleteEvent".equals(eventType) || "ProductAttributeValueChangeEvent".equals(eventType)) {
+                Map<String, Object> product = resourceOf(event);
+                if (product != null) {
+                    String name = str(product.get("name"));
+                    String status = product.get("status") == null ? ""
+                            : String.valueOf(product.get("status")).toLowerCase();
+                    boolean gone = "ProductDeleteEvent".equals(eventType)
+                            || java.util.Set.of("cancelled", "terminated", "closed", "inactive").contains(status);
+                    String owner = productOwner(product);
+                    if (gone && owner != null && name != null && !name.isBlank()) {
+                        try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                            traits.remove(owner, "product", name);
+                        }
+                    }
+                }
+                return;
+            }
             if ("LoyaltyTierChangedEvent".equals(eventType)) {
                 setFrom(event, tenantId, "loyaltyTier", r -> str(r.get("tier")));
                 return;
@@ -204,6 +224,28 @@ public class BssTraitListener {
                     && medium.get("characteristic") instanceof Map<?, ?> c && c.get("emailAddress") != null) {
                 return String.valueOf(c.get("emailAddress"));
             }
+        }
+        return null;
+    }
+
+    /** The party that HOLDS a product — its owner/customer relatedParty. */
+    @SuppressWarnings("unchecked")
+    private static String productOwner(Map<String, Object> product) {
+        if (product.get("relatedParty") instanceof List<?> parties) {
+            String first = null;
+            for (Object p : parties) {
+                if (p instanceof Map<?, ?> ref && ref.get("id") != null) {
+                    String id = String.valueOf(ref.get("id"));
+                    if (first == null) {
+                        first = id;
+                    }
+                    String role = String.valueOf(ref.get("role"));
+                    if ("owner".equalsIgnoreCase(role) || "customer".equalsIgnoreCase(role)) {
+                        return id;
+                    }
+                }
+            }
+            return first;
         }
         return null;
     }

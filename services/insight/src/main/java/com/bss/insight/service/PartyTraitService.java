@@ -66,4 +66,14 @@ public class PartyTraitService {
         t.setUpdatedAt(OffsetDateTime.now());
         traits.save(t);
     }
+
+    /** Retract one value of a multi-valued trait (a product the customer gave up). */
+    @Transactional
+    public void remove(String partyId, String key, String value) {
+        if (partyId == null || partyId.isBlank() || value == null || value.isBlank()) {
+            return;
+        }
+        traits.deleteByTenantIdAndPartyIdAndTraitKeyAndTraitValue(
+                tenantScope.currentTenantId(), partyId, key, value);
+    }
 }

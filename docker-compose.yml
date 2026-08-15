@@ -1604,7 +1604,7 @@ services:
       GOOGLE_API_URL: http://mock-social:8080
       GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
-      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events
+      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events
       # auto-refresh materialized audiences — short interval in dev (prod: minutes)
       INSIGHT_REFRESH_INTERVAL_MS: "8000"
       # DNC-at-activation: filter the ESP suppression list before an export

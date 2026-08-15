@@ -33,6 +33,13 @@ public interface PartyTraitRepository extends JpaRepository<PartyTrait, String> 
     @Query("delete from PartyTrait t where t.tenantId = ?1 and t.partyId = ?2 and t.traitKey = ?3")
     void deleteByTenantIdAndPartyIdAndTraitKey(String tenantId, String partyId, String traitKey);
 
+    /** Retract ONE value of a multi-valued trait — a held product the customer
+     * gave up (cancelled/terminated), so audiences stop matching a stale holding. */
+    @Modifying
+    @Query("delete from PartyTrait t where t.tenantId = ?1 and t.partyId = ?2 and t.traitKey = ?3 and t.traitValue = ?4")
+    void deleteByTenantIdAndPartyIdAndTraitKeyAndTraitValue(
+            String tenantId, String partyId, String traitKey, String traitValue);
+
     /** Distinct party ids that carry any trait — the BSS-native candidate base. */
     @Query("select distinct t.partyId from PartyTrait t where t.tenantId = ?1")
     List<String> distinctPartyIds(String tenantId);
