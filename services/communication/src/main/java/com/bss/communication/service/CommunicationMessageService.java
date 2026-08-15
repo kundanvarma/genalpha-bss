@@ -42,6 +42,8 @@ public class CommunicationMessageService {
     private final MessageTemplateService templates;
     private final com.bss.communication.client.PartyLookupClient parties;
 
+    private final com.bss.communication.repository.MarketingOptOutRepository optOuts;
+    private final UnsubscribeToken unsub;
     private final int freqCapMax;
     private final int freqCapWindowHours;
 
@@ -49,6 +51,7 @@ public class CommunicationMessageService {
             PartyScope partyScope, TenantScope tenantScope, com.bss.communication.client.EspForwarder esp,
             com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates,
             com.bss.communication.client.PartyLookupClient parties,
+            com.bss.communication.repository.MarketingOptOutRepository optOuts, UnsubscribeToken unsub,
             @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-max:0}") int freqCapMax,
             @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-window-hours:24}") int freqCapWindowHours) {
         this.repository = repository;
@@ -59,6 +62,8 @@ public class CommunicationMessageService {
         this.channels = channels;
         this.templates = templates;
         this.parties = parties;
+        this.optOuts = optOuts;
+        this.unsub = unsub;
         this.freqCapMax = freqCapMax;
         this.freqCapWindowHours = freqCapWindowHours;
     }
@@ -147,7 +152,15 @@ public class CommunicationMessageService {
         List<String> recipients = parties.recipientsOf(tenantId, target);
         Map<String, Object> firstCreated = null;
         int capped = 0;
+        int optedOut = 0;
         for (String receiver : recipients) {
+            // MARKETING OPT-OUT: the customer's own choice (preference centre or a
+            // one-click unsubscribe) wins over any campaign — in-app AND email. This
+            // is the martech door, so every send here is marketing and must honour it.
+            if (optOuts.existsByTenantIdAndPartyId(tenantId, receiver)) {
+                optedOut++;
+                continue;
+            }
             // FREQUENCY CAP: the martech door governs contact frequency — a party
             // over the cap in the window is skipped, so campaigns/journeys can't
             // over-message. Transactional mail (mint) never runs through here.
@@ -170,7 +183,10 @@ public class CommunicationMessageService {
             entity.setTenantId(tenantId);
             entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
             entity.setSubject(String.valueOf(rendered.get("subject")));
-            entity.setContent(rendered.get("content") == null ? null : String.valueOf(rendered.get("content")));
+            // Unsubscribe in EVERY marketing message (the law + the honest thing) —
+            // a one-click, no-login link keyed to this recipient.
+            String body = rendered.get("content") == null ? "" : String.valueOf(rendered.get("content"));
+            entity.setContent(body + "\n\n—\nToo many emails? Unsubscribe: " + unsub.linkFor(receiver));
             entity.setMessageType(rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType")));
             entity.setStatus(CommunicationMessage.SENT);
             entity.setReceiverPartyId(receiver);
@@ -183,9 +199,12 @@ public class CommunicationMessageService {
                     entity.getSubject(), entity.getContent(), entity.getMessageType());
             if (firstCreated == null) firstCreated = created;
         }
-        if (firstCreated == null && capped > 0) {
-            return Map.of("status", "capped", "capped", capped,
-                    "reason", "frequency cap reached for all recipients in the window");
+        if (firstCreated == null && (capped > 0 || optedOut > 0)) {
+            return Map.of("status", optedOut > 0 && capped == 0 ? "suppressed" : "capped",
+                    "capped", capped, "optedOut", optedOut,
+                    "reason", optedOut > 0 && capped == 0
+                            ? "every recipient has opted out of marketing"
+                            : "frequency cap reached for all recipients in the window");
         }
         return firstCreated;
     }

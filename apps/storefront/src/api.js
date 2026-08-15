@@ -169,6 +169,22 @@ export async function updateMyParty(patch) {
   }));
 }
 
+const COMM = '/tmf-api/communicationManagement/v4';
+
+/** My marketing preference — { marketingOptOut }. */
+export async function myMarketingPreference() {
+  return json(await authFetch(`${COMM}/marketingPreference`));
+}
+
+/** Set my marketing preference; opting out stops marketing (in-app + email). */
+export async function setMarketingPreference(optOut) {
+  return json(await authFetch(`${COMM}/marketingPreference`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ optOut }),
+  }));
+}
+
 /**
  * Authorizes the one-time charges with the payment service (mock PSP in dev).
  * Card details go straight to the API and are never stored client-side.

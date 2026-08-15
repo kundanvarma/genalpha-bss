@@ -46,7 +46,12 @@ public class SecurityConfig {
                         // the ESP's webhook has no OIDC token; each event is
                         // verified against its tenant's own ESP key inside
                         .requestMatchers(HttpMethod.POST, "/esp/v1/event").permitAll()
+                        // one-click unsubscribe: public, no login — the HMAC token is the auth
+                        .requestMatchers(HttpMethod.GET, "/esp/v1/unsubscribe").permitAll()
                         .requestMatchers(HttpMethod.GET, "/esp/v1/suppression").hasAuthority(READ)
+                        // marketing preference is the CUSTOMER's own self-service setting
+                        // (party-scoped) — a signed-in customer, not a communication:write scope
+                        .requestMatchers(ApiConstants.BASE_PATH + "/marketingPreference").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

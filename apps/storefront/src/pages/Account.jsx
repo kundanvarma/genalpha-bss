@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { myAgreements, myParty, updateMyParty } from '../api.js';
+import { myAgreements, myMarketingPreference, myParty, setMarketingPreference, updateMyParty } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, withPostalAddress } from '../address.js';
 
@@ -81,6 +81,39 @@ export default function Account() {
         <button className="primary" onClick={save} disabled={!isComplete(address)}>Save address</button>
       </div>
       <AgreementRows />
+      <MarketingPreferences />
+    </>
+  );
+}
+
+function MarketingPreferences() {
+  const [optedOut, setOptedOut] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    myMarketingPreference().then((p) => setOptedOut(Boolean(p.marketingOptOut))).catch(() => setOptedOut(false));
+  }, []);
+  const toggle = async () => {
+    setBusy(true);
+    try {
+      const res = await setMarketingPreference(!optedOut);
+      setOptedOut(Boolean(res.marketingOptOut));
+    } catch { /* leave state as-is on error */ }
+    setBusy(false);
+  };
+  return (
+    <>
+      <h2>Marketing preferences</h2>
+      <div className="rows">
+        <div className="row" data-testid="marketing-pref">
+          <span>
+            <strong>Marketing messages</strong>
+            <span className="dim"> — offers, tips and campaigns. You'll always get essential service and billing notices.</span>
+          </span>
+          <button className="ghost" onClick={toggle} disabled={busy || optedOut === null} data-testid="marketing-toggle">
+            {optedOut === null ? '…' : optedOut ? 'Opted out — turn back on' : 'Opt out'}
+          </button>
+        </div>
+      </div>
     </>
   );
 }
