@@ -1090,6 +1090,22 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'socialCare',
+    title: 'Social care',
+    socialCare: true, // inbound DMs -> triage -> trouble tickets
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    path: 'attribution',
+    title: 'Attribution',
+    attribution: true, // portfolio lift + incremental revenue across programs
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'staff',
     title: 'Staff',
     staff: true,        // custom panel, not the generic CRUD table
@@ -1223,6 +1239,8 @@ const TAB_ROLE = {
   audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
+  socialCare: 'insight:read',
+  attribution: 'campaign:read',
   profile: 'insight:read',
   numberPortingOrder: 'porting:write',
   copilot: 'catalog:write',
@@ -1282,7 +1300,7 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'audienceBuilder', 'socialListening', 'audience', 'profile', 'settings',
+  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'profile', 'settings',
     'salesLead', 'salesOpportunity'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
@@ -3341,6 +3359,138 @@ function staffPanel() {
   return panel;
 }
 
+// SOCIAL CARE: inbound DMs, triaged. Sync pulls direct messages, scores mood +
+// support intent, and routes the ones that need a human to trouble tickets over
+// the bus. The queue is what the care team works; praise stays out of it.
+async function renderSocialCare() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'social-care';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'Inbound direct messages, triaged. Sync pulls DMs and scores them; a negative or '
+    + 'support message is routed to a trouble ticket automatically (over the bus, not a call). Praise is left alone.';
+  const bar = document.createElement('div'); bar.className = 'staffbar';
+  const sync = document.createElement('button'); sync.className = 'primary'; sync.textContent = 'Sync DMs';
+  sync.dataset.testid = 'care-sync';
+  const note = document.createElement('span'); note.className = 'dim'; note.style.cssText = 'font-size:12px;margin-left:8px';
+  bar.append(sync, note);
+  const summaryWrap = document.createElement('div'); summaryWrap.dataset.testid = 'care-summary'; summaryWrap.style.margin = '14px 0';
+  const queue = document.createElement('div'); queue.dataset.testid = 'care-queue';
+
+  const chip = (label, n, color) => {
+    const s = document.createElement('span');
+    s.style.cssText = `display:inline-block;margin:0 8px 6px 0;padding:3px 10px;border-radius:12px;font-size:12px;background:${color};color:#fff`;
+    s.textContent = `${label}: ${n}`; return s;
+  };
+  const load = async () => {
+    const sum = await (await authFetch('/insight/v1/care/summary')).json().catch(() => ({ total: 0, needCare: 0, sentiment: {} }));
+    summaryWrap.replaceChildren();
+    const h = document.createElement('h3'); h.textContent = `DMs: ${sum.total || 0} · needs care: ${sum.needCare || 0}`;
+    h.style.cssText = 'font-size:15px;margin:0 0 8px';
+    const s = sum.sentiment || {};
+    const row = document.createElement('div');
+    row.append(chip('Positive', s.positive || 0, '#2e7d32'), chip('Neutral', s.neutral || 0, '#607d8b'), chip('Negative', s.negative || 0, '#c62828'));
+    summaryWrap.append(h, row);
+
+    const list = await (await authFetch('/insight/v1/care/queue')).json().catch(() => []);
+    queue.replaceChildren();
+    const fh = document.createElement('h3'); fh.textContent = 'Care queue'; fh.style.cssText = 'font-size:14px;margin:6px 0';
+    queue.append(fh);
+    if (!list.length) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = 'No DMs yet — Sync to pull them in.'; queue.append(p); return; }
+    for (const m of list.slice(0, 50)) {
+      const card = document.createElement('div'); card.className = 'panel'; card.dataset.testid = 'care-row';
+      card.style.cssText = 'padding:8px 12px;margin:6px 0';
+      const col = { positive: '#2e7d32', negative: '#c62828', neutral: '#607d8b' }[m.sentiment] || '#607d8b';
+      const meta = document.createElement('div'); meta.style.cssText = 'font-size:12px;margin-bottom:2px';
+      meta.innerHTML = `<span style="color:${col};font-weight:600">${m.sentiment || 'neutral'}</span> · `
+        + `<span class="dim">${(m.platform || '')} · ${esc(m.handle || ('@' + (m.author || '')))}</span>`
+        + (m.ticketRequested ? ' · <span style="color:#c62828;font-weight:600">ticket opened</span>'
+          : (m.needsCare ? ' · <span class="dim">needs care</span>' : ''));
+      const txt = document.createElement('div'); txt.textContent = m.text || ''; txt.style.fontSize = '13px';
+      card.append(meta, txt); queue.append(card);
+    }
+  };
+  sync.addEventListener('click', async () => {
+    note.textContent = 'syncing…';
+    const r = await authFetch('/insight/v1/care/sync', { method: 'POST' });
+    const res = r.ok ? await r.json() : { ingested: 0, ticketsRequested: 0 };
+    note.textContent = `pulled ${res.ingested} DM(s) · ${res.ticketsRequested} routed to tickets`;
+    load();
+  });
+  panel.append(intro, bar, summaryWrap, queue);
+  load();
+}
+
+// ATTRIBUTION: the portfolio readout. Lift + INCREMENTAL revenue across every
+// campaign and journey — one page a marketer reads to see what actually moved
+// money, with the honest rule shown in the open: no control group, no lift claim.
+async function renderAttribution() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'attribution';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'Every campaign and journey in one readout. Incremental revenue is holdout-adjusted — the '
+    + 'money the message actually made — never the gross a message cannon would claim. A program with no '
+    + 'holdout shows reach and gross but no lift: you cannot measure what you never left room to see.';
+  const kpis = document.createElement('div'); kpis.className = 'kpis'; kpis.style.cssText = 'display:flex;gap:0.7rem;flex-wrap:wrap;margin:10px 0 16px';
+  kpis.dataset.testid = 'attribution-kpis';
+  const channels = document.createElement('div'); channels.className = 'dim'; channels.style.cssText = 'font-size:12px;margin:0 0 12px';
+  const tableWrap = document.createElement('div'); tableWrap.style.cssText = 'overflow-x:auto';
+  const table = document.createElement('table'); table.dataset.testid = 'attribution-table';
+  table.style.cssText = 'width:100%;border-collapse:collapse;font-size:13px';
+  tableWrap.append(table);
+
+  const money = (v) => (v == null ? '—' : Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const load = async () => {
+    const r = await authFetch('/tmf-api/campaignManagement/v4/campaign/attribution');
+    const rep = r.ok ? await r.json() : { programs: [], portfolio: {}, byChannel: {} };
+    const p = rep.portfolio || {};
+    const rev = p.revenue || {};
+    kpis.replaceChildren(
+      kpiCard('Programs', p.programs ?? 0, 'campaigns + journeys', 'kpi-programs'),
+      kpiCard('Reached', p.totalReached ?? 0, 'treated across all programs', 'kpi-reached'),
+      kpiCard('Blended lift', p.blendedLiftPoints != null ? p.blendedLiftPoints + ' pts' : '—', 'treated rate minus holdout rate', 'kpi-lift'),
+      kpiCard('Incremental / mo', money(rev.incremental), 'holdout-adjusted — the money the messages made', 'kpi-incremental'),
+      kpiCard('Gross attributed', money(rev.grossAttributed), 'total monthly value of converting orders', 'kpi-gross'));
+    const bc = rep.byChannel || {};
+    channels.textContent = 'By channel: '
+      + (['campaign', 'journey'].filter((k) => bc[k]).map((k) => `${bc[k].programs} ${k}${bc[k].programs === 1 ? '' : 's'} → reached ${bc[k].reached}, ${money(bc[k].attributedRevenue)}/mo`).join(' · ') || '—');
+    table.replaceChildren();
+    const head = document.createElement('tr');
+    for (const h of ['Program', 'Type', 'Reached', 'Held out', 'Conv (t/h)', 'Lift', 'Incremental/mo']) {
+      const th = document.createElement('th'); th.textContent = h;
+      th.style.cssText = 'text-align:left;border-bottom:1px solid var(--line,#ddd);padding:5px 8px;white-space:nowrap';
+      head.append(th);
+    }
+    table.append(head);
+    const rows = (rep.programs || []).filter((x) => x.reached || x.heldOut).slice(0, 60);
+    for (const x of rows) {
+      const tr = document.createElement('tr'); tr.dataset.testid = 'attribution-row';
+      const inc = x.revenue ? x.revenue.incremental : null;
+      const cells = [
+        x.name || x.id, x.type, x.reached ?? 0, x.heldOut ?? 0,
+        `${x.conversions?.treated ?? 0}/${x.conversions?.holdout ?? 0}`,
+        x.liftPoints != null ? `${x.liftPoints} pts` : '—',
+        x.heldOut ? money(inc) : '— (no holdout)'];
+      cells.forEach((c, i) => {
+        const td = document.createElement('td'); td.textContent = c;
+        td.style.cssText = 'padding:5px 8px;border-bottom:1px solid var(--line,#f0f0f0)' + (i >= 2 ? ';white-space:nowrap' : '');
+        tr.append(td);
+      });
+      table.append(tr);
+    }
+    if (rows.length === 0) {
+      const tr = document.createElement('tr'); const td = document.createElement('td');
+      td.colSpan = 7; td.className = 'dim'; td.textContent = 'No measured programs yet — run a campaign or journey with a holdout.';
+      td.style.padding = '8px'; tr.append(td); table.append(tr);
+    }
+  };
+  panel.append(intro, kpis, channels, tableWrap);
+  load();
+}
+
 // THE WORKFORCE SCOREBOARD: what the digital workers did, what it saved
 // (labeled as the estimate it is), the honesty metric (reopen rate), and
 // the approvals queue — where a human's click IS the write.
@@ -4766,6 +4916,24 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderSocialListening();
+    return;
+  }
+  if (active.socialCare) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderSocialCare();
+    return;
+  }
+  if (active.attribution) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderAttribution();
     return;
   }
   if (active.staff) {

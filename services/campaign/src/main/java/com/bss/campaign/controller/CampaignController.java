@@ -1,6 +1,7 @@
 package com.bss.campaign.controller;
 
 import com.bss.campaign.api.ApiConstants;
+import com.bss.campaign.service.AttributionService;
 import com.bss.campaign.service.CampaignService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,9 +22,11 @@ import java.util.Map;
 public class CampaignController {
 
     private final CampaignService service;
+    private final AttributionService attribution;
 
-    public CampaignController(CampaignService service) {
+    public CampaignController(CampaignService service, AttributionService attribution) {
         this.service = service;
+        this.attribution = attribution;
     }
 
     @PostMapping
@@ -35,6 +38,13 @@ public class CampaignController {
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> list() {
         return ResponseEntity.ok(service.findAll());
+    }
+
+    /** Portfolio attribution: lift + incremental revenue across EVERY campaign
+     * and journey, one marketer readout (literal path — precedes /{id}/... rules). */
+    @GetMapping("/attribution")
+    public ResponseEntity<Map<String, Object>> attribution() {
+        return ResponseEntity.ok(attribution.report());
     }
 
     @PatchMapping("/{id}")

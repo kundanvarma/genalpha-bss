@@ -5,9 +5,10 @@
  * consumes SocialCareTicketRequested and opens a TMF621 case. A happy DM opens
  * nothing. Re-syncing is idempotent — no duplicate tickets.
  */
-const { request } = require('playwright');
+const { chromium, request } = require('playwright');
 
 const API = 'http://localhost:8080';
+const CONSOLE = 'http://localhost:8080/console/';
 const SOCIAL = 'http://localhost:8122';
 const ACCOUNT = 'genalpha-brand';           // the insight tenant's brand handle
 const run = Date.now();
@@ -38,10 +39,12 @@ async function token(ctx) {
   console.log('OK three inbound DMs seeded: a complaint, a support ask, and a compliment');
 
   /* ---------- the CDP triages and requests tickets for the two that need a human ---------- */
+  // mock-social accumulates DMs across runs (in-memory), so counts are aggregate;
+  // this run's exactly-2 routing is proven per-DM below (run-unique authors).
   const sync = await (await ctx.post(`${CARE}/sync`, { headers: H })).json();
   if (!sync.enabled) fail('care sync is not wired to the social platform');
-  if (sync.ticketsRequested !== 2) fail('expected 2 ticket requests (complaint + support ask), got: ' + JSON.stringify(sync));
-  console.log(`OK triage: ${sync.ingested} DMs ingested, ${sync.ticketsRequested} routed to care (the happy one was not)`);
+  if (sync.ingested < 3 || sync.ticketsRequested < 2) fail('sync did not triage this run\'s DMs: ' + JSON.stringify(sync));
+  console.log(`OK triage: ${sync.ingested} DMs ingested, ${sync.ticketsRequested} routed to care (the happy one is not among them)`);
 
   const summary = await (await ctx.get(`${CARE}/summary`, { headers: H })).json();
   if (summary.needCare < 2) fail('care summary undercounts the queue: ' + JSON.stringify(summary));
@@ -83,6 +86,26 @@ async function token(ctx) {
   const dupes = arr.filter((t) => Array.isArray(t.relatedEntity) && t.relatedEntity.some((e) => e.id === angry));
   if (dupes.length !== 1) fail('idempotency broke — the complaint has ' + dupes.length + ' tickets');
   console.log('OK re-sync opened nothing new — one DM, one ticket (at-least-once dedup holds)');
+
+  /* ================= the console Social care pane ================= */
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 1200, height: 1200 } });
+  await page.goto(CONSOLE);
+  await page.waitForSelector('#username, input[name="username"]', { timeout: 15000 });
+  if (await page.locator('input[name="username"]').count()) {
+    await page.fill('input[name="username"]', 'demo'); await page.fill('input[name="password"]', 'demo');
+    await page.click('input[type="submit"], button[type="submit"]');
+  }
+  await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
+  await page.locator('.tab', { hasText: 'Social care' }).click();
+  await page.waitForSelector('[data-testid="social-care"]', { timeout: 10000 });
+  await page.locator('[data-testid="care-sync"]').click();
+  await page.waitForFunction(() => (document.querySelector('[data-testid="care-summary"]')?.textContent || '').includes('needs care'), { timeout: 10000 });
+  await page.waitForSelector('[data-testid="care-row"]', { timeout: 10000 });
+  const opened = await page.locator('[data-testid="care-row"]', { hasText: 'ticket opened' }).count();
+  if (opened < 1) fail('the console care queue shows no ticket-opened row');
+  console.log(`OK the console Social care pane shows the triaged queue with ${opened} ticket(s) opened`);
+  await browser.close();
 
   console.log('\nALL SOCIAL-CARE CHECKS PASSED — inbound DMs are triaged by the CDP and negative/support '
     + 'ones become TMF621 trouble tickets over the bus (no cross-service write scope), while praise is left '
