@@ -22,10 +22,12 @@ public class IndividualMapper {
         this.objectMapper = objectMapper;
     }
 
+    // region is a plain single-valued attribute — mapped both ways + on patch.
     public IndividualDto toDto(Individual entity) {
         IndividualDto dto = new IndividualDto();
         dto.setBillingAnchorDay(entity.getBillingAnchorDay());
         dto.setBillDelivery(entity.getBillDelivery());
+        dto.setRegion(entity.getRegion());
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setGivenName(entity.getGivenName());
@@ -58,6 +60,7 @@ public class IndividualMapper {
         entity.setGivenName(dto.getGivenName());
         entity.setFamilyName(dto.getFamilyName());
         entity.setContactMediumJson(writeJsonObjectList(dto.getContactMedium()));
+        entity.setRegion(dto.getRegion());
         if (dto.getBirthDate() != null && !dto.getBirthDate().isBlank()) {
             entity.setBirthDate(java.time.LocalDate.parse(dto.getBirthDate()));
         }
@@ -79,6 +82,9 @@ public class IndividualMapper {
         }
         if (patch.getContactMedium() != null) {
             entity.setContactMediumJson(writeJsonObjectList(patch.getContactMedium()));
+        }
+        if (patch.getRegion() != null) {
+            entity.setRegion(patch.getRegion());
         }
         if (patch.getBirthDate() != null && !patch.getBirthDate().isBlank()) {
             entity.setBirthDate(java.time.LocalDate.parse(patch.getBirthDate()));

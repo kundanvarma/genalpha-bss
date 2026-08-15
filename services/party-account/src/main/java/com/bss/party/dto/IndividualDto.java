@@ -32,6 +32,9 @@ public class IndividualDto {
     @JsonProperty("contactMedium")
     private List<Map<String, Object>> contactMedium;
 
+    @JsonProperty("region")
+    private String region;
+
     @JsonProperty("organization")
     private Map<String, Object> organization;
 
@@ -109,4 +112,7 @@ public class IndividualDto {
     public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
     public String getBillDelivery() { return billDelivery; }
     public void setBillDelivery(String v) { this.billDelivery = v; }
+
+    public String getRegion() { return region; }
+    public void setRegion(String region) { this.region = region; }
 }

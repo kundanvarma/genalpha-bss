@@ -29,6 +29,11 @@ public class Individual {
     @Column(name = "contact_medium", length = 4000)
     private String contactMediumJson;
 
+    /** Where the customer is — a first-class attribute (marketing region, etc.);
+     * a change emits IndividualAttributeValueChangeEvent, so the CDP re-homes them. */
+    @Column(name = "region", length = 64)
+    private String region;
+
     @Column(name = "organization_id", length = 36)
     private String organizationId;
 
@@ -132,4 +137,7 @@ public class Individual {
     public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }
     public String getBillDelivery() { return billDelivery; }
     public void setBillDelivery(String v) { this.billDelivery = v; }
+
+    public String getRegion() { return region; }
+    public void setRegion(String region) { this.region = region; }
 }
