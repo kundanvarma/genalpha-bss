@@ -23,6 +23,10 @@ async function token(ctx, realm, user, pass) {
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const staff = await token(ctx, 'bss', 'demo', 'demo');
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
+  // The FAQ shelf renders EVERY article to the customer, so a test that seeds
+  // articles must delete them again — otherwise each run leaves a timestamped
+  // "Fair use policy 178…" duplicate in the live shop FAQ. Clean up as we go.
+  const del = (tok, id) => ctx.delete(`${API}/tmf-api/knowledgeManagement/v4/article/${id}`, { headers: H(tok) });
 
   /* ---------- 1. strict search: exactly as it always was ---------- */
   const email = `solveig-${run}@example.com`;
@@ -59,6 +63,7 @@ async function token(ctx, realm, user, pass) {
     `${API}/tmf-api/knowledgeManagement/v4/article?q=${encodeURIComponent('roaming charge')}`,
     { headers: H(staff) })).json();
   if (!en.find((a) => a.id === art.id)) fail('english stemming missed charge→charges');
+  await del(staff, art.id);
   console.log('OK ENGLISH FTS: "roaming charge" stems to find "Roaming charges" — ranked,'
     + ' and now GIN-indexed');
 
@@ -75,6 +80,7 @@ async function token(ctx, realm, user, pass) {
   if (!no.find((a) => a.id === noArt.id)) {
     fail('norwegian stemming missed regning→regningene: ' + JSON.stringify(no.map((a) => a.title)));
   }
+  await del(novaStaff, noArt.id);
   console.log('OK NORWEGIAN FTS: nova\'s article searched with nova\'s stemmer — "regning"'
     + ' finds "regningene" and "regninger", which the english config never could');
 
@@ -93,6 +99,7 @@ async function token(ctx, realm, user, pass) {
   if (!semantic.find((a) => a.id === fair.id)) {
     fail('the semantic net missed slow→throttling: ' + JSON.stringify(semantic.map((a) => a.title)));
   }
+  await del(staff, fair.id);
   console.log('OK THE SEMANTIC NET: "why is my internet so slow" found the fair-use article —'
     + ' which contains NEITHER word. pgvector cosine neighbours, speaking only because keyword'
     + ' search was silent');

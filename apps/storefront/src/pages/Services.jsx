@@ -296,23 +296,43 @@ export default function Services() {
     ? `${a.value.toFixed(2)} ${a.unit}` : intlMoney(a.value, a.unit));
   const latestBill = [...bills].sort((a, b) =>
     String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];
-  // Exclude what the customer already OWNS and what they've just ORDERED (still
-  // provisioning) — otherwise discovery recommends the deal they just bought.
-  const ownedOfferingIds = new Set(products.map((p) => p.productOffering?.id));
-  for (const o of orders) {
-    if (['cancelled', 'rejected'].includes(o.state)) continue;
-    for (const it of (o.productOrderItem || [])) {
-      if (it.productOffering?.id) ownedOfferingIds.add(it.productOffering.id);
-    }
-  }
-  const recOffers = recIds.map((id) => offerings[id])
-    .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity
-      && categoryOf(o) !== 'Top-ups') // the top-up has its own button on the Mobile card
-    .slice(0, 3);
   const dataBuckets = buckets.filter((b) => b.name === 'Mobile data');
   const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data');
   const topUps = Object.values(offerings).filter((o) => categoryOf(o) === 'Top-ups');
   const ownsMobile = mobilePlans.length > 0 || bundleGroups.length > 0 || Boolean(number);
+
+  // Discovery points at what's MISSING — it must never resell a line of business
+  // the customer already holds. Two exclusions:
+  //   1. exact offerings they OWN or have just ORDERED (still provisioning), and
+  //   2. every CATEGORY they already hold — standalone, covered by a BUNDLE, or
+  //      bought in an in-flight order. Without the category rule a bundle that
+  //      includes mobile still lets discovery recommend a standalone mobile plan,
+  //      because the bundle's child offering ids differ from the plan's.
+  const ownedOfferingIds = new Set(products.map((p) => p.productOffering?.id));
+  const heldCategories = new Set();
+  if (ownsMobile) heldCategories.add('Mobile plans');
+  if (broadband.length || bundleGroups.length) heldCategories.add('Broadband');
+  if (entertainment.length || bundleGroups.length) heldCategories.add('TV & Add-ons');
+  if (devices.length) heldCategories.add('Devices');
+  for (const { bundle } of bundleGroups) {
+    for (const id of bundleChildIds(offerings[bundle.productOffering?.id])) {
+      const cat = categoryOf(offerings[id]);
+      if (cat) heldCategories.add(cat);
+    }
+  }
+  for (const o of orders) {
+    if (['cancelled', 'rejected'].includes(o.state)) continue;
+    for (const it of (o.productOrderItem || [])) {
+      if (it.productOffering?.id) ownedOfferingIds.add(it.productOffering.id);
+      const cat = categoryOf(offerings[it.productOffering?.id]);
+      if (cat) heldCategories.add(cat);
+    }
+  }
+  const recOffers = recIds.map((id) => offerings[id])
+    .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity
+      && categoryOf(o) !== 'Top-ups' // the top-up has its own button on the Mobile card
+      && !heldCategories.has(categoryOf(o)))
+    .slice(0, 3);
 
   const rowsOf = (list) => list.map((p) => (
     <ProductRow key={p.id} product={p} services={services}

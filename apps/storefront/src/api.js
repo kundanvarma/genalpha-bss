@@ -568,9 +568,13 @@ export async function memberUsage(memberId) {
   return json(await authFetch(`${CONSUMPTION}/queryUsageConsumption?relatedPartyId=${encodeURIComponent(memberId)}`));
 }
 
-/** The FAQ library — the customer shelf of the knowledge base. */
+/** The FAQ library — the customer shelf of the knowledge base. The audience
+ *  filter is what keeps the CSR/sales/product-owner cheat-sheets off the
+ *  customer's Support page: the shop only ever asks for customer-facing articles. */
 export async function searchFaq(q) {
-  return json(await authFetch(`/tmf-api/knowledgeManagement/v4/article${q ? `?q=${encodeURIComponent(q)}` : ''}`));
+  const params = new URLSearchParams({ audience: 'customer' });
+  if (q) params.set('q', q);
+  return json(await authFetch(`/tmf-api/knowledgeManagement/v4/article?${params}`));
 }
 
 export async function decideApproval(orderId, approve) {
