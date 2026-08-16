@@ -23,14 +23,14 @@ APIs we already conform to.
 
 The spine is unbroken (lead → opportunity → quote → order → contract → bill).
 
-> **Update (shipped):** **O1** and **C1** are built and proven
-> (`opportunity_o1_c1_test`). Deep tier now largely shipped too: **funnel
-> analytics**, **lead scoring + routing** (O2 —
-> `funnel_analytics_test`, `lead_scoring_test`); **config rules + discount
-> approvals** and **quote→order→contract automation** (C2 —
-> `quote_cpq_rules_test`, `quote_order_contract_test`). Remaining: **O2** quota /
-> territory + weekly forecast snapshot; **C2** guided selling, tiered/segment
-> pricing, and e-signature.
+> **Update (shipped):** **O1** and **C1** proven (`opportunity_o1_c1_test`), and
+> the deep tier is now nearly complete. **O2:** funnel analytics, lead scoring +
+> routing, and **quota + attainment** (`funnel_analytics_test`,
+> `lead_scoring_test`, `quota_attainment_test`). **C2:** config rules + discount
+> approvals, quote→order→contract automation, and **guided selling**
+> (`quote_cpq_rules_test`, `quote_order_contract_test`, `guided_selling_test`).
+> Remaining tail: **O2** territory + a weekly forecast snapshot (scheduled
+> capture); **C2** tiered/segment pricing rules and e-signature.
 
 > **AI-age design note.** These are built API-first and copilot-ready, not as
 > human-only screens: analytics return a narrative `summary` an agent can reason
@@ -88,8 +88,9 @@ order + TMF651 agreement.
   time, and average time-in-stage — off a stage-history record, returned with a
   copilot-narratable summary. *(A weekly pipeline snapshot for forecast-over-time
   is the remaining extension — needs a scheduled capture.)*
-- **Team / territory / quota** — owners roll up to a team; a quota per
-  owner/period; quota-attainment vs the weighted forecast.
+- **Quota + attainment** ✅ — a quota per owner/period; attainment (won vs quota)
+  and coverage (won + weighted pipeline vs quota). *(Team/territory roll-up is
+  the remaining extension.)*
 - *Proves:* the numbers a VP of Sales asks for — coverage, conversion, quota
   attainment — come out of the BSS, not a spreadsheet.
 
@@ -115,8 +116,9 @@ order + TMF651 agreement.
   AND exposed as an agent-callable `/quote/validate` decision endpoint.
 - **Discount-approval workflow** ✅ — a discount over the threshold is `pending`
   and blocks the quote from approval until a manager approves it (the human gate).
-- **Guided selling** — a short rules-based questionnaire ("how many sites? need
-  static IP?") that narrows the catalog to the right offerings. *(remaining)*
+- **Guided selling** ✅ — a rules-based questionnaire ("how many sites?") that
+  narrows the catalog to the right offerings, as an agent-callable decision
+  (`/quote/guidedRecommend`) that also composes the deal (`applyGuided`).
 - **Pricing & discount rules** — volume/tier pricing, segment/contract price
   lists, line/deal discounts. *(remaining — today the discount is a flat quote %)*
 - **Quote → order → contract** ✅ — on acceptance the quote drives a TMF622
