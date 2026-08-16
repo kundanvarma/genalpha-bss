@@ -307,6 +307,12 @@ public class QuoteService {
         return out;
     }
 
+    /** The CDP's lead signal for an email — used by lead scoring. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> leadSignal(String email) {
+        return email == null ? Map.of() : downstream.leadSignal(email);
+    }
+
     /** Approve a pending discount so the quote can proceed (the human gate). */
     @Transactional
     public Map<String, Object> approveDiscount(String id) {

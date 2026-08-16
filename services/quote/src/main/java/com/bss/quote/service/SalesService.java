@@ -207,8 +207,19 @@ public class SalesService {
     /** Score a lead from the tenant's scoring rules, grade it, and route it to
      *  an owner. Runs on capture; the opportunity later inherits the owner. */
     private void scoreAndRoute(SalesLead lead) {
+        List<LeadScoringRule> rules = scoringRules.findByTenantIdOrderByCreatedAt(lead.getTenantId());
+        // Pull the CDP lead signal once, only if an engagement rule exists and
+        // we have an email to look up (fail-soft — the CDP never blocks capture).
+        Map<String, Object> signal = null;
+        boolean needsSignal = lead.getContactEmail() != null
+                && rules.stream().anyMatch(r -> LeadScoringRule.ENGAGEMENT.equals(r.getField()));
+        if (needsSignal) {
+            try { signal = quotes.leadSignal(lead.getContactEmail()); }
+            catch (Exception e) { signal = null; /* CDP unreachable — skip the signal */ }
+        }
+        final Map<String, Object> sig = signal == null ? Map.of() : signal;
         int score = 0;
-        for (LeadScoringRule r : scoringRules.findByTenantIdOrderByCreatedAt(lead.getTenantId())) {
+        for (LeadScoringRule r : rules) {
             boolean hit = switch (r.getField()) {
                 case LeadScoringRule.SOURCE -> r.getValue() != null && r.getValue().equalsIgnoreCase(lead.getSource());
                 case LeadScoringRule.COMPANY_PRESENT -> lead.getCompany() != null && !lead.getCompany().isBlank();
@@ -216,6 +227,7 @@ public class SalesService {
                         && r.getValue() != null && lead.getCompanySize() >= parseIntSafe(r.getValue());
                 case LeadScoringRule.KEYWORD -> r.getValue() != null && containsCi(lead.getName(), r.getValue())
                         || (r.getValue() != null && containsCi(lead.getDescription(), r.getValue()));
+                case LeadScoringRule.ENGAGEMENT -> engagementHit(sig, r.getValue());
                 default -> false;
             };
             if (hit) score += r.getPoints();
@@ -232,6 +244,16 @@ public class SalesService {
 
     private boolean containsCi(String haystack, String needle) {
         return haystack != null && haystack.toLowerCase().contains(needle.toLowerCase());
+    }
+
+    /** Match a CDP lead signal against an engagement rule value. */
+    private boolean engagementHit(Map<String, Object> sig, String value) {
+        if (value == null || sig.isEmpty()) return false;
+        return switch (value) {
+            case "knownProspect" -> Boolean.TRUE.equals(sig.get("knownProspect"));
+            case "engaged" -> Boolean.TRUE.equals(sig.get("engaged"));
+            default -> value.equalsIgnoreCase(String.valueOf(sig.get("engagement"))); // opened|clicked
+        };
     }
 
     private int parseIntSafe(String s) {
@@ -251,8 +273,9 @@ public class SalesService {
     public Map<String, Object> createScoringRule(Map<String, Object> dto) {
         String field = str(dto.get("field"));
         if (!List.of(LeadScoringRule.SOURCE, LeadScoringRule.COMPANY_PRESENT,
-                LeadScoringRule.COMPANY_SIZE_MIN, LeadScoringRule.KEYWORD).contains(field)) {
-            throw new BadRequestException("field must be source/companyPresent/companySizeMin/keyword");
+                LeadScoringRule.COMPANY_SIZE_MIN, LeadScoringRule.KEYWORD,
+                LeadScoringRule.ENGAGEMENT).contains(field)) {
+            throw new BadRequestException("field must be source/companyPresent/companySizeMin/keyword/engagement");
         }
         LeadScoringRule r = new LeadScoringRule();
         r.setId(UUID.randomUUID().toString());

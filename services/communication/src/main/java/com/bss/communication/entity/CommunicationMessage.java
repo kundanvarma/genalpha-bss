@@ -45,7 +45,7 @@ public class CommunicationMessage {
     @Column(name = "delivery_status", length = 32)
     private String deliveryStatus;
 
-    @Column(name = "receiver_party_id")
+    @Column(name = "receiver_party_id", length = 320)
     private String receiverPartyId;
 
     @Column(name = "source_event_id")

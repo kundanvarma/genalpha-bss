@@ -17,6 +17,8 @@ public class LeadScoringRule {
     public static final String COMPANY_PRESENT = "companyPresent";
     public static final String COMPANY_SIZE_MIN = "companySizeMin";
     public static final String KEYWORD = "keyword";
+    /** value ∈ knownProspect | engaged | opened | clicked — read from the CDP. */
+    public static final String ENGAGEMENT = "engagement";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)

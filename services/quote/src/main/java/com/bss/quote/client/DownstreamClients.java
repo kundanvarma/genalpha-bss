@@ -30,6 +30,7 @@ public class DownstreamClients {
     private final RestClient ordering;
     private final RestClient intelligence;
     private final RestClient agreement;
+    private final RestClient insight;
     private final ObjectMapper objectMapper;
 
     public DownstreamClients(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
@@ -39,14 +40,28 @@ public class DownstreamClients {
             @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBaseUrl,
             @Value("${bss.downstream.ordering-base-url:http://localhost:8082}") String orderingBaseUrl,
             @Value("${bss.downstream.intelligence-base-url:http://localhost:8109}") String intelligenceBaseUrl,
-            @Value("${bss.downstream.agreement-base-url:http://localhost:8098}") String agreementBaseUrl) {
+            @Value("${bss.downstream.agreement-base-url:http://localhost:8098}") String agreementBaseUrl,
+            @Value("${bss.downstream.insight-base-url:http://localhost:8110}") String insightBaseUrl) {
         this.som = builder.baseUrl(somBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.catalog = builder.baseUrl(catalogBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.usage = builder.baseUrl(usageBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.ordering = builder.baseUrl(orderingBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.intelligence = builder.baseUrl(intelligenceBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.agreement = builder.baseUrl(agreementBaseUrl).requestInterceptor(tokenInterceptor).build();
+        this.insight = builder.baseUrl(insightBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
+    }
+
+    /** The CDP's lead signal for an email: {knownProspect, engagement, engaged}.
+     *  Fail-soft — an unreachable CDP just means no engagement signal. */
+    public Map<String, Object> leadSignal(String email) {
+        try {
+            return parseObject(insight.get()
+                    .uri(uri -> uri.path("/insight/v1/leadSignal").queryParam("email", email).build())
+                    .retrieve().body(String.class));
+        } catch (RestClientException e) {
+            return Map.of();
+        }
     }
 
     public Map<String, Object> intent(String intentId) {

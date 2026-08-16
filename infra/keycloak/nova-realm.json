@@ -998,7 +998,8 @@
         "usage:read",
         "ordering:write",
         "ai:use",
-        "agreement:write"
+        "agreement:write",
+        "insight:read"
       ]
     },
     {

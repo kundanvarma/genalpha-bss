@@ -72,6 +72,13 @@ public class InsightController {
         return ResponseEntity.ok(service.partyProfile(partyId));
     }
 
+    /** The lead signal for the sales funnel (insight:read — machines): is this
+     *  email a known prospect, and has it engaged? */
+    @GetMapping("/leadSignal")
+    public ResponseEntity<Map<String, Object>> leadSignal(@RequestParam String email) {
+        return ResponseEntity.ok(service.leadSignal(email));
+    }
+
     /** The tenant's audience catalog from their OWN analytics, through the
      * GA4 Data API wire shape (insight:read). */
     @GetMapping("/audiences")

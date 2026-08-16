@@ -63,6 +63,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/profile",
                                 ApiConstants.BASE_PATH + "/partyProfile",
                                 ApiConstants.BASE_PATH + "/segmentMembers",
+                                ApiConstants.BASE_PATH + "/leadSignal",
                                 ApiConstants.BASE_PATH + "/audiences").hasAuthority("insight:read")
                         // CDP backfill: one-shot admin ingest of existing customers' traits
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/traits/backfill")

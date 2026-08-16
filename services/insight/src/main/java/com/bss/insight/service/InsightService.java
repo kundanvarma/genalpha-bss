@@ -32,6 +32,8 @@ public class InsightService {
     private final PolicyClient policy;
     private final TenantScope tenantScope;
     private final com.bss.insight.client.AnalyticsForwarder analytics;
+    private final com.bss.insight.repository.PartyTraitRepository traits;
+    private final com.bss.insight.repository.ProspectRepository prospects;
     /** The session decay window: a view older than this no longer leads
      * the next page. Default 30 min; a suite dials it to prove decay. */
     private final long sessionSeconds;
@@ -39,6 +41,8 @@ public class InsightService {
     public InsightService(VisitorProfileRepository profiles, VisitorEventRepository events,
             PolicyClient policy, TenantScope tenantScope,
             com.bss.insight.client.AnalyticsForwarder analytics,
+            com.bss.insight.repository.PartyTraitRepository traits,
+            com.bss.insight.repository.ProspectRepository prospects,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.insight.session-seconds:1800}") long sessionSeconds) {
         this.profiles = profiles;
@@ -46,7 +50,37 @@ public class InsightService {
         this.policy = policy;
         this.tenantScope = tenantScope;
         this.analytics = analytics;
+        this.traits = traits;
+        this.prospects = prospects;
         this.sessionSeconds = sessionSeconds;
+    }
+
+    /**
+     * The lead signal the sales funnel reads: is this email a known consented
+     * prospect in the CDP, and has it engaged (opened/clicked our email)? The
+     * engagement trait is keyed by "prospect:&lt;email&gt;", set by the martech
+     * engagement loop. A pure read — the CDP owns this question.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> leadSignal(String email) {
+        String tenant = tenantScope.currentTenantId();
+        boolean known = email != null && prospects.findByTenantIdAndEmail(tenant, email).isPresent();
+        String engagement = "none";
+        if (email != null) {
+            for (com.bss.insight.entity.PartyTrait t
+                    : traits.findByTenantIdAndPartyId(tenant, "prospect:" + email)) {
+                if ("emailEngagement".equals(t.getTraitKey())) {
+                    engagement = t.getTraitValue();
+                    break;
+                }
+            }
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("email", email);
+        out.put("knownProspect", known);
+        out.put("engagement", engagement);
+        out.put("engaged", "opened".equals(engagement) || "clicked".equals(engagement));
+        return out;
     }
 
     /** Order-preserving dedup: keep the first (most-recent) occurrence. */
