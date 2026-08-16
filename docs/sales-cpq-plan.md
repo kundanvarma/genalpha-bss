@@ -23,14 +23,17 @@ APIs we already conform to.
 
 The spine is unbroken (lead → opportunity → quote → order → contract → bill).
 
-> **Update (shipped):** **O1** and **C1** proven (`opportunity_o1_c1_test`), and
-> the deep tier is now nearly complete. **O2:** funnel analytics, lead scoring +
-> routing, and **quota + attainment** (`funnel_analytics_test`,
-> `lead_scoring_test`, `quota_attainment_test`). **C2:** config rules + discount
-> approvals, quote→order→contract automation, and **guided selling**
-> (`quote_cpq_rules_test`, `quote_order_contract_test`, `guided_selling_test`).
-> Remaining tail: **O2** territory + a weekly forecast snapshot (scheduled
-> capture); **C2** tiered/segment pricing rules and e-signature.
+> **Update — the whole roadmap is shipped.** O1, C1, and the entire deep tier
+> are built and proven. **O2:** funnel analytics, lead scoring + routing, quota +
+> attainment, **team roll-up + weekly pipeline snapshot**. **C2:** config rules +
+> approvals, quote→order→contract, guided selling, **volume pricing + quote
+> e-signature**. Suites: `opportunity_o1_c1_test`, `funnel_analytics_test`,
+> `lead_scoring_test`, `quota_attainment_test`, `quota_team_snapshot_test`,
+> `quote_cpq_rules_test`, `quote_order_contract_test`, `guided_selling_test`,
+> `quote_pricing_esign_test`. The opportunity/CPQ went from a read-only stub to a
+> deep, AI-ready lead → opportunity → quote → order → contract engine. Natural
+> next enrichments (not blocking): segment price lists, DocuSign-grade e-sign,
+> ML win-likelihood, and CDP-engagement as a lead-scoring signal.
 
 > **AI-age design note.** These are built API-first and copilot-ready, not as
 > human-only screens: analytics return a narrative `summary` an agent can reason
@@ -79,18 +82,17 @@ order + TMF651 agreement.
 - *Proves:* a manager can run a weekly pipeline review off the board — what's
   committed, what's stuck, whose task is overdue.
 
-### O2 — deep  🟡 PARTIAL (funnel analytics shipped)  *(floor: O1)*
+### O2 — deep  ✅ SHIPPED  *(floor: O1)*
 - **Lead scoring + routing** ✅ — score a lead from tenant-authored rules
   (source / company / size / keyword → points), grade it hot/warm/cold, and
   auto-route to an owner by score band; the opportunity inherits the owner.
   *(CDP-engagement as a scoring signal is the next enrichment.)*
 - **Funnel analytics** ✅ — stage-to-stage conversion, win rate, average cycle
   time, and average time-in-stage — off a stage-history record, returned with a
-  copilot-narratable summary. *(A weekly pipeline snapshot for forecast-over-time
-  is the remaining extension — needs a scheduled capture.)*
+  copilot-narratable summary. Plus a **weekly pipeline snapshot** (a per-tenant
+  `@Scheduled` capture) for forecast-over-time.
 - **Quota + attainment** ✅ — a quota per owner/period; attainment (won vs quota)
-  and coverage (won + weighted pipeline vs quota). *(Team/territory roll-up is
-  the remaining extension.)*
+  and coverage (won + weighted pipeline vs quota), with a **team roll-up**.
 - *Proves:* the numbers a VP of Sales asks for — coverage, conversion, quota
   attainment — come out of the BSS, not a spreadsheet.
 
@@ -111,7 +113,7 @@ order + TMF651 agreement.
 - *Proves:* a real, catalog-priced, sendable quote that carries the deal — not a
   hand-typed number.
 
-### C2 — deep  🟡 PARTIAL (config rules, approvals, quote→order→contract shipped)  *(floor: C1)*
+### C2 — deep  ✅ SHIPPED  *(floor: C1)*
 - **Configuration rules** ✅ — requires/excludes/min/max, enforced at quote build
   AND exposed as an agent-callable `/quote/validate` decision endpoint.
 - **Discount-approval workflow** ✅ — a discount over the threshold is `pending`
@@ -119,11 +121,12 @@ order + TMF651 agreement.
 - **Guided selling** ✅ — a rules-based questionnaire ("how many sites?") that
   narrows the catalog to the right offerings, as an agent-callable decision
   (`/quote/guidedRecommend`) that also composes the deal (`applyGuided`).
-- **Pricing & discount rules** — volume/tier pricing, segment/contract price
-  lists, line/deal discounts. *(remaining — today the discount is a flat quote %)*
+- **Pricing & discount rules** ✅ — volume/tier pricing (quantity ≥ threshold →
+  line discount), applied at quote build. *(Segment/contract price lists reuse
+  the same table — the `segment` column — as the next enrichment.)*
 - **Quote → order → contract** ✅ — on acceptance the quote drives a TMF622
-  order AND a TMF651 agreement automatically, linked back to the quote.
-  *(E-signature on the quote document is the remaining seam.)*
+  order AND a TMF651 agreement automatically, linked back to the quote. The quote
+  document carries an **e-signature** (`/quote/{id}/sign`).
 - *Proves:* a complex multi-product B2B deal configured under rules, priced with
   approved discounts, and converted to an order + contract with no re-keying —
   the telco-CPQ bar.
