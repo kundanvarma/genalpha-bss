@@ -569,6 +569,7 @@ public class JourneyService {
             } catch (Exception ignore) { /* best-effort */ }
         }
         if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
+        if (journey.getName() != null) context.put("source", journey.getName());
         if (message.get("templateRef") != null) {
             communication.sendTemplated(enrollment.getPartyId(),
                     String.valueOf(message.get("templateRef")),

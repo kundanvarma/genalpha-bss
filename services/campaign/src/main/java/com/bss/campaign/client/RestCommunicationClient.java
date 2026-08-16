@@ -24,7 +24,10 @@ public class RestCommunicationClient implements CommunicationClient {
         body.put("subject", subject);
         body.put("content", content);
         body.put("messageType", "inApp");
-        if (context != null && !context.isEmpty()) body.put("context", context);
+        if (context != null && !context.isEmpty()) {
+            body.put("context", context);
+            if (context.get("source") != null) body.put("source", context.get("source"));
+        }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
             restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
@@ -43,7 +46,10 @@ public class RestCommunicationClient implements CommunicationClient {
         body.put("templateRef", templateRef);
         if (locale != null) body.put("locale", locale);
         if (channel != null) body.put("messageType", channel);
-        if (context != null && !context.isEmpty()) body.put("context", context);
+        if (context != null && !context.isEmpty()) {
+            body.put("context", context);
+            if (context.get("source") != null) body.put("source", context.get("source"));
+        }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
             restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")

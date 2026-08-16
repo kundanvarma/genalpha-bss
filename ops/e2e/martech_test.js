@@ -68,7 +68,9 @@ async function staffToken(request, realm) {
     hits = await inbox();
   }
   if (hits.length !== 1) fail('expected the welcome message once, got ' + hits.length);
-  if (hits[0].content !== 'Use WELCOME10 on your next order.') {
+  // Marketing messages now carry a one-click unsubscribe footer (law + honesty),
+  // so the templated body is the PREFIX, not the whole content.
+  if (!hits[0].content.startsWith('Use WELCOME10 on your next order.')) {
     fail('promo code not templated into the message: ' + hits[0].content);
   }
   console.log('OK first order fired the journey; message carries WELCOME10');

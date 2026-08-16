@@ -190,6 +190,7 @@ public class CommunicationMessageService {
             entity.setMessageType(rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType")));
             entity.setStatus(CommunicationMessage.SENT);
             entity.setReceiverPartyId(receiver);
+            entity.setSource(dto.get("source") == null ? null : String.valueOf(dto.get("source")));
             entity.setCreatedAt(OffsetDateTime.now());
             entity.setLastUpdate(OffsetDateTime.now());
             Map<String, Object> created = toMap(repository.save(entity));
@@ -277,6 +278,9 @@ public class CommunicationMessageService {
         map.put("content", entity.getContent());
         map.put("messageType", entity.getMessageType());
         map.put("status", entity.getStatus());
+        if (entity.getSource() != null) {
+            map.put("source", entity.getSource());
+        }
         if (entity.getDeliveryStatus() != null) {
             map.put("deliveryStatus", entity.getDeliveryStatus());
         }

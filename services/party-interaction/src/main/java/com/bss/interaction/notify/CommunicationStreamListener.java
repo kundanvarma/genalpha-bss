@@ -44,28 +44,56 @@ public class CommunicationStreamListener {
     public void onEvent(String payload) {
         try {
             Map<String, Object> envelope = objectMapper.readValue(payload, JSON_OBJECT);
-            if (!"CommunicationMessageCreateEvent".equals(envelope.get("eventType"))) {
-                return;
-            }
+            String eventType = String.valueOf(envelope.get("eventType"));
             String tenantId = envelope.get("tenantId") == null ? "genalpha"
                     : String.valueOf(envelope.get("tenantId"));
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m
                     ? castMap(m) : Map.of();
-            Map<String, Object> message = event.get("communicationMessage") instanceof Map<?, ?> m
-                    ? castMap(m) : Map.of();
-            String party = partyOf(message);
-            if (party == null || message.get("subject") == null) {
-                return;
-            }
-            String channel = message.get("messageType") == null ? "inApp"
-                    : String.valueOf(message.get("messageType"));
-            try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                interactions.mintTouchpoint(String.valueOf(envelope.get("eventId")),
-                        "communication", "Message sent: " + message.get("subject"),
-                        channel, party);
+            if ("CommunicationMessageCreateEvent".equals(eventType)) {
+                onMessageSent(envelope, event, tenantId);
+            } else if ("EmailEngagedEvent".equals(eventType)) {
+                onEngagement(envelope, event, tenantId);
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable communication event: {}", e.getMessage());
+        }
+    }
+
+    /** A message left the building — record "we said X to this customer". */
+    private void onMessageSent(Map<String, Object> envelope, Map<String, Object> event, String tenantId) {
+        Map<String, Object> message = event.get("communicationMessage") instanceof Map<?, ?> m
+                ? castMap(m) : Map.of();
+        String party = partyOf(message);
+        if (party == null || message.get("subject") == null) {
+            return;
+        }
+        String channel = message.get("messageType") == null ? "inApp"
+                : String.valueOf(message.get("messageType"));
+        // A campaign/journey stamps its name as `source` — a CSR reads
+        // "Marketing (Winback): ..." instead of a bare subject.
+        String source = message.get("source") == null ? null : String.valueOf(message.get("source"));
+        String description = source != null
+                ? "Marketing (" + source + "): " + message.get("subject")
+                : "Message sent: " + message.get("subject");
+        try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+            interactions.mintTouchpoint(String.valueOf(envelope.get("eventId")),
+                    "communication", description, channel, party);
+        }
+    }
+
+    /** The customer opened or clicked — close the loop on the same timeline. */
+    private void onEngagement(Map<String, Object> envelope, Map<String, Object> event, String tenantId) {
+        Map<String, Object> engagement = event.get("engagement") instanceof Map<?, ?> m
+                ? castMap(m) : Map.of();
+        String party = engagement.get("partyId") == null ? null : String.valueOf(engagement.get("partyId"));
+        String verdict = String.valueOf(engagement.get("engagement"));
+        if (party == null || (!"open".equals(verdict) && !"click".equals(verdict))) {
+            return;
+        }
+        String description = "click".equals(verdict) ? "Email clicked" : "Email opened";
+        try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+            interactions.mintTouchpoint(String.valueOf(envelope.get("eventId")),
+                    "communication", description, "email", party);
         }
     }
 

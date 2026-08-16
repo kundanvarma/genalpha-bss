@@ -416,7 +416,8 @@ public class CampaignService {
                     : campaign.getMessageContent();
             String content = campaign.getPromotionCode() == null
                     ? body : body.replace("{code}", campaign.getPromotionCode());
-            communication.send(partyId, subject, content);
+            communication.send(partyId, subject, content,
+                    campaign.getName() == null ? null : Map.of("source", campaign.getName()));
             frequency.record(partyId, "campaign");
         }
         events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(

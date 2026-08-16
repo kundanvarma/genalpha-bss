@@ -30,6 +30,10 @@ public class CommunicationMessage {
     @Column(name = "content")
     private String content;
 
+    /** The campaign/journey that sent this — for the interaction timeline. */
+    @Column(name = "source", length = 128)
+    private String source;
+
     @Column(name = "message_type")
     private String messageType;
 
@@ -97,6 +101,14 @@ public class CommunicationMessage {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     public String getMessageType() {
