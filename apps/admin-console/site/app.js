@@ -4996,10 +4996,12 @@ async function renderPipelineBoard() {
   panel.innerHTML = '<p class="dim">loading pipeline…</p>';
   let opps = [];
   let forecast = { openCount: 0, openAmount: 0, weightedForecast: 0, currency: 'USD', stages: [] };
+  let funnel = null;
   try {
-    [opps, forecast] = await Promise.all([
+    [opps, forecast, funnel] = await Promise.all([
       authFetch(`${SALES_BASE}/salesOpportunity`).then((r) => r.json()),
       authFetch(`${SALES_BASE}/salesOpportunity/pipeline`).then((r) => r.json()),
+      authFetch(`${SALES_BASE}/salesOpportunity/funnel`).then((r) => r.json()).catch(() => null),
     ]);
   } catch (e) {
     panel.innerHTML = `<p class="error">Could not load the pipeline: ${esc(e.message)}</p>`;
@@ -5047,6 +5049,20 @@ async function renderPipelineBoard() {
     html += '</div>';
   }
   html += '</div>';
+  // Funnel analytics strip — conversion, win rate, cycle; and the copilot-ready line.
+  if (funnel && Array.isArray(funnel.stageConversion)) {
+    const conv = funnel.stageConversion
+      .map((c) => `${esc(c.from)}→${esc(c.to)} <b>${esc(c.conversionPct)}%</b>`).join(' · ');
+    html += '<div class="pipeline-funnel" data-testid="pl-funnel" style="margin-top:1.25rem;'
+      + 'padding:0.75rem 1rem;border:1px solid var(--line,#3333);border-radius:0.6rem">'
+      + `<div style="display:flex;gap:2rem;flex-wrap:wrap"><div><span class="dim">Win rate</span> `
+      + `<b>${esc(funnel.winRatePct)}%</b></div><div><span class="dim">Avg cycle</span> `
+      + `<b>${esc(funnel.avgCycleDays)} days</b></div><div><span class="dim">Closed</span> `
+      + `<b>${esc(funnel.wonCount)} won / ${esc(funnel.lostCount)} lost</b></div></div>`
+      + `<div class="dim" style="margin-top:0.4rem;font-size:0.85rem">Stage conversion: ${conv}</div>`
+      + `<div class="dim" style="margin-top:0.4rem;font-style:italic">${esc(funnel.summary || '')}</div>`
+      + '</div>';
+  }
   html += '<p id="pl-msg" class="dim" style="margin-top:0.75rem;min-height:1.2rem"></p>';
   panel.innerHTML = html;
 

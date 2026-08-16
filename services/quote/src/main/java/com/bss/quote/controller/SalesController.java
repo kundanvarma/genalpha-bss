@@ -73,6 +73,13 @@ public class SalesController {
         return ResponseEntity.ok(service.wonReport());
     }
 
+    /** Funnel analytics: stage conversion, win rate, cycle time, time-in-stage
+     *  — structured + a narrative summary a copilot can read. */
+    @GetMapping("/salesOpportunity/funnel")
+    public ResponseEntity<Map<String, Object>> funnel() {
+        return ResponseEntity.ok(service.funnel());
+    }
+
     /** The open next-step tasks across the pipeline (optionally one assignee's). */
     @GetMapping("/salesOpportunity/tasks")
     public ResponseEntity<Map<String, Object>> tasks(

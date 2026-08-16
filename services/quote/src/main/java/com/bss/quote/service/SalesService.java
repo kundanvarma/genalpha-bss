@@ -3,6 +3,7 @@ package com.bss.quote.service;
 import com.bss.quote.api.ApiConstants;
 import com.bss.quote.entity.OpportunityActivity;
 import com.bss.quote.entity.OpportunityItem;
+import com.bss.quote.entity.OpportunityStageHistory;
 import com.bss.quote.entity.SalesLead;
 import com.bss.quote.entity.SalesOpportunity;
 import com.bss.quote.events.DomainEventPublisher;
@@ -47,6 +48,7 @@ public class SalesService {
     private final SalesOpportunityRepository opportunities;
     private final OpportunityItemRepository items;
     private final OpportunityActivityRepository activities;
+    private final com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory;
     private final QuoteService quotes;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -55,6 +57,7 @@ public class SalesService {
 
     public SalesService(SalesLeadRepository leads, SalesOpportunityRepository opportunities,
             OpportunityItemRepository items, OpportunityActivityRepository activities,
+            com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory,
             QuoteService quotes, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.quote.security.TenantRegistry tenants,
             org.springframework.web.client.RestClient.Builder builder) {
@@ -62,6 +65,7 @@ public class SalesService {
         this.opportunities = opportunities;
         this.items = items;
         this.activities = activities;
+        this.stageHistory = stageHistory;
         this.quotes = quotes;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -216,6 +220,7 @@ public class SalesService {
             opp.setCreatedAt(OffsetDateTime.now());
             opp.setLastUpdate(OffsetDateTime.now());
             opportunities.save(opp);
+            recordStage(opp, SalesOpportunity.QUALIFICATION);
             lead.setOpportunityId(oppId);
             events.publish("SalesOpportunityCreateEvent", "salesOpportunity", oppToMap(opp));
             logActivityInternal(opp, OpportunityActivity.LIFECYCLE,
@@ -261,6 +266,7 @@ public class SalesService {
             opp.setProbability(closeWon ? 100 : 0);
             opp.setForecastCategory(closeWon ? SalesOpportunity.CAT_CLOSED : SalesOpportunity.CAT_OMITTED);
             opp.setStageChangedAt(OffsetDateTime.now());
+            recordStage(opp, opp.getStage());
             if (patch.get("closeReason") != null) opp.setCloseReason(str(patch.get("closeReason")));
             if (patch.get("quote") instanceof Map<?, ?> quote && quote.get("id") != null) {
                 opp.setQuoteRef(String.valueOf(quote.get("id")));
@@ -285,6 +291,7 @@ public class SalesService {
                 beats.add("Moved to " + stage);
                 opp.setStage(stage);
                 opp.setStageChangedAt(OffsetDateTime.now());
+                recordStage(opp, stage);
                 // Probability and forecast category ride with the stage unless
                 // the deal overrides them.
                 opp.setProbability(SalesOpportunity.defaultProbability(stage));
@@ -563,6 +570,124 @@ public class SalesService {
         out.put("openAmount", openAmount);
         out.put("weightedForecast", weighted);
         out.put("currency", DEFAULT_CURRENCY);
+        return out;
+    }
+
+    /** Record a stage entry for the funnel analytics. */
+    private void recordStage(SalesOpportunity opp, String stage) {
+        OpportunityStageHistory h = new OpportunityStageHistory();
+        h.setId(UUID.randomUUID().toString());
+        h.setTenantId(opp.getTenantId());
+        h.setOpportunityId(opp.getId());
+        h.setStage(stage);
+        h.setEnteredAt(OffsetDateTime.now());
+        stageHistory.save(h);
+    }
+
+    /**
+     * Funnel analytics — the numbers a manager (or a copilot) reads: how deals
+     * convert stage-to-stage, the win rate, the average sales cycle, and the
+     * average time a deal spends in each stage. Computed off the stage history,
+     * and returned WITH a plain-language summary so a copilot can narrate it.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> funnel() {
+        String tenantId = tenantScope.currentTenantId();
+        List<SalesOpportunity> opps = opportunities.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        Map<String, OffsetDateTime> created = new LinkedHashMap<>();
+        for (SalesOpportunity o : opps) created.put(o.getId(), o.getCreatedAt());
+
+        // Group the history by opportunity, in time order.
+        Map<String, List<OpportunityStageHistory>> byOpp = new LinkedHashMap<>();
+        for (OpportunityStageHistory h : stageHistory.findByTenantIdOrderByEnteredAt(tenantId)) {
+            byOpp.computeIfAbsent(h.getOpportunityId(), k -> new ArrayList<>()).add(h);
+        }
+
+        String[] order = { SalesOpportunity.QUALIFICATION, SalesOpportunity.NEEDS_ANALYSIS,
+                SalesOpportunity.PROPOSAL, SalesOpportunity.NEGOTIATION, SalesOpportunity.CLOSED_WON };
+        Map<String, Integer> reached = new LinkedHashMap<>();
+        for (String s : order) reached.put(s, 0);
+        // Sum of durations spent in each stage, and a count, for the average.
+        Map<String, long[]> stageDwell = new LinkedHashMap<>(); // stage -> [totalSeconds, count]
+
+        long cycleSecondsTotal = 0;
+        int cycleCount = 0;
+        for (Map.Entry<String, List<OpportunityStageHistory>> e : byOpp.entrySet()) {
+            List<OpportunityStageHistory> hist = e.getValue();
+            java.util.Set<String> stagesSeen = new java.util.HashSet<>();
+            for (int i = 0; i < hist.size(); i++) {
+                String st = hist.get(i).getStage();
+                if (reached.containsKey(st)) stagesSeen.add(st);
+                // dwell = time until the next transition (only for exited stages)
+                if (i + 1 < hist.size()) {
+                    long secs = java.time.Duration.between(
+                            hist.get(i).getEnteredAt(), hist.get(i + 1).getEnteredAt()).getSeconds();
+                    long[] acc = stageDwell.computeIfAbsent(st, k -> new long[2]);
+                    acc[0] += Math.max(0, secs);
+                    acc[1] += 1;
+                }
+            }
+            for (String s : stagesSeen) reached.merge(s, 1, Integer::sum);
+            // cycle time: created → the closing (won or lost) entry
+            OpportunityStageHistory close = hist.stream()
+                    .filter(h -> SalesOpportunity.CLOSED_WON.equals(h.getStage())
+                            || SalesOpportunity.CLOSED_LOST.equals(h.getStage()))
+                    .reduce((a, b) -> b).orElse(null);
+            if (close != null && created.get(e.getKey()) != null) {
+                cycleSecondsTotal += Math.max(0, java.time.Duration.between(
+                        created.get(e.getKey()), close.getEnteredAt()).getSeconds());
+                cycleCount++;
+            }
+        }
+
+        // Stage-to-stage conversion.
+        List<Map<String, Object>> conversion = new ArrayList<>();
+        for (int i = 0; i < order.length - 1; i++) {
+            int from = reached.get(order[i]);
+            int to = reached.get(order[i + 1]);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("from", order[i]);
+            row.put("to", order[i + 1]);
+            row.put("reachedFrom", from);
+            row.put("reachedTo", to);
+            row.put("conversionPct", from == 0 ? 0 : Math.round(to * 1000.0 / from) / 10.0);
+            conversion.add(row);
+        }
+        // Average time-in-stage (days).
+        List<Map<String, Object>> timeInStage = new ArrayList<>();
+        for (String s : new String[] { SalesOpportunity.QUALIFICATION, SalesOpportunity.NEEDS_ANALYSIS,
+                SalesOpportunity.PROPOSAL, SalesOpportunity.NEGOTIATION }) {
+            long[] acc = stageDwell.getOrDefault(s, new long[2]);
+            double days = acc[1] == 0 ? 0 : Math.round(acc[0] / (double) acc[1] / 86400.0 * 10) / 10.0;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("stage", s);
+            row.put("avgDays", days);
+            timeInStage.add(row);
+        }
+
+        int won = (int) opps.stream().filter(o -> SalesOpportunity.WON.equals(o.getState())).count();
+        int lost = (int) opps.stream().filter(o -> SalesOpportunity.LOST.equals(o.getState())).count();
+        double winRate = (won + lost) == 0 ? 0 : Math.round(won * 1000.0 / (won + lost)) / 10.0;
+        double avgCycleDays = cycleCount == 0 ? 0 : Math.round(cycleSecondsTotal / (double) cycleCount / 86400.0 * 10) / 10.0;
+
+        // A plain-language summary — the copilot narrates from this, and it
+        // keeps us honest about thin samples.
+        String weakest = conversion.stream()
+                .filter(c -> (int) c.get("reachedFrom") > 0)
+                .min((a, b) -> Double.compare((double) a.get("conversionPct"), (double) b.get("conversionPct")))
+                .map(c -> c.get("from") + "→" + c.get("to")).orElse("n/a");
+        String summary = "Win rate " + winRate + "% over " + (won + lost) + " closed deals; "
+                + "average cycle " + avgCycleDays + " days. Weakest stage transition: " + weakest + "."
+                + ((won + lost) < 5 ? " (Small sample — read as a hint, not a measurement.)" : "");
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("stageConversion", conversion);
+        out.put("timeInStage", timeInStage);
+        out.put("winRatePct", winRate);
+        out.put("wonCount", won);
+        out.put("lostCount", lost);
+        out.put("avgCycleDays", avgCycleDays);
+        out.put("summary", summary);
         return out;
     }
 
