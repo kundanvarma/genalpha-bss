@@ -24,12 +24,13 @@ APIs we already conform to.
 The spine is unbroken (lead → opportunity → quote → order → contract → bill).
 
 > **Update (shipped):** **O1** and **C1** are built and proven
-> (`opportunity_o1_c1_test`). Into the **deep tier**: **funnel analytics** (O2 —
-> conversion, win rate, cycle time, copilot-narratable) and **config rules +
-> discount approvals** (C2 — agent-callable validate + human approval gate) are
-> also shipped (`funnel_analytics_test`, `quote_cpq_rules_test`). Remaining in
-> the deep tier: **O2** lead scoring/routing + quota; **C2** guided selling and
-> quote→order→contract automation + e-sign.
+> (`opportunity_o1_c1_test`). Deep tier now largely shipped too: **funnel
+> analytics**, **lead scoring + routing** (O2 —
+> `funnel_analytics_test`, `lead_scoring_test`); **config rules + discount
+> approvals** and **quote→order→contract automation** (C2 —
+> `quote_cpq_rules_test`, `quote_order_contract_test`). Remaining: **O2** quota /
+> territory + weekly forecast snapshot; **C2** guided selling, tiered/segment
+> pricing, and e-signature.
 
 > **AI-age design note.** These are built API-first and copilot-ready, not as
 > human-only screens: analytics return a narrative `summary` an agent can reason
@@ -79,9 +80,10 @@ order + TMF651 agreement.
   committed, what's stuck, whose task is overdue.
 
 ### O2 — deep  🟡 PARTIAL (funnel analytics shipped)  *(floor: O1)*
-- **Lead scoring + routing** — score a lead from its traits (source, company
-  size, engagement from the CDP) and auto-assign to an owner by rule. Reuses the
-  insight/CDP signals we already compute. *(remaining)*
+- **Lead scoring + routing** ✅ — score a lead from tenant-authored rules
+  (source / company / size / keyword → points), grade it hot/warm/cold, and
+  auto-route to an owner by score band; the opportunity inherits the owner.
+  *(CDP-engagement as a scoring signal is the next enrichment.)*
 - **Funnel analytics** ✅ — stage-to-stage conversion, win rate, average cycle
   time, and average time-in-stage — off a stage-history record, returned with a
   copilot-narratable summary. *(A weekly pipeline snapshot for forecast-over-time
@@ -108,7 +110,7 @@ order + TMF651 agreement.
 - *Proves:* a real, catalog-priced, sendable quote that carries the deal — not a
   hand-typed number.
 
-### C2 — deep  🟡 PARTIAL (config rules + discount approvals shipped)  *(floor: C1)*
+### C2 — deep  🟡 PARTIAL (config rules, approvals, quote→order→contract shipped)  *(floor: C1)*
 - **Configuration rules** ✅ — requires/excludes/min/max, enforced at quote build
   AND exposed as an agent-callable `/quote/validate` decision endpoint.
 - **Discount-approval workflow** ✅ — a discount over the threshold is `pending`
@@ -117,9 +119,9 @@ order + TMF651 agreement.
   static IP?") that narrows the catalog to the right offerings. *(remaining)*
 - **Pricing & discount rules** — volume/tier pricing, segment/contract price
   lists, line/deal discounts. *(remaining — today the discount is a flat quote %)*
-- **Quote → order → contract** — on acceptance, the quote drives a TMF622 order
-  and a TMF651 agreement automatically (asset-based ordering); e-signature seam
-  on the quote document.
+- **Quote → order → contract** ✅ — on acceptance the quote drives a TMF622
+  order AND a TMF651 agreement automatically, linked back to the quote.
+  *(E-signature on the quote document is the remaining seam.)*
 - *Proves:* a complex multi-product B2B deal configured under rules, priced with
   approved discounts, and converted to an order + contract with no re-keying —
   the telco-CPQ bar.
