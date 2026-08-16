@@ -307,8 +307,10 @@ consent-first loop, all authored from the console.
 > sends (campaign, journey step, or system notice) is logged to the **omnichannel interaction record
 > (TMF683)** — who, what, which channel, which system. So a **CSR sees marketing + service messages
 > together** on the 360 view and can judge the next best action, and the NBA engine reads the same
-> history. *(Today the touchpoint carries the subject + channel, not the campaign name; opens/clicks
-> and inbound social DMs are separate records — natural next steps if you want them on the timeline.)*
+> history. A campaign/journey stamps its **name** on the touchpoint, so the CSR reads
+> **"Marketing (Winback): we miss you"** — not a bare subject — and knows exactly which programme
+> reached out. The loop closes too: an ESP **open** or **click** lands its own touchpoint, so the
+> record reads **sent → opened → clicked**. *(Proven by `interaction_timeline_test`.)*
 
 ---
 

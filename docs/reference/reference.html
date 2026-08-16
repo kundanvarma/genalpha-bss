@@ -194,7 +194,7 @@ kept no control group.</p>
 <tr><td><b>Attribution</b></td><td>Per-program and portfolio-wide holdout-vs-treated lift and <b>incremental</b> revenue, with a hard no-holdout-no-claim rule.</td></tr>
 <tr><td><b>Marketing preferences</b></td><td>A customer self-serve opt-out (shop → Account) enforced in the send path (in-app + email) before the frequency cap; a one-click, no-login unsubscribe (HMAC) in every marketing message; opt-out also excludes from ad activations.</td></tr>
 <tr><td><b>Landing pages + lead capture</b></td><td>Standalone branded campaign pages (logo/hero/colour/links, sanitized) with a consent-first form; a ticked submit becomes a consented prospect stamped with the campaign — closing ad/email → landing → lead → nurture. Authored in the console.</td></tr>
-<tr><td><b>Interaction record (TMF683)</b></td><td>Every message sent — <em>including martech campaigns and journeys</em> — is logged to the omnichannel interaction timeline (who, what, which channel, which system), so a CSR sees the whole contact history on one 360 view and can pick the next best action.</td></tr>
+<tr><td><b>Interaction record (TMF683)</b></td><td>Every message sent — <em>including martech campaigns and journeys</em> — is logged to the omnichannel interaction timeline (who, what, which channel, which system), tagged with the <em>campaign/journey name</em> ("Marketing (Winback): …"), and opens/clicks land their own touchpoints (sent → opened → clicked). A CSR sees the whole contact history on one 360 view and can pick the next best action.</td></tr>
 </table>
 
 <h3>How</h3>
@@ -302,9 +302,12 @@ console (or via the APIs) and stored as rows — no redeploy to change a campaig
 journey step, or system notice — publishes <code>CommunicationMessageCreateEvent</code>, which the
 <code>party-interaction</code> service records as a touchpoint (who · what · channel · sending system,
 deduped by event id). So marketing isn't a silo: a CSR sees marketing + service messages together on
-the customer's 360, which is exactly what next-best-action reads. (Honest limits today: the touchpoint
-carries the subject + channel, not the specific campaign name; opens/clicks and inbound social DMs are
-separate records, not timeline touchpoints.)</div>
+the customer's 360, which is exactly what next-best-action reads. A campaign/journey stamps its
+<code>source</code> (its name) on the touchpoint, so the CSR reads <em>"Marketing (Winback): we miss
+you"</em> — not a bare subject — and the loop closes: an ESP <code>EmailEngagedEvent</code> (open /
+click) mints its own touchpoint, so the record reads <b>sent → opened → clicked</b>. Proven by
+<code>interaction_timeline_test</code>. (Inbound social DMs are still their own care records, by
+design — they open a trouble-ticket, not a marketing touchpoint.)</div>
 <div class="rule"><b>Two kinds of consent, kept apart.</b> The Visitor-consent tab's flags —
 <code>analyticsConsent</code> (gates storing breadcrumbs) and <code>personalizationConsent</code>
 (gates using them on-site) — are <b>first-party tracking/personalization</b> consent, the cookie-banner
