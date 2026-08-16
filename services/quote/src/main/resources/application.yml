@@ -54,6 +54,7 @@ bss:
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     intelligence-base-url: ${INTELLIGENCE_BASE_URL:http://localhost:8109}
+    agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8098}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

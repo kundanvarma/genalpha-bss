@@ -29,6 +29,7 @@ public class DownstreamClients {
     private final RestClient usage;
     private final RestClient ordering;
     private final RestClient intelligence;
+    private final RestClient agreement;
     private final ObjectMapper objectMapper;
 
     public DownstreamClients(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
@@ -37,12 +38,14 @@ public class DownstreamClients {
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBaseUrl,
             @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBaseUrl,
             @Value("${bss.downstream.ordering-base-url:http://localhost:8082}") String orderingBaseUrl,
-            @Value("${bss.downstream.intelligence-base-url:http://localhost:8109}") String intelligenceBaseUrl) {
+            @Value("${bss.downstream.intelligence-base-url:http://localhost:8109}") String intelligenceBaseUrl,
+            @Value("${bss.downstream.agreement-base-url:http://localhost:8098}") String agreementBaseUrl) {
         this.som = builder.baseUrl(somBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.catalog = builder.baseUrl(catalogBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.usage = builder.baseUrl(usageBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.ordering = builder.baseUrl(orderingBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.intelligence = builder.baseUrl(intelligenceBaseUrl).requestInterceptor(tokenInterceptor).build();
+        this.agreement = builder.baseUrl(agreementBaseUrl).requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
     }
 
@@ -74,6 +77,14 @@ public class DownstreamClients {
                 .uri("/tmf-api/productOrderingManagement/v4/productOrder")
                 .header("Content-Type", "application/json")
                 .body(order).retrieve().body(String.class));
+    }
+
+    /** The accepted quote also becomes a TMF651 agreement (the contract). */
+    public Map<String, Object> createAgreement(Map<String, Object> agreementBody) {
+        return parseObject(agreement.post()
+                .uri("/tmf-api/agreementManagement/v4/agreement")
+                .header("Content-Type", "application/json")
+                .body(agreementBody).retrieve().body(String.class));
     }
 
     /** Fail-soft: a quote without prose is still a quote. */

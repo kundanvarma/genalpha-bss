@@ -749,6 +749,7 @@ services:
       USAGE_BASE_URL: http://usage:8080
       ORDERING_BASE_URL: http://product-ordering:8080
       INTELLIGENCE_BASE_URL: http://intelligence:8080
+      AGREEMENT_BASE_URL: http://agreement:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"

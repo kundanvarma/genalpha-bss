@@ -11,8 +11,11 @@ import com.bss.quote.repository.QuoteRepository;
 import com.bss.quote.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -32,6 +35,8 @@ import java.util.UUID;
  */
 @Service
 public class QuoteService {
+
+    private static final Logger log = LoggerFactory.getLogger(QuoteService.class);
 
     private static final TypeReference<List<Map<String, Object>>> ITEMS = new TypeReference<>() {
     };
@@ -393,25 +398,46 @@ public class QuoteService {
         return result;
     }
 
-    /** The handoff: an approved quote becomes a product order, atomically once. */
+    /** The handoff: an approved quote becomes a product order AND a contract
+     *  (TMF651 agreement), linked back here — atomically once. */
     @Transactional
     public Map<String, Object> accept(String id) {
         Quote quote = own(id);
         if (!Quote.APPROVED.equals(quote.getState())) {
             throw new ConflictException("only approved quotes can be accepted");
         }
+        String party = quote.getOwnerPartyId() == null ? "unknown" : quote.getOwnerPartyId();
         List<Map<String, Object>> orderItems = new ArrayList<>();
+        List<Map<String, Object>> agreementItems = new ArrayList<>();
         for (Map<String, Object> item : readItems(quote)) {
             Map<?, ?> offering = (Map<?, ?>) item.get("offering");
             orderItems.add(Map.of("action", "add",
                     "productOffering", Map.of("id", offering.get("id"), "name", offering.get("name"))));
+            agreementItems.add(Map.of("productOffering",
+                    Map.of("id", offering.get("id"), "name", offering.get("name"))));
         }
         Map<String, Object> order = downstream.placeOrder(Map.of(
                 "productOrderItem", orderItems,
-                "relatedParty", List.of(Map.of(
-                        "id", quote.getOwnerPartyId() == null ? "unknown" : quote.getOwnerPartyId(),
-                        "role", "customer"))));
+                "relatedParty", List.of(Map.of("id", party, "role", "customer"))));
         quote.setProductOrderId(String.valueOf(order.get("id")));
+        // The contract: a TMF651 agreement for the same party + items, tagged
+        // with the quote it came from.
+        try {
+            Map<String, Object> agreement = downstream.createAgreement(Map.of(
+                    "name", "Agreement — " + quote.getDescription(),
+                    "agreementType", "commercial",
+                    "status", "active",
+                    "engagedParty", List.of(Map.of("id", party, "role", "customer")),
+                    "agreementItem", agreementItems,
+                    "characteristic", List.of(Map.of("name", "quoteId", "value", quote.getId()))));
+            if (agreement.get("id") != null) {
+                quote.setAgreementId(String.valueOf(agreement.get("id")));
+            }
+        } catch (RestClientException e) {
+            // Fail-soft: the order stands; the contract can be reconciled. Do
+            // not lose the accepted order to a contract hiccup.
+            log.warn("agreement creation failed for quote {}: {}", quote.getId(), e.getMessage());
+        }
         quote.setState(Quote.ACCEPTED);
         quote.setLastUpdate(OffsetDateTime.now());
         quotes.save(quote);
@@ -470,6 +496,10 @@ public class QuoteService {
         if (quote.getNarrative() != null) map.put("narrative", quote.getNarrative());
         if (quote.getProductOrderId() != null) {
             map.put("productOrder", Map.of("id", quote.getProductOrderId()));
+        }
+        if (quote.getAgreementId() != null) {
+            map.put("agreement", Map.of("id", quote.getAgreementId(),
+                    "href", "/tmf-api/agreementManagement/v4/agreement/" + quote.getAgreementId()));
         }
         map.put("@type", "Quote");
         return map;

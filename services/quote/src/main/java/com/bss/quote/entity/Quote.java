@@ -69,6 +69,9 @@ public class Quote {
     @Column(name = "product_order_id", length = 36)
     private String productOrderId;
 
+    @Column(name = "agreement_id", length = 36)
+    private String agreementId;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -105,6 +108,8 @@ public class Quote {
     public void setNarrative(String narrative) { this.narrative = narrative; }
     public String getProductOrderId() { return productOrderId; }
     public void setProductOrderId(String productOrderId) { this.productOrderId = productOrderId; }
+    public String getAgreementId() { return agreementId; }
+    public void setAgreementId(String agreementId) { this.agreementId = agreementId; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
