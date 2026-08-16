@@ -40,6 +40,11 @@ public class OpportunityItem {
     @Column(name = "currency", length = 3)
     private String currency;
 
+    /** A recurring (monthly) charge vs a one-time charge — splits the quote
+     *  total into MRR and one-off. */
+    @Column(name = "recurring", nullable = false)
+    private boolean recurring = true;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -59,6 +64,8 @@ public class OpportunityItem {
     public void setUnitPrice(BigDecimal v) { this.unitPrice = v; }
     public String getCurrency() { return currency; }
     public void setCurrency(String v) { this.currency = v; }
+    public boolean isRecurring() { return recurring; }
+    public void setRecurring(boolean v) { this.recurring = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
 }

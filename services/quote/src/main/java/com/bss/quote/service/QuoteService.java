@@ -135,6 +135,91 @@ public class QuoteService {
         return result;
     }
 
+    /**
+     * CPQ C1 — the opportunity → quote hand-off. Build a quote from a
+     * developed opportunity's negotiated line items: MRR from the recurring
+     * lines, one-off from the rest. State opens at inProgress like any quote.
+     */
+    @Transactional
+    public Map<String, Object> createFromLineItems(String description, String ownerPartyId,
+            String currency, List<Map<String, Object>> lineItems) {
+        String cur = currency == null ? "USD" : currency;
+        List<Map<String, Object>> items = new ArrayList<>();
+        BigDecimal monthly = BigDecimal.ZERO;
+        BigDecimal oneTime = BigDecimal.ZERO;
+        for (Map<String, Object> li : lineItems) {
+            boolean recurring = !Boolean.FALSE.equals(li.get("recurring"));
+            int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
+            BigDecimal unit = li.get("unitPrice") == null ? BigDecimal.ZERO
+                    : new BigDecimal(String.valueOf(li.get("unitPrice")));
+            BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("offering", Map.of(
+                    "id", li.get("offeringId") == null ? "" : li.get("offeringId"),
+                    "name", li.get("offeringName")));
+            item.put("quantity", qty);
+            item.put("unitPrice", Map.of("value", unit, "unit", cur,
+                    "period", recurring ? "month" : "oneTime"));
+            item.put("recurring", recurring);
+            items.add(item);
+            if (recurring) monthly = monthly.add(lineTotal); else oneTime = oneTime.add(lineTotal);
+        }
+        Quote quote = new Quote();
+        quote.setId(UUID.randomUUID().toString());
+        quote.setTenantId(tenantScope.currentTenantId());
+        quote.setHref(ApiConstants.BASE_PATH + "/quote/" + quote.getId());
+        quote.setDescription(description == null ? "Opportunity quote" : description);
+        quote.setState(Quote.IN_PROGRESS);
+        quote.setOwnerPartyId(ownerPartyId);
+        writeItems(quote, items);
+        quote.setMonthlyTotal(monthly);
+        quote.setOneTimeTotal(oneTime);
+        quote.setCurrency(cur);
+        quote.setCreatedAt(OffsetDateTime.now());
+        quote.setLastUpdate(OffsetDateTime.now());
+        quotes.save(quote);
+        Map<String, Object> result = toMap(quote);
+        events.publish("QuoteCreateEvent", "quote", result);
+        return result;
+    }
+
+    /** A branded, printable quote document (HTML) the rep can send. */
+    @Transactional(readOnly = true)
+    public String renderDocument(String id) {
+        Quote quote = own(id);
+        StringBuilder rows = new StringBuilder();
+        for (Map<String, Object> item : readItems(quote)) {
+            Object off = item.get("offering");
+            String name = off instanceof Map<?, ?> m ? String.valueOf(m.get("name")) : "—";
+            Object up = item.get("unitPrice");
+            String price = up instanceof Map<?, ?> m
+                    ? m.get("value") + " " + m.get("unit") + "/" + m.get("period") : "—";
+            String qty = String.valueOf(item.getOrDefault("quantity", 1));
+            rows.append("<tr><td>").append(esc(name)).append("</td><td style=\"text-align:right\">")
+                    .append(esc(qty)).append("</td><td style=\"text-align:right\">")
+                    .append(esc(price)).append("</td></tr>");
+        }
+        String cur = quote.getCurrency();
+        return "<!doctype html><html><head><meta charset=\"utf-8\"><title>Quote "
+                + esc(quote.getId()) + "</title><style>body{font-family:system-ui,sans-serif;"
+                + "max-width:720px;margin:2rem auto;color:#1a1a1a}h1{font-size:1.4rem}"
+                + "table{width:100%;border-collapse:collapse;margin:1rem 0}"
+                + "th,td{padding:0.5rem;border-bottom:1px solid #ddd;text-align:left}"
+                + ".totals{margin-top:1rem;font-size:1.05rem}.dim{color:#666}</style></head><body>"
+                + "<h1>Quotation</h1><p class=\"dim\">" + esc(quote.getDescription()) + "</p>"
+                + "<p class=\"dim\">Quote " + esc(quote.getId()) + " · status " + esc(quote.getState()) + "</p>"
+                + "<table><thead><tr><th>Item</th><th style=\"text-align:right\">Qty</th>"
+                + "<th style=\"text-align:right\">Price</th></tr></thead><tbody>" + rows + "</tbody></table>"
+                + "<div class=\"totals\"><b>Monthly (recurring): " + quote.getMonthlyTotal() + " " + esc(cur)
+                + "</b><br><b>One-time: " + quote.getOneTimeTotal() + " " + esc(cur) + "</b></div>"
+                + "<p class=\"dim\" style=\"margin-top:2rem\">This quotation is valid subject to the terms of service.</p>"
+                + "</body></html>";
+    }
+
+    private static String esc(String s) {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> findAll() {
         return quotes.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
@@ -227,6 +312,10 @@ public class QuoteService {
         map.put("quoteItem", readItems(quote));
         map.put("quoteTotalPrice", Map.of("value", quote.getMonthlyTotal(),
                 "unit", quote.getCurrency(), "period", "month"));
+        if (quote.getOneTimeTotal() != null && quote.getOneTimeTotal().signum() != 0) {
+            map.put("quoteOneTimePrice", Map.of("value", quote.getOneTimeTotal(),
+                    "unit", quote.getCurrency(), "period", "oneTime"));
+        }
         if (quote.getNarrative() != null) map.put("narrative", quote.getNarrative());
         if (quote.getProductOrderId() != null) {
             map.put("productOrder", Map.of("id", quote.getProductOrderId()));

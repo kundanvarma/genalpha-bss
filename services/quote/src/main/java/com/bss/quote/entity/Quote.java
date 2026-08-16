@@ -45,6 +45,9 @@ public class Quote {
     @Column(name = "monthly_total", nullable = false, precision = 12, scale = 2)
     private BigDecimal monthlyTotal;
 
+    @Column(name = "one_time_total", nullable = false, precision = 12, scale = 2)
+    private BigDecimal oneTimeTotal = BigDecimal.ZERO;
+
     @Column(name = "currency", nullable = false, length = 8)
     private String currency;
 
@@ -78,6 +81,8 @@ public class Quote {
     public void setItems(String items) { this.items = items; }
     public BigDecimal getMonthlyTotal() { return monthlyTotal; }
     public void setMonthlyTotal(BigDecimal monthlyTotal) { this.monthlyTotal = monthlyTotal; }
+    public BigDecimal getOneTimeTotal() { return oneTimeTotal; }
+    public void setOneTimeTotal(BigDecimal oneTimeTotal) { this.oneTimeTotal = oneTimeTotal; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public String getNarrative() { return narrative; }

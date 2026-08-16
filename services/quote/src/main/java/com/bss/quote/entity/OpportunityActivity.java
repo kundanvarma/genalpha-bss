@@ -21,6 +21,10 @@ public class OpportunityActivity {
     public static final String NEXT_STEP = "nextStep";
     public static final String LIFECYCLE = "lifecycle";
 
+    // Task status: an open next-step vs a done record.
+    public static final String OPEN = "open";
+    public static final String DONE = "done";
+
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
     private String id;
@@ -43,6 +47,15 @@ public class OpportunityActivity {
     @Column(name = "occurred_at", nullable = false)
     private OffsetDateTime occurredAt;
 
+    @Column(name = "due_date")
+    private OffsetDateTime dueDate;
+
+    @Column(name = "status", nullable = false, length = 16)
+    private String status = DONE;
+
+    @Column(name = "assignee", length = 255)
+    private String assignee;
+
     public String getId() { return id; }
     public void setId(String v) { this.id = v; }
     public String getTenantId() { return tenantId; }
@@ -57,4 +70,10 @@ public class OpportunityActivity {
     public void setNote(String v) { this.note = v; }
     public OffsetDateTime getOccurredAt() { return occurredAt; }
     public void setOccurredAt(OffsetDateTime v) { this.occurredAt = v; }
+    public OffsetDateTime getDueDate() { return dueDate; }
+    public void setDueDate(OffsetDateTime v) { this.dueDate = v; }
+    public String getStatus() { return status; }
+    public void setStatus(String v) { this.status = v; }
+    public String getAssignee() { return assignee; }
+    public void setAssignee(String v) { this.assignee = v; }
 }

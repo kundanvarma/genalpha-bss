@@ -49,6 +49,31 @@ public class SalesOpportunity {
                 || NEGOTIATION.equals(s) || CLOSED_WON.equals(s) || CLOSED_LOST.equals(s);
     }
 
+    // Forecast categories: the number a manager commits, layered over the raw
+    // probability (Salesforce's Pipeline/Best Case/Commit/Closed/Omitted).
+    public static final String CAT_PIPELINE = "pipeline";
+    public static final String CAT_BEST_CASE = "bestCase";
+    public static final String CAT_COMMIT = "commit";
+    public static final String CAT_CLOSED = "closed";
+    public static final String CAT_OMITTED = "omitted";
+
+    /** The forecast category a stage defaults into — overridable per deal. */
+    public static String defaultForecastCategory(String stage) {
+        if (stage == null) return CAT_PIPELINE;
+        return switch (stage) {
+            case PROPOSAL -> CAT_BEST_CASE;
+            case NEGOTIATION -> CAT_COMMIT;
+            case CLOSED_WON -> CAT_CLOSED;
+            case CLOSED_LOST -> CAT_OMITTED;
+            default -> CAT_PIPELINE; // qualification, needsAnalysis
+        };
+    }
+
+    public static boolean isForecastCategory(String c) {
+        return CAT_PIPELINE.equals(c) || CAT_BEST_CASE.equals(c) || CAT_COMMIT.equals(c)
+                || CAT_CLOSED.equals(c) || CAT_OMITTED.equals(c);
+    }
+
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;
 
@@ -104,6 +129,13 @@ public class SalesOpportunity {
     @Column(name = "party_id", length = 64)
     private String partyId;
 
+    /** When the deal last changed stage — the basis for "days in stage" aging. */
+    @Column(name = "stage_changed_at")
+    private OffsetDateTime stageChangedAt;
+
+    @Column(name = "forecast_category", length = 16)
+    private String forecastCategory;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -144,6 +176,10 @@ public class SalesOpportunity {
     public void setCloseReason(String v) { this.closeReason = v; }
     public String getPartyId() { return partyId; }
     public void setPartyId(String v) { this.partyId = v; }
+    public OffsetDateTime getStageChangedAt() { return stageChangedAt; }
+    public void setStageChangedAt(OffsetDateTime v) { this.stageChangedAt = v; }
+    public String getForecastCategory() { return forecastCategory; }
+    public void setForecastCategory(String v) { this.forecastCategory = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

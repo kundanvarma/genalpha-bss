@@ -47,6 +47,7 @@ public class SalesService {
     private final SalesOpportunityRepository opportunities;
     private final OpportunityItemRepository items;
     private final OpportunityActivityRepository activities;
+    private final QuoteService quotes;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.quote.security.TenantRegistry tenants;
@@ -54,13 +55,14 @@ public class SalesService {
 
     public SalesService(SalesLeadRepository leads, SalesOpportunityRepository opportunities,
             OpportunityItemRepository items, OpportunityActivityRepository activities,
-            DomainEventPublisher events, TenantScope tenantScope,
+            QuoteService quotes, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.quote.security.TenantRegistry tenants,
             org.springframework.web.client.RestClient.Builder builder) {
         this.leads = leads;
         this.opportunities = opportunities;
         this.items = items;
         this.activities = activities;
+        this.quotes = quotes;
         this.events = events;
         this.tenantScope = tenantScope;
         this.tenants = tenants;
@@ -205,6 +207,8 @@ public class SalesService {
             // rides with the stage until sales edits it.
             opp.setStage(SalesOpportunity.QUALIFICATION);
             opp.setProbability(SalesOpportunity.defaultProbability(SalesOpportunity.QUALIFICATION));
+            opp.setForecastCategory(SalesOpportunity.defaultForecastCategory(SalesOpportunity.QUALIFICATION));
+            opp.setStageChangedAt(OffsetDateTime.now());
             opp.setCurrency(DEFAULT_CURRENCY);
             // A deal can be with an account we already know (B2B expansion) —
             // then its activities mirror onto that party's 360.
@@ -255,6 +259,8 @@ public class SalesService {
             opp.setState(closeWon ? SalesOpportunity.WON : SalesOpportunity.LOST);
             opp.setStage(closeWon ? SalesOpportunity.CLOSED_WON : SalesOpportunity.CLOSED_LOST);
             opp.setProbability(closeWon ? 100 : 0);
+            opp.setForecastCategory(closeWon ? SalesOpportunity.CAT_CLOSED : SalesOpportunity.CAT_OMITTED);
+            opp.setStageChangedAt(OffsetDateTime.now());
             if (patch.get("closeReason") != null) opp.setCloseReason(str(patch.get("closeReason")));
             if (patch.get("quote") instanceof Map<?, ?> quote && quote.get("id") != null) {
                 opp.setQuoteRef(String.valueOf(quote.get("id")));
@@ -278,9 +284,19 @@ public class SalesService {
             if (!stage.equals(opp.getStage())) {
                 beats.add("Moved to " + stage);
                 opp.setStage(stage);
-                // Probability rides with the stage unless the deal overrides it.
+                opp.setStageChangedAt(OffsetDateTime.now());
+                // Probability and forecast category ride with the stage unless
+                // the deal overrides them.
                 opp.setProbability(SalesOpportunity.defaultProbability(stage));
+                opp.setForecastCategory(SalesOpportunity.defaultForecastCategory(stage));
             }
+        }
+        if (patch.get("forecastCategory") != null) {
+            String c = str(patch.get("forecastCategory"));
+            if (!SalesOpportunity.isForecastCategory(c)) {
+                throw new BadRequestException("forecastCategory must be pipeline/bestCase/commit/closed/omitted");
+            }
+            opp.setForecastCategory(c);
         }
         if (patch.get("probability") != null) opp.setProbability(asInt(patch.get("probability")));
         if (patch.get("amount") != null) opp.setAmount(asDecimal(patch.get("amount")));
@@ -323,6 +339,7 @@ public class SalesService {
         item.setQuantity(dto.get("quantity") == null ? 1 : Math.max(1, asInt(dto.get("quantity"))));
         item.setUnitPrice(dto.get("unitPrice") == null ? BigDecimal.ZERO : asDecimal(dto.get("unitPrice")));
         item.setCurrency(opp.getCurrency() == null ? DEFAULT_CURRENCY : opp.getCurrency());
+        item.setRecurring(!Boolean.FALSE.equals(dto.get("recurring")));
         item.setCreatedAt(OffsetDateTime.now());
         items.save(item);
         recomputeAmount(opp);
@@ -358,23 +375,67 @@ public class SalesService {
 
     // ---------------- activities: the sales workspace ----------------
 
-    /** Log a call/email/note/next-step on the deal. Mirrors onto the party's
+    /** Log a call/email/note on the deal, OR set a next-step TASK: pass a
+     *  dueDate (+ optional assignee) and it becomes an OPEN task that shows on
+     *  the "my open tasks" queue until marked done. Mirrors onto the party's
      *  TMF683 360 timeline when the deal is with a known account. */
     @Transactional
     public Map<String, Object> logActivity(String opportunityId, Map<String, Object> dto) {
         SalesOpportunity opp = requireOpportunity(opportunityId);
         if (dto.get("note") == null || String.valueOf(dto.get("note")).isBlank()) {
-            throw new BadRequestException("note is required — what happened?");
+            throw new BadRequestException("note is required — what happened, or what's next?");
         }
         String type = str(dto.get("type"));
-        if (type == null) type = OpportunityActivity.NOTE;
-        logActivityInternal(opp, type, truncate(String.valueOf(dto.get("note")), 2000));
+        if (type == null) type = dto.get("dueDate") != null ? OpportunityActivity.NEXT_STEP : OpportunityActivity.NOTE;
+        OffsetDateTime due = dto.get("dueDate") == null ? null : OffsetDateTime.parse(str(dto.get("dueDate")));
+        String status = due != null ? OpportunityActivity.OPEN : OpportunityActivity.DONE;
+        logActivityInternal(opp, type, truncate(String.valueOf(dto.get("note")), 2000),
+                due, status, str(dto.get("assignee")));
         return Map.of("opportunityId", opportunityId, "activities",
                 activities.findByTenantIdAndOpportunityIdOrderByOccurredAtDesc(
                         opp.getTenantId(), opportunityId).stream().map(this::activityToMap).toList());
     }
 
+    /** Mark an open task done. */
+    @Transactional
+    public Map<String, Object> completeTask(String opportunityId, String activityId) {
+        SalesOpportunity opp = requireOpportunity(opportunityId);
+        OpportunityActivity a = activities.findByTenantIdAndOpportunityIdOrderByOccurredAtDesc(
+                        opp.getTenantId(), opportunityId).stream()
+                .filter(x -> x.getId().equals(activityId)).findFirst()
+                .orElseThrow(() -> NotFoundException.forResource("OpportunityActivity", activityId));
+        a.setStatus(OpportunityActivity.DONE);
+        activities.save(a);
+        return activityToMap(a);
+    }
+
+    /** The open-tasks queue — every open next-step across the pipeline, soonest
+     *  due first; optionally just one assignee's. Overdue ones are flagged. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> openTasks(String assignee) {
+        String tenantId = tenantScope.currentTenantId();
+        List<OpportunityActivity> open = assignee == null
+                ? activities.findByTenantIdAndStatusOrderByDueDateAsc(tenantId, OpportunityActivity.OPEN)
+                : activities.findByTenantIdAndStatusAndAssigneeOrderByDueDateAsc(
+                        tenantId, OpportunityActivity.OPEN, assignee);
+        OffsetDateTime now = OffsetDateTime.now();
+        List<Map<String, Object>> tasks = new ArrayList<>();
+        for (OpportunityActivity a : open) {
+            Map<String, Object> m = activityToMap(a);
+            m.put("opportunityId", a.getOpportunityId());
+            m.put("overdue", a.getDueDate() != null && a.getDueDate().isBefore(now));
+            if (a.getAssignee() != null) m.put("assignee", a.getAssignee());
+            tasks.add(m);
+        }
+        return Map.of("openCount", tasks.size(), "tasks", tasks);
+    }
+
     private void logActivityInternal(SalesOpportunity opp, String type, String note) {
+        logActivityInternal(opp, type, note, null, OpportunityActivity.DONE, null);
+    }
+
+    private void logActivityInternal(SalesOpportunity opp, String type, String note,
+            OffsetDateTime dueDate, String status, String assignee) {
         OpportunityActivity a = new OpportunityActivity();
         String actId = UUID.randomUUID().toString();
         a.setId(actId);
@@ -384,6 +445,9 @@ public class SalesService {
         a.setActivityType(type);
         a.setNote(note);
         a.setOccurredAt(OffsetDateTime.now());
+        a.setDueDate(dueDate);
+        a.setStatus(status);
+        a.setAssignee(assignee);
         activities.save(a);
         // The event carries the party id (when known) so party-interaction can
         // mint a TMF683 touchpoint — sales on the customer 360.
@@ -395,6 +459,42 @@ public class SalesService {
         evt.put("type", type);
         evt.put("note", note);
         events.publish("SalesActivityCreateEvent", "salesActivity", evt);
+    }
+
+    // ---------------- CPQ C1: the opportunity → quote hand-off ----------------
+
+    /** Turn the deal's negotiated line items into a TMF648 quote in one step,
+     *  and link it back to the opportunity. MRR from recurring lines, one-off
+     *  from the rest. */
+    @Transactional
+    public Map<String, Object> buildQuote(String opportunityId) {
+        SalesOpportunity opp = requireOpportunity(opportunityId);
+        List<OpportunityItem> lines = items.findByTenantIdAndOpportunityIdOrderByCreatedAt(
+                opp.getTenantId(), opp.getId());
+        if (lines.isEmpty()) {
+            throw new BadRequestException("add line items to the opportunity before quoting");
+        }
+        List<Map<String, Object>> lineItems = new ArrayList<>();
+        for (OpportunityItem l : lines) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("offeringId", l.getOfferingId());
+            m.put("offeringName", l.getOfferingName());
+            m.put("quantity", l.getQuantity());
+            m.put("unitPrice", l.getUnitPrice());
+            m.put("recurring", l.isRecurring());
+            lineItems.add(m);
+        }
+        Map<String, Object> quote = quotes.createFromLineItems(
+                "Quote for " + opp.getName(), opp.getPartyId(), opp.getCurrency(), lineItems);
+        opp.setQuoteRef(String.valueOf(quote.get("id")));
+        opp.setLastUpdate(OffsetDateTime.now());
+        opportunities.save(opp);
+        logActivityInternal(opp, OpportunityActivity.LIFECYCLE,
+                "Quote generated from the deal's line items");
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("opportunity", oppToMap(requireOpportunity(opportunityId)));
+        out.put("quote", quote);
+        return out;
     }
 
     // ---------------- pipeline & forecast ----------------
@@ -434,8 +534,31 @@ public class SalesService {
             openAmount = openAmount.add(amt);
             weighted = weighted.add(wtd);
         }
+        // Forecast categories: the number a manager commits, rolled up over the
+        // open pipeline (Commit is the "will land" number; Best Case is upside).
+        String[] cats = { SalesOpportunity.CAT_PIPELINE, SalesOpportunity.CAT_BEST_CASE,
+                SalesOpportunity.CAT_COMMIT };
+        List<Map<String, Object>> byCategory = new ArrayList<>();
+        for (String cat : cats) {
+            int count = 0;
+            BigDecimal amt = BigDecimal.ZERO;
+            for (SalesOpportunity o : all) {
+                if (!SalesOpportunity.DEVELOPED.equals(o.getState())) continue;
+                String c = o.getForecastCategory() == null
+                        ? SalesOpportunity.defaultForecastCategory(o.getStage()) : o.getForecastCategory();
+                if (!cat.equals(c)) continue;
+                count++;
+                amt = amt.add(o.getAmount() == null ? BigDecimal.ZERO : o.getAmount());
+            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("category", cat);
+            row.put("count", count);
+            row.put("amount", amt);
+            byCategory.add(row);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("stages", stages);
+        out.put("byCategory", byCategory);
         out.put("openCount", openCount);
         out.put("openAmount", openAmount);
         out.put("weightedForecast", weighted);
@@ -538,6 +661,9 @@ public class SalesService {
         m.put("type", a.getActivityType());
         m.put("note", a.getNote());
         m.put("occurredAt", a.getOccurredAt());
+        m.put("status", a.getStatus());
+        if (a.getDueDate() != null) m.put("dueDate", a.getDueDate());
+        if (a.getAssignee() != null) m.put("assignee", a.getAssignee());
         return m;
     }
 
@@ -574,7 +700,13 @@ public class SalesService {
         }
         map.put("state", opp.getState());
         if (opp.getStage() != null) map.put("stage", opp.getStage());
+        if (opp.getForecastCategory() != null) map.put("forecastCategory", opp.getForecastCategory());
         if (opp.getProbability() != null) map.put("probability", opp.getProbability());
+        if (opp.getStageChangedAt() != null) {
+            map.put("stageChangedAt", opp.getStageChangedAt());
+            map.put("daysInStage", java.time.Duration.between(
+                    opp.getStageChangedAt(), OffsetDateTime.now()).toDays());
+        }
         if (opp.getAmount() != null) map.put("amount", opp.getAmount());
         if (opp.getCurrency() != null) map.put("currency", opp.getCurrency());
         if (opp.getExpectedCloseDate() != null) map.put("expectedCloseDate", opp.getExpectedCloseDate().toString());

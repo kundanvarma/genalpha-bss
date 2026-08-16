@@ -10,4 +10,9 @@ import java.util.List;
 public interface OpportunityActivityRepository extends JpaRepository<OpportunityActivity, String> {
 
     List<OpportunityActivity> findByTenantIdAndOpportunityIdOrderByOccurredAtDesc(String tenantId, String opportunityId);
+
+    List<OpportunityActivity> findByTenantIdAndStatusOrderByDueDateAsc(String tenantId, String status);
+
+    List<OpportunityActivity> findByTenantIdAndStatusAndAssigneeOrderByDueDateAsc(
+            String tenantId, String status, String assignee);
 }

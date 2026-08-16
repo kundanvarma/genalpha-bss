@@ -41,6 +41,12 @@ public class QuoteController {
         return ResponseEntity.ok(service.findById(id));
     }
 
+    /** A branded, printable quote document (HTML) the rep can send. */
+    @GetMapping(value = "/quote/{id}/document", produces = "text/html")
+    public ResponseEntity<String> document(@PathVariable String id) {
+        return ResponseEntity.ok(service.renderDocument(id));
+    }
+
     @PatchMapping("/quote/{id}")
     public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
             @RequestBody Map<String, Object> patch) {

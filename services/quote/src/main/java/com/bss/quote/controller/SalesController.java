@@ -73,6 +73,13 @@ public class SalesController {
         return ResponseEntity.ok(service.wonReport());
     }
 
+    /** The open next-step tasks across the pipeline (optionally one assignee's). */
+    @GetMapping("/salesOpportunity/tasks")
+    public ResponseEntity<Map<String, Object>> tasks(
+            @org.springframework.web.bind.annotation.RequestParam(required = false) String assignee) {
+        return ResponseEntity.ok(service.openTasks(assignee));
+    }
+
     @GetMapping("/salesOpportunity/{id}")
     public ResponseEntity<Map<String, Object>> opportunity(@PathVariable String id) {
         return ResponseEntity.ok(service.findOpportunity(id));
@@ -99,10 +106,23 @@ public class SalesController {
         return ResponseEntity.ok(service.removeItem(id, itemId));
     }
 
-    /** Log a call/email/note/next-step on the deal (mirrors to the 360). */
+    /** Log a call/email/note, or set a next-step task (with dueDate). Mirrors to the 360. */
     @PostMapping("/salesOpportunity/{id}/activity")
     public ResponseEntity<Map<String, Object>> logActivity(@PathVariable String id,
             @RequestBody Map<String, Object> dto) {
         return ResponseEntity.ok(service.logActivity(id, dto));
+    }
+
+    /** Mark an open task done. */
+    @PostMapping("/salesOpportunity/{id}/activity/{activityId}/done")
+    public ResponseEntity<Map<String, Object>> completeTask(@PathVariable String id,
+            @PathVariable String activityId) {
+        return ResponseEntity.ok(service.completeTask(id, activityId));
+    }
+
+    /** CPQ hand-off: build a TMF648 quote from the deal's line items. */
+    @PostMapping("/salesOpportunity/{id}/quote")
+    public ResponseEntity<Map<String, Object>> buildQuote(@PathVariable String id) {
+        return ResponseEntity.ok(service.buildQuote(id));
     }
 }

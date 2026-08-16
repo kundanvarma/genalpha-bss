@@ -841,6 +841,11 @@ const RESOURCES = [
         { label: 'Proposal', value: 'proposal' },
         { label: 'Negotiation', value: 'negotiation' },
       ] },
+      { name: 'forecastCategory', label: 'Forecast category', kind: 'select', options: [
+        { label: 'Pipeline', value: 'pipeline' },
+        { label: 'Best case', value: 'bestCase' },
+        { label: 'Commit', value: 'commit' },
+      ] },
       { name: 'amount', label: 'Deal value', kind: 'number' },
       { name: 'probability', label: 'Win probability %', kind: 'number' },
       { name: 'expectedCloseDate', label: 'Expected close (YYYY-MM-DD)' },
@@ -867,6 +872,8 @@ const RESOURCES = [
       const money = (v) => (v == null ? '—' : `${item.currency || 'USD'} ${v}`);
       const rows = [
         { field: 'Stage', value: item.stage || '—' },
+        { field: 'Forecast category', value: item.forecastCategory || '—' },
+        { field: 'Days in stage', value: item.daysInStage == null ? '—' : String(item.daysInStage) },
         { field: 'Deal value', value: money(item.amount) },
         { field: 'Win probability', value: item.probability == null ? '—' : item.probability + '%' },
         { field: 'Weighted', value: item.amount != null && item.probability != null
@@ -5011,6 +5018,15 @@ async function renderPipelineBoard() {
     + `<div><span class="dim">Open deals</span> <b>${esc(forecast.openCount)}</b></div>`
     + '<div class="dim" style="margin-left:auto;font-size:0.8rem">drag a card to re-stage · closed deals live on the Opportunities tab</div>'
     + '</div>';
+  // forecast-category roll-up (Commit = will-land, Best case = upside)
+  if (Array.isArray(forecast.byCategory) && forecast.byCategory.length) {
+    const label = { commit: 'Commit', bestCase: 'Best case', pipeline: 'Pipeline' };
+    html += '<div class="pipeline-cats" style="display:flex;gap:1.5rem;margin:-0.4rem 0 1rem;padding:0 0.2rem;font-size:0.85rem">';
+    for (const c of forecast.byCategory) {
+      html += `<span class="dim">${esc(label[c.category] || c.category)}: <b>${esc(money(c.amount))}</b> (${esc(c.count)})</span>`;
+    }
+    html += '</div>';
+  }
   html += '<div class="pipeline-cols" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;align-items:start">';
   for (const st of PIPELINE_STAGES) {
     const cards = byStage(st.key);
