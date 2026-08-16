@@ -828,11 +828,29 @@ const RESOURCES = [
     path: 'salesOpportunity',
     base: SALES_BASE,
     title: 'Opportunities',
-    // The revenue conversation a qualified lead became: developed until
-    // won (ideally with the quote that sealed it) or lost.
-    readOnly: true,
-    fields: [],
-    columns: ['name', 'state', 'lastUpdate'],
+    // The B2B pipeline object: born by qualifying a lead, then WORKED here —
+    // moved along the stages, given a value, a close date and an owner, until
+    // it is won (ideally with the quote that sealed it) or lost. A weighted
+    // forecast falls out of stage × amount. Not authored from scratch (noCreate).
+    noCreate: true,
+    noDelete: true,
+    fields: [
+      { name: 'stage', label: 'Pipeline stage', kind: 'select', options: [
+        { label: 'Qualification', value: 'qualification' },
+        { label: 'Needs analysis', value: 'needsAnalysis' },
+        { label: 'Proposal', value: 'proposal' },
+        { label: 'Negotiation', value: 'negotiation' },
+      ] },
+      { name: 'amount', label: 'Deal value', kind: 'number' },
+      { name: 'probability', label: 'Win probability %', kind: 'number' },
+      { name: 'expectedCloseDate', label: 'Expected close (YYYY-MM-DD)' },
+      { name: 'ownerName', label: 'Owner' },
+      { name: 'partyId', label: 'Account party id (enables the 360 timeline)' },
+      { name: 'description', label: 'Notes', kind: 'longtext' },
+    ],
+    columns: ['name', 'stage', 'amount', 'probability', 'state', 'lastUpdate'],
+    // The one lifecycle button on the row; field edits (incl. re-staging) go
+    // through Edit. Close-lost and quote-attach are the API's job.
     rowAction: {
       label: (item) => (item.state === 'developed' ? 'Mark won' : '—'),
       apply: (item) => (item.state === 'developed'
@@ -843,11 +861,30 @@ const RESOURCES = [
           })
         : Promise.resolve()),
     },
-    detail: async (item) => [{
-      lead: item.salesLead ? item.salesLead.id : '—',
-      state: item.state,
-      quote: item.quote ? item.quote.id : '— (attach by winning with a quote ref via API)',
-    }],
+    detail: async (item) => {
+      const money = (v) => (v == null ? '—' : `${item.currency || 'USD'} ${v}`);
+      const rows = [{
+        stage: item.stage || '—',
+        value: money(item.amount),
+        probability: item.probability == null ? '—' : item.probability + '%',
+        weighted: item.amount != null && item.probability != null
+          ? money((Number(item.amount) * item.probability / 100).toFixed(2)) : '—',
+        expectedClose: item.expectedCloseDate || '—',
+        owner: (item.owner && item.owner.name) || '—',
+        account: item.partyId || '— (prospect — not on a 360)',
+        lead: item.salesLead ? item.salesLead.id : '—',
+        quote: item.quote ? item.quote.id : '— (attach by winning with a quote ref via API)',
+        closeReason: item.closeReason || '—',
+      }];
+      (item.items || []).forEach((li) => rows.push({
+        line: `${li.quantity}× ${li.offeringName}`,
+        unitPrice: money(li.unitPrice), lineTotal: money(li.lineTotal),
+      }));
+      (item.activities || []).slice(0, 8).forEach((a) => rows.push({
+        activity: a.type, note: a.note, when: a.occurredAt,
+      }));
+      return rows;
+    },
   },
   {
     path: 'audience',
@@ -2234,7 +2271,10 @@ function applySelection(select, ids) {
 function renderEditor() {
   controls = {};
   pendingSelection = {};
-  el('editor').hidden = Boolean(active.readOnly);
+  // noCreate: the tab edits existing rows but never authors new ones (e.g. an
+  // opportunity is born by qualifying a lead, then worked here) — hide the form
+  // until Edit reveals it.
+  el('editor').hidden = Boolean(active.readOnly) || (Boolean(active.noCreate) && !editingId);
   el('fields').replaceChildren(...active.fields.map((f) => {
     const wrap = document.createElement('label');
     wrap.className = 'field' + (f.kind === 'checkbox' ? ' check' : '') + ' field-' + (f.kind || 'text');
@@ -4509,6 +4549,7 @@ function stopEditing() {
   el('save').textContent = 'Create';
   el('cancel-edit').hidden = true;
   el('editor').reset();
+  if (active && active.noCreate) el('editor').hidden = true; // stays edit-only
   el('editor-error').hidden = true;
   for (const option of el('fields').querySelectorAll('option')) {
     option.disabled = false;
@@ -4520,6 +4561,7 @@ function startEditing(item) {
   el('editor-title').textContent = 'Edit ' + (item.name || item.id);
   el('save').textContent = 'Save changes';
   el('cancel-edit').hidden = false;
+  el('editor').hidden = false; // reveal for noCreate tabs
   for (const f of active.fields) {
     controls[f.name].set(item);
   }

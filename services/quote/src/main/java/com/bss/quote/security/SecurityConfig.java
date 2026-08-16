@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
+                        .requestMatchers(HttpMethod.DELETE, ApiConstants.SALES_BASE + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("quote:write")

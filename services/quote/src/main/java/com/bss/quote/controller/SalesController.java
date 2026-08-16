@@ -3,6 +3,7 @@ package com.bss.quote.controller;
 import com.bss.quote.api.ApiConstants;
 import com.bss.quote.service.SalesService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,15 +61,48 @@ public class SalesController {
         return ResponseEntity.ok(service.findOpportunities());
     }
 
+    /** The pipeline board: open deals per stage + the weighted forecast. */
+    @GetMapping("/salesOpportunity/pipeline")
+    public ResponseEntity<Map<String, Object>> pipeline() {
+        return ResponseEntity.ok(service.pipeline());
+    }
+
+    /** Won deals grouped by the programme that sourced the lead. */
+    @GetMapping("/salesOpportunity/wonReport")
+    public ResponseEntity<Map<String, Object>> wonReport() {
+        return ResponseEntity.ok(service.wonReport());
+    }
+
     @GetMapping("/salesOpportunity/{id}")
     public ResponseEntity<Map<String, Object>> opportunity(@PathVariable String id) {
         return ResponseEntity.ok(service.findOpportunity(id));
     }
 
-    /** won (optionally with the quote that sealed it) or lost — once. */
+    /** Work the deal: move a stage, set value/close-date/owner, or close
+     *  it won/lost — only the fields in the patch change. */
     @PatchMapping("/salesOpportunity/{id}")
     public ResponseEntity<Map<String, Object>> patchOpportunity(@PathVariable String id,
             @RequestBody Map<String, Object> patch) {
         return ResponseEntity.ok(service.patchOpportunity(id, patch));
+    }
+
+    /** Add a catalog offering as a line on the deal. */
+    @PostMapping("/salesOpportunity/{id}/item")
+    public ResponseEntity<Map<String, Object>> addItem(@PathVariable String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.addItem(id, dto));
+    }
+
+    @DeleteMapping("/salesOpportunity/{id}/item/{itemId}")
+    public ResponseEntity<Map<String, Object>> removeItem(@PathVariable String id,
+            @PathVariable String itemId) {
+        return ResponseEntity.ok(service.removeItem(id, itemId));
+    }
+
+    /** Log a call/email/note/next-step on the deal (mirrors to the 360). */
+    @PostMapping("/salesOpportunity/{id}/activity")
+    public ResponseEntity<Map<String, Object>> logActivity(@PathVariable String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.logActivity(id, dto));
     }
 }

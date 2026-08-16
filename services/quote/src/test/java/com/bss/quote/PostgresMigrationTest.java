@@ -31,7 +31,10 @@ class PostgresMigrationTest {
         assertThat(postgres.isRunning()).isTrue();
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(2);
+        // Every migration must apply cleanly on real Postgres — common (V1/V3/V5/V7)
+        // plus the postgres-only RLS (V2/V4/V8). Grows as migrations are added, so
+        // assert the floor rather than a brittle exact count.
+        assertThat(applied).isGreaterThanOrEqualTo(7);
         assertThat(repository.count()).isZero();
     }
 }
