@@ -23,10 +23,21 @@ APIs we already conform to.
 
 The spine is unbroken (lead → opportunity → quote → order → contract → bill).
 
-> **Update (shipped):** **O1** and **C1** below are now built and proven
-> (`opportunity_o1_c1_test`). The opportunity has forecast categories + aging +
-> tasks; the quote has a one-click hand-off from the deal (MRR/one-off split)
-> and a printable document. Remaining: **O2** and **C2** (the "deep" tier).
+> **Update (shipped):** **O1** and **C1** are built and proven
+> (`opportunity_o1_c1_test`). Into the **deep tier**: **funnel analytics** (O2 —
+> conversion, win rate, cycle time, copilot-narratable) and **config rules +
+> discount approvals** (C2 — agent-callable validate + human approval gate) are
+> also shipped (`funnel_analytics_test`, `quote_cpq_rules_test`). Remaining in
+> the deep tier: **O2** lead scoring/routing + quota; **C2** guided selling and
+> quote→order→contract automation + e-sign.
+
+> **AI-age design note.** These are built API-first and copilot-ready, not as
+> human-only screens: analytics return a narrative `summary` an agent can reason
+> over; CPQ configuration is a **decision endpoint** (`/quote/validate`) an agent
+> calls with no mutation; and the **discount-approval gate is the human-in-the-
+> loop control** on machine-proposed terms. In agentic commerce the buyer may be
+> an AI and the funnel compresses to seconds — so every capability is exposed as
+> a machine-negotiable API with an explicit human gate where money moves.
 
 ## The reference model
 
@@ -67,13 +78,14 @@ order + TMF651 agreement.
 - *Proves:* a manager can run a weekly pipeline review off the board — what's
   committed, what's stuck, whose task is overdue.
 
-### O2 — deep  *(floor: O1)*
+### O2 — deep  🟡 PARTIAL (funnel analytics shipped)  *(floor: O1)*
 - **Lead scoring + routing** — score a lead from its traits (source, company
   size, engagement from the CDP) and auto-assign to an owner by rule. Reuses the
-  insight/CDP signals we already compute.
-- **Funnel analytics** — stage-to-stage conversion, win rate, average cycle
-  time, and a weekly **pipeline snapshot** (so forecast-over-time and slippage
-  are visible). A read-model over opportunities + stage history.
+  insight/CDP signals we already compute. *(remaining)*
+- **Funnel analytics** ✅ — stage-to-stage conversion, win rate, average cycle
+  time, and average time-in-stage — off a stage-history record, returned with a
+  copilot-narratable summary. *(A weekly pipeline snapshot for forecast-over-time
+  is the remaining extension — needs a scheduled capture.)*
 - **Team / territory / quota** — owners roll up to a team; a quota per
   owner/period; quota-attainment vs the weighted forecast.
 - *Proves:* the numbers a VP of Sales asks for — coverage, conversion, quota
@@ -96,18 +108,15 @@ order + TMF651 agreement.
 - *Proves:* a real, catalog-priced, sendable quote that carries the deal — not a
   hand-typed number.
 
-### C2 — deep  *(floor: C1)*
+### C2 — deep  🟡 PARTIAL (config rules + discount approvals shipped)  *(floor: C1)*
+- **Configuration rules** ✅ — requires/excludes/min/max, enforced at quote build
+  AND exposed as an agent-callable `/quote/validate` decision endpoint.
+- **Discount-approval workflow** ✅ — a discount over the threshold is `pending`
+  and blocks the quote from approval until a manager approves it (the human gate).
 - **Guided selling** — a short rules-based questionnaire ("how many sites? need
-  static IP?") that narrows the catalog to the right offerings. A rules table
-  over TMF620.
-- **Configuration rules** — bundle requires/excludes, min/max quantities, and
-  validation ("Static IP requires a business line"), enforced at quote build.
-  Extends the bundle model the catalog already has.
+  static IP?") that narrows the catalog to the right offerings. *(remaining)*
 - **Pricing & discount rules** — volume/tier pricing, segment/contract price
-  lists, and line/deal discounts.
-- **Discount-approval workflow** — a discount over a threshold routes to a
-  manager (reuse the process-flow / approval engine already in the platform);
-  the quote can't be presented until approved.
+  lists, line/deal discounts. *(remaining — today the discount is a flat quote %)*
 - **Quote → order → contract** — on acceptance, the quote drives a TMF622 order
   and a TMF651 agreement automatically (asset-based ordering); e-signature seam
   on the quote document.
