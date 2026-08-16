@@ -53,6 +53,7 @@ public class SalesService {
     private final com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory;
     private final com.bss.quote.repository.LeadScoringRuleRepository scoringRules;
     private final com.bss.quote.repository.LeadRoutingRuleRepository routingRules;
+    private final com.bss.quote.repository.SalesQuotaRepository quotaRepo;
     private final QuoteService quotes;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -66,6 +67,7 @@ public class SalesService {
             com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory,
             com.bss.quote.repository.LeadScoringRuleRepository scoringRules,
             com.bss.quote.repository.LeadRoutingRuleRepository routingRules,
+            com.bss.quote.repository.SalesQuotaRepository quotaRepo,
             QuoteService quotes, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.quote.security.TenantRegistry tenants,
             org.springframework.web.client.RestClient.Builder builder,
@@ -78,6 +80,7 @@ public class SalesService {
         this.stageHistory = stageHistory;
         this.scoringRules = scoringRules;
         this.routingRules = routingRules;
+        this.quotaRepo = quotaRepo;
         this.quotes = quotes;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -632,6 +635,114 @@ public class SalesService {
         out.put("opportunity", oppToMap(requireOpportunity(opportunityId)));
         out.put("quote", quote);
         return out;
+    }
+
+    /** Guided selling → deal: run the answers through the recommendation rules
+     *  and add the recommended offerings to the opportunity as line items. */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> applyGuided(String opportunityId, Map<String, Object> answers) {
+        SalesOpportunity opp = requireOpportunity(opportunityId);
+        Map<String, Object> reco = quotes.recommend(answers);
+        List<Map<String, Object>> recs = reco.get("recommendations") instanceof List<?> l
+                ? (List<Map<String, Object>>) l : List.of();
+        for (Map<String, Object> r : recs) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("offeringName", r.get("offeringName"));
+            item.put("quantity", r.get("quantity"));
+            item.put("unitPrice", 0); // guided sizing picks products; the rep prices them
+            addItem(opportunityId, item);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("applied", recs.size());
+        out.put("recommendations", recs);
+        out.put("opportunity", oppToMap(requireOpportunity(opportunityId)));
+        return out;
+    }
+
+    // ---------------- O2: quota + attainment ----------------
+
+    @Transactional
+    public Map<String, Object> createQuota(Map<String, Object> dto) {
+        if (dto.get("ownerName") == null || dto.get("quotaPeriod") == null || dto.get("amount") == null) {
+            throw new BadRequestException("ownerName, quotaPeriod (YYYY-MM) and amount are required");
+        }
+        com.bss.quote.entity.SalesQuota q = new com.bss.quote.entity.SalesQuota();
+        q.setId(UUID.randomUUID().toString());
+        q.setTenantId(tenantScope.currentTenantId());
+        q.setOwnerName(str(dto.get("ownerName")));
+        q.setQuotaPeriod(str(dto.get("quotaPeriod")));
+        q.setAmount(asDecimal(dto.get("amount")));
+        q.setCreatedAt(OffsetDateTime.now());
+        quotaRepo.save(q);
+        return quotaToMap(q);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listQuotas() {
+        return quotaRepo.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
+                .stream().map(this::quotaToMap).toList();
+    }
+
+    /** Quota attainment for a period: per owner, the quota vs won-in-period vs
+     *  the probability-weighted open forecast (coverage) — the VP's Monday view. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> quotaAttainment(String period) {
+        String tenantId = tenantScope.currentTenantId();
+        List<com.bss.quote.entity.SalesQuota> quotas = quotaRepo
+                .findByTenantIdAndQuotaPeriodOrderByOwnerName(tenantId, period);
+        List<SalesOpportunity> opps = opportunities.findByTenantIdOrderByCreatedAtDesc(tenantId);
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (com.bss.quote.entity.SalesQuota q : quotas) {
+            BigDecimal won = BigDecimal.ZERO;
+            BigDecimal weightedOpen = BigDecimal.ZERO;
+            for (SalesOpportunity o : opps) {
+                if (o.getOwnerName() == null || !o.getOwnerName().equals(q.getOwnerName())) continue;
+                if (SalesOpportunity.WON.equals(o.getState())) {
+                    // closed-won in this period (by the stage-change/close time)
+                    if (o.getStageChangedAt() != null && period.equals(yearMonth(o.getStageChangedAt()))) {
+                        won = won.add(o.getAmount() == null ? BigDecimal.ZERO : o.getAmount());
+                    }
+                } else if (SalesOpportunity.DEVELOPED.equals(o.getState())) {
+                    BigDecimal a = o.getAmount() == null ? BigDecimal.ZERO : o.getAmount();
+                    int p = o.getProbability() == null
+                            ? SalesOpportunity.defaultProbability(o.getStage()) : o.getProbability();
+                    weightedOpen = weightedOpen.add(a.multiply(BigDecimal.valueOf(p)).divide(BigDecimal.valueOf(100)));
+                }
+            }
+            BigDecimal quota = q.getAmount();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("owner", q.getOwnerName());
+            row.put("quota", quota);
+            row.put("won", won);
+            row.put("weightedOpen", weightedOpen);
+            row.put("attainmentPct", pct(won, quota));
+            row.put("coveragePct", pct(won.add(weightedOpen), quota));
+            rows.add(row);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("period", period);
+        out.put("owners", rows);
+        return out;
+    }
+
+    private double pct(BigDecimal num, BigDecimal denom) {
+        if (denom == null || denom.signum() == 0) return 0;
+        return Math.round(num.multiply(BigDecimal.valueOf(1000)).divide(denom, java.math.RoundingMode.HALF_UP)
+                .doubleValue()) / 10.0;
+    }
+
+    private String yearMonth(OffsetDateTime t) {
+        return String.format("%04d-%02d", t.getYear(), t.getMonthValue());
+    }
+
+    private Map<String, Object> quotaToMap(com.bss.quote.entity.SalesQuota q) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", q.getId());
+        m.put("ownerName", q.getOwnerName());
+        m.put("quotaPeriod", q.getQuotaPeriod());
+        m.put("amount", q.getAmount());
+        return m;
     }
 
     // ---------------- pipeline & forecast ----------------

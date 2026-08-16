@@ -160,4 +160,30 @@ public class SalesController {
     public ResponseEntity<Map<String, Object>> buildQuote(@PathVariable String id) {
         return ResponseEntity.ok(service.buildQuote(id));
     }
+
+    /** Guided selling → deal: add the recommended offerings as line items. */
+    @PostMapping("/salesOpportunity/{id}/applyGuided")
+    public ResponseEntity<Map<String, Object>> applyGuided(@PathVariable String id,
+            @RequestBody Map<String, Object> answers) {
+        return ResponseEntity.ok(service.applyGuided(id, answers));
+    }
+
+    // ---- quota + attainment ----
+
+    @PostMapping("/salesOpportunity/quota")
+    public ResponseEntity<Map<String, Object>> createQuota(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createQuota(dto));
+    }
+
+    @GetMapping("/salesOpportunity/quota")
+    public ResponseEntity<List<Map<String, Object>>> quotas() {
+        return ResponseEntity.ok(service.listQuotas());
+    }
+
+    /** Quota attainment for a period: quota vs won vs weighted-open per owner. */
+    @GetMapping("/salesOpportunity/quotaAttainment")
+    public ResponseEntity<Map<String, Object>> quotaAttainment(
+            @org.springframework.web.bind.annotation.RequestParam String period) {
+        return ResponseEntity.ok(service.quotaAttainment(period));
+    }
 }

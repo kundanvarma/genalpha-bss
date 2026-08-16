@@ -859,6 +859,49 @@ const RESOURCES = [
     columns: ['minScore', 'assignee'],
   },
   {
+    // Guided-selling questionnaire.
+    path: 'guidedQuestion',
+    base: '/tmf-api/quoteManagement/v4/quote',
+    title: 'Guided questions',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'questionKey', label: 'Answer key', required: true },
+      { name: 'prompt', label: 'Question', required: true },
+      { name: 'sortOrder', label: 'Order', kind: 'number' },
+    ],
+    columns: ['questionKey', 'prompt', 'sortOrder'],
+  },
+  {
+    // Guided-selling rules: an answer recommends an offering.
+    path: 'guidedRecommendation',
+    base: '/tmf-api/quoteManagement/v4/quote',
+    title: 'Guided rules',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'questionKey', label: 'Answer key', required: true },
+      { name: 'answerValue', label: 'When answer is', required: true },
+      { name: 'offeringName', label: 'Recommend offering', required: true },
+      { name: 'quantity', label: 'Quantity', kind: 'number' },
+    ],
+    columns: ['questionKey', 'answerValue', 'offeringName', 'quantity'],
+  },
+  {
+    // Sales quotas per owner/period.
+    path: 'quota',
+    base: '/tmf-api/salesManagement/v4/salesOpportunity',
+    title: 'Sales quotas',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'ownerName', label: 'Owner', required: true },
+      { name: 'quotaPeriod', label: 'Period (YYYY-MM)', required: true },
+      { name: 'amount', label: 'Quota amount', kind: 'number', required: true },
+    ],
+    columns: ['ownerName', 'quotaPeriod', 'amount'],
+  },
+  {
     path: 'salesOpportunity',
     base: SALES_BASE,
     title: 'Opportunities',
@@ -1396,6 +1439,9 @@ const TAB_ROLE = {
   configRule: 'quote:read',
   scoringRule: 'quote:read',
   routingRule: 'quote:read',
+  guidedQuestion: 'quote:read',
+  guidedRecommendation: 'quote:read',
+  quota: 'quote:read',
   audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
@@ -1462,7 +1508,8 @@ const WORKSPACES = [
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
-    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule', 'scoringRule', 'routingRule'] },
+    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule', 'scoringRule', 'routingRule',
+    'guidedQuestion', 'guidedRecommendation', 'quota'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.

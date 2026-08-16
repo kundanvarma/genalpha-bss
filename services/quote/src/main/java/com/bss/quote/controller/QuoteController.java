@@ -86,4 +86,32 @@ public class QuoteController {
                 ? (List<Map<String, Object>>) items : List.of();
         return ResponseEntity.ok(service.validate(lineItems));
     }
+
+    // ---- CPQ guided selling ----
+
+    @PostMapping("/quote/guidedQuestion")
+    public ResponseEntity<Map<String, Object>> createGuidedQuestion(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createGuidedQuestion(dto));
+    }
+
+    @GetMapping("/quote/guidedQuestion")
+    public ResponseEntity<List<Map<String, Object>>> guidedQuestions() {
+        return ResponseEntity.ok(service.listGuidedQuestions());
+    }
+
+    @PostMapping("/quote/guidedRecommendation")
+    public ResponseEntity<Map<String, Object>> createGuidedRecommendation(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createGuidedRecommendation(dto));
+    }
+
+    @GetMapping("/quote/guidedRecommendation")
+    public ResponseEntity<List<Map<String, Object>>> guidedRecommendations() {
+        return ResponseEntity.ok(service.listGuidedRecommendations());
+    }
+
+    /** Guided-selling decision: answers → recommended offerings (agent-callable). */
+    @PostMapping("/quote/guidedRecommend")
+    public ResponseEntity<Map<String, Object>> guidedRecommend(@RequestBody Map<String, Object> answers) {
+        return ResponseEntity.ok(service.recommend(answers));
+    }
 }

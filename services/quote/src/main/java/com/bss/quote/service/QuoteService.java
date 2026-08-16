@@ -43,6 +43,8 @@ public class QuoteService {
 
     private final QuoteRepository quotes;
     private final com.bss.quote.repository.QuoteConfigRuleRepository configRules;
+    private final com.bss.quote.repository.GuidedQuestionRepository guidedQuestions;
+    private final com.bss.quote.repository.GuidedRecommendationRepository guidedRecos;
     private final DownstreamClients downstream;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -51,12 +53,16 @@ public class QuoteService {
 
     public QuoteService(QuoteRepository quotes,
             com.bss.quote.repository.QuoteConfigRuleRepository configRules,
+            com.bss.quote.repository.GuidedQuestionRepository guidedQuestions,
+            com.bss.quote.repository.GuidedRecommendationRepository guidedRecos,
             DownstreamClients downstream, DomainEventPublisher events, TenantScope tenantScope,
             ObjectMapper objectMapper,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.quote.discount-approval-threshold:20}") String threshold) {
         this.quotes = quotes;
         this.configRules = configRules;
+        this.guidedQuestions = guidedQuestions;
+        this.guidedRecos = guidedRecos;
         this.downstream = downstream;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -293,6 +299,104 @@ public class QuoteService {
         Map<String, Object> result = toMap(quote);
         events.publish("QuoteStateChangeEvent", "quote", result);
         return result;
+    }
+
+    // ---------------- CPQ C2: guided selling ----------------
+
+    @Transactional
+    public Map<String, Object> createGuidedQuestion(Map<String, Object> dto) {
+        if (dto.get("questionKey") == null || dto.get("prompt") == null) {
+            throw new BadRequestException("questionKey and prompt are required");
+        }
+        com.bss.quote.entity.GuidedQuestion q = new com.bss.quote.entity.GuidedQuestion();
+        q.setId(UUID.randomUUID().toString());
+        q.setTenantId(tenantScope.currentTenantId());
+        q.setQuestionKey(String.valueOf(dto.get("questionKey")));
+        q.setPrompt(String.valueOf(dto.get("prompt")));
+        q.setSortOrder(dto.get("sortOrder") == null ? 0 : ((Number) dto.get("sortOrder")).intValue());
+        q.setCreatedAt(OffsetDateTime.now());
+        guidedQuestions.save(q);
+        return Map.of("id", q.getId(), "questionKey", q.getQuestionKey(),
+                "prompt", q.getPrompt(), "sortOrder", q.getSortOrder());
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listGuidedQuestions() {
+        return guidedQuestions.findByTenantIdOrderBySortOrderAscCreatedAtAsc(tenantScope.currentTenantId())
+                .stream().map(q -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", q.getId());
+                    m.put("questionKey", q.getQuestionKey());
+                    m.put("prompt", q.getPrompt());
+                    m.put("sortOrder", q.getSortOrder());
+                    return m;
+                }).toList();
+    }
+
+    @Transactional
+    public Map<String, Object> createGuidedRecommendation(Map<String, Object> dto) {
+        if (dto.get("questionKey") == null || dto.get("answerValue") == null
+                || dto.get("offeringName") == null) {
+            throw new BadRequestException("questionKey, answerValue and offeringName are required");
+        }
+        com.bss.quote.entity.GuidedRecommendation r = new com.bss.quote.entity.GuidedRecommendation();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setQuestionKey(String.valueOf(dto.get("questionKey")));
+        r.setAnswerValue(String.valueOf(dto.get("answerValue")));
+        r.setOfferingName(String.valueOf(dto.get("offeringName")));
+        r.setQuantity(dto.get("quantity") == null ? 1 : Math.max(1, ((Number) dto.get("quantity")).intValue()));
+        r.setCreatedAt(OffsetDateTime.now());
+        guidedRecos.save(r);
+        return recoToMap(r);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listGuidedRecommendations() {
+        return guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
+                .stream().map(this::recoToMap).toList();
+    }
+
+    /**
+     * The guided-selling decision (pure, no mutation): given answers, return the
+     * recommended offerings. Agent-callable — an LLM can drive the questionnaire
+     * and get a configuration back.
+     */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> recommend(Map<String, Object> answers) {
+        Map<String, Object> answerMap = answers.get("answers") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m : answers;
+        // Merge duplicate offerings by summing the recommended quantity.
+        Map<String, Integer> byOffering = new LinkedHashMap<>();
+        Map<String, String> because = new LinkedHashMap<>();
+        for (com.bss.quote.entity.GuidedRecommendation r
+                : guidedRecos.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
+            Object given = answerMap.get(r.getQuestionKey());
+            if (given != null && r.getAnswerValue().equalsIgnoreCase(String.valueOf(given))) {
+                byOffering.merge(r.getOfferingName(), r.getQuantity(), Integer::sum);
+                because.putIfAbsent(r.getOfferingName(), r.getQuestionKey() + "=" + r.getAnswerValue());
+            }
+        }
+        List<Map<String, Object>> recommendations = new ArrayList<>();
+        for (Map.Entry<String, Integer> e : byOffering.entrySet()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("offeringName", e.getKey());
+            m.put("quantity", e.getValue());
+            m.put("because", because.get(e.getKey()));
+            recommendations.add(m);
+        }
+        return Map.of("recommendations", recommendations);
+    }
+
+    private Map<String, Object> recoToMap(com.bss.quote.entity.GuidedRecommendation r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("questionKey", r.getQuestionKey());
+        m.put("answerValue", r.getAnswerValue());
+        m.put("offeringName", r.getOfferingName());
+        m.put("quantity", r.getQuantity());
+        return m;
     }
 
     private String defaultRuleMessage(com.bss.quote.entity.QuoteConfigRule r) {
