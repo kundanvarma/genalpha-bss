@@ -180,10 +180,21 @@ public class SalesController {
         return ResponseEntity.ok(service.listQuotas());
     }
 
-    /** Quota attainment for a period: quota vs won vs weighted-open per owner. */
+    /** Quota attainment for a period: quota vs won vs weighted-open per owner + team. */
     @GetMapping("/salesOpportunity/quotaAttainment")
     public ResponseEntity<Map<String, Object>> quotaAttainment(
             @org.springframework.web.bind.annotation.RequestParam String period) {
         return ResponseEntity.ok(service.quotaAttainment(period));
+    }
+
+    /** Capture the current open weighted forecast (forecast-over-time). */
+    @PostMapping("/salesOpportunity/snapshot")
+    public ResponseEntity<Map<String, Object>> snapshot() {
+        return ResponseEntity.ok(service.captureSnapshot());
+    }
+
+    @GetMapping("/salesOpportunity/snapshots")
+    public ResponseEntity<List<Map<String, Object>>> snapshots() {
+        return ResponseEntity.ok(service.listSnapshots());
     }
 }

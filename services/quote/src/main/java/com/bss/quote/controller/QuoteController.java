@@ -114,4 +114,23 @@ public class QuoteController {
     public ResponseEntity<Map<String, Object>> guidedRecommend(@RequestBody Map<String, Object> answers) {
         return ResponseEntity.ok(service.recommend(answers));
     }
+
+    // ---- CPQ volume pricing rules ----
+
+    @PostMapping("/quote/pricingRule")
+    public ResponseEntity<Map<String, Object>> createPricingRule(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createPricingRule(dto));
+    }
+
+    @GetMapping("/quote/pricingRule")
+    public ResponseEntity<List<Map<String, Object>>> pricingRules() {
+        return ResponseEntity.ok(service.listPricingRules());
+    }
+
+    /** E-sign the quote document (the customer accepted it). */
+    @PostMapping("/quote/{id}/sign")
+    public ResponseEntity<Map<String, Object>> sign(@PathVariable String id,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.sign(id, dto));
+    }
 }

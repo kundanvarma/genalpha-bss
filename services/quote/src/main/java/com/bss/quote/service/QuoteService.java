@@ -45,6 +45,7 @@ public class QuoteService {
     private final com.bss.quote.repository.QuoteConfigRuleRepository configRules;
     private final com.bss.quote.repository.GuidedQuestionRepository guidedQuestions;
     private final com.bss.quote.repository.GuidedRecommendationRepository guidedRecos;
+    private final com.bss.quote.repository.QuotePricingRuleRepository pricingRules;
     private final DownstreamClients downstream;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -55,6 +56,7 @@ public class QuoteService {
             com.bss.quote.repository.QuoteConfigRuleRepository configRules,
             com.bss.quote.repository.GuidedQuestionRepository guidedQuestions,
             com.bss.quote.repository.GuidedRecommendationRepository guidedRecos,
+            com.bss.quote.repository.QuotePricingRuleRepository pricingRules,
             DownstreamClients downstream, DomainEventPublisher events, TenantScope tenantScope,
             ObjectMapper objectMapper,
             @org.springframework.beans.factory.annotation.Value(
@@ -63,6 +65,7 @@ public class QuoteService {
         this.configRules = configRules;
         this.guidedQuestions = guidedQuestions;
         this.guidedRecos = guidedRecos;
+        this.pricingRules = pricingRules;
         this.downstream = downstream;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -176,11 +179,25 @@ public class QuoteService {
         List<Map<String, Object>> items = new ArrayList<>();
         BigDecimal monthly = BigDecimal.ZERO;
         BigDecimal oneTime = BigDecimal.ZERO;
+        List<com.bss.quote.entity.QuotePricingRule> tiers =
+                pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId());
         for (Map<String, Object> li : lineItems) {
             boolean recurring = !Boolean.FALSE.equals(li.get("recurring"));
             int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
-            BigDecimal unit = li.get("unitPrice") == null ? BigDecimal.ZERO
+            BigDecimal listUnit = li.get("unitPrice") == null ? BigDecimal.ZERO
                     : new BigDecimal(String.valueOf(li.get("unitPrice")));
+            String offeringName = String.valueOf(li.get("offeringName"));
+            // Volume pricing: the best (deepest) tier this line qualifies for.
+            BigDecimal tierDiscount = BigDecimal.ZERO;
+            for (com.bss.quote.entity.QuotePricingRule t : tiers) {
+                if (t.getOfferingName().equalsIgnoreCase(offeringName) && qty >= t.getMinQuantity()
+                        && t.getDiscountPercent().compareTo(tierDiscount) > 0) {
+                    tierDiscount = t.getDiscountPercent();
+                }
+            }
+            BigDecimal unit = tierDiscount.signum() > 0
+                    ? listUnit.multiply(BigDecimal.ONE.subtract(tierDiscount.movePointLeft(2)))
+                    : listUnit;
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("offering", Map.of(
@@ -189,6 +206,10 @@ public class QuoteService {
             item.put("quantity", qty);
             item.put("unitPrice", Map.of("value", unit, "unit", cur,
                     "period", recurring ? "month" : "oneTime"));
+            if (tierDiscount.signum() > 0) {
+                item.put("listUnitPrice", listUnit);
+                item.put("volumeDiscountPercent", tierDiscount);
+            }
             item.put("recurring", recurring);
             items.add(item);
             if (recurring) monthly = monthly.add(lineTotal); else oneTime = oneTime.add(lineTotal);
@@ -389,6 +410,58 @@ public class QuoteService {
         return Map.of("recommendations", recommendations);
     }
 
+    // ---------------- CPQ: volume pricing rules ----------------
+
+    @Transactional
+    public Map<String, Object> createPricingRule(Map<String, Object> dto) {
+        if (dto.get("offeringName") == null || dto.get("discountPercent") == null) {
+            throw new BadRequestException("offeringName and discountPercent are required");
+        }
+        com.bss.quote.entity.QuotePricingRule r = new com.bss.quote.entity.QuotePricingRule();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setOfferingName(String.valueOf(dto.get("offeringName")));
+        r.setMinQuantity(dto.get("minQuantity") == null ? 1 : Math.max(1, ((Number) dto.get("minQuantity")).intValue()));
+        r.setSegment(dto.get("segment") == null ? null : String.valueOf(dto.get("segment")));
+        r.setDiscountPercent(new BigDecimal(String.valueOf(dto.get("discountPercent"))));
+        r.setCreatedAt(OffsetDateTime.now());
+        pricingRules.save(r);
+        return pricingRuleToMap(r);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listPricingRules() {
+        return pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
+                .stream().map(this::pricingRuleToMap).toList();
+    }
+
+    private Map<String, Object> pricingRuleToMap(com.bss.quote.entity.QuotePricingRule r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("offeringName", r.getOfferingName());
+        m.put("minQuantity", r.getMinQuantity());
+        if (r.getSegment() != null) m.put("segment", r.getSegment());
+        m.put("discountPercent", r.getDiscountPercent());
+        return m;
+    }
+
+    // ---------------- CPQ: e-signature ----------------
+
+    /** The e-sign callback: the customer signed the quote document. */
+    @Transactional
+    public Map<String, Object> sign(String id, Map<String, Object> dto) {
+        Quote quote = own(id);
+        if (dto.get("signedBy") == null) throw new BadRequestException("signedBy is required");
+        quote.setSignatureStatus("signed");
+        quote.setSignedBy(String.valueOf(dto.get("signedBy")));
+        quote.setSignedAt(OffsetDateTime.now());
+        quote.setLastUpdate(OffsetDateTime.now());
+        quotes.save(quote);
+        Map<String, Object> result = toMap(quote);
+        events.publish("QuoteStateChangeEvent", "quote", result);
+        return result;
+    }
+
     private Map<String, Object> recoToMap(com.bss.quote.entity.GuidedRecommendation r) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", r.getId());
@@ -453,7 +526,13 @@ public class QuoteService {
                 + "<th style=\"text-align:right\">Price</th></tr></thead><tbody>" + rows + "</tbody></table>"
                 + "<div class=\"totals\"><b>Monthly (recurring): " + quote.getMonthlyTotal() + " " + esc(cur)
                 + "</b><br><b>One-time: " + quote.getOneTimeTotal() + " " + esc(cur) + "</b></div>"
-                + "<p class=\"dim\" style=\"margin-top:2rem\">This quotation is valid subject to the terms of service.</p>"
+                + ("signed".equals(quote.getSignatureStatus())
+                        ? "<div style=\"margin-top:2rem;padding:1rem;border:2px solid #2a7;border-radius:6px\">"
+                          + "<b>✓ Signed</b> by " + esc(quote.getSignedBy()) + " on "
+                          + esc(String.valueOf(quote.getSignedAt())) + "</div>"
+                        : "<div style=\"margin-top:2rem;padding:1rem;border:1px dashed #999;border-radius:6px\" class=\"dim\">"
+                          + "Signature: ____________________  (sign to accept)</div>")
+                + "<p class=\"dim\" style=\"margin-top:1.5rem\">This quotation is valid subject to the terms of service.</p>"
                 + "</body></html>";
     }
 
@@ -605,6 +684,9 @@ public class QuoteService {
             map.put("agreement", Map.of("id", quote.getAgreementId(),
                     "href", "/tmf-api/agreementManagement/v4/agreement/" + quote.getAgreementId()));
         }
+        map.put("signatureStatus", quote.getSignatureStatus());
+        if (quote.getSignedBy() != null) map.put("signedBy", quote.getSignedBy());
+        if (quote.getSignedAt() != null) map.put("signedAt", quote.getSignedAt());
         map.put("@type", "Quote");
         return map;
     }

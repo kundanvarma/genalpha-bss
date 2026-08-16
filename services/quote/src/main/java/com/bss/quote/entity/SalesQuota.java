@@ -29,6 +29,9 @@ public class SalesQuota {
     @Column(name = "amount", nullable = false, precision = 14, scale = 2)
     private BigDecimal amount;
 
+    @Column(name = "team", length = 128)
+    private String team;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -42,6 +45,8 @@ public class SalesQuota {
     public void setQuotaPeriod(String v) { this.quotaPeriod = v; }
     public BigDecimal getAmount() { return amount; }
     public void setAmount(BigDecimal v) { this.amount = v; }
+    public String getTeam() { return team; }
+    public void setTeam(String v) { this.team = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
 }

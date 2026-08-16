@@ -54,6 +54,7 @@ public class SalesService {
     private final com.bss.quote.repository.LeadScoringRuleRepository scoringRules;
     private final com.bss.quote.repository.LeadRoutingRuleRepository routingRules;
     private final com.bss.quote.repository.SalesQuotaRepository quotaRepo;
+    private final com.bss.quote.repository.PipelineSnapshotRepository snapshots;
     private final QuoteService quotes;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
@@ -68,6 +69,7 @@ public class SalesService {
             com.bss.quote.repository.LeadScoringRuleRepository scoringRules,
             com.bss.quote.repository.LeadRoutingRuleRepository routingRules,
             com.bss.quote.repository.SalesQuotaRepository quotaRepo,
+            com.bss.quote.repository.PipelineSnapshotRepository snapshots,
             QuoteService quotes, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.quote.security.TenantRegistry tenants,
             org.springframework.web.client.RestClient.Builder builder,
@@ -81,6 +83,7 @@ public class SalesService {
         this.scoringRules = scoringRules;
         this.routingRules = routingRules;
         this.quotaRepo = quotaRepo;
+        this.snapshots = snapshots;
         this.quotes = quotes;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -673,6 +676,7 @@ public class SalesService {
         q.setOwnerName(str(dto.get("ownerName")));
         q.setQuotaPeriod(str(dto.get("quotaPeriod")));
         q.setAmount(asDecimal(dto.get("amount")));
+        q.setTeam(str(dto.get("team")));
         q.setCreatedAt(OffsetDateTime.now());
         quotaRepo.save(q);
         return quotaToMap(q);
@@ -713,6 +717,7 @@ public class SalesService {
             BigDecimal quota = q.getAmount();
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("owner", q.getOwnerName());
+            if (q.getTeam() != null) row.put("team", q.getTeam());
             row.put("quota", quota);
             row.put("won", won);
             row.put("weightedOpen", weightedOpen);
@@ -720,10 +725,84 @@ public class SalesService {
             row.put("coveragePct", pct(won.add(weightedOpen), quota));
             rows.add(row);
         }
+        // Team roll-up: owners aggregate to their team (quota, won, weighted).
+        Map<String, BigDecimal[]> teamAgg = new LinkedHashMap<>();
+        for (Map<String, Object> r : rows) {
+            String team = r.get("team") == null ? "(no team)" : String.valueOf(r.get("team"));
+            BigDecimal[] a = teamAgg.computeIfAbsent(team,
+                    k -> new BigDecimal[] { BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO });
+            a[0] = a[0].add((BigDecimal) r.get("quota"));
+            a[1] = a[1].add((BigDecimal) r.get("won"));
+            a[2] = a[2].add((BigDecimal) r.get("weightedOpen"));
+        }
+        List<Map<String, Object>> byTeam = new ArrayList<>();
+        for (Map.Entry<String, BigDecimal[]> e : teamAgg.entrySet()) {
+            BigDecimal[] a = e.getValue();
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("team", e.getKey());
+            t.put("quota", a[0]);
+            t.put("won", a[1]);
+            t.put("weightedOpen", a[2]);
+            t.put("attainmentPct", pct(a[1], a[0]));
+            t.put("coveragePct", pct(a[1].add(a[2]), a[0]));
+            byTeam.add(t);
+        }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("period", period);
         out.put("owners", rows);
+        out.put("byTeam", byTeam);
         return out;
+    }
+
+    // ---------------- O2: weekly pipeline snapshot (forecast-over-time) ----------------
+
+    /** Capture the current open weighted forecast for the acting tenant. */
+    @Transactional
+    public Map<String, Object> captureSnapshot() {
+        Map<String, Object> p = pipeline();
+        com.bss.quote.entity.PipelineSnapshot s = new com.bss.quote.entity.PipelineSnapshot();
+        s.setId(UUID.randomUUID().toString());
+        s.setTenantId(tenantScope.currentTenantId());
+        s.setCapturedAt(OffsetDateTime.now());
+        s.setOpenCount(((Number) p.get("openCount")).intValue());
+        s.setOpenAmount((BigDecimal) p.get("openAmount"));
+        s.setWeightedForecast((BigDecimal) p.get("weightedForecast"));
+        s.setCurrency(String.valueOf(p.get("currency")));
+        snapshots.save(s);
+        return snapshotToMap(s);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listSnapshots() {
+        return snapshots.findTop52ByTenantIdOrderByCapturedAtDesc(tenantScope.currentTenantId())
+                .stream().map(this::snapshotToMap).toList();
+    }
+
+    /** The weekly scheduled capture — one snapshot per tenant, so forecast
+     *  over time and slippage are visible without anyone remembering to click. */
+    @org.springframework.scheduling.annotation.Scheduled(
+            cron = "${bss.sales.snapshot-cron:0 0 6 * * MON}")
+    public void weeklySnapshot() {
+        for (com.bss.quote.security.TenantRegistry.TenantEntry t : tenants.getRegistry()) {
+            if (t.getId() == null) continue;
+            try (com.bss.quote.security.TenantContext ignored
+                    = com.bss.quote.security.TenantContext.actAs(t.getId())) {
+                captureSnapshot();
+            } catch (Exception e) {
+                log.warn("weekly pipeline snapshot failed for tenant {}: {}", t.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private Map<String, Object> snapshotToMap(com.bss.quote.entity.PipelineSnapshot s) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", s.getId());
+        m.put("capturedAt", s.getCapturedAt());
+        m.put("openCount", s.getOpenCount());
+        m.put("openAmount", s.getOpenAmount());
+        m.put("weightedForecast", s.getWeightedForecast());
+        m.put("currency", s.getCurrency());
+        return m;
     }
 
     private double pct(BigDecimal num, BigDecimal denom) {
@@ -742,6 +821,7 @@ public class SalesService {
         m.put("ownerName", q.getOwnerName());
         m.put("quotaPeriod", q.getQuotaPeriod());
         m.put("amount", q.getAmount());
+        if (q.getTeam() != null) m.put("team", q.getTeam());
         return m;
     }
 

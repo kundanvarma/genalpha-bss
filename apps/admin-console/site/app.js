@@ -896,10 +896,26 @@ const RESOURCES = [
     noDelete: true,
     fields: [
       { name: 'ownerName', label: 'Owner', required: true },
+      { name: 'team', label: 'Team (rolls up)' },
       { name: 'quotaPeriod', label: 'Period (YYYY-MM)', required: true },
       { name: 'amount', label: 'Quota amount', kind: 'number', required: true },
     ],
-    columns: ['ownerName', 'quotaPeriod', 'amount'],
+    columns: ['ownerName', 'team', 'quotaPeriod', 'amount'],
+  },
+  {
+    // Volume pricing tiers: quantity ≥ minQuantity of an offering → line discount.
+    path: 'pricingRule',
+    base: '/tmf-api/quoteManagement/v4/quote',
+    title: 'Volume pricing',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'offeringName', label: 'Offering', required: true },
+      { name: 'minQuantity', label: 'From quantity', kind: 'number', required: true },
+      { name: 'discountPercent', label: 'Discount %', kind: 'number', required: true },
+      { name: 'segment', label: 'Segment (optional)' },
+    ],
+    columns: ['offeringName', 'minQuantity', 'discountPercent', 'segment'],
   },
   {
     path: 'salesOpportunity',
@@ -1442,6 +1458,7 @@ const TAB_ROLE = {
   guidedQuestion: 'quote:read',
   guidedRecommendation: 'quote:read',
   quota: 'quote:read',
+  pricingRule: 'quote:read',
   audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
@@ -1509,7 +1526,7 @@ const WORKSPACES = [
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
     'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule', 'scoringRule', 'routingRule',
-    'guidedQuestion', 'guidedRecommendation', 'quota'] },
+    'guidedQuestion', 'guidedRecommendation', 'quota', 'pricingRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.

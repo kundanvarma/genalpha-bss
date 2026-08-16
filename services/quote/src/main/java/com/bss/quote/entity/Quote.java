@@ -72,6 +72,15 @@ public class Quote {
     @Column(name = "agreement_id", length = 36)
     private String agreementId;
 
+    @Column(name = "signature_status", nullable = false, length = 16)
+    private String signatureStatus = "unsigned";
+
+    @Column(name = "signed_by", length = 255)
+    private String signedBy;
+
+    @Column(name = "signed_at")
+    private OffsetDateTime signedAt;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -110,6 +119,12 @@ public class Quote {
     public void setProductOrderId(String productOrderId) { this.productOrderId = productOrderId; }
     public String getAgreementId() { return agreementId; }
     public void setAgreementId(String agreementId) { this.agreementId = agreementId; }
+    public String getSignatureStatus() { return signatureStatus; }
+    public void setSignatureStatus(String signatureStatus) { this.signatureStatus = signatureStatus; }
+    public String getSignedBy() { return signedBy; }
+    public void setSignedBy(String signedBy) { this.signedBy = signedBy; }
+    public OffsetDateTime getSignedAt() { return signedAt; }
+    public void setSignedAt(OffsetDateTime signedAt) { this.signedAt = signedAt; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
