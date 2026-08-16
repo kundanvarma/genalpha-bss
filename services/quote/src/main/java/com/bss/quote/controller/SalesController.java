@@ -56,6 +56,34 @@ public class SalesController {
         return ResponseEntity.ok(service.importSocial());
     }
 
+    // ---- lead scoring + routing ----
+
+    @PostMapping("/salesLead/scoringRule")
+    public ResponseEntity<Map<String, Object>> createScoringRule(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createScoringRule(dto));
+    }
+
+    @GetMapping("/salesLead/scoringRule")
+    public ResponseEntity<List<Map<String, Object>>> scoringRules() {
+        return ResponseEntity.ok(service.listScoringRules());
+    }
+
+    @PostMapping("/salesLead/routingRule")
+    public ResponseEntity<Map<String, Object>> createRoutingRule(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createRoutingRule(dto));
+    }
+
+    @GetMapping("/salesLead/routingRule")
+    public ResponseEntity<List<Map<String, Object>>> routingRules() {
+        return ResponseEntity.ok(service.listRoutingRules());
+    }
+
+    /** Recompute a lead's score/grade/owner after the rules changed. */
+    @PostMapping("/salesLead/{id}/score")
+    public ResponseEntity<Map<String, Object>> rescore(@PathVariable String id) {
+        return ResponseEntity.ok(service.rescoreLead(id));
+    }
+
     @GetMapping("/salesOpportunity")
     public ResponseEntity<List<Map<String, Object>>> opportunities() {
         return ResponseEntity.ok(service.findOpportunities());

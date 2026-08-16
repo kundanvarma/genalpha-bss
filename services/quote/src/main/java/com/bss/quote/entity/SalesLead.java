@@ -56,6 +56,22 @@ public class SalesLead {
     @Column(name = "social_ref", length = 128)
     private String socialRef;
 
+    // Scoring + routing.
+    @Column(name = "score", nullable = false)
+    private int score = 0;
+
+    @Column(name = "grade", length = 8)
+    private String grade;
+
+    @Column(name = "owner_id", length = 64)
+    private String ownerId;
+
+    @Column(name = "owner_name", length = 255)
+    private String ownerName;
+
+    @Column(name = "company_size")
+    private Integer companySize;
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 
@@ -86,6 +102,16 @@ public class SalesLead {
     public void setOpportunityId(String v) { this.opportunityId = v; }
     public String getSocialRef() { return socialRef; }
     public void setSocialRef(String v) { this.socialRef = v; }
+    public int getScore() { return score; }
+    public void setScore(int v) { this.score = v; }
+    public String getGrade() { return grade; }
+    public void setGrade(String v) { this.grade = v; }
+    public String getOwnerId() { return ownerId; }
+    public void setOwnerId(String v) { this.ownerId = v; }
+    public String getOwnerName() { return ownerName; }
+    public void setOwnerName(String v) { this.ownerName = v; }
+    public Integer getCompanySize() { return companySize; }
+    public void setCompanySize(Integer v) { this.companySize = v; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }

@@ -807,7 +807,7 @@ const RESOURCES = [
       { name: 'company', label: 'Company' },
       { name: 'description', label: 'Notes', kind: 'longtext' },
     ],
-    columns: ['name', 'company', 'contactEmail', 'source', 'state', 'lastUpdate'],
+    columns: ['name', 'company', 'source', 'score', 'grade', 'state', 'lastUpdate'],
     rowAction: {
       label: (item) => (item.state === 'acknowledged' ? 'Qualify' : '—'),
       apply: (item) => (item.state === 'acknowledged'
@@ -821,8 +821,42 @@ const RESOURCES = [
     detail: async (item) => [{
       contact: [item.contactName, item.contactEmail, item.company].filter(Boolean).join(' · ') || '—',
       notes: item.description || '—',
+      score: `${item.score ?? 0} (${item.grade || '—'})`,
+      routedTo: (item.owner && item.owner.name) || '— (no routing band cleared)',
       opportunity: item.salesOpportunity ? item.salesOpportunity.id : '— (qualify to create one)',
     }],
+  },
+  {
+    // Lead scoring rules: signal → points (source / company / size / keyword).
+    path: 'scoringRule',
+    base: '/tmf-api/salesManagement/v4/salesLead',
+    title: 'Lead scoring',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'field', label: 'Signal', kind: 'select', options: [
+        { label: 'Source equals', value: 'source' },
+        { label: 'Company present', value: 'companyPresent' },
+        { label: 'Company size ≥', value: 'companySizeMin' },
+        { label: 'Keyword in lead', value: 'keyword' },
+      ] },
+      { name: 'value', label: 'Value (source / size / keyword)' },
+      { name: 'points', label: 'Points', kind: 'number', required: true },
+    ],
+    columns: ['field', 'value', 'points'],
+  },
+  {
+    // Lead routing bands: score ≥ minScore → assignee (highest band wins).
+    path: 'routingRule',
+    base: '/tmf-api/salesManagement/v4/salesLead',
+    title: 'Lead routing',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'minScore', label: 'Minimum score', kind: 'number', required: true },
+      { name: 'assignee', label: 'Assign to', required: true },
+    ],
+    columns: ['minScore', 'assignee'],
   },
   {
     path: 'salesOpportunity',
@@ -1360,6 +1394,8 @@ const TAB_ROLE = {
   salesOpportunity: 'quote:read',
   salesPipeline: 'quote:read',
   configRule: 'quote:read',
+  scoringRule: 'quote:read',
+  routingRule: 'quote:read',
   audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
@@ -1426,7 +1462,7 @@ const WORKSPACES = [
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
-    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule'] },
+    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule', 'scoringRule', 'routingRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.

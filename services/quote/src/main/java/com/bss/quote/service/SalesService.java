@@ -3,6 +3,8 @@ package com.bss.quote.service;
 import com.bss.quote.api.ApiConstants;
 import com.bss.quote.entity.OpportunityActivity;
 import com.bss.quote.entity.OpportunityItem;
+import com.bss.quote.entity.LeadRoutingRule;
+import com.bss.quote.entity.LeadScoringRule;
 import com.bss.quote.entity.OpportunityStageHistory;
 import com.bss.quote.entity.SalesLead;
 import com.bss.quote.entity.SalesOpportunity;
@@ -49,28 +51,40 @@ public class SalesService {
     private final OpportunityItemRepository items;
     private final OpportunityActivityRepository activities;
     private final com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory;
+    private final com.bss.quote.repository.LeadScoringRuleRepository scoringRules;
+    private final com.bss.quote.repository.LeadRoutingRuleRepository routingRules;
     private final QuoteService quotes;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.quote.security.TenantRegistry tenants;
     private final org.springframework.web.client.RestClient socialClient;
+    private final int hotScore;
+    private final int warmScore;
 
     public SalesService(SalesLeadRepository leads, SalesOpportunityRepository opportunities,
             OpportunityItemRepository items, OpportunityActivityRepository activities,
             com.bss.quote.repository.OpportunityStageHistoryRepository stageHistory,
+            com.bss.quote.repository.LeadScoringRuleRepository scoringRules,
+            com.bss.quote.repository.LeadRoutingRuleRepository routingRules,
             QuoteService quotes, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.quote.security.TenantRegistry tenants,
-            org.springframework.web.client.RestClient.Builder builder) {
+            org.springframework.web.client.RestClient.Builder builder,
+            @org.springframework.beans.factory.annotation.Value("${bss.sales.lead-hot-score:70}") int hotScore,
+            @org.springframework.beans.factory.annotation.Value("${bss.sales.lead-warm-score:40}") int warmScore) {
         this.leads = leads;
         this.opportunities = opportunities;
         this.items = items;
         this.activities = activities;
         this.stageHistory = stageHistory;
+        this.scoringRules = scoringRules;
+        this.routingRules = routingRules;
         this.quotes = quotes;
         this.events = events;
         this.tenantScope = tenantScope;
         this.tenants = tenants;
         this.socialClient = builder.build();
+        this.hotScore = hotScore;
+        this.warmScore = warmScore;
     }
 
     /**
@@ -133,6 +147,11 @@ public class SalesService {
         lead.setSource("social");
         lead.setSocialRef(socialRef);
         lead.setState(SalesLead.ACKNOWLEDGED);
+        if (fields.get("company_size") != null) {
+            try { lead.setCompanySize(Integer.parseInt(fields.get("company_size").trim())); }
+            catch (NumberFormatException ignore) { /* not a number */ }
+        }
+        scoreAndRoute(lead);
         lead.setCreatedAt(OffsetDateTime.now());
         lead.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = leadToMap(leads.save(lead));
@@ -160,11 +179,14 @@ public class SalesService {
         lead.setCompany(str(dto.get("company")));
         lead.setSource(dto.get("source") == null ? "storefront" : str(dto.get("source")));
         lead.setState(SalesLead.ACKNOWLEDGED);
+        if (dto.get("companySize") != null) lead.setCompanySize(asInt(dto.get("companySize")));
+        scoreAndRoute(lead);
         lead.setCreatedAt(OffsetDateTime.now());
         lead.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = leadToMap(leads.save(lead));
         events.publish("SalesLeadCreateEvent", "salesLead", created);
-        log.info("sales lead '{}' acknowledged (source: {})", lead.getName(), lead.getSource());
+        log.info("sales lead '{}' acknowledged (source: {}, score: {}, grade: {}, owner: {})",
+                lead.getName(), lead.getSource(), lead.getScore(), lead.getGrade(), lead.getOwnerName());
         return created;
     }
 
@@ -172,6 +194,111 @@ public class SalesService {
     public List<Map<String, Object>> findLeads() {
         return leads.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
                 .stream().map(this::leadToMap).toList();
+    }
+
+    // ---------------- O2: lead scoring + routing ----------------
+
+    /** Score a lead from the tenant's scoring rules, grade it, and route it to
+     *  an owner. Runs on capture; the opportunity later inherits the owner. */
+    private void scoreAndRoute(SalesLead lead) {
+        int score = 0;
+        for (LeadScoringRule r : scoringRules.findByTenantIdOrderByCreatedAt(lead.getTenantId())) {
+            boolean hit = switch (r.getField()) {
+                case LeadScoringRule.SOURCE -> r.getValue() != null && r.getValue().equalsIgnoreCase(lead.getSource());
+                case LeadScoringRule.COMPANY_PRESENT -> lead.getCompany() != null && !lead.getCompany().isBlank();
+                case LeadScoringRule.COMPANY_SIZE_MIN -> lead.getCompanySize() != null
+                        && r.getValue() != null && lead.getCompanySize() >= parseIntSafe(r.getValue());
+                case LeadScoringRule.KEYWORD -> r.getValue() != null && containsCi(lead.getName(), r.getValue())
+                        || (r.getValue() != null && containsCi(lead.getDescription(), r.getValue()));
+                default -> false;
+            };
+            if (hit) score += r.getPoints();
+        }
+        lead.setScore(score);
+        lead.setGrade(score >= hotScore ? "hot" : score >= warmScore ? "warm" : "cold");
+        // Route to the highest band the score clears.
+        String assignee = null;
+        for (LeadRoutingRule rr : routingRules.findByTenantIdOrderByMinScoreDesc(lead.getTenantId())) {
+            if (score >= rr.getMinScore()) { assignee = rr.getAssignee(); break; }
+        }
+        lead.setOwnerName(assignee);
+    }
+
+    private boolean containsCi(String haystack, String needle) {
+        return haystack != null && haystack.toLowerCase().contains(needle.toLowerCase());
+    }
+
+    private int parseIntSafe(String s) {
+        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return Integer.MAX_VALUE; }
+    }
+
+    /** Recompute a lead's score/grade/owner (e.g. after the rules changed). */
+    @Transactional
+    public Map<String, Object> rescoreLead(String id) {
+        SalesLead lead = requireLead(id);
+        scoreAndRoute(lead);
+        lead.setLastUpdate(OffsetDateTime.now());
+        return leadToMap(leads.save(lead));
+    }
+
+    @Transactional
+    public Map<String, Object> createScoringRule(Map<String, Object> dto) {
+        String field = str(dto.get("field"));
+        if (!List.of(LeadScoringRule.SOURCE, LeadScoringRule.COMPANY_PRESENT,
+                LeadScoringRule.COMPANY_SIZE_MIN, LeadScoringRule.KEYWORD).contains(field)) {
+            throw new BadRequestException("field must be source/companyPresent/companySizeMin/keyword");
+        }
+        LeadScoringRule r = new LeadScoringRule();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setField(field);
+        r.setValue(str(dto.get("value")));
+        r.setPoints(dto.get("points") == null ? 0 : asInt(dto.get("points")));
+        r.setCreatedAt(OffsetDateTime.now());
+        scoringRules.save(r);
+        return scoringRuleToMap(r);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listScoringRules() {
+        return scoringRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
+                .stream().map(this::scoringRuleToMap).toList();
+    }
+
+    @Transactional
+    public Map<String, Object> createRoutingRule(Map<String, Object> dto) {
+        if (dto.get("assignee") == null) throw new BadRequestException("assignee is required");
+        LeadRoutingRule r = new LeadRoutingRule();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setMinScore(dto.get("minScore") == null ? 0 : asInt(dto.get("minScore")));
+        r.setAssignee(str(dto.get("assignee")));
+        r.setCreatedAt(OffsetDateTime.now());
+        routingRules.save(r);
+        return routingRuleToMap(r);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRoutingRules() {
+        return routingRules.findByTenantIdOrderByMinScoreDesc(tenantScope.currentTenantId())
+                .stream().map(this::routingRuleToMap).toList();
+    }
+
+    private Map<String, Object> scoringRuleToMap(LeadScoringRule r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("field", r.getField());
+        if (r.getValue() != null) m.put("value", r.getValue());
+        m.put("points", r.getPoints());
+        return m;
+    }
+
+    private Map<String, Object> routingRuleToMap(LeadRoutingRule r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("minScore", r.getMinScore());
+        m.put("assignee", r.getAssignee());
+        return m;
     }
 
     @Transactional(readOnly = true)
@@ -206,6 +333,9 @@ public class SalesService {
             opp.setName(lead.getName());
             opp.setDescription(lead.getDescription());
             opp.setLeadId(lead.getId());
+            // The opportunity inherits the owner the lead routed to.
+            opp.setOwnerId(lead.getOwnerId());
+            opp.setOwnerName(lead.getOwnerName());
             opp.setState(SalesOpportunity.DEVELOPED);
             // A qualified lead opens at the first pipeline stage; probability
             // rides with the stage until sales edits it.
@@ -803,6 +933,15 @@ public class SalesService {
         if (lead.getCompany() != null) map.put("company", lead.getCompany());
         map.put("source", lead.getSource());
         map.put("state", lead.getState());
+        map.put("score", lead.getScore());
+        if (lead.getGrade() != null) map.put("grade", lead.getGrade());
+        if (lead.getOwnerName() != null) {
+            Map<String, Object> owner = new LinkedHashMap<>();
+            if (lead.getOwnerId() != null) owner.put("id", lead.getOwnerId());
+            owner.put("name", lead.getOwnerName());
+            map.put("owner", owner);
+        }
+        if (lead.getCompanySize() != null) map.put("companySize", lead.getCompanySize());
         if (lead.getOpportunityId() != null) {
             map.put("salesOpportunity", Map.of("id", lead.getOpportunityId(),
                     "href", ApiConstants.SALES_BASE + "/salesOpportunity/" + lead.getOpportunityId()));
