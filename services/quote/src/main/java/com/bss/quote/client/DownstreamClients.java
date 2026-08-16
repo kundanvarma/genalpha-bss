@@ -64,6 +64,27 @@ public class DownstreamClients {
         }
     }
 
+    /** The party's CDP segments (its trait values) — for CPQ segment pricing.
+     *  Fail-soft — no CDP just means list/volume pricing. */
+    @SuppressWarnings("unchecked")
+    public java.util.Set<String> partySegments(String partyId) {
+        if (partyId == null) return java.util.Set.of();
+        try {
+            Map<String, Object> body = parseObject(insight.get()
+                    .uri(uri -> uri.path("/insight/v1/partySegments").queryParam("partyId", partyId).build())
+                    .retrieve().body(String.class));
+            Object segs = body.get("segments");
+            if (segs instanceof List<?> l) {
+                java.util.Set<String> out = new java.util.LinkedHashSet<>();
+                for (Object s : l) out.add(String.valueOf(s));
+                return out;
+            }
+        } catch (RestClientException e) {
+            // fall through
+        }
+        return java.util.Set.of();
+    }
+
     public Map<String, Object> intent(String intentId) {
         return parseObject(som.get().uri("/tmf-api/intentManagement/v4/intent/" + intentId)
                 .retrieve().body(String.class));

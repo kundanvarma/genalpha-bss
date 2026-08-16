@@ -914,7 +914,7 @@ const RESOURCES = [
       { name: 'offeringName', label: 'Offering', required: true },
       { name: 'minQuantity', label: 'From quantity', kind: 'number', required: true },
       { name: 'discountPercent', label: 'Discount %', kind: 'number', required: true },
-      { name: 'segment', label: 'Segment (optional)' },
+      { name: 'segment', label: 'CDP segment (optional — a trait value; beats the volume tier)' },
     ],
     columns: ['offeringName', 'minQuantity', 'discountPercent', 'segment'],
   },

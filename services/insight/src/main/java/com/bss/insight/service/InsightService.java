@@ -83,6 +83,27 @@ public class InsightService {
         return out;
     }
 
+    /**
+     * The party's CDP segments — the trait key/values it carries (loyaltyTier,
+     * region, spend band, …). The one governed segment definition marketing
+     * targets on, reused by CPQ segment pricing. A pure read (insight:read).
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public Map<String, Object> partySegments(String partyId) {
+        String tenant = tenantScope.currentTenantId();
+        Map<String, Object> byKey = new LinkedHashMap<>();
+        java.util.Set<String> values = new java.util.LinkedHashSet<>();
+        for (com.bss.insight.entity.PartyTrait t : traits.findByTenantIdAndPartyId(tenant, partyId)) {
+            byKey.put(t.getTraitKey(), t.getTraitValue());
+            if (t.getTraitValue() != null) values.add(t.getTraitValue());
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("partyId", partyId);
+        out.put("traits", byKey);
+        out.put("segments", new java.util.ArrayList<>(values));
+        return out;
+    }
+
     /** Order-preserving dedup: keep the first (most-recent) occurrence. */
     private static List<String> distinct(List<String> ordered) {
         return ordered.stream().distinct().toList();

@@ -79,6 +79,12 @@ public class InsightController {
         return ResponseEntity.ok(service.leadSignal(email));
     }
 
+    /** A party's CDP segments (insight:read — machines): for CPQ segment pricing. */
+    @GetMapping("/partySegments")
+    public ResponseEntity<Map<String, Object>> partySegments(@RequestParam String partyId) {
+        return ResponseEntity.ok(service.partySegments(partyId));
+    }
+
     /** The tenant's audience catalog from their OWN analytics, through the
      * GA4 Data API wire shape (insight:read). */
     @GetMapping("/audiences")

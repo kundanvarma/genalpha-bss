@@ -181,22 +181,36 @@ public class QuoteService {
         BigDecimal oneTime = BigDecimal.ZERO;
         List<com.bss.quote.entity.QuotePricingRule> tiers =
                 pricingRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId());
+        // The buyer's CDP segments (resolved once) — the same governed segment
+        // definition marketing targets on. Fail-soft: no CDP → list/volume only.
+        java.util.Set<String> buyerSegments = tiers.stream().anyMatch(t -> t.getSegment() != null)
+                ? downstream.partySegments(ownerPartyId) : java.util.Set.of();
         for (Map<String, Object> li : lineItems) {
             boolean recurring = !Boolean.FALSE.equals(li.get("recurring"));
             int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
             BigDecimal listUnit = li.get("unitPrice") == null ? BigDecimal.ZERO
                     : new BigDecimal(String.valueOf(li.get("unitPrice")));
             String offeringName = String.valueOf(li.get("offeringName"));
-            // Volume pricing: the best (deepest) tier this line qualifies for.
-            BigDecimal tierDiscount = BigDecimal.ZERO;
+            // Most-specific-wins: a matching SEGMENT price beats a volume tier.
+            BigDecimal segmentDiscount = BigDecimal.ZERO;
+            BigDecimal volumeDiscount = BigDecimal.ZERO;
+            String segmentApplied = null;
             for (com.bss.quote.entity.QuotePricingRule t : tiers) {
-                if (t.getOfferingName().equalsIgnoreCase(offeringName) && qty >= t.getMinQuantity()
-                        && t.getDiscountPercent().compareTo(tierDiscount) > 0) {
-                    tierDiscount = t.getDiscountPercent();
+                if (!t.getOfferingName().equalsIgnoreCase(offeringName) || qty < t.getMinQuantity()) continue;
+                if (t.getSegment() != null) {
+                    if (buyerSegments.contains(t.getSegment())
+                            && t.getDiscountPercent().compareTo(segmentDiscount) > 0) {
+                        segmentDiscount = t.getDiscountPercent();
+                        segmentApplied = t.getSegment();
+                    }
+                } else if (t.getDiscountPercent().compareTo(volumeDiscount) > 0) {
+                    volumeDiscount = t.getDiscountPercent();
                 }
             }
-            BigDecimal unit = tierDiscount.signum() > 0
-                    ? listUnit.multiply(BigDecimal.ONE.subtract(tierDiscount.movePointLeft(2)))
+            boolean bySegment = segmentDiscount.signum() > 0;
+            BigDecimal discount = bySegment ? segmentDiscount : volumeDiscount;
+            BigDecimal unit = discount.signum() > 0
+                    ? listUnit.multiply(BigDecimal.ONE.subtract(discount.movePointLeft(2)))
                     : listUnit;
             BigDecimal lineTotal = unit.multiply(BigDecimal.valueOf(qty));
             Map<String, Object> item = new LinkedHashMap<>();
@@ -206,9 +220,15 @@ public class QuoteService {
             item.put("quantity", qty);
             item.put("unitPrice", Map.of("value", unit, "unit", cur,
                     "period", recurring ? "month" : "oneTime"));
-            if (tierDiscount.signum() > 0) {
+            if (discount.signum() > 0) {
                 item.put("listUnitPrice", listUnit);
-                item.put("volumeDiscountPercent", tierDiscount);
+                if (bySegment) {
+                    item.put("segmentDiscountPercent", discount);
+                    item.put("pricedBy", "segment:" + segmentApplied);
+                } else {
+                    item.put("volumeDiscountPercent", discount);
+                    item.put("pricedBy", "volume");
+                }
             }
             item.put("recurring", recurring);
             items.add(item);
