@@ -121,9 +121,10 @@ order + TMF651 agreement.
 - **Guided selling** ✅ — a rules-based questionnaire ("how many sites?") that
   narrows the catalog to the right offerings, as an agent-callable decision
   (`/quote/guidedRecommend`) that also composes the deal (`applyGuided`).
-- **Pricing & discount rules** ✅ — volume/tier pricing (quantity ≥ threshold →
-  line discount), applied at quote build. *(Segment/contract price lists reuse
-  the same table — the `segment` column — as the next enrichment.)*
+- **Pricing & discount rules** ✅ — volume/tier pricing AND **segment price lists
+  off the CDP** (a matching segment price overrides the volume tier —
+  most-specific-wins), resolved live from `insight`. *(Contract price lists on
+  the TMF651 agreement are the remaining enrichment.)*
 - **Quote → order → contract** ✅ — on acceptance the quote drives a TMF622
   order AND a TMF651 agreement automatically, linked back to the quote. The quote
   document carries an **e-signature** (`/quote/{id}/sign`).

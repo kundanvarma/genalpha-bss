@@ -56,7 +56,12 @@ We don't need to invent "segment" — three of the four pieces exist:
 
 Two layers over the catalog list price, resolved most-specific-first.
 
-### Layer 1 — Segment price lists  *(floor: CDP segments, the pricing rules table)*
+### Layer 1 — Segment price lists  ✅ SHIPPED  *(floor: CDP segments, the pricing rules table)*
+> Built: `insight` `/partySegments` + a segment on `quote_pricing_rule`; the
+> quote resolves the buyer's CDP segments live and applies the matching segment
+> price, overriding volume. Proven by `segment_pricing_test`. The decision below
+> was taken: **segment = a CDP trait value** (the same the CDP already computes).
+
 - A **price list** = a named set of entries `{offeringName → discount% or fixed
   price}`, tagged with a **segment** (e.g. `enterprise`, `public-sector`).
 - At quote build, resolve the buyer's segment from the CDP: call
