@@ -21,8 +21,12 @@ APIs we already conform to.
 - **Quote (TMF648)** — MVP: flat line items, a manually-typed price, a simple
   accept path. No catalog pricing, no configuration, no approvals, no document.
 
-The spine is unbroken (lead → opportunity → quote → order → contract → bill),
-but the opportunity is *thin-but-usable* and the quote is a *stub*.
+The spine is unbroken (lead → opportunity → quote → order → contract → bill).
+
+> **Update (shipped):** **O1** and **C1** below are now built and proven
+> (`opportunity_o1_c1_test`). The opportunity has forecast categories + aging +
+> tasks; the quote has a one-click hand-off from the deal (MRR/one-off split)
+> and a printable document. Remaining: **O2** and **C2** (the "deep" tier).
 
 ## The reference model
 
@@ -50,7 +54,7 @@ order + TMF651 agreement.
 
 ## Roadmap — Opportunity
 
-### O1 — solid  *(floor: the opportunity we have)*
+### O1 — solid  ✅ SHIPPED  *(floor: the opportunity we have)*
 - **Activities as tasks** — an activity gains `dueDate` + `status` (open/done) +
   `assignee`; a "my open tasks" queue and an overdue flag. (We log activities
   already; this makes them *actionable*, not just a log.)
@@ -79,7 +83,7 @@ order + TMF651 agreement.
 
 ## Roadmap — CPQ
 
-### C1 — solid  *(floor: TMF620 catalog + productOfferingPrice, the opportunity)*
+### C1 — solid  ✅ SHIPPED  *(floor: TMF620 catalog + productOfferingPrice, the opportunity)*
 - **Opportunity → quote hand-off** — build a quote *from* the opportunity's line
   items in one click (the deal composition becomes the quote).
 - **Catalog pricing** — quote lines pull `productOfferingPrice` from TMF620
