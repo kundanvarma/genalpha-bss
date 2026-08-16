@@ -61,7 +61,26 @@ export default function Orders() {
     }
   }
 
-  const load = () => myOrders().then(setOrders).catch((e) => setError(e.message));
+  // The process flow (TMF701) is the authoritative "where is this order" — it
+  // aggregates the lifecycle from the same events. We read THAT (not just the
+  // raw TMF622 order state), so the chrome never contradicts the journey.
+  const flowComplete = (j) => j && j !== 'none' && (j.taskFlow || []).length > 0
+    && (j.taskFlow || []).every((t) => t.state === 'completed');
+  // A single source of truth for the badge/toggle: the flow wins once it's done.
+  const effectiveState = (o) => (flowComplete(journeys[o.id]) ? 'completed' : o.state);
+
+  // Prefetch flows for in-flight orders so the chrome can reconcile on first
+  // paint (and expanding is instant) — terminal orders need no reconciliation.
+  const prefetchFlows = (list) => {
+    for (const o of list) {
+      if (TERMINAL.includes(o.state)) continue;
+      myOrderJourney(o.id)
+        .then((j) => setJourneys((m) => ({ ...m, [o.id]: j || 'none' })))
+        .catch(() => {});
+    }
+  };
+  const load = () => myOrders().then((list) => { setOrders(list); prefetchFlows(list || []); return list; })
+    .catch((e) => setError(e.message));
   useEffect(() => {
     load();
     myAppointments().then((appointments) => {
@@ -78,6 +97,16 @@ export default function Orders() {
       setShips(byOrder);
     }).catch(() => {});
   }, []);
+
+  // Read-your-writes: while any order is still in flight, refresh so the list
+  // catches up to completion instead of showing a stale "in progress".
+  useEffect(() => {
+    if (!orders || !orders.some((o) => !TERMINAL.includes(effectiveState(o)))) return undefined;
+    const id = setInterval(() => {
+      myOrders().then((list) => { setOrders(list); prefetchFlows(list || []); }).catch(() => {});
+    }, 4000);
+    return () => clearInterval(id);
+  }, [orders, journeys]);
 
   if (error) return <p className="error">{error}</p>;
   if (!orders) return <p className="dim">Loading your orders…</p>;
@@ -210,21 +239,17 @@ export default function Orders() {
           const { families, leaves, waitOn } = decompose(o);
           const done = leaves.filter((l) => l.state === 'completed').length;
           const isMulti = families.length > 1 || leaves.length > 1;
-          // The process flow can finish a beat before the order state flips
-          // (two services, eventual consistency). If so, don't frame it as "why
-          // is it stuck" — it's finishing up.
-          const loadedJ = journeys[o.id];
-          const flowDone = loadedJ && loadedJ !== 'none' && (loadedJ.taskFlow || []).length > 0
-            && (loadedJ.taskFlow || []).every((t) => t.state === 'completed');
-          const openText = openJourney === o.id ? 'Hide progress ▲'
-            : flowDone ? 'Finishing up — see steps ▾' : 'Why is it in progress? ▾';
+          // Single source of truth: the process-flow aggregate wins over the raw
+          // order state, so the badge/toggle never contradict the journey.
+          const es = effectiveState(o);
+          const openText = openJourney === o.id ? 'Hide progress ▲' : 'Why is it in progress? ▾';
           return (
             <div className="row orderrow" key={o.id}>
               <div className="ordermain">
                 <strong>{o.description || o.id}</strong>
                 <div className="dim small">
                   {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
-                  {isMulti && !TERMINAL.includes(o.state) && leaves.length > 0
+                  {isMulti && !TERMINAL.includes(es) && leaves.length > 0
                     && <> · <b>{done} of {leaves.length}</b> ready</>}
                 </div>
                 {visit && (
@@ -264,7 +289,7 @@ export default function Orders() {
                     ))}
                   </div>
                 )}
-                {!TERMINAL.includes(o.state) && (
+                {!TERMINAL.includes(es) && (
                   <button className="linkish small" data-testid="why-toggle"
                           onClick={() => toggleJourney(o.id)}>
                     {openText}
@@ -276,20 +301,10 @@ export default function Orders() {
                   if (j === 'none') return <div className="dim small journey" data-testid="journey">
                     We're on it — your order is being set up.</div>;
                   const g = (state) => state === 'completed' ? '✓' : state === 'cancelled' ? '✗' : '⏳';
-                  const allDone = (j.taskFlow || []).length > 0
-                    && (j.taskFlow || []).every((t) => t.state === 'completed');
-                  // Flow done but the order chrome hasn't caught up (two services,
-                  // a beat apart): say "finishing up", not a bare "all completed".
-                  const headline = allDone && !TERMINAL.includes(o.state)
-                    ? 'Provisioned — finalizing your order'
-                    : (j.summary?.headline || '');
-                  const why = allDone && !TERMINAL.includes(o.state)
-                    ? 'Your services are set up; this will show as complete in a moment.'
-                    : (j.summary?.why || '');
                   return (
                     <div className="journey" data-testid="journey">
-                      <p className="journeywhy"><b>{headline}</b>
-                        {why ? ` — ${why}` : ''}</p>
+                      <p className="journeywhy"><b>{j.summary?.headline}</b>
+                        {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
                       <ul className="journeysteps">
                         {(j.taskFlow || []).map((t) => (
                           <li key={t.id} className={`jstep ${t.state === 'completed' ? 'completed' : 'active'}`}>
@@ -302,8 +317,8 @@ export default function Orders() {
                 })()}
               </div>
               <div className="rowend">
-                <span className={`state ${o.state}`}>{ORDER_LABEL[o.state] || o.state}</span>
-                {!TERMINAL.includes(o.state) && (
+                <span className={`state ${es}`}>{ORDER_LABEL[es] || es}</span>
+                {!TERMINAL.includes(es) && (
                   <button className="ghost danger" onClick={() => cancel(o.id)}>Cancel</button>
                 )}
               </div>
