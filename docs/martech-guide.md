@@ -48,8 +48,37 @@ a **holdout** so lift is real.
 
 > **Behaviour, not just attributes.** Leaf type **Behaviour (browsing)** matches an interest a
 > customer showed on the storefront; **Analytics audience** matches a GA4 segment if the tenant has
-> a provider bound. Pure-trait audiences resolve as a single set-based SQL query (fast at millions);
-> behavioural ones layer in per-member work only when the tree asks for it.
+> a provider bound. Pure-trait audiences resolve as a single set-based SQL query (fast at millions,
+> index-backed); behavioural ones layer in per-member work only when the tree asks for it.
+
+### The traits you can target
+
+Traits are filled live off the operational bus (an order completes, a bill is issued, a tier
+changes — the trait is *already* there). Single-valued traits **replace on change**, so a customer
+whose value changes **moves between audiences automatically** on the next resolution.
+
+| Trait | Where it comes from | Notes |
+|---|---|---|
+| `product` | a completed order / product inventory | multi-valued (several holdings); **retracts** when a product is cancelled |
+| `deviceModel` | the **network** (EIR / device-detection, IMEI→TAC→model) | the handset the SIM is *actually* in — incl. BYOD; a swap re-homes them |
+| `region` | the customer's party record (native) | a move re-homes them between region audiences |
+| `loyaltyTier` · `monthlySpend` · `churnRisk` | loyalty / billing / intelligence events | single-valued; range operators on the numeric ones |
+| `email` | party record | used to reach + to label members |
+| `industry` · `orgName` | organization events | the B2B population |
+
+> **"Bought an iPhone" vs "on an iPhone".** `product = Apple iPhone 17` targets who **bought** that
+> handset from you; `deviceModel = iPhone 15` targets who is **currently using** one on the network
+> (regardless of where they bought it) — the classic upgrade-offer segment.
+
+> **Existing customers are in the CDP.** The trait store is fed by events going forward; a one-shot
+> **backfill** (`ops/e2e/backfill_cdp.js` → `POST /insight/v1/traits/backfill`) seeds email/region/
+> product for customers who predate the CDP, so your whole base is reachable, not just new signups.
+
+### Seeing and pruning audiences
+
+On **Saved audiences**, **View** expands the actual members (labelled by email, not opaque ids), and
+**Delete** removes an audience so the list stays clean. Big audiences preview a bounded slice —
+resolution stays flat as the base grows.
 
 ### Prospects — people who aren't customers yet
 
@@ -199,7 +228,47 @@ it for debugging.
 *Full first-party personalization walkthrough (guest loop, reject-honestly, stitch, GA4 seam): see the
 [Personalization guide](personalization-guide.md).*
 
-## 9. Quick reference
+---
+
+## 9. Marketing preferences & unsubscribe — the opt-out spine
+
+For **existing customers**, marketing is opt-*out* (the legitimate-interest model), and the customer
+is always in control:
+
+- **Self-serve** — a customer opens **shop → Account → Marketing preferences** and toggles out. That
+  writes a party-keyed opt-out; every subsequent marketing send **skips them** (in-app *and* email),
+  and they're excluded from ad-platform activations too.
+- **One-click unsubscribe in every message** — every marketing message carries a no-login unsubscribe
+  link (an HMAC token, so it can't be forged for someone else). Following it honours the opt-out.
+- **Enforced at send** — the send path checks the opt-out *before* the frequency cap; a fully-opted-out
+  blast returns `{status: suppressed}` and delivers nothing.
+
+> **The law (EU ePrivacy + GDPR Art 21; Norway markedsføringsloven §15):** an unsubscribe is
+> **mandatory in every marketing message** — it cannot be omitted, and a request to stop must be
+> honoured. Opt-out alone (no prior opt-in) is allowed only under the existing-customer/similar-product
+> "soft opt-in". *(Not legal advice — confirm with counsel.)* Prospects are the opposite: **opt-in**
+> only, via a recorded lawful basis (§2).
+
+## 10. Landing pages & lead capture — the acquisition loop
+
+A standalone campaign landing page (separate from the storefront) that an ad or email deep-links to,
+authored in **console → Growth → Landing pages**:
+
+1. **Author** — headline, subhead, button label, the **campaign (utm_source)** leads are stamped
+   with, and optional branding: **logo, hero image, brand colour, a "learn more" link, a privacy
+   link**. (URLs are sanitized — no `javascript:` — and the colour must be `#hex`.) **Edit** pre-fills
+   the form; the slug (the public URL) stays fixed so live links never break.
+2. **Preview** — **Open page** shows the public URL (`/insight/v1/landing/{slug}/view`) — a
+   self-contained branded page with a **consent-first form**.
+3. **Capture** — a *ticked* submission becomes a **consented prospect**, stamped with the campaign.
+   No consent → no capture (enforced, not wished for).
+4. **Close the loop** — build a prospect audience `source = <campaign>` → nurture; **Attribution**
+   reads the lift.
+
+So **ad/email → branded landing page → consented lead → prospect audience → nurture** is one
+consent-first loop, all authored from the console.
+
+## 11. Quick reference
 
 ### Populations
 
@@ -227,16 +296,29 @@ it for debugging.
 | Import prospects | Audience builder (population = Prospects) |
 | Push to ad platforms | Saved audiences → Activate |
 | Lift & incremental revenue | **Attribution** |
+| Author landing pages | **Landing pages** |
 | Brand mentions + mood | Social listening |
 | Inbound DMs → tickets | Social care |
+| The consent ledger | Privacy & governance → Visitor consent |
+| Marketing opt-out (customer) | shop → Account → Marketing preferences |
+| Full contact history (incl. martech) | CSR console → customer 360 timeline |
+
+> **Marketing isn't a silo — every send is on the customer's timeline.** Each message the module
+> sends (campaign, journey step, or system notice) is logged to the **omnichannel interaction record
+> (TMF683)** — who, what, which channel, which system. So a **CSR sees marketing + service messages
+> together** on the 360 view and can judge the next best action, and the NBA engine reads the same
+> history. *(Today the touchpoint carries the subject + channel, not the campaign name; opens/clicks
+> and inbound social DMs are separate records — natural next steps if you want them on the timeline.)*
 
 ---
 
 **Golden rules.** Keep a 10% holdout so lift is real, not a story. Never target a prospect without a
-lawful basis on record. Trust the incremental number, not the gross. And remember the traits are
-*already there* — the operational bus you run every day is the audience feed.
+lawful basis on record, and put an unsubscribe in every message. Trust the incremental number, not the
+gross. And remember the traits are *already there* — the operational bus you run every day is the
+audience feed.
 
 *Built on TMF Open APIs (TMF688 events · TMF620/GA4 audiences · TMF621 trouble tickets · TMF699
 leads). Every capability here is verified by an end-to-end browser suite — see
-`ops/e2e/audience_*`, `connector_multidest`, `visitor_retargeting`, `social_care`,
+`ops/e2e/audience_*`, `connector_multidest`, `visitor_retargeting`, `device_model`,
+`product_trait_retraction`, `marketing_preference`, `landing_page`, `social_care`,
 `attribution_report`. Journeys and campaigns are covered in the [Growth guide](growth-guide.md).*
