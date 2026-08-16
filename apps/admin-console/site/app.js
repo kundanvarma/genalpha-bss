@@ -861,27 +861,30 @@ const RESOURCES = [
           })
         : Promise.resolve()),
     },
+    // A uniform field/value property sheet — the detail engine renders one
+    // table off the first row's keys, so every row must share the same shape.
     detail: async (item) => {
       const money = (v) => (v == null ? '—' : `${item.currency || 'USD'} ${v}`);
-      const rows = [{
-        stage: item.stage || '—',
-        value: money(item.amount),
-        probability: item.probability == null ? '—' : item.probability + '%',
-        weighted: item.amount != null && item.probability != null
-          ? money((Number(item.amount) * item.probability / 100).toFixed(2)) : '—',
-        expectedClose: item.expectedCloseDate || '—',
-        owner: (item.owner && item.owner.name) || '—',
-        account: item.partyId || '— (prospect — not on a 360)',
-        lead: item.salesLead ? item.salesLead.id : '—',
-        quote: item.quote ? item.quote.id : '— (attach by winning with a quote ref via API)',
-        closeReason: item.closeReason || '—',
-      }];
+      const rows = [
+        { field: 'Stage', value: item.stage || '—' },
+        { field: 'Deal value', value: money(item.amount) },
+        { field: 'Win probability', value: item.probability == null ? '—' : item.probability + '%' },
+        { field: 'Weighted', value: item.amount != null && item.probability != null
+          ? money((Number(item.amount) * item.probability / 100).toFixed(2)) : '—' },
+        { field: 'Expected close', value: item.expectedCloseDate || '—' },
+        { field: 'Owner', value: (item.owner && item.owner.name) || '—' },
+        { field: 'Account (360)', value: item.partyId || '— (prospect — not on a 360)' },
+        { field: 'From lead', value: item.salesLead ? item.salesLead.id : '—' },
+        { field: 'Quote', value: item.quote ? item.quote.id : '— (win with a quote ref via API)' },
+        { field: 'Close reason', value: item.closeReason || '—' },
+      ];
       (item.items || []).forEach((li) => rows.push({
-        line: `${li.quantity}× ${li.offeringName}`,
-        unitPrice: money(li.unitPrice), lineTotal: money(li.lineTotal),
+        field: `Line — ${li.quantity}× ${li.offeringName}`,
+        value: `${money(li.unitPrice)} each · ${money(li.lineTotal)} total`,
       }));
       (item.activities || []).slice(0, 8).forEach((a) => rows.push({
-        activity: a.type, note: a.note, when: a.occurredAt,
+        field: `Activity — ${a.type}`,
+        value: `${a.note}  (${a.occurredAt})`,
       }));
       return rows;
     },
