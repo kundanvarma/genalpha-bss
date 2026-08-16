@@ -905,6 +905,28 @@ const RESOURCES = [
     pipelineBoard: true,
   },
   {
+    // CPQ configuration rules: requires / excludes / min / max on offerings,
+    // enforced when a quote is built (and checkable via the validate endpoint).
+    path: 'configRule',
+    base: '/tmf-api/quoteManagement/v4/quote',
+    title: 'CPQ rules',
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'ruleType', label: 'Rule', kind: 'select', options: [
+        { label: 'Requires', value: 'requires' },
+        { label: 'Excludes', value: 'excludes' },
+        { label: 'Min quantity', value: 'minQty' },
+        { label: 'Max quantity', value: 'maxQty' },
+      ] },
+      { name: 'subjectOffering', label: 'Offering', required: true },
+      { name: 'objectOffering', label: 'Other offering (requires/excludes)' },
+      { name: 'qty', label: 'Quantity bound (min/max)', kind: 'number' },
+      { name: 'message', label: 'Message shown on violation' },
+    ],
+    columns: ['ruleType', 'subjectOffering', 'objectOffering', 'qty', 'message'],
+  },
+  {
     path: 'audience',
     base: '/insight/v1',
     title: 'Saved audiences',
@@ -1337,6 +1359,7 @@ const TAB_ROLE = {
   salesLead: 'quote:read',
   salesOpportunity: 'quote:read',
   salesPipeline: 'quote:read',
+  configRule: 'quote:read',
   audience: 'insight:read',
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
@@ -1403,7 +1426,7 @@ const WORKSPACES = [
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
-    'salesLead', 'salesOpportunity', 'salesPipeline'] },
+    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.

@@ -17,6 +17,12 @@ public class Quote {
     public static final String ACCEPTED = "accepted";
     public static final String REJECTED = "rejected";
 
+    // Discount-approval gate.
+    public static final String APPR_NOT_REQUIRED = "notRequired";
+    public static final String APPR_PENDING = "pending";
+    public static final String APPR_APPROVED = "approved";
+    public static final String APPR_REJECTED = "rejected";
+
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;
 
@@ -47,6 +53,12 @@ public class Quote {
 
     @Column(name = "one_time_total", nullable = false, precision = 12, scale = 2)
     private BigDecimal oneTimeTotal = BigDecimal.ZERO;
+
+    @Column(name = "discount_percent", nullable = false, precision = 5, scale = 2)
+    private BigDecimal discountPercent = BigDecimal.ZERO;
+
+    @Column(name = "approval_status", nullable = false, length = 16)
+    private String approvalStatus = APPR_NOT_REQUIRED;
 
     @Column(name = "currency", nullable = false, length = 8)
     private String currency;
@@ -83,6 +95,10 @@ public class Quote {
     public void setMonthlyTotal(BigDecimal monthlyTotal) { this.monthlyTotal = monthlyTotal; }
     public BigDecimal getOneTimeTotal() { return oneTimeTotal; }
     public void setOneTimeTotal(BigDecimal oneTimeTotal) { this.oneTimeTotal = oneTimeTotal; }
+    public BigDecimal getDiscountPercent() { return discountPercent; }
+    public void setDiscountPercent(BigDecimal discountPercent) { this.discountPercent = discountPercent; }
+    public String getApprovalStatus() { return approvalStatus; }
+    public void setApprovalStatus(String approvalStatus) { this.approvalStatus = approvalStatus; }
     public String getCurrency() { return currency; }
     public void setCurrency(String currency) { this.currency = currency; }
     public String getNarrative() { return narrative; }

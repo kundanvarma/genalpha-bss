@@ -57,4 +57,33 @@ public class QuoteController {
     public ResponseEntity<Map<String, Object>> accept(@PathVariable String id) {
         return ResponseEntity.ok(service.accept(id));
     }
+
+    /** Approve a pending discount (the human gate) so the quote can advance. */
+    @PostMapping("/quote/{id}/approveDiscount")
+    public ResponseEntity<Map<String, Object>> approveDiscount(@PathVariable String id) {
+        return ResponseEntity.ok(service.approveDiscount(id));
+    }
+
+    // ---- CPQ configuration rules ----
+
+    @PostMapping("/quote/configRule")
+    public ResponseEntity<Map<String, Object>> createRule(@RequestBody Map<String, Object> dto) {
+        return ResponseEntity.ok(service.createRule(dto));
+    }
+
+    @GetMapping("/quote/configRule")
+    public ResponseEntity<List<Map<String, Object>>> listRules() {
+        return ResponseEntity.ok(service.listRules());
+    }
+
+    /** The CPQ decision endpoint: check line items against the rules (no
+     *  mutation) — agent-callable before committing a configuration. */
+    @PostMapping("/quote/validate")
+    @SuppressWarnings("unchecked")
+    public ResponseEntity<Map<String, Object>> validate(@RequestBody Map<String, Object> body) {
+        Object items = body.get("items");
+        List<Map<String, Object>> lineItems = items instanceof List<?>
+                ? (List<Map<String, Object>>) items : List.of();
+        return ResponseEntity.ok(service.validate(lineItems));
+    }
 }

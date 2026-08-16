@@ -37,18 +37,26 @@ public class QuoteService {
     };
 
     private final QuoteRepository quotes;
+    private final com.bss.quote.repository.QuoteConfigRuleRepository configRules;
     private final DownstreamClients downstream;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
+    private final java.math.BigDecimal discountThreshold;
 
-    public QuoteService(QuoteRepository quotes, DownstreamClients downstream,
-            DomainEventPublisher events, TenantScope tenantScope, ObjectMapper objectMapper) {
+    public QuoteService(QuoteRepository quotes,
+            com.bss.quote.repository.QuoteConfigRuleRepository configRules,
+            DownstreamClients downstream, DomainEventPublisher events, TenantScope tenantScope,
+            ObjectMapper objectMapper,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.quote.discount-approval-threshold:20}") String threshold) {
         this.quotes = quotes;
+        this.configRules = configRules;
         this.downstream = downstream;
         this.events = events;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+        this.discountThreshold = new java.math.BigDecimal(threshold);
     }
 
     @Transactional
@@ -143,6 +151,16 @@ public class QuoteService {
     @Transactional
     public Map<String, Object> createFromLineItems(String description, String ownerPartyId,
             String currency, List<Map<String, Object>> lineItems) {
+        // The configuration rules gate the build: a quote that violates
+        // requires/excludes/min/max cannot be created.
+        Map<String, Object> check = validate(lineItems);
+        if (!Boolean.TRUE.equals(check.get("valid"))) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> vs = (List<Map<String, Object>>) check.get("violations");
+            String msgs = vs.stream().map(v -> String.valueOf(v.get("message")))
+                    .reduce((x, y) -> x + "; " + y).orElse("configuration invalid");
+            throw new ConflictException("configuration rules violated: " + msgs);
+        }
         String cur = currency == null ? "USD" : currency;
         List<Map<String, Object>> items = new ArrayList<>();
         BigDecimal monthly = BigDecimal.ZERO;
@@ -181,6 +199,120 @@ public class QuoteService {
         Map<String, Object> result = toMap(quote);
         events.publish("QuoteCreateEvent", "quote", result);
         return result;
+    }
+
+    // ---------------- CPQ C2: configuration rules ----------------
+
+    @Transactional
+    public Map<String, Object> createRule(Map<String, Object> dto) {
+        String type = String.valueOf(dto.get("ruleType"));
+        if (!List.of(com.bss.quote.entity.QuoteConfigRule.REQUIRES,
+                com.bss.quote.entity.QuoteConfigRule.EXCLUDES,
+                com.bss.quote.entity.QuoteConfigRule.MIN_QTY,
+                com.bss.quote.entity.QuoteConfigRule.MAX_QTY).contains(type)) {
+            throw new BadRequestException("ruleType must be requires/excludes/minQty/maxQty");
+        }
+        if (dto.get("subjectOffering") == null) {
+            throw new BadRequestException("subjectOffering is required");
+        }
+        com.bss.quote.entity.QuoteConfigRule r = new com.bss.quote.entity.QuoteConfigRule();
+        r.setId(UUID.randomUUID().toString());
+        r.setTenantId(tenantScope.currentTenantId());
+        r.setRuleType(type);
+        r.setSubjectOffering(String.valueOf(dto.get("subjectOffering")));
+        r.setObjectOffering(dto.get("objectOffering") == null ? null : String.valueOf(dto.get("objectOffering")));
+        r.setQty(dto.get("qty") == null ? null : ((Number) dto.get("qty")).intValue());
+        r.setMessage(dto.get("message") == null ? defaultRuleMessage(r) : String.valueOf(dto.get("message")));
+        r.setCreatedAt(OffsetDateTime.now());
+        configRules.save(r);
+        return ruleToMap(r);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listRules() {
+        return configRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())
+                .stream().map(this::ruleToMap).toList();
+    }
+
+    /**
+     * The CPQ decision endpoint — pure, no mutation: check a set of line items
+     * against the configuration rules and return the violations. An agent (or
+     * the quote builder) calls this before committing a configuration.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> validate(List<Map<String, Object>> lineItems) {
+        Map<String, Integer> qtyByName = new LinkedHashMap<>();
+        for (Map<String, Object> li : lineItems) {
+            String name = String.valueOf(li.get("offeringName"));
+            int qty = li.get("quantity") == null ? 1 : ((Number) li.get("quantity")).intValue();
+            qtyByName.merge(name, qty, Integer::sum);
+        }
+        List<Map<String, Object>> violations = new ArrayList<>();
+        for (com.bss.quote.entity.QuoteConfigRule r
+                : configRules.findByTenantIdOrderByCreatedAt(tenantScope.currentTenantId())) {
+            if (!qtyByName.containsKey(r.getSubjectOffering())) continue; // rule's subject not on the deal
+            boolean ok = switch (r.getRuleType()) {
+                case com.bss.quote.entity.QuoteConfigRule.REQUIRES -> qtyByName.containsKey(r.getObjectOffering());
+                case com.bss.quote.entity.QuoteConfigRule.EXCLUDES -> !qtyByName.containsKey(r.getObjectOffering());
+                case com.bss.quote.entity.QuoteConfigRule.MIN_QTY -> r.getQty() == null
+                        || qtyByName.get(r.getSubjectOffering()) >= r.getQty();
+                case com.bss.quote.entity.QuoteConfigRule.MAX_QTY -> r.getQty() == null
+                        || qtyByName.get(r.getSubjectOffering()) <= r.getQty();
+                default -> true;
+            };
+            if (!ok) {
+                Map<String, Object> v = new LinkedHashMap<>();
+                v.put("ruleType", r.getRuleType());
+                v.put("subject", r.getSubjectOffering());
+                if (r.getObjectOffering() != null) v.put("object", r.getObjectOffering());
+                v.put("message", r.getMessage());
+                violations.add(v);
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("valid", violations.isEmpty());
+        out.put("violations", violations);
+        return out;
+    }
+
+    /** Approve a pending discount so the quote can proceed (the human gate). */
+    @Transactional
+    public Map<String, Object> approveDiscount(String id) {
+        Quote quote = own(id);
+        if (!Quote.APPR_PENDING.equals(quote.getApprovalStatus())) {
+            throw new ConflictException("this quote has no discount pending approval");
+        }
+        quote.setApprovalStatus(Quote.APPR_APPROVED);
+        quote.setLastUpdate(OffsetDateTime.now());
+        quotes.save(quote);
+        Map<String, Object> result = toMap(quote);
+        events.publish("QuoteStateChangeEvent", "quote", result);
+        return result;
+    }
+
+    private String defaultRuleMessage(com.bss.quote.entity.QuoteConfigRule r) {
+        return switch (r.getRuleType()) {
+            case com.bss.quote.entity.QuoteConfigRule.REQUIRES ->
+                    r.getSubjectOffering() + " requires " + r.getObjectOffering();
+            case com.bss.quote.entity.QuoteConfigRule.EXCLUDES ->
+                    r.getSubjectOffering() + " cannot be sold with " + r.getObjectOffering();
+            case com.bss.quote.entity.QuoteConfigRule.MIN_QTY ->
+                    r.getSubjectOffering() + " needs a quantity of at least " + r.getQty();
+            case com.bss.quote.entity.QuoteConfigRule.MAX_QTY ->
+                    r.getSubjectOffering() + " allows at most " + r.getQty();
+            default -> "configuration rule violated";
+        };
+    }
+
+    private Map<String, Object> ruleToMap(com.bss.quote.entity.QuoteConfigRule r) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", r.getId());
+        m.put("ruleType", r.getRuleType());
+        m.put("subjectOffering", r.getSubjectOffering());
+        if (r.getObjectOffering() != null) m.put("objectOffering", r.getObjectOffering());
+        if (r.getQty() != null) m.put("qty", r.getQty());
+        m.put("message", r.getMessage());
+        return m;
     }
 
     /** A branded, printable quote document (HTML) the rep can send. */
@@ -234,11 +366,23 @@ public class QuoteService {
     @Transactional
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
         Quote quote = own(id);
+        // A discount over the threshold needs manager approval before the quote
+        // can advance — the human gate on a (possibly agent-proposed) discount.
+        if (patch.get("discountPercent") != null) {
+            BigDecimal disc = new BigDecimal(String.valueOf(patch.get("discountPercent")));
+            quote.setDiscountPercent(disc);
+            quote.setApprovalStatus(disc.compareTo(discountThreshold) > 0
+                    ? Quote.APPR_PENDING : Quote.APPR_NOT_REQUIRED);
+        }
         if (patch.get("state") != null) {
             String target = String.valueOf(patch.get("state"));
             if (!List.of(Quote.APPROVED, Quote.REJECTED).contains(target)
                     || !Quote.IN_PROGRESS.equals(quote.getState())) {
                 throw new ConflictException("only inProgress quotes move to approved/rejected");
+            }
+            if (Quote.APPROVED.equals(target) && Quote.APPR_PENDING.equals(quote.getApprovalStatus())) {
+                throw new ConflictException("the discount on this quote is pending approval — "
+                        + "a manager must approve it before the quote can be approved");
             }
             quote.setState(target);
         }
@@ -316,6 +460,13 @@ public class QuoteService {
             map.put("quoteOneTimePrice", Map.of("value", quote.getOneTimeTotal(),
                     "unit", quote.getCurrency(), "period", "oneTime"));
         }
+        if (quote.getDiscountPercent() != null && quote.getDiscountPercent().signum() != 0) {
+            map.put("discountPercent", quote.getDiscountPercent());
+            BigDecimal factor = BigDecimal.ONE.subtract(
+                    quote.getDiscountPercent().movePointLeft(2));
+            map.put("netMonthlyTotal", quote.getMonthlyTotal().multiply(factor));
+        }
+        map.put("approvalStatus", quote.getApprovalStatus());
         if (quote.getNarrative() != null) map.put("narrative", quote.getNarrative());
         if (quote.getProductOrderId() != null) {
             map.put("productOrder", Map.of("id", quote.getProductOrderId()));
