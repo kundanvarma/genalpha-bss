@@ -165,7 +165,8 @@ const run = Date.now();
   console.log('OK stock tab:', stockCells.slice(0, 5).join(' | '));
 
   // 7. Rules tab: the dry-run panel tests the live engine without placing anything
-  await page.locator('.tab', { hasText: 'Rules' }).click();
+  // (exact-match — 'CPQ rules'/'Guided rules' also contain "Rules")
+  await page.locator('.tab', { hasText: /^Rules$/ }).click();
   await page.waitForSelector('#test-order', { timeout: 10000 });
   await page.fill('#test-subtotal', '200');
   await page.click('#test-order');

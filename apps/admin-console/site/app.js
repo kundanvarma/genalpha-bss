@@ -1525,9 +1525,14 @@ const WORKSPACES = [
     'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
-  { label: 'Growth', tabs: ['growthCopilot', 'campaign', 'journey', 'landing', 'attribution', 'audienceBuilder', 'socialListening', 'socialCare', 'audience', 'settings',
-    'salesLead', 'salesOpportunity', 'salesPipeline', 'configRule', 'scoringRule', 'routingRule',
-    'guidedQuestion', 'guidedRecommendation', 'quota', 'pricingRule'] },
+  // "Growth" split by persona (the marketer, the seller, the sales-ops admin) —
+  // one theme was three jobs. Role gates unchanged, so a narrow role lands on
+  // just its own desk.
+  { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
+    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'settings'] },
+  { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
+  { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
+    'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.

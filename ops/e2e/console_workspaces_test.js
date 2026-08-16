@@ -54,7 +54,7 @@ async function desks(page) {
   const patDesks = await desks(pat.page);
   const patGroups = Object.keys(patDesks);
   if (!patGroups.includes('Catalog & Pricing')) fail('pat lost his catalog: ' + patGroups);
-  for (const g of ['Money', 'Growth']) {
+  for (const g of ['Money', 'Marketing', 'Sales', 'Sales setup']) {
     if (patGroups.includes(g)) fail(`pat sees the ${g} desk: ` + JSON.stringify(patDesks[g]));
   }
   const patAI = patDesks['AI & Automation'] || [];
@@ -78,7 +78,7 @@ async function desks(page) {
   if (finnDisputes.length !== 1) {
     fail('exactly ONE Disputes tab expected, got ' + finnDisputes.length);
   }
-  for (const g of ['Catalog & Pricing', 'Growth', 'AI & Automation', 'Platform', 'Care & Ops']) {
+  for (const g of ['Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform', 'Care & Ops']) {
     if (finnGroups.includes(g)) fail(`finn sees ${g}: ` + JSON.stringify(finnDesks[g]));
   }
   console.log('OK FINN (finance): Money only — '
@@ -98,10 +98,13 @@ async function desks(page) {
   const gro = await loginConsole(browser, 'gro@bss.local', 'gro');
   const groDesks = await desks(gro.page);
   const groGroups = Object.keys(groDesks);
-  if (!groGroups.includes('Growth')) fail('gro has no growth desk: ' + groGroups);
-  if ((groDesks['Growth'] || []).length < 6) {
-    fail('gro is missing growth tabs: ' + JSON.stringify(groDesks['Growth']));
+  // gro (growth-staff) spans marketing + sales — the split gives her Marketing,
+  // Sales and Sales setup desks (a narrower role would get just one).
+  if (!groGroups.includes('Marketing')) fail('gro has no marketing desk: ' + groGroups);
+  if ((groDesks['Marketing'] || []).length < 6) {
+    fail('gro is missing marketing tabs: ' + JSON.stringify(groDesks['Marketing']));
   }
+  if (!groGroups.includes('Sales')) fail('gro (quote:read) has no sales desk: ' + groGroups);
   for (const g of ['Money', 'Catalog & Pricing', 'AI & Automation', 'Platform', 'Care & Ops']) {
     if (groGroups.includes(g)) fail(`gro sees ${g}: ` + JSON.stringify(groDesks[g]));
   }
@@ -113,7 +116,7 @@ async function desks(page) {
   if (groBills.ok() && Array.isArray(groRows) && groRows.length) {
     fail('growth reading the operator bill ledger should see nothing');
   }
-  console.log('OK GRO (growth): Growth only — ' + groDesks['Growth'].join(', ')
+  console.log('OK GRO (growth): Marketing + Sales — ' + (groDesks['Marketing'] || []).join(', ')
     + '; the bill ledger shows her nothing.');
   await gro.ctx.close();
 
@@ -127,7 +130,7 @@ async function desks(page) {
     fail('omar (workforce:use) should see the AI Workforce: ' + JSON.stringify(omarAI));
   }
   if (omarAI.includes('Runbooks')) fail('runbook signing is ai:admin — omar must not see it');
-  for (const g of ['Money', 'Catalog & Pricing', 'Growth']) {
+  for (const g of ['Money', 'Catalog & Pricing', 'Marketing', 'Sales', 'Sales setup']) {
     if (omarGroups.includes(g)) fail(`omar sees ${g}: ` + JSON.stringify(omarDesks[g]));
   }
   // negative pair: watching the crew is his; GOVERNING it is not
@@ -146,7 +149,7 @@ async function desks(page) {
   const demo = await loginConsole(browser, 'demo', 'demo');
   const demoDesks = await desks(demo.page);
   const demoGroups = Object.keys(demoDesks);
-  for (const g of ['Catalog & Pricing', 'Money', 'Care & Ops', 'Growth', 'AI & Automation', 'Platform']) {
+  for (const g of ['Catalog & Pricing', 'Money', 'Care & Ops', 'Marketing', 'Sales', 'Sales setup', 'AI & Automation', 'Platform']) {
     if (!demoGroups.includes(g)) fail('demo is missing the ' + g + ' desk: ' + demoGroups);
   }
   if (!(demoDesks['AI & Automation'] || []).includes('AI Workforce')) {
