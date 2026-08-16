@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -214,6 +214,7 @@ export default function Services() {
   const [changed, setChanged] = useState(null);
   const [bills, setBills] = useState([]);
   const [recIds, setRecIds] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
 
   const [hh, setHh] = useState(null);
@@ -223,6 +224,9 @@ export default function Services() {
     // Usage and bills are additive: the page renders without them.
     myUsage().then((report) => setBuckets(report.bucket || [])).catch(() => {});
     myBills().then(setBills).catch(() => {});
+    // In-flight orders: what's bought-but-not-yet-provisioned, so discovery
+    // never recommends something the customer just ordered.
+    myOrders().then(setOrders).catch(() => {});
   }
   useEffect(() => {
     refresh();
@@ -292,7 +296,15 @@ export default function Services() {
     ? `${a.value.toFixed(2)} ${a.unit}` : intlMoney(a.value, a.unit));
   const latestBill = [...bills].sort((a, b) =>
     String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];
+  // Exclude what the customer already OWNS and what they've just ORDERED (still
+  // provisioning) — otherwise discovery recommends the deal they just bought.
   const ownedOfferingIds = new Set(products.map((p) => p.productOffering?.id));
+  for (const o of orders) {
+    if (['cancelled', 'rejected'].includes(o.state)) continue;
+    for (const it of (o.productOrderItem || [])) {
+      if (it.productOffering?.id) ownedOfferingIds.add(it.productOffering.id);
+    }
+  }
   const recOffers = recIds.map((id) => offerings[id])
     .filter((o) => o && !ownedOfferingIds.has(o.id) && !o.requiresVerifiedIdentity
       && categoryOf(o) !== 'Top-ups') // the top-up has its own button on the Mobile card

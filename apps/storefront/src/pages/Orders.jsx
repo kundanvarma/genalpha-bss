@@ -210,7 +210,14 @@ export default function Orders() {
           const { families, leaves, waitOn } = decompose(o);
           const done = leaves.filter((l) => l.state === 'completed').length;
           const isMulti = families.length > 1 || leaves.length > 1;
-          const openText = openJourney === o.id ? 'Hide progress ▲' : 'Why is it in progress? ▾';
+          // The process flow can finish a beat before the order state flips
+          // (two services, eventual consistency). If so, don't frame it as "why
+          // is it stuck" — it's finishing up.
+          const loadedJ = journeys[o.id];
+          const flowDone = loadedJ && loadedJ !== 'none' && (loadedJ.taskFlow || []).length > 0
+            && (loadedJ.taskFlow || []).every((t) => t.state === 'completed');
+          const openText = openJourney === o.id ? 'Hide progress ▲'
+            : flowDone ? 'Finishing up — see steps ▾' : 'Why is it in progress? ▾';
           return (
             <div className="row orderrow" key={o.id}>
               <div className="ordermain">
@@ -269,10 +276,20 @@ export default function Orders() {
                   if (j === 'none') return <div className="dim small journey" data-testid="journey">
                     We're on it — your order is being set up.</div>;
                   const g = (state) => state === 'completed' ? '✓' : state === 'cancelled' ? '✗' : '⏳';
+                  const allDone = (j.taskFlow || []).length > 0
+                    && (j.taskFlow || []).every((t) => t.state === 'completed');
+                  // Flow done but the order chrome hasn't caught up (two services,
+                  // a beat apart): say "finishing up", not a bare "all completed".
+                  const headline = allDone && !TERMINAL.includes(o.state)
+                    ? 'Provisioned — finalizing your order'
+                    : (j.summary?.headline || '');
+                  const why = allDone && !TERMINAL.includes(o.state)
+                    ? 'Your services are set up; this will show as complete in a moment.'
+                    : (j.summary?.why || '');
                   return (
                     <div className="journey" data-testid="journey">
-                      <p className="journeywhy"><b>{j.summary?.headline}</b>
-                        {j.summary?.why ? ` — ${j.summary.why}` : ''}</p>
+                      <p className="journeywhy"><b>{headline}</b>
+                        {why ? ` — ${why}` : ''}</p>
                       <ul className="journeysteps">
                         {(j.taskFlow || []).map((t) => (
                           <li key={t.id} className={`jstep ${t.state === 'completed' ? 'completed' : 'active'}`}>
