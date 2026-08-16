@@ -65,7 +65,7 @@ async function token(request, client, user, pass) {
   await page.fill('input[name="password"]', 'pat');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
-  await page.locator('.tab', { hasText: 'Copilot' }).click();
+  await page.locator('.tab', { hasText: 'Product copilot' }).click();
   await page.waitForSelector('#copilot-input', { timeout: 10000 });
   console.log('OK pat (product persona) opened the Copilot tab');
 
@@ -222,7 +222,7 @@ async function token(request, client, user, pass) {
   await micPage.fill('input[name="password"]', 'pat');
   await micPage.click('input[type="submit"], button[type="submit"]');
   await micPage.waitForSelector('#main:not([hidden])', { timeout: 20000 });
-  await micPage.locator('.tab', { hasText: 'Copilot' }).click();
+  await micPage.locator('.tab', { hasText: 'Product copilot' }).click();
   await micPage.waitForSelector('#copilot-input', { timeout: 10000 });
   await micPage.locator('[data-testid="copilot-mic"]').waitFor({ timeout: 5000 });
   await micPage.click('[data-testid="copilot-mic"]');

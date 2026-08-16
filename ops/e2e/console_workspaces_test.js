@@ -120,6 +120,30 @@ async function desks(page) {
     + '; the bill ledger shows her nothing.');
   await gro.ctx.close();
 
+  /* ---------- 3b. mkt: marketing-staff — Marketing desk ONLY ---------- */
+  const mkt = await loginConsole(browser, 'mkt@bss.local', 'mkt');
+  const mktDesks = await desks(mkt.page);
+  const mktGroups = Object.keys(mktDesks);
+  if (!mktGroups.includes('Marketing')) fail('mkt has no marketing desk: ' + mktGroups);
+  for (const g of ['Sales', 'Sales setup', 'Money', 'Catalog & Pricing', 'Care & Ops']) {
+    if (mktGroups.includes(g)) fail(`mkt (marketing-staff) sees ${g}: ` + JSON.stringify(mktDesks[g]));
+  }
+  console.log('OK MKT (marketing-staff): Marketing only — ' + (mktDesks['Marketing'] || []).join(', '));
+  await mkt.ctx.close();
+
+  /* ---------- 3c. sel: sales-staff — Sales + Sales setup, no Marketing ---------- */
+  const sel = await loginConsole(browser, 'sel@bss.local', 'sel');
+  const selDesks = await desks(sel.page);
+  const selGroups = Object.keys(selDesks);
+  if (!selGroups.includes('Sales')) fail('sel has no sales desk: ' + selGroups);
+  if (!selGroups.includes('Sales setup')) fail('sel (quote:write) has no sales-setup desk: ' + selGroups);
+  for (const g of ['Marketing', 'Money', 'Catalog & Pricing', 'Care & Ops']) {
+    if (selGroups.includes(g)) fail(`sel (sales-staff) sees ${g}: ` + JSON.stringify(selDesks[g]));
+  }
+  console.log('OK SEL (sales-staff): Sales + Sales setup, no Marketing — '
+    + (selDesks['Sales'] || []).join(', '));
+  await sel.ctx.close();
+
   /* ---------- 4. omar: the ops desk + the AI crew window ---------- */
   const omar = await loginConsole(browser, 'omar@bss.local', 'omar');
   const omarDesks = await desks(omar.page);

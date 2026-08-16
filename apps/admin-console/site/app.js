@@ -1247,7 +1247,7 @@ const RESOURCES = [
   },
   {
     path: 'copilot',
-    title: 'Copilot',
+    title: 'Product copilot',
     copilot: true,      // custom chat panel, not the generic CRUD table
     readOnly: true,
     fields: [],
@@ -1255,7 +1255,7 @@ const RESOURCES = [
   },
   {
     path: 'growthCopilot',
-    title: 'Growth Copilot',
+    title: 'Marketing copilot',
     growthCopilot: true, // conversational journey/campaign authoring
     readOnly: true,
     fields: [],

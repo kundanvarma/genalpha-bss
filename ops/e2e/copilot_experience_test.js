@@ -51,7 +51,7 @@ async function token(request, user, pass) {
     await page.fill('input[name="username"]', 'pat@bss.local');
     await page.fill('input[name="password"]', 'pat');
     await page.click('input[type="submit"], button[type="submit"]');
-    await page.locator('.tab', { hasText: 'Copilot' }).click();
+    await page.locator('.tab', { hasText: 'Product copilot' }).click();
     await page.waitForSelector('#copilot-input', { timeout: 10000 });
     await page.fill('#copilot-input',
       'When guests have been browsing Devices, show them the banner and pin the 60 GB plan');

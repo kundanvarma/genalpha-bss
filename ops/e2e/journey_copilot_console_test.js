@@ -33,7 +33,7 @@ async function token(ctx, client, user, pass) {
   await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
 
   /* ---------- the Growth Copilot tab exists and opens a chat ---------- */
-  await page.locator('.tab', { hasText: 'Growth Copilot' }).click();
+  await page.locator('.tab', { hasText: 'Marketing copilot' }).click();
   await page.waitForSelector('#growth-copilot-input', { timeout: 10000 });
   console.log('OK the Growth workspace has a Growth Copilot chat');
 

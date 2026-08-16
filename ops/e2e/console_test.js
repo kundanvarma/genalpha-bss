@@ -245,7 +245,7 @@ const run = Date.now();
   // pat gained ai:use with the Product Copilot (2026-07-13): Copilot and the
   // AI Audit trail ride along — auditability goes with AI power, by design
   const expectPat = ['Product Offerings', 'Product Specifications', 'Product Offering Prices',
-    'Product Stock', 'Serviceable Areas', 'Rules', 'Copilot', 'AI Audit'];
+    'Product Stock', 'Serviceable Areas', 'Rules', 'Product copilot', 'AI Audit'];
   for (const t of expectPat) {
     if (!patTabs.includes(t)) fail(`product persona missing tab "${t}" — got ${patTabs.join(', ')}`);
   }
