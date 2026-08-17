@@ -367,13 +367,14 @@
    },
    {
     "name": "marketing-staff",
-    "description": "Marketing desk: campaigns, journeys, audiences, insight",
+    "description": "Marketing desk: campaigns, journeys, audiences, insight, AI copilot",
     "composite": true,
     "composites": {
      "realm": [
       "campaign:read",
       "campaign:write",
-      "insight:read"
+      "insight:read",
+      "ai:use"
      ]
     }
    },
