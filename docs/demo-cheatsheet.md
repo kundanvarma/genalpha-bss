@@ -3,6 +3,7 @@
 **Card:** `4242 4242 4242 4242` pays · `…0002` declines **Promo:** `WELCOME10`
 **Fibre postcode:** `11122` ok · `99999` unserviceable
 **Panic button:** `localhost:8080/flow/demo.html` → `demo`/`demo` → press ▶ (5 acts, live, on rails)
+**Personas/SSO:** one shared login per tenant → give each persona its OWN incognito window, OR just run the console as `demo` (sees every desk) and open a 2nd window only for the role-isolation moment. Signing out isn't enough — use a fresh incognito window.
 
 ---
 

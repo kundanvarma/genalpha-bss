@@ -22,9 +22,21 @@ curl -s -o /dev/null -w 'gw %{http_code}\n' 'http://localhost:8080/tmf-api/produ
 python3 ops/demo-reset-catalog.py
 ```
 
-- Open these tabs in your browser BEFORE the call, logged in, so there's no
-  fumbling: storefront, console (as `pat`), CSR (as `agent-anna`), the guided
-  demo page.
+- **Personas & single sign-on — read this once.** Every portal shares ONE
+  Keycloak session per tenant, so after you sign in as (say) `pat`, opening the
+  console again silently reuses that identity; switching to `demo`/`sel`/`mkt`
+  trips the wrong-persona guard ("signed in as … — sign in as …"). That guard is
+  a feature, not a fault. To avoid it live:
+  - **Simplest: run the whole console as `demo`.** `demo` sees every desk
+    (Catalog, Sales, Marketing, Money, AI, …), so you never switch mid-demo.
+  - Give each *other* persona its **own incognito window / browser profile**
+    (separate cookie jars = no SSO collision). Only pop a second window as
+    `pat`/`mkt`/`sel` when the POINT is role isolation ("this role lands on just
+    its own desk"). The storefront (a customer) also needs its own window,
+    separate from any staff session.
+- Open these windows BEFORE the call, logged in, so there's no fumbling:
+  storefront (a customer), console (`demo`), CSR (`agent-anna`), the guided demo
+  page — each in its own incognito window.
 - Have the demo card handy: **`4242 4242 4242 4242`** pays, anything ending
   **`0002`** declines. Promo code **`WELCOME10`**. Serviceable fibre postcodes
   start **111 / 222 / 333** (use `11122`); an unserviceable one is `99999`.
@@ -298,6 +310,11 @@ URL: `http://localhost:8080/partner/` as `demo` / `demo`
 
 Demo card: `4242 4242 4242 4242` pays, `…0002` declines. Promo: `WELCOME10`.
 Fibre postcodes: 111 / 222 / 333.
+
+> **SSO reminder:** one shared session per tenant — put each persona above in its
+> OWN incognito window, or just run the console as `demo` (sees every desk) and
+> only open a second window for the role-isolation moment. Signing out of the app
+> alone isn't enough; a fresh incognito window is the reliable reset.
 
 ---
 
