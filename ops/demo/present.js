@@ -312,7 +312,10 @@ async function customerBuy(page) {
     await narrate(patPage, 'pat', "Watch. I want a new streaming add-on — I just tell it, in words.");
     await tryDo(() => copilotAsk(patPage, 'copilot', 'Create a streaming TV add-on called Screen Plus for 9.99 per month'));
     await narrate(patPage, 'ai',
-      "It proposed the standards-based payloads — a specification, a price, an offering, the category it chose. It wrote nothing on its own; Pat approves and it is live in the storefront. Conversation to product, no deploy.");
+      "It proposed the standards-based payloads — a specification, a price, an offering, the category. Pat did not write a line of code. He just approves.");
+    await tryDo(async () => { await patPage.locator('[data-testid="copilot-create"]').first().click(); await sleep(2800); await reveal(patPage, '[data-testid="copilot-log"]'); });
+    await narrate(patPage, 'ai',
+      "Created — and live in the storefront this instant. No deploy, no JSON. A sentence became a sellable product.");
     await clickTab(patPage, 'Product Offerings');
     await narrate(patPage, 'pat',
       "And my bundles are soft. A customer upgrades the internet and downgrades the TV in place — no re-contract. The bundle decomposes into parts that each fulfil, and change, on their own.");
