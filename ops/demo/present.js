@@ -192,6 +192,7 @@ async function clickTab(page, title) {
   try {
     // ---------- COLD OPEN ----------
     await loginShop(sPage, SHOP, 'kai@bss.local', 'kai');
+    await sPage.bringToFront();
     await title(sPage, 'genalpha-bss', 'The demo gives itself.',
       'Every other BSS demo is a human reading slides. This one is the AI, running its own.');
     await narrate(sPage, 'ai',
@@ -209,6 +210,7 @@ async function clickTab(page, title) {
 
     // ---------- ACT 2 — create a product; soft bundles; price change without migration ----------
     await loginConsole(cPage, 'demo', 'demo');
+    await cPage.bringToFront();
     await title(cPage, 'Act two', 'Products are data — and bundles stay soft.', 'The product desk');
     await dropTitle(cPage);
     await narrate(cPage, 'pat',
@@ -253,6 +255,7 @@ async function clickTab(page, title) {
     await narrate(cPage, 'ai', "Same journey object the API serves, drawn as a graph — with how many customers each step has reached. Data, not code.");
 
     // ---- the payoff: what the CUSTOMER sees ----
+    await sPage.bringToFront();
     await title(sPage, 'Act five', 'And here is what the customer sees.', "Kai's app · notifications");
     await dropTitle(sPage);
     await tryDo(async () => { await sPage.locator('a:has-text("Notifications"), [href*="notification"]').first().click(); await sleep(1400); });
@@ -262,6 +265,7 @@ async function clickTab(page, title) {
       "Authored in the back office, delivered on the event bus, received in the customer's own app — the whole loop, one platform.");
 
     // ---------- ACT 6 — any operator ----------
+    await cPage.bringToFront();
     await title(cPage, 'Act six', 'One build. Any operator.', 'The multi-tenant punchline');
     await dropTitle(cPage);
     await tryDo(async () => { await loginShop(cPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
