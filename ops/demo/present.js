@@ -23,6 +23,15 @@ const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
 const readline = require('readline');
+const fs = require('fs');
+
+// Persona portraits captured from the launch video (ops/demo-assets/personas/*.png,
+// gitignored). Inlined as data-URIs so they render inside the injected overlay with
+// no file-serving / CSP issues. Missing files degrade gracefully to a text chip.
+const AVATARS = {};
+for (const p of ['ai', 'kai', 'pat', 'sel', 'mia', 'nils']) {
+  try { AVATARS[p] = 'data:image/png;base64,' + fs.readFileSync(path.join(__dirname, '..', 'demo-assets', 'personas', p + '.png')).toString('base64'); } catch { /* no avatar */ }
+}
 
 const DRY = !!process.env.DEMO_DRY;
 const API = 'http://localhost:8080';
@@ -81,10 +90,13 @@ async function ensureOverlay(page) {
         padding:6px 10px;border-radius:20px;display:flex;gap:7px;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.3)}
       #demo-badge b{width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:demopulse 1.4s infinite}
       @keyframes demopulse{50%{opacity:.3}}
-      #demo-cap{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:22px 30px;
-        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;transition:opacity .3s}
-      #demo-cap .who{display:inline-block;font:700 12px system-ui;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:6px;margin-bottom:10px;color:#fff}
-      #demo-cap .txt{max-width:1040px}
+      #demo-cap{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:20px 30px;
+        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;
+        transition:opacity .3s;display:flex;gap:18px;align-items:center}
+      #demo-ava{width:76px;height:76px;border-radius:50%;object-fit:cover;flex:0 0 auto;display:none;
+        border:2px solid rgba(255,255,255,.6);box-shadow:0 2px 14px rgba(0,0,0,.5)}
+      #demo-cap .who{display:inline-block;font:700 12px system-ui;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:6px;margin-bottom:8px;color:#fff}
+      #demo-cap .txt{max-width:1000px}
       #demo-title{position:fixed;inset:0;z-index:2147483646;background:radial-gradient(circle at 50% 40%,#1a1a2e,#08080e);color:#fff;
         display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui;transition:opacity .5s}
       #demo-title .k{font:700 13px system-ui;letter-spacing:3px;text-transform:uppercase;color:#7c5cff;margin-bottom:14px}
@@ -94,18 +106,21 @@ async function ensureOverlay(page) {
     const badge = document.createElement('div'); badge.id = 'demo-badge';
     badge.innerHTML = '<b></b> LIVE · AI-narrated · SPACE pause · Q quit';
     const cap = document.createElement('div'); cap.id = 'demo-cap'; cap.style.opacity = '0';
-    cap.innerHTML = '<div class="who"></div><div class="txt"></div>';
+    cap.innerHTML = '<img id="demo-ava" alt=""><div><div class="who"></div><div class="txt"></div></div>';
     document.body.appendChild(badge); document.body.appendChild(cap);
   }).catch(() => {});
 }
 async function caption(page, persona, text) {
   const p = VOICE[persona];
   await ensureOverlay(page);
-  await page.evaluate(({ name, color, text }) => {
+  await page.evaluate(({ name, color, text, ava }) => {
     const cap = document.getElementById('demo-cap'); if (!cap) return;
     cap.querySelector('.who').textContent = name; cap.querySelector('.who').style.background = color;
-    cap.querySelector('.txt').textContent = text; cap.style.opacity = '1';
-  }, { name: p.name, color: p.color, text }).catch(() => {});
+    cap.querySelector('.txt').textContent = text;
+    const img = document.getElementById('demo-ava');
+    if (img) { if (ava) { img.src = ava; img.style.display = 'block'; img.style.borderColor = color; } else { img.style.display = 'none'; } }
+    cap.style.opacity = '1';
+  }, { name: p.name, color: p.color, text, ava: AVATARS[persona] || '' }).catch(() => {});
 }
 async function narrate(page, persona, text) {
   await caption(page, persona, text);
@@ -158,6 +173,45 @@ async function clickTab(page, title) {
     await reveal(page, '#list, #content, #main');
     await sleep(500);
   }
+}
+// A REAL copilot turn: type the ask, send, wait for the AI to reply. The copilot
+// only PROPOSES (nothing is persisted until a human confirms), so it is safe to
+// run every time. DRY skips it to keep validation side-effect-free.
+async function copilotAsk(page, prefix, text) {
+  if (DRY) return true;
+  const input = page.locator(`#${prefix}-input`);
+  if (!(await input.count())) return false;
+  await input.click(); await input.fill('');
+  await input.pressSequentially(text, { delay: 28 });   // visible typing
+  await sleep(400);
+  const before = ((await page.locator(`#${prefix}-log`).innerText().catch(() => '')) || '').length;
+  await page.locator(`#${prefix}-send`).click();
+  for (let i = 0; i < 50; i++) {                          // up to ~25s for the reply
+    await gate(page);
+    const now = ((await page.locator(`#${prefix}-log`).innerText().catch(() => '')) || '');
+    if (now.length > before + 20) { await reveal(page, `#${prefix}-log`); await sleep(600); return true; }
+    await sleep(500);
+  }
+  return false;
+}
+// A REAL re-stage: drag the first card of one stage column to another (the API
+// PATCHes the deal, the forecast re-totals). Reversible — the caller drags back.
+async function dragCard(page, fromStage, toStage) {
+  if (DRY) return null;
+  const card = page.locator(`[data-testid="pl-col-${fromStage}"] .pl-card`).first();
+  if (!(await card.count())) return null;
+  const id = await card.getAttribute('data-id');
+  await page.evaluate(({ id, toStage }) => {
+    const dt = new DataTransfer();
+    const el = document.querySelector(`.pl-card[data-id="${id}"]`);
+    const col = document.querySelector(`[data-stage="${toStage}"]`);
+    if (!el || !col) return;
+    el.dispatchEvent(new DragEvent('dragstart', { dataTransfer: dt, bubbles: true }));
+    col.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true }));
+    col.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
+  }, { id, toStage });
+  await sleep(1600);
+  return id;
 }
 
 (async () => {
@@ -223,8 +277,10 @@ async function clickTab(page, title) {
     await narrate(patPage, 'pat',
       "I am Pat, in product. Notice my console — I only see the catalog. I do not file a ticket to launch a product; I just talk to my copilot.");
     await clickTab(patPage, 'Product copilot');
+    await narrate(patPage, 'pat', "Watch. I want a new streaming add-on — I just tell it, in words.");
+    await tryDo(() => copilotAsk(patPage, 'copilot', 'Create a streaming TV add-on called Screen Plus for 9.99 per month'));
     await narrate(patPage, 'ai',
-      "Pat describes it in words; the copilot proposes the standards-based payloads; Pat approves. Conversation to storefront, no deploy. By hand it is the same three rows — a price, an offering, a category. A product is data, not code.");
+      "It proposed the standards-based payloads — a specification, a price, an offering, the category it chose. It wrote nothing on its own; Pat approves and it is live in the storefront. Conversation to product, no deploy.");
     await clickTab(patPage, 'Product Offerings');
     await narrate(patPage, 'pat',
       "And my bundles are soft. A customer upgrades the internet and downgrades the TV in place — no re-contract. The bundle decomposes into parts that each fulfil, and change, on their own.");
@@ -248,18 +304,20 @@ async function clickTab(page, title) {
     await narrate(selPage, 'sel', "I am Sel. My desk is sales, nothing else. Every deal staged, valued, forecast. I drag a card across the stages and the weighted forecast re-totals, live.");
     await clickTab(selPage, 'Pipeline board');
     await reveal(selPage, '[data-testid="pipeline-board"]'); await sleep(400);
-    await narrate(selPage, 'ai', "Arithmetic on the pipeline, not a spreadsheet. And when Sel wins, the quote becomes an order and a signed contract in a single act.");
+    await narrate(selPage, 'sel', "Watch me move a live deal — from Proposal across to Negotiation.");
+    const movedId = await dragCard(selPage, 'proposal', 'negotiation');
+    await narrate(selPage, 'ai', "The stage moved, the win-probability rode up, and the weighted forecast re-totalled — live, and the rest of the BSS agrees. When Sel wins, that quote becomes an order and a signed contract in one act.");
+    if (movedId) await tryDo(() => dragCard(selPage, 'negotiation', 'proposal'));   // revert — keep the board repeatable
 
     // ---------- ACT 5 — Mia's marketing desk: AUTHOR it, then the CUSTOMER RECEIVES it ----------
     const mktPage = await desk('mkt', 'mkt@bss.local', 'mkt');
     await title(mktPage, 'Act five', 'Marketing: authored here, received there.', 'Signed in as Mia — the marketing desk');
     await dropTitle(mktPage);
-    await narrate(mktPage, 'mia', "I am Mia, in marketing — again, just my desk. Let me build a campaign: a proven recipe, a real trigger like an order, and a message.");
-    await clickTab(mktPage, 'Campaigns');
-    await tryDo(async () => { await mktPage.getByRole('button', { name: /^\+?\s*new$/i }).first().click(); await sleep(1000); await reveal(mktPage, 'form, textarea, input'); });
-    await narrate(mktPage, 'mia', "The AI drafts the copy — the double-brace inserts the customer's name, the promo code drops in, and a holdout group is held back so I can prove the lift in money.");
-    await tryDo(async () => { await mktPage.keyboard.press('Escape'); });
-    await narrate(mktPage, 'mia', "A journey is the sophisticated version — an ordered path drawn as a canvas: message, then wait, then branch.");
+    await narrate(mktPage, 'mia', "I am Mia, in marketing — again, just my desk. I do not hand-build a campaign; I describe it.");
+    await clickTab(mktPage, 'Marketing copilot');
+    await tryDo(() => copilotAsk(mktPage, 'growth-copilot', 'Welcome new customers when they sign up, and include a 10 percent code'));
+    await narrate(mktPage, 'mia', "It proposes a whole journey — the steps, the timing, the copy, even a holdout group to prove the lift — and creates it only when I confirm. It proposes; I decide.");
+    await narrate(mktPage, 'mia', "Here is a journey, drawn as a canvas: a message, then a wait, then a branch.");
     await clickTab(mktPage, 'Journeys');
     await tryDo(async () => { await mktPage.locator('#list tbody tr, .row').first().click(); await sleep(1300); });
     await tryDo(async () => { await mktPage.waitForSelector('[data-testid="journey-canvas"]', { timeout: 4000 }); await reveal(mktPage, '[data-testid="journey-canvas"]'); });
