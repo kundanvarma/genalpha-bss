@@ -99,8 +99,8 @@ the operator edits, never a deploy."**
 ### Scene 2 — The product owner creates an offer by TALKING (console) · ~3 min
 URL: `http://localhost:8080/console/` as `pat@bss.local` / `pat`
 
-1. Open the **Copilot** tab. **"A product manager describes what they want to
-   sell — in words."**
+1. Open the **Product copilot** tab. **"A product manager describes what they
+   want to sell — in words."**
 2. Type (or press the 🎤 and speak): *"I want to sell a streaming service."*
 3. It asks the price. Answer *"9.99 a month."*
 4. A proposal card appears — spec, price, offering, the category it chose.
@@ -131,20 +131,63 @@ for the full operator view (AI Workforce + Runbooks tabs need `demo`).
   Revoke it and it goes back to asking the model. Learning as a reviewable
   artifact, not a black box."**
 
-### Scene 4 — Marketing runs the machine, no curl (journeys / martech) · ~4 min
-URL: `http://localhost:8080/console/` as `pat@bss.local` / `pat`
-(or `demo`/`demo` for the full view)
+### Scene 4 — B2B sales: pipeline to signed contract (console) · ~4 min
+URL: `http://localhost:8080/console/` as `sel@bss.local` / `sel`
+(the seller's desk; `demo`/`demo` sees everything)
+
+The same platform runs the B2B sale — a real CRM pipeline and CPQ, not a
+bolt-on. `sel` lands on the **Sales** and **Sales setup** desks and nothing else.
+
+1. **Leads → Opportunities.** A sourced **lead** qualifies into an
+   **opportunity** — it opens at *Qualification, 10%*, on an account. Open the
+   **Opportunities** tab: each deal carries a **stage**, a **value**, a **win
+   probability**, a **forecast category** (Pipeline / Best case / Commit) and an
+   owner. **"A genuine sales object — staged, valued, forecastable — not a note."**
+2. **The pipeline board.** Open **Pipeline board** — four stage columns, deals as
+   cards, a **live weighted forecast** on top (Σ value × probability). **Drag** a
+   card from *Proposal* to *Negotiation*: the stage moves, the win-probability
+   rides up, the forecast re-totals. **"The forecast is arithmetic on the
+   pipeline, not a spreadsheet someone maintains."**
+3. **Win it.** On an opportunity, **Mark won**. It closes *won*, and
+   **won-by-source** attributes the revenue to the campaign that sourced the lead
+   — marketing and sales on one record. Every logged sales activity also lands on
+   the account's **TMF683 360**, beside the service history.
+4. **CPQ — quote to signed contract.** The deal builds a **quote**: line items
+   split **MRR vs one-off**, priced by the catalog. Pricing is **rule-driven** —
+   volume tiers *and* **segment prices off the CDP** (a customer's trait value
+   beats the volume tier); discounts past a threshold need **approval**; the quote
+   is **e-signable**. **Accepting the quote yields BOTH a TMF622 order AND a
+   TMF651 contract in one act** — the sale becomes fulfilment and a signed
+   agreement, no re-keying.
+5. **Sales setup — the levers, as data.** The **Sales setup** desk holds **lead
+   scoring** (incl. a **CDP-engagement** signal — how warm the prospect is on the
+   event bus), **routing rules**, **config/approval rules**, **guided selling**
+   (Q&A → recommended offering) and the **pricing rules**. **"Every sales lever is
+   data an ops admin edits — same story as the catalog."**
+
+> Honest boundary: Leads, Opportunities, the Pipeline board, Quota and the setup
+> rules are all clickable in the console. The quote→order→contract and e-sign
+> steps are proven end-to-end by the suite and run through the **TMF648** API;
+> the console surfaces the result on the opportunity (its detail shows the quote
+> ref). Don't promise a live "Accept" button — show the pipeline live, narrate CPQ.
+
+### Scene 5 — Marketing runs the machine, no curl (journeys + CDP) · ~4 min
+URL: `http://localhost:8080/console/` as `mkt@bss.local` / `mkt`
+(the marketer's desk; `demo`/`demo` for the full view)
 
 The same event stream that drives fulfilment drives marketing — a marketer sets
-up automation against real business moments, and it fires itself.
+up automation against real business moments, and it fires itself. `mkt` lands on
+the **Marketing** desk. *(Note: `pat` is the product desk and does NOT see these
+tabs — use `mkt` or `demo`.)*
 
 1. **Campaigns tab** → *New* (or pick a **recipe** — "Churn save", "Tier
    congrats" — to prefill). Set trigger **"Order placed"**, subject + message.
    **"Marketing reacts to real events — an order, a bill, an AI churn signal —
    not a nightly CSV."**
-2. **Let the AI draft it.** Use the draft button; the `{code}` placeholder for a
-   promo survives. Attach a promo code. **"The AI writes the copy; the marketer
-   approves it. Same human-in-control pattern as everywhere else."**
+2. **Let the AI draft it.** Use the draft button (that's the **Marketing
+   copilot**); the `{code}` placeholder for a promo survives. Attach a promo code.
+   **"The AI writes the copy; the marketer approves it — human-in-control, as
+   everywhere."**
 3. **Save → then place a new customer's first order** (Scene 1 flow, or a quick
    guest order). The campaign **fires exactly once** via TMF681 — the reached
    counter ticks to **1**. A **second** order stays silent. **"Fires once per
@@ -152,17 +195,28 @@ up automation against real business moments, and it fires itself.
 4. **Journeys tab** (the sophisticated version): a journey is an ordered
    **sequence** (message → wait → branch) with a **holdout group** for
    **measurable lift**. Open one → the stats show *entered / held-out /
-   converted / **lift in points** / revenue per customer*. **"This isn't
-   send-and-hope — a control group proves the lift in money, per customer, per
-   month."**
-5. Pause a campaign from the GUI (button flips to **Resume**). **"On/off is a
+   converted / **lift in points** / revenue per customer*. **"Not send-and-hope —
+   a control group proves the lift in money, per customer, per month."**
+5. **The CDP & activation.** The same desk runs a **BSS-native CDP**:
+   **Audiences** built from real customer **traits** off the event bus (spend,
+   tenure, loyalty, churn-risk, region); **prospects** imported under **consent**
+   and reachable only if consented; and **acquisition activation** — an audience
+   pushed as a **hashed Custom Audience** to **Meta *and* Google**
+   (multi-destination). **"First-party data activated to the ad platforms — with
+   consent enforced at the door and DNC honoured at activation."**
+6. **Social + attribution.** **Social listening** (mentions + sentiment) and
+   **Social care** — an inbound DM becomes a **TMF621 trouble ticket**
+   automatically, event-driven. **Attribution** closes the loop: campaign **lift**
+   and **incremental revenue**, under the honest rule that **no holdout = no lift
+   claimed**.
+7. Pause a campaign from the GUI (button flips to **Resume**). **"On/off is a
    click, not a deploy — and Nova's tenant sees none of GenAlpha's campaigns."**
 
 > Why it lands: it's the *same* choreography engine as Live Flow and fulfilment,
-> pointed at growth. "Data, not code" holds for marketing too — a journey is
-> ordered steps as JSON the marketer edits.
+> pointed at growth — and a CDP that's native to the BSS, not a bolt-on data
+> silo. "Data, not code" holds for marketing too.
 
-### Scene 5 — One build, any operator (multi-tenant punchline) · ~2 min
+### Scene 6 — One build, any operator (multi-tenant punchline) · ~2 min
 URL: `http://shop.nova.localhost:8080/shop/`
 
 - **"Same binary, same deployment. This is a second operator — Norwegian,
@@ -196,7 +250,7 @@ URL: `http://localhost:8080/partner/` as `demo` / `demo`
 - **What you owe** → settlement per owner, and the margin. **"Every euro we pay the
   owner books to the ledger as wholesale cost; the margin is visible, not assumed."**
 - The punchline: postcode `7010` (Trondheim) is served by **Nova** — the second
-  operator from Scene 5, now playing the fibre **owner**. **"Seeker and provider,
+  operator from Scene 6, now playing the fibre **owner**. **"Seeker and provider,
   the same platform, meeting across the tenant line — the one deliberate
   cross-tenant path, and it still goes through the gateway, never around the
   isolation."**
@@ -223,7 +277,8 @@ URL: `http://localhost:8080/partner/` as `demo` / `demo`
 |---|---|---|
 | Storefront (B2C) | `localhost:8080/shop/` | self-register, or `kai@bss.local` / `kai` (live line) |
 | Back-office console | `localhost:8080/console/` | `pat@bss.local` / `pat` (product desk); `demo`/`demo` (everything) |
-| Finance / Growth / Ops desks | same console | `finn` / `gro` / `omar` `@bss.local` (pw = name) |
+| Finance / Marketing / Sales / Ops desks | same console | `finn` / `mkt` / `sel` / `omar` `@bss.local` (pw = name) |
+| Growth (combined mkt+sales) | same console | `gro@bss.local` / `gro` — sees Marketing **and** Sales (the split role, still valid) |
 | CSR console | `localhost:8080/csr/` | `agent-anna` / `agent` (full); `jo@bss.local` / `jo` (junior) |
 | Business console (B2B) | `localhost:8080/biz/` | `bianca@acme.example` / `bianca` |
 | Mobile app | `localhost:8080/app/` | `emil@acme.example` / `emil` |
@@ -244,7 +299,7 @@ immediately, for THIS tenant only, with no deploy. Show them side by side —
 it's the demo's strongest contrast.
 
 ### Way A — by talking (the copilot)
-Console → **Copilot** tab (as `pat`):
+Console → **Product copilot** tab (as `pat`):
 1. Type or 🎤-speak: *"I want to sell a streaming service."*
 2. It asks what's missing (the price). Answer in words.
 3. Read the proposal card (spec + price + offering + category).
@@ -312,12 +367,12 @@ TMF APIs, and it's AI-native from day one rather than retrofitted. It runs as
 a full BSS for a smaller operator/MVNO, or as a layer on top of what you have."*
 
 **"Is it production-ready?"**
-*"The core is proven — 111 end-to-end suites, 25 conformance kits at zero,
-crash-resumable billing, GDPR endpoints, runs on three clouds off one Helm
-chart. A campaign-day browse cache absorbs a Black-Friday surge at the gateway
-before it reaches the database. And it's honest about the gaps: the charging
-system is a seam (bring your own OCS), no tax engine, no ERP integration, no
-third-party pen test yet.
+*"The core is proven — 136 browser end-to-end suites (174 automated suites in
+all), 25 conformance kits at zero, crash-resumable billing, GDPR endpoints, runs
+on three clouds off one Helm chart. A campaign-day browse cache absorbs a
+Black-Friday surge at the gateway before it reaches the database. And it's honest
+about the gaps: the charging system is a seam (bring your own OCS), no tax engine,
+no ERP integration, no third-party pen test yet.
 The capability map lists every gap as an integration plan, not a surprise."*
 
 **"How much did this cost to build?"**
