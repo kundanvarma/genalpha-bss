@@ -90,13 +90,15 @@ async function ensureOverlay(page) {
         padding:6px 10px;border-radius:20px;display:flex;gap:7px;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.3)}
       #demo-badge b{width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:demopulse 1.4s infinite}
       @keyframes demopulse{50%{opacity:.3}}
-      #demo-cap{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:20px 30px;
-        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;
-        transition:opacity .3s;display:flex;gap:18px;align-items:center}
-      #demo-ava{width:76px;height:76px;border-radius:50%;object-fit:cover;flex:0 0 auto;display:none;
-        border:2px solid rgba(255,255,255,.6);box-shadow:0 2px 14px rgba(0,0,0,.5)}
+      #demo-cap{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:22px 30px;
+        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;transition:opacity .3s}
       #demo-cap .who{display:inline-block;font:700 12px system-ui;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:6px;margin-bottom:8px;color:#fff}
-      #demo-cap .txt{max-width:1000px}
+      #demo-cap .txt{max-width:1040px}
+      #demo-hero{position:fixed;left:48px;top:50%;transform:translate(-44px,-50%);z-index:2147483646;
+        display:flex;flex-direction:column;align-items:center;gap:16px;opacity:0;pointer-events:none;transition:opacity .45s,transform .45s}
+      #demo-hero.on{opacity:1;transform:translate(0,-50%)}
+      #demo-hero img{width:260px;height:260px;border-radius:50%;object-fit:cover;border:5px solid #fff;box-shadow:0 12px 60px rgba(0,0,0,.65)}
+      #demo-hero .hn{font:700 23px system-ui;color:#fff;background:rgba(8,8,14,.82);padding:10px 22px;border-radius:30px}
       #demo-title{position:fixed;inset:0;z-index:2147483646;background:radial-gradient(circle at 50% 40%,#1a1a2e,#08080e);color:#fff;
         display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui;transition:opacity .5s}
       #demo-title .k{font:700 13px system-ui;letter-spacing:3px;text-transform:uppercase;color:#7c5cff;margin-bottom:14px}
@@ -106,21 +108,40 @@ async function ensureOverlay(page) {
     const badge = document.createElement('div'); badge.id = 'demo-badge';
     badge.innerHTML = '<b></b> LIVE · AI-narrated · SPACE pause · Q quit';
     const cap = document.createElement('div'); cap.id = 'demo-cap'; cap.style.opacity = '0';
-    cap.innerHTML = '<img id="demo-ava" alt=""><div><div class="who"></div><div class="txt"></div></div>';
-    document.body.appendChild(badge); document.body.appendChild(cap);
+    cap.innerHTML = '<div class="who"></div><div class="txt"></div>';
+    const hero = document.createElement('div'); hero.id = 'demo-hero';
+    hero.innerHTML = '<img alt=""><div class="hn"></div>';
+    document.body.appendChild(badge); document.body.appendChild(cap); document.body.appendChild(hero);
   }).catch(() => {});
 }
 async function caption(page, persona, text) {
   const p = VOICE[persona];
   await ensureOverlay(page);
-  await page.evaluate(({ name, color, text, ava }) => {
+  await page.evaluate(({ name, color, text }) => {
     const cap = document.getElementById('demo-cap'); if (!cap) return;
     cap.querySelector('.who').textContent = name; cap.querySelector('.who').style.background = color;
-    cap.querySelector('.txt').textContent = text;
-    const img = document.getElementById('demo-ava');
-    if (img) { if (ava) { img.src = ava; img.style.display = 'block'; img.style.borderColor = color; } else { img.style.display = 'none'; } }
-    cap.style.opacity = '1';
-  }, { name: p.name, color: p.color, text, ava: AVATARS[persona] || '' }).catch(() => {});
+    cap.querySelector('.txt').textContent = text; cap.style.opacity = '1';
+  }, { name: p.name, color: p.color, text }).catch(() => {});
+}
+// The persona reveal: a large portrait slides in on the LEFT while they introduce
+// themselves, then it clears so the software is unobstructed.
+async function showHero(page, persona) {
+  const p = VOICE[persona]; const ava = AVATARS[persona];
+  if (!ava) return;
+  await ensureOverlay(page);
+  await page.evaluate(({ name, color, ava }) => {
+    const h = document.getElementById('demo-hero'); if (!h) return;
+    h.querySelector('img').src = ava; h.querySelector('img').style.borderColor = color;
+    h.querySelector('.hn').textContent = name; h.classList.add('on');
+  }, { name: p.name, color: p.color, ava }).catch(() => {});
+}
+async function hideHero(page) {
+  await page.evaluate(() => { const h = document.getElementById('demo-hero'); if (h) h.classList.remove('on'); }).catch(() => {});
+}
+async function introduce(page, persona, text) {
+  await showHero(page, persona); await sleep(450);
+  await narrate(page, persona, text);
+  await hideHero(page); await sleep(400);
 }
 async function narrate(page, persona, text) {
   await caption(page, persona, text);
@@ -213,6 +234,16 @@ async function dragCard(page, fromStage, toStage) {
   await sleep(1600);
   return id;
 }
+// A REAL shopping run: browse the catalog, open a product, add it to the cart, and
+// land on the cart — but STOP before payment, so no order is created and it repeats
+// cleanly. Best-effort throughout; the narration carries if a control moves.
+async function customerBuy(page) {
+  if (DRY) return;
+  await tryDo(async () => { await page.goto(SHOP); await page.waitForLoadState('networkidle'); await sleep(1200); });
+  await tryDo(async () => { await page.locator('a.card[href*="/offering/"], a[href*="/offering/"]').first().click(); await sleep(1600); await scrollDown(page, 220); });
+  await tryDo(async () => { await page.locator('button:has-text("Add to cart"), button:has-text("Add to bag")').first().click(); await sleep(1400); });
+  await tryDo(async () => { await page.locator('a[href="/cart"], a[href*="/cart"], a:has-text("Cart")').first().click(); await sleep(1600); await scrollDown(page, 150); });
+}
 
 (async () => {
   const browser = await chromium.launch({ headless: DRY, slowMo: DRY ? 0 : 110 });
@@ -257,16 +288,17 @@ async function dragCard(page, fromStage, toStage) {
     await loginShop(sPage, SHOP, 'kai@bss.local', 'kai'); await sPage.bringToFront();
     await title(sPage, 'genalpha-bss', 'The demo gives itself.',
       'Every other BSS demo is a human reading slides. This one is the AI, running its own.');
-    await narrate(sPage, 'ai',
+    await introduce(sPage, 'ai',
       "Every BSS demo you have seen was a person reading slides. This one is different. I am the AI inside this BSS, and I am going to give you the demo myself. No slides. Real software.");
     await dropTitle(sPage);
 
     // ---------- ACT 1 — the customer ----------
-    await title(sPage, 'Act one', 'A customer, and their live account.', 'The storefront · signed in as a customer');
+    await title(sPage, 'Act one', 'A customer shops — and it just works.', 'The storefront · signed in as a customer');
     await dropTitle(sPage);
-    await narrate(sPage, 'kai',
-      "I am Kai. This is my account — my plan, my number, my usage, all in one place. When I bought a family bundle, the digital SIM activated itself in seconds. No human, no wait.");
-    await tryDo(async () => { await sPage.mouse.wheel(0, 500); }); await sleep(500);
+    await introduce(sPage, 'kai', "I am Kai. This is my storefront — my plans, my devices, all in one place.");
+    await narrate(sPage, 'kai', "Watch me shop. I browse the plans, open one, and add it to my cart.");
+    await customerBuy(sPage);
+    await narrate(sPage, 'kai', "There — it is in my cart, ready to check out. And when I buy, the digital SIM activates itself in seconds. No human, no wait.");
     await narrate(sPage, 'ai',
       "Every part fulfils on its own clock — the SIM instant, the phone shipped, the fibre booked for an engineer. One order, many timelines, one bill.");
 
@@ -274,7 +306,7 @@ async function dragCard(page, fromStage, toStage) {
     const patPage = await desk('pat', 'pat@bss.local', 'pat');
     await title(patPage, 'Act two', 'Products are data — and bundles stay soft.', 'Signed in as Pat — only the product desk shows');
     await dropTitle(patPage);
-    await narrate(patPage, 'pat',
+    await introduce(patPage, 'pat',
       "I am Pat, in product. Notice my console — I only see the catalog. I do not file a ticket to launch a product; I just talk to my copilot.");
     await clickTab(patPage, 'Product copilot');
     await narrate(patPage, 'pat', "Watch. I want a new streaming add-on — I just tell it, in words.");
@@ -291,7 +323,7 @@ async function dragCard(page, fromStage, toStage) {
     const opPage = await desk('demo', 'demo', 'demo');
     await title(opPage, 'Act three', 'AI you can audit.', 'The operator view — the AI works across the whole floor');
     await dropTitle(opPage);
-    await narrate(opPage, 'ai', "This is my view — the whole operation. Digital workers pull the real backlog: open tickets, unapplied cash.");
+    await introduce(opPage, 'ai', "This is my view — the whole operation. Digital workers pull the real backlog: open tickets, unapplied cash.");
     await clickTab(opPage, 'AI Workforce'); await scrollDown(opPage, 320);
     await narrate(opPage, 'ai', "But I cannot mark done what is not done. I escalate when I am unsure. And a human holds every approval key.");
     await clickTab(opPage, 'Runbooks'); await scrollDown(opPage, 320);
@@ -301,7 +333,7 @@ async function dragCard(page, fromStage, toStage) {
     const selPage = await desk('sel', 'sel@bss.local', 'sel');
     await title(selPage, 'Act four', 'A pipeline that forecasts itself.', 'Signed in as Sel — the sales desk');
     await dropTitle(selPage);
-    await narrate(selPage, 'sel', "I am Sel. My desk is sales, nothing else. Every deal staged, valued, forecast. I drag a card across the stages and the weighted forecast re-totals, live.");
+    await introduce(selPage, 'sel', "I am Sel. My desk is sales, nothing else. Every deal staged, valued, forecast. I drag a card across the stages and the weighted forecast re-totals, live.");
     await clickTab(selPage, 'Pipeline board');
     await reveal(selPage, '[data-testid="pipeline-board"]'); await sleep(400);
     await narrate(selPage, 'sel', "Watch me move a live deal — from Proposal across to Negotiation.");
@@ -313,7 +345,7 @@ async function dragCard(page, fromStage, toStage) {
     const mktPage = await desk('mkt', 'mkt@bss.local', 'mkt');
     await title(mktPage, 'Act five', 'Marketing: authored here, received there.', 'Signed in as Mia — the marketing desk');
     await dropTitle(mktPage);
-    await narrate(mktPage, 'mia', "I am Mia, in marketing — again, just my desk. I do not hand-build a campaign; I describe it.");
+    await introduce(mktPage, 'mia', "I am Mia, in marketing — again, just my desk. I do not hand-build a campaign; I describe it.");
     await clickTab(mktPage, 'Marketing copilot');
     await tryDo(() => copilotAsk(mktPage, 'growth-copilot', 'Welcome new customers when they sign up, and include a 10 percent code'));
     await narrate(mktPage, 'mia', "It proposes a whole journey — the steps, the timing, the copy, even a holdout group to prove the lift — and creates it only when I confirm. It proposes; I decide.");
@@ -338,7 +370,7 @@ async function dragCard(page, fromStage, toStage) {
     await title(novaPage, 'Act six', 'One build. Any operator.', 'The multi-tenant punchline');
     await dropTitle(novaPage);
     await tryDo(async () => { await loginShop(novaPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
-    await narrate(novaPage, 'nils', "Hei. Velkommen til Nova. A second operator — Norwegian, priced in kroner, its own catalog and customers.");
+    await introduce(novaPage, 'nils', "Hei. Velkommen til Nova. A second operator — Norwegian, priced in kroner, its own catalog and customers.");
     await narrate(novaPage, 'ai', "Same binary. Same deployment. Walled off by row-level security. Onboarding a new operator is a form, not a project.");
 
     // ---------- CLOSE ----------
