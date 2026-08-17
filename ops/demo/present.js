@@ -13,11 +13,17 @@
  *           interrupt and explain, then carry on.
  *   Q     = quit.
  *
- *   node ops/demo/present.js              # headed, with voice — the show
+ *   node ops/demo/present.js              # headed, with voice — the show (keyboard control)
+ *   DEMO_VOICE=1 node ops/demo/present.js # + hands-free voice control: say "pause" / "resume" / "stop"
  *   DEMO_DRY=1 node ops/demo/present.js   # headless, silent, fast — validate the drive
+ *
+ * Voice is opt-in and offline (whisper.cpp); the keyboard stays plan B and is
+ * never affected if the mic/model is unavailable. See voice-control.js.
  */
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
+const path = require('path');
+const readline = require('readline');
 
 const DRY = !!process.env.DEMO_DRY;
 const API = 'http://localhost:8080';
@@ -41,6 +47,8 @@ function handleKey(k) {
   if (k === ' ' || k === 'Spacebar') { paused = !paused; if (paused) killAudio(); }
   else if (k === 'q' || k === 'Q') { quit = true; paused = false; killAudio(); }
 }
+// explicit set — the voice seam sends "pause"/"resume" (not a toggle)
+function setPause(b) { if (b && !paused) { paused = true; killAudio(); } else if (!b && paused) { paused = false; } }
 function speakAbortable(voice, text) {
   return new Promise((res) => {
     if (DRY) return res(true);
@@ -167,6 +175,20 @@ async function clickTab(page, title) {
   await shopCtx.addInitScript(keyInit);
   const sPage = await shopCtx.newPage();
 
+  // Plan A: voice control (opt-in). The keyboard (plan B) is always live; if the
+  // mic/model is missing or capture fails, this exits and the show is unaffected.
+  let voiceProc = null;
+  if (process.env.DEMO_VOICE && !DRY) {
+    voiceProc = spawn('node', [path.join(__dirname, 'voice-control.js')], { stdio: ['ignore', 'pipe', 'pipe'] });
+    readline.createInterface({ input: voiceProc.stdout }).on('line', (l) => {
+      const c = l.trim();
+      if (c === 'pause') setPause(true);
+      else if (c === 'resume') setPause(false);
+      else if (c === 'quit') { quit = true; paused = false; killAudio(); }
+    });
+    voiceProc.stderr.on('data', (d) => process.stderr.write(String(d)));
+  }
+
   try {
     // ---------- COLD OPEN ----------
     await loginShop(sPage, SHOP, 'kai@bss.local', 'kai');
@@ -256,6 +278,7 @@ async function clickTab(page, title) {
     if (e instanceof Quit) console.log('Stopped (Q).');
     else throw e;
   } finally {
+    if (voiceProc) { try { voiceProc.kill(); } catch { /* gone */ } }
     await browser.close();
   }
 })().catch((e) => { console.error('PRESENTER ERROR:', e.message.split('\n')[0]); process.exit(1); });

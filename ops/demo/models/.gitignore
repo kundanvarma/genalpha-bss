@@ -1,0 +1,5 @@
+# Whisper STT models are large binaries — fetched on setup, never committed.
+# Download with:
+#   curl -L -o ggml-base.bin    https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+#   curl -L -o ggml-tiny.en.bin https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin
+*.bin
