@@ -20,10 +20,18 @@
  * never affected if the mic/model is unavailable. See voice-control.js.
  */
 const { chromium } = require('playwright');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const readline = require('readline');
 const fs = require('fs');
+
+// Record mode (DEMO_RECORD=1): screen-capture the show + write each narration line
+// to a timed wav, then mux into recordings/demo.mp4 with the persona voices. No
+// system-audio loopback needed — the voiceover is rendered and muxed in post.
+const RECORD = !!process.env.DEMO_RECORD;
+const REC_DIR = path.join(__dirname, 'recordings');
+const REC_LEAD = 1.4;            // ~ffmpeg pre-roll before recT0, seconds
+let recProc = null, recT0 = 0, recIdx = 0; const recClips = [];
 
 // Persona portraits captured from the launch video (ops/demo-assets/personas/*.png,
 // gitignored). Inlined as data-URIs so they render inside the injected overlay with
@@ -59,6 +67,14 @@ function setPause(b) { if (b && !paused) { paused = true; killAudio(); } else if
 function speakAbortable(voice, text) {
   return new Promise((res) => {
     if (DRY) return res(true);
+    if (RECORD) {                       // write the line to a timed wav; hold the timeline for its length
+      const wav = path.join(REC_DIR, `clip_${recIdx++}.aiff`);
+      spawnSync('say', ['-v', voice, '-r', '186', '-o', wav, text]);
+      const d = spawnSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nk=1:nw=1', wav], { encoding: 'utf8' }).stdout;
+      const dur = parseFloat(d) || 2.4;
+      recClips.push({ off: (Date.now() - recT0) / 1000, file: wav });
+      return setTimeout(() => res(true), (dur + 0.2) * 1000);
+    }
     killedByCtl = false;
     currentSay = spawn('say', ['-v', voice, '-r', '186', text]);
     currentSay.on('exit', () => { const k = killedByCtl; currentSay = null; res(!k); });
@@ -270,8 +286,28 @@ async function customerBuy(page) {
   await tryDo(async () => { await page.locator('a[href="/cart"], a[href*="/cart"], a:has-text("Cart")').first().click(); await sleep(1600); await scrollDown(page, 150); });
 }
 
+// Mux the rendered narration clips onto the screen capture at their timestamps.
+function assembleVideo() {
+  const screen = path.join(REC_DIR, 'screen.mp4');
+  const out = path.join(REC_DIR, 'demo.mp4');
+  if (!fs.existsSync(screen) || !recClips.length) { console.log('RECORD: no screen capture / clips — is Screen Recording permission granted?'); return; }
+  const inputs = []; const filters = [];
+  recClips.forEach((c, i) => {
+    inputs.push('-i', c.file);
+    const ms = Math.max(0, Math.round((REC_LEAD + c.off) * 1000));
+    filters.push(`[${i + 1}]adelay=${ms}|${ms}[a${i}]`);
+  });
+  const fc = filters.join(';') + ';' + recClips.map((_, i) => `[a${i}]`).join('')
+    + `amix=inputs=${recClips.length}:normalize=0:dropout_transition=0[aout]`;
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', screen, ...inputs,
+    '-filter_complex', fc, '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', out];
+  console.log('RECORD: assembling ' + out + ' …');
+  const r = spawnSync('ffmpeg', args, { encoding: 'utf8' });
+  console.log(r.status === 0 ? ('VIDEO READY → ' + out) : ('ffmpeg mux failed: ' + (r.stderr || '').split('\n').slice(-3).join(' ')));
+}
+
 (async () => {
-  const browser = await chromium.launch({ headless: DRY, slowMo: DRY ? 0 : 110 });
+  const browser = await chromium.launch({ headless: DRY && !RECORD, slowMo: DRY ? 0 : 110 });
   const vp = { viewport: { width: 1560, height: 900 } };
   const keyInit = () => window.addEventListener('keydown', (e) => {
     if ([' ', 'Spacebar', 'q', 'Q'].includes(e.key)) { e.preventDefault(); if (window.__demoKey) window.__demoKey(e.key); }
@@ -297,7 +333,7 @@ async function customerBuy(page) {
 
   // Plan A: voice control (opt-in). Keyboard (plan B) is always live and untouched.
   let voiceProc = null;
-  if (process.env.DEMO_VOICE && !DRY) {
+  if (process.env.DEMO_VOICE && !DRY && !RECORD) {
     voiceProc = spawn('node', [path.join(__dirname, 'voice-control.js')], { stdio: ['ignore', 'pipe', 'pipe'] });
     readline.createInterface({ input: voiceProc.stdout }).on('line', (l) => {
       const c = l.trim();
@@ -306,6 +342,14 @@ async function customerBuy(page) {
       else if (c === 'quit') { quit = true; paused = false; killAudio(); }
     });
     voiceProc.stderr.on('data', (d) => process.stderr.write(String(d)));
+  }
+
+  if (RECORD) {
+    fs.mkdirSync(REC_DIR, { recursive: true });
+    for (const f of fs.readdirSync(REC_DIR)) if (f.startsWith('clip_')) { try { fs.unlinkSync(path.join(REC_DIR, f)); } catch { /* */ } }
+    recProc = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'avfoundation',
+      '-capture_cursor', '1', '-framerate', '30', '-i', '3:none', '-pix_fmt', 'yuv420p', path.join(REC_DIR, 'screen.mp4')], { stdio: 'ignore' });
+    await sleep(1500); recT0 = Date.now();
   }
 
   try {
@@ -413,6 +457,8 @@ async function customerBuy(page) {
     else throw e;
   } finally {
     if (voiceProc) { try { voiceProc.kill(); } catch { /* gone */ } }
+    if (recProc) { try { recProc.kill('SIGINT'); await new Promise((r) => recProc.on('exit', r)); } catch { /* */ } }
     await browser.close();
+    if (RECORD) assembleVideo();
   }
 })().catch((e) => { console.error('PRESENTER ERROR:', e.message.split('\n')[0]); process.exit(1); });
