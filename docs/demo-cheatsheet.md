@@ -40,6 +40,7 @@
 > **Journeys** *[open one]* "Ordered steps + a HOLDOUT group → measurable LIFT in points + revenue per customer. Not send-and-hope."
 > **CDP** "Audiences from real traits off the event bus (spend/tenure/loyalty/churn-risk/region); prospects imported under CONSENT, reached only if consented; activation → hashed Custom Audience to Meta AND Google."
 > **Social + attribution** "Social listening (mentions+sentiment); Social care → inbound DM becomes a TMF621 ticket, event-driven; attribution reports lift + incremental revenue — no holdout, no lift claimed."
+> ⚠️ social + Meta/Google activation run against a local **mock-social** emulator (swappable seam) — connector speaks the real API shape, nothing leaves the box; a live Meta hookup is a post-demo integration. Panes empty? mock restarted → `python3 ops/seed/seed_social.py`.
 
 ### ⑥ ONE BUILD, ANY OPERATOR — `shop.nova.localhost:8080/shop/` → `nils`/`nils`
 > "Same binary, same deployment. A second operator — Norwegian, prices in NOK, own catalog, walled off by row-level security."

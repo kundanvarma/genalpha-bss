@@ -216,6 +216,15 @@ tabs — use `mkt` or `demo`.)*
 > pointed at growth — and a CDP that's native to the BSS, not a bolt-on data
 > silo. "Data, not code" holds for marketing too.
 
+> Honesty note (say it if asked): social listening/care and the Meta/Google
+> activation run against a local **mock-social** emulator on a swappable seam
+> (`bss.downstream.social-api-url`). The connector speaks the platform's API
+> shape and the DM→TMF621-ticket choreography is real, but in this demo nothing
+> leaves the box — no live ad account, no PII off-machine. A real Meta/Instagram
+> hookup is a defined integration on that seam, not wired here. If the two social
+> panes are empty, the mock was restarted — repopulate with
+> `python3 ops/seed/seed_social.py`.
+
 ### Scene 6 — One build, any operator (multi-tenant punchline) · ~2 min
 URL: `http://shop.nova.localhost:8080/shop/`
 
