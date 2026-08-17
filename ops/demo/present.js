@@ -30,7 +30,7 @@ const fs = require('fs');
 // system-audio loopback needed — the voiceover is rendered and muxed in post.
 const RECORD = !!process.env.DEMO_RECORD;
 const REC_DIR = path.join(__dirname, 'recordings');
-const REC_LEAD = 1.4;            // ~ffmpeg pre-roll before recT0, seconds
+const REC_LEAD = 0.3;            // small offset so voiceover aligns with the video
 let recProc = null, recT0 = 0, recIdx = 0; const recClips = [];
 
 // Persona portraits captured from the launch video (ops/demo-assets/personas/*.png,
@@ -286,11 +286,13 @@ async function customerBuy(page) {
   await tryDo(async () => { await page.locator('a[href="/cart"], a[href*="/cart"], a:has-text("Cart")').first().click(); await sleep(1600); await scrollDown(page, 150); });
 }
 
-// Mux the rendered narration clips onto the screen capture at their timestamps.
+// Mux the rendered narration clips onto the Playwright-captured video at their
+// timestamps → recordings/demo.mp4 (voiceover baked in).
 function assembleVideo() {
-  const screen = path.join(REC_DIR, 'screen.mp4');
+  const webms = fs.existsSync(REC_DIR) ? fs.readdirSync(REC_DIR).filter((f) => f.endsWith('.webm')).map((f) => path.join(REC_DIR, f)) : [];
+  if (!webms.length || !recClips.length) { console.log('RECORD: no video / clips captured'); return; }
+  const video = webms.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
   const out = path.join(REC_DIR, 'demo.mp4');
-  if (!fs.existsSync(screen) || !recClips.length) { console.log('RECORD: no screen capture / clips — is Screen Recording permission granted?'); return; }
   const inputs = []; const filters = [];
   recClips.forEach((c, i) => {
     inputs.push('-i', c.file);
@@ -299,37 +301,44 @@ function assembleVideo() {
   });
   const fc = filters.join(';') + ';' + recClips.map((_, i) => `[a${i}]`).join('')
     + `amix=inputs=${recClips.length}:normalize=0:dropout_transition=0[aout]`;
-  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', screen, ...inputs,
-    '-filter_complex', fc, '-map', '0:v', '-map', '[aout]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', out];
+  const args = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video, ...inputs,
+    '-filter_complex', fc, '-map', '0:v', '-map', '[aout]', '-c:v', 'libx264', '-preset', 'veryfast',
+    '-crf', '23', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', out];
   console.log('RECORD: assembling ' + out + ' …');
   const r = spawnSync('ffmpeg', args, { encoding: 'utf8' });
-  console.log(r.status === 0 ? ('VIDEO READY → ' + out) : ('ffmpeg mux failed: ' + (r.stderr || '').split('\n').slice(-3).join(' ')));
+  console.log(r.status === 0 ? ('\n✅ VIDEO READY → ' + out) : ('mux failed: ' + (r.stderr || '').split('\n').slice(-3).join(' ')));
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless: DRY && !RECORD, slowMo: DRY ? 0 : 110 });
+  const browser = await chromium.launch({ headless: DRY || RECORD, slowMo: DRY ? 0 : 110 });
   const vp = { viewport: { width: 1560, height: 900 } };
   const keyInit = () => window.addEventListener('keydown', (e) => {
     if ([' ', 'Spacebar', 'q', 'Q'].includes(e.key)) { e.preventDefault(); if (window.__demoKey) window.__demoKey(e.key); }
   }, true);
 
-  // A fresh context per persona = independent SSO session (no wrong-persona guard),
-  // so each role shows ONLY its own desk.
+  // LIVE: a fresh context per persona (own SSO session → each role shows only its
+  // desk). RECORD: ONE context with Playwright video, switching identity by clearing
+  // the session + re-logging in — the whole demo becomes a single clean video, no OS
+  // screen-recording permission, no window (headless), so stray keystrokes can't leak.
   async function newCtx() {
-    const ctx = await browser.newContext(vp);
+    const opts = { ...vp };
+    if (RECORD) opts.recordVideo = { dir: REC_DIR, size: { width: 1560, height: 900 } };
+    const ctx = await browser.newContext(opts);
     await ctx.exposeBinding('__demoKey', (_s, k) => handleKey(k));
     await ctx.addInitScript(keyInit);
     return ctx;
   }
+  const sharedCtx = RECORD ? await newCtx() : null;
+  const sPage = RECORD ? await sharedCtx.newPage() : await (await newCtx()).newPage();
   const desks = {};
   async function desk(persona, u, p) {           // logged-in console page for a staff persona
+    if (RECORD) { await sharedCtx.clearCookies(); await loginConsole(sPage, u, p); return sPage; }
     if (!desks[persona]) { const page = await (await newCtx()).newPage(); await loginConsole(page, u, p); desks[persona] = page; }
     await desks[persona].bringToFront();
     return desks[persona];
   }
-
-  // customer + Nova shop sessions
-  const sPage = await (await newCtx()).newPage();
+  // RECORD: re-point the single page at a shop identity (no-op in live mode)
+  async function recShop(url, u, p) { if (RECORD) { await sharedCtx.clearCookies(); await loginShop(sPage, url, u, p); } }
 
   // Plan A: voice control (opt-in). Keyboard (plan B) is always live and untouched.
   let voiceProc = null;
@@ -346,10 +355,8 @@ function assembleVideo() {
 
   if (RECORD) {
     fs.mkdirSync(REC_DIR, { recursive: true });
-    for (const f of fs.readdirSync(REC_DIR)) if (f.startsWith('clip_')) { try { fs.unlinkSync(path.join(REC_DIR, f)); } catch { /* */ } }
-    recProc = spawn('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'avfoundation',
-      '-capture_cursor', '1', '-framerate', '30', '-i', '3:none', '-pix_fmt', 'yuv420p', path.join(REC_DIR, 'screen.mp4')], { stdio: 'ignore' });
-    await sleep(1500); recT0 = Date.now();
+    for (const f of fs.readdirSync(REC_DIR)) if (f.startsWith('clip_') || f.endsWith('.webm')) { try { fs.unlinkSync(path.join(REC_DIR, f)); } catch { /* */ } }
+    recT0 = Date.now();
   }
 
   try {
@@ -429,6 +436,7 @@ function assembleVideo() {
     await narrate(mktPage, 'ai', "Same journey object the API serves, drawn as a graph — with how many customers each step has reached. Data, not code.");
 
     // ---- the payoff: what the CUSTOMER sees ----
+    await recShop(SHOP, 'kai@bss.local', 'kai');   // RECORD: back to Kai's shop (no-op live)
     await sPage.bringToFront();
     await title(sPage, 'Act five', 'And here is what the customer sees.', "Kai's app · notifications");
     await dropTitle(sPage);
@@ -439,10 +447,11 @@ function assembleVideo() {
       "Authored in the back office, delivered on the event bus, received in the customer's own app — the whole loop, one platform.");
 
     // ---------- ACT 6 — any operator ----------
-    const novaPage = await (await newCtx()).newPage(); await novaPage.bringToFront();
+    const novaPage = RECORD ? sPage : await (await newCtx()).newPage(); await novaPage.bringToFront();
     await title(novaPage, 'Act six', 'One build. Any operator.', 'The multi-tenant punchline');
     await dropTitle(novaPage);
-    await tryDo(async () => { await loginShop(novaPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
+    if (RECORD) await recShop(NOVA_SHOP, 'nils@nova.local', 'nils');
+    else await tryDo(async () => { await loginShop(novaPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
     await introduce(novaPage, 'nils', "Hei. Velkommen til Nova. A second operator — Norwegian, priced in kroner, its own catalog and customers.");
     await narrate(novaPage, 'ai', "Same binary. Same deployment. Walled off by row-level security. Onboarding a new operator is a form, not a project.");
 
@@ -457,8 +466,7 @@ function assembleVideo() {
     else throw e;
   } finally {
     if (voiceProc) { try { voiceProc.kill(); } catch { /* gone */ } }
-    if (recProc) { try { recProc.kill('SIGINT'); await new Promise((r) => recProc.on('exit', r)); } catch { /* */ } }
-    await browser.close();
-    if (RECORD) assembleVideo();
+    await browser.close();                 // finalizes the Playwright .webm
+    if (RECORD) assembleVideo();            // mux the voiceover → demo.mp4
   }
 })().catch((e) => { console.error('PRESENTER ERROR:', e.message.split('\n')[0]); process.exit(1); });
