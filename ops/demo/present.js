@@ -172,11 +172,36 @@ async function reveal(page, sel) { try { await page.locator(sel).first().scrollI
 async function scrollDown(page, px = 350) { await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px).catch(() => {}); await sleep(600); }
 
 async function loginConsole(page, u, p) {
-  await page.goto(`${API}/console/`);
-  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
-  await page.fill('input[name="username"]', u); await page.fill('input[name="password"]', p);
-  await page.click('button[type="submit"], input[type="submit"]');
-  await page.waitForSelector('#tabs .tab', { timeout: 20000 }); await sleep(700);
+  for (let attempt = 1; attempt <= 2; attempt++) {          // one retry — logins can be briefly slow under load
+    try {
+      await page.goto(`${API}/console/`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('input[name="username"]', { timeout: 30000 });
+      await page.fill('input[name="username"]', u); await page.fill('input[name="password"]', p);
+      await page.click('button[type="submit"], input[type="submit"]');
+      await page.waitForSelector('#tabs .tab', { timeout: 30000 }); await sleep(700);
+      return;
+    } catch (e) { if (attempt === 2) throw e; await sleep(1500); }
+  }
+}
+// Make the "create a product" act repeatable: delete any prior demo-created
+// "Screen Plus" (offering + spec + price) so the copilot never hits "already
+// exists". Best-effort; needs catalog:write (demo).
+async function resetDemoProduct() {
+  if (DRY) return;
+  try {
+    const tr = await fetch('http://localhost:8085/realms/bss/protocol/openid-connect/token', {
+      method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'password', client_id: 'bss-demo', username: 'demo', password: 'demo' }) });
+    const H = { Authorization: 'Bearer ' + (await tr.json()).access_token };
+    for (const res of ['productOffering', 'productSpecification', 'productOfferingPrice']) {
+      const list = await (await fetch(`${API}/tmf-api/productCatalogManagement/v4/${res}?limit=200`, { headers: H })).json();
+      for (const it of (Array.isArray(list) ? list : [])) {
+        if (String(it.name || '').toLowerCase().includes('screen plus')) {
+          await fetch(`${API}/tmf-api/productCatalogManagement/v4/${res}/${it.id}`, { method: 'DELETE', headers: H }).catch(() => {});
+        }
+      }
+    }
+  } catch { /* best-effort — Act 2 still narrates */ }
 }
 async function loginShop(page, url, u, p) {
   await page.goto(url);
@@ -284,6 +309,7 @@ async function customerBuy(page) {
   }
 
   try {
+    await resetDemoProduct();   // clear any prior "Screen Plus" so Act 2's create is fresh
     // ---------- COLD OPEN ----------
     await loginShop(sPage, SHOP, 'kai@bss.local', 'kai'); await sPage.bringToFront();
     await title(sPage, 'genalpha-bss', 'The demo gives itself.',
