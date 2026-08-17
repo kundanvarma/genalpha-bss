@@ -30,11 +30,14 @@ const WINDOW = Number(process.env.STT_WINDOW || 1.6); // seconds per listen
 
 // Command words survive STT even when a coined wake-word does not. Order matters:
 // check quit (most specific) → resume → pause. English + a few Norwegian synonyms.
+// DISTINCTIVE words only — common words (hold/wait/go/start/next/play) collide with
+// the narration itself and would self-trigger through the speakers. These do not
+// appear in the script, so the demo's own voice can't pause it.
 function classify(textRaw) {
   const t = ' ' + textRaw.toLowerCase().replace(/[^a-zæøå ]/g, ' ') + ' ';
-  if (/\b(quit|exit|end show|shut ?down|avslutt)\b/.test(t)) return 'quit';
-  if (/\b(resume|resumes|continue|carry on|proceed|start|play|go on|next|onward|fortsett|videre|start igjen)\b/.test(t)) return 'resume';
-  if (/\b(pause|paws|pos|pass|hold|wait|stop|stopp|halt|vent)\b/.test(t)) return 'pause';
+  if (/\b(quit|exit|avslutt)\b/.test(t)) return 'quit';
+  if (/\b(resume|resumes|continue|fortsett)\b/.test(t)) return 'resume';
+  if (/\b(pause|stop|stopp)\b/.test(t)) return 'pause';
   return null;
 }
 

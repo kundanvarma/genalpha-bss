@@ -4,17 +4,16 @@
  * Deterministic orchestration (TTS + timing), NOT a live agent: identical every
  * run, offline, no latency, cannot wander off-script. The AI authored the story;
  * the BSS's own copilots are live inside it; the voice is synthesized per persona
- * (macOS `say`, offline). Drives the REAL stack across two live sessions — the
- * back-office console (as `demo`) and a customer's shop (as `kai`).
+ * (macOS `say`, offline). Each act runs as the REAL persona in its OWN browser
+ * session, so only that role's desk is shown — the RBAC is part of the story.
  *
- * LIVE CONTROLS (click the browser window first, so it has focus):
- *   SPACE = pause / resume — cuts the voice instantly; on resume it re-speaks the
- *           line you were on, so you pick up exactly where you left off. Use it to
- *           interrupt and explain, then carry on.
+ * LIVE CONTROLS (click the active window first, so it has focus):
+ *   SPACE = pause / resume — cuts the voice instantly; on resume re-speaks the
+ *           line you were on, so you pick up where you left off.
  *   Q     = quit.
  *
  *   node ops/demo/present.js              # headed, with voice — the show (keyboard control)
- *   DEMO_VOICE=1 node ops/demo/present.js # + hands-free voice control: say "pause" / "resume" / "stop"
+ *   DEMO_VOICE=1 node ops/demo/present.js # + hands-free voice: say "pause" / "resume" / "stop"
  *   DEMO_DRY=1 node ops/demo/present.js   # headless, silent, fast — validate the drive
  *
  * Voice is opt-in and offline (whisper.cpp); the keyboard stays plan B and is
@@ -47,7 +46,6 @@ function handleKey(k) {
   if (k === ' ' || k === 'Spacebar') { paused = !paused; if (paused) killAudio(); }
   else if (k === 'q' || k === 'Q') { quit = true; paused = false; killAudio(); }
 }
-// explicit set — the voice seam sends "pause"/"resume" (not a toggle)
 function setPause(b) { if (b && !paused) { paused = true; killAudio(); } else if (!b && paused) { paused = false; } }
 function speakAbortable(voice, text) {
   return new Promise((res) => {
@@ -74,7 +72,6 @@ async function gate(page) {
   if (shown) await setBadge(page, 'live');
   if (quit) throw new Quit();
 }
-
 async function ensureOverlay(page) {
   await page.evaluate(() => {
     if (document.getElementById('demo-cap')) return;
@@ -113,11 +110,10 @@ async function caption(page, persona, text) {
 async function narrate(page, persona, text) {
   await caption(page, persona, text);
   for (;;) {
-    await gate(page);            // hold here while paused
+    await gate(page);
     await sleep(300);
     const finished = await speakAbortable(VOICE[persona].voice, text);
-    if (finished) break;         // natural end
-    // cut by SPACE → loop: gate holds until resume, then this same line replays
+    if (finished) break;
   }
   await sleep(200);
 }
@@ -136,6 +132,8 @@ async function dropTitle(page) {
   await sleep(500);
 }
 const tryDo = async (fn) => { try { await fn(); } catch { /* the show goes on */ } };
+async function reveal(page, sel) { try { await page.locator(sel).first().scrollIntoViewIfNeeded({ timeout: 2500 }); } catch { /* not present */ } }
+async function scrollDown(page, px = 350) { await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px).catch(() => {}); await sleep(600); }
 
 async function loginConsole(page, u, p) {
   await page.goto(`${API}/console/`);
@@ -155,7 +153,11 @@ async function loginShop(page, url, u, p) {
 }
 async function clickTab(page, title) {
   const t = page.locator('.tab', { hasText: new RegExp('^' + title + '$') }).first();
-  if (await t.count()) { await t.click(); await sleep(1200); }
+  if (await t.count()) {
+    await t.click(); await sleep(900);
+    await reveal(page, '#list, #content, #main');
+    await sleep(500);
+  }
 }
 
 (async () => {
@@ -165,18 +167,25 @@ async function clickTab(page, title) {
     if ([' ', 'Spacebar', 'q', 'Q'].includes(e.key)) { e.preventDefault(); if (window.__demoKey) window.__demoKey(e.key); }
   }, true);
 
-  const consoleCtx = await browser.newContext(vp);
-  await consoleCtx.exposeBinding('__demoKey', (_s, k) => handleKey(k));
-  await consoleCtx.addInitScript(keyInit);
-  const cPage = await consoleCtx.newPage();
+  // A fresh context per persona = independent SSO session (no wrong-persona guard),
+  // so each role shows ONLY its own desk.
+  async function newCtx() {
+    const ctx = await browser.newContext(vp);
+    await ctx.exposeBinding('__demoKey', (_s, k) => handleKey(k));
+    await ctx.addInitScript(keyInit);
+    return ctx;
+  }
+  const desks = {};
+  async function desk(persona, u, p) {           // logged-in console page for a staff persona
+    if (!desks[persona]) { const page = await (await newCtx()).newPage(); await loginConsole(page, u, p); desks[persona] = page; }
+    await desks[persona].bringToFront();
+    return desks[persona];
+  }
 
-  const shopCtx = await browser.newContext(vp);
-  await shopCtx.exposeBinding('__demoKey', (_s, k) => handleKey(k));
-  await shopCtx.addInitScript(keyInit);
-  const sPage = await shopCtx.newPage();
+  // customer + Nova shop sessions
+  const sPage = await (await newCtx()).newPage();
 
-  // Plan A: voice control (opt-in). The keyboard (plan B) is always live; if the
-  // mic/model is missing or capture fails, this exits and the show is unaffected.
+  // Plan A: voice control (opt-in). Keyboard (plan B) is always live and untouched.
   let voiceProc = null;
   if (process.env.DEMO_VOICE && !DRY) {
     voiceProc = spawn('node', [path.join(__dirname, 'voice-control.js')], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -191,8 +200,7 @@ async function clickTab(page, title) {
 
   try {
     // ---------- COLD OPEN ----------
-    await loginShop(sPage, SHOP, 'kai@bss.local', 'kai');
-    await sPage.bringToFront();
+    await loginShop(sPage, SHOP, 'kai@bss.local', 'kai'); await sPage.bringToFront();
     await title(sPage, 'genalpha-bss', 'The demo gives itself.',
       'Every other BSS demo is a human reading slides. This one is the AI, running its own.');
     await narrate(sPage, 'ai',
@@ -200,7 +208,7 @@ async function clickTab(page, title) {
     await dropTitle(sPage);
 
     // ---------- ACT 1 — the customer ----------
-    await title(sPage, 'Act one', 'A customer, and their live account.', 'The storefront');
+    await title(sPage, 'Act one', 'A customer, and their live account.', 'The storefront · signed in as a customer');
     await dropTitle(sPage);
     await narrate(sPage, 'kai',
       "I am Kai. This is my account — my plan, my number, my usage, all in one place. When I bought a family bundle, the digital SIM activated itself in seconds. No human, no wait.");
@@ -208,76 +216,79 @@ async function clickTab(page, title) {
     await narrate(sPage, 'ai',
       "Every part fulfils on its own clock — the SIM instant, the phone shipped, the fibre booked for an engineer. One order, many timelines, one bill.");
 
-    // ---------- ACT 2 — create a product; soft bundles; price change without migration ----------
-    await loginConsole(cPage, 'demo', 'demo');
-    await cPage.bringToFront();
-    await title(cPage, 'Act two', 'Products are data — and bundles stay soft.', 'The product desk');
-    await dropTitle(cPage);
-    await narrate(cPage, 'pat',
-      "I am Pat. I run the catalog. I do not file a ticket to launch a product — I just talk to my copilot.");
-    await clickTab(cPage, 'Product copilot');
-    await narrate(cPage, 'ai',
+    // ---------- ACT 2 — Pat's product desk (only his tabs) ----------
+    const patPage = await desk('pat', 'pat@bss.local', 'pat');
+    await title(patPage, 'Act two', 'Products are data — and bundles stay soft.', 'Signed in as Pat — only the product desk shows');
+    await dropTitle(patPage);
+    await narrate(patPage, 'pat',
+      "I am Pat, in product. Notice my console — I only see the catalog. I do not file a ticket to launch a product; I just talk to my copilot.");
+    await clickTab(patPage, 'Product copilot');
+    await narrate(patPage, 'ai',
       "Pat describes it in words; the copilot proposes the standards-based payloads; Pat approves. Conversation to storefront, no deploy. By hand it is the same three rows — a price, an offering, a category. A product is data, not code.");
-    await clickTab(cPage, 'Product Offerings');
-    await narrate(cPage, 'pat',
+    await clickTab(patPage, 'Product Offerings');
+    await narrate(patPage, 'pat',
       "And my bundles are soft. A customer upgrades the internet and downgrades the TV in place — no re-contract. The bundle decomposes into parts that each fulfil, and change, on their own.");
-    await narrate(cPage, 'ai',
+    await narrate(patPage, 'ai',
       "Here is the line operators lean in for. When Pat changes a price, he changes ONE row — not a migration project that forklifts every customer off the old plan. The customers on it simply see the new price. No mass migration, ever.");
 
-    // ---------- ACT 3 — the AI, kept honest ----------
-    await title(cPage, 'Act three', 'AI you can audit.', 'The workforce & the runbooks');
-    await dropTitle(cPage);
-    await narrate(cPage, 'ai', "This is where I earn my keep. Digital workers pull the real backlog — open tickets, unapplied cash.");
-    await clickTab(cPage, 'AI Workforce');
-    await narrate(cPage, 'ai', "But I cannot mark done what is not done. I escalate when I am unsure. And a human holds every approval key.");
-    await clickTab(cPage, 'Runbooks');
-    await narrate(cPage, 'ai', "My learning is not a black box. Three confirmed diagnoses become a runbook a human approves — and can revoke. AI you can read, and switch off.");
+    // ---------- ACT 3 — the AI, kept honest (operator / whole-floor view) ----------
+    const opPage = await desk('demo', 'demo', 'demo');
+    await title(opPage, 'Act three', 'AI you can audit.', 'The operator view — the AI works across the whole floor');
+    await dropTitle(opPage);
+    await narrate(opPage, 'ai', "This is my view — the whole operation. Digital workers pull the real backlog: open tickets, unapplied cash.");
+    await clickTab(opPage, 'AI Workforce'); await scrollDown(opPage, 320);
+    await narrate(opPage, 'ai', "But I cannot mark done what is not done. I escalate when I am unsure. And a human holds every approval key.");
+    await clickTab(opPage, 'Runbooks'); await scrollDown(opPage, 320);
+    await narrate(opPage, 'ai', "My learning is not a black box. Three confirmed diagnoses become a runbook a human approves — and can revoke. AI you can read, and switch off.");
 
-    // ---------- ACT 4 — sales ----------
-    await title(cPage, 'Act four', 'A pipeline that forecasts itself.', 'B2B sales & CPQ');
-    await dropTitle(cPage);
-    await narrate(cPage, 'sel', "I am Sel. Every deal staged, valued, forecast. I drag a card across the stages and the weighted forecast re-totals, live.");
-    await clickTab(cPage, 'Pipeline board'); await sleep(400);
-    await narrate(cPage, 'ai', "Arithmetic on the pipeline, not a spreadsheet. And when Sel wins, the quote becomes an order and a signed contract in a single act.");
+    // ---------- ACT 4 — Sel's sales desk (only sales) ----------
+    const selPage = await desk('sel', 'sel@bss.local', 'sel');
+    await title(selPage, 'Act four', 'A pipeline that forecasts itself.', 'Signed in as Sel — the sales desk');
+    await dropTitle(selPage);
+    await narrate(selPage, 'sel', "I am Sel. My desk is sales, nothing else. Every deal staged, valued, forecast. I drag a card across the stages and the weighted forecast re-totals, live.");
+    await clickTab(selPage, 'Pipeline board');
+    await reveal(selPage, '[data-testid="pipeline-board"]'); await sleep(400);
+    await narrate(selPage, 'ai', "Arithmetic on the pipeline, not a spreadsheet. And when Sel wins, the quote becomes an order and a signed contract in a single act.");
 
-    // ---------- ACT 5 — marketing: AUTHOR it, then the CUSTOMER RECEIVES it ----------
-    await title(cPage, 'Act five', 'Marketing: authored here, received there.', 'Campaign → journey → the customer');
-    await dropTitle(cPage);
-    await narrate(cPage, 'mia', "I am Mia, in marketing. Let me build a campaign. New campaign — a proven recipe, a real trigger like an order, and a message.");
-    await clickTab(cPage, 'Campaigns');
-    await tryDo(async () => { await cPage.getByRole('button', { name: /^\+?\s*new$/i }).first().click(); await sleep(1000); });
-    await narrate(cPage, 'mia', "The AI drafts the copy — the double-brace inserts the customer's name, the promo code drops in, and a holdout group is held back so I can prove the lift in money.");
-    await tryDo(async () => { await cPage.keyboard.press('Escape'); });
-    await narrate(cPage, 'mia', "A journey is the sophisticated version — an ordered path drawn as a canvas: message, wait, branch.");
-    await clickTab(cPage, 'Journeys');
-    await tryDo(async () => { await cPage.locator('#list tbody tr, .row').first().click(); await sleep(1300); });
-    await tryDo(async () => { await cPage.waitForSelector('[data-testid="journey-canvas"]', { timeout: 4000 }); });
-    await narrate(cPage, 'ai', "Same journey object the API serves, drawn as a graph — with how many customers each step has reached. Data, not code.");
+    // ---------- ACT 5 — Mia's marketing desk: AUTHOR it, then the CUSTOMER RECEIVES it ----------
+    const mktPage = await desk('mkt', 'mkt@bss.local', 'mkt');
+    await title(mktPage, 'Act five', 'Marketing: authored here, received there.', 'Signed in as Mia — the marketing desk');
+    await dropTitle(mktPage);
+    await narrate(mktPage, 'mia', "I am Mia, in marketing — again, just my desk. Let me build a campaign: a proven recipe, a real trigger like an order, and a message.");
+    await clickTab(mktPage, 'Campaigns');
+    await tryDo(async () => { await mktPage.getByRole('button', { name: /^\+?\s*new$/i }).first().click(); await sleep(1000); await reveal(mktPage, 'form, textarea, input'); });
+    await narrate(mktPage, 'mia', "The AI drafts the copy — the double-brace inserts the customer's name, the promo code drops in, and a holdout group is held back so I can prove the lift in money.");
+    await tryDo(async () => { await mktPage.keyboard.press('Escape'); });
+    await narrate(mktPage, 'mia', "A journey is the sophisticated version — an ordered path drawn as a canvas: message, then wait, then branch.");
+    await clickTab(mktPage, 'Journeys');
+    await tryDo(async () => { await mktPage.locator('#list tbody tr, .row').first().click(); await sleep(1300); });
+    await tryDo(async () => { await mktPage.waitForSelector('[data-testid="journey-canvas"]', { timeout: 4000 }); await reveal(mktPage, '[data-testid="journey-canvas"]'); });
+    await narrate(mktPage, 'ai', "Same journey object the API serves, drawn as a graph — with how many customers each step has reached. Data, not code.");
 
     // ---- the payoff: what the CUSTOMER sees ----
     await sPage.bringToFront();
     await title(sPage, 'Act five', 'And here is what the customer sees.', "Kai's app · notifications");
     await dropTitle(sPage);
-    await tryDo(async () => { await sPage.locator('a:has-text("Notifications"), [href*="notification"]').first().click(); await sleep(1400); });
+    await tryDo(async () => { await sPage.locator('a:has-text("Notifications"), [href*="notification"]').first().click(); await sleep(1400); await scrollDown(sPage, 200); });
     await narrate(sPage, 'kai',
       "And on my side — here they are. The messages land right in my app. A welcome, an offer with my name on it, a nudge when my data runs low. That is the campaign Mia just built, reaching me.");
     await narrate(sPage, 'ai',
       "Authored in the back office, delivered on the event bus, received in the customer's own app — the whole loop, one platform.");
 
     // ---------- ACT 6 — any operator ----------
-    await cPage.bringToFront();
-    await title(cPage, 'Act six', 'One build. Any operator.', 'The multi-tenant punchline');
-    await dropTitle(cPage);
-    await tryDo(async () => { await loginShop(cPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
-    await narrate(cPage, 'nils', "Hei. Velkommen til Nova. A second operator — Norwegian, priced in kroner, its own catalog and customers.");
-    await narrate(cPage, 'ai', "Same binary. Same deployment. Walled off by row-level security. Onboarding a new operator is a form, not a project.");
+    const novaPage = await (await newCtx()).newPage(); await novaPage.bringToFront();
+    await title(novaPage, 'Act six', 'One build. Any operator.', 'The multi-tenant punchline');
+    await dropTitle(novaPage);
+    await tryDo(async () => { await loginShop(novaPage, NOVA_SHOP, 'nils@nova.local', 'nils'); });
+    await narrate(novaPage, 'nils', "Hei. Velkommen til Nova. A second operator — Norwegian, priced in kroner, its own catalog and customers.");
+    await narrate(novaPage, 'ai', "Same binary. Same deployment. Walled off by row-level security. Onboarding a new operator is a form, not a project.");
 
     // ---------- CLOSE ----------
-    await title(cPage, 'genalpha-bss', 'AI-native, top to bottom.', 'One codebase. Every operator. A demo that ran itself.');
-    await narrate(cPage, 'ai',
+    await title(novaPage, 'genalpha-bss', 'AI-native, top to bottom.', 'One codebase. Every operator. A demo that ran itself.');
+    await narrate(novaPage, 'ai',
       "One codebase. Every operator. Catalogue to cash, marketing to sales — all standards-based. And a demo that ran itself, because this BSS is AI-native, top to bottom. Any questions? Ask my copilots. They are me.");
     await sleep(1000);
-    console.log(DRY ? 'DRY RUN complete — the drive is clean (two live sessions, no window, no audio).' : 'PRESENTATION complete.');
+    console.log(DRY ? 'DRY RUN complete — the drive is clean (per-persona sessions, no window, no audio).' : 'PRESENTATION complete.');
   } catch (e) {
     if (e instanceof Quit) console.log('Stopped (Q).');
     else throw e;
