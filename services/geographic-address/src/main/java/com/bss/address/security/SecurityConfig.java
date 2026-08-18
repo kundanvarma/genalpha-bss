@@ -51,6 +51,7 @@ public class SecurityConfig {
                         .requestMatchers("/tmf-api/geographicSiteManagement/v4/**").hasAuthority("address:write")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("address:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")
+                        .requestMatchers(HttpMethod.PUT, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("address:write")
                         .anyRequest().authenticated())

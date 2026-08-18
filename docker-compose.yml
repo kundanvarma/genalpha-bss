@@ -931,6 +931,9 @@ services:
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: address_app
       DB_PASSWORD: address_app
+      # registry seam (F-P1): the secret-ref target for the freg binding — the
+      # config row names this var; the mock accepts any token
+      FREG_API_KEY: dev-freg-key
       DB_MIGRATION_USERNAME: postgres
       DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       OIDC_ISSUER_URI: http://localhost:8085/realms/bss
@@ -1830,6 +1833,16 @@ services:
       TRACK_PREFIX: PN
     ports:
       - "8134:8080"
+
+  # Folkeregisteret (NO) — the national-registry seam target (freg-address-plan
+  # F-P1). Real Freg / a distributor needs no code change: point the tenant's
+  # registry binding baseUrl at it and set the secret-ref env var.
+  mock-freg:
+    build: ./integrations/mock-freg
+    container_name: bss-mock-freg
+    restart: unless-stopped
+    ports:
+      - "8141:8080"
 
   # The redirect/BNPL PSP for proving the Klarna payment session flow (PSP-P2)
   # without a real Klarna merchant account. Real Klarna needs no code change —

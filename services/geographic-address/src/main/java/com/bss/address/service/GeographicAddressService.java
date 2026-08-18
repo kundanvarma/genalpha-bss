@@ -6,10 +6,15 @@ import com.bss.address.api.PagedResult;
 import com.bss.address.entity.GeographicAddress;
 import com.bss.address.exception.BadRequestException;
 import com.bss.address.exception.NotFoundException;
+import com.bss.address.registry.RegistryAdapter;
+import com.bss.address.registry.RegistryRouter;
 import com.bss.address.repository.GeographicAddressRepository;
 import com.bss.address.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,10 +46,13 @@ public class GeographicAddressService {
 
     private final GeographicAddressRepository repository;
     private final TenantScope tenantScope;
+    private final RegistryRouter registryRouter;
 
-    public GeographicAddressService(GeographicAddressRepository repository, TenantScope tenantScope) {
+    public GeographicAddressService(GeographicAddressRepository repository, TenantScope tenantScope,
+            RegistryRouter registryRouter) {
         this.repository = repository;
         this.tenantScope = tenantScope;
+        this.registryRouter = registryRouter;
     }
 
     /** Anonymous: normalize + judge. Returns the TMF673 validation shape. */
@@ -92,11 +100,50 @@ public class GeographicAddressService {
             result.put("validationResult", "success");
             standardized.put("@type", "GeographicAddress");
             result.put("standardizedGeographicAddress", standardized);
+            registryMatch(request, standardized).ifPresent(m -> result.put("registryMatch", m));
         } else {
             result.put("validationResult", "failed");
             result.put("validationReason", problem.toString());
         }
         return result;
+    }
+
+    /**
+     * The registry half (freg-address-plan F-P1): when the caller supplies a
+     * party context, ask the country's national registry whether that person
+     * is registered at the standardized address. AUTHENTICATED callers only —
+     * the anonymous shop window must not become a who-lives-where oracle. A
+     * country with no registry bound answers outcome=unavailable (the honest
+     * degrade the risk seam reads); no party context = pure postal wash,
+     * no registryMatch part at all.
+     */
+    private java.util.Optional<Map<String, Object>> registryMatch(
+            Map<String, Object> request, Map<String, Object> standardized) {
+        if (!(request.get("relatedParty") instanceof Map<?, ?> partyRaw)) {
+            return java.util.Optional.empty();
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (!(auth instanceof JwtAuthenticationToken jwt)) {
+            return java.util.Optional.empty();
+        }
+        String name = partyRaw.get("name") == null ? null : String.valueOf(partyRaw.get("name")).trim();
+        if (name == null || name.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        String birthDate = partyRaw.get("birthDate") == null ? null : String.valueOf(partyRaw.get("birthDate"));
+        String country = String.valueOf(standardized.get("country"));
+        Map<String, Object> claimed = new LinkedHashMap<>(standardized);
+        claimed.remove("@type");
+        return java.util.Optional.of(registryRouter
+                .match(tenantScope.currentTenantId(), country,
+                        new RegistryAdapter.Person(name, birthDate), claimed, jwt.getToken().getSubject())
+                .orElseGet(() -> {
+                    Map<String, Object> none = new LinkedHashMap<>();
+                    none.put("country", country);
+                    none.put("outcome", "unavailable");
+                    none.put("reason", "no registry bound for " + country);
+                    return none;
+                }));
     }
 
     @Transactional
