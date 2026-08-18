@@ -53,6 +53,19 @@ export async function getCustomer(id) {
   return json(await authFetch(`${PARTY}/individual/${id}`));
 }
 
+/** Re-verify a customer's address against the national registry (freg F-P4).
+ * Back-office callers may vouch for the customer by id — the match event is
+ * attributed to THEM, so the CDP re-homes movers. Returns the registryMatch
+ * part, or null when the address fails validation outright. */
+export async function verifyPartyAddress(customer, address) {
+  const name = [customer.givenName, customer.familyName].filter(Boolean).join(' ');
+  const result = await json(await authFetch('/tmf-api/geographicAddressManagement/v4/geographicAddressValidation', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ submittedGeographicAddress: address, relatedParty: { id: customer.id, name } }),
+  }));
+  return result.registryMatch || null;
+}
+
 export async function ordersOf(customerId) {
   return json(await authFetch(`${ORDERING}/productOrder?limit=100&relatedPartyId=${customerId}`));
 }

@@ -134,9 +134,19 @@ public class GeographicAddressService {
         String country = String.valueOf(standardized.get("country"));
         Map<String, Object> claimed = new LinkedHashMap<>(standardized);
         claimed.remove("@type");
+        // Who is the verification ABOUT? Un-named: the caller themselves. A
+        // back-office caller (address:write) may name another party — the CSR
+        // re-verify. Anyone else naming a party gets the OUTCOME but no event:
+        // nobody can plant a verified-address event on a party they don't
+        // hold, and it never mis-attributes to the caller either.
+        String callerSub = jwt.getToken().getSubject();
+        String claimedParty = partyRaw.get("id") == null ? null : String.valueOf(partyRaw.get("id"));
+        boolean backOffice = auth.getAuthorities().stream()
+                .anyMatch(a -> "address:write".equals(a.getAuthority()));
+        String partyId = claimedParty == null ? callerSub : (backOffice ? claimedParty : null);
         return java.util.Optional.of(registryRouter
                 .match(tenantScope.currentTenantId(), country,
-                        new RegistryAdapter.Person(name, birthDate), claimed, jwt.getToken().getSubject())
+                        new RegistryAdapter.Person(name, birthDate), claimed, callerSub, partyId)
                 .orElseGet(() -> {
                     Map<String, Object> none = new LinkedHashMap<>();
                     none.put("country", country);

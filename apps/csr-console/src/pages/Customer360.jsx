@@ -7,7 +7,7 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
   disputeBill, issueCreditNote, transferService, findCustomerByEmail, diagnoseService,
-  openBillPdf, resendBill, setBillDeliveryFor } from '../api.js';
+  openBillPdf, resendBill, setBillDeliveryFor, verifyPartyAddress } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -47,6 +47,7 @@ const chan = (c) => Array.isArray(c)
 export default function Customer360() {
   const { id } = useParams();
   const [customer, setCustomer] = useState(null);
+  const [regCheck, setRegCheck] = useState(null);
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [bills, setBills] = useState([]);
@@ -120,8 +121,14 @@ export default function Customer360() {
   // over one failed call reads like being thrown out of the room
   if (!customer) return error ? <p className="error">{error}</p> : <p className="dim">Loading…</p>;
 
+  // the customer's own address; the registry-verified stamp (freg) is a
+  // second postalAddress medium with source=folkeregisteret
   const address = (customer.contactMedium || [])
-    .find((m) => m.mediumType === 'postalAddress')?.characteristic;
+    .find((m) => m.mediumType === 'postalAddress'
+      && m.characteristic?.source !== 'folkeregisteret')?.characteristic;
+  const registered = (customer.contactMedium || [])
+    .find((m) => m.mediumType === 'postalAddress'
+      && m.characteristic?.source === 'folkeregisteret')?.characteristic;
   const email = (customer.contactMedium || [])
     .find((m) => m.mediumType === 'email')?.characteristic?.emailAddress;
   // the numbers the customer actually calls from — their active lines
@@ -152,7 +159,25 @@ export default function Customer360() {
         {numbers.length > 0 && <> · <span data-testid="cust-numbers">
           📞 {numbers.map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
         </span></>}
-        {address && <> · {address.street1}, {address.postCode} {address.city}</>}</p>
+        {address && <> · {address.street1}, {address.postCode} {address.city}</>}
+        {registered && <span className="ok" data-testid="registered-hint"> · ✓ registered address on file</span>}
+        {address && (
+          <> · <button className="linkish small" data-testid="reverify-address" disabled={regCheck === 'checking'}
+            onClick={async () => {
+              setRegCheck('checking');
+              try {
+                const m = await verifyPartyAddress(customer, address);
+                setRegCheck(m ? m.outcome : 'unavailable');
+              } catch { setRegCheck('unavailable'); }
+            }}>{regCheck === 'checking' ? 'Checking register…' : 'Re-verify address'}</button>
+          {regCheck && regCheck !== 'checking' && (
+            <span data-testid="reverify-result" className={regCheck === 'match' ? 'ok' : 'dim'}>
+              {' '}{regCheck === 'match' ? '✓ matches the national register'
+                : regCheck === 'unavailable' ? 'no registry for this market'
+                : 'could not be verified against the register'}
+            </span>
+          )}</>
+        )}</p>
       {error && <p className="error">{error}</p>}
 
       <section className="copilot" data-testid="nbo-card">

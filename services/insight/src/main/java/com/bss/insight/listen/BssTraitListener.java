@@ -68,6 +68,26 @@ public class BssTraitListener {
                 }
                 return;
             }
+            // freg F-P4: a registry-verified address re-homes the customer —
+            // region is single-valued (replace-on-change), so a mover leaves
+            // the old region audience on the next resolution; addressVerified
+            // is the provenance flag audiences and journeys can target.
+            if ("PartyAddressVerifiedEvent".equals(eventType)) {
+                Map<String, Object> ver = event.get("addressVerification") instanceof Map<?, ?> v
+                        ? (Map<String, Object>) v : Map.of();
+                String partyId = ver.get("partyId") == null ? null : String.valueOf(ver.get("partyId"));
+                Map<String, Object> reg = ver.get("registeredAddress") instanceof Map<?, ?> ra
+                        ? (Map<String, Object>) ra : Map.of();
+                if (partyId != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        if (reg.get("city") != null) {
+                            traits.setTrait(partyId, "region", String.valueOf(reg.get("city")));
+                        }
+                        traits.setTrait(partyId, "addressVerified", "true");
+                    }
+                }
+                return;
+            }
             // B2B: an organization becomes an org-population candidate with its
             // own traits (industry…), marked so org audiences resolve only orgs.
             if ("OrganizationCreateEvent".equals(eventType) || "OrganizationAttributeValueChangeEvent".equals(eventType)) {
