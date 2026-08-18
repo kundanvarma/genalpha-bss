@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { availabilityFor, checkQualification, deliveryOptions, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots } from '../api.js';
+import { availabilityFor, checkQualification, deliveryOptions, getOffering, getSpec, myParty, previewPrice, priceIndex, queryServiceQualification, searchTimeSlots, updateMyParty, verifyDeliveryAddress } from '../api.js';
 import { beginLogin, isCustomer, isSignedIn, switchAccount } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
-import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, saveDraft } from '../address.js';
+import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, registeredAddressOf, saveDraft, withRegisteredAddress } from '../address.js';
 import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
 import { checkPromotion, confirmPayment, createPaymentSession, numberOffers, paymentMethods, savePaymentMethod } from '../api.js';
 import { monthlyTotal, pricesOf } from '../money.js';
@@ -127,16 +127,46 @@ export default function Cart() {
   }, [lines]);
 
   // Prefill from the saved party address once signed in (draft wins if typed).
+  const [party, setParty] = useState(null);
   useEffect(() => {
-    if (!isSignedIn() || isComplete(loadDraft())) return;
-    myParty().then((party) => {
-      const saved = addressOf(party);
+    if (!isSignedIn()) return;
+    myParty().then((p) => {
+      setParty(p);
+      if (isComplete(loadDraft())) return;
+      const saved = addressOf(p);
       if (saved) {
         setAddress(saved);
         saveDraft(saved);
       }
     }).catch(() => {});
   }, []);
+
+  // Registry verification (freg F-P2): is the signed-in shopper registered at
+  // the typed address? Debounced so the form doesn't flood the lookup ledger;
+  // guests are never asked (no identity to match). The answer tags the
+  // delivery with addressSource registry|manual for the risk seam.
+  const partyName = party ? [party.givenName, party.familyName].filter(Boolean).join(' ').trim() : '';
+  const [regMatch, setRegMatch] = useState(null);
+  useEffect(() => {
+    if (!partyName || !isComplete(address)) { setRegMatch(null); return; }
+    const t = setTimeout(() => {
+      verifyDeliveryAddress(address, partyName).then(setRegMatch).catch(() => setRegMatch(null));
+    }, 600);
+    return () => clearTimeout(t);
+  }, [partyName, address.street1, address.postCode, address.city, address.country]);
+  const registryVerified = regMatch?.outcome === 'match';
+
+  // A fresh match stamps the party with the registered address (a SECOND
+  // postalAddress medium, source=folkeregisteret — the typed one stays).
+  useEffect(() => {
+    if (!party || !registryVerified || !regMatch.registeredAddress) return;
+    const current = registeredAddressOf(party);
+    const reg = regMatch.registeredAddress;
+    if (current && current.street1 === reg.street1 && current.postCode === reg.postCode) return;
+    updateMyParty({ contactMedium: withRegisteredAddress(party,
+      { ...reg, source: 'folkeregisteret', verifiedAt: new Date().toISOString() }) })
+      .then(setParty).catch(() => {});
+  }, [regMatch, party, registryVerified]);
 
   // Serviceability: re-check whenever the postcode or the cart changes. The
   // result is tagged with the postcode it was computed for so a stale answer
@@ -401,7 +431,9 @@ export default function Cart() {
       const delivery = chosenPoint
         ? { method: 'pickupPoint', carrier: sel.carrier,
           pickupPointId: chosenPoint.id, pickupPointName: chosenPoint.name }
-        : { method: 'home', carrier: sel?.carrier || null };
+        : { method: 'home', carrier: sel?.carrier || null,
+          // the risk seam (F-P3) reads this off the place: registry-verified or not
+          addressSource: registryVerified ? 'registry' : 'manual' };
       if (payingRedirect && due) {
         // Redirect to the provider (Klarna/PayPal) to approve. Open the session
         // first, then stash the SERVED provider + session id (failover may switch
@@ -666,8 +698,27 @@ export default function Cart() {
           )}
           {selectedOpt && !isPickupMethod(selectedOpt.method) && shipAddress && (
             <p className="dim small" data-testid="delivering-to">
-              🏠 Delivering to: {shipAddress} ·{' '}
+              🏠 Delivering to: {shipAddress}
+              {registryVerified && <span className="regbadge" data-testid="registry-verified"> ✓ registered address</span>}
+              {' · '}
               <button type="button" className="linkbtn" onClick={scrollToAddress}>Change</button>
+            </p>
+          )}
+          {selectedOpt && !isPickupMethod(selectedOpt.method) && regMatch
+            && (regMatch.outcome === 'mismatch' || regMatch.outcome === 'no_data') && (
+            <p className="dim small" data-testid="registry-unverified">
+              Could not verify this address against the national register.
+              {regMatch.registeredAddress && (
+                <>
+                  {' '}
+                  <button type="button" className="linkbtn" data-testid="use-registered"
+                          onClick={() => { const r = regMatch.registeredAddress;
+                            const next = { street1: r.street1, postCode: r.postCode, city: r.city, country: r.country };
+                            setAddress(next); saveDraft(next); }}>
+                    Use my registered address
+                  </button>
+                </>
+              )}
             </p>
           )}
         </div>
@@ -677,6 +728,7 @@ export default function Cart() {
         <p className="dim small" data-testid="delivery-by">
           🚚 Home delivery by {selectedOpt.carrierName}
           {shipAddress ? ` to ${shipAddress}` : ''}
+          {registryVerified && <span className="regbadge"> ✓ registered address</span>}
           {shipNames.length > 0 ? ` — ${shipNames.join(', ')}` : ' — track it to your door'}
           {shipAddress ? <>{' · '}<button type="button" className="linkbtn" onClick={scrollToAddress}>Change</button></> : null}
         </p>

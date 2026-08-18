@@ -90,8 +90,10 @@ function deliveryPlace(address, delivery) {
   }
   // Home delivery carries the shopper's chosen carrier when they picked one, so
   // the fulfilment router books that carrier (its precedence honours the pick).
+  // addressSource (registry|manual) rides the same place for the risk seam.
   return { ...base, deliveryMethod: 'home',
-    ...(delivery && delivery.carrier ? { carrier: delivery.carrier } : {}) };
+    ...(delivery && delivery.carrier ? { carrier: delivery.carrier } : {}),
+    ...(delivery && delivery.addressSource ? { addressSource: delivery.addressSource } : {}) };
 }
 
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,

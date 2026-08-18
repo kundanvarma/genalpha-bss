@@ -6,6 +6,7 @@
 import { authFetch, publicFetch, tokenClaims } from './auth.js';
 
 const CATALOG = '/tmf-api/productCatalogManagement/v4';
+const GEO = '/tmf-api/geographicAddressManagement/v4';
 const ORDERING = '/tmf-api/productOrderingManagement/v4';
 const INVENTORY = '/tmf-api/productInventory/v4';
 const PARTY = '/tmf-api/party/v4';
@@ -79,6 +80,19 @@ export async function ensureParty() {
 export async function myParty() {
   const claims = tokenClaims();
   return json(await authFetch(`${PARTY}/individual/${claims.sub}`));
+}
+
+/** Registry-verify a delivery address for the signed-in shopper (freg F-P2):
+ * TMF673 validation with the party context — the backend asks the delivery
+ * country's national registry and answers match / mismatch / no_data /
+ * unavailable. Returns the registryMatch part, or null (postal-wash only —
+ * e.g. no registry for that country, or the address failed validation). */
+export async function verifyDeliveryAddress(address, partyName) {
+  const result = await json(await authFetch(`${GEO}/geographicAddressValidation`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ submittedGeographicAddress: address, relatedParty: { name: partyName } }),
+  }));
+  return result.registryMatch || null;
 }
 
 // ---------------- household billing (person-payer, with consent) ----------------
