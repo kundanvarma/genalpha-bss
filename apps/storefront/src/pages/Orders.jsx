@@ -194,9 +194,12 @@ export default function Orders() {
         const at = ship.state === 'delivered' ? '✓ Ready for collection at' : '📍 On its way to';
         return { cls: 'go', text: `${at} ${ship.pickupPoint}${via} · ${ship.trackingRef}`, ...track };
       }
+      // freg F-P2/3: say when the parcel ships to the registry-verified address
+      const shipPlace = Array.isArray(ship.place) ? ship.place[0] : ship.place;
+      const reg = shipPlace?.addressSource === 'registry' ? ' · ✓ registered address' : '';
       const stageText = ship.state === 'delivered' ? '✓ Delivered'
-        : ship.state === 'acknowledged' ? `📦 Packed — preparing to ship · ${ship.trackingRef}${via}`
-        : `🚚 Shipped — on its way · ${ship.trackingRef}${via}`;
+        : ship.state === 'acknowledged' ? `📦 Packed — preparing to ship · ${ship.trackingRef}${via}${reg}`
+        : `🚚 Shipped — on its way · ${ship.trackingRef}${via}${reg}`;
       return { cls: 'go', text: stageText, ...track };
     }
     if (physical) return { cls: 'go', text: '📦 Packed — preparing to ship' };

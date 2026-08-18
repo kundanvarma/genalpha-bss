@@ -73,6 +73,19 @@ public class RiskService {
             signals.add(signal("verifiedSession", -20,
                     "the ordering session is BankID-verified", Map.of("verifiedIdentity", true)));
         }
+        // freg F-P3: the delivery address, registry-verified or typed by hand.
+        // A registry match binds person->address (the classic parcel-redirect
+        // fraud lever); a hand-typed address on a home delivery raises risk.
+        Object addressSource = request.get("addressSource");
+        if ("registry".equals(addressSource)) {
+            signals.add(signal("registryVerifiedAddress", -10,
+                    "the delivery address matches the national registry",
+                    Map.of("addressSource", "registry")));
+        } else if ("manual".equals(addressSource)) {
+            signals.add(signal("unverifiedAddress", 15,
+                    "the delivery address is hand-typed, not registry-verified",
+                    Map.of("addressSource", "manual")));
+        }
         return persist(RiskAssessment.PRODUCT_ORDER, partyId, signals);
     }
 

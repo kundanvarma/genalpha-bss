@@ -860,11 +860,23 @@ public class ProductOrderService {
         context.put("maxLineQuantity", maxLineQuantity);
         context.put("totalQuantity", total);
         context.put("lineCount", items.size());
+        // The delivery place (freg F-P3): home deliveries carry how the address
+        // was sourced — registry-verified or typed by hand. Rules read both;
+        // an order with nothing shipping has neither var, so such rules
+        // simply do not fire on it.
+        Map<String, Object> deliveryPlace = deliveryPlaceOf(dto);
+        if (deliveryPlace != null) {
+            context.put("deliveryMethod", String.valueOf(deliveryPlace.get("deliveryMethod")));
+            if (deliveryPlace.get("addressSource") != null) {
+                context.put("addressSource", String.valueOf(deliveryPlace.get("addressSource")));
+            }
+        }
         // TMF696: the party's risk, freshly assessed, as two more vars the
         // OPERATOR's rules may reference. Fail-open — no engine, no vars,
         // and a rule naming riskScore simply does not fire.
         com.bss.ordering.client.RiskClient.Assessment risk = riskClient.assessOrder(
-                ownerPartyId, total, items.size(), verifiedIdentity.isVerified());
+                ownerPartyId, total, items.size(), verifiedIdentity.isVerified(),
+                deliveryPlace == null ? null : strOrNull(deliveryPlace.get("addressSource")));
         if (risk != null) {
             context.put("riskScore", risk.score());
             context.put("riskLevel", risk.level());
@@ -897,6 +909,41 @@ public class ProductOrderService {
         List<ItemRef> refs = new ArrayList<>();
         collectItems(items, refs);
         return refs;
+    }
+
+    /** The delivery place riding any item (role=shipping, deliveryMethod set)
+     * — where checkout wrote the shopper's method, carrier and addressSource. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> deliveryPlaceOf(ProductOrderDto dto) {
+        List<Map<String, Object>> items = dto.getProductOrderItem();
+        if (items == null) {
+            return null;
+        }
+        for (Map<String, Object> item : items) {
+            Object product = item.get("product");
+            Object place = product instanceof Map<?, ?> p ? p.get("place") : null;
+            List<Object> places = place instanceof List<?> l ? (List<Object>) l
+                    : place == null ? List.of() : List.of(place);
+            for (Object entry : places) {
+                if (entry instanceof Map<?, ?> m && m.get("deliveryMethod") != null) {
+                    return (Map<String, Object>) m;
+                }
+            }
+            if (item.get("productOrderItem") instanceof List<?> children) {
+                // bundles: the place rides the leaf items
+                ProductOrderDto sub = new ProductOrderDto();
+                sub.setProductOrderItem((List<Map<String, Object>>) children);
+                Map<String, Object> nested = deliveryPlaceOf(sub);
+                if (nested != null) {
+                    return nested;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static String strOrNull(Object o) {
+        return o == null ? null : String.valueOf(o);
     }
 
     @SuppressWarnings("unchecked")

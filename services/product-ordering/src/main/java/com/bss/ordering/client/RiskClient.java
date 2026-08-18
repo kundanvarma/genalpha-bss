@@ -37,15 +37,21 @@ public class RiskClient {
 
     @SuppressWarnings("unchecked")
     public Assessment assessOrder(String partyId, long totalQuantity, int lineCount,
-            boolean verifiedIdentity) {
+            boolean verifiedIdentity, String addressSource) {
         try {
+            Map<String, Object> payload = new java.util.LinkedHashMap<>();
+            payload.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
+            payload.put("totalQuantity", totalQuantity);
+            payload.put("lineCount", lineCount);
+            payload.put("verifiedIdentity", verifiedIdentity);
+            // freg F-P3: how the delivery address was sourced (registry|manual),
+            // absent when nothing ships to a home address.
+            if (addressSource != null) {
+                payload.put("addressSource", addressSource);
+            }
             Map<String, Object> body = restClient.post()
                     .uri("/tmf-api/riskManagement/v4/productOrderRiskAssessment")
-                    .body(Map.of(
-                            "relatedParty", List.of(Map.of("id", partyId, "role", "customer")),
-                            "totalQuantity", totalQuantity,
-                            "lineCount", lineCount,
-                            "verifiedIdentity", verifiedIdentity))
+                    .body(payload)
                     .retrieve()
                     .body(Map.class);
             if (body == null || !(body.get("riskAssessmentResult") instanceof Map<?, ?> result)) {
