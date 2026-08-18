@@ -301,6 +301,11 @@ export default function Cart() {
   const deliveryReady = !showDeliveryPicker || !selectedOpt
     || !isPickupMethod(selectedOpt.method) || Boolean(pickupId);
   const addressReady = !(needsShipping || needsInstall) || isComplete(address);
+  // The address home delivery would ship to, said wherever the shopper picks —
+  // a prefilled form higher up must never leave the destination unstated.
+  const shipAddress = isComplete(address)
+    ? `${address.street1}, ${address.postCode} ${address.city}` : null;
+  const scrollToAddress = () => document.querySelector('.shipping')?.scrollIntoView({ behavior: 'smooth' });
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
@@ -637,7 +642,9 @@ export default function Cart() {
                   <span className="simopt-t">{pickup ? '📍 Pickup point' : '🏠 Home delivery'} · {o.carrierName}</span>
                   <span className="simopt-d">{pickup
                     ? `Collect at a ${o.carrierName} point near you`
-                    : `Delivered to your door by ${o.carrierName}`}</span>
+                    : (shipAddress
+                      ? `Delivered to ${shipAddress} by ${o.carrierName}`
+                      : `Delivered to your door by ${o.carrierName}`)}</span>
                 </button>
               );
             })}
@@ -650,13 +657,21 @@ export default function Cart() {
               ))}
             </select>
           )}
+          {selectedOpt && !isPickupMethod(selectedOpt.method) && shipAddress && (
+            <p className="dim small" data-testid="delivering-to">
+              🏠 Delivering to: {shipAddress} ·{' '}
+              <button type="button" className="linkbtn" onClick={scrollToAddress}>Change</button>
+            </p>
+          )}
         </div>
       )}
       {needsShipping && !showDeliveryPicker && selectedOpt && selectedOpt.carrierName && (
-        // one carrier only — no picker, but still SAY who delivers, and of what
+        // one carrier only — no picker, but still SAY who delivers, of what, and to where
         <p className="dim small" data-testid="delivery-by">
           🚚 Home delivery by {selectedOpt.carrierName}
+          {shipAddress ? ` to ${shipAddress}` : ''}
           {shipNames.length > 0 ? ` — ${shipNames.join(', ')}` : ' — track it to your door'}
+          {shipAddress ? <>{' · '}<button type="button" className="linkbtn" onClick={scrollToAddress}>Change</button></> : null}
         </p>
       )}
 
