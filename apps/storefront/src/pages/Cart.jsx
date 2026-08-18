@@ -305,7 +305,14 @@ export default function Cart() {
   // a prefilled form higher up must never leave the destination unstated.
   const shipAddress = isComplete(address)
     ? `${address.street1}, ${address.postCode} ${address.city}` : null;
-  const scrollToAddress = () => document.querySelector('.shipping')?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToAddress = () => {
+    const el = document.querySelector('.shipping');
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Focus + select the street field so the click visibly answers even when
+    // the form is already on-screen (a scroll alone reads as a dead button).
+    const input = el?.querySelector('input[name="street1"]');
+    if (input) setTimeout(() => { input.focus(); input.select(); }, 350);
+  };
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
