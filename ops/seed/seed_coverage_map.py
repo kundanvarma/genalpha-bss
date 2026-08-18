@@ -38,6 +38,8 @@ existing = {(row["technology"], row["postcodePrefix"])
 
 ROWS = [
     # the fiber footprint mirrors the TMF679 commercial gates
+    {"technology": "fiber", "postcodePrefix": "015", "maxDownMbps": 1000, "maxUpMbps": 1000,
+     "note": "Oslo sentrum — full XGS-PON"},
     {"technology": "fiber", "postcodePrefix": "111", "maxDownMbps": 1000, "maxUpMbps": 1000,
      "note": "Stockholm inner city — full XGS-PON"},
     {"technology": "fiber", "postcodePrefix": "222", "maxDownMbps": 500, "maxUpMbps": 500,

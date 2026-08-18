@@ -38,8 +38,9 @@ fiber = offerings["GenAlpha Fiber 1000"]
 existing = {a["postcodePrefix"] for a in
             req("GET", f"{QUALIFICATION}/serviceableArea?productOfferingId={fiber['id']}&limit=100")}
 
-# Fiber footprint: central Stockholm (111), Göteborg (222), Malmö (333).
-for prefix, label in [("111", "Stockholm inner city"), ("222", "Göteborg"), ("333", "Malmö")]:
+# Fiber footprint: Oslo sentrum (015), central Stockholm (111), Göteborg (222), Malmö (333).
+for prefix, label in [("015", "Oslo sentrum"), ("111", "Stockholm inner city"),
+                      ("222", "Göteborg"), ("333", "Malmö")]:
     if prefix in existing:
         print(f"exists: {prefix} ({label})")
         continue
