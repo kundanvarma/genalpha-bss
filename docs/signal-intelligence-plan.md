@@ -191,7 +191,15 @@ Three doctrines locked:
   (fault = something broken; complaint = dissatisfaction without a defect), shorter-quote
   guidance to lift the acceptance rate, a HYBRID tier (local first, frontier only for signals
   the local model's evidence fails — most text stays on-prem, stubborn ones escalate
-  redacted), or a fine-tune on the churn outcome labels the fleet already collects. The flip is
+  redacted), or a fine-tune on the churn outcome labels the fleet already collects.
+  **The distillation flywheel (the hybrid's second job):** the hybrid does NOT make the local
+  model learn — weights are static. But every frontier fallback is a verified labeled example
+  of exactly what the local model cannot do yet, the AiGovernor's ledger already records the
+  redacted prompt+response pairs as a by-product of governance, and only evidence-verified
+  rows ever become labels — distillation with a quality filter the receipts system provides
+  for free. Periodic fine-tunes on that set (plus the churn OUTCOME labels) shrink the
+  frontier share round after round. Hybrid ships the privacy win on day one; the flywheel
+  makes it grow. The flip is
   four env vars (AI_*_FAST) after 524bbc9 fixed the silently-ignored tenant tier keys and the
   tier-blind ledger labels the experiment exposed; the harness (copy → flip → sweep → compare →
   erase) is repeatable in one command.
