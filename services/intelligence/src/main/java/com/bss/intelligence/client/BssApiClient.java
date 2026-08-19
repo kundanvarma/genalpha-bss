@@ -223,6 +223,33 @@ public class BssApiClient {
     }
 
     @SuppressWarnings("unchecked")
+    /** Unclassified customer signals awaiting the battery (SI-P3). */
+    public List<Map<String, Object>> unclassifiedSignals() {
+        try {
+            String body = insightClient.get()
+                    .uri("/insight/v1/signal?unclassified=true")
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** Write a classification back to the store — insight verifies the
+     * evidence quotes and refuses (422) anything that cannot cite itself. */
+    public boolean postSignalClassification(String signalId, Map<String, Object> classification) {
+        try {
+            insightClient.post()
+                    .uri("/insight/v1/signal/" + signalId + "/classification")
+                    .header("Content-Type", "application/json")
+                    .body(classification)
+                    .retrieve().toBodilessEntity();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public List<String> interestsOf(String partyId) {
         try {
             Map<String, Object> profile = objectMapper.readValue(insightClient.get()

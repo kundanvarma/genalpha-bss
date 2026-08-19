@@ -1,7 +1,10 @@
 package com.bss.insight.service;
 
 import com.bss.insight.entity.CustomerSignal;
+import com.bss.insight.entity.SignalClassification;
+import com.bss.insight.events.DomainEventPublisher;
 import com.bss.insight.repository.CustomerSignalRepository;
+import com.bss.insight.repository.SignalClassificationRepository;
 import com.bss.insight.security.TenantScope;
 import com.bss.insight.signal.RedactionService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -33,14 +36,22 @@ public class SignalService {
     private static final int MAX_TEXT = 4000;
 
     private final CustomerSignalRepository signals;
+    private final SignalClassificationRepository classifications;
     private final RedactionService redaction;
+    private final PartyTraitService traits;
+    private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
-    public SignalService(CustomerSignalRepository signals, RedactionService redaction,
+    public SignalService(CustomerSignalRepository signals,
+            SignalClassificationRepository classifications, RedactionService redaction,
+            PartyTraitService traits, DomainEventPublisher events,
             TenantScope tenantScope, ObjectMapper objectMapper) {
         this.signals = signals;
+        this.classifications = classifications;
         this.redaction = redaction;
+        this.traits = traits;
+        this.events = events;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
     }
@@ -81,12 +92,117 @@ public class SignalService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String source) {
+    public List<Map<String, Object>> list(String source, boolean unclassifiedOnly) {
         String tenant = tenantScope.currentTenantId();
         List<CustomerSignal> rows = source == null || source.isBlank()
                 ? signals.findTop100ByTenantIdOrderByReceivedAtDesc(tenant)
                 : signals.findTop100ByTenantIdAndSourceOrderByReceivedAtDesc(tenant, source);
-        return rows.stream().map(s -> view(s, false)).toList();
+        Map<String, SignalClassification> byId = classifications
+                .findByTenantIdAndSignalIdIn(tenant, rows.stream().map(CustomerSignal::getId).toList())
+                .stream().collect(java.util.stream.Collectors.toMap(
+                        SignalClassification::getSignalId, java.util.function.Function.identity()));
+        return rows.stream()
+                .filter(r -> !unclassifiedOnly || !byId.containsKey(r.getId()))
+                .map(r -> {
+                    Map<String, Object> v = view(r, false);
+                    SignalClassification c = byId.get(r.getId());
+                    if (c != null) {
+                        v.put("classification", classificationView(c));
+                    }
+                    return v;
+                }).toList();
+    }
+
+    /**
+     * The battery's write-back (SI-P3) — with the receipts checked HERE, at
+     * the store: every non-null evidence quote must appear VERBATIM in the
+     * signal's redacted text, or the whole classification is refused (422).
+     * A model that cannot cite its source does not get a row. An accepted
+     * churn signal marks the party's trait, and the event goes on the bus.
+     */
+    @Transactional
+    public Map<String, Object> classify(String signalId, Map<String, Object> dto) {
+        String tenant = tenantScope.currentTenantId();
+        CustomerSignal signal = signals.findById(signalId)
+                .filter(x -> tenant.equals(x.getTenantId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "no signal '" + signalId + "'"));
+        Map<String, Object> evidence = dto.get("evidence") instanceof Map<?, ?> e
+                ? castMap(e) : Map.of();
+        if (evidence.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "a classification without evidence quotes is not accepted");
+        }
+        for (Map.Entry<String, Object> quote : evidence.entrySet()) {
+            if (quote.getValue() == null) {
+                continue;
+            }
+            if (!signal.getText().contains(String.valueOf(quote.getValue()))) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "evidence for '" + quote.getKey() + "' is not a verbatim quote from the signal");
+            }
+        }
+        SignalClassification c = classifications.findByTenantIdAndSignalId(tenant, signalId)
+                .orElseGet(() -> {
+                    SignalClassification fresh = new SignalClassification();
+                    fresh.setId(UUID.randomUUID().toString());
+                    fresh.setTenantId(tenant);
+                    fresh.setSignalId(signalId);
+                    return fresh;
+                });
+        c.setSentiment(str(dto.get("sentiment")));
+        c.setAspect(str(dto.get("aspect")));
+        c.setCategory(str(dto.get("category")));
+        c.setPainPoint(str(dto.get("painPoint")));
+        c.setPainImpact(dto.get("painImpact") instanceof Number n ? n.intValue() : null);
+        c.setLoyaltyIndicator(str(dto.get("loyaltyIndicator")));
+        c.setChurnSignal(Boolean.TRUE.equals(dto.get("churnSignal")));
+        c.setChurnReason(str(dto.get("churnReason")));
+        c.setEvidence(json(evidence));
+        c.setProvider(str(dto.get("provider")));
+        c.setModel(str(dto.get("model")));
+        c.setClassifiedAt(OffsetDateTime.now());
+        classifications.save(c);
+
+        if (c.isChurnSignal() && signal.getPartyId() != null) {
+            traits.setTrait(signal.getPartyId(), "churnSignal", "true");
+        }
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("signalId", signalId);
+        event.put("source", signal.getSource());
+        if (signal.getPartyId() != null) {
+            event.put("partyId", signal.getPartyId());
+        }
+        event.put("sentiment", c.getSentiment());
+        event.put("aspect", c.getAspect());
+        event.put("category", c.getCategory());
+        event.put("churnSignal", c.isChurnSignal());
+        events.publish("SignalClassifiedEvent", "signalClassification", event);
+
+        return classificationView(c);
+    }
+
+    private Map<String, Object> classificationView(SignalClassification c) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (c.getSentiment() != null) m.put("sentiment", c.getSentiment());
+        if (c.getAspect() != null) m.put("aspect", c.getAspect());
+        if (c.getCategory() != null) m.put("category", c.getCategory());
+        if (c.getPainPoint() != null) m.put("painPoint", c.getPainPoint());
+        if (c.getPainImpact() != null) m.put("painImpact", c.getPainImpact());
+        if (c.getLoyaltyIndicator() != null) m.put("loyaltyIndicator", c.getLoyaltyIndicator());
+        m.put("churnSignal", c.isChurnSignal());
+        if (c.getChurnReason() != null) m.put("churnReason", c.getChurnReason());
+        if (c.getEvidence() != null) m.put("evidence", read(c.getEvidence()));
+        if (c.getProvider() != null) m.put("provider", c.getProvider());
+        if (c.getModel() != null) m.put("model", c.getModel());
+        m.put("classifiedAt", c.getClassifiedAt());
+        m.put("@type", "SignalClassification");
+        return m;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> m) {
+        return (Map<String, Object>) m;
     }
 
     private Map<String, Object> view(CustomerSignal s, boolean duplicate) {

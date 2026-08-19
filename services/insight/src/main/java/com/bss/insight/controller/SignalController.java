@@ -5,6 +5,7 @@ import com.bss.insight.service.SignalService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -38,7 +39,16 @@ public class SignalController {
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> list(
-            @RequestParam(required = false) String source) {
-        return ResponseEntity.ok(service.list(source));
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false, defaultValue = "false") boolean unclassified) {
+        return ResponseEntity.ok(service.list(source, unclassified));
+    }
+
+    /** The battery's write-back (SI-P3) — evidence quotes verified at the
+     * store; a classification that cannot cite its source is refused. */
+    @PostMapping("/{signalId}/classification")
+    public ResponseEntity<Map<String, Object>> classify(@PathVariable String signalId,
+            @RequestBody Map<String, Object> dto) {
+        return ResponseEntity.status(201).body(service.classify(signalId, dto));
     }
 }
