@@ -109,7 +109,12 @@ public class SignalClassifier {
         List<Map<String, Object>> pending = bss.unclassifiedSignals();
         for (Map<String, Object> signal : pending.subList(0, Math.min(pending.size(), batchCap))) {
             String id = String.valueOf(signal.get("id"));
-            String text = String.valueOf(signal.get("text"));
+            // Tvilling T-P2: the model reads the TWIN when one exists — the
+            // frontier thinks at full power about a person who does not
+            // exist; quotes return in twin-space and the STORE re-anchors
+            // them through its vault. Old twin-less rows keep the old path.
+            boolean twinned = signal.get("twin") != null;
+            String text = String.valueOf(twinned ? signal.get("twin") : signal.get("text"));
             try {
                 String user = "Source: " + signal.get("source")
                         + (signal.get("lang") != null ? " · language: " + signal.get("lang") : "")
@@ -124,6 +129,9 @@ public class SignalClassifier {
                 // who ACTUALLY spoke: the FAST tier's resolved adapter
                 parsed.put("provider", llm.provider(LlmAdapter.Tier.FAST));
                 parsed.put("model", llm.model(LlmAdapter.Tier.FAST));
+                if (twinned) {
+                    parsed.put("evidenceSpace", "twin");
+                }
                 if (bss.postSignalClassification(id, parsed)) {
                     classified++;
                 } else {

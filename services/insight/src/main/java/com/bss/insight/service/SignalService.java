@@ -153,6 +153,32 @@ public class SignalService {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "a classification without evidence quotes is not accepted");
         }
+        // Tvilling T-P2: the frontier read the TWIN, so its quotes arrive in
+        // twin-space. Re-anchor each one through the vault's offset map into
+        // stored-text space BEFORE the verbatim gate — a quote that cuts a
+        // surrogate in half cannot re-anchor and drops the classification.
+        if ("twin".equals(str(dto.get("evidenceSpace")))) {
+            String twinText = signal.getTwinText();
+            List<TwinningService.TwinSpan> spans = twinSpansOf(signalId, tenant);
+            if (twinText == null || spans == null) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "twin evidence offered but the signal has no twin/vault");
+            }
+            Map<String, Object> anchored = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> q : evidence.entrySet()) {
+                if (q.getValue() == null) {
+                    continue;
+                }
+                String real = reanchor(String.valueOf(q.getValue()), twinText, spans);
+                if (real == null) {
+                    throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                            "evidence for '" + q.getKey() + "' cannot be re-anchored from the twin");
+                }
+                anchored.put(q.getKey(), real);
+            }
+            evidence = anchored;
+            dto.remove("evidenceSpace");
+        }
         for (Map.Entry<String, Object> quote : evidence.entrySet()) {
             if (quote.getValue() == null) {
                 continue;
@@ -200,6 +226,43 @@ public class SignalService {
         events.publish("SignalClassifiedEvent", "signalClassification", event);
 
         return classificationView(c);
+    }
+
+    private List<TwinningService.TwinSpan> twinSpansOf(String signalId, String tenant) {
+        return twins.findByTenantIdAndSignalId(tenant, signalId).map(v -> {
+            try {
+                return objectMapper.readValue(v.getOffsetMap(),
+                        new TypeReference<List<TwinningService.TwinSpan>>() { });
+            } catch (Exception e) {
+                return null;
+            }
+        }).orElse(null);
+    }
+
+    /** Translate a twin-space quote into stored-text space: shared segments
+     * copy verbatim (identical in both), a WHOLLY covered surrogate becomes
+     * its [TYPE] token, and a PARTIALLY cut surrogate is unmappable — null. */
+    static String reanchor(String quote, String twinText, List<TwinningService.TwinSpan> spans) {
+        int qs = twinText.indexOf(quote);
+        if (qs < 0) {
+            return null; // not verbatim from the twin — nothing to anchor
+        }
+        int qe = qs + quote.length();
+        StringBuilder out = new StringBuilder();
+        int pos = qs;
+        for (TwinningService.TwinSpan span : spans) {
+            if (span.twinEnd() <= qs || span.twinStart() >= qe) {
+                continue;
+            }
+            if (span.twinStart() < qs || span.twinEnd() > qe) {
+                return null; // the quote slices a surrogate — unmappable
+            }
+            out.append(twinText, pos, span.twinStart());
+            out.append("[").append(span.type()).append("]");
+            pos = span.twinEnd();
+        }
+        out.append(twinText, pos, qe);
+        return out.toString();
     }
 
     private Map<String, Object> classificationView(SignalClassification c) {
@@ -250,6 +313,7 @@ public class SignalService {
         if (s.getChannel() != null) m.put("channel", s.getChannel());
         if (s.getLang() != null) m.put("lang", s.getLang());
         m.put("text", s.getText());
+        if (s.getTwinText() != null) m.put("twin", s.getTwinText());
         if (s.getContext() != null) m.put("context", read(s.getContext()));
         if (s.getRedactions() != null) m.put("redactions", read(s.getRedactions()));
         m.put("receivedAt", s.getReceivedAt());
