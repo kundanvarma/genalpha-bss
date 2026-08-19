@@ -1537,7 +1537,7 @@ const WORKSPACES = [
   // one theme was three jobs. Role gates unchanged, so a narrow role lands on
   // just its own desk.
   { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
-    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'settings'] },
+    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings'] },
   { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
