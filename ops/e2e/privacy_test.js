@@ -149,8 +149,11 @@ const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/j
   for (let i = 0; i < 45 && !healed; i++) {
     await sleep(4000);
     try {
+      // re-mint: on a slow VM the suite outlives the staff token's lifetime,
+      // and a stale token 401s this probe forever ("never came back")
+      const freshStaff = await token(ctx, 'demo', 'demo');
       const probe = await ctx.post(`${API}/tmf-api/partyInteraction/v4/partyInteraction`,
-        { headers: H(staff), timeout: 4000,
+        { headers: H(freshStaff), timeout: 4000,
           data: { description: `Retention probe (${run})`, channel: 'phone', direction: 'inbound',
             relatedParty: [{ id: 'retention-probe-' + run, role: 'customer',
               '@referredType': 'Individual' }] } });

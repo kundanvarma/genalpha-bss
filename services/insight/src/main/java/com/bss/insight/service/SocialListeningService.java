@@ -31,18 +31,20 @@ public class SocialListeningService {
             "worst", "angry", "broken", "outage", "buggy", "awful", "scam");
 
     private final SocialMentionRepository mentions;
+    private final SignalService signalService;
     private final TenantScope tenantScope;
     private final RestClient social;
     private final String accountId;
     private final String token;
     private final boolean enabled;
 
-    public SocialListeningService(SocialMentionRepository mentions, TenantScope tenantScope,
-            RestClient.Builder builder,
+    public SocialListeningService(SocialMentionRepository mentions, SignalService signalService,
+            TenantScope tenantScope, RestClient.Builder builder,
             @Value("${bss.downstream.social-api-url:}") String baseUrl,
             @Value("${bss.downstream.social-account-id:}") String accountId,
             @Value("${bss.downstream.social-access-token:}") String token) {
         this.mentions = mentions;
+        this.signalService = signalService;
         this.tenantScope = tenantScope;
         this.social = builder.baseUrl(baseUrl == null ? "" : baseUrl).build();
         this.accountId = accountId;
@@ -80,6 +82,16 @@ public class SocialListeningService {
                 sm.setSentiment(score(text));
                 sm.setCreatedAt(OffsetDateTime.now());
                 mentions.save(sm);
+                // a mention IS a customer signal (SI-P1) — same door, same firewall;
+                // a failed ingest must never break the listening sync
+                try {
+                    signalService.ingest(java.util.Map.of(
+                            "source", "mention", "sourceRef", platform + ":" + externalId,
+                            "channel", "social", "text", text,
+                            "context", java.util.Map.of("platform", platform, "sentiment", sm.getSentiment())));
+                } catch (RuntimeException e) {
+                    // non-fatal by design
+                }
                 ingested++;
             }
         }

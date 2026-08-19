@@ -1,5 +1,6 @@
 package com.bss.insight.privacy;
 
+import com.bss.insight.repository.CustomerSignalRepository;
 import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
@@ -29,12 +30,15 @@ public class PrivacyController {
 
     private final VisitorProfileRepository profiles;
     private final VisitorEventRepository events;
+    private final CustomerSignalRepository signals;
     private final TenantScope tenantScope;
 
     public PrivacyController(VisitorProfileRepository profiles,
-            VisitorEventRepository events, TenantScope tenantScope) {
+            VisitorEventRepository events, CustomerSignalRepository signals,
+            TenantScope tenantScope) {
         this.profiles = profiles;
         this.events = events;
+        this.signals = signals;
         this.tenantScope = tenantScope;
     }
 
@@ -46,7 +50,9 @@ public class PrivacyController {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND); // 404, never 403
         }
         var stitched = profiles.findByTenantIdAndPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", "behavioral", "count", stitched.size(), "items", stitched);
+        var said = signals.findByTenantIdAndPartyId(tenantScope.currentTenantId(), target);
+        return Map.of("category", "behavioral", "count", stitched.size(), "items", stitched,
+                "signals", said.size());
     }
 
     @PostMapping("/erase")
@@ -62,7 +68,10 @@ public class PrivacyController {
             events.deleteByTenantIdAndVisitorId(tenant, profile.getVisitorId());
         }
         profiles.deleteAll(stitched);
-        return Map.of("category", "behavioral", "deleted", stitched.size(), "retained", 0);
+        // the signal store is pseudonymized, not anonymized — it goes too (SI-P1)
+        long signalsGone = signals.deleteByTenantIdAndPartyId(tenant, target);
+        return Map.of("category", "behavioral", "deleted", stitched.size(),
+                "signalsDeleted", signalsGone, "retained", 0);
     }
 
     private String subject() {

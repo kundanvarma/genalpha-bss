@@ -38,19 +38,21 @@ public class SocialCareService {
 
     private final SocialDmRepository dms;
     private final DomainEventPublisher events;
+    private final SignalService signalService;
     private final TenantScope tenantScope;
     private final RestClient social;
     private final String accountId;
     private final String token;
     private final boolean enabled;
 
-    public SocialCareService(SocialDmRepository dms, DomainEventPublisher events, TenantScope tenantScope,
-            RestClient.Builder builder,
+    public SocialCareService(SocialDmRepository dms, DomainEventPublisher events,
+            SignalService signalService, TenantScope tenantScope, RestClient.Builder builder,
             @Value("${bss.downstream.social-api-url:}") String baseUrl,
             @Value("${bss.downstream.social-account-id:}") String accountId,
             @Value("${bss.downstream.social-access-token:}") String token) {
         this.dms = dms;
         this.events = events;
+        this.signalService = signalService;
         this.tenantScope = tenantScope;
         this.social = builder.baseUrl(baseUrl == null ? "" : baseUrl).build();
         this.accountId = accountId;
@@ -111,6 +113,17 @@ public class SocialCareService {
                     ticketsRequested++;
                 }
                 dms.save(dm);
+                // a DM IS a customer signal (SI-P1) — the author's handle is PII-ish
+                // context, the text passes the firewall like every other source
+                try {
+                    signalService.ingest(java.util.Map.of(
+                            "source", "chat", "sourceRef", "dm:" + platform + ":" + externalId,
+                            "channel", "social-dm", "text", text,
+                            "context", java.util.Map.of("platform", platform, "sentiment", sentiment,
+                                    "needsCare", needsCare)));
+                } catch (RuntimeException e) {
+                    // non-fatal by design
+                }
                 ingested++;
             }
         }
