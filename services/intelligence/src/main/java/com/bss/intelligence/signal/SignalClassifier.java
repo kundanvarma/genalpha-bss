@@ -38,7 +38,8 @@ public class SignalClassifier {
     private static final String SYSTEM = """
             You classify ONE customer signal from a telecom operator (support tickets, reviews, \
             chats, call transcripts; Norwegian or English; PII already redacted to tokens like \
-            [PHONE]). Reply with ONLY a JSON object — no fences, no prose:
+            [PHONE]). Reply with ONLY a JSON object — no fences, no prose, nothing after the \
+            closing brace:
             {"sentiment":"positive|neutral|negative",
              "aspect":"product|billing|network|support|price|other",
              "category":"fault|feature-request|question|praise|complaint",
@@ -47,10 +48,16 @@ public class SignalClassifier {
              "loyaltyIndicator":"promoter|passive|detractor",
              "churnSignal":true|false,
              "churnReason":"one short sentence, or null",
-             "evidence":{"sentiment":"...","category":"...","churnSignal":"..."}}
-            RULES: every evidence value MUST be a VERBATIM substring copied from the signal text \
-            (the store rejects anything else). churnSignal=true only when the text itself signals \
-            leaving, cancelling or switching. Do not invent facts absent from the text.""";
+             "evidence":{"sentiment":"<copied words>","category":"<copied words>","churnSignal":"<copied words>"}}
+            THE EVIDENCE CONTRACT: each evidence value is a short phrase COPIED CHARACTER-FOR-\
+            CHARACTER from the signal text — the exact words that justify that field. NEVER put \
+            a label (like "negative" or "fault") in evidence; the store rejects any evidence \
+            that is not an exact substring of the signal text.
+            EXAMPLE signal: "Regningen er feil igjen, og nå bytter jeg leverandør."
+            EXAMPLE evidence: {"sentiment":"Regningen er feil igjen","category":"Regningen er feil",\
+            "churnSignal":"nå bytter jeg leverandør"}
+            churnSignal=true only when the text itself signals leaving, cancelling or switching. \
+            Do not invent facts absent from the text.""";
 
     private final BssApiClient bss;
     private final AiGovernor governor;

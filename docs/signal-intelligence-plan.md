@@ -175,10 +175,16 @@ Three doctrines locked:
   fields instead of verbatim quotes, and the double verification refused every row. The
   evidence contract proved itself a real quality gate, not decoration. Claude (fallback tier):
   13/13 with verbatim quotes. Local latency ~1–4 s/call was fine; the failure is instruction-
-  following, not speed. NEXT (unscheduled): a small-model-friendlier prompt (explicit
-  copy-the-words example) and/or qwen2.5:7b / llama3.1:8b, re-run on the same harness. The
-  flip itself is now four env vars (AI_*_FAST) after 524bbc9 fixed the silently-ignored tenant
-  tier keys and the tier-blind ledger labels the experiment exposed.
+  following, not speed. ROUND 2 (same day): the hardened prompt
+  (worked copy-these-words example, "never put a label in evidence") + **qwen2.5:7b: 5/13
+  accepted** (sentiment 100% agreement where accepted) — but 8/13 still failed the evidence
+  gate, and the 7B **over-flags churnSignal on ordinary complaints** (bill-wrong ≠ leaving),
+  which would poison the churn trait. VERDICT: the local tier stays FRONTIER until a model
+  passes this harness; the gate refused two weaker models exactly as designed. NEXT
+  (unscheduled): llama3.1:8b / a churn-negative example in the prompt / fine-tune. The flip is
+  four env vars (AI_*_FAST) after 524bbc9 fixed the silently-ignored tenant tier keys and the
+  tier-blind ledger labels the experiment exposed; the harness (copy → flip → sweep → compare →
+  erase) is repeatable in one command.
 - The demo ships with mocks (mock-servicedesk, planted transcripts) and the stub/pattern-only
   redactor as the floor; real NER redaction and a real local model are config on existing
   seams (`AI_PROVIDER=openai-compatible`, redactor seam) — same claim discipline as carriers.
