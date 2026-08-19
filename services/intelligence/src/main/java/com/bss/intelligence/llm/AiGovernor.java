@@ -46,13 +46,20 @@ public class AiGovernor {
     private final org.springframework.transaction.support.TransactionTemplate newTx;
     private final long defaultPricePer1kMicros;
     private final Map<String, Long> pricePer1kByModel;
+    private final com.bss.intelligence.security.TenantRegistry tenants;
+    /** T-P3: what CLASS of data each use-case sends outward. Declared here
+     * (overridable as data: bss.ai.exposure.<useCase>=…); anything
+     * undeclared is RAW — the honest default, and raw is tenant-gated. */
+    private final Map<String, String> exposureByUseCase;
 
     public AiGovernor(LlmAdapter llm, AiAuditRepository audits, AiBudgetRepository budgets,
             com.bss.intelligence.audit.AiContractRepository contracts,
             TenantScope tenantScope, Redactor redactor,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
             @Value("${bss.ai.default-price-per-1k-micros:2000}") long defaultPricePer1kMicros,
+            com.bss.intelligence.security.TenantRegistry tenants,
             org.springframework.core.env.Environment env) {
+        this.tenants = tenants;
         this.llm = llm;
         this.audits = audits;
         this.budgets = budgets;
@@ -73,6 +80,32 @@ public class AiGovernor {
                 .bind("bss.ai.prices", org.springframework.boot.context.properties.bind.Bindable
                         .mapOf(String.class, Long.class))
                 .orElseGet(java.util.Map::of);
+        Map<String, String> declared = new java.util.LinkedHashMap<>(Map.of(
+                "signal-classification", "twin",     // Tvilling: fiction leaves
+                "voc-ask", "aggregate"));            // aggregates only, never text
+        declared.putAll(org.springframework.boot.context.properties.bind.Binder.get(env)
+                .bind("bss.ai.exposure", org.springframework.boot.context.properties.bind.Bindable
+                        .mapOf(String.class, String.class))
+                .orElseGet(java.util.Map::of));
+        this.exposureByUseCase = declared;
+    }
+
+    /** Exposure class of a use-case: declared, else RAW (honest default).
+     * A stub provider exposes nothing regardless of declaration. */
+    private String exposureOf(String useCase, LlmAdapter.Tier tier) {
+        if ("stub".equals(safe(() -> llm.provider(tier)))) {
+            return "none";
+        }
+        return exposureByUseCase.getOrDefault(useCase, "raw");
+    }
+
+    private String jurisdictionOf(LlmAdapter.Tier tier) {
+        return switch (safe(() -> llm.provider(tier))) {
+            case "anthropic" -> "US";
+            case "openai-compatible" -> "self-hosted";
+            case "stub" -> "none";
+            default -> "unknown";
+        };
     }
 
     /**
@@ -104,6 +137,20 @@ public class AiGovernor {
                     "AI spend ceiling reached for this window — raise the budget or wait for the window to roll");
         }
 
+        // T-P3: the raw gate — a use-case that sends RAW customer data to a
+        // remote model runs only for tenants that opted in. Opt-in is a
+        // tenant-registry flag, never assumed.
+        String exposure = exposureOf(useCase, tier);
+        if ("raw".equals(exposure)) {
+            var entry = tenants.byId(tenant);
+            if (entry == null || !entry.isAiRawExposure()) {
+                record(tenant, useCase, tier, system, user, "", 0, 0, 0L,
+                        "refused-raw-exposure", null, null, null);
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "use-case '" + useCase + "' sends raw customer data to a remote model — "
+                        + "enable ai-raw-exposure for this tenant to allow it");
+            }
+        }
         String redSystem = redactor.redact(system);
         String redUser = redactor.redact(user);
         long started = System.nanoTime();
@@ -167,6 +214,8 @@ public class AiGovernor {
             audit.setUseCase(useCase);
             audit.setProvider(safe(() -> llm.provider(tier)));
             audit.setModel(safe(() -> llm.model(tier)));
+            audit.setExposure(exposureOf(useCase, tier));
+            audit.setJurisdiction(jurisdictionOf(tier));
             audit.setPrompt(truncate(system + (user.isEmpty() ? "" : "\n---\n" + user)));
             audit.setResponse(truncate(response));
             audit.setCreatedAt(OffsetDateTime.now());

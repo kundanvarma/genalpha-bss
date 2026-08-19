@@ -206,6 +206,12 @@ public class TenantRegistry {
         public String getAiApiKeySmart() { return aiApiKeySmart; }
         public void setAiApiKeySmart(String v) { this.aiApiKeySmart = v; }
 
+        /** T-P3 gate: may this tenant's AI use-cases send RAW customer data
+         * to a remote model? Opt-in, never assumed. */
+        private boolean aiRawExposure;
+        public boolean isAiRawExposure() { return aiRawExposure; }
+        public void setAiRawExposure(boolean v) { this.aiRawExposure = v; }
+
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }

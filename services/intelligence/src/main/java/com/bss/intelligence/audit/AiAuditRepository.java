@@ -38,4 +38,15 @@ public interface AiAuditRepository extends JpaRepository<AiAudit, String> {
     @Query("SELECT DISTINCT a.provider, a.model, a.tier, a.useCase FROM AiAudit a "
             + "WHERE a.tenantId = :tenantId AND a.model IS NOT NULL AND a.model <> ''")
     List<Object[]> servedModels(@Param("tenantId") String tenantId);
+
+    /** T-P3: the data-flow rollup — one row per (useCase, exposure, provider,
+     * jurisdiction) with call count and last occurrence. */
+    @org.springframework.data.jpa.repository.Query("""
+            select a.useCase, a.exposure, a.provider, a.jurisdiction,
+                   count(a), max(a.createdAt)
+            from AiAudit a where a.tenantId = :tenantId
+            group by a.useCase, a.exposure, a.provider, a.jurisdiction
+            order by count(a) desc""")
+    java.util.List<Object[]> exposureSummary(
+            @org.springframework.data.repository.query.Param("tenantId") String tenantId);
 }

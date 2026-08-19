@@ -19,6 +19,13 @@ public class AiAudit {
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;
 
+    /** What CLASS of data left on this call (T-P3): none|twin|aggregate|raw-redacted|raw. */
+    @Column(length = 16)
+    private String exposure;
+
+    @Column(length = 32)
+    private String jurisdiction;
+
     @Column(name = "use_case", nullable = false, length = 64)
     private String useCase;
 
@@ -65,6 +72,11 @@ public class AiAudit {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
+    public String getExposure() { return exposure; }
+    public void setExposure(String v) { this.exposure = v; }
+    public String getJurisdiction() { return jurisdiction; }
+    public void setJurisdiction(String v) { this.jurisdiction = v; }
+
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }
     public String getUseCase() { return useCase; }

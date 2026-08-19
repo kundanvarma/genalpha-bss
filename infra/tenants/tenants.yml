@@ -85,6 +85,9 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART:}
         ai-base-url-smart: ${AI_BASE_URL_SMART:}
         ai-api-key-smart: ${AI_API_KEY_SMART:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
       - id: nova
         issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
         jwks-uri: ${OIDC_JWKS_URI_NOVA:}
@@ -138,6 +141,9 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART_NOVA:}
         ai-base-url-smart: ${AI_BASE_URL_SMART_NOVA:}
         ai-api-key-smart: ${AI_API_KEY_SMART_NOVA:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
