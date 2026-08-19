@@ -223,6 +223,19 @@ public class BssApiClient {
     }
 
     @SuppressWarnings("unchecked")
+    /** A customer's bills — the honest input to CLTV (SI-P4). */
+    public List<Map<String, Object>> billsOf(String partyId) {
+        try {
+            String body = billingClient.get()
+                    .uri("/tmf-api/customerBillManagement/v4/customerBill?relatedPartyId="
+                            + partyId + "&limit=24")
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     /** Unclassified customer signals awaiting the battery (SI-P3). */
     public List<Map<String, Object>> unclassifiedSignals() {
         try {

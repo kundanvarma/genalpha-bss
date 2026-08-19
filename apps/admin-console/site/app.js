@@ -1294,6 +1294,14 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'voc',
+    title: 'Voice of Customer',
+    voc: true, // SI-P4: battery aggregates per aspect + early-warning alerts
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'landing',
     base: '/insight/v1',
     title: 'Landing pages',
@@ -3662,6 +3670,88 @@ async function renderSocialCare() {
 // ATTRIBUTION: the portfolio readout. Lift + INCREMENTAL revenue across every
 // campaign and journey — one page a marketer reads to see what actually moved
 // money, with the honest rule shown in the open: no control group, no lift claim.
+/* ---------- Voice of Customer (SI-P4): what customers SAY, aggregated with
+ * receipts. v1 is honest SQL over verified classifications — the method label
+ * says so on the pane. Deviating aspects carry the early-warning badge. */
+async function renderVoc() {
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'voc-pane';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'What customers SAY — every signal PII-firewalled at ingest, every '
+    + 'classification carrying a verbatim evidence quote. Aggregated per aspect over 28 days.';
+  const method = document.createElement('p');
+  method.className = 'dim'; method.dataset.testid = 'voc-method';
+  method.style.cssText = 'font-size:11px;margin:0 0 10px;font-style:italic';
+  const alertsWrap = document.createElement('div'); alertsWrap.dataset.testid = 'voc-alerts';
+  const cards = document.createElement('div'); cards.dataset.testid = 'voc-aspects';
+  const drill = document.createElement('div'); drill.dataset.testid = 'voc-drill';
+
+  const chip = (label, n, color) => {
+    const c = document.createElement('span');
+    c.style.cssText = `display:inline-block;margin:0 6px 4px 0;padding:2px 9px;border-radius:12px;font-size:12px;background:${color};color:#fff`;
+    c.textContent = `${label} ${n}`; return c;
+  };
+
+  const sum = await (await authFetch('/insight/v1/voc/summary')).json()
+    .catch(() => ({ aspects: [], alerts: [], method: '' }));
+  method.textContent = 'Method: ' + (sum.method || '');
+
+  for (const al of (sum.alerts || []).slice(0, 5)) {
+    const b = document.createElement('div'); b.dataset.testid = 'voc-alert';
+    b.style.cssText = 'padding:8px 12px;margin:0 0 8px;border-left:3px solid #c62828;background:#fdecea;font-size:13px;border-radius:4px';
+    b.textContent = `⚠ ${al.aspect}: ${al.weekNegatives} negatives this week vs a `
+      + `${al.baselineAvg}/week baseline (${al.isoWeek}) — customers are telling you something.`;
+    alertsWrap.append(b);
+  }
+
+  if (!(sum.aspects || []).length) {
+    const p = document.createElement('p'); p.className = 'dim';
+    p.textContent = 'No classified signals in the window yet — the battery fills this pane as signals arrive.';
+    cards.append(p);
+  }
+  for (const a of (sum.aspects || [])) {
+    const card = document.createElement('div'); card.className = 'panel'; card.dataset.testid = 'voc-aspect';
+    card.style.cssText = 'padding:10px 14px;margin:8px 0;cursor:pointer';
+    const head = document.createElement('div'); head.style.cssText = 'display:flex;align-items:baseline;gap:10px';
+    const h = document.createElement('h3'); h.textContent = a.aspect; h.style.cssText = 'font-size:15px;margin:0';
+    const trend = document.createElement('span'); trend.style.cssText = 'font-size:12px';
+    const base = a.baselineWeeklyNegatives || 0;
+    trend.textContent = a.deviating ? '▲ deviating' : (a.weekNegatives > base ? '▲' : a.weekNegatives < base ? '▼' : '→');
+    trend.style.color = a.deviating ? '#c62828' : '#607d8b';
+    const tot = document.createElement('span'); tot.className = 'dim'; tot.style.fontSize = '12px';
+    tot.textContent = `${a.total} signals · ${a.thisWeek} this week`;
+    head.append(h, trend, tot);
+    const row = document.createElement('div'); row.style.marginTop = '6px';
+    row.append(chip('pos', a.positive, '#2e7d32'), chip('neu', a.neutral, '#607d8b'), chip('neg', a.negative, '#c62828'));
+    card.append(head, row);
+    for (const p of (a.painPoints || []).slice(0, 3)) {
+      const pp = document.createElement('div'); pp.className = 'dim';
+      pp.style.cssText = 'font-size:12px;margin-top:3px';
+      pp.textContent = `· ${p.painPoint}` + (p.impact ? ` (impact ${p.impact}/5)` : '');
+      card.append(pp);
+    }
+    card.addEventListener('click', async () => {
+      drill.replaceChildren();
+      const dh = document.createElement('h3'); dh.textContent = `Signals — ${a.aspect}`;
+      dh.style.cssText = 'font-size:14px;margin:10px 0 6px'; drill.append(dh);
+      const rows = await (await authFetch('/insight/v1/signal')).json().catch(() => []);
+      for (const r of rows.filter((x) => x.classification && x.classification.aspect === a.aspect).slice(0, 20)) {
+        const rc = document.createElement('div'); rc.className = 'panel'; rc.dataset.testid = 'voc-signal';
+        rc.style.cssText = 'padding:7px 11px;margin:5px 0';
+        const meta = document.createElement('div'); meta.className = 'dim'; meta.style.cssText = 'font-size:11px;margin-bottom:2px';
+        const c = r.classification;
+        meta.textContent = `${r.source} · ${c.sentiment} · ${c.category}` + (c.churnSignal ? ' · CHURN SIGNAL' : '');
+        const t = document.createElement('div'); t.textContent = r.text; t.style.fontSize = '13px';
+        rc.append(meta, t); drill.append(rc);
+      }
+    });
+    cards.append(card);
+  }
+  panel.append(intro, method, alertsWrap, cards, drill);
+}
+
 async function renderAttribution() {
   const panel = copilotPanel();
   panel.replaceChildren();
@@ -5299,6 +5389,15 @@ async function loadList() {
     el('listing-body').replaceChildren();
     document.querySelector('.pager')?.setAttribute('hidden', '');
     renderAttribution();
+    return;
+  }
+  if (active.voc) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderVoc();
     return;
   }
   if (active.staff) {

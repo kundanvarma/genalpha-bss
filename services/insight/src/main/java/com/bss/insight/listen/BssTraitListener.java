@@ -68,6 +68,19 @@ public class BssTraitListener {
                 }
                 return;
             }
+            // SI-P4: honest CLTV from billing+tenure lands as a NUMERIC trait —
+            // range operators make "worth >= 5000" an audience leaf, not a report
+            if ("CltvScoredEvent".equals(eventType)) {
+                Map<String, Object> cltv = event.get("cltvScore") instanceof Map<?, ?> v
+                        ? (Map<String, Object>) v : Map.of();
+                String partyId = cltv.get("partyId") == null ? null : String.valueOf(cltv.get("partyId"));
+                if (partyId != null && cltv.get("cltv") != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        traits.setTrait(partyId, "cltv", String.valueOf(cltv.get("cltv")));
+                    }
+                }
+                return;
+            }
             // freg F-P4: a registry-verified address re-homes the customer —
             // region is single-valued (replace-on-change), so a mover leaves
             // the old region audience on the next resolution; addressVerified

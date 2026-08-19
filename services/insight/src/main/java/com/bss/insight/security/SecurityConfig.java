@@ -89,6 +89,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/prospect").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/prospect/import")
                                 .hasAuthority("insight:read")
+                        // Voice of Customer (SI-P4): aggregates + deviation sweep
+                        .requestMatchers(ApiConstants.BASE_PATH + "/voc/**").hasAuthority("insight:read")
                         // signal connectors (SI-P2): CRUD + sync are back-office; the
                         // webhook door is anonymous HERE and opens only to the
                         // connector's shared secret, verified constant-time inside
