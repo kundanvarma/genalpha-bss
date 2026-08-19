@@ -23,5 +23,16 @@ public interface LlmAdapter {
     /** Which provider/model answered — recorded in the audit ledger. */
     String provider();
 
+    /** Tier-aware self-report: the ledger must name who ACTUALLY answered a
+     * tiered call (a tenant can run local-FAST + frontier-SMART at once —
+     * the tier-blind report once labelled local calls as the frontier). */
+    default String provider(Tier tier) {
+        return provider();
+    }
+
+    default String model(Tier tier) {
+        return model();
+    }
+
     String model();
 }

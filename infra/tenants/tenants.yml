@@ -71,6 +71,12 @@ bss:
         speech-url: ${SPEECH_URL:}
         speech-token: ${SPEECH_TOKEN:}
         market-feed-token: ${MARKET_FEED_TOKEN:}
+        # the shared AI stack (tier fallback). Without these the router
+        # short-circuits to the service default and IGNORES the tier keys.
+        ai-provider: ${AI_PROVIDER:}
+        ai-base-url: ${AI_BASE_URL:}
+        ai-api-key: ${AI_API_KEY:}
+        ai-model: ${AI_MODEL:}
         ai-model-fast: ${AI_MODEL_FAST:}
         ai-model-smart: ${AI_MODEL_SMART:}
         ai-provider-fast: ${AI_PROVIDER_FAST:}

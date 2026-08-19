@@ -100,6 +100,16 @@ public class LlmRouter implements LlmAdapter {
     }
 
     @Override
+    public String provider(Tier tier) {
+        return resolve(tier).provider();
+    }
+
+    @Override
+    public String model(Tier tier) {
+        return resolve(tier).model();
+    }
+
+    @Override
     public String model() {
         return resolve().model();
     }

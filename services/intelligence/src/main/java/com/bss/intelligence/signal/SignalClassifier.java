@@ -111,10 +111,9 @@ public class SignalClassifier {
                     dropped++;
                     continue;
                 }
-                // who spoke, on the row (the audit ledger holds the
-                // per-call, tier-resolved truth; this is the router's report)
-                parsed.put("provider", llm.provider());
-                parsed.put("model", llm.model());
+                // who ACTUALLY spoke: the FAST tier's resolved adapter
+                parsed.put("provider", llm.provider(LlmAdapter.Tier.FAST));
+                parsed.put("model", llm.model(LlmAdapter.Tier.FAST));
                 if (bss.postSignalClassification(id, parsed)) {
                     classified++;
                 } else {

@@ -120,7 +120,7 @@ public class AiGovernor {
         int latencyMs = (int) ((System.nanoTime() - started) / 1_000_000);
         int promptTokens = tokens(redSystem + redUser);
         int completionTokens = tokens(raw);
-        long cost = cost(promptTokens + completionTokens, safe(llm::model));
+        long cost = cost(promptTokens + completionTokens, safe(() -> llm.model(tier)));
         record(tenant, useCase, tier, redSystem, redUser, redactor.redact(raw),
                 promptTokens, completionTokens, cost, outcome, latencyMs, null, null);
         return raw;
@@ -165,8 +165,8 @@ public class AiGovernor {
             audit.setId(UUID.randomUUID().toString());
             audit.setTenantId(tenant);
             audit.setUseCase(useCase);
-            audit.setProvider(safe(llm::provider));
-            audit.setModel(safe(llm::model));
+            audit.setProvider(safe(() -> llm.provider(tier)));
+            audit.setModel(safe(() -> llm.model(tier)));
             audit.setPrompt(truncate(system + (user.isEmpty() ? "" : "\n---\n" + user)));
             audit.setResponse(truncate(response));
             audit.setCreatedAt(OffsetDateTime.now());
