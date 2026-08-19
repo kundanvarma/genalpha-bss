@@ -107,6 +107,19 @@ signal ⇒ naive Sonnet ≈ $0.005/signal; Haiku+caching+batch ≈ $0.0002–0.0
 per-tenant adapter matures. T-P3's pane shows spend beside exposure class: what left, and
 what it cost.
 
+## Structurally synthetic surrogates (no coincidental real person — by construction)
+
+A surrogate that COULD collide with reality is a residual risk (a generated phone number might
+be someone's; an fnr might validate). Every surrogate is therefore built provably unreal while
+staying real-shaped to a model: **phone** +47 19 xx xx xx (8-digit numbers starting with 1 are
+unassignable in the Norwegian numbering plan — cannot ring anyone), **fnr** with birth-month
++80 (the official Tenor/Skatteetaten synthetic-person convention, months 81–92), **card**
+deliberately Luhn-broken (no validator accepts it), **email** on example.net (RFC 2606
+reserved — cannot exist). Names stay natural (a fictional character named like a real person
+is the posture of a novel — no linkage), and since everything AROUND a name is provably
+synthetic, no combination can converge on a living person. Coincidence is eliminated, not
+made unlikely.
+
 ## Honesty box
 - Surrogate substitution is not new (clinical de-identification has done it for years); the
   claimed novelty is the COMPOSITION — twin + verbatim-evidence re-anchoring + erasure-cascade

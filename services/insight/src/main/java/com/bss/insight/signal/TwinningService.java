@@ -99,16 +99,43 @@ public class TwinningService {
                 yield value.trim().contains(" ")
                         ? first + " " + LAST[idx(h, 1, LAST.length)] : first;
             }
-            case "PHONE" -> "+47 4" + digits(h, 2, 1) + " " + digits(h, 3, 2)
+            // STRUCTURALLY SYNTHETIC by construction — real-shaped to a model,
+            // provably unreal to the world, so a coincidental hit on a living
+            // person is impossible (not merely unlikely):
+            // phone: NO 8-digit numbers starting with 1 are unassignable
+            case "PHONE" -> "+47 19 " + digits(h, 3, 2)
                     + " " + digits(h, 5, 2) + " " + digits(h, 7, 2);
+            // email: example.net is RFC 2606 reserved — can never exist
             case "EMAIL" -> (FIRST[idx(h, 0, FIRST.length)] + "."
                     + LAST[idx(h, 1, LAST.length)] + "@example.net").toLowerCase(java.util.Locale.ROOT);
+            // fnr: the Tenor/Skatteetaten synthetic convention — birth month
+            // +80 (81..92) officially marks a fictional person
             case "FNR" -> String.format("%02d%02d%02d %s",
-                    1 + idx(h, 2, 28), 1 + idx(h, 3, 12), 40 + idx(h, 4, 60), digits(h, 5, 5));
-            case "CARD" -> digits(h, 2, 4) + " " + digits(h, 6, 4) + " "
-                    + digits(h, 10, 4) + " " + digits(h, 14, 4);
+                    1 + idx(h, 2, 28), 81 + idx(h, 3, 12), 40 + idx(h, 4, 60), digits(h, 5, 5));
+            // card: deliberately Luhn-BROKEN — fails validation everywhere
+            case "CARD" -> luhnBroken(digits(h, 2, 4) + digits(h, 6, 4)
+                    + digits(h, 10, 4) + digits(h, 14, 4));
             default -> "[" + type + "]"; // an unknown type degrades to the token
         };
+    }
+
+    /** Format the 16 digits in 4-groups with the LAST digit forced to fail
+     * the Luhn check — a card number no validator anywhere will accept. */
+    private static String luhnBroken(String d16) {
+        int sum = 0;
+        for (int i = 0; i < 15; i++) {
+            int digit = d16.charAt(i) - '0';
+            if (i % 2 == 0) { // doubling positions for a 16-digit PAN
+                digit *= 2;
+                if (digit > 9) digit -= 9;
+            }
+            sum += digit;
+        }
+        int valid = (10 - (sum % 10)) % 10;
+        int broken = (valid + 5) % 10; // maximally far from the valid check digit
+        String d = d16.substring(0, 15) + broken;
+        return d.substring(0, 4) + " " + d.substring(4, 8) + " "
+                + d.substring(8, 12) + " " + d.substring(12);
     }
 
     private static int idx(byte[] h, int at, int mod) {
