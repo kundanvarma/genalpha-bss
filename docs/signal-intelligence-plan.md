@@ -179,9 +179,19 @@ Three doctrines locked:
   (worked copy-these-words example, "never put a label in evidence") + **qwen2.5:7b: 5/13
   accepted** (sentiment 100% agreement where accepted) — but 8/13 still failed the evidence
   gate, and the 7B **over-flags churnSignal on ordinary complaints** (bill-wrong ≠ leaving),
-  which would poison the churn trait. VERDICT: the local tier stays FRONTIER until a model
-  passes this harness; the gate refused two weaker models exactly as designed. NEXT
-  (unscheduled): llama3.1:8b / a churn-negative example in the prompt / fine-tune. The flip is
+  which would poison the churn trait. ROUND 3: **llama3.1:8b + a churn-negative
+  example in the prompt: 6/13 accepted, churnSignal 6/6 with ZERO false positives** (the
+  counter-example fixed the over-flagging completely), sentiment 6/6, aspect 5/6 — but 7/13
+  still fail the evidence gate and category sits at 2/6 (the model reads every outage as
+  'complaint' where the taxonomy says 'fault' — a definitions problem, not hallucination).
+  Trajectory across rounds: 0/13 → 5/13 → 6/13 accepted, churn quality broken → broken →
+  perfect. VERDICT: the local tier stays FRONTIER until a model passes this harness; the gate
+  refused three weaker configurations exactly as designed, and every ACCEPTED local row was
+  trustworthy on sentiment+churn. NEXT (unscheduled): category definitions in the prompt
+  (fault = something broken; complaint = dissatisfaction without a defect), shorter-quote
+  guidance to lift the acceptance rate, a HYBRID tier (local first, frontier only for signals
+  the local model's evidence fails — most text stays on-prem, stubborn ones escalate
+  redacted), or a fine-tune on the churn outcome labels the fleet already collects. The flip is
   four env vars (AI_*_FAST) after 524bbc9 fixed the silently-ignored tenant tier keys and the
   tier-blind ledger labels the experiment exposed; the harness (copy → flip → sweep → compare →
   erase) is repeatable in one command.

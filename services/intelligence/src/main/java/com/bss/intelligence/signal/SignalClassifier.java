@@ -56,7 +56,10 @@ public class SignalClassifier {
             EXAMPLE signal: "Regningen er feil igjen, og nå bytter jeg leverandør."
             EXAMPLE evidence: {"sentiment":"Regningen er feil igjen","category":"Regningen er feil",\
             "churnSignal":"nå bytter jeg leverandør"}
-            churnSignal=true only when the text itself signals leaving, cancelling or switching. \
+            THE CHURN BOUNDARY: churnSignal=true ONLY when the text itself says the customer is \
+            leaving, cancelling or switching. A complaint alone — however angry — is FALSE.
+            COUNTER-EXAMPLE: "Fakturaen er feil og beløpet er alt for høyt." -> churnSignal=false \
+            (a billing complaint; not one word about leaving), evidence has NO churnSignal key.
             Do not invent facts absent from the text.""";
 
     private final BssApiClient bss;
