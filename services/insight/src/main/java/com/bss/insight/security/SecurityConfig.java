@@ -89,6 +89,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/prospect").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/prospect/import")
                                 .hasAuthority("insight:read")
+                        // signal connectors (SI-P2): CRUD + sync are back-office; the
+                        // webhook door is anonymous HERE and opens only to the
+                        // connector's shared secret, verified constant-time inside
+                        .requestMatchers(ApiConstants.BASE_PATH + "/connector/**").hasAuthority("insight:read")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/connector").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/hook/*").permitAll()
+                        // the signal store (SI-P1): POST is the connectors' door (PII
+                        // firewall inside), GET the back-office read — house scope until
+                        // the dedicated machine scope ships with the connector family
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/signal").hasAuthority("insight:read")
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/signal").hasAuthority("insight:read")
                         // social listening (mentions + sentiment)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/listening/**").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/listening/sync")

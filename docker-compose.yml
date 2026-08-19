@@ -1610,6 +1610,10 @@ services:
       GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
       BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events
+      # signal connectors (SI-P2): secret-ref targets — the desk poll token and
+      # the generic webhook's shared secret; the mocks accept any token
+      SERVICEDESK_API_TOKEN: dev-desk-token
+      SIGNAL_HOOK_SECRET: dev-hook-secret
       # auto-refresh materialized audiences — short interval in dev (prod: minutes)
       INSIGHT_REFRESH_INTERVAL_MS: "8000"
       # DNC-at-activation: filter the ESP suppression list before an export
@@ -1843,6 +1847,17 @@ services:
     restart: unless-stopped
     ports:
       - "8141:8080"
+
+  # Zendesk-shaped support desk — the reference NAMED signal connector
+  # (signal-intelligence SI-P2). Its seeded tickets carry PLANTED PII on
+  # purpose: a sync must prove the SI-P1 firewall catches what a real desk
+  # would leak. A real desk = same adapter, real baseUrl + token.
+  mock-servicedesk:
+    build: ./integrations/mock-servicedesk
+    container_name: bss-mock-servicedesk
+    restart: unless-stopped
+    ports:
+      - "8142:8080"
 
   # The redirect/BNPL PSP for proving the Klarna payment session flow (PSP-P2)
   # without a real Klarna merchant account. Real Klarna needs no code change —
