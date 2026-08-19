@@ -26,6 +26,10 @@ public class AiAudit {
     @Column(length = 32)
     private String jurisdiction;
 
+    /** T-P4: the per-call retention canary embedded in the outbound prompt. */
+    @Column(length = 24)
+    private String canary;
+
     @Column(name = "use_case", nullable = false, length = 64)
     private String useCase;
 
@@ -76,6 +80,8 @@ public class AiAudit {
     public void setExposure(String v) { this.exposure = v; }
     public String getJurisdiction() { return jurisdiction; }
     public void setJurisdiction(String v) { this.jurisdiction = v; }
+    public String getCanary() { return canary; }
+    public void setCanary(String v) { this.canary = v; }
 
     public String getTenantId() { return tenantId; }
     public void setTenantId(String tenantId) { this.tenantId = tenantId; }

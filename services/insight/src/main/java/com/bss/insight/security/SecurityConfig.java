@@ -102,6 +102,9 @@ public class SecurityConfig {
                         // the dedicated machine scope ships with the connector family
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/signal").hasAuthority("insight:read")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/signal").hasAuthority("insight:read")
+                        // twins + the flywheel corpus are back-office surfaces —
+                        // WITHOUT this, /signal/{id}/twin fell to bare authenticated()
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/signal/**").hasAuthority("insight:read")
                         // the battery's write-back (SI-P3): intelligence's machine
                         // identity carries insight:read like every back-office writer
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/signal/*/classification").hasAuthority("insight:read")

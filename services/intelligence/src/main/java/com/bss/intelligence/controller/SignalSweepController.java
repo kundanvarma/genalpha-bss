@@ -16,13 +16,22 @@ import java.util.Map;
 public class SignalSweepController {
 
     private final SignalClassifier classifier;
+    private final com.bss.intelligence.signal.CanaryProbe canaryProbe;
 
-    public SignalSweepController(SignalClassifier classifier) {
+    public SignalSweepController(SignalClassifier classifier,
+            com.bss.intelligence.signal.CanaryProbe canaryProbe) {
         this.classifier = classifier;
+        this.canaryProbe = canaryProbe;
     }
 
     @PostMapping("/signalSweep")
     public ResponseEntity<Map<String, Object>> sweep() {
         return ResponseEntity.ok(classifier.sweepAllTenants());
+    }
+
+    /** T-P4: probe the provider with stored canaries — on demand. */
+    @PostMapping("/canaryProbe")
+    public ResponseEntity<Map<String, Object>> canaryProbe() {
+        return ResponseEntity.ok(canaryProbe.probeCurrentTenant(3));
     }
 }

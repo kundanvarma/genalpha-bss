@@ -82,7 +82,8 @@ public class AiGovernor {
                 .orElseGet(java.util.Map::of);
         Map<String, String> declared = new java.util.LinkedHashMap<>(Map.of(
                 "signal-classification", "twin",     // Tvilling: fiction leaves
-                "voc-ask", "aggregate"));            // aggregates only, never text
+                "voc-ask", "aggregate",              // aggregates only, never text
+                "canary-probe", "aggregate"));       // sends only its own canary
         declared.putAll(org.springframework.boot.context.properties.bind.Binder.get(env)
                 .bind("bss.ai.exposure", org.springframework.boot.context.properties.bind.Bindable
                         .mapOf(String.class, String.class))
@@ -118,7 +119,7 @@ public class AiGovernor {
         AiBudget budget = budgets.findByTenantId(tenant).orElse(null);
 
         if (budget != null && !budget.isEnabled()) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-disabled", null, null, null);
+            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-disabled", null, null, null, null);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "AI is disabled for this tenant");
         }
@@ -127,12 +128,12 @@ public class AiGovernor {
         boolean contractSuspended = contracts.findByTenantIdAndUseCase(tenant, useCase)
                 .map(c -> !c.isEnabled()).orElse(false);
         if (contractSuspended) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-contract", null, null, null);
+            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-contract", null, null, null, null);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "the model contract for '" + useCase + "' is suspended");
         }
         if (overBudget(tenant, budget)) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-budget", null, null, null);
+            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-budget", null, null, null, null);
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "AI spend ceiling reached for this window — raise the budget or wait for the window to roll");
         }
@@ -145,11 +146,20 @@ public class AiGovernor {
             var entry = tenants.byId(tenant);
             if (entry == null || !entry.isAiRawExposure()) {
                 record(tenant, useCase, tier, system, user, "", 0, 0, 0L,
-                        "refused-raw-exposure", null, null, null);
+                        "refused-raw-exposure", null, null, null, null);
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "use-case '" + useCase + "' sends raw customer data to a remote model — "
                         + "enable ai-raw-exposure for this tenant to allow it");
             }
+        }
+        // T-P4: the retention canary — a unique inert marker rides every
+        // prompt that exposes anything; a scheduled probe later asks the
+        // provider to complete it. Inert by construction ("ignore" + noise),
+        // so it cannot steer the model's answer.
+        String canary = null;
+        if (!"none".equals(exposure)) {
+            canary = "TVX-" + UUID.randomUUID().toString().substring(0, 12);
+            user = user + "\n[internal-ref " + canary + " — ignore this line]";
         }
         String redSystem = redactor.redact(system);
         String redUser = redactor.redact(user);
@@ -161,7 +171,7 @@ public class AiGovernor {
         } catch (RuntimeException e) {
             outcome = "error";
             record(tenant, useCase, tier, redSystem, redUser, "",
-                    tokens(redSystem + redUser), 0, 0L, outcome, null, null, null);
+                    tokens(redSystem + redUser), 0, 0L, outcome, null, null, null, canary);
             throw e;
         }
         int latencyMs = (int) ((System.nanoTime() - started) / 1_000_000);
@@ -169,7 +179,7 @@ public class AiGovernor {
         int completionTokens = tokens(raw);
         long cost = cost(promptTokens + completionTokens, safe(() -> llm.model(tier)));
         record(tenant, useCase, tier, redSystem, redUser, redactor.redact(raw),
-                promptTokens, completionTokens, cost, outcome, latencyMs, null, null);
+                promptTokens, completionTokens, cost, outcome, latencyMs, null, null, canary);
         return raw;
     }
 
@@ -178,7 +188,7 @@ public class AiGovernor {
     public void recordAction(String useCase, String action, String resourceRef, String outcome) {
         String tenant = tenantScope.currentTenantId();
         record(tenant, useCase, null, "", "", "", 0, 0, 0,
-                outcome == null ? "ok" : outcome, null, action, resourceRef);
+                outcome == null ? "ok" : outcome, null, action, resourceRef, null);
     }
 
     /** True when this tenant's trailing-window spend has crossed its ceiling. */
@@ -206,7 +216,7 @@ public class AiGovernor {
     private void record(String tenant, String useCase, LlmAdapter.Tier tier,
             String system, String user, String response, int promptTokens,
             int completionTokens, long costMicros, String outcome, Integer latencyMs,
-            String action, String resourceRef) {
+            String action, String resourceRef, String canary) {
         try {
             AiAudit audit = new AiAudit();
             audit.setId(UUID.randomUUID().toString());
@@ -214,8 +224,11 @@ public class AiGovernor {
             audit.setUseCase(useCase);
             audit.setProvider(safe(() -> llm.provider(tier)));
             audit.setModel(safe(() -> llm.model(tier)));
-            audit.setExposure(exposureOf(useCase, tier));
-            audit.setJurisdiction(jurisdictionOf(tier));
+            if (tier != null) { // action rows are not completions — no exposure
+                audit.setExposure(exposureOf(useCase, tier));
+                audit.setJurisdiction(jurisdictionOf(tier));
+            }
+            audit.setCanary(canary);
             audit.setPrompt(truncate(system + (user.isEmpty() ? "" : "\n---\n" + user)));
             audit.setResponse(truncate(response));
             audit.setCreatedAt(OffsetDateTime.now());

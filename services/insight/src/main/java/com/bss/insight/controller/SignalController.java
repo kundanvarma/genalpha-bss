@@ -44,6 +44,13 @@ public class SignalController {
         return ResponseEntity.ok(service.list(source, unclassified));
     }
 
+    /** The flywheel's fine-tune corpus (T-P4): evidence-verified pairs in
+     * TWIN SPACE — zero real facts by construction. */
+    @GetMapping("/flywheel/dataset")
+    public ResponseEntity<List<Map<String, Object>>> flywheelDataset() {
+        return ResponseEntity.ok(service.flywheelDataset());
+    }
+
     /** The twin (Tvilling T-P1): the fiction that would leave in T-P2 —
      * back-office read, so an operator can SEE what the frontier would see. */
     @GetMapping("/{signalId}/twin")

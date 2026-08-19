@@ -265,6 +265,89 @@ public class SignalService {
         return out.toString();
     }
 
+    /**
+     * T-P4: the flywheel's dataset — every evidence-verified classification
+     * as a fine-tune pair, IN TWIN SPACE: the input is the fiction, and the
+     * stored-space evidence is reverse-anchored back through the offset map
+     * ([TYPE] tokens become the twin's surrogates). The result is a training
+     * corpus with ZERO real facts by construction — a local model learns the
+     * taxonomy and the quoting contract without ever reading a customer.
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> flywheelDataset() {
+        String tenant = tenantScope.currentTenantId();
+        List<Map<String, Object>> pairs = new java.util.ArrayList<>();
+        for (CustomerSignal s : signals.findTop100ByTenantIdOrderByReceivedAtDesc(tenant)) {
+            if (s.getTwinText() == null) {
+                continue;
+            }
+            SignalClassification c = classifications
+                    .findByTenantIdAndSignalId(tenant, s.getId()).orElse(null);
+            if (c == null) {
+                continue;
+            }
+            List<TwinningService.TwinSpan> spans = twinSpansOf(s.getId(), tenant);
+            Map<String, Object> label = classificationView(c);
+            label.remove("provider");
+            label.remove("model");
+            label.remove("classifiedAt");
+            label.remove("@type");
+            // reverse-anchor the evidence into twin space; a quote that cannot
+            // be mapped drops the PAIR — the corpus stays fiction-only
+            Object ev = label.get("evidence");
+            if (ev instanceof Map<?, ?> em && spans != null) {
+                Map<String, Object> twinEv = new LinkedHashMap<>();
+                boolean ok = true;
+                for (Map.Entry<?, ?> q : em.entrySet()) {
+                    String mapped = toTwinSpace(String.valueOf(q.getValue()), s.getText(),
+                            s.getTwinText(), spans);
+                    if (mapped == null) {
+                        ok = false;
+                        break;
+                    }
+                    twinEv.put(String.valueOf(q.getKey()), mapped);
+                }
+                if (!ok) {
+                    continue;
+                }
+                label.put("evidence", twinEv);
+            }
+            Map<String, Object> pair = new LinkedHashMap<>();
+            pair.put("input", s.getTwinText());
+            pair.put("source", s.getSource());
+            if (s.getLang() != null) pair.put("lang", s.getLang());
+            pair.put("output", label);
+            pairs.add(pair);
+        }
+        return pairs;
+    }
+
+    /** The inverse of {@link #reanchor}: stored-space quote → twin-space
+     * (a [TYPE] token becomes the twin's surrogate at that position). */
+    static String toTwinSpace(String quote, String storedText, String twinText,
+            List<TwinningService.TwinSpan> spans) {
+        int qs = storedText.indexOf(quote);
+        if (qs < 0) {
+            return null;
+        }
+        int qe = qs + quote.length();
+        StringBuilder out = new StringBuilder();
+        int pos = qs;
+        for (TwinningService.TwinSpan span : spans) {
+            if (span.redactedEnd() <= qs || span.redactedStart() >= qe) {
+                continue;
+            }
+            if (span.redactedStart() < qs || span.redactedEnd() > qe) {
+                return null; // slices a token — unmappable
+            }
+            out.append(storedText, pos, span.redactedStart());
+            out.append(twinText, span.twinStart(), span.twinEnd());
+            pos = span.redactedEnd();
+        }
+        out.append(storedText, pos, qe);
+        return out.toString();
+    }
+
     private Map<String, Object> classificationView(SignalClassification c) {
         Map<String, Object> m = new LinkedHashMap<>();
         if (c.getSentiment() != null) m.put("sentiment", c.getSentiment());

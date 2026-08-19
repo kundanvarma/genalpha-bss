@@ -39,6 +39,9 @@ public interface AiAuditRepository extends JpaRepository<AiAudit, String> {
             + "WHERE a.tenantId = :tenantId AND a.model IS NOT NULL AND a.model <> ''")
     List<Object[]> servedModels(@Param("tenantId") String tenantId);
 
+    java.util.List<com.bss.intelligence.audit.AiAudit>
+            findTop100ByTenantIdOrderByCreatedAtDesc(String tenantId);
+
     /** T-P3: the data-flow rollup — one row per (useCase, exposure, provider,
      * jurisdiction) with call count and last occurrence. */
     @org.springframework.data.jpa.repository.Query("""
