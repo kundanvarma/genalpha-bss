@@ -168,10 +168,17 @@ Three doctrines locked:
 - **Pseudonymized ≠ anonymized.** The signal store remains personal data (EDPB); retention
   windows, RLS, and partyId erasure are in SI-P1, but the LIA/DPIA is per-operator paperwork
   the product cannot ship for them.
-- **The local-model quality claim must be re-proven on OUR taxonomy.** The cited benchmarks
-  are the reason to try 7–8B locally first, not proof it works here — SI-P3 needs a small
-  eval set (labeled signals + the churn outcomes we already collect) before the tier choice
-  is called settled.
+- **The local-model quality claim must be re-proven on OUR taxonomy — and the first eval
+  says: not yet at 3B.** Experiment 2026-08-19 (harness: copy the Claude-classified reference
+  set under a throwaway party → flip FAST to a local model → sweep → compare → erase):
+  **qwen2.5:3b via host Ollama went 0/13** — it systematically echoed labels into the evidence
+  fields instead of verbatim quotes, and the double verification refused every row. The
+  evidence contract proved itself a real quality gate, not decoration. Claude (fallback tier):
+  13/13 with verbatim quotes. Local latency ~1–4 s/call was fine; the failure is instruction-
+  following, not speed. NEXT (unscheduled): a small-model-friendlier prompt (explicit
+  copy-the-words example) and/or qwen2.5:7b / llama3.1:8b, re-run on the same harness. The
+  flip itself is now four env vars (AI_*_FAST) after 524bbc9 fixed the silently-ignored tenant
+  tier keys and the tier-blind ledger labels the experiment exposed.
 - The demo ships with mocks (mock-servicedesk, planted transcripts) and the stub/pattern-only
   redactor as the floor; real NER redaction and a real local model are config on existing
   seams (`AI_PROVIDER=openai-compatible`, redactor seam) — same claim discipline as carriers.
