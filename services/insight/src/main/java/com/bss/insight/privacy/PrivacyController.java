@@ -1,6 +1,7 @@
 package com.bss.insight.privacy;
 
 import com.bss.insight.repository.CustomerSignalRepository;
+import com.bss.insight.repository.TwinVaultRepository;
 import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
@@ -31,14 +32,16 @@ public class PrivacyController {
     private final VisitorProfileRepository profiles;
     private final VisitorEventRepository events;
     private final CustomerSignalRepository signals;
+    private final TwinVaultRepository twinVault;
     private final TenantScope tenantScope;
 
     public PrivacyController(VisitorProfileRepository profiles,
             VisitorEventRepository events, CustomerSignalRepository signals,
-            TenantScope tenantScope) {
+            TwinVaultRepository twinVault, TenantScope tenantScope) {
         this.profiles = profiles;
         this.events = events;
         this.signals = signals;
+        this.twinVault = twinVault;
         this.tenantScope = tenantScope;
     }
 
@@ -70,8 +73,11 @@ public class PrivacyController {
         profiles.deleteAll(stitched);
         // the signal store is pseudonymized, not anonymized — it goes too (SI-P1)
         long signalsGone = signals.deleteByTenantIdAndPartyId(tenant, target);
+        // Tvilling: destroying the vault keys makes any twin that ever left
+        // permanently unlinkable — erasure reaches the cloud retroactively
+        long twinKeysGone = twinVault.deleteByTenantIdAndPartyId(tenant, target);
         return Map.of("category", "behavioral", "deleted", stitched.size(),
-                "signalsDeleted", signalsGone, "retained", 0);
+                "signalsDeleted", signalsGone, "twinKeysDestroyed", twinKeysGone, "retained", 0);
     }
 
     private String subject() {

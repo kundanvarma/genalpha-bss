@@ -1,6 +1,6 @@
 # Tvilling — frontier-grade AI on customer text that never exposes a real person
 
-**Status:** PLANNED — T-P1–T-P4 · **Depends on:** the signal store + PII firewall (`PiiRecognizer`
+**Status:** T-P1 SHIPPED 2026-08-19 (the deterministic twinning engine: `TwinningService` supersedes RedactionService — ONE pass yields the redacted stored text AND the twin, HMAC(per-signal key) surrogates from same-shaped Norwegian pools, offset map persisted; `PiiRecognizer` gains span-finding, `NameRecognizer` = the dictionary+capitalization floor (demo personas + ~90 NO/common names — recall is the honest limit), `NerRecognizer` = the config-enabled local-model seam (`bss.insight.ner-url`, fail-open); `twin_vault` V34+V35 RLS with party-keyed erasure — the orchestrator's erase now reports `twinKeysDestroyed`; `GET /signal/{id}/twin` shows the operator exactly what would leave. Proven live: "Kai Kunde… +47 99 88 77 66… kai@…" became "Eivind Lund… +47 43 18 42 61… vegard.haugen@example.net" — no real fact in the twin, in-signal consistency (same person = same fiction twice), cross-signal difference (signal 2 = "Sindre Tangen" — no longitudinal profile), the churn phrase verbatim-intact, 2 twin keys destroyed on erasure. signal_intelligence + martech + privacy suites green) · T-P2–T-P4 PLANNED · **Depends on:** the signal store + PII firewall (`PiiRecognizer`
 seam, SI-P1), the evidence-verified battery (SI-P3), the AI audit ledger (AiGovernor), the fleet
 privacy orchestrator, the hybrid-tier + flywheel roadmap (signal-intelligence plan)
 

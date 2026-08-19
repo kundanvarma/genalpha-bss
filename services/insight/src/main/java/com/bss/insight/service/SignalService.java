@@ -6,7 +6,9 @@ import com.bss.insight.events.DomainEventPublisher;
 import com.bss.insight.repository.CustomerSignalRepository;
 import com.bss.insight.repository.SignalClassificationRepository;
 import com.bss.insight.security.TenantScope;
-import com.bss.insight.signal.RedactionService;
+import com.bss.insight.entity.TwinVault;
+import com.bss.insight.repository.TwinVaultRepository;
+import com.bss.insight.signal.TwinningService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
@@ -37,19 +39,21 @@ public class SignalService {
 
     private final CustomerSignalRepository signals;
     private final SignalClassificationRepository classifications;
-    private final RedactionService redaction;
+    private final TwinningService twinning;
+    private final TwinVaultRepository twins;
     private final PartyTraitService traits;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
 
     public SignalService(CustomerSignalRepository signals,
-            SignalClassificationRepository classifications, RedactionService redaction,
-            PartyTraitService traits, DomainEventPublisher events,
+            SignalClassificationRepository classifications, TwinningService twinning,
+            TwinVaultRepository twins, PartyTraitService traits, DomainEventPublisher events,
             TenantScope tenantScope, ObjectMapper objectMapper) {
         this.signals = signals;
         this.classifications = classifications;
-        this.redaction = redaction;
+        this.twinning = twinning;
+        this.twins = twins;
         this.traits = traits;
         this.events = events;
         this.tenantScope = tenantScope;
@@ -65,11 +69,16 @@ public class SignalService {
         }
         String tenant = tenantScope.currentTenantId();
 
-        RedactionService.Redacted clean = redaction.redact(
-                rawText.length() > MAX_TEXT ? rawText.substring(0, MAX_TEXT) : rawText);
+        // Tvilling T-P1: ONE pass yields both protections — the redacted text
+        // the store keeps AND the twin (same story, nobody real) for T-P2's
+        // frontier path. The per-signal key makes the same customer a
+        // DIFFERENT fiction in every signal.
+        String twinKey = UUID.randomUUID().toString();
+        TwinningService.Twinned clean = twinning.twin(
+                rawText.length() > MAX_TEXT ? rawText.substring(0, MAX_TEXT) : rawText, twinKey);
 
         String sourceRef = str(dto.get("sourceRef"));
-        String hash = sha256(source + "|" + (sourceRef != null ? sourceRef : clean.text()));
+        String hash = sha256(source + "|" + (sourceRef != null ? sourceRef : clean.redacted()));
         CustomerSignal existing = signals.findByTenantIdAndDedupHash(tenant, hash).orElse(null);
         if (existing != null) {
             return view(existing, true);
@@ -83,12 +92,23 @@ public class SignalService {
         s.setPartyId(str(dto.get("partyId")));
         s.setChannel(str(dto.get("channel")));
         s.setLang(str(dto.get("lang")));
-        s.setText(clean.text());
+        s.setText(clean.redacted());
+        s.setTwinText(clean.twin());
         s.setContext(json(dto.get("context")));
         s.setRedactions(clean.counts().isEmpty() ? null : json(clean.counts()));
         s.setDedupHash(hash);
         s.setReceivedAt(OffsetDateTime.now());
-        return view(signals.save(s), false);
+        CustomerSignal saved = signals.save(s);
+        TwinVault vault = new TwinVault();
+        vault.setId(UUID.randomUUID().toString());
+        vault.setTenantId(tenant);
+        vault.setSignalId(saved.getId());
+        vault.setPartyId(saved.getPartyId());
+        vault.setTwinKey(twinKey);
+        vault.setOffsetMap(json(clean.offsetMap()));
+        vault.setCreatedAt(OffsetDateTime.now());
+        twins.save(vault);
+        return view(saved, false);
     }
 
     @Transactional(readOnly = true)
@@ -203,6 +223,22 @@ public class SignalService {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castMap(Map<?, ?> m) {
         return (Map<String, Object>) m;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> twinOf(String signalId) {
+        String tenant = tenantScope.currentTenantId();
+        CustomerSignal s = signals.findById(signalId)
+                .filter(x -> tenant.equals(x.getTenantId()))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "no signal '" + signalId + "'"));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("signalId", signalId);
+        out.put("text", s.getText());
+        out.put("twin", s.getTwinText());
+        out.put("linkable", twins.findByTenantIdAndSignalId(tenant, signalId).isPresent());
+        out.put("@type", "SignalTwin");
+        return out;
     }
 
     private Map<String, Object> view(CustomerSignal s, boolean duplicate) {

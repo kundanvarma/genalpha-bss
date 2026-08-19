@@ -44,6 +44,13 @@ public class SignalController {
         return ResponseEntity.ok(service.list(source, unclassified));
     }
 
+    /** The twin (Tvilling T-P1): the fiction that would leave in T-P2 —
+     * back-office read, so an operator can SEE what the frontier would see. */
+    @GetMapping("/{signalId}/twin")
+    public ResponseEntity<Map<String, Object>> twin(@PathVariable String signalId) {
+        return ResponseEntity.ok(service.twinOf(signalId));
+    }
+
     /** The battery's write-back (SI-P3) — evidence quotes verified at the
      * store; a classification that cannot cite its source is refused. */
     @PostMapping("/{signalId}/classification")

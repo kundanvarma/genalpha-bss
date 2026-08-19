@@ -39,6 +39,11 @@ public class CustomerSignal {
     @Column(nullable = false, length = 4000)
     private String text;
 
+    /** The twin — the same narrative about a person who does not exist
+     * (Tvilling T-P1). Fiction by construction; what T-P2 sends outward. */
+    @Column(name = "twin_text", length = 4000)
+    private String twinText;
+
     @Column(length = 2000)
     private String context;
 
@@ -67,6 +72,8 @@ public class CustomerSignal {
     public void setLang(String v) { this.lang = v; }
     public String getText() { return text; }
     public void setText(String v) { this.text = v; }
+    public String getTwinText() { return twinText; }
+    public void setTwinText(String v) { this.twinText = v; }
     public String getContext() { return context; }
     public void setContext(String v) { this.context = v; }
     public String getRedactions() { return redactions; }
