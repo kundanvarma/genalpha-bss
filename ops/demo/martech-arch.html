@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>The BSS is the CDP</title>
+<style>
+  /* Executive architecture intro — 1560x900, self-contained, CSS-only animation.
+     Five BSS domains emit events onto one Kafka bus; the bus fills a CDP trait
+     store; the store feeds Audiences, Activation and Attribution. */
+  html,body{margin:0;padding:0;background:#0F1514;overflow:hidden}
+  #stage{position:absolute;left:50%;top:50%;width:1560px;height:900px;margin:-450px 0 0 -780px;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#E8F2F1}
+
+  .domain{position:absolute;top:74px;width:224px;height:92px;border:1.5px solid #2A3B39;
+    border-radius:14px;background:#141D1C;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px}
+  .domain b{font-size:24px;letter-spacing:.3px}
+  .domain span{font-size:12.5px;color:#7FA09D;letter-spacing:1.6px;text-transform:uppercase}
+
+  /* the bus spine */
+  #bus{position:absolute;left:80px;right:80px;top:337px;height:6px;border-radius:3px;
+    background:linear-gradient(90deg,rgba(69,175,172,.25),#45AFAC 18%,#45AFAC 82%,rgba(69,175,172,.25))}
+  #bus:after{content:'';position:absolute;inset:-7px 0;border-radius:10px;
+    background:linear-gradient(90deg,transparent,rgba(69,175,172,.16),transparent);
+    animation:busglow 3.2s ease-in-out infinite}
+  @keyframes busglow{50%{opacity:.35}}
+  #buslabel{position:absolute;top:356px;left:0;right:0;text-align:center;font-size:14px;
+    font-weight:700;letter-spacing:4px;color:#45AFAC;text-transform:uppercase}
+
+  /* event dots: fall from a domain box, ride the bus, drop into the store */
+  .dot{position:absolute;width:13px;height:13px;border-radius:50%;background:#45AFAC;
+    box-shadow:0 0 12px rgba(69,175,172,.85);opacity:0;top:0;left:0}
+  @keyframes d1{0%{transform:translate(192px,168px);opacity:0}6%{opacity:1}
+    26%{transform:translate(192px,334px)}68%{transform:translate(773px,334px)}
+    90%{transform:translate(773px,428px);opacity:1}100%{transform:translate(773px,448px);opacity:0}}
+  @keyframes d2{0%{transform:translate(482px,168px);opacity:0}6%{opacity:1}
+    26%{transform:translate(482px,334px)}68%{transform:translate(773px,334px)}
+    90%{transform:translate(773px,428px);opacity:1}100%{transform:translate(773px,448px);opacity:0}}
+  @keyframes d3{0%{transform:translate(773px,168px);opacity:0}6%{opacity:1}
+    26%{transform:translate(773px,334px)}68%{transform:translate(773px,334px)}
+    90%{transform:translate(773px,428px);opacity:1}100%{transform:translate(773px,448px);opacity:0}}
+  @keyframes d4{0%{transform:translate(1064px,168px);opacity:0}6%{opacity:1}
+    26%{transform:translate(1064px,334px)}68%{transform:translate(773px,334px)}
+    90%{transform:translate(773px,428px);opacity:1}100%{transform:translate(773px,448px);opacity:0}}
+  @keyframes d5{0%{transform:translate(1354px,168px);opacity:0}6%{opacity:1}
+    26%{transform:translate(1354px,334px)}68%{transform:translate(773px,334px)}
+    90%{transform:translate(773px,428px);opacity:1}100%{transform:translate(773px,448px);opacity:0}}
+
+  /* the trait store */
+  #cdp{position:absolute;left:490px;top:436px;width:580px;height:198px;border-radius:16px;
+    border:2px solid #45AFAC;background:#12201F;box-shadow:0 0 40px rgba(69,175,172,.14);
+    padding:18px 26px;box-sizing:border-box}
+  #cdp h2{margin:0 0 4px;font-size:26px}
+  #cdp p{margin:0 0 14px;font-size:13px;color:#7FA09D;letter-spacing:1.4px;text-transform:uppercase}
+  .chips{display:flex;flex-wrap:wrap;gap:12px}
+  .chip{font-size:19px;font-weight:600;padding:9px 18px;border-radius:22px;background:#1B2E2C;
+    border:1.5px solid #45AFAC;color:#BFE6E4;opacity:0;transform:scale(.6);
+    animation:pop 9s cubic-bezier(.2,1.4,.4,1) infinite}
+  .chip i{font-style:normal;color:#45AFAC}
+  @keyframes pop{6%{opacity:0;transform:scale(.6)}12%{opacity:1;transform:scale(1)}
+    92%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(.9)}}
+  .chip:nth-child(1){animation-delay:.4s}
+  .chip:nth-child(2){animation-delay:1.4s}
+  .chip:nth-child(3){animation-delay:2.4s}
+  .chip:nth-child(4){animation-delay:3.4s}
+
+  /* outcome arrows + boxes */
+  svg{position:absolute;inset:0;pointer-events:none}
+  .flow{stroke:#2E4A48;stroke-width:2.5;fill:none}
+  .pulse{fill:#45AFAC;opacity:0}
+  .outcome{position:absolute;top:748px;width:300px;height:96px;border:1.5px solid #2A3B39;
+    border-radius:14px;background:#141D1C;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:4px}
+  .outcome b{font-size:23px}
+  .outcome span{font-size:13px;color:#7FA09D}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="domain" style="left:80px"><b>Ordering</b><span>orders placed</span></div>
+  <div class="domain" style="left:370px"><b>Billing</b><span>bills issued</span></div>
+  <div class="domain" style="left:661px"><b>Loyalty</b><span>tiers earned</span></div>
+  <div class="domain" style="left:952px"><b>Usage</b><span>data consumed</span></div>
+  <div class="domain" style="left:1242px"><b>Network</b><span>service live</span></div>
+
+  <div id="bus"></div>
+  <div id="buslabel">Kafka event bus</div>
+
+  <div class="dot" style="animation:d1 4.2s linear infinite"></div>
+  <div class="dot" style="animation:d2 4.2s linear .9s infinite"></div>
+  <div class="dot" style="animation:d3 4.2s linear 1.7s infinite"></div>
+  <div class="dot" style="animation:d4 4.2s linear 2.5s infinite"></div>
+  <div class="dot" style="animation:d5 4.2s linear 3.3s infinite"></div>
+  <div class="dot" style="animation:d2 4.2s linear 2.1s infinite"></div>
+  <div class="dot" style="animation:d4 4.2s linear .5s infinite"></div>
+
+  <div id="cdp">
+    <h2>CDP · trait store</h2>
+    <p>fills itself from the bus — no export, no reverse ETL</p>
+    <div class="chips">
+      <span class="chip"><i>product</i> = Fibre 500</span>
+      <span class="chip"><i>loyaltyTier</i> = gold</span>
+      <span class="chip"><i>region</i> = Oslo</span>
+      <span class="chip"><i>churnRisk</i> = low</span>
+    </div>
+  </div>
+
+  <svg viewBox="0 0 1560 900">
+    <path class="flow" d="M640 634 C 560 690, 480 700, 420 748"/>
+    <path class="flow" d="M780 634 L 780 748"/>
+    <path class="flow" d="M920 634 C 1000 690, 1080 700, 1140 748"/>
+    <circle class="pulse" r="6"><animateMotion dur="2.6s" repeatCount="indefinite" path="M640 634 C 560 690, 480 700, 420 748"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.85;1" dur="2.6s" repeatCount="indefinite"/></circle>
+    <circle class="pulse" r="6"><animateMotion dur="2.6s" begin="0.8s" repeatCount="indefinite" path="M780 634 L 780 748"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.85;1" dur="2.6s" begin="0.8s" repeatCount="indefinite"/></circle>
+    <circle class="pulse" r="6"><animateMotion dur="2.6s" begin="1.6s" repeatCount="indefinite" path="M920 634 C 1000 690, 1080 700, 1140 748"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.15;.85;1" dur="2.6s" begin="1.6s" repeatCount="indefinite"/></circle>
+  </svg>
+
+  <div class="outcome" style="left:270px"><b>Audiences</b><span>rule trees over live traits</span></div>
+  <div class="outcome" style="left:630px"><b>Activation</b><span>Meta · Google — hashed</span></div>
+  <div class="outcome" style="left:990px"><b>Attribution</b><span>holdout-honest lift</span></div>
+</div>
+</body>
+</html>
