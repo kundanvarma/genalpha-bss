@@ -31,8 +31,8 @@ import java.util.UUID;
 @Service
 public class SignalConnectorService {
 
-    private static final Set<String> KINDS = Set.of("servicedesk", "http-webhook");
-    private static final Set<String> MODES = Set.of("poll", "webhook");
+    private static final Set<String> KINDS = Set.of("servicedesk", "http-webhook", "slack-webhook");
+    private static final Set<String> MODES = Set.of("poll", "webhook", "notify");
 
     private final SignalConnectorRepository connectors;
     private final SignalConnectorRegistry registry;

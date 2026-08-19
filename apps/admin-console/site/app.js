@@ -3749,7 +3749,35 @@ async function renderVoc() {
     });
     cards.append(card);
   }
-  panel.append(intro, method, alertsWrap, cards, drill);
+  /* ---------- ask the VoC data (SI-P5): grounded on aggregates only ---------- */
+  const ask = document.createElement('div'); ask.className = 'panel'; ask.dataset.testid = 'voc-ask';
+  ask.style.cssText = 'padding:12px 14px;margin:14px 0 8px';
+  const ah = document.createElement('h3'); ah.textContent = 'Ask the voice of customer';
+  ah.style.cssText = 'font-size:14px;margin:0 0 6px';
+  const asub = document.createElement('p'); asub.className = 'dim';
+  asub.style.cssText = 'font-size:11px;margin:0 0 8px;font-style:italic';
+  asub.textContent = 'Answers come from the aggregates only — raw customer words never reach the model. Claims cite [signalId] receipts.';
+  const abar = document.createElement('div'); abar.style.cssText = 'display:flex;gap:8px';
+  const ain = document.createElement('input'); ain.dataset.testid = 'voc-ask-input';
+  ain.placeholder = 'e.g. What are customers complaining about this week?';
+  ain.style.cssText = 'flex:1;padding:6px 10px';
+  const abtn = document.createElement('button'); abtn.className = 'primary'; abtn.textContent = 'Ask';
+  abtn.dataset.testid = 'voc-ask-btn';
+  const aout = document.createElement('div'); aout.dataset.testid = 'voc-ask-answer';
+  aout.style.cssText = 'font-size:13px;margin-top:10px;white-space:pre-wrap';
+  abtn.addEventListener('click', async () => {
+    if (!ain.value.trim()) return;
+    aout.textContent = 'thinking…';
+    try {
+      const r = await authFetch('/ai/v1/voc/ask', { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: ain.value.trim() }) });
+      const res = await r.json();
+      aout.textContent = r.ok ? res.answer : (res.message || 'the ask surface is unavailable');
+    } catch { aout.textContent = 'the ask surface is unavailable'; }
+  });
+  abar.append(ain, abtn); ask.append(ah, asub, abar, aout);
+  panel.append(intro, method, alertsWrap, ask, cards, drill);
 }
 
 async function renderAttribution() {

@@ -1614,6 +1614,8 @@ services:
       # the generic webhook's shared secret; the mocks accept any token
       SERVICEDESK_API_TOKEN: dev-desk-token
       SIGNAL_HOOK_SECRET: dev-hook-secret
+      # SI-P5: a Slack incoming-webhook URL IS a credential — env-var only
+      VOC_ALERT_WEBHOOK_URL: http://mock-chatops:8080/hook
       # auto-refresh materialized audiences — short interval in dev (prod: minutes)
       INSIGHT_REFRESH_INTERVAL_MS: "8000"
       # DNC-at-activation: filter the ESP suppression list before an export
@@ -1858,6 +1860,16 @@ services:
     restart: unless-stopped
     ports:
       - "8142:8080"
+
+  # Slack-incoming-webhook-shaped sink — the VoC alert notifier's dev target
+  # (SI-P5). A real Slack/Teams webhook is the same connector with the real
+  # URL in the secret env var.
+  mock-chatops:
+    build: ./integrations/mock-chatops
+    container_name: bss-mock-chatops
+    restart: unless-stopped
+    ports:
+      - "8143:8080"
 
   # The redirect/BNPL PSP for proving the Klarna payment session flow (PSP-P2)
   # without a real Klarna merchant account. Real Klarna needs no code change —

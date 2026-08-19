@@ -45,4 +45,10 @@ calls = put(f"{INSIGHT}/connector", {
     "config": {"textPointer": "/transcript", "refPointer": "/callId", "langPointer": "/language"},
 })
 print(f"connector: {calls['name']} ({calls['kind']}, {calls['mode']}) id={calls['id']}")
+
+chat = put(f"{INSIGHT}/connector", {
+    "name": "voc-alerts-chat", "kind": "slack-webhook", "source": "alert", "mode": "notify",
+    "secretRef": "VOC_ALERT_WEBHOOK_URL",
+})
+print(f"connector: {chat['name']} ({chat['kind']}, {chat['mode']})")
 print("done")

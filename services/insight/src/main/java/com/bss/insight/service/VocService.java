@@ -41,15 +41,18 @@ public class VocService {
     private final SignalClassificationRepository classifications;
     private final VocAlertRepository alerts;
     private final DomainEventPublisher events;
+    private final com.bss.insight.signal.AlertNotifier notifier;
     private final TenantScope tenantScope;
 
     public VocService(CustomerSignalRepository signals,
             SignalClassificationRepository classifications, VocAlertRepository alerts,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, com.bss.insight.signal.AlertNotifier notifier,
+            TenantScope tenantScope) {
         this.signals = signals;
         this.classifications = classifications;
         this.alerts = alerts;
         this.events = events;
+        this.notifier = notifier;
         this.tenantScope = tenantScope;
     }
 
@@ -147,6 +150,7 @@ public class VocService {
         String tenant = tenantScope.currentTenantId();
         String isoWeek = isoWeekNow();
         int fired = 0;
+        int notified = 0;
         for (Map<String, Object> a : (List<Map<String, Object>>) summary().get("aspects")) {
             if (!Boolean.TRUE.equals(a.get("deviating"))) {
                 continue;
@@ -174,9 +178,13 @@ public class VocService {
             event.put("weekNegatives", alert.getWeekNegatives());
             event.put("baselineWeeklyNegatives", baseline);
             events.publish("VocDeviationEvent", "vocDeviation", event);
+            // the act half (SI-P5): the warning lands where the team lives
+            notified += notifier.notify(tenant, "⚠ VoC early warning — " + aspect + ": "
+                    + alert.getWeekNegatives() + " negative signals this week vs a "
+                    + baseline + "/week baseline (" + isoWeek + "). Customers are telling you something.");
             fired++;
         }
-        return Map.of("fired", fired, "isoWeek", isoWeek);
+        return Map.of("fired", fired, "notified", notified, "isoWeek", isoWeek);
     }
 
     private static void bump(Map<String, Object> m, String key) {

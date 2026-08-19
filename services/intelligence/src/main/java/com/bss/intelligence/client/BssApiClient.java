@@ -223,6 +223,20 @@ public class BssApiClient {
     }
 
     @SuppressWarnings("unchecked")
+    /** The VoC aggregates — the ONLY signal-derived data the ask surface
+     * feeds a frontier model (aggregates and battery outputs, never raw
+     * signal text — the SI doctrine). */
+    public Map<String, Object> vocSummary() {
+        try {
+            String body = insightClient.get()
+                    .uri("/insight/v1/voc/summary")
+                    .retrieve().body(String.class);
+            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() { });
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
     /** A customer's bills — the honest input to CLTV (SI-P4). */
     public List<Map<String, Object>> billsOf(String partyId) {
         try {
