@@ -110,7 +110,7 @@ export default function Shop() {
     <>
       <section className="hero">
         <h1>{brand.brandName || 'Welcome'}</h1>
-        <p>{t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
+        <p>{brand.tagline || t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
       </section>
       <ConsentBanner onDecided={() => myExperience().then(setExperience).catch(() => {})} />
       {hero && (

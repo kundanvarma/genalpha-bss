@@ -162,6 +162,22 @@ public class TenantOnboardingService {
         if (dto.get("currency") != null) {
             block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
         }
+        if (dto.get("tagline") != null) {
+            // the storefront hero line — free text, so it rides YML double-quoted;
+            // insert-if-absent because older tenant blocks predate the field
+            String tagline = String.valueOf(dto.get("tagline")).replace("\"", "'").trim();
+            if (tagline.length() > 200) {
+                throw new com.bss.userroles.exception.BadRequestException(
+                        "tagline must be 200 characters or fewer");
+            }
+            String line = "tagline: \"" + tagline + "\"";
+            if (block.contains("tagline: ")) {
+                block = block.replaceAll("tagline: .*", java.util.regex.Matcher.quoteReplacement(line));
+            } else {
+                block = block.replaceFirst("( +)brand-name: ",
+                        "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
+            }
+        }
         if (dto.get("agentCommerce") != null) {
             // The agentic-commerce switch: how much of this operator AI
             // shopping agents may see. Flipping it here live-refreshes the

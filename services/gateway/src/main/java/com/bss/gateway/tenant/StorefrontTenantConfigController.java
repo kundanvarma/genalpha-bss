@@ -45,6 +45,7 @@ public class StorefrontTenantConfigController {
         if (tenant.getBrandColor() != null) manifest.put("brandColor", tenant.getBrandColor());
         manifest.put("locale", tenant.getLocale() == null ? "en" : tenant.getLocale());
         manifest.put("currency", tenant.getCurrency() == null ? "EUR" : tenant.getCurrency());
+        if (tenant.getTagline() != null) manifest.put("tagline", tenant.getTagline());
         manifest.put("logoUrl", logoUrlOf(tenant));
         manifest.put("businessSales", tenant.isBusinessSales());
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);
@@ -71,16 +72,24 @@ public class StorefrontTenantConfigController {
         String locale = tenant != null && tenant.getLocale() != null ? tenant.getLocale() : "en";
         String currency = tenant != null && tenant.getCurrency() != null ? tenant.getCurrency() : "EUR";
         boolean businessSales = tenant != null && tenant.isBusinessSales();
-        String body = "window." + global + " = { issuer: '" + issuer
-                + "', logoUrl: '" + logoUrlOf(tenant)
-                + "', brandName: '" + brandName
-                + "', brandColor: '" + brandColor
-                + "', locale: '" + locale
-                + "', currency: '" + currency
+        String tagline = tenant != null && tenant.getTagline() != null ? tenant.getTagline() : "";
+        String body = "window." + global + " = { issuer: '" + js(issuer)
+                + "', logoUrl: '" + js(logoUrlOf(tenant))
+                + "', brandName: '" + js(brandName)
+                + "', brandColor: '" + js(brandColor)
+                + "', locale: '" + js(locale)
+                + "', currency: '" + js(currency)
+                + "', tagline: '" + js(tagline)
                 + "', businessSales: " + businessSales + " };\n";
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/javascript"))
                 .header("Cache-Control", "no-store")
                 .body(body);
+    }
+
+    /** A value inside a single-quoted JS literal — quotes and backslashes escaped. */
+    private static String js(String v) {
+        return v == null ? "" : v.replace("\\", "\\\\").replace("'", "\\'")
+                .replace("\n", " ").replace("\r", " ");
     }
 }

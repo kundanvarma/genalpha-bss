@@ -52,6 +52,8 @@ public class TenantHosts {
         private String issuer;
         private String brandName;
         private String brandColor;
+        /** The storefront hero line — the operator's voice, console-editable. */
+        private String tagline;
         private String locale;
         private String currency;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
@@ -96,6 +98,14 @@ public class TenantHosts {
 
         public String getBrandColor() {
             return brandColor;
+        }
+
+        public String getTagline() {
+            return tagline;
+        }
+
+        public void setTagline(String tagline) {
+            this.tagline = tagline;
         }
 
         public void setBrandColor(String brandColor) {

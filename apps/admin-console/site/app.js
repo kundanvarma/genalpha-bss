@@ -756,6 +756,7 @@ const RESOURCES = [
       { name: 'locale', label: 'Locale (en, no, da, sv…)', placeholder: 'en' },
       { name: 'currency', label: 'Currency', placeholder: 'EUR' },
       { name: 'color', label: 'Brand color', placeholder: '#B85C38' },
+      { name: 'tagline', label: 'Storefront tagline — the hero line under the brand name (blank = the built-in line)' },
       // Agentic commerce: how much of this operator AI shopping agents see.
       // New operators are born 'off' — being shopped by agents is opt-in.
       { name: 'agentCommerce', label: 'Agent commerce (off | discovery | full)', placeholder: 'off' },
