@@ -1,6 +1,14 @@
 # The commercial simulator — simulate the money before you move it
 
-**Status:** BACKLOG (vision researched 2026-08-21; build on trigger) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
+**Status:** P1 + P2 + P3 + P4 SHIPPED (2026-08-21, overnight build) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
+
+> **P1 shipped:** `POST /ai/v1/simulate/priceChange` — the real base (paginated inventory), real catalog, wholesale cost ceiling, churn-risk overlay; assumptions on the face, dated basis, persisted receipts (`price_sim_report`), and the suite proves zero production mutation. Console: a **Simulator** pane under Catalog & Pricing (catalog:write). Suite `price_sim_test`.
+>
+> **P2 shipped:** a product-copilot proposal that reprices an EXISTING offering arrives pre-scored — the proposal card shows subscribers, revenue delta, churn overlay and the first assumption beside the create button. Fail-soft: an uncomputable forecast attaches nothing and blocks nothing. Suite `forecast_receipt_test` (model-in-the-loop).
+>
+> **P3 shipped:** continuous shadow billing — a per-tenant scheduled loop re-prices a ROTATING window of the base against the current catalog and compares with the last real bill's applied-rate receipts, RATE vs RATE (proration undone from the bill period + product start date — the suite forced that lesson). Drift rows (V27+RLS) + `BillDriftDetectedEvent` + a **Shadow billing** console pane; targeted `?partyId` sweep for drill-downs. Suite `shadow_billing_test`.
+>
+> **P4 shipped:** the negotiation twin (`POST /usageManagement/v4/simulateWholesale` — real CDRs vs a hypothetical rate card, read-only by construction) and the prospect simulator (`POST /ai/v1/simulate/prospect` — stated assumptions only, and its first assumption admits no real data was read). Suite `negotiation_twin_test`. Console surfaces for P4 are a follow-up; the calibration-receipts pass (linking saved reports to later measured lift) is the next arc.
 
 ## The thesis
 
