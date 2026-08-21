@@ -114,6 +114,42 @@ public class WholesaleUsageService {
         return out;
     }
 
+    /**
+     * THE CLOSED LOOP (late-CDR auto re-rating): reconciliation used to only
+     * FLAG a ledger row whose CDRs kept arriving after rating — a human had to
+     * notice and fix. The loop now re-rates the drifted row (monthly periods),
+     * stamps the receipt (rerateCount, lastReratedAt) and emits
+     * WholesaleUsageReratedEvent carrying the DELTA so the revenue subledger
+     * books an adjustment, idempotent per (ledger id, rerateCount). Bounded by
+     * a window: a settled old period is a dispute, not a silent mutation.
+     */
+    @Transactional
+    public List<Map<String, Object>> rerateDrifted(String tenant, int windowDays) {
+        LocalDate earliest = LocalDate.now(ZoneOffset.UTC).minusDays(windowDays).withDayOfMonth(1);
+        List<Map<String, Object>> rerated = new ArrayList<>();
+        for (WholesaleUsageLedger row : ledger.findByTenantIdAndPeriodStartGreaterThanEqual(tenant, earliest)) {
+            LocalDate periodStart = row.getPeriodStart();
+            LocalDate periodEnd = periodStart.plusMonths(1).minusDays(1);
+            BigDecimal live = unitsBySpec(tenant, periodStart, periodEnd)
+                    .getOrDefault(row.getUsageSpecName(), BigDecimal.ZERO);
+            if (live.signum() == 0 || live.compareTo(row.getTotalUnits()) == 0) {
+                continue;
+            }
+            BigDecimal oldAmount = row.getAmount();
+            row.setTotalUnits(live);
+            row.setAmount(live.multiply(row.getWholesaleRate()).setScale(2, RoundingMode.HALF_UP));
+            row.setRerateCount(row.getRerateCount() + 1);
+            row.setLastReratedAt(OffsetDateTime.now());
+            ledger.save(row);
+            Map<String, Object> event = ledgerMap(row);
+            event.put("previousAmount", oldAmount);
+            event.put("delta", row.getAmount().subtract(oldAmount));
+            events.publish("WholesaleUsageReratedEvent", "wholesaleUsageLedger", event, tenant);
+            rerated.add(event);
+        }
+        return rerated;
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> ledgerFor(LocalDate periodStart) {
         return ledger.findByTenantIdAndPeriodStart(tenantScope.currentTenantId(), periodStart)
@@ -229,6 +265,10 @@ public class WholesaleUsageService {
         m.put("currency", r.getCurrency());
         m.put("hostPartyId", r.getHostPartyId());
         m.put("status", r.getStatus());
+        if (r.getRerateCount() > 0) {
+            m.put("rerateCount", r.getRerateCount());
+            m.put("lastReratedAt", r.getLastReratedAt());
+        }
         m.put("@type", "WholesaleUsageLedger");
         return m;
     }

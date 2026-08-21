@@ -46,6 +46,11 @@ springdoc:
     path: /swagger-ui.html
 
 bss:
+  usage:
+    # closed-loop late-CDR re-rating: sweep cadence + how far back a period
+    # may still auto-move (older = a dispute, not a silent mutation)
+    wholesale-rerate-tick-ms: ${WHOLESALE_RERATE_TICK_MS:300000}
+    wholesale-rerate-window-days: ${WHOLESALE_RERATE_WINDOW_DAYS:45}
   events:
     topic: bss.usage.events
   downstream:

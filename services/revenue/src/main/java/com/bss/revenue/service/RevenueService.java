@@ -251,6 +251,43 @@ public class RevenueService {
     }
 
     /**
+     * Late-CDR re-rate (the CLOSED LOOP): the wholesale ledger row moved after
+     * it was first booked — the event carries the DELTA. A positive delta books
+     * additional COGS + payable; a negative one reverses the excess. Keyed on
+     * (ledger id, rerateCount) so replays are free and every re-rate books once.
+     */
+    @Transactional
+    public boolean postMobileWholesaleCogsDelta(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        Object count = event.getOrDefault("rerateCount", 0);
+        String sourceRef = "mobile-wholesale-rerate:" + id + ":" + count;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("delta") == null) {
+            return false;
+        }
+        BigDecimal delta = money(event.get("delta"));
+        if (delta.signum() == 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String spec = String.valueOf(event.getOrDefault("usageSpecName", "usage"));
+        String period = String.valueOf(event.getOrDefault("periodStart", ""));
+        String desc = "Mobile wholesale re-rate #" + count + " " + spec
+                + (period.isBlank() ? "" : " " + period);
+        BigDecimal magnitude = delta.abs();
+        List<JournalLine> posting = delta.signum() > 0
+                ? List.of(line("mobile-wholesale:cogs", magnitude, null, id, desc),
+                          line("mobile-wholesale:payable", null, magnitude, id, "Payable to host MNO"))
+                : List.of(line("mobile-wholesale:payable", magnitude, null, id, "Payable to host MNO reduced"),
+                          line("mobile-wholesale:cogs", null, magnitude, id, desc));
+        saveBalanced(tenant, sourceRef, "mobileWholesaleCogsDelta", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
      * Mobile wholesale PROVIDER side (W-M7): the host earns wholesale revenue from
      * an external MVNO's traffic — booked as a receivable + wholesale revenue,
      * keyed on the provider-ledger id so replays are free. The mirror of the

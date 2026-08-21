@@ -11,4 +11,6 @@ public interface WholesaleUsageLedgerRepository extends JpaRepository<WholesaleU
     List<WholesaleUsageLedger> findByTenantIdAndPeriodStart(String tenantId, LocalDate periodStart);
     Optional<WholesaleUsageLedger> findByTenantIdAndPeriodStartAndUsageSpecName(
             String tenantId, LocalDate periodStart, String usageSpecName);
+    List<WholesaleUsageLedger> findByTenantIdAndPeriodStartGreaterThanEqual(
+            String tenantId, LocalDate earliest);
 }
