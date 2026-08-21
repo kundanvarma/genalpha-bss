@@ -57,6 +57,15 @@ services:
       # keycloak:8080.
       KC_HOSTNAME: http://localhost:8085
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      # IDENTITY IS DATA, NOT CONTAINER STATE: realms live in the shared
+      # Postgres like every other tenant fact — a form-born operator survives
+      # restarts, recreates and image upgrades, and rides ops/backup.sh's
+      # dump + restore drill. The realm files become FIRST-BOOT bootstrap:
+      # --import-realm skips realms that already exist in the DB.
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
     ports:
       - "8085:8080"
     volumes:
