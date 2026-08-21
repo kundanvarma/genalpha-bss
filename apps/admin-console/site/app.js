@@ -3081,8 +3081,19 @@ function copilotProposalCard(reply, context, log) {
   }
   const problems = copilotValidate(proposal, context);
   const hardProblems = problems.filter((x) => !x.includes('is new'));
+  // P2 — the FORECAST RECEIPT: a proposal that reprices an existing offering
+  // arrives pre-scored by the commercial simulator; the owner approves a
+  // number, not a vibe. Absence is visible (no forecast line), never blocking.
+  const fc = reply.forecast;
+  const forecastHtml = fc && fc.lines ? `<p class="copilot-forecast" data-testid="copilot-forecast">
+      📊 <b>Forecast</b>: ${(fc.lines || []).map((l) =>
+        `${l.offeringName}: ${l.subscribers} subs, ${l.currentMonthly}→${l.proposedMonthly} = `
+        + `${l.annualRevenueDelta > 0 ? '+' : ''}${l.annualRevenueDelta} ${fc.currency || ''}/yr`
+        + (l.subscribersAtChurnRisk ? ` (${l.subscribersAtChurnRisk} at churn risk)` : '')).join(' · ')}
+      <span class="dim" style="font-size:11px"> — ${(fc.assumptions || [])[0] || ''}</span></p>` : '';
   card.innerHTML = `<b>The copilot will create:</b>
     <ul>${rows.map((r) => `<li>${r}</li>`).join('')}</ul>
+    ${forecastHtml}
     ${repairs.length ? `<p class="dim" style="font-size:12px">auto-repaired: ${repairs.join('; ')}</p>` : ''}
     ${problems.length ? `<p class="copilot-warn">${problems.join('<br>')}</p>` : ''}`;
   const actions = document.createElement('div');

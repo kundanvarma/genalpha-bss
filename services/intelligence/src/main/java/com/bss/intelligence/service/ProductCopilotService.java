@@ -34,15 +34,21 @@ public class ProductCopilotService {
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
     private final com.bss.intelligence.llm.TenantVoice voice;
+    private final com.bss.intelligence.sim.PriceSimService priceSim;
+    private final com.bss.intelligence.client.BssApiClient bssApi;
 
     public ProductCopilotService(LlmAdapter llm, Redactor redactor,
             com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper,
-            com.bss.intelligence.llm.TenantVoice voice) {
+            com.bss.intelligence.llm.TenantVoice voice,
+            com.bss.intelligence.sim.PriceSimService priceSim,
+            com.bss.intelligence.client.BssApiClient bssApi) {
         this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
         this.objectMapper = objectMapper;
         this.voice = voice;
+        this.priceSim = priceSim;
+        this.bssApi = bssApi;
     }
 
     // Deliberately NOT @Transactional: when the model misses the contract we
@@ -153,7 +159,60 @@ public class ProductCopilotService {
         }
         parsed.put("provider", llm.provider());
         parsed.put("model", llm.model());
+        attachForecast(parsed);
         return parsed;
+    }
+
+    /**
+     * P2 — FORECAST RECEIPTS: an AI proposal that reprices an EXISTING
+     * offering gets scored by the commercial simulator BEFORE the owner sees
+     * the Approve button. An AI proposal without a forecast is just an
+     * opinion. Fail-soft: a forecast that cannot be computed attaches
+     * nothing — it never blocks the proposal itself.
+     */
+    @SuppressWarnings("unchecked")
+    private void attachForecast(Map<String, Object> parsed) {
+        try {
+            if (!"proposal".equals(String.valueOf(parsed.get("kind")))
+                    || !(parsed.get("proposal") instanceof Map<?, ?> proposal)) {
+                return;
+            }
+            List<Map<String, Object>> offerings = proposal.get("offerings") instanceof List<?> l
+                    ? (List<Map<String, Object>>) l : List.of();
+            List<Map<String, Object>> prices = proposal.get("prices") instanceof List<?> l
+                    ? (List<Map<String, Object>>) l : List.of();
+            java.util.Set<String> existing = new java.util.HashSet<>();
+            for (Map<String, Object> o : bssApi.offerings()) {
+                existing.add(String.valueOf(o.get("name")));
+            }
+            List<Map<String, Object>> changes = new java.util.ArrayList<>();
+            for (Map<String, Object> offering : offerings) {
+                String name = String.valueOf(offering.get("name"));
+                if (!existing.contains(name)) {
+                    continue;   // a NEW offering has no base to move — nothing to simulate
+                }
+                for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
+                    String ref = String.valueOf(refObj);
+                    for (Map<String, Object> price : prices) {
+                        if (ref.equals(String.valueOf(price.get("ref")))
+                                && "recurring".equals(String.valueOf(price.get("priceType")))
+                                && price.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
+                            changes.add(Map.of("offeringName", name,
+                                    "newMonthlyPrice", p.get("value")));
+                        }
+                    }
+                }
+            }
+            if (changes.isEmpty()) {
+                return;
+            }
+            Map<String, Object> report = priceSim.simulate(Map.of(
+                    "name", "copilot proposal forecast",
+                    "changes", changes));
+            parsed.put("forecast", report);
+        } catch (RuntimeException e) {
+            // the forecast is a receipt, not a gate — its absence is visible, not fatal
+        }
     }
 
     /** Markdown-tolerant JSON parse: strip fences, find the outermost object. */
