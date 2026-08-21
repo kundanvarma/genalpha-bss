@@ -65,6 +65,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET,
                                 ApiConstants.BASE_PATH + "/governance/adminCheck").hasAuthority("ai:admin")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
+                        // the commercial simulator: pricing is the product
+                        // owner's decision, so simulating it is their tool too
+                        .requestMatchers(ApiConstants.BASE_PATH + "/simulate/**").hasAuthority("catalog:write")
                         // the customer's OWN rail: self-scoped in the handler
                         // (party = token subject), so plain authentication is
                         // the right gate — customers carry no staff AI roles

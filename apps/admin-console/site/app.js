@@ -764,6 +764,45 @@ const RESOURCES = [
     columns: ['id', 'name', 'locale', 'currency', 'agentCommerce'],
   },
   {
+    path: 'simulate/priceChange',
+    base: '/ai/v1',
+    title: 'Simulator',
+    // SIMULATE THE MONEY BEFORE YOU MOVE IT (P1): a proposed price replayed
+    // against the REAL base, catalog and wholesale rate card. Honesty on the
+    // face: every report lists its assumptions; nothing mutates production —
+    // the report is the only thing written.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'offeringName', label: 'Offering (exact catalog name)', required: true },
+      { name: 'newMonthlyPrice', label: 'Proposed monthly price', kind: 'number', required: true },
+      { name: 'assumedChurnPct', label: 'Assumed churn % on the raised base (blank = mechanical, everyone stays)', kind: 'number' },
+      { name: 'name', label: 'Report name (blank = auto)' },
+    ],
+    assemble: (body) => ({
+      name: body.name,
+      assumedChurnPct: body.assumedChurnPct,
+      changes: [{ offeringName: body.offeringName, newMonthlyPrice: Number(body.newMonthlyPrice) }],
+    }),
+    columns: ['name', 'totalAnnualRevenueDelta', 'currency', 'subscribersAtChurnRisk', 'createdAt'],
+    detail: async (item) => {
+      const r = item.report || {};
+      const rows = (r.lines || []).map((l) => ({
+        offering: l.offeringName,
+        subscribers: l.subscribers,
+        price: `${l.currentMonthly} → ${l.proposedMonthly}`,
+        'Δ / year': l.annualRevenueDelta,
+        'margin/sub': l.marginPerSubBefore != null ? `${l.marginPerSubBefore} → ${l.marginPerSubAfter}` : '—',
+        'churn-risk subs': l.subscribersAtChurnRisk,
+        'Δ w/ assumed churn': l.annualRevenueDeltaWithAssumedChurn ?? '—',
+      }));
+      rows.push({ offering: 'ASSUMPTIONS', subscribers: '', price: '',
+        'Δ / year': '', 'margin/sub': '', 'churn-risk subs': '',
+        'Δ w/ assumed churn': (r.assumptions || []).join(' · ') });
+      return rows;
+    },
+  },
+  {
     path: 'myOperator',
     base: ONBOARDING_BASE,
     title: 'Brand',
@@ -1485,6 +1524,7 @@ const TAB_ROLE = {
   findings: 'catalog:write',
   operator: 'roles:admin',
   myOperator: 'campaign:write',
+  'simulate/priceChange': 'catalog:write',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
@@ -1555,7 +1595,8 @@ function computeVisible() {
 // suites click by text is untouched.
 const WORKSPACES = [
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
-    'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot'] },
+    'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot',
+    'simulate/priceChange'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',

@@ -33,6 +33,7 @@ public class BssApiClient {
     private final RestClient processClient;
     private final RestClient orderingClient;
     private final RestClient partyClient;
+    private final RestClient catalogClient;
 
     public BssApiClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             ObjectMapper objectMapper,
@@ -46,7 +47,8 @@ public class BssApiClient {
             @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBaseUrl,
             @Value("${bss.downstream.process-base-url:http://localhost:8116}") String processBaseUrl,
             @Value("${bss.downstream.ordering-base-url:http://localhost:8082}") String orderingBaseUrl,
-            @Value("${bss.downstream.party-base-url:http://localhost:8084}") String partyBaseUrl) {
+            @Value("${bss.downstream.party-base-url:http://localhost:8084}") String partyBaseUrl,
+            @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBaseUrl) {
         this.processClient = builder.baseUrl(processBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.agreementClient = builder.baseUrl(agreementBaseUrl)
@@ -68,6 +70,8 @@ public class BssApiClient {
         this.orderingClient = builder.baseUrl(orderingBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.partyClient = builder.baseUrl(partyBaseUrl)
+                .requestInterceptor(tokenInterceptor).build();
+        this.catalogClient = builder.baseUrl(catalogBaseUrl)
                 .requestInterceptor(tokenInterceptor).build();
         this.objectMapper = objectMapper;
     }
@@ -367,6 +371,86 @@ public class BssApiClient {
     private List<Map<String, Object>> parse(String body) {
         try {
             return objectMapper.readValue(body, JSON_LIST);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /* ---- the commercial simulator's raw material (P1) ---- */
+
+    /** EVERY active product in the tenant, paginated — the machine that sweeps
+     *  a table must paginate (the churn sweep learned this the hard way). */
+    public List<Map<String, Object>> allActiveProducts() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 100000; offset += 100) {
+            List<Map<String, Object>> page;
+            try {
+                String body = inventoryClient.get()
+                        .uri("/tmf-api/productInventory/v4/product?limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                page = parse(body);
+            } catch (Exception e) {
+                break;
+            }
+            for (Map<String, Object> product : page) {
+                if (!"terminated".equalsIgnoreCase(String.valueOf(product.get("status")))) {
+                    all.add(product);
+                }
+            }
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    public List<Map<String, Object>> offerings() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 10000; offset += 100) {
+            List<Map<String, Object>> page;
+            try {
+                String body = catalogClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                page = parse(body);
+            } catch (Exception e) {
+                break;
+            }
+            all.addAll(page);
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    public List<Map<String, Object>> offeringPrices() {
+        List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 10000; offset += 100) {
+            List<Map<String, Object>> page;
+            try {
+                String body = catalogClient.get()
+                        .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                page = parse(body);
+            } catch (Exception e) {
+                break;
+            }
+            all.addAll(page);
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        return all;
+    }
+
+    /** The host's wholesale rate card — the cost side of a margin estimate. */
+    public List<Map<String, Object>> wholesaleRateCards() {
+        try {
+            String body = usageClient.get()
+                    .uri("/tmf-api/usageManagement/v4/wholesaleRateCard")
+                    .retrieve().body(String.class);
+            return parse(body);
         } catch (Exception e) {
             return List.of();
         }
