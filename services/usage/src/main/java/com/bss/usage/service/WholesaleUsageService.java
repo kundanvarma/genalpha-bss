@@ -150,6 +150,71 @@ public class WholesaleUsageService {
         return rerated;
     }
 
+    /**
+     * P4 — THE NEGOTIATION TWIN: replay the period's REAL CDRs against a
+     * HYPOTHETICAL rate card ("what if the host gave us data at 1.50?").
+     * Read-only — nothing is rated, booked or stored; the answer is a
+     * comparison with its assumptions on the face. The MVNO's side of the
+     * table at the renegotiation.
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> simulateWholesale(LocalDate periodStart, LocalDate periodEnd,
+            List<Map<String, Object>> proposedRates) {
+        String tenant = tenantScope.currentTenantId();
+        Map<String, BigDecimal> units = unitsBySpec(tenant, periodStart, periodEnd);
+        Map<String, BigDecimal> proposal = new LinkedHashMap<>();
+        for (Map<String, Object> r : proposedRates == null ? List.<Map<String, Object>>of() : proposedRates) {
+            if (r.get("usageSpecName") != null && r.get("wholesaleRate") != null) {
+                proposal.put(String.valueOf(r.get("usageSpecName")),
+                        new BigDecimal(String.valueOf(r.get("wholesaleRate"))));
+            }
+        }
+        List<Map<String, Object>> lines = new ArrayList<>();
+        BigDecimal currentTotal = BigDecimal.ZERO;
+        BigDecimal proposedTotal = BigDecimal.ZERO;
+        String currency = null;
+        for (Map.Entry<String, BigDecimal> e : units.entrySet()) {
+            Optional<WholesaleRateCard> cardOpt = rateCards.findByTenantIdAndUsageSpecName(tenant, e.getKey());
+            if (cardOpt.isEmpty()) {
+                continue;   // no agreed rate today — nothing to compare against
+            }
+            WholesaleRateCard card = cardOpt.get();
+            currency = currency != null ? currency : card.getCurrency();
+            BigDecimal currentRate = card.getWholesaleRate();
+            BigDecimal proposedRate = proposal.getOrDefault(e.getKey(), currentRate);
+            BigDecimal currentCost = e.getValue().multiply(currentRate).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal proposedCost = e.getValue().multiply(proposedRate).setScale(2, RoundingMode.HALF_UP);
+            currentTotal = currentTotal.add(currentCost);
+            proposedTotal = proposedTotal.add(proposedCost);
+            Map<String, Object> line = new LinkedHashMap<>();
+            line.put("usageSpecName", e.getKey());
+            line.put("units", e.getValue());
+            line.put("unit", card.getUnit());
+            line.put("currentRate", currentRate);
+            line.put("proposedRate", proposedRate);
+            line.put("currentCost", currentCost);
+            line.put("proposedCost", proposedCost);
+            line.put("delta", proposedCost.subtract(currentCost));
+            lines.add(line);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("@type", "WholesaleNegotiationSimulation");
+        out.put("periodStart", periodStart.toString());
+        out.put("periodEnd", periodEnd.toString());
+        out.put("line", lines);
+        out.put("currentTotal", currentTotal);
+        out.put("proposedTotal", proposedTotal);
+        out.put("delta", proposedTotal.subtract(currentTotal));
+        if (currency != null) {
+            out.put("currency", currency);
+        }
+        out.put("assumptions", List.of(
+                "units are the period's REAL CDRs — traffic mix assumed unchanged under the new rates",
+                "specs without a proposed rate keep the current agreed rate",
+                "read-only: nothing was rated, booked or stored"));
+        return out;
+    }
+
     @Transactional(readOnly = true)
     public List<Map<String, Object>> ledgerFor(LocalDate periodStart) {
         return ledger.findByTenantIdAndPeriodStart(tenantScope.currentTenantId(), periodStart)

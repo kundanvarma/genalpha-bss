@@ -38,6 +38,17 @@ public class WholesaleUsageController {
         return ResponseEntity.ok(service.rateWholesale(periodStart, periodEnd));
     }
 
+    @PostMapping(ApiConstants.BASE_PATH + "/simulateWholesale")
+    public ResponseEntity<Map<String, Object>> simulateWholesale(
+            @RequestParam("periodStart") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStart,
+            @RequestParam("periodEnd") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEnd,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rates = body != null && body.get("rateCard") instanceof List<?> l
+                ? (List<Map<String, Object>>) l : List.of();
+        return ResponseEntity.ok(service.simulateWholesale(periodStart, periodEnd, rates));
+    }
+
     @GetMapping(ApiConstants.BASE_PATH + "/wholesaleUsageLedger")
     public ResponseEntity<List<Map<String, Object>>> ledger(
             @RequestParam("periodStart") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStart) {
