@@ -303,8 +303,13 @@ export default function Cart() {
   }
 
   const hasMobile = lines.some((l) => {
+    // the catalog's word first: a line whose offering sits in 'Mobile plans'
+    // IS a mobile line, whatever the brand calls it (name keywords are the
+    // fallback for offerings that predate category tagging)
+    const inMobileCategory = [l, ...(l.selections || [])].some((x) =>
+      ((offerings[x.offeringId]?.category || [])[0] || {}).name === 'Mobile plans');
     const names = [l.name, ...(l.selections || []).map((x) => x.name)].join(' ').toLowerCase();
-    return names.includes('mobile') || names.includes('5g') || names.includes('subscription');
+    return inMobileCategory || names.includes('mobile') || names.includes('5g') || names.includes('subscription');
   });
 
   const needsShipping = (lines || []).some((l) =>
