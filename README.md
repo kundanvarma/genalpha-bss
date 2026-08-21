@@ -23,7 +23,7 @@ mvn -q package -DskipTests && docker compose build && docker compose up -d
 - A **BSS-native CDP** — no reverse-ETL, no second database: audiences are built from the operational event bus you already run (a completed order, a new bill, a loyalty-tier change *is* the trait), across four populations (customers · consent-gated prospects · B2B organizations · anonymous visitors for retargeting). One connector activates the same audience to **Meta *and* Google** (SHA-256 hashed, DNC-filtered, async), inbound **social care** turns negative/support DMs into TMF621 trouble tickets over the bus, and a **portfolio attribution** report shows holdout-measured lift and **incremental** revenue across every campaign and journey — with a hard honesty rule: no control group, no lift claimed. **[Step-by-step martech guide →](docs/martech-guide.md)**
 - Two operators run multi-tenant on one deployment; onboarding an MVNO is a form, not a project
 - AI-native with the approval keys kept human: a product copilot (type or speak), an advisor whose every claim carries a receipt, the Hermes digital workforce, agentic commerce off-by-default — all metered, audited, revocable
-- Bring-your-own everything, per tenant: headless CMS/DAM, parcel carriers (Helthjem/Posten-Bring/PostNord with pickup points), and payment providers — Klarna & PayPal redirect flows, card routing rules + idempotency-safe failover, and BNPL settlement booked honestly (a Klarna capture is a receivable, not cash, until the payout clears it)
+- Bring-your-own everything, per tenant: headless CMS/DAM, parcel carriers (Helthjem/Posten-Bring/PostNord with pickup points), and payment providers — Klarna, Vipps MobilePay & PayPal redirect flows, card routing rules + idempotency-safe failover, and BNPL settlement booked honestly (a Klarna capture is a receivable, not cash, until the payout clears it)
 - One Helm chart runs it on AWS EKS, Azure AKS, and bare-metal k3s — two flags of difference
 
 
@@ -169,7 +169,7 @@ Posten/Bring, PostNord — with pickup points and postcode routing rules; the SH
 carrier at checkout and the pick rides the order's delivery place to the actual booking; the
 delivery block names its parcel so an eSIM next to a shipping phone never reads as a
 contradiction; suites #90/#92), **bring-your-own PSP** (per-tenant payment providers with the
-redirect/BNPL flow done honestly: session → approve at Klarna/PayPal → return leg AND
+redirect/BNPL flow done honestly: session → approve at Klarna/Vipps/PayPal → return leg AND
 HMAC-verified webhook confirming the same session idempotently; capture-on-ship routes by
 session; the subledger books a Klarna capture as a **receivable** (acct 1100) that the payout's
 remittance clears to cash; PayPal proves the seam generic; suites #91/#93/#94/#97),

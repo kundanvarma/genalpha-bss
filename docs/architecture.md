@@ -272,7 +272,7 @@ the acting tenant's machine identity.
   delivery menu — Helthjem/Posten-Bring/PostNord adapters, pickup points, postcode routing;
   the shopper's pick rides the order's delivery place to the booking), and **payments** — with
   one deliberate exception: **money has no generic connector.** PSPs are named adapters only;
-  redirect/BNPL providers (Klarna, PayPal) confirm a session idempotently across the return leg
+  redirect/BNPL providers (Klarna, Vipps MobilePay, PayPal) confirm a session idempotently across the return leg
   AND an HMAC-verified webhook; card charges route by currency/priority and fail over only on
   connect-level outages (a decline or an ambiguous timeout never retries) under one idempotency
   key; and the revenue subledger books a BNPL capture as a provider **receivable** (1100) that

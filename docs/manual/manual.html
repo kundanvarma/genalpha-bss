@@ -80,7 +80,7 @@ beside it.</p>
 32. <a href="#ctkcampaign">The CTK campaign — twenty-five kits, the closed list</a><br>
 33. <a href="#byocms">Bring your own CMS/DAM — reference-mode content</a><br>
 34. <a href="#carriers">Bring your own carrier — the delivery menu</a><br>
-35. <a href="#byopsp">Bring your own PSP — cards, Klarna/PayPal, BNPL books</a><br>
+35. <a href="#byopsp">Bring your own PSP — cards, Klarna/Vipps/PayPal, BNPL books</a><br>
 36. <a href="#bundledecomp">Bundle decomposition — the several things it is</a><br>
 37. <a href="#wholesale">Wholesale / open-access — selling on a wire you don't own</a><br>
 38. <a href="#browsecache">Browse-path caching — the shop on a surge</a><br>
@@ -951,8 +951,8 @@ eSIM — the "Ships to you" line is what keeps that from reading as a bug. (3) O
 as captions of the row above — the delivery options must stay a vertical list. (4) mock ports: logistics
 :8128, bring :8133, postnord :8134 (same image as bring).</p>
 
-<h2 id="byopsp">35 · Bring your own PSP — cards, Klarna/PayPal, orchestration, BNPL books</h2>
-<p><b>What</b>: per-tenant payment providers — card acquirers AND redirect/BNPL (Klarna, PayPal) — with
+<h2 id="byopsp">35 · Bring your own PSP — cards, Klarna/Vipps/PayPal, orchestration, BNPL books</h2>
+<p><b>What</b>: per-tenant payment providers — card acquirers AND redirect/BNPL (Klarna, Vipps MobilePay, PayPal) — with
 routing rules, failover, and settlement accounting that tells the truth. Suites:
 <a href="../../ops/e2e/psp_klarna_test.js">psp_klarna_test.js</a> (#91),
 <a href="../../ops/e2e/psp_bnpl_settlement_test.js">psp_bnpl_settlement_test.js</a> (#93),
@@ -987,7 +987,7 @@ records the serving provider. <b>Storefront</b>: Card + one button per redirect 
 <b>Test</b> = reachability probe of <code>baseUrl/health</code>, never a payment.
 <b>Install-slot rollback</b> (#95): order placed, appointment 409s (slot lost) → the checkout CANCELS the
 order (cancel voids the card + releases stock) and says "pick another slot — not placed, not charged."
-<b>Gotchas that will bite again</b>: (1) real Klarna/PayPal need merchant sandbox credentials — config
+<b>Gotchas that will bite again</b>: (1) real Klarna/Vipps/PayPal need merchant sandbox credentials — config
 only (baseUrl + secret-refs), no code change; until then mock-klarna :8135 / mock-paypal :8136 (compose
 sets <code>PUBLIC_BASE</code> so the approve URL is browser-reachable — a relative redirect dies at the
 browser). (2) payment migrations now NINE — <code>PostgresMigrationTest</code> asserts the count, bump it
