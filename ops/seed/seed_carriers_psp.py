@@ -65,4 +65,9 @@ put(f"{PAY}/paymentProvider", {
     "provider": "paypal", "displayName": "PayPal", "baseUrl": "http://mock-paypal:8080",
     "secretRef": "PAYPAL_API_KEY", "methods": ["paypal"], "isDefault": False})
 print("payment: PayPal offered (second redirect provider)")
+
+put(f"{PAY}/paymentProvider", {
+    "provider": "vipps", "displayName": "Vipps", "baseUrl": "http://mock-vipps:8080",
+    "secretRef": "VIPPS_API_KEY", "methods": ["vipps"], "isDefault": False})
+print("payment: Vipps offered (the Norwegian wallet — geography reference)")
 print("done")

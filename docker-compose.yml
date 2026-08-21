@@ -1883,6 +1883,18 @@ services:
     ports:
       - "8135:8080"
 
+  # Stands in for Vipps MobilePay (the Norwegian wallet) when proving the
+  # redirect checkout without a real Vipps merchant. Speaks the ePayment shape
+  # (amounts in øre); the VippsPspAdapter points here via a tenant's baseUrl.
+  mock-vipps:
+    build: ./integrations/mock-vipps
+    container_name: bss-mock-vipps
+    restart: unless-stopped
+    environment:
+      PUBLIC_BASE: http://localhost:8144
+    ports:
+      - "8144:8080"
+
   # Stands in for PayPal (the second redirect PSP) when proving multi-provider
   # redirect checkout without a real PayPal merchant account. Speaks the Orders
   # v2 shape; the PayPalPspAdapter points here via a tenant's baseUrl.
