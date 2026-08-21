@@ -1141,7 +1141,12 @@ re-running never double-books and revenue never double-posts). It <b>never flips
 status</b>, so retail rating is untouched. <b>Endpoints</b> (under the usage BASE_PATH, accept
 <code>wholesale:admin</code> alongside usage:read/write): <code>POST /rateWholesale</code>,
 <code>GET /mobileWholesaleSettlement</code> (statement + a <b>reconciliation</b>: rated units vs
-live CDRs — a late CDR is flagged, revenue assurance), <code>GET/POST /wholesaleRateCard</code>,
+live CDRs — a late CDR is flagged, revenue assurance <b>and the loop now CLOSES ITSELF</b>: a
+scheduled per-tenant sweep (<code>WholesaleRerateLoop</code>, window-bounded — an old settled
+period is a dispute, not a silent mutation) re-rates the drifted row, stamps
+<code>rerateCount/lastReratedAt</code> and emits <code>WholesaleUsageReratedEvent</code> with the
+delta; revenue books the adjustment idempotently per (ledger id, rerate #), negative deltas
+reverse), <code>GET/POST /wholesaleRateCard</code>,
 <code>GET/POST /imsiRange</code>, <code>GET /wholesaleUsageLedger</code>.
 <b>Books</b> (revenue): a <code>WholesaleUsageEventListener</code> on <code>bss.usage.events</code>
 books <code>postMobileWholesaleCogs</code> — DR <code>mobile-wholesale:cogs</code> (5110) / CR

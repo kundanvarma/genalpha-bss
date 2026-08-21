@@ -1,0 +1,76 @@
+# The commercial simulator — simulate the money before you move it
+
+**Status:** BACKLOG (vision researched 2026-08-21; build on trigger) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
+
+## The thesis
+
+The telecom digital-twin market simulates **networks** — RF planning, topology,
+what-if on radio changes. Nobody ships a turnkey twin of the **money**: what
+happens to revenue, margin and churn if this price changes, this bundle
+launches, this wholesale rate card is renegotiated, this base migrates. The
+science exists (churn-aware elasticity models, Monte Carlo scenario runs) but
+lives in one-off consulting projects, disconnected from the system that
+executes the decision. Parallel/shadow bill runs — the industry's standard
+migration de-risking ritual — are manual and one-off.
+
+This platform is unusually placed to close that gap, because the engines are
+**deterministic and event-sourced**: a simulation is not a model *of* the
+system, it is the system run again on different inputs.
+
+## The plays (in rough build order)
+
+1. **Price-change simulator (P1).** Replay the subscriber base and recent
+   usage against a PROPOSED catalog into a scratch ledger: projected revenue
+   delta, margin per plan (retail minus the wholesale rate card), and which
+   customers cross a pain threshold — overlaid with churn-risk scores. A
+   console pane; the answer in seconds, before the change is real.
+
+2. **Forecast receipts for governed AI (P2).** Every copilot proposal (a
+   repricing, a new offering, a campaign) is auto-scored by the simulator
+   BEFORE the human approval dialog — the approver sees the projected
+   revenue/margin/churn delta next to the Approve button. Simulation becomes
+   the governance layer's other half: an AI proposal without a forecast is
+   just an opinion.
+
+3. **Continuous shadow billing (P3).** The industry's one-off parallel bill
+   run, productized as an always-on feature: every cycle the twin re-bills a
+   slice of the base against tomorrow's catalog; drift raises an alert before
+   an invoice is wrong. Migration mode is the same engine pointed at a legacy
+   import — every subscriber lands on a plan, bills within tolerance, the
+   exceptions listed by name.
+
+4. **Wholesale negotiation twin + prospect simulator (P4).** Replay real CDRs
+   against hypothetical host rate cards → margin curves per plan: the MVNO's
+   renegotiation weapon. The same engine, pointed at a prospect's public
+   price list and an assumed base mix, produces "your business on this BSS"
+   in a first meeting — the sales tool is the demo.
+
+## The unfair advantages
+
+- **Shadow-operator clones, not math models.** Tenant onboarding is a form;
+  a sandbox tenant with copied data runs the REAL engines. Simulation by
+  cloning has zero model drift — the twin cannot disagree with production
+  because it *is* production code.
+- **Tvilling as the simulation substrate.** The privacy twin already
+  generates structurally-true-but-fictional data — simulations (and sales
+  demos of simulations) run on a realistic base with no PII processing.
+- **The lift-calibrated flywheel.** Elasticity assumptions rot everywhere
+  else. Here the holdout machinery MEASURES real causal lift; the gap between
+  the simulator's prediction and the measured outcome retrains the priors.
+  The simulator provably improves with every campaign.
+- **Cross-tenant priors.** Multi-tenancy gives small operators anonymized,
+  aggregate-only elasticity priors their own data cannot support.
+- Smaller: a **chaos twin** (revenue impact of host-network or PSP outages,
+  using the failover machinery that already exists) and **regulatory
+  rehearsal** (price-notification cohorts, port-out exposure per price point).
+
+## Honesty rules (non-negotiable, house style)
+
+- A simulation is not a prophecy: every report names its assumptions
+  (elasticity source, data window, base snapshot date) on the face of it.
+- Calibration receipts: when a simulated decision later has a measured
+  outcome (holdout lift, actual churn), the report is linked to the reality
+  and the delta is shown — the simulator's own track record is public to its
+  users.
+- The scratch ledger never touches the real one; a simulation cannot mutate
+  production state, only describe it.
