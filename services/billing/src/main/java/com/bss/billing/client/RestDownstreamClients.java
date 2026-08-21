@@ -30,7 +30,21 @@ public class RestDownstreamClients {
             MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.inventory-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
-        return () -> {
+        return new DownstreamClients.InventoryClient() {
+            @Override
+            public List<Map<String, Object>> productsOf(String partyId) {
+                try {
+                    List<Map<String, Object>> page = rest.get()
+                            .uri("/tmf-api/productInventory/v4/product?relatedPartyId={p}&limit=100", partyId)
+                            .retrieve().body(List.class);
+                    return page == null ? List.of() : page;
+                } catch (Exception e) {
+                    return List.of();
+                }
+            }
+
+            @Override
+            public List<Map<String, Object>> activeProducts() {
             // active products AND cancelled ones — a line ceased mid-period
             // still owes its days; the run's date-math decides what counts
             List<Map<String, Object>> all = new ArrayList<>();
@@ -55,6 +69,7 @@ public class RestDownstreamClients {
             }
             }
             return all;
+            }
         };
     }
 

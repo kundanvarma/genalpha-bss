@@ -18,6 +18,11 @@ public final class DownstreamClients {
     public interface InventoryClient {
         /** All active products, fully paged. */
         List<Map<String, Object>> activeProducts();
+
+        /** One party's products — the shadow run's targeted drill-down. */
+        default List<Map<String, Object>> productsOf(String partyId) {
+            return List.of();
+        }
     }
 
     public interface CatalogClient {

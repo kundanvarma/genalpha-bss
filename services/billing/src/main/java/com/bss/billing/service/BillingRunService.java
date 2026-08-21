@@ -755,7 +755,7 @@ public class BillingRunService {
      * colour without an SKU per variant.
      */
     @SuppressWarnings("unchecked")
-    private BigDecimal monthlyFor(String offeringId, Map<String, String> characteristics,
+    BigDecimal monthlyFor(String offeringId, Map<String, String> characteristics,
             Map<String, String> unitCache) {
         Map<String, Object> offering = catalog.offering(offeringId);
         if (offering == null) {
@@ -802,7 +802,7 @@ public class BillingRunService {
     /** The product's configured characteristics ({color=Titanium Edition}),
      * sorted so they can key a cache. */
     @SuppressWarnings("unchecked")
-    private java.util.TreeMap<String, String> charsOf(Map<String, Object> product) {
+    java.util.TreeMap<String, String> charsOf(Map<String, Object> product) {
         java.util.TreeMap<String, String> chars = new java.util.TreeMap<>();
         if (product.get("productCharacteristic") instanceof List<?> list) {
             for (Map<String, Object> c : (List<Map<String, Object>>) list) {

@@ -688,6 +688,18 @@ const RESOURCES = [
     columns: ['maxMarketingMessages', 'perDays', 'capActive', 'quietStart', 'quietEnd', 'quietActive'],
   },
   {
+    path: 'shadowDrift',
+    base: BILLING_BASE,
+    title: 'Shadow billing',
+    // P3 — the parallel bill run, standing: what will bill DIFFERENTLY next
+    // cycle vs the last real invoice, caught by the sweep before it lands.
+    noEdit: true,
+    noDelete: true,
+    readOnly: true,
+    fields: [],
+    columns: ['offeringName', 'ownerPartyId', 'billedMonthly', 'currentMonthly', 'delta', 'unit', 'detectedAt'],
+  },
+  {
     path: 'dunning',
     base: BILLING_BASE,
     title: 'Dunning',
@@ -1523,6 +1535,7 @@ const TAB_ROLE = {
   billFormatProfile: 'billing:admin',
   findings: 'catalog:write',
   operator: 'roles:admin',
+  shadowDrift: 'billing:admin',
   myOperator: 'campaign:write',
   'simulate/priceChange': 'catalog:write',
   billDistribution: 'billing:admin',
@@ -1600,7 +1613,8 @@ const WORKSPACES = [
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
-    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment'] },
+    'dunning', 'billFormatProfile', 'billDistribution', 'remittance/unapplied', 'partyRiskAssessment',
+    'shadowDrift'] },
   { label: 'Reporting', tabs: ['reporting'] },
   { label: 'Care & Ops', tabs: ['productOrder', 'processFlow', 'appointment', 'numberPortingOrder', 'article'] },
   // "Growth" split by persona (the marketer, the seller, the sales-ops admin) —
