@@ -160,7 +160,9 @@ public class WholesaleUsageService {
         out.put("hostPartyId", host);
         out.put("line", lines);
         out.put("totalOwed", total.setScale(2, RoundingMode.HALF_UP));
-        out.put("currency", "EUR");
+        // the statement's currency is the ledger's, not a hardcoded default
+        out.put("currency", rows.isEmpty() || rows.get(0).getCurrency() == null
+                ? "EUR" : rows.get(0).getCurrency());
         out.put("reconciled", reconciled);
         return out;
     }
