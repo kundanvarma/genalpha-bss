@@ -103,11 +103,11 @@ async function ensureOverlay(page) {
     const style = document.createElement('style');
     style.textContent = `
       #demo-badge{position:fixed;top:14px;left:14px;z-index:2147483647;font:600 12px system-ui;background:#111;color:#fff;
-        padding:6px 10px;border-radius:20px;display:flex;gap:7px;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.3)}
+        padding:6px 10px;border-radius:20px;display:flex;gap:7px;align-items:center;box-shadow:0 2px 12px rgba(0,0,0,.3);pointer-events:none}
       #demo-badge b{width:8px;height:8px;border-radius:50%;background:#ff4d4d;animation:demopulse 1.4s infinite}
       @keyframes demopulse{50%{opacity:.3}}
       #demo-cap{position:fixed;left:0;right:0;bottom:0;z-index:2147483647;padding:22px 30px;
-        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;transition:opacity .3s}
+        background:linear-gradient(0deg,rgba(8,8,14,.94),rgba(8,8,14,.72));color:#fff;font:400 22px/1.45 system-ui;transition:opacity .3s;pointer-events:none}
       #demo-cap .who{display:inline-block;font:700 12px system-ui;letter-spacing:.6px;text-transform:uppercase;padding:4px 10px;border-radius:6px;margin-bottom:8px;color:#fff}
       #demo-cap .txt{max-width:1040px}
       #demo-hero{position:fixed;left:48px;top:50%;transform:translate(-44px,-50%);z-index:2147483646;
@@ -116,7 +116,7 @@ async function ensureOverlay(page) {
       #demo-hero img{width:260px;height:260px;border-radius:50%;object-fit:cover;border:5px solid #fff;box-shadow:0 12px 60px rgba(0,0,0,.65)}
       #demo-hero .hn{font:700 23px system-ui;color:#fff;background:rgba(8,8,14,.82);padding:10px 22px;border-radius:30px}
       #demo-title{position:fixed;inset:0;z-index:2147483646;background:radial-gradient(circle at 50% 40%,#1a1a2e,#08080e);color:#fff;
-        display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui;transition:opacity .5s}
+        display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;font-family:system-ui;transition:opacity .5s;pointer-events:none}
       #demo-title .k{font:700 13px system-ui;letter-spacing:3px;text-transform:uppercase;color:#7c5cff;margin-bottom:14px}
       #demo-title .h{font:700 46px/1.15 system-ui;max-width:920px}
       #demo-title .s{margin-top:16px;font:400 20px system-ui;color:#aab}`;
@@ -244,11 +244,15 @@ async function copilotAsk(page, prefix, text) {
   const input = page.locator(`#${prefix}-input`);
   if (!(await input.count())) return false;
   await input.click(); await input.fill('');
-  await input.pressSequentially(text, { delay: 28 });   // visible typing
+  await input.pressSequentially(text, { delay: RECORD ? 8 : 28 });   // visible typing
   await sleep(400);
+  // RECORD: show the typed prompt, then skip the live AI send — the copilot's
+  // network call hangs a headless render; the narration explains the proposal.
+  if (RECORD) { await sleep(1200); return true; }
   const before = ((await page.locator(`#${prefix}-log`).innerText().catch(() => '')) || '').length;
   await page.locator(`#${prefix}-send`).click();
-  for (let i = 0; i < 50; i++) {                          // up to ~25s for the reply
+  const maxIter = RECORD ? 10 : 50;                       // RECORD: cap the AI wait at ~5s so the render never stalls
+  for (let i = 0; i < maxIter; i++) {
     await gate(page);
     const now = ((await page.locator(`#${prefix}-log`).innerText().catch(() => '')) || '');
     if (now.length > before + 20) { await reveal(page, `#${prefix}-log`); await sleep(600); return true; }
