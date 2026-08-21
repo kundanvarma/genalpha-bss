@@ -133,6 +133,48 @@ public class TenantOnboardingService {
      * them out within one interval — no restart. Identity (id, issuer,
      * key endpoints) is deliberately NOT editable here.
      */
+    /** The caller's OWN brand card — the fields a hosted operator's
+     *  marketing team may read: name, color, tagline. Nothing operational. */
+    public Map<String, Object> brandOf(String id) throws Exception {
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        if (!m.find()) {
+            throw new com.bss.userroles.exception.NotFoundException("Operator '" + id + "' not found");
+        }
+        String block = m.group(1);
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("id", id);
+        out.put("name", firstGroup(block, "brand-name: (.*)"));
+        out.put("color", strip(firstGroup(block, "brand-color: (.*)")));
+        out.put("tagline", strip(firstGroup(block, "tagline: (.*)")));
+        return out;
+    }
+
+    /** Brand-only mutation for the tenant's own team: name, color, tagline —
+     *  locale, currency and agent-commerce stay with the host operator. */
+    public Map<String, Object> mutateBrand(String id, Map<String, Object> dto) throws Exception {
+        Map<String, Object> safe = new java.util.LinkedHashMap<>();
+        for (String k : java.util.List.of("name", "color", "tagline")) {
+            if (dto.get(k) != null) {
+                safe.put(k, dto.get(k));
+            }
+        }
+        if (safe.isEmpty()) {
+            return Map.of("id", id, "mutated", false);
+        }
+        return mutate(id, safe);
+    }
+
+    private static String firstGroup(String block, String regex) {
+        Matcher m = Pattern.compile(regex).matcher(block);
+        return m.find() ? m.group(1).trim() : null;
+    }
+
+    private static String strip(String v) {
+        return v != null && v.length() > 1 && v.startsWith("\"") && v.endsWith("\"")
+                ? v.substring(1, v.length() - 1) : v;
+    }
+
     public Map<String, Object> mutate(String id, Map<String, Object> dto) throws Exception {
         // the SEED operators are env-governed and form-protected — only
         // form-born operators are form-mutable

@@ -54,6 +54,24 @@ public class TenantOnboardingController {
         return ResponseEntity.ok(onboarding.mutate(id, dto));
     }
 
+    /** THE TENANT'S OWN VOICE: a hosted operator's marketing team reads and
+     *  edits its storefront brand — no host-admin rights involved. */
+    @GetMapping("/onboarding/v1/myOperator")
+    public ResponseEntity<List<Map<String, Object>>> myOperator() throws Exception {
+        return ResponseEntity.ok(List.of(onboarding.brandOf(tenantScope.currentTenantId())));
+    }
+
+    @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/myOperator/{id}")
+    public ResponseEntity<Map<String, Object>> mutateOwn(
+            @org.springframework.web.bind.annotation.PathVariable("id") String id,
+            @RequestBody Map<String, Object> dto) throws Exception {
+        if (!tenantScope.currentTenantId().equals(id)) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "you edit YOUR operator's brand only");
+        }
+        return ResponseEntity.ok(onboarding.mutateBrand(id, dto));
+    }
+
     private void requireHostOperator() {
         if (!hostTenant.equals(tenantScope.currentTenantId())) {
             throw new com.bss.userroles.exception.BadRequestException(

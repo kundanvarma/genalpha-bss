@@ -764,6 +764,23 @@ const RESOURCES = [
     columns: ['id', 'name', 'locale', 'currency', 'agentCommerce'],
   },
   {
+    path: 'myOperator',
+    base: ONBOARDING_BASE,
+    title: 'Brand',
+    // THE TENANT'S OWN VOICE: a hosted operator's marketing team edits its
+    // storefront brand — name, color, tagline — without host-admin rights.
+    // The shop follows within one refresh interval; blank tagline = the
+    // built-in line.
+    noCreate: true,
+    noDelete: true,
+    fields: [
+      { name: 'name', label: 'Brand name', required: true },
+      { name: 'color', label: 'Brand color', placeholder: '#E63329' },
+      { name: 'tagline', label: 'Storefront tagline — the hero line under the brand name (blank = the built-in line)' },
+    ],
+    columns: ['name', 'color', 'tagline'],
+  },
+  {
     path: 'billDistribution',
     base: BILLING_BASE,
     title: 'Deliveries',
@@ -1467,6 +1484,7 @@ const TAB_ROLE = {
   billFormatProfile: 'billing:admin',
   findings: 'catalog:write',
   operator: 'roles:admin',
+  myOperator: 'campaign:write',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
@@ -1548,7 +1566,7 @@ const WORKSPACES = [
   // one theme was three jobs. Role gates unchanged, so a narrow role lands on
   // just its own desk.
   { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
-    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings'] },
+    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings', 'myOperator'] },
   { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
