@@ -455,7 +455,9 @@ const RESOURCES = [
     title: 'Journeys',
     // Sequences as DATA: ordered message/wait steps, a conversion event
     // that is also the always-on exit rule, holdouts for honest lift.
-    noEdit: true,
+    // Live-editable the way marketers expect (the Klaviyo model): edits
+    // apply forward-only — parked enrollees get the new copy at their
+    // next send, nobody is re-sent a step they already passed.
     noDelete: true,
     fields: [
       { name: 'name', label: 'Name', required: true },
@@ -506,7 +508,7 @@ const RESOURCES = [
         inFlight: Object.entries(s.activeAtStep || {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || '—',
         converted: `treated ${s.conversions.treated} (${s.treatedRate ?? '—'}%) · holdout ${s.conversions.holdout} (${s.holdoutRate ?? '—'}%)`,
         lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
-        note: s.note || `${s.completedUnconverted} completed unconverted`,
+        note: [s.note, s.editNote].filter(Boolean).join(' · ') || `${s.completedUnconverted} completed unconverted`,
         revenue: s.revenue ? `treated ${s.revenue.treated} · holdout ${s.revenue.holdout}`
           + (s.revenue.liftPerCustomer != null ? ` · lift ${s.revenue.liftPerCustomer} per customer/month` : '') : '—'
       }];

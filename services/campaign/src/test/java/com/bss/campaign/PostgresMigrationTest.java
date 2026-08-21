@@ -35,9 +35,13 @@ class PostgresMigrationTest {
     void flywayAppliesMigrationsAndEntitiesValidateAgainstPostgres() {
         assertThat(postgres.isRunning()).isTrue();
 
+        // every migration applied cleanly; no hardcoded count — it rots
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(2);
+        Integer failed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE success = false", Integer.class);
+        assertThat(applied).isGreaterThanOrEqualTo(20);
+        assertThat(failed).isZero();
 
         assertThat(repository.count()).isZero();
     }

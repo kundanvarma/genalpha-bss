@@ -12,6 +12,7 @@ import org.springframework.test.context.ActiveProfiles;
 import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -50,9 +51,9 @@ class CampaignEngineTest {
             service.onEvent("OnceProbeEvent", "completed", "party-engine-2", java.util.List.of());
 
             verify(communicationClient, times(1)).send(
-                    eq("party-engine-1"), eq("Welcome!"), eq("Use WELCOME10 on your next order."));
+                    eq("party-engine-1"), eq("Welcome!"), eq("Use WELCOME10 on your next order."), anyMap());
             verify(communicationClient, times(1)).send(
-                    eq("party-engine-2"), anyString(), anyString());
+                    eq("party-engine-2"), anyString(), anyString(), anyMap());
             org.junit.jupiter.api.Assertions.assertEquals(2,
                     service.executionsOf(campaignId).size());
         }
@@ -66,7 +67,7 @@ class CampaignEngineTest {
             service.onEvent("SomeOtherEvent", null, "party-engine-3", java.util.List.of());
             service.patch(campaignId, Map.of("status", "paused"));
             service.onEvent("PausedProbeEvent", null, "party-engine-3", java.util.List.of());
-            verify(communicationClient, never()).send(eq("party-engine-3"), any(), any());
+            verify(communicationClient, never()).send(eq("party-engine-3"), any(), any(), anyMap());
         }
     }
 
@@ -80,10 +81,10 @@ class CampaignEngineTest {
                     "message", Map.of("subject", "Enjoy!", "content", "Your order is live.")));
 
             service.onEvent("ProductOrderStateChangeEvent", "inProgress", "party-engine-4", java.util.List.of());
-            verify(communicationClient, never()).send(eq("party-engine-4"), any(), any());
+            verify(communicationClient, never()).send(eq("party-engine-4"), any(), any(), anyMap());
 
             service.onEvent("ProductOrderStateChangeEvent", "completed", "party-engine-4", java.util.List.of());
-            verify(communicationClient, times(1)).send(eq("party-engine-4"), eq("Enjoy!"), anyString());
+            verify(communicationClient, times(1)).send(eq("party-engine-4"), eq("Enjoy!"), anyString(), anyMap());
         }
     }
 
@@ -94,6 +95,6 @@ class CampaignEngineTest {
         try (TenantContext ignored = TenantContext.actAs("tenant-b")) {
             service.onEvent("TenantProbeEvent", null, "party-engine-5", java.util.List.of());
         }
-        verify(communicationClient, never()).send(eq("party-engine-5"), any(), any());
+        verify(communicationClient, never()).send(eq("party-engine-5"), any(), any(), anyMap());
     }
 }

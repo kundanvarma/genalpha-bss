@@ -82,6 +82,32 @@ public class JourneyService {
             throw new BadRequestException("name and steps are required");
         }
         List<Map<String, Object>> steps = parseSteps(dto.get("steps"));
+        validateSteps(steps);
+        Journey entity = new Journey();
+        String id = UUID.randomUUID().toString();
+        entity.setId(id);
+        entity.setTenantId(tenantScope.currentTenantId());
+        entity.setHref(ApiConstants.BASE_PATH + "/journey/" + id);
+        entity.setName(String.valueOf(dto.get("name")));
+        entity.setStatus(dto.get("status") == null ? Journey.ACTIVE : requireLifecycle(dto.get("status")));
+        entity.setTriggerEventType(str(dto.get("triggerEventType")));
+        entity.setTriggerState(str(dto.get("triggerState")));
+        entity.setSegmentName(str(dto.get("segmentName")));
+        entity.setConversionEvent(str(dto.get("conversionEvent")));
+        if (dto.get("holdoutPercent") != null) {
+            entity.setHoldoutPercent(requireHoldout(dto.get("holdoutPercent")));
+        }
+        if (dto.get("priority") != null) {
+            entity.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
+        }
+        entity.setSteps(serializeSteps(steps));
+        entity.setCreatedAt(OffsetDateTime.now());
+        entity.setLastUpdate(OffsetDateTime.now());
+        return toMap(journeys.save(entity));
+    }
+
+    /** One rulebook for steps, shared by create and edit. */
+    private void validateSteps(List<Map<String, Object>> steps) {
         if (steps.isEmpty()) {
             throw new BadRequestException("a journey needs at least one step");
         }
@@ -135,35 +161,22 @@ public class JourneyService {
                         + "'waitForEvent' or 'exit'");
             }
         }
-        Journey entity = new Journey();
-        String id = UUID.randomUUID().toString();
-        entity.setId(id);
-        entity.setTenantId(tenantScope.currentTenantId());
-        entity.setHref(ApiConstants.BASE_PATH + "/journey/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setStatus(dto.get("status") == null ? Journey.ACTIVE : requireLifecycle(dto.get("status")));
-        entity.setTriggerEventType(str(dto.get("triggerEventType")));
-        entity.setTriggerState(str(dto.get("triggerState")));
-        entity.setSegmentName(str(dto.get("segmentName")));
-        entity.setConversionEvent(str(dto.get("conversionEvent")));
-        if (dto.get("holdoutPercent") != null) {
-            int holdout = Integer.parseInt(String.valueOf(dto.get("holdoutPercent")));
-            if (holdout < 0 || holdout > 90) {
-                throw new BadRequestException("holdoutPercent must be 0-90");
-            }
-            entity.setHoldoutPercent(holdout);
+    }
+
+    private int requireHoldout(Object value) {
+        int holdout = Integer.parseInt(String.valueOf(value));
+        if (holdout < 0 || holdout > 90) {
+            throw new BadRequestException("holdoutPercent must be 0-90");
         }
-        if (dto.get("priority") != null) {
-            entity.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
-        }
+        return holdout;
+    }
+
+    private String serializeSteps(List<Map<String, Object>> steps) {
         try {
-            entity.setSteps(objectMapper.writeValueAsString(steps));
+            return objectMapper.writeValueAsString(steps);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new BadRequestException("steps are not serializable JSON");
         }
-        entity.setCreatedAt(OffsetDateTime.now());
-        entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(journeys.save(entity));
     }
 
     @Transactional(readOnly = true)
@@ -174,6 +187,15 @@ public class JourneyService {
                 .map(this::toMap).toList();
     }
 
+    /**
+     * Live edit, the way marketers expect it (the Klaviyo/Customer.io model):
+     * changes take effect FORWARD-ONLY. The tick re-reads steps on every run,
+     * so people parked mid-journey get the new copy at their next send; nobody
+     * is re-sent a step they already passed, and if the journey shrinks below
+     * someone's position they simply complete. Steps are re-validated with the
+     * same rulebook as create, and a steps edit is stamped (stepsEditedAt) so
+     * lift/funnel reads stay honest about mixing step versions.
+     */
     @Transactional
     public Map<String, Object> patch(String id, Map<String, Object> patch) {
         Journey entity = journeys.findByIdAndTenantId(id, tenantScope.currentTenantId())
@@ -183,6 +205,37 @@ public class JourneyService {
         }
         if (patch.get("priority") != null) {
             entity.setPriority(Integer.parseInt(String.valueOf(patch.get("priority"))));
+        }
+        if (patch.get("name") != null) {
+            entity.setName(String.valueOf(patch.get("name")));
+        }
+        // trigger/segment/conversion edits govern FUTURE enrollment and exits;
+        // people already in flight continue their journey (Customer.io rule)
+        if (patch.containsKey("triggerEventType")) {
+            entity.setTriggerEventType(str(patch.get("triggerEventType")));
+        }
+        if (patch.containsKey("triggerState")) {
+            entity.setTriggerState(str(patch.get("triggerState")));
+        }
+        if (patch.containsKey("segmentName")) {
+            entity.setSegmentName(str(patch.get("segmentName")));
+        }
+        if (patch.containsKey("conversionEvent")) {
+            entity.setConversionEvent(str(patch.get("conversionEvent")));
+        }
+        // variants are stamped at enrollment, so a holdout change only
+        // buckets NEW entrants — per-variant lift math stays valid
+        if (patch.get("holdoutPercent") != null) {
+            entity.setHoldoutPercent(requireHoldout(patch.get("holdoutPercent")));
+        }
+        if (patch.get("steps") != null) {
+            List<Map<String, Object>> steps = parseSteps(patch.get("steps"));
+            validateSteps(steps);
+            String serialized = serializeSteps(steps);
+            if (!serialized.equals(entity.getSteps())) {
+                entity.setSteps(serialized);
+                entity.setStepsEditedAt(OffsetDateTime.now());
+            }
         }
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(journeys.save(entity));
@@ -674,6 +727,11 @@ public class JourneyService {
             revenue.put("basis", "monthly recurring value of converting orders");
             stats.put("revenue", revenue);
         }
+        // honesty marker: an edited journey's funnel/lift mixes step versions
+        if (journey.getStepsEditedAt() != null) {
+            stats.put("stepsEditedAt", journey.getStepsEditedAt());
+            stats.put("editNote", "steps were edited after launch — earlier enrollees walked a different version");
+        }
         return stats;
     }
 
@@ -734,6 +792,7 @@ public class JourneyService {
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             map.put("steps", j.getSteps());
         }
+        if (j.getStepsEditedAt() != null) map.put("stepsEditedAt", j.getStepsEditedAt());
         map.put("lastUpdate", j.getLastUpdate());
         map.put("@type", "Journey");
         return map;

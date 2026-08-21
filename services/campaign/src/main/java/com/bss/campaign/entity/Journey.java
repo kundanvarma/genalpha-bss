@@ -63,6 +63,10 @@ public class Journey {
     @Column(name = "last_update")
     private OffsetDateTime lastUpdate;
 
+    /** Stamped when steps change after launch — the stats honesty marker. */
+    @Column(name = "steps_edited_at")
+    private OffsetDateTime stepsEditedAt;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getHref() { return href; }
@@ -91,4 +95,6 @@ public class Journey {
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime v) { this.lastUpdate = v; }
+    public OffsetDateTime getStepsEditedAt() { return stepsEditedAt; }
+    public void setStepsEditedAt(OffsetDateTime v) { this.stepsEditedAt = v; }
 }
