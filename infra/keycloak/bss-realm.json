@@ -1271,6 +1271,24 @@
    ]
   },
   {
+   "id": "4a925214-acd4-4988-992b-02b7e499f746",
+   "username": "dag@elektra.example",
+   "email": "dag@elektra.example",
+   "firstName": "Dag",
+   "lastName": "Elektra",
+   "enabled": true,
+   "emailVerified": true,
+   "credentials": [
+    {
+     "type": "password",
+     "value": "dag"
+    }
+   ],
+   "realmRoles": [
+    "customer"
+   ]
+  },
+  {
    "username": "service-account-bss-usage",
    "enabled": true,
    "serviceAccountClientId": "bss-usage",
