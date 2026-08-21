@@ -73,9 +73,14 @@ public class TenantRegistry {
         /** THE OVERLAY SEAM: the legacy estate's incident system — the
          * workforce works LEGACY backlogs through it. */
         private String legacyTicketBaseUrl;
+        /** The operator's storefront language — copilots write customer-facing
+         * copy (banners, offering names, descriptions) in it, not in English. */
+        private String locale;
 
         public String getLegacyTicketBaseUrl() { return legacyTicketBaseUrl; }
         public void setLegacyTicketBaseUrl(String v) { this.legacyTicketBaseUrl = v; }
+        public String getLocale() { return locale; }
+        public void setLocale(String v) { this.locale = v; }
 
         public String getId() {
             return id;

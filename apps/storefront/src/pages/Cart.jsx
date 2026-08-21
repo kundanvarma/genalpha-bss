@@ -471,7 +471,7 @@ export default function Cart() {
 
   return (
     <>
-      <h1>Cart</h1>
+      <h1>{t('Cart')}</h1>
       {error && <p className="error">{error}</p>}
       <div className="rows">
         {lines.map((line, idx) => {
@@ -525,7 +525,7 @@ export default function Cart() {
                   <button className="ghost" aria-label="increase"
                           onClick={() => setQuantity(line.key, line.quantity + 1)}>+</button>
                 </div>
-                <button className="ghost danger" onClick={() => removeLine(line.key)}>Remove</button>
+                <button className="ghost danger" onClick={() => removeLine(line.key)}>{t('Remove')}</button>
               </div>
             </div>
             </React.Fragment>
@@ -533,7 +533,7 @@ export default function Cart() {
         })}
         {grand && (
           <div className="row granded">
-            <strong>Total per month</strong>
+            <strong>{t('Total per month')}</strong>
             <strong className="linetotal">{grand.value.toFixed(2)} {grand.unit}</strong>
           </div>
         )}
@@ -573,16 +573,16 @@ export default function Cart() {
         ))}
         {due && (
           <div className="row granded duenow">
-            <strong>Due now</strong>
+            <strong>{t('Due now')}</strong>
             <strong className="linetotal">{due.value.toFixed(2)} {due.unit}</strong>
           </div>
         )}
       </div>
 
       <div className="promobar">
-        <input placeholder="Promo code" value={promoInput}
+        <input placeholder={t('Promo code')} value={promoInput}
                onChange={(e) => setPromoInput(e.target.value)} />
-        <button className="ghost" onClick={applyPromo} disabled={!promoInput.trim()}>Apply</button>
+        <button className="ghost" onClick={applyPromo} disabled={!promoInput.trim()}>{t('Apply')}</button>
         {promoError && <span className="error small">{promoError}</span>}
       </div>
 
@@ -653,17 +653,17 @@ export default function Cart() {
 
       {hasMobile && (
         <div className="keepnumber simchoice">
-          <h2>Your SIM</h2>
+          <h2>{t('Your SIM')}</h2>
           <div className="simopts">
             <button type="button" className={`simopt ${simType === 'esim' ? 'on' : ''}`}
                     onClick={() => setSimType('esim')}>
               <span className="simopt-t">⚡ eSIM</span>
-              <span className="simopt-d">Activates instantly — nothing to ship</span>
+              <span className="simopt-d">{t('Activates instantly — nothing to ship')}</span>
             </button>
             <button type="button" className={`simopt ${simType === 'physical' ? 'on' : ''}`}
                     onClick={() => setSimType('physical')}>
-              <span className="simopt-t">📦 Physical SIM</span>
-              <span className="simopt-d">Ships to your door — track it every step</span>
+              <span className="simopt-t">📦 {t('Physical SIM')}</span>
+              <span className="simopt-d">{t('Ships to your door — track it every step')}</span>
             </button>
           </div>
         </div>
@@ -671,7 +671,7 @@ export default function Cart() {
 
       {showDeliveryPicker && (
         <div className="delivery-method">
-          <h2>Delivery</h2>
+          <h2>{t('Delivery')}</h2>
           {shipNames.length > 0 && (
             <p className="dim small" data-testid="ships-to-you">📦 Ships to you: {shipNames.join(', ')}</p>
           )}
@@ -683,7 +683,7 @@ export default function Cart() {
                 <button type="button" key={key} data-testid="delivery-opt"
                         className={`simopt ${deliverySel === key ? 'on' : ''}`}
                         onClick={() => { setDeliverySel(key); if (!pickup) setPickupId(''); }}>
-                  <span className="simopt-t">{pickup ? '📍 Pickup point' : '🏠 Home delivery'} · {o.carrierName}</span>
+                  <span className="simopt-t">{pickup ? `📍 ${t('Pickup point')}` : `🏠 ${t('Home delivery')}`} · {o.carrierName}</span>
                   <span className="simopt-d">{pickup
                     ? `Collect at a ${o.carrierName} point near you`
                     : (shipAddress
@@ -741,15 +741,15 @@ export default function Cart() {
 
       {hasMobile && (
         <div className="keepnumber">
-          <h2>Your number</h2>
+          <h2>{t('Your number')}</h2>
           <label className="keepnum-toggle small">
             <input type="checkbox" checked={keepNumber.on}
                    onChange={(e) => setKeepNumber({ ...keepNumber, on: e.target.checked })} />
-            {' '}Keep my current number (port it in)
+            {' '}{t('Keep my current number (port it in)')}
           </label>
           {keepNumber.on && (
             <div className="addressgrid" style={{ marginTop: '0.5rem' }}>
-              <label className="charfield"><span>Your number</span>
+              <label className="charfield"><span>{t('Your number')}</span>
                 <input name="portNumber" value={keepNumber.number} placeholder="+47 901 12 233"
                        onChange={(e) => setKeepNumber({ ...keepNumber, number: e.target.value })} /></label>
               <label className="charfield"><span>Current provider</span>
@@ -769,7 +769,7 @@ export default function Cart() {
           {!keepNumber.on && numberChoices.length > 0 && (
             <div className="number-choice" data-testid="number-choice">
               <p className="dim small" style={{ margin: '0.6rem 0 0.3rem' }}>
-                …or pick your new number (optional — none picked = we assign one):</p>
+                {t('…or pick your new number (optional — none picked = we assign one):')}</p>
               <div className="simopts" style={{ gap: 8 }}>
                 {numberChoices.map((n) => (
                   <button type="button" key={n} data-testid="number-option"
@@ -780,7 +780,7 @@ export default function Cart() {
                   </button>
                 ))}
                 <button type="button" className="ghost" data-testid="number-shuffle"
-                        onClick={() => setNumberShuffle((x) => x + 1)}>Show me others</button>
+                        onClick={() => setNumberShuffle((x) => x + 1)}>{t('Show me others')}</button>
               </div>
             </div>
           )}
@@ -789,19 +789,19 @@ export default function Cart() {
 
       {due && (signedIn ? (
         <div className="payment">
-          <h2>Payment</h2>
+          <h2>{t('Payment')}</h2>
           {redirectMethods.length > 0 && (
             <div className="simopts" style={{ marginBottom: '0.8rem' }}>
               <button type="button" className={`simopt ${payMethod === 'card' ? 'on' : ''}`}
                       onClick={() => setPayMethod('card')}>
-                <span className="simopt-t">💳 Card</span>
-                <span className="simopt-d">Pay the one-time amount now</span>
+                <span className="simopt-t">💳 {t('Card')}</span>
+                <span className="simopt-d">{t('Pay the one-time amount now')}</span>
               </button>
               {redirectMethods.map((m) => (
                 <button type="button" key={m.method} className={`simopt ${payMethod === m.method ? 'on' : ''}`}
                         onClick={() => setPayMethod(m.method)}>
                   <span className="simopt-t">{payLabel(m.method)}</span>
-                  <span className="simopt-d">Approve at {payLabel(m.method)}</span>
+                  <span className="simopt-d">{t('Approve at')} {payLabel(m.method)}</span>
                 </button>
               ))}
             </div>
@@ -810,8 +810,7 @@ export default function Cart() {
             <p className="dim small">You'll approve the payment at {payLabel(payMethod)}, then come back to finish your order.</p>
           ) : (
             <>
-              <p className="dim small">Your card is charged the one-time amount due now.
-                Monthly charges arrive on your bill.</p>
+              <p className="dim small">{t('Your card is charged the one-time amount due now. Monthly charges arrive on your bill.')}</p>
               <div className="addressgrid">
                 <label className="charfield"><span>Card number</span>
                   <input name="cardNumber" value={card.cardNumber} inputMode="numeric"
@@ -837,7 +836,7 @@ export default function Cart() {
       ))}
 
       <div className="cartactions">
-        <Link to="/" className="dim">Continue shopping</Link>
+        <Link to="/" className="dim">{t('Continue shopping')}</Link>
         <button className="primary big" onClick={checkout}
                 disabled={busy || !addressReady || !serviceable || !slotReady || !deliveryReady || !cardReady}>
           {busy ? 'Placing order…'

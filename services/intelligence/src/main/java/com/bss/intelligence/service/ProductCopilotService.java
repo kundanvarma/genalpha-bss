@@ -33,13 +33,16 @@ public class ProductCopilotService {
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
+    private final com.bss.intelligence.llm.TenantVoice voice;
 
     public ProductCopilotService(LlmAdapter llm, Redactor redactor,
-            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
+            com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper,
+            com.bss.intelligence.llm.TenantVoice voice) {
         this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
         this.objectMapper = objectMapper;
+        this.voice = voice;
     }
 
     // Deliberately NOT @Transactional: when the model misses the contract we
@@ -120,7 +123,7 @@ public class ProductCopilotService {
                 Ask a question when the ask is ambiguous; give advice when they want to \
                 understand; produce a proposal when they ask you to create or they have \
                 answered your questions. Use the tenant's existing categories and currency. \
-                Keep names short and sellable.""";
+                Keep names short and sellable.""" + voice.instruction();
 
         StringBuilder conversation = new StringBuilder();
         Object catalog = request.get("catalog");

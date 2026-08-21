@@ -40,16 +40,19 @@ public class ForYouService {
     private final AiGovernor governor;
     private final TenantScope tenantScope;
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
+    private final com.bss.intelligence.llm.TenantVoice voice;
 
     record CacheEntry(long at, Map<String, Object> value) {
     }
 
     public ForYouService(BssApiClient bss, ChurnAlertRepository churnAlerts,
-            AiGovernor governor, TenantScope tenantScope) {
+            AiGovernor governor, TenantScope tenantScope,
+            com.bss.intelligence.llm.TenantVoice voice) {
         this.bss = bss;
         this.churnAlerts = churnAlerts;
         this.governor = governor;
         this.tenantScope = tenantScope;
+        this.voice = voice;
     }
 
     public Map<String, Object> forParty(String partyId) {
@@ -190,7 +193,7 @@ public class ForYouService {
                             + " customer. Warm, specific, grounded ONLY in the INTEREST and"
                             + " HOLDING lines — never invent facts, never mention churn."
                             + " Respond with ONLY one labeled line:\n"
-                            + "CAPTION: <max 120 characters>",
+                            + "CAPTION: <max 120 characters>" + voice.instruction(),
                     user.toString());
             for (String line : raw.split("\\R")) {
                 String t = line.trim().replaceFirst("^[*#>\\-\\s]+", "");

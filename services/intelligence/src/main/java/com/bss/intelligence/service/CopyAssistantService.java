@@ -21,12 +21,15 @@ public class CopyAssistantService {
     private final LlmAdapter llm;
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
+    private final com.bss.intelligence.llm.TenantVoice voice;
 
     public CopyAssistantService(LlmAdapter llm, Redactor redactor,
-            com.bss.intelligence.llm.AiGovernor governor) {
+            com.bss.intelligence.llm.AiGovernor governor,
+            com.bss.intelligence.llm.TenantVoice voice) {
         this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
+        this.voice = voice;
     }
 
     @Transactional
@@ -48,7 +51,7 @@ public class CopyAssistantService {
                 + "BODY: <body, max 300 characters, no emojis>\n"
                 + "Example response:\n"
                 + "SUBJECT: Welcome to the family\n"
-                + "BODY: Hi! Thanks for joining us. We are glad you are here.";
+                + "BODY: Hi! Thanks for joining us. We are glad you are here." + voice.instruction();
         StringBuilder user = new StringBuilder("Brief: ").append(brief).append('\n');
         if (trigger != null) {
             user.append("The message is sent when this happens: ").append(trigger).append('\n');

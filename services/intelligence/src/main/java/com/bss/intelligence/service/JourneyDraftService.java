@@ -28,6 +28,7 @@ public class JourneyDraftService {
     private final LlmAdapter llm;
     private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
+    private final com.bss.intelligence.llm.TenantVoice voice;
 
     /** The default plan when the author doesn't specify stages. */
     private static final List<String[]> DEFAULT_STAGES = List.of(
@@ -36,10 +37,12 @@ public class JourneyDraftService {
             new String[] {"Follow-up", "check in about a week later and offer help"});
 
     public JourneyDraftService(LlmAdapter llm, Redactor redactor,
-            com.bss.intelligence.llm.AiGovernor governor) {
+            com.bss.intelligence.llm.AiGovernor governor,
+            com.bss.intelligence.llm.TenantVoice voice) {
         this.llm = llm;
         this.redactor = redactor;
         this.governor = governor;
+        this.voice = voice;
     }
 
     @Transactional
@@ -99,7 +102,7 @@ public class JourneyDraftService {
         String system = "You write short, warm lifecycle marketing messages for " + brandName
                 + ", a telecom brand. Respond with ONLY two lines and nothing else, exactly:\n"
                 + "SUBJECT: <subject, max 60 characters>\n"
-                + "BODY: <body, max 300 characters, no emojis>";
+                + "BODY: <body, max 300 characters, no emojis>" + voice.instruction();
         String user = "Journey brief: " + brief + "\n"
                 + "This message is the '" + stage + "' stage. Its job: " + intent + ".";
         String raw = governor.complete("journey-draft", LlmAdapter.Tier.FAST, system, user);
