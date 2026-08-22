@@ -84,16 +84,57 @@ per-agent-platform budget caps, a kill switch per platform, TMF696 risk
 class for agent-attributed conversions, and every agent decision leaving
 the same receipts a human channel would.
 
-### A5 — Bounded negotiation (the simulator sets the walls)
+### A5 — Bounded negotiation, v3: configuration flexes, price integrity holds
 
-Agents negotiate; most merchants will either refuse (and lose the shortlist)
-or capitulate blindly (and bleed margin). This platform can do what neither
-can: **let the agent haggle inside walls the commercial simulator computed**
-— the wholesale-cost floor per plan, the churn-adjusted concession budget —
-enforced by policy rules, with every concession leaving a receipt and every
-negotiation outcome feeding the elasticity flywheel. "You may negotiate; the
-walls are load-bearing and the ledger watches" is an offer no pure-rail
-merchant can make.
+The v2 version of this phase — per-transaction price haggling inside
+simulator-computed walls — was WRONG, on two counts the plan's own owner
+caught. Strategically: when an aggregator holds the users (a ChatGPT- or
+Perplexity-scale platform), per-deal negotiation becomes systematic floor
+discovery — millions of negotiations reverse-engineer the concession
+function, list price becomes fiction, and the merchant relives the
+OTA-vs-hotel squeeze with extra steps. And internally: secret agent
+concessions violate this plan's own first honesty rule. Both problems have
+the same fix — **never negotiate the price; negotiate the FIT**:
+
+- **Configuration negotiation (per transaction).** The agent may flex WHAT
+  is bought — allowance mix, bundle composition, contract length, activation
+  timing — against published prices. The simulator still guards the walls
+  (no configuration may fall below its cost floor), but there is no secret
+  number to extract: everything the agent can reach, a human can reach on
+  the same shelf.
+- **Channel economics (per platform, not per deal).** The commercial
+  negotiation happens ONCE, in the A1 dealer agreement — commission rates,
+  volume kickers, clawback windows — where the operator negotiates as a
+  channel owner, not a cornered merchant. Per-deal margin never moves.
+- **The published ladder.** Volume and community discounts exist as PUBLIC
+  price ladders (the Community Grid unlock IS one) — visible to every agent
+  and every human at once. A discount that cannot be secret cannot be
+  extracted.
+
+### The aggregator squeeze (asked and answered)
+
+Will this backfire when the platforms have the users? The squeeze is real —
+demand aggregators historically extract margin from suppliers (OTAs vs
+hotels, marketplaces vs sellers). The defenses, in order of load-bearing:
+
+1. **Price integrity is the shield, not the sacrifice.** A merchant with one
+   public price everywhere cannot be arbitraged into secret concessions; the
+   negotiation surface simply is not there. The honesty rule is the defense.
+2. **Multi-home by construction.** The ACP surface + MCP tools mean every
+   agent platform connects the same way; no single aggregator owns the
+   demand pipe. Certification (A6) is granted per platform — and revocable.
+3. **The direct relationship keeps the moat.** The honest game — streaks,
+   referrals, community, right-plan advocacy — lives in the OPERATOR
+   relationship, not the purchase transaction. An aggregator can carry the
+   checkout; it cannot carry the customer's club, meter or trust.
+4. **Arm the customer's side.** The proof surface serves the CUSTOMER'S
+   agent as much as the aggregator's — an operator whose claims a personal
+   agent can verify gets chosen by the user's own machinery, which no
+   platform can disintermediate.
+5. **Negotiating leverage compounds while the market is early.** Aggregator
+   power in telecom subscriptions is not yet established fact; the operator
+   that sets certification terms and channel economics NOW negotiates the
+   A1 contract from the seller's side of history, not the supplicant's.
 
 ### A6 — The agent conformance kit (certification, inverted)
 
