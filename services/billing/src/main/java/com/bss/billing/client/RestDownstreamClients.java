@@ -79,6 +79,18 @@ public class RestDownstreamClients {
             @Value("${bss.downstream.catalog-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
         return new DownstreamClients.CatalogClient() {
+            @Override
+            public List<Map<String, Object>> offeringsByName(String name) {
+                try {
+                    List<Map<String, Object>> page = rest.get()
+                            .uri("/tmf-api/productCatalogManagement/v4/productOffering?name={n}", name)
+                            .retrieve().body(List.class);
+                    return page == null ? List.of() : page;
+                } catch (Exception e) {
+                    return List.of();
+                }
+            }
+
             @SuppressWarnings("unchecked")
             private Map<String, Object> get(String path, String id) {
                 try {

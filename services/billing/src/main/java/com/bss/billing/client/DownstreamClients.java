@@ -29,6 +29,11 @@ public final class DownstreamClients {
         Map<String, Object> offering(String id);
 
         Map<String, Object> price(String id);
+
+        /** The migration rehearsal maps legacy rows by offering NAME. */
+        default List<Map<String, Object>> offeringsByName(String name) {
+            return List.of();
+        }
     }
 
     public interface UsageClient {
