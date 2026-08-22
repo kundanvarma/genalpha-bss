@@ -81,6 +81,7 @@ beside it.</p>
 33. <a href="#byocms">Bring your own CMS/DAM — reference-mode content</a><br>
 34. <a href="#carriers">Bring your own carrier — the delivery menu</a><br>
 35. <a href="#byopsp">Bring your own PSP — cards, Klarna/Vipps/PayPal, BNPL books</a><br>
+36. <a href="#honestgame">The honest game — referrals, streaks, right-plan, community</a><br>
 36. <a href="#bundledecomp">Bundle decomposition — the several things it is</a><br>
 37. <a href="#wholesale">Wholesale / open-access — selling on a wire you don't own</a><br>
 38. <a href="#browsecache">Browse-path caching — the shop on a surge</a><br>
@@ -1181,6 +1182,28 @@ per-MVNO settlement + total wholesale revenue. <b>Boundary</b>: external-MVNO au
 wholesale:admin for the demo — a real
 deployment issues each MVNO a scoped machine credential for its own statement.</p>
 
+
+<h2 id="honestgame">36 · The honest game — referrals, streaks, right-plan, community</h2>
+<p><b>What</b>: engagement mechanics with RECEIPTS — every mechanic is measurable, guarded and
+honest by construction. <b>Member-get-member</b> (campaign svc): a customer's stable code
+(<code>GET /referral/myCode</code>), one redemption per joiner, never self; the reward pays in
+DATA on both meters when the joiner's FIRST order completes (a referral is a customer, not a
+click); a velocity guard HOLDS farm-shaped payouts as a worklist; a reward arriving before the
+joiner's meter exists is PARKED (usage svc) and lands on their first GB record — never lost.
+<b>Streaks</b>: a bill settled by the bank's remittance extends <code>streak_bill_paid</code> as a
+CDP trait (deduped per bill, milestone events for journeys, audience-targetable). <b>The
+Right-Plan Guarantee</b> (<code>POST /ai/v1/fairPlay/sweep</code>): customers using under 30% of
+their allowance get the cheaper SAME-CATEGORY plan with 1.5&times; headroom — read-only, the
+journey only tells them. <b>Community Grid</b>: area goals with a PUBLIC score (a percentage,
+never a person) that unlock at target; <b>Klubbdugnad</b> ties a code to a local club org and
+tallies the season (<code>GET /referral/clubs</code>). <b>Channel</b>:
+<code>GET /dealer/v1/leaderboard</code> ranks stores off the commission ledger.
+<b>Config, not code</b>: the weekly perk drop is a journey on a segment minting partner codes;
+a level tier is an audience over traits (points, streaks, tenure).
+<b>Gotchas</b>: (1) the reward rail requires a data bucket — that is WHY parked rewards exist;
+(2) rate-vs-amount lessons apply to any reward math near prorated bills; (3) suggestion
+candidates must share the current plan's CATEGORY or a bundle masquerades as a downgrade.
+<b>Suites</b>: referral_test, g2_honest_game_test, g3_community_test.</p>
 <h2 id="extendproviders">41 · Extending the provider seams — bind, wire, or build</h2>
 <p><b>Who this is for</b>: an operator or a fork bringing the BSS to a new country/market and asking
 two questions — <em>how do I switch on what already ships</em> (Helthjem, Posten/Bring, PostNord,
