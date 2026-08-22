@@ -1,6 +1,23 @@
 # Agentic engagement — stop gamifying attention, start publishing proof
 
-**Status:** PLAN (authored 2026-08-22; build on trigger) · **Depends on:** the agent-commerce gate (off | discovery | full, born off per tenant), the dealer/partner channel (commission accrual, hardening, clawback), the referral engine (G1), TMF696 risk, the receipts culture (holdout lift, published odds, audit ledgers)
+**Status:** PLAN v2 (researched + revised 2026-08-22; build on trigger) · **Depends on:** the LIVE ACP surface (product feed, checkout_sessions, delegated payment tokens, RFC 8693 shopper exchange — shopping-cart `AcpCheckoutController`, MCP-wrapped in integrations/mcp-server), the agent-commerce gate (off | discovery | full, born off per tenant), the dealer/partner channel (commission accrual, hardening, clawback), the referral engine (G1), TMF696 risk, the receipts culture
+
+## Where the industry actually is (researched)
+
+The transaction layer is standardizing fast: **ACP** (OpenAI + Stripe,
+Apache-2.0, spec on GitHub; Stripe's Agentic Commerce Suite shipped, PayPal
+and Shopify aboard) standardizes the agent→merchant checkout — **and this
+platform already implements it**, worn both as the raw ACP surface and as MCP
+tools. **AP2** (Google + 60 partners, being donated to the FIDO Alliance)
+defines the trust layer: cryptographically signed **mandates** — verifiable
+statements of what an agent may do on a human's behalf — with an Agentic
+Authentication working group (Google, OpenAI, CVS, Mastercard's Verifiable
+Intent) forming around the same idea. The strategic read: checkout is
+becoming a commodity rail; **the open ground is trust, attribution economics
+and negotiation** — exactly where this plan plays. One cautionary datum:
+OpenAI's first Instant Checkout was retired after thin merchant adoption —
+the rail matters less than what a merchant is WORTH connecting to, which is
+the proof surface's whole argument.
 
 ## The thesis
 
@@ -38,12 +55,12 @@ different clock speed.
 ### A2 — The referral artifact (human relationships, machine carriers)
 
 A member-get-member code's real payload is proof of a human relationship —
-which survives agents if it becomes a portable, verifiable artifact. The
-agent-facing catalog (discovery mode) publishes the referral offer as
-structured data (both-sides reward, terms, expiry), and a joiner's agent may
-present a friend's code on their behalf; self-scoping, one-per-joiner and
-pay-on-first-completed-order are unchanged. The human said "use Rita's
-code"; the agent just carried it honestly.
+which survives agents if it becomes a portable, verifiable artifact.
+**Standards alignment: this is an AP2-shaped mandate** — a signed statement
+("Rita authorizes carrying her referral to one friend") an agent presents at
+the ACP checkout session; the platform verifies the signature, not the
+story. Self-scoping, one-per-joiner and pay-on-first-completed-order are
+unchanged. The human said "use Rita's code"; the agent carried it provably.
 
 ### A3 — The proof surface (the trust API)
 
@@ -66,6 +83,27 @@ price. And the guardrails get governance parity with the AI governor:
 per-agent-platform budget caps, a kill switch per platform, TMF696 risk
 class for agent-attributed conversions, and every agent decision leaving
 the same receipts a human channel would.
+
+### A5 — Bounded negotiation (the simulator sets the walls)
+
+Agents negotiate; most merchants will either refuse (and lose the shortlist)
+or capitulate blindly (and bleed margin). This platform can do what neither
+can: **let the agent haggle inside walls the commercial simulator computed**
+— the wholesale-cost floor per plan, the churn-adjusted concession budget —
+enforced by policy rules, with every concession leaving a receipt and every
+negotiation outcome feeding the elasticity flywheel. "You may negotiate; the
+walls are load-bearing and the ledger watches" is an offer no pure-rail
+merchant can make.
+
+### A6 — The agent conformance kit (certification, inverted)
+
+This platform's brand is passing 25 TM Forum CTKs at zero. Flip the
+direction: before an agent platform is granted FULL mode, IT passes a
+conformance battery — honors consent and DNC, displays the total price it
+was quoted, respects idempotency, presents mandates correctly. Certified
+agents appear on the proof surface; uncertified ones stay in discovery.
+Nobody certifies the BUYER side yet — the operator that does defines the
+bar, and gives risk-averse tenants a reason to turn the gate on at all.
 
 ## Honesty rules (non-negotiable, house style)
 
