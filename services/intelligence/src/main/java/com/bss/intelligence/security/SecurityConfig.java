@@ -68,6 +68,7 @@ public class SecurityConfig {
                         // the commercial simulator: pricing is the product
                         // owner's decision, so simulating it is their tool too
                         .requestMatchers(ApiConstants.BASE_PATH + "/simulate/**").hasAuthority("catalog:write")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/fairPlay/**").hasAuthority("catalog:write")
                         // the customer's OWN rail: self-scoped in the handler
                         // (party = token subject), so plain authentication is
                         // the right gate — customers carry no staff AI roles

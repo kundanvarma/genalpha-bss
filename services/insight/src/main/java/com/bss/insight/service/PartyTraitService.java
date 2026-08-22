@@ -49,6 +49,14 @@ public class PartyTraitService {
     }
 
     @Transactional
+    /** One trait's current value — the streak logic reads before it writes. */
+    public java.util.Optional<String> valueOf(String partyId, String key) {
+        return traits.findByTenantIdAndPartyId(tenantScope.currentTenantId(), partyId).stream()
+                .filter(t -> key.equals(t.getTraitKey()))
+                .map(t -> t.getTraitValue())
+                .findFirst();
+    }
+
     public void upsert(String partyId, String key, String value) {
         if (partyId == null || partyId.isBlank() || value == null || value.isBlank()) {
             return;

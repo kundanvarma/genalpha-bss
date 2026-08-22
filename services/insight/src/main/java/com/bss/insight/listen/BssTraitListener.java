@@ -29,10 +29,13 @@ public class BssTraitListener {
     private final com.bss.insight.repository.EmailSuppressionRepository suppressions;
     private final com.bss.insight.security.TenantScope tenantScope;
     private final ObjectMapper objectMapper;
+    private final com.bss.insight.events.DomainEventPublisher events;
 
     public BssTraitListener(PartyTraitService traits,
             com.bss.insight.repository.EmailSuppressionRepository suppressions,
-            com.bss.insight.security.TenantScope tenantScope, ObjectMapper objectMapper) {
+            com.bss.insight.security.TenantScope tenantScope, ObjectMapper objectMapper,
+            com.bss.insight.events.DomainEventPublisher events) {
+        this.events = events;
         this.traits = traits;
         this.suppressions = suppressions;
         this.tenantScope = tenantScope;
@@ -70,6 +73,37 @@ public class BssTraitListener {
             }
             // SI-P4: honest CLTV from billing+tenure lands as a NUMERIC trait —
             // range operators make "worth >= 5000" an audience leaf, not a report
+            if ("CustomerBillStateChangeEvent".equals(eventType)) {
+                // G2 — the bill-paid STREAK: a settled bill extends it; the
+                // last-bill trait is the at-least-once dedupe. "We both win":
+                // its lift is visible as reduced dunning, not a vanity number.
+                if (event.get("customerBill") instanceof Map<?, ?> bm
+                        && "settled".equals(String.valueOf(((Map<String, Object>) bm).get("state")))) {
+                    Map<String, Object> bill = (Map<String, Object>) bm;
+                    String billId = String.valueOf(bill.get("id"));
+                    String party = null;
+                    for (Object rp : bill.get("relatedParty") instanceof java.util.List<?> l ? l : java.util.List.of()) {
+                        if (rp instanceof Map<?, ?> pm && "customer".equals(pm.get("role"))) {
+                            party = String.valueOf(pm.get("id"));
+                        }
+                    }
+                    if (party != null) {
+                        try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                            String last = traits.valueOf(party, "streak_last_bill").orElse(null);
+                            if (!billId.equals(last)) {
+                                int streak = Integer.parseInt(
+                                        traits.valueOf(party, "streak_bill_paid").orElse("0")) + 1;
+                                traits.setTrait(party, "streak_last_bill", billId);
+                                traits.setTrait(party, "streak_bill_paid", String.valueOf(streak));
+                                events.publish("StreakMilestoneEvent", "streak", Map.of(
+                                        "partyId", party, "streakType", "bill_paid",
+                                        "streak", streak), tenantId);
+                            }
+                        }
+                    }
+                }
+                return;
+            }
             if ("CltvScoredEvent".equals(eventType)) {
                 Map<String, Object> cltv = event.get("cltvScore") instanceof Map<?, ?> v
                         ? (Map<String, Object>) v : Map.of();
