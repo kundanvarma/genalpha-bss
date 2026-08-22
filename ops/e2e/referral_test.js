@@ -82,12 +82,16 @@ async function token(ctx, client, user, pass) {
   };
   const rita = await mkUser('rita');
   const jon = await mkUser('jon');
+  // H2: Rita plays for her local club — the dugnad share books as MONEY
+  const club = await (await ctx.post(`${API}/tmf-api/party/v4/organization`,
+    { headers: H(staff), data: { name: `IL Refklubb ${run}`, isLegalEntity: true } })).json();
   // Rita is an EXISTING customer: plan bought, meter open (usage recorded)
   await buy(rita);
   await openMeter(rita);
 
   /* ---------- the code and the guardrails ---------- */
   const mine = await (await ctx.get(`${REF}/myCode`, { headers: H(rita.tok) })).json();
+  await ctx.post(`${REF}/myClub`, { headers: H(rita.tok), data: { clubOrgId: club.id } });
   if (!/^[A-Z2-9]{8}$/.test(mine.code)) fail('code shape wrong: ' + JSON.stringify(mine));
   const again = await (await ctx.get(`${REF}/myCode`, { headers: H(rita.tok) })).json();
   if (again.code !== mine.code) fail('the code must be stable, not re-minted');
@@ -126,6 +130,26 @@ async function token(ctx, client, user, pass) {
   if (!row || row.status !== 'rewarded') fail('the conversion is not rewarded in the report');
   if (!(Number(report.rewardCostGb) >= 10)) fail('the report must carry the honest GB cost');
   console.log(`OK report: ${report.rewarded} rewarded, cost ${report.rewardCostGb} GB — the program's price tag on its face`);
+
+  /* ---------- H2: the dugnad share is a LIABILITY, not a scoreboard ---------- */
+  let clubEntry = null;
+  for (let i = 0; i < 20 && !clubEntry; i++) {
+    const entries = await (await ctx.get(`${API}/revenue/v1/journalEntry?limit=200`,
+      { headers: H(staff) })).json();
+    clubEntry = (Array.isArray(entries) ? entries : []).find((e) =>
+      String(e.sourceRef || '').startsWith('club-share:')
+      && String(e.description || '').includes(club.id));
+    if (!clubEntry) await sleep(3000);
+  }
+  if (!clubEntry) fail('the club share never booked to the subledger');
+  const detail = await (await ctx.get(`${API}/revenue/v1/journalEntry/${clubEntry.id}`,
+    { headers: H(staff) })).json();
+  const expense = (detail.lines || []).find((l) => l.accountCode === '6150');
+  const payable = (detail.lines || []).find((l) => l.accountCode === '2150');
+  if (!expense || Number(expense.debit) !== 10) fail('club expense wrong: ' + JSON.stringify(detail.lines));
+  if (!payable || Number(payable.credit) !== 10) fail('club payable wrong');
+  console.log('OK KLUBBDUGNAD MONEY: 10.00 booked DR 6150 sponsorship / CR 2150 payable-to-club — '
+    + 'the season tally is a balance the operator OWES');
 
   console.log('\nALL G1 CHECKS PASSED — a referral is a customer, not a click: code minted, guarded, '
     + 'paid in data on both meters at first completed order, and honestly accounted.');

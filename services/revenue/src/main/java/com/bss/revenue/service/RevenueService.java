@@ -72,6 +72,8 @@ public class RevenueService {
         DEFAULT_CHART.put("mobile-wholesale:cogs", new String[] {"5110", "Mobile wholesale usage (COGS)"});
         DEFAULT_CHART.put("mobile-wholesale:payable", new String[] {"2110", "Accounts payable — mobile wholesale"});
         DEFAULT_CHART.put("mobile-wholesale:receivable", new String[] {"1210", "Accounts receivable — mobile wholesale"});
+        DEFAULT_CHART.put("club-share:expense", new String[] {"6150", "Community sponsorship (Klubbdugnad)"});
+        DEFAULT_CHART.put("club-share:payable", new String[] {"2150", "Payable to community clubs"});
         DEFAULT_CHART.put("mobile-wholesale:revenue", new String[] {"4020", "Mobile wholesale revenue"});
     }
 
@@ -284,6 +286,39 @@ public class RevenueService {
                 : List.of(line("mobile-wholesale:payable", magnitude, null, id, "Payable to host MNO reduced"),
                           line("mobile-wholesale:cogs", null, magnitude, id, desc));
         saveBalanced(tenant, sourceRef, "mobileWholesaleCogsDelta", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
+     * H2 — KLUBBDUGNAD becomes MONEY: a rewarded, club-linked referral accrues
+     * the club's share as a real liability — sponsorship expense against a
+     * payable to the club, keyed on the conversion so replays are free. The
+     * season tally stops being a scoreboard and becomes a balance the
+     * operator OWES — which is the whole point of a dugnad.
+     */
+    @Transactional
+    public boolean postClubShare(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String conversionId = String.valueOf(event.get("conversionId"));
+        String sourceRef = "club-share:" + conversionId;
+        if (conversionId == null || "null".equals(conversionId)
+                || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("amount") == null) {
+            return false;
+        }
+        BigDecimal amount = money(event.get("amount"));
+        if (amount.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String club = String.valueOf(event.getOrDefault("clubOrgId", "club"));
+        String desc = "Klubbdugnad share — club " + club;
+        List<JournalLine> posting = List.of(
+                line("club-share:expense", amount, null, conversionId, desc),
+                line("club-share:payable", null, amount, conversionId, "Payable to club " + club));
+        saveBalanced(tenant, sourceRef, "clubShare", desc + " — " + conversionId, currency, null, posting);
         return true;
     }
 

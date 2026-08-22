@@ -48,12 +48,18 @@ public class ReferralService {
     private final PartyScope partyScope;
     private final BigDecimal rewardGb;
     private final int velocityPerDay;
+    private final BigDecimal clubShareAmount;
+    private final String clubShareCurrency;
 
     public ReferralService(ReferralCodeRepository codes, ReferralConversionRepository conversions,
             com.bss.campaign.repository.CommunityGoalRepository goals,
             DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
             @Value("${bss.campaign.referral-reward-gb:5}") BigDecimal rewardGb,
-            @Value("${bss.campaign.referral-velocity-per-day:5}") int velocityPerDay) {
+            @Value("${bss.campaign.referral-velocity-per-day:5}") int velocityPerDay,
+            @Value("${bss.campaign.club-share-amount:10}") BigDecimal clubShareAmount,
+            @Value("${bss.campaign.club-share-currency:EUR}") String clubShareCurrency) {
+        this.clubShareAmount = clubShareAmount;
+        this.clubShareCurrency = clubShareCurrency;
         this.codes = codes;
         this.conversions = conversions;
         this.goals = goals;
@@ -145,6 +151,15 @@ public class ReferralService {
                     conversions.save(c);
                     publishReward(tenant, c.getJoinerPartyId(), c.getId() + ":joiner");
                     publishReward(tenant, c.getReferrerPartyId(), c.getId() + ":referrer");
+                    // H2 — the dugnad becomes money: a club-linked code accrues
+                    // the club's share as a REAL liability in the subledger
+                    codes.findByTenantIdAndCode(tenant, c.getCode())
+                            .map(ReferralCode::getClubOrgId)
+                            .filter(club -> club != null && !club.isBlank())
+                            .ifPresent(club -> events.publish("ClubShareAccruedEvent", "clubShare",
+                                    Map.of("conversionId", c.getId(), "clubOrgId", club,
+                                            "amount", clubShareAmount,
+                                            "currency", clubShareCurrency), tenant));
                     log.info("referral REWARDED: {} GB each — referrer {} joiner {}",
                             rewardGb, c.getReferrerPartyId(), partyId);
                 });
