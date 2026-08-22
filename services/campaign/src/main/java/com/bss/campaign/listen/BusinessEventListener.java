@@ -29,9 +29,12 @@ public class BusinessEventListener {
     private final CampaignService campaigns;
     private final ObjectMapper objectMapper;
     private final com.bss.campaign.service.JourneyService journeys;
+    private final com.bss.campaign.service.ReferralService referrals;
 
     public BusinessEventListener(CampaignService campaigns, ObjectMapper objectMapper,
-            com.bss.campaign.service.JourneyService journeys) {
+            com.bss.campaign.service.JourneyService journeys,
+            com.bss.campaign.service.ReferralService referrals) {
+        this.referrals = referrals;
         this.campaigns = campaigns;
         this.objectMapper = objectMapper;
         this.journeys = journeys;
@@ -68,6 +71,11 @@ public class BusinessEventListener {
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 campaigns.onEvent(eventType, state, party, offeringIds);
                 journeys.onEvent(eventType, state, party, offeringIds, context);
+                if ("ProductOrderStateChangeEvent".equals(eventType) && "completed".equals(state)
+                        && party != null) {
+                    // G1: a completed first order turns a pending referral into GBs
+                    referrals.onOrderCompleted(tenantId, party);
+                }
             }
         } catch (Exception e) {
             log.warn("skipping unprocessable event: {}", e.getMessage());

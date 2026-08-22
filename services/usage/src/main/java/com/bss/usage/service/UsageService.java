@@ -54,6 +54,7 @@ public class UsageService {
     private final com.bss.usage.client.CatalogClient catalogClient;
     private final com.bss.usage.client.PolicyClient policyClient;
     private final com.bss.usage.client.NumberClient numberClient;
+    private final com.bss.usage.repository.PendingDataRewardRepository pendingRewards;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -64,7 +65,9 @@ public class UsageService {
             com.bss.usage.client.PartyClient partyClient,
             com.bss.usage.client.CatalogClient catalogClient,
             com.bss.usage.client.PolicyClient policyClient,
-            com.bss.usage.client.NumberClient numberClient) {
+            com.bss.usage.client.NumberClient numberClient,
+            com.bss.usage.repository.PendingDataRewardRepository pendingRewards) {
+        this.pendingRewards = pendingRewards;
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -122,6 +125,11 @@ public class UsageService {
         entity.setStatus(RECEIVED);
         entity.setCreatedAt(OffsetDateTime.now());
         records.save(entity);
+        // a fresh GB record may have just OPENED this party's first bucket —
+        // any reward parked for them lands now
+        if (entity.getOwnerPartyId() != null && "GB".equalsIgnoreCase(String.valueOf(entity.getUnits()))) {
+            applyPendingRewards(entity.getTenantId(), entity.getOwnerPartyId());
+        }
         return toRecordMap(entity);
     }
 
@@ -564,19 +572,43 @@ public class UsageService {
      * the meter's history says where every GB came from.
      */
     @org.springframework.transaction.annotation.Transactional
-    public void recordLoyaltyBoost(String tenantId, String party, java.math.BigDecimal gb,
+    /** Park a reward whose meter does not exist yet — idempotent by rewardId. */
+    public void parkReward(String tenantId, String party, java.math.BigDecimal gb, String rewardId) {
+        if (pendingRewards.existsById(rewardId)) {
+            return;
+        }
+        com.bss.usage.entity.PendingDataReward row = new com.bss.usage.entity.PendingDataReward();
+        row.setRewardId(rewardId);
+        row.setTenantId(tenantId);
+        row.setPartyId(party);
+        row.setGb(gb);
+        row.setCreatedAt(OffsetDateTime.now());
+        pendingRewards.save(row);
+    }
+
+    /** The parked rewards land the moment the party's first bucket opens. */
+    public void applyPendingRewards(String tenantId, String party) {
+        for (com.bss.usage.entity.PendingDataReward parked
+                : pendingRewards.findByTenantIdAndPartyId(tenantId, party)) {
+            if (recordLoyaltyBoost(tenantId, party, parked.getGb(), parked.getRewardId())) {
+                pendingRewards.delete(parked);
+            }
+        }
+    }
+
+    public boolean recordLoyaltyBoost(String tenantId, String party, java.math.BigDecimal gb,
             String redemptionId) {
         String marker = "loyalty-" + redemptionId;
         LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
         List<GbPosition> positions = gbPositions(tenantId, party, periodStart);
         if (positions.isEmpty()) {
             org.slf4j.LoggerFactory.getLogger(UsageService.class)
-                    .warn("loyalty boost skipped: {} has no data bucket to credit", party);
-            return;
+                    .warn("data reward has no bucket yet: {} — parking it", party);
+            return false;
         }
         String spec = positions.get(0).spec();
         if (boosts.existsByTenantIdAndProductOrderIdAndUsageSpecName(tenantId, marker, spec)) {
-            return; // at-least-once delivery, exactly-once gigabytes
+            return true; // at-least-once delivery, exactly-once gigabytes
         }
         boosts.save(giftBoost(tenantId, party, spec, gb, marker, "loyalty", periodStart));
         events.publish("BucketBalanceChangeEvent", "bucket", Map.of(
@@ -584,6 +616,7 @@ public class UsageService {
                 "amount", gb, "units", "GB", "usageType", spec, "source", "loyalty"));
         org.slf4j.LoggerFactory.getLogger(UsageService.class)
                 .info("loyalty: {} credited {} GB on {} (redemption {})", party, gb, spec, redemptionId);
+        return true;
     }
 
     /** A party's GB position this month, per usage spec: base, boosted, used. */

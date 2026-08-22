@@ -526,6 +526,20 @@ export async function myUsage() {
  * number when the plan's giftScope reaches that far; usage verifies the
  * link (or resolves the number in the tenant's own pool) live. */
 const LOYALTY = '/tmf-api/loyaltyManagement/v4';
+const CAMPAIGN = '/tmf-api/campaignManagement/v4';
+
+/** G1 — my referral code (minted on first ask) + its tally. */
+export async function myReferral() {
+  return json(await authFetch(`${CAMPAIGN}/referral/myCode`));
+}
+
+/** Redeem a friend's code — pays both sides on your first completed order. */
+export async function redeemReferral(code) {
+  return json(await authFetch(`${CAMPAIGN}/referral/redeem`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }) }));
+}
+
 
 /** Loyalty: opt-in membership, my balance, and points→GB redemption. */
 export async function myLoyalty() {

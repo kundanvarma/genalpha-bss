@@ -16,7 +16,8 @@ class BusinessEventListenerTest {
     private final CampaignService service = Mockito.mock(CampaignService.class);
     private final BusinessEventListener listener =
             new BusinessEventListener(service, new ObjectMapper(),
-            Mockito.mock(com.bss.campaign.service.JourneyService.class));
+            Mockito.mock(com.bss.campaign.service.JourneyService.class),
+            Mockito.mock(com.bss.campaign.service.ReferralService.class));
 
     @Test
     void extractsTenantStateAndCustomerFromEnvelope() {

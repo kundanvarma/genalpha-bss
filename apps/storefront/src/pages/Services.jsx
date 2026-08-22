@@ -450,6 +450,7 @@ export default function Services() {
           )}
         </section>
       )}
+      <ReferralCard />
       {broadband.length > 0 && (
         <section className="card" data-testid="broadband-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Broadband')}</h2>
@@ -674,5 +675,42 @@ function LineDoctor({ serviceId }) {
         </ul>
       )}
     </div>
+  );
+}
+
+
+/** G1 — member-get-member: my code, my tally, and the redeem field. The
+ *  reward pays BOTH sides in data when the joiner's first order completes. */
+function ReferralCard() {
+  const [ref, setRef] = useState(null);
+  const [code, setCode] = useState('');
+  const [msg, setMsg] = useState(null);
+  useEffect(() => { myReferral().then(setRef).catch(() => {}); }, []);
+  if (!ref) return null;
+  const share = `${window.location.origin}/shop/?ref=${ref.code}`;
+  return (
+    <section className="card" data-testid="referral-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
+      <h2 style={{ marginTop: 0 }}>{t('Invite a friend')}</h2>
+      <p style={{ margin: '4px 0 10px' }}>
+        {t('You each get')} <b>{ref.rewardGb} GB</b> {t('when they place their first order.')}
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <b data-testid="referral-code" style={{ fontSize: '1.3rem', letterSpacing: '0.08em' }}>{ref.code}</b>
+        <button className="ghost" data-testid="referral-copy"
+          onClick={() => { navigator.clipboard?.writeText(share); setMsg(t('Link copied!')); }}>
+          {t('Copy invite link')}</button>
+        <span className="dim">{ref.rewarded} {t('friends joined')}{ref.pending > 0 ? ` · ${ref.pending} ${t('on the way')}` : ''}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <input data-testid="referral-input" placeholder={t('Got a code? Enter it here')}
+          value={code} onChange={(e) => setCode(e.target.value)} style={{ width: '12rem' }} />
+        <button className="ghost" data-testid="referral-redeem" disabled={!code.trim()}
+          onClick={async () => {
+            try { const r = await redeemReferral(code.trim()); setMsg(r.note || t('Code accepted!')); }
+            catch (e) { setMsg(String(e.message || e)); }
+          }}>{t('Redeem')}</button>
+        {msg && <span data-testid="referral-msg" className="dim">{msg}</span>}
+      </div>
+    </section>
   );
 }

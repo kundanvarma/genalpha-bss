@@ -42,6 +42,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // referral: the customer's OWN code and redemption — self-scoped in
+                        // the handler (party = token subject); the report stays staff
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/referral/myCode").authenticated()
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/referral/redeem").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")

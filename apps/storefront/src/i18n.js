@@ -13,6 +13,16 @@ export const currency = CFG.currency || 'EUR';
 export const intlLocale = { no: 'nb-NO', en: 'en-IE' }[locale] || locale;
 
 const NO = {
+  'Invite a friend': 'Verv en venn',
+  'You each get': 'Dere f\u00e5r begge',
+  'when they place their first order.': 'n\u00e5r de fullf\u00f8rer sin f\u00f8rste bestilling.',
+  'Copy invite link': 'Kopier vervelenke',
+  'Link copied!': 'Lenke kopiert!',
+  'friends joined': 'venner har blitt med',
+  'on the way': 'p\u00e5 vei',
+  'Got a code? Enter it here': 'Har du en kode? Skriv den her',
+  'Redeem': 'L\u00f8s inn',
+  'Code accepted!': 'Kode godtatt!',
   // shopper-journey + family strings (locale sweep 2026-08-21)
   'Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.': 'Mobil, bredbånd og TV som bare fungerer sammen. Velg en pakke, behold nummeret ditt, og vær i gang på minutter.',
   'Because you were looking at': 'Fordi du så på',

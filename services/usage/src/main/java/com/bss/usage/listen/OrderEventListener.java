@@ -34,7 +34,8 @@ public class OrderEventListener {
     }
 
     @KafkaListener(topics = { "${bss.usage.order-topic:bss.ordering.events}",
-            "${bss.usage.loyalty-topic:bss.loyalty.events}" }, groupId = "usage")
+            "${bss.usage.loyalty-topic:bss.loyalty.events}",
+            "${bss.usage.campaign-topic:bss.campaign.events}" }, groupId = "usage")
     @SuppressWarnings("unchecked")
     public void onEvent(String payload) {
         try {
@@ -53,6 +54,25 @@ public class OrderEventListener {
                                 String.valueOf(rw.get("partyId")),
                                 new java.math.BigDecimal(String.valueOf(rw.get("gb"))),
                                 String.valueOf(rw.get("redemptionId")));
+                    }
+                }
+                return;
+            }
+            if ("ReferralDataRewardEvent".equals(eventType)) {
+                // G1: a referral became a customer — both sides get GBs on the
+                // meter, same idempotent rail as a loyalty redemption
+                String tenant = envelope.get("tenantId") == null ? "genalpha"
+                        : String.valueOf(envelope.get("tenantId"));
+                Map<String, Object> ev = envelope.get("event") instanceof Map<?, ?> em
+                        ? (Map<String, Object>) em : Map.of();
+                if (ev.get("referralReward") instanceof Map<?, ?> rw) {
+                    try (TenantContext ignored = TenantContext.actAs(tenant)) {
+                        String party = String.valueOf(rw.get("partyId"));
+                        java.math.BigDecimal gb = new java.math.BigDecimal(String.valueOf(rw.get("gb")));
+                        String rewardId = "referral-" + rw.get("rewardId");
+                        if (!usage.recordLoyaltyBoost(tenant, party, gb, rewardId)) {
+                            usage.parkReward(tenant, party, gb, rewardId);
+                        }
                     }
                 }
                 return;
