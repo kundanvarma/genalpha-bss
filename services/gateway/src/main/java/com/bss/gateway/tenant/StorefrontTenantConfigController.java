@@ -50,6 +50,7 @@ public class StorefrontTenantConfigController {
         // per-channel = the tenant chose differentiated channel pricing and
         // says so openly — what is forbidden is differentiation that hides
         manifest.put("priceParity", tenant.getPriceParityMode());
+        manifest.put("catalogGovernance", tenant.getCatalogGovernance());
         manifest.put("logoUrl", logoUrlOf(tenant));
         manifest.put("businessSales", tenant.isBusinessSales());
         return ResponseEntity.ok().header("Cache-Control", "no-store").body(manifest);

@@ -65,6 +65,9 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** 'direct' (create is live — the default) | 'governed' (drafts +
+         * ladder enforcement — launch is a decision). */
+        private String catalogGovernance;
         /** This tenant's external PIM (product content) endpoint; empty means
          * the catalog's own document store carries the imagery. */
         private String pimBaseUrl;
@@ -154,5 +157,8 @@ public class TenantRegistry {
         public void setAgentCommerce(String agentCommerce) {
             this.agentCommerce = agentCommerce;
         }
+
+        public String getCatalogGovernance() { return catalogGovernance; }
+        public void setCatalogGovernance(String v) { this.catalogGovernance = v; }
     }
 }

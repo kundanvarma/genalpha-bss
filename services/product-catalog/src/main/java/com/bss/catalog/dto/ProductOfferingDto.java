@@ -27,6 +27,9 @@ public class ProductOfferingDto {
     @JsonProperty("lifecycleStatus")
     private String lifecycleStatus;
 
+    @JsonProperty("validFor")
+    private java.util.Map<String, String> validFor;
+
     @JsonProperty("version")
     private String version;
 
@@ -190,4 +193,7 @@ public class ProductOfferingDto {
     public void setAttachment(List<Map<String, Object>> attachment) {
         this.attachment = attachment;
     }
+
+    public java.util.Map<String, String> getValidFor() { return validFor; }
+    public void setValidFor(java.util.Map<String, String> v) { this.validFor = v; }
 }

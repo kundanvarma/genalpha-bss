@@ -100,7 +100,9 @@ const RESOURCES = [
     fields: [
       { name: 'name', label: 'Name', required: true },
       { name: 'description', label: 'Description' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
+      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
+      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
+      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
       { name: 'version', label: 'Version' },
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification' },
       { name: 'category', label: 'Categories (drive placement & fulfilment)', kind: 'reflist', resource: 'category', referredType: 'Category' },
@@ -110,6 +112,30 @@ const RESOURCES = [
       { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice' },
       { name: 'attachment', label: 'Artwork — gallery shots & colour variants', kind: 'artwork' },
     ],
+    assemble: (body) => {
+      const out = { ...body };
+      if (body.validFrom || body.validTo) {
+        out.validFor = { startDateTime: body.validFrom || undefined, endDateTime: body.validTo || undefined };
+      }
+      delete out.validFrom; delete out.validTo;
+      return out;
+    },
+    // L1 — governed catalogs climb the ladder one rung at a time; the row
+    // action offers exactly the next rung
+    rowAction: {
+      label: (item) => {
+        const next = { 'In study': 'In design', 'In design': 'In test', 'In test': 'Launched',
+          Launched: 'Retired', Active: 'Retired' }[item.lifecycleStatus];
+        return next ? `→ ${next}` : '—';
+      },
+      apply: (item) => {
+        const next = { 'In study': 'In design', 'In design': 'In test', 'In test': 'Launched',
+          Launched: 'Retired', Active: 'Retired' }[item.lifecycleStatus];
+        return next ? authFetch(`${API_BASE}/productOffering/${item.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lifecycleStatus: next }) }) : Promise.resolve();
+      },
+    },
     columns: ['name', 'lifecycleStatus', 'isBundle', 'version', 'lastUpdate'],
   },
   {
@@ -118,7 +144,9 @@ const RESOURCES = [
     fields: [
       { name: 'name', label: 'Name', required: true },
       { name: 'brand', label: 'Brand' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
+      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
+      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
+      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
       { name: 'productSpecCharacteristic', label: 'Characteristics (JSON array)', kind: 'jsontext',
         placeholder: '[{"name": "color", "productSpecCharacteristicValue": [{"value": "Black"}]}]' },
     ],
@@ -134,7 +162,9 @@ const RESOURCES = [
       { name: 'recurringChargePeriodType', label: 'Charge period', placeholder: 'month' },
       { name: 'recurringChargePeriodLength', label: 'Period length', kind: 'number', placeholder: '1' },
       { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active' },
+      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
+      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
+      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
       { name: 'version', label: 'Version' },
     ],
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
@@ -773,6 +803,7 @@ const RESOURCES = [
       // uniform refuses channel-priced rules; per-channel allows them and
       // the storefront/agent manifest says so openly.
       { name: 'priceParityMode', label: 'Price parity (uniform | per-channel)', placeholder: 'uniform' },
+      { name: 'catalogGovernance', label: 'Catalog governance (direct | governed) — governed: create lands as a draft, Launch is a decision', placeholder: 'direct' },
       // Agentic commerce: how much of this operator AI shopping agents see.
       // New operators are born 'off' — being shopped by agents is opt-in.
       { name: 'agentCommerce', label: 'Agent commerce (off | discovery | full)', placeholder: 'off' },

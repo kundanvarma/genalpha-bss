@@ -7,6 +7,7 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ProductOfferingRepository extends JpaRepository<ProductOffering, String> {
+    java.util.List<com.bss.catalog.entity.ProductOffering> findByTenantId(String tenantId);
 
     Optional<ProductOffering> findByIdAndTenantId(String id, String tenantId);
 }

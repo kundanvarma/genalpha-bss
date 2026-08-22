@@ -56,6 +56,8 @@ public class TenantHosts {
         private String tagline;
         /** uniform (default) | per-channel — attested to humans AND agents. */
         private String priceParityMode;
+        /** direct (default) | governed — is launch a decision here? Attested. */
+        private String catalogGovernance;
         private String locale;
         private String currency;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
@@ -116,6 +118,14 @@ public class TenantHosts {
 
         public void setPriceParityMode(String v) {
             this.priceParityMode = v;
+        }
+
+        public String getCatalogGovernance() {
+            return catalogGovernance == null || catalogGovernance.isBlank() ? "direct" : catalogGovernance;
+        }
+
+        public void setCatalogGovernance(String v) {
+            this.catalogGovernance = v;
         }
 
         public void setBrandColor(String brandColor) {

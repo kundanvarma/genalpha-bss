@@ -1348,11 +1348,62 @@ public class ProductOrderService {
      * offering that exists in the catalog and a billing account that exists in
      * party-account. Absent references are allowed; dangling ones are not.
      */
+    @SuppressWarnings("unchecked")
+    private void requireSellable(String offeringId) {
+        if (offeringId == null) {
+            return;
+        }
+        Map<String, Object> detail = catalogClient.findOfferingDetail(offeringId).orElse(null);
+        if (detail == null) {
+            return; // existence is validated elsewhere; absence has its own message
+        }
+        requireSellableDetail(detail);
+        for (Object child : detail.get("bundledProductOffering") instanceof List<?> l
+                ? l : java.util.List.of()) {
+            if (child instanceof Map<?, ?> cm && cm.get("id") != null) {
+                catalogClient.findOfferingDetail(String.valueOf(cm.get("id")))
+                        .ifPresent(this::requireSellableDetail);
+            }
+        }
+    }
+
+    private void requireSellableDetail(Map<String, Object> offering) {
+        String status = String.valueOf(offering.get("lifecycleStatus"));
+        if (!"Active".equals(status) && !"Launched".equals(status)) {
+            throw new OrderValidationException("offering '" + offering.get("name")
+                    + "' is not launched (lifecycle '" + status + "') — it cannot be ordered");
+        }
+        if (offering.get("validFor") instanceof Map<?, ?> window) {
+            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+            Object start = window.get("startDateTime");
+            Object end = window.get("endDateTime");
+            if (start != null && java.time.OffsetDateTime.parse(String.valueOf(start)).isAfter(now)) {
+                throw new OrderValidationException("offering '" + offering.get("name")
+                        + "' launches " + start + " — not orderable yet");
+            }
+            if (end != null && !java.time.OffsetDateTime.parse(String.valueOf(end)).isAfter(now)) {
+                throw new OrderValidationException("offering '" + offering.get("name")
+                        + "' ended " + end + " — its window is over");
+            }
+        }
+    }
+
     private void validateReferences(ProductOrderDto dto) {
         if (dto.getProductOfferingId() != null
                 && catalogClient.findOffering(dto.getProductOfferingId()).isEmpty()) {
             throw new OrderValidationException(
                     "productOffering '" + dto.getProductOfferingId() + "' not found in catalog");
+        }
+        // L1 — ORDER-TIME LIFECYCLE TEETH (the deep pass found a draft
+        // ordering 201): every item's offering must be Launched/Active AND
+        // inside its validFor window; bundle children included. The machine
+        // token can SEE drafts — that is exactly why the check is explicit.
+        requireSellable(dto.getProductOfferingId());
+        for (Map<String, Object> item : dto.getProductOrderItem() == null
+                ? java.util.List.<Map<String, Object>>of() : dto.getProductOrderItem()) {
+            if (item.get("productOffering") instanceof Map<?, ?> ref && ref.get("id") != null) {
+                requireSellable(String.valueOf(ref.get("id")));
+            }
         }
         if (dto.getBillingAccountId() != null
                 && !partyClient.billingAccountExists(dto.getBillingAccountId())) {

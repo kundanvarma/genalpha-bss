@@ -452,6 +452,12 @@ function OfferingCard({ offering, prices }) {
              onError={(e) => { e.currentTarget.style.display = 'none'; }} />
       )}
       {offering.isBundle && <span className="tag">Bundle</span>}
+      {offering.lifecycleStatus && offering.lifecycleStatus !== 'Active'
+        && offering.lifecycleStatus !== 'Launched' && (
+        <span className="tag" data-testid="preview-badge"
+              style={{ background: 'var(--danger, #b64a3a)' }}>
+          PREVIEW · {offering.lifecycleStatus}</span>
+      )}
       <h2>{offering.name}</h2>
       <p className="dim">{offering.description}</p>
       {offering.isBundle && (

@@ -30,6 +30,15 @@ public class ProductOffering {
     @Column(name = "lifecycle_status")
     private String lifecycleStatus;
 
+    @Column(name = "valid_from")
+    private java.time.OffsetDateTime validFrom;
+
+    @Column(name = "valid_to")
+    private java.time.OffsetDateTime validTo;
+
+    @Column(name = "announced_at")
+    private java.time.OffsetDateTime announcedAt;
+
     @Column(name = "version")
     private String version;
 
@@ -196,4 +205,11 @@ public class ProductOffering {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
+    public java.time.OffsetDateTime getValidFrom() { return validFrom; }
+    public void setValidFrom(java.time.OffsetDateTime v) { this.validFrom = v; }
+    public java.time.OffsetDateTime getValidTo() { return validTo; }
+    public void setValidTo(java.time.OffsetDateTime v) { this.validTo = v; }
+    public java.time.OffsetDateTime getAnnouncedAt() { return announcedAt; }
+    public void setAnnouncedAt(java.time.OffsetDateTime v) { this.announcedAt = v; }
 }

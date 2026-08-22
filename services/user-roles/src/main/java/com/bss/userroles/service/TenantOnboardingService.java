@@ -204,7 +204,22 @@ public class TenantOnboardingService {
         if (dto.get("currency") != null) {
             block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
         }
-        if (dto.get("priceParityMode") != null) {
+        if (dto.get("catalogGovernance") != null) {
+            String mode = String.valueOf(dto.get("catalogGovernance")).trim();
+            if (!java.util.Set.of("direct", "governed").contains(mode)) {
+                throw new com.bss.userroles.exception.BadRequestException(
+                        "catalogGovernance must be direct or governed");
+            }
+            String line = "catalog-governance: \"" + mode + "\"";
+            if (block.contains("catalog-governance: ")) {
+                block = block.replaceAll("catalog-governance: .*",
+                        java.util.regex.Matcher.quoteReplacement(line));
+            } else {
+                block = block.replaceFirst("( +)brand-name: ",
+                        "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
+            }
+        }
+                if (dto.get("priceParityMode") != null) {
             String mode = String.valueOf(dto.get("priceParityMode")).trim();
             if (!java.util.Set.of("uniform", "per-channel").contains(mode)) {
                 throw new com.bss.userroles.exception.BadRequestException(

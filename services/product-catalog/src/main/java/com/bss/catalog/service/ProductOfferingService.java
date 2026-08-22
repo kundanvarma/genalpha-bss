@@ -34,10 +34,13 @@ public class ProductOfferingService {
     private final com.bss.catalog.pim.ProductContentSource content;
     private final LegacyFederation legacy;
     private final com.bss.catalog.security.TenantRegistry tenants;
+    private final LifecyclePolicy lifecycle;
 
     public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.catalog.pim.ProductContentSource content, LegacyFederation legacy,
-            com.bss.catalog.security.TenantRegistry tenants) {
+            com.bss.catalog.security.TenantRegistry tenants,
+            LifecyclePolicy lifecycle) {
+        this.lifecycle = lifecycle;
         this.repository = repository;
         this.mapper = mapper;
         this.events = events;
@@ -49,15 +52,29 @@ public class ProductOfferingService {
 
     @Transactional(readOnly = true)
     public PagedResult<ProductOfferingDto> findAll(int offset, int limit, Map<String, String> filters) {
+        boolean staff = lifecycle.staffCaller();
+        if (!staff) {
+            // L1 enforcement: a guest or customer NEVER sees the unlaunched
+            // shelf, whatever their query says — the deep pass caught the
+            // client-side-courtesy hole this line closes
+            filters = new java.util.LinkedHashMap<>(filters);
+            filters.putIfAbsent("lifecycleStatus", "Active");
+        }
         Page<ProductOffering> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         List<ProductOfferingDto> items = new java.util.ArrayList<>(
-                page.getContent().stream().map(mapper::toDto).map(this::withContent).toList());
+                page.getContent().stream()
+                        .filter(e -> staff || lifecycle.sellable(e))
+                        .map(mapper::toDto).map(this::withContent).toList());
         // THE OVERLAY SEAM: a tenant wrapping a legacy estate sees that
         // catalog federated in — read-through, legacy-prefixed, fail-soft.
         // First page only, so paging math stays honest.
         List<ProductOfferingDto> federated = offset == 0
                 ? legacy.offeringsFor(tenants.byId(tenantScope.currentTenantId())) : List.of();
-        items.addAll(federated);
+        for (ProductOfferingDto f : federated) {
+            if (staff || lifecycle.sellableDto(f)) {
+                items.add(f);
+            }
+        }
         return new PagedResult<>(items, page.getTotalElements() + federated.size());
     }
 
@@ -121,12 +138,20 @@ public class ProductOfferingService {
         }
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        if (!lifecycle.staffCaller() && !lifecycle.sellable(entity)) {
+            // an unlaunched (or out-of-window) offering does not exist for
+            // the shop-facing world — 404, not 403, no oracle
+            throw NotFoundException.forResource(RESOURCE, id);
+        }
         return withContent(mapper.toDto(entity));
     }
 
     @Transactional
     public ProductOfferingDto create(ProductOfferingDto dto) {
-        if (dto.getLifecycleStatus() == null) {
+        if (lifecycle.governed()) {
+            // L1 governed mode: creation is a DRAFT, launch is a decision
+            dto.setLifecycleStatus("In design");
+        } else if (dto.getLifecycleStatus() == null) {
             dto.setLifecycleStatus("Active");
         }
         ProductOffering entity = mapper.toEntity(dto);
@@ -148,9 +173,16 @@ public class ProductOfferingService {
     public ProductOfferingDto patch(String id, ProductOfferingDto patch) {
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
+        String before = entity.getLifecycleStatus();
+        if (patch.getLifecycleStatus() != null) {
+            lifecycle.requireLegalTransition(before, patch.getLifecycleStatus());
+        }
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
         ProductOfferingDto updated = mapper.toDto(repository.save(entity));
+        if (patch.getLifecycleStatus() != null && !patch.getLifecycleStatus().equals(before)) {
+            events.publish("ProductOfferingStateChangeEvent", "productOffering", updated);
+        }
         events.publish("ProductOfferingAttributeValueChangeEvent", "productOffering", updated);
         return updated;
     }

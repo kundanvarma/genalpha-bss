@@ -43,6 +43,12 @@ public class ProductOfferingMapper {
         dto.setProductOfferingTerm(readJsonObjectList(entity.getProductOfferingTermJson()));
         dto.setAttachment(readJsonObjectList(entity.getAttachmentJson()));
         dto.setType("ProductOffering");
+        if (entity.getValidFrom() != null || entity.getValidTo() != null) {
+            java.util.Map<String, String> window = new java.util.LinkedHashMap<>();
+            if (entity.getValidFrom() != null) window.put("startDateTime", entity.getValidFrom().toString());
+            if (entity.getValidTo() != null) window.put("endDateTime", entity.getValidTo().toString());
+            dto.setValidFor(window);
+        }
         return dto;
     }
 
@@ -63,6 +69,7 @@ public class ProductOfferingMapper {
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
         entity.setProductOfferingTermJson(writeJsonObjectList(dto.getProductOfferingTerm()));
         entity.setAttachmentJson(writeJsonObjectList(dto.getAttachment()));
+        applyWindow(dto, entity);
         return entity;
     }
 
@@ -70,6 +77,9 @@ public class ProductOfferingMapper {
      * Applies non-null fields of the patch DTO onto the entity (JSON merge patch style).
      */
     public void applyPatch(ProductOfferingDto patch, ProductOffering entity) {
+        if (patch.getValidFor() != null) {
+            applyWindow(patch, entity);
+        }
         if (patch.getName() != null) {
             entity.setName(patch.getName());
         }
@@ -150,5 +160,17 @@ public class ProductOfferingMapper {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }
+    }
+
+    private void applyWindow(ProductOfferingDto dto, ProductOffering entity) {
+        if (dto.getValidFor() == null) {
+            return;
+        }
+        String start = dto.getValidFor().get("startDateTime");
+        String end = dto.getValidFor().get("endDateTime");
+        entity.setValidFrom(start == null || start.isBlank() ? null
+                : java.time.OffsetDateTime.parse(start));
+        entity.setValidTo(end == null || end.isBlank() ? null
+                : java.time.OffsetDateTime.parse(end));
     }
 }

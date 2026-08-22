@@ -22,6 +22,11 @@ async function json(res) {
 }
 
 export async function listOfferings() {
+  // L2 preview: staff append ?preview=1 to walk the unlaunched shelf —
+  // the SERVER decides what a token may see; guests get Active regardless
+  if (new URLSearchParams(window.location.search).get('preview') === '1') {
+    return json(await authFetch(`${CATALOG}/productOffering?limit=100`));
+  }
   return json(await publicFetch(`${CATALOG}/productOffering?limit=100&lifecycleStatus=Active`));
 }
 
