@@ -26,6 +26,20 @@ import java.util.Map;
 @RequestMapping(ApiConstants.BASE_PATH + "/simulate/prospect")
 public class ProspectSimController {
 
+    private final PriceSimService sims;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    public ProspectSimController(PriceSimService sims,
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+        this.sims = sims;
+        this.objectMapper = objectMapper;
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping
+    public ResponseEntity<List<Map<String, Object>>> list() {
+        return ResponseEntity.ok(sims.list("ProspectSimulation"));
+    }
+
     @PostMapping
     @SuppressWarnings("unchecked")
     public ResponseEntity<Map<String, Object>> simulate(@RequestBody Map<String, Object> request) {
@@ -83,6 +97,13 @@ public class ProspectSimController {
                 "EVERY number here is a stated assumption — no real subscriber, usage or billing data was read",
                 "cost ceiling assumes full-allowance burn at the given wholesale data rate; real burn is lower",
                 "flat base: no growth, churn or seasonality modeled"));
+        String name = request.get("name") == null
+                ? "Prospect: " + totalSubs + " subs" : String.valueOf(request.get("name"));
+        try {
+            sims.saveReport(name, objectMapper.writeValueAsString(request), out);
+        } catch (Exception e) {
+            // an unsaveable receipt does not block the answer
+        }
         return ResponseEntity.ok(out);
     }
 }

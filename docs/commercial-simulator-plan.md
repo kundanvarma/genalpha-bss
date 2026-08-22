@@ -8,7 +8,7 @@
 >
 > **P3 shipped:** continuous shadow billing — a per-tenant scheduled loop re-prices a ROTATING window of the base against the current catalog and compares with the last real bill's applied-rate receipts, RATE vs RATE (proration undone from the bill period + product start date — the suite forced that lesson). Drift rows (V27+RLS) + `BillDriftDetectedEvent` + a **Shadow billing** console pane; targeted `?partyId` sweep for drill-downs. Suite `shadow_billing_test`.
 >
-> **P4 shipped:** the negotiation twin (`POST /usageManagement/v4/simulateWholesale` — real CDRs vs a hypothetical rate card, read-only by construction) and the prospect simulator (`POST /ai/v1/simulate/prospect` — stated assumptions only, and its first assumption admits no real data was read). Suite `negotiation_twin_test`. Console surfaces for P4 are a follow-up; the calibration-receipts pass (linking saved reports to later measured lift) is the next arc.
+> **P4 shipped:** the negotiation twin (`POST /usageManagement/v4/simulateWholesale` — real CDRs vs a hypothetical rate card, read-only by construction) and the prospect simulator (`POST /ai/v1/simulate/prospect` — stated assumptions only, and its first assumption admits no real data was read). Suite `negotiation_twin_test`. Console surfaces shipped 2026-08-22: the twin runs inside the **Mobile wholesale** desk (pick a rate, see the period replayed), and **Prospect sim** is a Sales pane whose scenarios persist as receipts on the shared simulator shelf. The calibration-receipts pass (linking saved reports to later measured lift) is the next arc.
 
 ## The thesis
 

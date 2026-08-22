@@ -815,6 +815,40 @@ const RESOURCES = [
     },
   },
   {
+    path: 'simulate/prospect',
+    base: '/ai/v1',
+    title: 'Prospect sim',
+    // P4 — "your business on this BSS": a price list + an assumed base mix
+    // become revenue, cost ceiling and margin floor. The ONLY simulator with
+    // no real data behind it — and its report says so first.
+    noEdit: true,
+    noDelete: true,
+    fields: [
+      { name: 'name', label: 'Scenario name', required: true },
+      { name: 'currency', label: 'Currency', placeholder: 'NOK' },
+      { name: 'wholesaleDataRatePerGb', label: 'Wholesale data rate per GB (blank = no cost side)', kind: 'number' },
+      { name: 'offerings', label: 'Offerings as JSON: [{"name","monthlyPrice","subscribers","allowanceGb"?}, …]', kind: 'longtext', required: true },
+    ],
+    assemble: (body) => {
+      let offerings = body.offerings;
+      try { offerings = JSON.parse(body.offerings); } catch { /* the API rejects with a clear message */ }
+      return { name: body.name, currency: body.currency,
+        wholesaleDataRatePerGb: body.wholesaleDataRatePerGb, offerings };
+    },
+    columns: ['name', 'totalSubscribers', 'annualRevenue', 'annualGrossMarginFloor', 'currency', 'createdAt'],
+    detail: async (item) => {
+      const r = item.report || {};
+      const rows = (r.lines || []).map((l) => ({
+        offering: l.name, subscribers: l.subscribers, 'price/mo': l.monthlyPrice,
+        'revenue/yr': l.annualRevenue,
+        'margin/sub': l.marginPerSub ?? '—',
+      }));
+      rows.push({ offering: 'ASSUMPTIONS', subscribers: '', 'price/mo': '', 'revenue/yr': '',
+        'margin/sub': (r.assumptions || []).join(' · ') });
+      return rows;
+    },
+  },
+  {
     path: 'myOperator',
     base: ONBOARDING_BASE,
     title: 'Brand',
@@ -1538,6 +1572,7 @@ const TAB_ROLE = {
   shadowDrift: 'billing:admin',
   myOperator: 'campaign:write',
   'simulate/priceChange': 'catalog:write',
+  'simulate/prospect': 'catalog:write',
   billDistribution: 'billing:admin',
   'remittance/unapplied': 'billing:admin',
   salesLead: 'quote:read',
@@ -1622,7 +1657,7 @@ const WORKSPACES = [
   // just its own desk.
   { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
     'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings', 'myOperator'] },
-  { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
+  { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota', 'simulate/prospect'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
@@ -5258,6 +5293,17 @@ async function renderMobileWholesale(periodStart, periodEnd) {
     }
     html += '</tbody></table></div>';
   }
+  // P4 — the negotiation twin: real CDRs vs a hypothetical rate card
+  html += '<h2 style="font-size:1rem;margin-top:1.5rem">Negotiation twin — what if the host priced differently?</h2>'
+    + '<p class="dim small">The period\u2019s REAL traffic replayed against a hypothetical rate. '
+    + 'Read-only: nothing is rated, booked or stored.</p>'
+    + '<div class="actions" style="align-items:center">'
+    + `<select id="nt-spec" data-testid="nt-spec">${cards.map((c) =>
+        `<option value="${esc(c.usageSpecName)}">${esc(c.usageSpecName)} (now ${esc(c.wholesaleRate)})</option>`).join('')}</select>`
+    + '<input id="nt-rate" data-testid="nt-rate" placeholder="proposed rate" style="width:8rem">'
+    + '<button class="ghost" id="nt-run" data-testid="nt-run">Run the twin</button></div>'
+    + '<div id="nt-result" data-testid="nt-result"></div>';
+
   // IMSI
   html += '<h2 style="font-size:1rem;margin-top:1.5rem">IMSI ranges (lent by the host)</h2>';
   if (!imsi.length) {
@@ -5273,6 +5319,29 @@ async function renderMobileWholesale(periodStart, periodEnd) {
   }
   html += '</div>';
   panel.innerHTML = html;
+  panel.querySelector('#nt-run')?.addEventListener('click', async () => {
+    const spec = panel.querySelector('#nt-spec').value;
+    const rate = Number(panel.querySelector('#nt-rate').value);
+    const out = panel.querySelector('#nt-result');
+    if (!spec || !(rate > 0)) { out.innerHTML = '<p class="dim">Pick a usage type and a positive rate.</p>'; return; }
+    out.innerHTML = '<p class="dim">Replaying the period\u2019s CDRs…</p>';
+    const res = await authFetch(`${USAGE_BASE_C}/simulateWholesale?${q}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rateCard: [{ usageSpecName: spec, wholesaleRate: rate }] }) });
+    if (!res.ok) { out.innerHTML = '<p class="copilot-warn">The twin could not answer.</p>'; return; }
+    const sim = await res.json();
+    let t = '<div class="table-wrap"><table><thead><tr><th>Usage type</th><th>Units</th><th>Current rate</th>'
+      + '<th>Proposed</th><th>Current cost</th><th>Proposed cost</th><th>Δ</th></tr></thead><tbody>';
+    for (const l of sim.line || []) {
+      t += `<tr><td>${esc(l.usageSpecName)}</td><td>${esc(l.units)} ${esc(l.unit)}</td>`
+        + `<td>${esc(l.currentRate)}</td><td>${esc(l.proposedRate)}</td>`
+        + `<td>${esc(l.currentCost)}</td><td>${esc(l.proposedCost)}</td><td><b>${esc(l.delta)}</b></td></tr>`;
+    }
+    t += `</tbody></table></div><p><b>Period total: ${esc(sim.currentTotal)} → ${esc(sim.proposedTotal)} `
+      + `${esc(sim.currency || '')} (Δ ${esc(sim.delta)})</b></p>`
+      + `<p class="dim" style="font-size:12px">${(sim.assumptions || []).map(esc).join(' · ')}</p>`;
+    out.innerHTML = t;
+  });
   panel.querySelector('#mw-refresh').addEventListener('click', () =>
     renderMobileWholesale(panel.querySelector('#mw-start').value.trim(), panel.querySelector('#mw-end').value.trim()));
   panel.querySelector('#mw-rate').addEventListener('click', async () => {

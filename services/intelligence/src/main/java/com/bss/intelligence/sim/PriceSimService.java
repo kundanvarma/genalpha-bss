@@ -194,6 +194,40 @@ public class PriceSimService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> list() {
+        return list("PriceChangeSimulation");
+    }
+
+    /** Saved reports of one kind — the price pane and the prospect pane each
+     *  read their own shelf of receipts. */
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> list(String type) {
+        List<Map<String, Object>> all = listAll();
+        return all.stream().filter(m -> {
+            Object report = m.get("report");
+            return report instanceof Map<?, ?> r && type.equals(r.get("@type"));
+        }).toList();
+    }
+
+    /** Persist any simulator's report as a receipt on the shared shelf. */
+    @Transactional
+    public Map<String, Object> saveReport(String name, String requestJson, Map<String, Object> report) {
+        PriceSimReport row = new PriceSimReport();
+        row.setId(UUID.randomUUID().toString());
+        row.setTenantId(tenantScope.currentTenantId());
+        row.setName(name);
+        row.setRequestJson(requestJson);
+        row.setReportJson(toJson(report));
+        row.setCreatedAt(OffsetDateTime.now());
+        reports.save(row);
+        report.put("id", row.getId());
+        report.put("name", row.getName());
+        return report;
+    }
+
+    @Transactional(readOnly = true)
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> listAll() {
         List<Map<String, Object>> out = new ArrayList<>();
         for (PriceSimReport r : reports.findTop50ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())) {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -205,6 +239,9 @@ public class PriceSimService {
                 m.put("totalAnnualRevenueDelta", report.get("totalAnnualRevenueDelta"));
                 m.put("currency", report.get("currency"));
                 m.put("subscribersAtChurnRisk", report.get("subscribersAtChurnRisk"));
+                m.put("totalSubscribers", report.get("totalSubscribers"));
+                m.put("annualRevenue", report.get("annualRevenue"));
+                m.put("annualGrossMarginFloor", report.get("annualGrossMarginFloor"));
                 m.put("report", report);
             } catch (Exception ignored) {
                 // an unreadable stored report still lists by name
