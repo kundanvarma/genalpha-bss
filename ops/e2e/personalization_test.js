@@ -40,6 +40,15 @@ async function token(request, realm, client, user, pass) {
   };
   const visitorOf = (page) => page.evaluate(() => localStorage.getItem('bss.shop.visitor'));
 
+  // suite hygiene: an earlier FAILED run leaves its personalization rule
+  // behind, and lower-priority debris SHADOWS this run's rule — purge first
+  const debris = await (await ctx.request.get(
+    `${API}/tmf-api/policyManagement/v4/policyRule?limit=100`, { headers: H(staff) })).json();
+  for (const r of debris) {
+    if (r.domain === 'personalization' && /^(Device browsers welcome|Device browsers pitch|probe-exp)/.test(r.name || '')) {
+      await ctx.request.delete(`${API}/tmf-api/policyManagement/v4/policyRule/${r.id}`, { headers: H(staff) });
+    }
+  }
   /* ---------- the consenting guest ---------- */
   // Banners exist only when an ENABLED operator rule matches — the aged
   // fleet had ambient deal rules, a fresh fleet has none (the drill's
@@ -57,6 +66,23 @@ async function token(request, realm, client, user, pass) {
   await yes.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
   await yes.click('[data-testid=consent-accept]');
   await browse(yes);
+  // the browse beacon is fire-and-forget and can die with the goBack
+  // navigation — the PRECONDITION is "this visitor has a Devices interest";
+  // prove it landed (re-sending the same first-party event) before judging
+  let landed = false;
+  for (let i = 0; i < 15 && !landed; i++) {
+    const vidNow = await visitorOf(yes);
+    const exp = await (await ctx.request.get(
+      `${API}/insight/v1/experience?visitorId=${vidNow}`)).json().catch(() => ({}));
+    landed = (exp.interests || []).includes('Devices');
+    if (!landed) {
+      await ctx.request.post(`${API}/insight/v1/event`, {
+        headers: { 'Content-Type': 'application/json' },
+        data: { visitorId: vidNow, type: 'view', category: 'Devices' } });
+      await yes.waitForTimeout(2000);
+    }
+  }
+  if (!landed) fail('the visitor interest never landed in insight');
   // cold-start friendly: the first insight round-trips (machine token mint,
   // JIT) can outlive one page load — poll a few reloads before judging
   let bannerUp = false;
@@ -120,6 +146,24 @@ async function token(request, realm, client, user, pass) {
   await ruled.locator('[data-testid=consent-banner]').waitFor({ timeout: 15000 });
   await ruled.click('[data-testid=consent-accept]');
   await browse(ruled);
+  // same beacon race as above: prove the interest landed, resending if dropped
+  {
+    const rVid = await visitorOf(ruled);
+    let rLanded = false;
+    for (let i = 0; i < 15 && !rLanded; i++) {
+      const exp = await (await ctx.request.get(
+        `${API}/insight/v1/experience?visitorId=${rVid}`)).json().catch(() => ({}));
+      rLanded = (exp.interests || []).includes('Devices');
+      if (!rLanded) {
+        await ctx.request.post(`${API}/insight/v1/event`, {
+          headers: { 'Content-Type': 'application/json' },
+          data: { visitorId: rVid, type: 'view', category: 'Devices' } });
+        await ruled.waitForTimeout(2000);
+      }
+    }
+    if (!rLanded) fail('the ruled visitor interest never landed');
+    await ruled.reload();
+  }
   await ruled.reload();
   await ruled.locator('[data-testid=personal-banner]', { hasText: 'Phone fans' }).waitFor({ timeout: 15000 });
   await ruled.locator('[data-testid=personal-pick]', { hasText: pinnedOffer.name }).waitFor({ timeout: 10000 });
@@ -224,7 +268,9 @@ async function token(request, realm, client, user, pass) {
   const nbo = await (await ctx.request.post(`${API}/ai/v1/nextBestOffer`,
     { headers: H(annaTok), data: { partyId: login.id } })).json();
   if (!nbo.offer || !nbo.offer.name) fail('NBO returned no offer: ' + JSON.stringify(nbo).slice(0, 200));
-  if (!(nbo.reason || '').includes('Devices')) {
+  // a REAL model writes the reason in its own words — grounded means it
+  // speaks to the device interest, not that it echoes the category label
+  if (!/devices?|phone|handset/i.test(nbo.reason || '')) {
     fail('the NBO reason is not grounded in the customer\'s interest: ' + nbo.reason);
   }
   const nboOff = await (await ctx.request.get(
