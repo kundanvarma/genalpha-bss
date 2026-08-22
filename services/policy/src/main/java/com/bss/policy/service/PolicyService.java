@@ -36,9 +36,12 @@ public class PolicyService {
     private final PolicyEngine engine;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final com.bss.policy.security.TenantRegistry tenants;
 
     public PolicyService(PolicyRuleRepository repository, PolicyEngine engine,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            com.bss.policy.security.TenantRegistry tenants) {
+        this.tenants = tenants;
         this.repository = repository;
         this.engine = engine;
         this.events = events;
@@ -283,6 +286,24 @@ public class PolicyService {
     }
 
     @Transactional
+    /** PRICE-PARITY MODE: a channel-conditioned PRICING rule is only legal
+     *  when the tenant explicitly chose per-channel pricing. Uniform (the
+     *  default) means one price everywhere — the switch has teeth, and the
+     *  proof face can attest whichever policy the tenant runs. */
+    private void requireParityAllows(String domain, String condition) {
+        if (!"pricing".equals(domain) || condition == null || !condition.contains("\"channel\"")) {
+            return;
+        }
+        var entry = tenants.byId(tenantScope.currentTenantId());
+        String mode = entry == null || entry.getPriceParityMode() == null
+                ? "uniform" : entry.getPriceParityMode();
+        if (!"per-channel".equalsIgnoreCase(mode)) {
+            throw new BadRequestException("this operator runs UNIFORM price parity — "
+                    + "channel-conditioned pricing rules are refused; flip "
+                    + "price-parity-mode to per-channel first");
+        }
+    }
+
     public Map<String, Object> create(Map<String, Object> body) {
         String name = str(body.get("name"));
         String condition = str(body.get("condition"));
@@ -293,6 +314,7 @@ public class PolicyService {
             throw new BadRequestException("condition (a JSON-logic expression) is required");
         }
         validateCondition(condition);
+        requireParityAllows(str(body.get("domain")), condition);
 
         PolicyRule rule = new PolicyRule();
         String id = UUID.randomUUID().toString();
@@ -345,6 +367,7 @@ public class PolicyService {
         }
         if (body.containsKey("condition")) {
             String condition = str(body.get("condition"));
+            requireParityAllows(rule.getDomain(), condition);
             validateCondition(condition);
             rule.setCondition(condition);
         }

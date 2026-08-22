@@ -853,7 +853,7 @@ export async function previewPrice(subtotal, offeringIds, characteristicValues =
       headers: { 'Content-Type': 'application/json' },
       // characteristicValues ("color:Icy Blue") let marketing run a
       // campaign on a colour — a pricing rule conditioned on the pick
-      body: JSON.stringify({ context: { subtotal, offeringIds, characteristicValues } }),
+      body: JSON.stringify({ context: { subtotal, offeringIds, characteristicValues, channel: 'shop' } }),
     });
     if (!res.ok) return null;
     const result = await res.json();

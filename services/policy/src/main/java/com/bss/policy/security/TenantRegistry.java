@@ -65,6 +65,10 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Price-parity policy: 'uniform' (default — channel-scoped pricing
+         * rules are refused) or 'per-channel' (the tenant chose differentiated
+         * channel pricing; the proof face must say so). */
+        private String priceParityMode;
 
         public String getId() {
             return id;
@@ -113,5 +117,8 @@ public class TenantRegistry {
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
         }
+
+        public String getPriceParityMode() { return priceParityMode; }
+        public void setPriceParityMode(String v) { this.priceParityMode = v; }
     }
 }

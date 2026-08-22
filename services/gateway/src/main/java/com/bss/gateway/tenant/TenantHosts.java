@@ -54,6 +54,8 @@ public class TenantHosts {
         private String brandColor;
         /** The storefront hero line — the operator's voice, console-editable. */
         private String tagline;
+        /** uniform (default) | per-channel — attested to humans AND agents. */
+        private String priceParityMode;
         private String locale;
         private String currency;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
@@ -106,6 +108,14 @@ public class TenantHosts {
 
         public void setTagline(String tagline) {
             this.tagline = tagline;
+        }
+
+        public String getPriceParityMode() {
+            return priceParityMode == null || priceParityMode.isBlank() ? "uniform" : priceParityMode;
+        }
+
+        public void setPriceParityMode(String v) {
+            this.priceParityMode = v;
         }
 
         public void setBrandColor(String brandColor) {

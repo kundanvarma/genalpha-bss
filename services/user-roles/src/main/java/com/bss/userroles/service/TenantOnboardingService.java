@@ -204,7 +204,22 @@ public class TenantOnboardingService {
         if (dto.get("currency") != null) {
             block = block.replaceAll("currency: .*", "currency: " + dto.get("currency"));
         }
-        if (dto.get("tagline") != null) {
+        if (dto.get("priceParityMode") != null) {
+            String mode = String.valueOf(dto.get("priceParityMode")).trim();
+            if (!java.util.Set.of("uniform", "per-channel").contains(mode)) {
+                throw new com.bss.userroles.exception.BadRequestException(
+                        "priceParityMode must be uniform or per-channel");
+            }
+            String line = "price-parity-mode: \"" + mode + "\"";
+            if (block.contains("price-parity-mode: ")) {
+                block = block.replaceAll("price-parity-mode: .*",
+                        java.util.regex.Matcher.quoteReplacement(line));
+            } else {
+                block = block.replaceFirst("( +)brand-name: ",
+                        "$1" + java.util.regex.Matcher.quoteReplacement(line) + "\n$1brand-name: ");
+            }
+        }
+                if (dto.get("tagline") != null) {
             // the storefront hero line — free text, so it rides YML double-quoted;
             // insert-if-absent because older tenant blocks predate the field
             String tagline = String.valueOf(dto.get("tagline")).replace("\"", "'").trim();

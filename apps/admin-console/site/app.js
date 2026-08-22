@@ -769,6 +769,10 @@ const RESOURCES = [
       { name: 'currency', label: 'Currency', placeholder: 'EUR' },
       { name: 'color', label: 'Brand color', placeholder: '#B85C38' },
       { name: 'tagline', label: 'Storefront tagline — the hero line under the brand name (blank = the built-in line)' },
+      // Price parity is COMMERCIAL policy, so it lives on the host desk:
+      // uniform refuses channel-priced rules; per-channel allows them and
+      // the storefront/agent manifest says so openly.
+      { name: 'priceParityMode', label: 'Price parity (uniform | per-channel)', placeholder: 'uniform' },
       // Agentic commerce: how much of this operator AI shopping agents see.
       // New operators are born 'off' — being shopped by agents is opt-in.
       { name: 'agentCommerce', label: 'Agent commerce (off | discovery | full)', placeholder: 'off' },
