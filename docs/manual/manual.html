@@ -128,6 +128,20 @@ colour = Titanium"), commitment terms, categories that drive placement <em>and</
 else draws an MSISDN + SIM). Artwork rides the offering's attachments — internal store or the
 tenant's own PIM; the internal store's bytes live in-row by default or in S3-protocol /
 Azure Blob object storage (deployment config, §9 — suite #54 proves all three).</p>
+<h3>Catalog lifecycle — launch is a decision, not a side effect</h3>
+<p>The TMF620 ladder has server-side TEETH: non-staff callers only ever see offerings that are
+<b>Launched/Active and inside their <code>validFor</code> window</b> — the list filter is forced,
+a draft is 404 by id, and ordering one (including a bundle child) is refused at validation.
+Per-tenant switch <code>catalog-governance</code> (operator form / console Operators pane):
+<code>direct</code> (default) keeps create-is-live; <code>governed</code> lands every create at
+"In design" and enforces the ladder <em>one rung at a time</em> (In study → In design → In test →
+Launched → Retired → Obsolete; pre-launch states shuffle freely). <code>validFor</code> on the
+offering is the shelf: before the window it is invisible and unorderable, after it it is gone —
+enforced at query time, no tick decides visibility. When a Launched offering's window opens,
+<code>ProductOfferingLaunchedEvent</code> fires exactly once for launch-day journeys. Staff walk
+the unlaunched shelf in the real storefront with <code>?preview=1</code> — a PREVIEW badge on
+everything not yet live. Suite <code>lifecycle_test</code> proves the whole ladder on a throwaway
+operator.</p>
 <h3>Rules &amp; pricing as data (console → Rules)</h3>
 <p>Order rules and dynamic pricing are JSON-logic rows with a dry-run panel. A price change is a
 rule, not a release. See <code>docs/product-rules.md</code> for the authoring guide.</p>
@@ -189,6 +203,15 @@ per-account: mid-month starts, mid-cycle plan changes and ceases each bill exact
 days, labelled ("from the 16th, 15 days"). Payday alignment per customer
 (<code>POST /individual/{id}/billingCycle</code>, day 1–28). The invariant the suites enforce
 from every direction: <b>no day is ever billed twice</b>.</p>
+<h3>The migration rehearsal — the parallel run before anyone moves</h3>
+<p><code>POST /migrationRehearsal</code> (billing, <code>billing:admin</code>) takes a legacy
+export as rows <code>{externalRef, offeringName, expectedMonthly}</code> and prices each against
+THIS catalog with the <b>same engine that cuts real bills</b>: matched within tolerance,
+price-differs by exactly how much, or offering-missing — the exceptions BY NAME, an honest
+<code>readyToCutOver</code> flag that is only true when the exception lists are empty, and a
+read-only promise in the assumptions (the persisted report is the only write). The scariest
+sentence in a BSS sale — "we'll migrate you" — becomes a report. Suite
+<code>migration_rehearsal_test</code>.</p>
 <h3>The bill as a document — suite #46</h3>
 <p><code>GET /customerBill/{id}/document.pdf</code> (owner-scoped);
 <code>POST /customerBill/{id}/resend</code> emails it to the address on file. Delivery preference
@@ -1178,7 +1201,14 @@ mirror of the seeker's COGS): <code>postMobileWholesaleRevenue</code> DR <code>1
 <code>ProviderWholesaleRatedEvent</code>. Seed adds two external MVNOs (Aurora premium, Fjord
 default). <b>Console</b>: a <b>Mobile — host (provider)</b> pane on the Wholesale desk enters
 per-MVNO rate cards (MVNO dropdown from the party service; blank = default) and shows the host's
-per-MVNO settlement + total wholesale revenue. <b>Boundary</b>: external-MVNO auth is gated by
+per-MVNO settlement + total wholesale revenue. <b>The provider-face closed loop</b>: the provider
+ledger has no CDR store of its own — the mediation feed IS the source — so late CDRs arrive as a
+corrected RE-REPORT of the same (mvno, period, type). An unchanged repeat stays a free no-op; a
+changed one inside the shared correction window re-rates the row in place, stamps
+<code>rerateCount/lastReratedAt</code> and emits <code>ProviderWholesaleReratedEvent</code> with
+the delta — revenue books exactly that delta (DR 1210 / CR 4020, reversed when negative),
+idempotent per (ledger id, rerate #). Outside the window the correction is REFUSED: a settled old
+period is a dispute, not a silent rewrite. <b>Boundary</b>: external-MVNO auth is gated by
 wholesale:admin for the demo — a real
 deployment issues each MVNO a scoped machine credential for its own statement.</p>
 
@@ -1196,7 +1226,11 @@ Right-Plan Guarantee</b> (<code>POST /ai/v1/fairPlay/sweep</code>): customers us
 their allowance get the cheaper SAME-CATEGORY plan with 1.5&times; headroom — read-only, the
 journey only tells them. <b>Community Grid</b>: area goals with a PUBLIC score (a percentage,
 never a person) that unlock at target; <b>Klubbdugnad</b> ties a code to a local club org and
-tallies the season (<code>GET /referral/clubs</code>). <b>Channel</b>:
+tallies the season (<code>GET /referral/clubs</code>) — and the tally is MONEY, not a scoreboard:
+each rewarded club-linked conversion publishes <code>ClubShareAccruedEvent</code> (amount/currency
+from <code>bss.campaign.club-share-amount/-currency</code>) and revenue books DR <code>6150</code>
+community sponsorship / CR <code>2150</code> payable-to-clubs, idempotent per conversion — a
+balance the operator OWES. <b>Channel</b>:
 <code>GET /dealer/v1/leaderboard</code> ranks stores off the commission ledger.
 <b>Config, not code</b>: the weekly perk drop is a journey on a segment minting partner codes;
 a level tier is an audience over traits (points, streaks, tenure).

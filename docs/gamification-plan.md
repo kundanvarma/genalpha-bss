@@ -6,7 +6,7 @@
 >
 > **G2 shipped:** bill-paid streaks as CDP traits (settled by the BANK's remittance, deduped per bill, milestone events for journeys, audience-targetable) + the Right-Plan Guarantee (`POST /ai/v1/fairPlay/sweep`): under-30%-of-allowance customers get the cheaper SAME-CATEGORY plan with 1.5x headroom — a bundle is never the honest answer to an oversized mobile plan. Suite `g2_honest_game_test`.
 >
-> **G3 shipped:** Community Grid goals (area target, public score — a percentage, never a person, unlock at target) + Klubbdugnad (code tied to a local club org; per-club season tally + leaderboard). One migration on G1's rails. Club revenue-share BOOKING is the noted follow-up. Suite `g3_community_test`.
+> **G3 shipped:** Community Grid goals (area target, public score — a percentage, never a person, unlock at target) + Klubbdugnad (code tied to a local club org; per-club season tally + leaderboard). One migration on G1's rails. Club revenue-share BOOKING shipped 2026-08-22 (H2): a rewarded, club-linked conversion publishes `ClubShareAccruedEvent` (configurable `club-share-amount`/`-currency`); revenue books DR 6150 Community sponsorship / CR 2150 Payable-to-clubs, idempotent per conversion — the season tally is a balance the operator OWES, not a scoreboard. Suite `g3_community_test`.
 >
 > **G4 shipped (lean):** the dealer/store leaderboard off the commission ledger (`GET /dealer/v1/leaderboard`, verified live). Honest deferrals: the reward-moment wheel UI, the level trait, and the weekly drop (the last two are journey/audience CONFIG recipes, not code — the manual says how).
 

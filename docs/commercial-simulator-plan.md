@@ -1,6 +1,6 @@
 # The commercial simulator — simulate the money before you move it
 
-**Status:** P1 + P2 + P3 + P4 SHIPPED (2026-08-21, overnight build) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
+**Status:** P1 + P2 + P3 + P4 SHIPPED (2026-08-21) · migration rehearsal SHIPPED (2026-08-22) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
 
 > **P1 shipped:** `POST /ai/v1/simulate/priceChange` — the real base (paginated inventory), real catalog, wholesale cost ceiling, churn-risk overlay; assumptions on the face, dated basis, persisted receipts (`price_sim_report`), and the suite proves zero production mutation. Console: a **Simulator** pane under Catalog & Pricing (catalog:write). Suite `price_sim_test`.
 >
@@ -9,6 +9,15 @@
 > **P3 shipped:** continuous shadow billing — a per-tenant scheduled loop re-prices a ROTATING window of the base against the current catalog and compares with the last real bill's applied-rate receipts, RATE vs RATE (proration undone from the bill period + product start date — the suite forced that lesson). Drift rows (V27+RLS) + `BillDriftDetectedEvent` + a **Shadow billing** console pane; targeted `?partyId` sweep for drill-downs. Suite `shadow_billing_test`.
 >
 > **P4 shipped:** the negotiation twin (`POST /usageManagement/v4/simulateWholesale` — real CDRs vs a hypothetical rate card, read-only by construction) and the prospect simulator (`POST /ai/v1/simulate/prospect` — stated assumptions only, and its first assumption admits no real data was read). Suite `negotiation_twin_test`. Console surfaces shipped 2026-08-22: the twin runs inside the **Mobile wholesale** desk (pick a rate, see the period replayed), and **Prospect sim** is a Sales pane whose scenarios persist as receipts on the shared simulator shelf. The calibration-receipts pass (linking saved reports to later measured lift) is the next arc.
+
+> **Migration rehearsal shipped:** the parallel bill run pointed at a LEGACY
+> export, before anyone migrates anything. POST `/migrationRehearsal` (billing,
+> `billing:admin`) takes rows `{externalRef, offeringName, expectedMonthly}`,
+> maps each against THIS catalog and prices it with the SAME engine that cuts
+> real bills: matched-within-tolerance / price-differs-by-exactly-how-much /
+> offering-missing — exceptions BY NAME, an honest `readyToCutOver` flag, a
+> read-only promise in the assumptions, and the report persisted (V29/V30).
+> Suite `migration_rehearsal_test`.
 
 ## The thesis
 

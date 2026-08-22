@@ -1,6 +1,19 @@
 # Catalog lifecycle — launch is a decision, not a side effect
 
-**Status:** PLAN (researched 2026-08-22; build on trigger) · **Depends on:** TMF620 lifecycleStatus (already served and already filtered by every channel), the advisor's In-study draft + promote flow, the operator-as-a-form config seam, the P1 simulator
+**Status:** SHIPPED (L1+L2+L3, 2026-08-22) · **Depends on:** TMF620 lifecycleStatus (already served and already filtered by every channel), the advisor's In-study draft + promote flow, the operator-as-a-form config seam, the P1 simulator
+
+> **Shipped:** L1 teeth server-side (`LifecyclePolicy`): non-staff callers see
+> only Launched/Active offerings inside their `validFor` window — list filter
+> forced, by-id 404, and ordering a non-sellable offering (incl. bundle
+> children) is refused at validation. Per-tenant `catalog-governance` switch
+> (operator-as-a-form + console): `governed` mode lands every create at
+> "In design" and enforces the TMF620 ladder one rung at a time; `direct`
+> stays live-immediately. L3 `validFor` on the offering (V16) is enforced at
+> query time — no tick decides visibility — while `LaunchEmitter` announces
+> window-opens once (`ProductOfferingLaunchedEvent`) for launch-day journeys.
+> L2 staff preview (`?preview=1`) walks the unlaunched shelf in the real shop
+> with a PREVIEW badge. Suite `lifecycle_test` proves it all on a throwaway
+> operator minted live.
 
 ## The finding (what the code says today)
 
