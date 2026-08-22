@@ -166,6 +166,13 @@ cheaper one; (4) referral rewards carried by agents as mandates — the
 
 ## Pricing policy is tenant CONFIG — the platform enforces honesty, not one policy
 
+> **SHIPPED 2026-08-22:** `price-parity-mode` per tenant (uniform default |
+> per-channel), the policy-service gate with teeth (channel-conditioned
+> pricing rules refused in uniform mode, create AND patch), channel as a
+> price-evaluation context variable (storefront sends `shop`), and the
+> manifest attestation in both modes. Host-desk config (Operators pane).
+> Suite `price_parity_test` — proven on a throwaway operator minted live.
+
 The doctrine above ("discount the channel, never the customer-by-channel")
 is the ADVICE this plan gives an operator. It is not a platform constraint:
 this BSS is vendor-neutral infrastructure, and different CSPs in different
