@@ -164,10 +164,29 @@ easiest merchant to successfully complete outranks the marginally
 cheaper one; (4) referral rewards carried by agents as mandates — the
 "discount" that arrives through trust and selects the loyal cohort.
 
+## Pricing policy is tenant CONFIG — the platform enforces honesty, not one policy
+
+The doctrine above ("discount the channel, never the customer-by-channel")
+is the ADVICE this plan gives an operator. It is not a platform constraint:
+this BSS is vendor-neutral infrastructure, and different CSPs in different
+geographies will lawfully and rationally choose differently. The capability:
+
+- **Price-parity mode, per tenant: `uniform` (default) | `per-channel`.**
+  In per-channel mode, prices and pricing rules gain a channel dimension
+  (shop · agent · dealer · telesales) — the same config-not-code seam as
+  audience-scoped pricing rules today.
+- **Whatever the policy, the proof surface tells the truth about it.** A
+  uniform-mode tenant gets the one-price attestation; a per-channel tenant's
+  proof face states "prices vary by channel" — verifiable either way. The
+  honesty rule is about TRANSPARENCY OF POLICY, never enforcement of one.
+- The market decides the rest: an operator whose agents-get-cheaper policy
+  costs them shortlist trust will read it in their own attribution report.
+
 ## Honesty rules (non-negotiable, house style)
 
-- **No agent-only pricing.** An agent never sees a price or a fee structure
-  a human cannot see; the proof surface attests to it.
+- **The proof surface never lies about the pricing policy.** Uniform mode
+  attests one price everywhere; per-channel mode says so openly. What is
+  forbidden is not differentiation — it is differentiation that hides.
 - **Attribution is provable, not claimed.** An agent platform's commission
   is backed by the same order-completion evidence as a dealer's — no
   last-click mythology.
