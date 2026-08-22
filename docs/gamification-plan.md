@@ -46,14 +46,37 @@ gamification module ships with three rules no competitor matches:
 | **Quizzes & guided games** | landing pages + guided questions | Plan-picker quiz = guided selling that also earns a small reward; prospect-side capture with consent |
 | **Win-back games** | churn alerts + journeys | A churn-risk segment gets a "we miss you" challenge instead of a discount mail |
 
+## The Starlink question (asked 2026-08-22, answered honestly)
+
+LEO satellite is real competition for fixed access — but its physics point the
+strategy, not kill it: Starlink is capacity-constrained by SUBSCRIBER DENSITY
+(quality measurably degrades as neighbors pile onto a shared cell; analysts
+place it "best suited to low-density markets" even after V3's capacity jump).
+Fibre is the opposite: density is its friend. So the community mechanic gets
+an anti-fragile reframe — **"every neighbor who joins makes fibre come sooner
+and satellite work worse."** Where density can never support fibre, the
+operator RESELLS the sky (LEO wholesale/community gateways) instead of losing
+the customer: the BSS is access-agnostic, so the moat is the RELATIONSHIP,
+never the medium. Engagement strategy follows: build the moats a global
+satellite ISP structurally cannot copy — local community, person-to-person
+value, household orchestration, and trust.
+
 ## Differentiators — what only this platform can do
 
-1. **Neighborhood unlock (fibre demand aggregation).** Serviceable areas +
-   coverage map + landing pages + lead capture become a community game: "your
-   street is at 62% of its fibre unlock goal — invite neighbors." The classic
-   crowd-fibre model, productized inside the BSS with live progress, referral
-   attribution, and an area-level leaderboard. Directly monetizes the fixed
-   line of business; no BSS ships this.
+1. **Community Grid (the neighborhood unlock, anti-fragile version).** Three
+   legs: (a) demand aggregation where density supports fibre — live street
+   progress, referral attribution, area leaderboards; (b) **connect-today
+   bridge** — FWA/5G (or resold LEO) NOW, price-locked upgrade to fibre at
+   unlock, loyalty and streaks carried across the swap: the game sells the
+   upgrade path, not the wait; (c) the density story told straight: more
+   neighbors = better fibre economics AND worse shared-cell satellite.
+1b. **Klubbdugnad (grassroots revenue share) — the sky-proof moat.** The
+   Norsk Tipping "Grasrotandelen" model, applied to connectivity: a customer
+   ties their subscription to their LOCAL club (sports team, korps, velforening)
+   and a slice of every bill funds it; referrals through the club compound it;
+   club leaderboards run by season. Party orgs + attribution + the revenue
+   ledger make this pure configuration — and a global satellite ISP can never
+   be the brand that funds your kid's football team.
 2. **Data as social currency.** Gifting already crosses households and (Ice
    model) strangers-by-number. Extend to: team data pots (a friend group's
    shared challenge balance), boost-a-friend, pay-it-forward chains with chain
@@ -64,6 +87,17 @@ gamification module ships with three rules no competitor matches:
    the quest goal, and whose holdout keeps the lift honest. The growth copilot
    drafts quests in the tenant's language (TenantVoice); the simulator's
    forecast receipt prices the reward budget before launch.
+3b. **Right-Plan Guarantee (fair-play as a mechanic).** The usage meters
+   already know who is on the WRONG plan. The honest-machine move nobody in
+   the industry dares: proactively offer the cheaper plan, gamified as the
+   operator's published "fair play score" (plans right-sized this month: N).
+   Short-term ARPU dip, holdout-measured churn and referral lift — trust as a
+   growth loop, provable in the attribution report.
+3c. **Seasonal play (the hytte rhythm).** Pause machinery exists — make
+   seasonality a feature, not a fight: hibernate the cabin line with one tap,
+   wake it from the app, number and streaks preserved, a "first fire of the
+   season" reward moment on wake. Honest seasonal billing vs the industry's
+   12-month contract reflex.
 4. **Streaks that respect you.** The honest-machine version: no shame
    mechanics, streak freezes included, quiet by default, and the on-time-bill
    streak explicitly framed as "we both win" — its lift shows up as reduced
@@ -89,8 +123,10 @@ gamification module ships with three rules no competitor matches:
 - **G2 — streaks + reward moments**: streak trait engine on the event bus
   (bill-paid, top-up), reward-moment journeys (spin at order-completed with
   published odds), My Page streak card.
-- **G3 — neighborhood unlock**: area goal object on serviceable areas,
-  public progress page per area, referral wiring from G1, area leaderboard.
+- **G3 — Community Grid**: area goal object on serviceable areas, public
+  progress page per area, referral wiring from G1, area leaderboard, the
+  bridge-product upgrade path (price-locked swap order). Klubbdugnad rides
+  the same rails: club org + revenue-share ledger entry + club leaderboard.
 - **G4 — levels/season + weekly drop + channel leaderboards.**
 
 Every phase ships with the standing doctrine: holdout-measured, odds
