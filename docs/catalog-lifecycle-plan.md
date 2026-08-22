@@ -27,6 +27,31 @@ the owner asked for. The answer is the house doctrine again: **capability
 with a per-tenant switch — the platform enforces honesty, the tenant
 chooses the policy.**
 
+## Deep-pass findings (probed live, 2026-08-22 — these reshape the scope)
+
+The owner asked whether the analysis was deep enough. It wasn't, yet. Two
+live probes changed the plan's center of gravity:
+
+1. **Draft invisibility is a client-side courtesy, not a server rule.** An
+   ANONYMOUS caller who omits `lifecycleStatus=Active` reads drafts today —
+   the storefront politely filters, the catalog does not enforce. Unlaunched
+   pricing is competitively sensitive; this is an information-exposure gap,
+   not a workflow nicety.
+2. **Ordering a draft returns 201.** Neither the cart nor product-ordering
+   validates lifecycle — a customer who knows an id can ORDER an In-study
+   offering right now. Lifecycle without order-time teeth is cosmetic.
+
+Consequence: L1's core is not the mode switch — it is SERVER-SIDE
+ENFORCEMENT. Non-staff callers get only Launched/Active (and, with L3,
+in-window) offerings REGARDLESS of query parameters; draft visibility
+becomes a staff authority (which is also exactly what makes L2's preview
+meaningful rather than redundant); and ordering/cart validate the
+offering's state at add and submit time — including bundle children, and
+including the mid-cart case where a validFor window closes before checkout
+(clear refusal, never a silent price surprise). CTK note: the kits run
+with staff credentials, so conformance is unaffected by guest-side
+enforcement — verified against how the suites authenticate before build.
+
 ## The phases
 
 ### L1 — Governed creation (the mode switch)
