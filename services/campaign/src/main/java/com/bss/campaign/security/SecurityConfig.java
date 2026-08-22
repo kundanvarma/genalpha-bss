@@ -46,6 +46,8 @@ public class SecurityConfig {
                         // the handler (party = token subject); the report stays staff
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/referral/myCode").authenticated()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/referral/redeem").authenticated()
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/referral/myClub").authenticated()
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/referral/community/*/progress").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")

@@ -30,7 +30,39 @@ public class ReferralController {
 
     @PostMapping("/redeem")
     public ResponseEntity<Map<String, Object>> redeem(@RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(referrals.redeem(String.valueOf(body.get("code"))));
+        return ResponseEntity.ok(referrals.redeem(String.valueOf(body.get("code")),
+                body.get("areaCode") == null ? null : String.valueOf(body.get("areaCode"))));
+    }
+
+    /** G3 — tie my code to my local club (Klubbdugnad). */
+    @PostMapping("/myClub")
+    public ResponseEntity<Map<String, Object>> myClub(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(referrals.linkClub(
+                body.get("clubOrgId") == null ? null : String.valueOf(body.get("clubOrgId"))));
+    }
+
+    /** G3 — community goals: staff create/list; progress is PUBLIC (a score,
+     *  never a person). */
+    @PostMapping("/community")
+    public ResponseEntity<Map<String, Object>> createGoal(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.ok(referrals.createGoal(body));
+    }
+
+    @GetMapping("/community")
+    public ResponseEntity<java.util.List<Map<String, Object>>> listGoals() {
+        return ResponseEntity.ok(referrals.listGoals());
+    }
+
+    @GetMapping("/community/{id}/progress")
+    public ResponseEntity<Map<String, Object>> progress(
+            @org.springframework.web.bind.annotation.PathVariable("id") String id) {
+        return ResponseEntity.ok(referrals.progress(id));
+    }
+
+    /** G3 — Klubbdugnad season tally (staff). */
+    @GetMapping("/clubs")
+    public ResponseEntity<java.util.List<Map<String, Object>>> clubs() {
+        return ResponseEntity.ok(referrals.clubReport());
     }
 
     @GetMapping("/report")

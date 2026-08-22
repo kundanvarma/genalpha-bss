@@ -42,6 +42,7 @@ public class ReferralService {
 
     private final ReferralCodeRepository codes;
     private final ReferralConversionRepository conversions;
+    private final com.bss.campaign.repository.CommunityGoalRepository goals;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
@@ -49,11 +50,13 @@ public class ReferralService {
     private final int velocityPerDay;
 
     public ReferralService(ReferralCodeRepository codes, ReferralConversionRepository conversions,
+            com.bss.campaign.repository.CommunityGoalRepository goals,
             DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
             @Value("${bss.campaign.referral-reward-gb:5}") BigDecimal rewardGb,
             @Value("${bss.campaign.referral-velocity-per-day:5}") int velocityPerDay) {
         this.codes = codes;
         this.conversions = conversions;
+        this.goals = goals;
         this.events = events;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
@@ -88,6 +91,11 @@ public class ReferralService {
     /** A joiner redeems a code — once, never their own. Pays on first order. */
     @Transactional
     public Map<String, Object> redeem(String rawCode) {
+        return redeem(rawCode, null);
+    }
+
+    @Transactional
+    public Map<String, Object> redeem(String rawCode, String areaCode) {
         String tenant = tenantScope.currentTenantId();
         String joiner = requireSelf();
         String normalized = rawCode == null ? "" : rawCode.trim().toUpperCase();
@@ -108,6 +116,9 @@ public class ReferralService {
         conversion.setStatus(ReferralConversion.PENDING);
         conversion.setRewardGb(rewardGb);
         conversion.setCreatedAt(OffsetDateTime.now());
+        if (areaCode != null && !areaCode.isBlank()) {
+            conversion.setAreaCode(areaCode.trim());
+        }
         conversions.save(conversion);
         return Map.of("code", code.getCode(), "status", conversion.getStatus(),
                 "rewardGb", rewardGb,
@@ -170,6 +181,94 @@ public class ReferralService {
         // the honest cost line: what the program has PAID, in data
         out.put("rewardCostGb", rewardGb.multiply(BigDecimal.valueOf(rewarded * 2)));
         out.put("rows", rows);
+        return out;
+    }
+
+    /** G3 — tie MY code to my local club: every conversion counts for them. */
+    @Transactional
+    public Map<String, Object> linkClub(String clubOrgId) {
+        String tenant = tenantScope.currentTenantId();
+        String party = requireSelf();
+        ReferralCode code = codes.findByTenantIdAndReferrerPartyId(tenant, party)
+                .orElseThrow(() -> new NotFoundException("mint your code first (GET /referral/myCode)"));
+        code.setClubOrgId(clubOrgId == null || clubOrgId.isBlank() ? null : clubOrgId.trim());
+        codes.save(code);
+        return Map.of("code", code.getCode(), "clubOrgId",
+                code.getClubOrgId() == null ? "" : code.getClubOrgId());
+    }
+
+    /** G3 — the street's game: create a goal (staff) and read its public score. */
+    @Transactional
+    public Map<String, Object> createGoal(Map<String, Object> dto) {
+        if (dto.get("name") == null || dto.get("areaCode") == null || dto.get("target") == null) {
+            throw new BadRequestException("name, areaCode and target are required");
+        }
+        com.bss.campaign.entity.CommunityGoal goal = new com.bss.campaign.entity.CommunityGoal();
+        goal.setId(UUID.randomUUID().toString());
+        goal.setTenantId(tenantScope.currentTenantId());
+        goal.setName(String.valueOf(dto.get("name")));
+        goal.setAreaCode(String.valueOf(dto.get("areaCode")).trim());
+        goal.setTarget(Integer.parseInt(String.valueOf(dto.get("target"))));
+        goal.setCreatedAt(OffsetDateTime.now());
+        goals.save(goal);
+        return progressOf(goal);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> listGoals() {
+        return goals.findByTenantId(tenantScope.currentTenantId())
+                .stream().map(this::progressOf).toList();
+    }
+
+    /** The PUBLIC face: joined / target / percent — a score, never a person. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> progress(String goalId) {
+        com.bss.campaign.entity.CommunityGoal goal = goals
+                .findByIdAndTenantId(goalId, tenantScope.currentTenantId())
+                .orElseThrow(() -> new NotFoundException("no such community goal"));
+        return progressOf(goal);
+    }
+
+    private Map<String, Object> progressOf(com.bss.campaign.entity.CommunityGoal goal) {
+        long joined = conversions.countByTenantIdAndAreaCode(goal.getTenantId(), goal.getAreaCode());
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", goal.getId());
+        out.put("name", goal.getName());
+        out.put("areaCode", goal.getAreaCode());
+        out.put("target", goal.getTarget());
+        out.put("joined", joined);
+        out.put("percent", goal.getTarget() == 0 ? 0
+                : Math.min(100, Math.round(joined * 100.0 / goal.getTarget())));
+        out.put("unlocked", joined >= goal.getTarget());
+        return out;
+    }
+
+    /** G3 — Klubbdugnad: every club's season tally, from its codes' conversions. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> clubReport() {
+        String tenant = tenantScope.currentTenantId();
+        Map<String, Long> joinedByClub = new LinkedHashMap<>();
+        Map<String, Long> rewardedByClub = new LinkedHashMap<>();
+        for (ReferralConversion c : conversions.findByTenantId(tenant)) {
+            codes.findByTenantIdAndCode(tenant, c.getCode())
+                    .map(ReferralCode::getClubOrgId)
+                    .filter(club -> club != null && !club.isBlank())
+                    .ifPresent(club -> {
+                        joinedByClub.merge(club, 1L, Long::sum);
+                        if (ReferralConversion.REWARDED.equals(c.getStatus())) {
+                            rewardedByClub.merge(club, 1L, Long::sum);
+                        }
+                    });
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        joinedByClub.forEach((club, joined) -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("clubOrgId", club);
+            row.put("joined", joined);
+            row.put("rewarded", rewardedByClub.getOrDefault(club, 0L));
+            out.add(row);
+        });
+        out.sort((a, b) -> Long.compare((long) b.get("joined"), (long) a.get("joined")));
         return out;
     }
 

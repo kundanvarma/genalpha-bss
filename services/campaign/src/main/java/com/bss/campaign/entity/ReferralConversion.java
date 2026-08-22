@@ -46,6 +46,10 @@ public class ReferralConversion {
     @Column(name = "rewarded_at")
     private OffsetDateTime rewardedAt;
 
+    /** G3: the area this signup grows (the street's unlock game). */
+    @Column(name = "area_code", length = 32)
+    private String areaCode;
+
     public String getId() { return id; }
     public void setId(String v) { this.id = v; }
     public String getTenantId() { return tenantId; }
@@ -64,4 +68,6 @@ public class ReferralConversion {
     public void setCreatedAt(OffsetDateTime v) { this.createdAt = v; }
     public OffsetDateTime getRewardedAt() { return rewardedAt; }
     public void setRewardedAt(OffsetDateTime v) { this.rewardedAt = v; }
+    public String getAreaCode() { return areaCode; }
+    public void setAreaCode(String v) { this.areaCode = v; }
 }

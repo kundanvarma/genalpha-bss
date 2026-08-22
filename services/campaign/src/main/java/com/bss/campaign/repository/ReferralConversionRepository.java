@@ -13,4 +13,5 @@ public interface ReferralConversionRepository extends JpaRepository<ReferralConv
     List<ReferralConversion> findByTenantId(String tenantId);
     long countByTenantIdAndReferrerPartyIdAndCreatedAtAfter(
             String tenantId, String referrerPartyId, OffsetDateTime after);
+    long countByTenantIdAndAreaCode(String tenantId, String areaCode);
 }
