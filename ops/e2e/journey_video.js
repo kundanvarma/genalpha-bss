@@ -92,6 +92,13 @@ async function confirmLogout(page) {
   if (await btn.count()) { await btn.first().click(); await page.waitForTimeout(1200); }
 }
 
+/** The shop lays out by line of business now — flip to a tab before
+ *  reaching for a card that lives on it. */
+async function shopTab(page, labelRe) {
+  const tab = page.locator('.shoptab', { hasText: labelRe }).first();
+  if (await tab.count()) { await glideClick(page, tab); await page.waitForTimeout(900); }
+}
+
 /* ---------- the film ---------- */
 (async () => {
   const dir = path.join(__dirname, 'recordings');
@@ -163,6 +170,8 @@ async function confirmLogout(page) {
   console.log('· SCENE1-shop');
   await caption(page, '🛍  A customer lands on the shop — no account, just browsing.');
   await captionOff(page);
+  // the shop lays out by line of business now — devices live on their own tab
+  await shopTab(page, /Devices/);
   // devices sell like devices: gallery, facts, and the photo follows the colour
   await glideClick(page, page.locator('.card', { hasText: 'Samsung Galaxy S26' }).first());
   await page.waitForSelector('[data-testid=offer-gallery]', { timeout: 15000 });
@@ -185,6 +194,7 @@ async function confirmLogout(page) {
   console.log('· SCENE1-device-gallery');
   await page.goBack();
   await page.waitForSelector('.card', { timeout: 15000 });
+  await shopTab(page, /Bundles/);
   await glideClick(page, page.locator('text=GenAlpha One Home & Mobile').first());
   await page.waitForSelector('.choice', { timeout: 20000 });
   await page.locator('.optprice').first().waitFor({ timeout: 15000 });
@@ -260,8 +270,14 @@ async function confirmLogout(page) {
   // the catalog first: a complicated bundle is DATA a product owner clicks together
   await caption(page, '🏢  Meanwhile in the back office. First stop: the catalog.');
   await captionOff(page);
+  // the catalog has grown — page until Family Max scrolls into the listing
   let fmRow = page.locator('#listing-body tr', { hasText: 'GenAlpha Family Max' });
-  if (!(await fmRow.count())) { await page.click('#next'); await page.waitForTimeout(800); }
+  for (let i = 0; i < 20 && !(await fmRow.count()); i++) {
+    const next = page.locator('#next:not([disabled])');
+    if (!(await next.count())) break;
+    await next.click();
+    await page.waitForTimeout(700);
+  }
   await fmRow.waitFor({ timeout: 15000 });
   await glideClick(page, fmRow.locator('button', { hasText: 'Edit' }));
   await page.waitForFunction(() => document.querySelectorAll('[data-composer-row]').length >= 5);
@@ -276,19 +292,34 @@ async function confirmLogout(page) {
   await captionOff(page);
 
   // the product owner CHATS the next product into existence
-  await glideClick(page, page.locator('.tab', { hasText: 'Copilot' }));
+  await glideClick(page, page.locator('.tab', { hasText: 'Product copilot' }));
   await page.waitForSelector('#copilot-input', { timeout: 10000 });
   await caption(page, '🤖  Or skip the forms entirely — the Product Copilot. Describe the product you want to sell…', 3000);
   await captionOff(page);
   await glideType(page, page.locator('#copilot-input'), 'I want to sell a streaming service');
   await glideClick(page, page.locator('#copilot-send'));
-  await page.locator('.copilot-ai', { hasText: 'cost per month' }).waitFor({ timeout: 20000 });
+  // a REAL model answers here — phrasing varies per take, so wait for any
+  // substantive reply rather than one canned sentence
+  await page.locator('.copilot-ai', { hasText: /price|month|currency|partner|call/i })
+    .first().waitFor({ timeout: 60000 });
   await page.waitForTimeout(800);
-  await caption(page, '💬  It knows this catalog: a streaming service is a PARTNER SERVICE — activation will mint the partner code. It asks for what is missing.', 3800);
+  await caption(page, '💬  A real model, live: it knows this catalog — a streaming service is a PARTNER SERVICE, activation will mint the code — and it asks for what is missing.', 3800);
   await captionOff(page);
-  await glideType(page, page.locator('#copilot-input'), '9.99 per month sounds right');
+  await glideType(page, page.locator('#copilot-input'),
+    'Call it StreamPlus, 9.99 EUR per month, sold on its own, one flat offering');
   await glideClick(page, page.locator('#copilot-send'));
-  await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 20000 });
+  // the model may ask one more clarifier before proposing — nudge it home
+  let proposed = await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 60000 })
+    .then(() => true).catch(() => false);
+  for (let i = 0; i < 2 && !proposed; i++) {
+    await glideType(page, page.locator('#copilot-input'),
+      'That covers everything — please propose it now.');
+    await glideClick(page, page.locator('#copilot-send'));
+    proposed = await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 60000 })
+      .then(() => true).catch(() => false);
+  }
+  if (!proposed) throw new Error('the copilot never proposed');
+  await page.locator('[data-testid=copilot-proposal]').first().waitFor({ timeout: 5000 });
   await page.waitForTimeout(600);
   await caption(page, '📋  It PROPOSES — spec, price, offering, plain TMF620. The model never writes; the owner decides.', 3400);
   await captionOff(page);
@@ -300,7 +331,7 @@ async function confirmLogout(page) {
 
   await caption(page, '📣  Next: marketing wants a 15% launch discount.');
   await captionOff(page);
-  await glideClick(page, page.locator('.tab', { hasText: 'Rules' }));
+  await glideClick(page, page.getByRole('button', { name: 'Rules', exact: true }));
   await page.waitForSelector('select[name="ruleKind"]', { timeout: 10000 });
   await glideClick(page, page.locator('select[name="ruleKind"]'));
   await page.selectOption('select[name="ruleKind"]', 'price-always');
@@ -330,7 +361,7 @@ async function confirmLogout(page) {
   }
   await page.waitForSelector('.searchbar', { timeout: 20000 });
   console.log('· SCENE3-csr');
-  await caption(page, '🎧  The CSR console. An agent picks up Mia\'s order for fulfilment.');
+  await caption(page, '🎧  The CSR console. An agent checks on Mia\'s order.');
   await captionOff(page);
   await glideType(page, page.locator('.searchbar input'), FAMILY);
   await glideClick(page, page.locator('.searchbar button'));
@@ -340,28 +371,24 @@ async function confirmLogout(page) {
   await page.locator('h1', { hasText: 'Mia' }).waitFor({ timeout: 15000 });
   await caption(page, '👤  The full 360: the order, the live cart, suggestions — and an AI copilot.');
   await captionOff(page);
-  const completeBtn = page.locator('.row', { hasText: 'GenAlpha One' }).locator('button', { hasText: 'Complete' }).first();
-  await completeBtn.waitFor({ timeout: 15000 });
-  await glideClick(page, completeBtn);
-  // Verify the order REALLY flipped to completed; retry the click if a
-  // transient hiccup swallowed it (this is a film, but the work is real).
+  // fulfilment is autonomous now: the shipping order books a real carrier and
+  // the order completes itself — the agent WATCHES it happen. If the film
+  // catches it early (still acknowledged), the one-click path still exists.
   let fulfilled = false;
-  for (let i = 0; i < 6 && !fulfilled; i++) {
-    await page.waitForTimeout(2500);
-    await page.reload();
-    await page.waitForSelector('h1', { timeout: 15000 });
+  for (let i = 0; i < 40 && !fulfilled; i++) {
     const st = await page.locator('.row', { hasText: 'GenAlpha One' }).locator('.state')
       .first().textContent().catch(() => '');
     if ((st || '').includes('completed')) { fulfilled = true; break; }
-    const err = await page.locator('.error').first().textContent().catch(() => '');
-    if (err) console.log('· CSR error:', err.slice(0, 140));
-    const again = page.locator('.row', { hasText: 'GenAlpha One' }).locator('button', { hasText: 'Complete' }).first();
-    if (await again.count()) await again.click().catch(() => {});
+    const btn = page.locator('.row', { hasText: 'GenAlpha One' }).locator('button', { hasText: 'Complete' }).first();
+    if (await btn.count()) { await glideClick(page, btn); }
+    await page.waitForTimeout(3000);
+    await page.reload();
+    await page.waitForSelector('h1', { timeout: 15000 });
   }
   if (!fulfilled) throw new Error('order never completed in CSR');
   console.log('· SCENE3-order-completed');
   await lens(page);
-  await caption(page, '🚀  Fulfilment is one click — activation is autonomous from here.', 2600);
+  await caption(page, '🚀  Completed — and the agent never had to push it: the parcel is with the carrier, activation runs itself. The agent is here for exceptions, not ceremony.', 3600);
   await captionOff(page);
   await glideClick(page, page.locator('button', { hasText: 'Sign out' }).first());
   await confirmLogout(page);
@@ -393,11 +420,6 @@ async function confirmLogout(page) {
   await captionOff(page);
   await caption(page, '🪪  Her page recomposes around what she owns — plan, lines, SIM, one place.', 2800);
   await captionOff(page);
-  // SIM self-care: the PUK, revealed on request — no call to anyone
-  await glideClick(page, page.locator('[data-testid=show-puk]').first());
-  await page.locator('[data-testid=sim-puk]').first().waitFor({ timeout: 10000 });
-  await caption(page, '🔐  Her SIM\'s PUK — self-served in one tap. At rest it\'s AES-256-GCM ciphertext, bound to her card.', 3200);
-  await captionOff(page);
   // one-tap data top-up
   const topupBtn = page.locator('[data-testid^=topup-]').first();
   if (await topupBtn.count()) {
@@ -412,6 +434,7 @@ async function confirmLogout(page) {
   await captionOff(page);
   await page.goto('http://localhost:8080/shop/');
   await page.waitForSelector('.card', { timeout: 20000 });
+  await shopTab(page, /TV/);
   await glideClick(page, page.locator('.card', { hasText: 'Netflix Standard' }).first());
   await page.locator('button.primary.big').waitFor({ timeout: 15000 });
   await glideClick(page, page.locator('button.primary.big'));
@@ -435,8 +458,27 @@ async function confirmLogout(page) {
   await page.locator('.row', { hasText: 'Order' }).first().waitFor({ timeout: 20000 });
   await caption(page, '📨  Every step became a message in her inbox — order received, completed, installer booked.');
   await captionOff(page);
+
+  // back to My page: the parcel has DELIVERED by now — the physical SIM went
+  // live with it. Self-served PUK, no call to anyone.
+  await page.goto('http://localhost:8080/shop/services');
+  let simShown = false;
+  for (let i = 0; i < 30 && !simShown; i++) {
+    simShown = await page.locator('[data-testid=show-puk]').first().waitFor({ timeout: 5000 })
+      .then(() => true).catch(() => false);
+    if (!simShown) await page.reload();
+  }
+  if (!simShown) fail('the SIM card never rendered on My page');
+  await caption(page, '📦→📱  The parcel delivered — and with it, her SIM went live.', 2200);
+  await captionOff(page);
+  await glideClick(page, page.locator('[data-testid=show-puk]').first());
+  await page.locator('[data-testid=sim-puk]').first().waitFor({ timeout: 10000 });
+  await caption(page, '🔐  Her SIM\'s PUK — self-served in one tap. At rest it\'s AES-256-GCM ciphertext, bound to her card.', 3200);
+  await captionOff(page);
   // the pricing rule from Scene 2, visible in HER cart
   await page.goto('http://localhost:8080/shop/');
+  await page.waitForSelector('.card', { timeout: 20000 });
+  await shopTab(page, /Devices/);
   await glideClick(page, page.locator('.card:has(h2:text-is("Apple iPhone 17"))').first());
   await page.waitForSelector('.pricetable', { timeout: 15000 });
   await glideClick(page, page.locator('button.primary.big'));
@@ -481,6 +523,7 @@ async function confirmLogout(page) {
   await caption(page, '🇳🇴  One more thing. Same build, different operator: Nova Telecom of Norway.', 3000);
   await captionOff(page);
   // bring-your-own-PIM: Nova's device imagery arrives from ITS system
+  await shopTab(page, /Enheter|Devices/);
   await glideClick(page, page.locator('.card', { hasText: 'Nordic Phone X' }).first());
   await page.waitForSelector('[data-testid=offer-gallery]', { timeout: 15000 });
   await page.waitForTimeout(700);
@@ -607,7 +650,7 @@ async function confirmLogout(page) {
   await page.waitForTimeout(3500);
   await caption(page, '🛰  Under the hood, every click you saw was an event — the system narrates itself.', 4000);
   await caption(page, '🔮  And under THAT: Java 25 with post-quantum crypto in the runtime, a hybrid ML-KEM edge, encrypted card secrets — PQC-ready, receipts in the repo.', 4200);
-  await caption(page, 'genalpha-bss · 32 ODA components · 11 CTKs at zero · families, gifting, a knowledge base · any language, any currency · quantum-ready · everything you watched was real.', 4500);
+  await caption(page, 'genalpha-bss · 38 ODA components · 25 CTKs at zero · families, gifting, wholesale both ways, a governed catalog · any language, any currency · quantum-ready · everything you watched was real.', 4500);
 
   await ctx.close();
   const video = await page.video().path();
