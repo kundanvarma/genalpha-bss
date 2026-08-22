@@ -146,6 +146,24 @@ agents appear on the proof surface; uncertified ones stay in discovery.
 Nobody certifies the BUYER side yet — the operator that does defines the
 bar, and gives risk-averse tenants a reason to turn the gate on at all.
 
+### Launch economics (asked and answered)
+
+Should agents get special discounts early, to buy traffic? No — and yes,
+in the right place. Agent-EXCLUSIVE retail discounts fail four ways: they
+make the one-price claim unverifiable (torching the proof-surface
+position), they train the aggregator's reference price downward forever
+(the OTA lesson), they buy the most churn-prone cohort there is (an agent
+that came for a delta leaves on a delta — the anti-referral), and "my AI
+got a better price than the shop gave me" is a brand-destroying sentence
+for an honesty-positioned operator. The doctrine: **discount the channel,
+never the customer-by-channel.** Buy early traffic with (1) rich,
+time-boxed acquisition commissions in the A1 dealer agreement — CAC, not
+retail price, with hardening and churn clawback; (2) PUBLIC launch
+pricing every channel sees at once; (3) machine-UX excellence — the
+easiest merchant to successfully complete outranks the marginally
+cheaper one; (4) referral rewards carried by agents as mandates — the
+"discount" that arrives through trust and selects the loyal cohort.
+
 ## Honesty rules (non-negotiable, house style)
 
 - **No agent-only pricing.** An agent never sees a price or a fee structure
