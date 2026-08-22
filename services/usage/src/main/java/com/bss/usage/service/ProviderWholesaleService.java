@@ -37,12 +37,17 @@ public class ProviderWholesaleService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
 
+    private final int rerateWindowDays;
+
     public ProviderWholesaleService(ProviderRateCardRepository rateCards, ProviderUsageLedgerRepository ledger,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.usage.wholesale-rerate-window-days:45}") int rerateWindowDays) {
         this.rateCards = rateCards;
         this.ledger = ledger;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.rerateWindowDays = rerateWindowDays;
     }
 
     /** The rate to charge THIS MVNO for THIS usage type: its own card wins, else the default. */
@@ -70,7 +75,7 @@ public class ProviderWholesaleService {
         Optional<ProviderUsageLedger> existing =
                 ledger.findByTenantIdAndMvnoPartyIdAndPeriodStartAndUsageSpecName(tenant, mvno, period, spec);
         if (existing.isPresent()) {
-            return ledgerMap(existing.get());
+            return correctIfMoved(existing.get(), units);
         }
         ProviderRateCard card = rateFor(tenant, mvno, spec)
                 .orElseThrow(() -> new BadRequestException(
@@ -93,6 +98,40 @@ public class ProviderWholesaleService {
         // Revenue books the host's wholesale REVENUE off this event (amount rides it).
         events.publish("ProviderWholesaleRatedEvent", "providerUsageLedger", ledgerMap(row));
         return ledgerMap(row);
+    }
+
+    /**
+     * THE PROVIDER-FACE CLOSED LOOP: the provider ledger has no CDR store of
+     * its own — the network's mediation feed IS the source — so late CDRs
+     * arrive as a corrected RE-REPORT of the same (mvno, period, type). An
+     * unchanged repeat stays a free no-op; a changed one inside the window
+     * re-rates the row, stamps the receipt (rerateCount, lastReratedAt) and
+     * emits ProviderWholesaleReratedEvent carrying the DELTA so the host's
+     * wholesale AR moves with the truth. Outside the window nothing mutates:
+     * a settled old period is a dispute, not a silent correction.
+     */
+    private Map<String, Object> correctIfMoved(ProviderUsageLedger row, BigDecimal units) {
+        if (units.compareTo(row.getTotalUnits()) == 0) {
+            return ledgerMap(row);
+        }
+        if (row.getPeriodStart().isBefore(
+                LocalDate.now().minusDays(rerateWindowDays).withDayOfMonth(1))) {
+            throw new BadRequestException("period " + row.getPeriodStart() + " is outside the "
+                    + rerateWindowDays + "-day correction window — raise a dispute, the ledger "
+                    + "does not silently rewrite settled history");
+        }
+        BigDecimal oldAmount = row.getAmount();
+        row.setTotalUnits(units);
+        row.setAmount(units.multiply(row.getRate()).setScale(2, RoundingMode.HALF_UP));
+        row.setRerateCount(row.getRerateCount() + 1);
+        row.setLastReratedAt(OffsetDateTime.now());
+        ledger.save(row);
+        Map<String, Object> event = ledgerMap(row);
+        event.put("previousAmount", oldAmount);
+        event.put("delta", row.getAmount().subtract(oldAmount));
+        event.put("rerateCount", row.getRerateCount());
+        events.publish("ProviderWholesaleReratedEvent", "providerUsageLedger", event);
+        return event;
     }
 
     /** The host's consolidated settlement: per MVNO, what each owes — host AR. */

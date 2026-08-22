@@ -52,6 +52,12 @@ public class ProviderUsageLedger {
     @Column(name = "status", length = 32)
     private String status;
 
+    @Column(name = "rerate_count", nullable = false)
+    private int rerateCount;
+
+    @Column(name = "last_rerated_at")
+    private OffsetDateTime lastReratedAt;
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
@@ -84,4 +90,9 @@ public class ProviderUsageLedger {
     public void setStatus(String status) { this.status = status; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
+    public int getRerateCount() { return rerateCount; }
+    public void setRerateCount(int v) { this.rerateCount = v; }
+    public OffsetDateTime getLastReratedAt() { return lastReratedAt; }
+    public void setLastReratedAt(OffsetDateTime v) { this.lastReratedAt = v; }
+
 }

@@ -290,6 +290,45 @@ public class RevenueService {
     }
 
     /**
+     * Provider-face closed loop (W-M7): the mediation feed re-reported an
+     * external MVNO's period and the rated row MOVED — the event carries the
+     * delta. A positive delta books additional receivable + revenue; a
+     * negative one reverses the excess. Keyed on (ledger id, rerateCount)
+     * so replays are free and every correction books exactly once.
+     */
+    @Transactional
+    public boolean postMobileWholesaleRevenueDelta(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        Object count = event.getOrDefault("rerateCount", 0);
+        String sourceRef = "mobile-wholesale-provider-rerate:" + id + ":" + count;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (event.get("delta") == null) {
+            return false;
+        }
+        BigDecimal delta = money(event.get("delta"));
+        if (delta.signum() == 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        String mvno = String.valueOf(event.getOrDefault("mvnoName", event.getOrDefault("mvnoPartyId", "MVNO")));
+        String spec = String.valueOf(event.getOrDefault("usageSpecName", "usage"));
+        String period = String.valueOf(event.getOrDefault("periodStart", ""));
+        String desc = "Mobile wholesale provider re-rate #" + count + " " + mvno + " " + spec
+                + (period.isBlank() ? "" : " " + period);
+        BigDecimal magnitude = delta.abs();
+        List<JournalLine> posting = delta.signum() > 0
+                ? List.of(line("mobile-wholesale:receivable", magnitude, null, id, desc),
+                          line("mobile-wholesale:revenue", null, magnitude, id, "Wholesale revenue — " + mvno))
+                : List.of(line("mobile-wholesale:revenue", magnitude, null, id, "Wholesale revenue reduced — " + mvno),
+                          line("mobile-wholesale:receivable", null, magnitude, id, desc));
+        saveBalanced(tenant, sourceRef, "mobileWholesaleRevenueDelta", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
      * H2 — KLUBBDUGNAD becomes MONEY: a rewarded, club-linked referral accrues
      * the club's share as a real liability — sponsorship expense against a
      * payable to the club, keyed on the conversion so replays are free. The

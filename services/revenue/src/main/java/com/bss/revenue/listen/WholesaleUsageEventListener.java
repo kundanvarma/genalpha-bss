@@ -54,6 +54,12 @@ public class WholesaleUsageEventListener {
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     revenue.postMobileWholesaleCogsDelta(row);
                 }
+            } else if ("ProviderWholesaleReratedEvent".equals(type)) {
+                // provider closed loop: a corrected re-report moved the row — book the delta
+                Map<String, Object> row = BillingEventListener.resource(envelope, "providerUsageLedger");
+                try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                    revenue.postMobileWholesaleRevenueDelta(row);
+                }
             } else if ("ProviderWholesaleRatedEvent".equals(type)) {
                 // provider side (W-M7): the host earns from an external MVNO — book revenue
                 Map<String, Object> row = BillingEventListener.resource(envelope, "providerUsageLedger");

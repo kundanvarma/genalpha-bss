@@ -89,6 +89,40 @@ const FJORD = `fjord-${run}`;
   if (afterN !== before) fail(`re-reporting double-booked: ${before} -> ${afterN}`);
   ok('IDEMPOTENT: a repeated usage report rates once and books once — the ledger is the checkpoint');
 
+  /* ---------- 6b. THE CLOSED LOOP: a corrected re-report moves the money ---------- */
+  // the network's mediation feed corrects Aurora's month: 100 GB was really 120 GB
+  const corr = await (await post('/mobileWholesaleProviderUsage',
+    { mvnoPartyId: AURORA, usageSpecName: SPEC, units: 120, unit: 'GB', periodStart: period })).json();
+  if (Number(corr.amount) !== 300 || Number(corr.rerateCount) !== 1 || Number(corr.delta) !== 50) {
+    fail(`correction not re-rated: ${JSON.stringify(corr)}`);
+  }
+  let deltaEntry = null;
+  for (let i = 0; i < 10 && !deltaEntry; i++) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const es = await (await ctx.request.get(`${REV}/journalEntry?limit=400`, { headers: H })).json();
+    deltaEntry = (Array.isArray(es) ? es : (es.journalEntry || []))
+      .find((e) => e.sourceRef === `mobile-wholesale-provider-rerate:${aRow.id}:1`);
+  }
+  if (!deltaEntry) fail('the correction delta never booked');
+  const dDetail = await (await ctx.request.get(`${REV}/journalEntry/${deltaEntry.id}`, { headers: H })).json();
+  const dr = (dDetail.lines || []).find((l) => l.accountCode === '1210');
+  const cr = (dDetail.lines || []).find((l) => l.accountCode === '4020');
+  if (!dr || Number(dr.debit) !== 50 || !cr || Number(cr.credit) !== 50) {
+    fail('delta booking wrong: ' + JSON.stringify(dDetail.lines));
+  }
+  ok('CLOSED LOOP: the feed re-reported 120 GB — the row re-rated to €300 (rerate #1) and the host '
+    + 'booked exactly the €50 delta, DR 1210 / CR 4020 — no human in the loop');
+
+  /* ---------- 6c. settled history refuses silent correction ---------- */
+  const oldPeriod = '2026-01-01';
+  await post('/mobileWholesaleProviderUsage',
+    { mvnoPartyId: AURORA, usageSpecName: SPEC, units: 10, unit: 'GB', periodStart: oldPeriod });
+  const tooLate = await post('/mobileWholesaleProviderUsage',
+    { mvnoPartyId: AURORA, usageSpecName: SPEC, units: 20, unit: 'GB', periodStart: oldPeriod });
+  if (tooLate.status() < 400) fail(`an out-of-window correction mutated settled history: ${tooLate.status()}`);
+  ok('WINDOW: a correction outside the window is refused — a settled old period is a dispute, '
+    + 'not a silent rewrite');
+
   /* ---------- 7. CONSOLE: enter a provider rate card + see the host book ---------- */
   const cctx = await browser.newContext();
   const page = await cctx.newPage();
