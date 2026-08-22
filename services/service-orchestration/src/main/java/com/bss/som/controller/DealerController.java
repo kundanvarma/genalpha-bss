@@ -56,6 +56,13 @@ public class DealerController {
         return ResponseEntity.ok(dealers.sell(dto));
     }
 
+    /** G4 — the season scoreboard: stores ranked by accrued commission.
+     *  A dealer sees the ranking; the wholesale desk sees it too. */
+    @GetMapping("/dealer/v1/leaderboard")
+    public ResponseEntity<List<Map<String, Object>>> leaderboard() {
+        return ResponseEntity.ok(dealers.leaderboard());
+    }
+
     /** The money page: entries + totals, own store only. */
     @GetMapping("/dealer/v1/commission")
     public ResponseEntity<Map<String, Object>> commission() {

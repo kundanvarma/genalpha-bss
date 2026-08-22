@@ -319,6 +319,35 @@ public class DealerService {
 
     /** The dealer's money page: entries newest first, plus honest totals. */
     @Transactional(readOnly = true)
+    /** G4 — CHANNEL GAMIFICATION: the season leaderboard the commission
+     *  ledger always contained. Stores ranked by accrued commission and
+     *  activations; the operator's sell-side scoreboard, sold-side honest. */
+    public List<Map<String, Object>> leaderboard() {
+        Map<String, Map<String, Object>> byKey = new LinkedHashMap<>();
+        for (CommissionEntry e : commissions.findByTenantId(tenantScope.currentTenantId())) {
+            String key = e.getDealerOrgId() + "|" + (e.getStore() == null ? "" : e.getStore());
+            Map<String, Object> row = byKey.computeIfAbsent(key, k -> {
+                Map<String, Object> fresh = new LinkedHashMap<>();
+                fresh.put("dealerOrgId", e.getDealerOrgId());
+                fresh.put("store", e.getStore());
+                fresh.put("activations", 0L);
+                fresh.put("commission", BigDecimal.ZERO);
+                fresh.put("unit", e.getAmountUnit());
+                return fresh;
+            });
+            row.put("activations", (long) row.get("activations") + 1);
+            row.put("commission", ((BigDecimal) row.get("commission"))
+                    .add(e.getAmountValue() == null ? BigDecimal.ZERO : e.getAmountValue()));
+        }
+        List<Map<String, Object>> out = new java.util.ArrayList<>(byKey.values());
+        out.sort((a, b) -> ((BigDecimal) b.get("commission")).compareTo((BigDecimal) a.get("commission")));
+        int rank = 0;
+        for (Map<String, Object> row : out) {
+            row.put("rank", ++rank);
+        }
+        return out;
+    }
+
     public Map<String, Object> myCommission() {
         DealerAgreement dealer = requireDealer();
         List<CommissionEntry> entries = commissions
