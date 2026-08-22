@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, myReferral, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold, redeemReferral } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
