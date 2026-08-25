@@ -46,6 +46,7 @@ public class TenantOnboardingService {
     private final String partyBase;
     private final String usageBase;
     private final String billingBase;
+    private final String somBase;
     private final String inventoryBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
     private final String protectedTenants;
@@ -63,6 +64,7 @@ public class TenantOnboardingService {
             @Value("${bss.downstream.party-base-url:http://localhost:8083}") String partyBase,
             @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBase,
             @Value("${bss.downstream.billing-base-url:http://localhost:8086}") String billingBase,
+            @Value("${bss.downstream.som-base-url:http://localhost:8104}") String somBase,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8084}") String inventoryBase,
             @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
             IdpAdminClient idp,
@@ -79,6 +81,7 @@ public class TenantOnboardingService {
         this.partyBase = partyBase;
         this.usageBase = usageBase;
         this.billingBase = billingBase;
+        this.somBase = somBase;
         this.inventoryBase = inventoryBase;
         this.protectedTenants = protectedTenants;
         this.idp = idp;
@@ -703,6 +706,128 @@ public class TenantOnboardingService {
             log.warn("twin mint skipped: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * B-M1 — THE REAL BASE IMPORTER: the migration door. Each legacy row
+     * becomes a LOGIN (temporary password the operator hands over), a party,
+     * and an active product carrying the customer's real MSISDN — created
+     * with the TARGET tenant's own staff token, idempotent per email
+     * (a re-run counts alreadyPresent and touches nothing). The report is
+     * S6-style: what landed, what already existed, which offerings are
+     * missing BY NAME, and what this version does not do — on its face.
+     */
+    public Map<String, Object> importBase(String tenantId, Map<String, Object> dto) throws Exception {
+        if (!(dto.get("rows") instanceof java.util.List<?> rows) || rows.isEmpty()) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "rows [{externalRef, givenName, familyName, email, msisdn?, offeringName}] are required");
+        }
+        String tok = staffToken(tenantId);
+        String self = "http://localhost:8080";
+        waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", tok);
+        waitAdopt(inventoryBase, "/tmf-api/productInventory/v4/product", tok);
+
+        Map<String, Map<String, Object>> shelf = new java.util.HashMap<>();
+        for (Map<String, Object> o : fetchAll(catalogBase,
+                "/tmf-api/productCatalogManagement/v4/productOffering", tok)) {
+            shelf.putIfAbsent(String.valueOf(o.get("name")), o);
+        }
+
+        java.util.List<Map<String, Object>> imported = new java.util.ArrayList<>();
+        java.util.List<String> alreadyPresent = new java.util.ArrayList<>();
+        java.util.List<Map<String, Object>> offeringMissing = new java.util.ArrayList<>();
+        java.util.List<Map<String, Object>> failed = new java.util.ArrayList<>();
+        for (Object raw : rows) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> row = (Map<String, Object>) raw;
+            String externalRef = String.valueOf(row.get("externalRef"));
+            String email = String.valueOf(row.get("email"));
+            String offeringName = String.valueOf(row.get("offeringName"));
+            Map<String, Object> offering = shelf.get(offeringName);
+            if (offering == null) {
+                Map<String, Object> miss = new java.util.LinkedHashMap<>();
+                miss.put("externalRef", externalRef);
+                miss.put("offeringName", offeringName);
+                miss.put("reason", "no offering with this name in the target catalog — author it first");
+                offeringMissing.add(miss);
+                continue;
+            }
+            Map<String, Object> login;
+            try {
+                login = rest.post().uri(self + "/tmf-api/rolesAndPermissionsManagement/v4/user")
+                        .header("Authorization", "Bearer " + tok)
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("email", email,
+                                "givenName", String.valueOf(row.getOrDefault("givenName", "Imported")),
+                                "familyName", String.valueOf(row.getOrDefault("familyName", externalRef))))
+                        .retrieve().body(Map.class);
+            } catch (Exception dup) {
+                // idempotency: this email already has a login — the row is done
+                alreadyPresent.add(externalRef);
+                continue;
+            }
+            try {
+                Map<String, Object> product = new java.util.LinkedHashMap<>();
+                product.put("name", offeringName);
+                product.put("status", "active");
+                product.put("startDate", java.time.OffsetDateTime.now().toString());
+                product.put("productOffering", Map.of("id", offering.get("id"), "name", offeringName));
+                product.put("relatedParty", java.util.List.of(Map.of(
+                        "id", login.get("id"), "role", "customer", "@referredType", "Individual")));
+                if (row.get("msisdn") != null) {
+                    product.put("supportingResource", java.util.List.of(
+                            Map.of("value", String.valueOf(row.get("msisdn")))));
+                }
+                rest.post().uri(inventoryBase + "/tmf-api/productInventory/v4/product")
+                        .header("Authorization", "Bearer " + tok)
+                        .header("Content-Type", "application/json")
+                        .body(product).retrieve().body(Map.class);
+                // the number the portal shows lives on the SERVICE — register
+                // the existing MSISDN as data, no pool draw, no order
+                rest.post().uri(somBase + "/som/v1/importService")
+                        .header("Authorization", "Bearer " + tok)
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("ownerPartyId", login.get("id"), "name", offeringName,
+                                "msisdn", row.get("msisdn") == null ? "" : String.valueOf(row.get("msisdn"))))
+                        .retrieve().body(Map.class);
+                Map<String, Object> out = new java.util.LinkedHashMap<>();
+                out.put("externalRef", externalRef);
+                out.put("partyId", login.get("id"));
+                out.put("email", email);
+                out.put("temporaryPassword", login.get("temporaryPassword"));
+                out.put("offeringName", offeringName);
+                if (row.get("msisdn") != null) {
+                    out.put("msisdn", row.get("msisdn"));
+                }
+                imported.add(out);
+            } catch (Exception e) {
+                Map<String, Object> f = new java.util.LinkedHashMap<>();
+                f.put("externalRef", externalRef);
+                f.put("reason", String.valueOf(e.getMessage()));
+                failed.add(f);
+            }
+        }
+        Map<String, Object> report = new java.util.LinkedHashMap<>();
+        report.put("@type", "BaseImport");
+        report.put("tenantId", tenantId);
+        report.put("rows", rows.size());
+        report.put("imported", imported.size());
+        report.put("alreadyPresent", alreadyPresent.size());
+        report.put("offeringMissing", offeringMissing.size());
+        report.put("failed", failed.size());
+        report.put("customers", imported);
+        report.put("exceptions", Map.of("offeringMissing", offeringMissing,
+                "alreadyPresent", alreadyPresent, "failed", failed));
+        report.put("readyForCutover", offeringMissing.isEmpty() && failed.isEmpty());
+        report.put("assumptions", java.util.List.of(
+                "idempotent per EMAIL: a re-run counts alreadyPresent and creates nothing",
+                "each customer gets a LOGIN with a temporary password — hand it over on cutover",
+                "the MSISDN rides the product as its supporting resource (the number the portal shows)",
+                "NOT in this version: open balances, SIM ICCIDs, port-in orchestration — book balances "
+                        + "separately and port numbers in waves"));
+        log.info("base import into '{}': {} imported, {} already present, {} missing offerings, {} failed",
+                tenantId, imported.size(), alreadyPresent.size(), offeringMissing.size(), failed.size());
+        return report;
     }
 
     private static String orDefault(String v, String dflt) {

@@ -24,6 +24,7 @@ bss:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8083}
     usage-base-url: ${USAGE_BASE_URL:http://localhost:8097}
     billing-base-url: ${BILLING_BASE_URL:http://localhost:8086}
+    som-base-url: ${SOM_BASE_URL:http://localhost:8104}
     inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8084}
   # Issuer-per-tenant, with each tenant's IdP admin credentials: the
   # bss-user-admin service account may manage exactly its own realm's users.

@@ -56,6 +56,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/mefApi/serviceOrdering/v1/serviceOrder").permitAll()
                         .requestMatchers("/tmf-api/serviceTestManagement/v4/**").authenticated()
+                        .requestMatchers("/som/v1/importService").hasAuthority("service:write")
                         .requestMatchers("/tmf-api/resourceInventoryManagement/v4/**").hasAuthority("service:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.ORDER_BASE + "/serviceOrder",
                                 "/tmf-api/serviceOrdering/v3/serviceOrder").hasAuthority(WRITE)

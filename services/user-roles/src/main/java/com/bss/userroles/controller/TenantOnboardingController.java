@@ -80,6 +80,13 @@ public class TenantOnboardingController {
         return ResponseEntity.status(201).body(onboarding.prospectSimulation(dto));
     }
 
+    @PostMapping("/onboarding/v1/operator/{id}/importBase")
+    public ResponseEntity<Map<String, Object>> importBase(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> dto) throws Exception {
+        return ResponseEntity.status(201).body(onboarding.importBase(id, dto));
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/operator/{id}")
     public ResponseEntity<Map<String, Object>> mutate(
             @org.springframework.web.bind.annotation.PathVariable("id") String id,

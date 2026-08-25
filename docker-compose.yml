@@ -916,6 +916,7 @@ services:
       PARTY_BASE_URL: http://party-account:8080
       USAGE_BASE_URL: http://usage:8080
       BILLING_BASE_URL: http://billing:8080
+      SOM_BASE_URL: http://service-orchestration:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
       # the tenant fleet is a FILE: shared registry, no rebuild to add one
       SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
