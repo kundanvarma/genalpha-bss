@@ -8,6 +8,8 @@ import java.util.Optional;
 
 public interface CustomerBillRepository extends JpaRepository<CustomerBill, String> {
 
+    java.util.List<CustomerBill> findByTenantId(String tenantId);
+
     java.util.List<CustomerBill> findByTenantIdAndPaymentReference(String tenantId, String paymentReference);
 
     Optional<CustomerBill> findByIdAndTenantId(String id, String tenantId);
