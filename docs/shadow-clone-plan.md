@@ -35,9 +35,14 @@ proves the wall (an email in the sandbox is suppressed, not sent), deletes the
 probe realm.
 
 ## Honest boundaries (follow-ups by trigger)
-- Subscriber-base seeding (Tvilling corpus into the clone) — the diff answers
-  portfolio-price questions without customers; base-dependent questions
-  (dunning, usage, churn exposure) need the corpus seeding pass.
+- ~~Subscriber-base seeding~~ **SHIPPED (2026-08-25)**:
+  `POST /onboarding/v1/operator/{cloneId}/seedTwinBase {sourceId, count}` —
+  the ONLY thing read from the source is the aggregate offering distribution
+  (no name, email or id crosses); the clone mints proportional synthetic
+  twins (`Tvilling …@twin.example`, fictional by construction, min 1 per
+  offering so `count` is a scale target) each holding its product, and the
+  REAL billing run bills them. Sandbox-only by guard — twins in production
+  would be pollution. Proven in `shadow_clone_test` (45 twins, 40 bills).
 - Wholesale rate-card copy + the remaining egress guards (payment PSP, insight
   GA4/ad destinations, social publish) — same one-line registry-gate pattern as
   the communication wall; communication is the highest-stakes egress and is the

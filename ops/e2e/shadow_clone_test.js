@@ -131,6 +131,42 @@ async function token(ctx, realm, client, user, pass) {
   console.log('OK THE WALL: an email inside the sandbox is stored in-app and marked '
     + 'sandbox-suppressed — real engines, no real-world side effects');
 
+  /* ---------- 5. TVILLING BASE: a subscriber base that is nobody ---------- */
+  const seedRes = await ctx.post(`${API}/onboarding/v1/operator/${SC}/seedTwinBase`,
+    { headers: H(host), data: { sourceId: 'genalpha', count: 12 } });
+  if (seedRes.status() !== 201) fail('twin seeding refused: ' + seedRes.status()
+    + ' ' + (await seedRes.text()).slice(0, 200));
+  const seedOut = await seedRes.json();
+  if (!(seedOut.seeded >= 10)) fail('too few twins seeded: ' + JSON.stringify(seedOut).slice(0, 200));
+  if (!/AGGREGATE/.test(seedOut.privacy || '')) fail('the privacy promise is missing from the receipt');
+  console.log(`OK TVILLING BASE: ${seedOut.seeded} synthetic subscribers minted in the clone, `
+    + `shaped like genalpha's real base (${Object.keys(seedOut.distribution).length} offerings) — `
+    + 'only the aggregate distribution crossed; every person is fictional');
+
+  // the guard: twins in PRODUCTION would be pollution, not simulation
+  const guard = await ctx.post(`${API}/onboarding/v1/operator/genalpha/seedTwinBase`,
+    { headers: H(host), data: { sourceId: 'genalpha', count: 2 } });
+  if (guard.status() < 400) fail('twin seeding into a NON-sandbox was allowed: ' + guard.status());
+  console.log('OK SANDBOX-ONLY: seeding a production tenant is refused — twins live in clones');
+
+  // the point of it all: the REAL billing engine bills the fictional base
+  const runRes = await ctx.post(`${API}/tmf-api/customerBillManagement/v4/billingRun`,
+    { headers: H(staff), data: {} });
+  if (runRes.status() >= 300) fail('clone billing run refused: ' + runRes.status());
+  let bills = [];
+  for (let i = 0; i < 10 && !bills.length; i++) {
+    await sleep(3000);
+    bills = await (await ctx.get(`${API}/tmf-api/customerBillManagement/v4/customerBill?limit=100`,
+      { headers: H(staff) })).json().catch(() => []);
+    if (!Array.isArray(bills)) bills = [];
+  }
+  if (!bills.length) fail('the twin base produced no bills');
+  const billed = bills.filter((b) => Number(((b.amountDue || b.taxIncludedAmount || {}).value) || 0) > 0);
+  if (!billed.length) fail('no twin bill carries an amount: ' + JSON.stringify(bills[0]).slice(0, 200));
+  console.log(`OK BASE-DEPENDENT SIMULATION: the clone's real billing run cut ${bills.length} bills `
+    + 'over the synthetic base — dunning, price and migration questions can now run on a base '
+    + 'that is structurally real and personally nobody');
+
   /* ---------- cleanup ---------- */
   const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
     { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;

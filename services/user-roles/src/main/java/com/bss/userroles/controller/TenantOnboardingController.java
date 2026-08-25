@@ -53,6 +53,13 @@ public class TenantOnboardingController {
         return ResponseEntity.status(201).body(onboarding.cloneOperator(id, dto));
     }
 
+    @PostMapping("/onboarding/v1/operator/{id}/seedTwinBase")
+    public ResponseEntity<Map<String, Object>> seedTwinBase(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> dto) throws Exception {
+        return ResponseEntity.status(201).body(onboarding.seedTwinBase(id, dto));
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/operator/{id}")
     public ResponseEntity<Map<String, Object>> mutate(
             @org.springframework.web.bind.annotation.PathVariable("id") String id,

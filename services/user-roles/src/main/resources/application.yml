@@ -21,6 +21,8 @@ bss:
   downstream:
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    party-base-url: ${PARTY_BASE_URL:http://localhost:8083}
+    inventory-base-url: ${INVENTORY_BASE_URL:http://localhost:8084}
   # Issuer-per-tenant, with each tenant's IdP admin credentials: the
   # bss-user-admin service account may manage exactly its own realm's users.
   tenants:

@@ -43,6 +43,8 @@ public class TenantOnboardingService {
     private final String tenantsFile;
     private final String catalogBase;
     private final String policyBase;
+    private final String partyBase;
+    private final String inventoryBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
     private final String protectedTenants;
     private final IdpAdminClient idp;
@@ -56,6 +58,8 @@ public class TenantOnboardingService {
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
             @Value("${bss.downstream.policy-base-url:http://localhost:8113}") String policyBase,
+            @Value("${bss.downstream.party-base-url:http://localhost:8083}") String partyBase,
+            @Value("${bss.downstream.inventory-base-url:http://localhost:8084}") String inventoryBase,
             @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
             IdpAdminClient idp,
             com.bss.userroles.security.TenantRegistry tenants,
@@ -68,6 +72,8 @@ public class TenantOnboardingService {
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
         this.policyBase = policyBase;
+        this.partyBase = partyBase;
+        this.inventoryBase = inventoryBase;
         this.protectedTenants = protectedTenants;
         this.idp = idp;
         this.tenants = tenants;
@@ -394,6 +400,110 @@ public class TenantOnboardingService {
         out.put("sourceId", sourceId);
         out.put("sandbox", true);
         out.put("copied", copied);
+        return out;
+    }
+
+    /**
+     * TVILLING BASE SEEDING: give the sandbox clone a subscriber base that is
+     * STRUCTURALLY the source's and PERSONALLY nobody's. The only thing read
+     * from the source is the AGGREGATE shape — how many active products sit
+     * on which offering, by name; no customer name, email or id ever crosses.
+     * The clone then mints that many synthetic twins (fictional by
+     * construction) and gives each its product, so the real billing engine
+     * has a real base to bill. Refused outside a sandbox: twins in
+     * production would be pollution, not simulation.
+     */
+    public Map<String, Object> seedTwinBase(String cloneId, Map<String, Object> dto) throws Exception {
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher cm = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
+        if (!cm.find() || !cm.group(1).contains("sandbox:")) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "twin seeding is sandbox-only — '" + cloneId + "' is not a sandbox clone");
+        }
+        String sourceId = String.valueOf(dto.getOrDefault("sourceId", "genalpha"));
+        Matcher sm = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
+        if (!sm.find()) {
+            throw new com.bss.userroles.exception.BadRequestException("unknown source '" + sourceId + "'");
+        }
+        String srcRealm = orDefault(firstGroup(sm.group(1), "issuer: .*?/realms/([a-z0-9-]+)"), sourceId);
+        int cap = dto.get("count") == null ? 25 : Integer.parseInt(String.valueOf(dto.get("count")));
+        String srcTok = staffToken(srcRealm);
+        String dstTok = staffToken(cloneId);
+
+        // 1. the SHAPE — aggregate only, the sole read from the source
+        Map<String, Integer> shape = new java.util.LinkedHashMap<>();
+        for (Map<String, Object> product : fetchAll(inventoryBase,
+                "/tmf-api/productInventory/v4/product?status=active", srcTok)) {
+            Object ref = product.get("productOffering");
+            if (ref instanceof Map<?, ?> r && r.get("name") != null) {
+                shape.merge(String.valueOf(r.get("name")), 1, Integer::sum);
+            }
+        }
+        int total = shape.values().stream().mapToInt(Integer::intValue).sum();
+        if (total == 0) {
+            throw new com.bss.userroles.exception.BadRequestException("the source has no active base to shape from");
+        }
+
+        // 2. the clone's own shelf, by name
+        Map<String, Map<String, Object>> shelf = new java.util.HashMap<>();
+        for (Map<String, Object> o : fetchAll(catalogBase,
+                "/tmf-api/productCatalogManagement/v4/productOffering", dstTok)) {
+            shelf.putIfAbsent(String.valueOf(o.get("name")), o);
+        }
+
+        // 3. mint the twins — deterministic, proportional, fictional
+        Map<String, Integer> seededBy = new java.util.LinkedHashMap<>();
+        int seeded = 0;
+        long stamp = System.currentTimeMillis();
+        for (Map.Entry<String, Integer> e : shape.entrySet()) {
+            Map<String, Object> offering = shelf.get(e.getKey());
+            if (offering == null) {
+                continue;
+            }
+            int n = Math.max(1, Math.round((float) cap * e.getValue() / total));
+            for (int i = 0; i < n; i++) {
+                String label = "Twin-" + Integer.toHexString((e.getKey() + i).hashCode());
+                Map<String, Object> party;
+                try {
+                    party = rest.post().uri(partyBase + "/tmf-api/party/v4/individual")
+                            .header("Authorization", "Bearer " + dstTok)
+                            .header("Content-Type", "application/json")
+                            .body(Map.of("givenName", "Tvilling", "familyName", label,
+                                    "contactMedium", java.util.List.of(Map.of(
+                                            "mediumType", "email", "characteristic",
+                                            Map.of("emailAddress", label.toLowerCase() + "-" + stamp + "@twin.example")))))
+                            .retrieve().body(Map.class);
+                } catch (Exception ex) {
+                    log.warn("twin party skipped: {}", ex.getMessage());
+                    continue;
+                }
+                try {
+                    rest.post().uri(inventoryBase + "/tmf-api/productInventory/v4/product")
+                            .header("Authorization", "Bearer " + dstTok)
+                            .header("Content-Type", "application/json")
+                            .body(Map.of("name", e.getKey(), "status", "active",
+                                    "startDate", java.time.OffsetDateTime.now().toString(),
+                                    "productOffering", Map.of("id", offering.get("id"), "name", e.getKey()),
+                                    "relatedParty", java.util.List.of(Map.of(
+                                            "id", party.get("id"), "role", "customer",
+                                            "@referredType", "Individual"))))
+                            .retrieve().body(Map.class);
+                    seeded++;
+                    seededBy.merge(e.getKey(), 1, Integer::sum);
+                } catch (Exception ex) {
+                    log.warn("twin product skipped for {}: {}", e.getKey(), ex.getMessage());
+                }
+            }
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("cloneId", cloneId);
+        out.put("sourceId", sourceId);
+        out.put("seeded", seeded);
+        out.put("distribution", seededBy);
+        out.put("privacy", "only the AGGREGATE offering distribution was read from the source — "
+                + "no name, email or id crossed; every subscriber here is fictional by construction");
+        log.info("twin base seeded into sandbox '{}': {} subscribers shaped like '{}'",
+                cloneId, seeded, sourceId);
         return out;
     }
 
