@@ -1,6 +1,6 @@
 # Time compression — a simulated quarter in the sandbox clone
 
-**Status:** RESEARCHED, PLAN (2026-08-25) · build on trigger · **Depends on:** shadow-operator clone (shipped), Tvilling base seeding (shipped)
+**Status:** T1 SHIPPED (2026-08-25) · T2 dunning + T3 usage on trigger · **Depends on:** shadow-operator clone (shipped), Tvilling base seeding (shipped)
 
 ## The research (what the code actually says)
 

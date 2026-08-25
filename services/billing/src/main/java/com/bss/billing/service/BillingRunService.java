@@ -61,6 +61,7 @@ public class BillingRunService {
     private static final int RATE_BATCH_SIZE = 200;
 
     private final int runConcurrency;
+    private final TenantClock clock;
 
     public BillingRunService(CustomerBillRepository bills, AppliedBillingRateRepository rates,
             DownstreamClients.InventoryClient inventory, DownstreamClients.CatalogClient catalog,
@@ -76,7 +77,9 @@ public class BillingRunService {
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.billing.run-account-delay-ms:0}") long accountDelayMs,
             @org.springframework.beans.factory.annotation.Value(
-                    "${bss.billing.run-concurrency:8}") int runConcurrency) {
+                    "${bss.billing.run-concurrency:8}") int runConcurrency,
+            TenantClock clock) {
+        this.clock = clock;
         this.bills = bills;
         this.loyaltyTierClient = loyaltyTierClient;
         this.rates = rates;
@@ -135,7 +138,7 @@ public class BillingRunService {
         // The run is triggered by an authenticated staff request, so the
         // caller's tenant scopes everything the run reads and creates.
         String tenantId = tenantScope.currentTenantId();
-        LocalDate today = LocalDate.now();
+        LocalDate today = clock.today();   // the T1 seam: sandbox clones may live in the future
         LocalDate defaultStart = today.withDayOfMonth(1);
         LocalDate defaultEnd = defaultStart.plusMonths(1).minusDays(1);
 

@@ -60,6 +60,20 @@ public class TenantOnboardingController {
         return ResponseEntity.status(201).body(onboarding.seedTwinBase(id, dto));
     }
 
+    @PostMapping("/onboarding/v1/operator/{id}/advanceClock")
+    public ResponseEntity<Map<String, Object>> advanceClock(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody Map<String, Object> dto) throws Exception {
+        return ResponseEntity.ok(onboarding.advanceClock(id,
+                Integer.parseInt(String.valueOf(dto.getOrDefault("days", 30)))));
+    }
+
+    @PostMapping("/onboarding/v1/operator/{id}/simulateQuarter")
+    public ResponseEntity<Map<String, Object>> simulateQuarter(
+            @org.springframework.web.bind.annotation.PathVariable String id) throws Exception {
+        return ResponseEntity.status(201).body(onboarding.simulateQuarter(id));
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/operator/{id}")
     public ResponseEntity<Map<String, Object>> mutate(
             @org.springframework.web.bind.annotation.PathVariable("id") String id,

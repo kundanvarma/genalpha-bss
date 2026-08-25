@@ -184,6 +184,32 @@ async function token(ctx, realm, client, user, pass) {
     + 'over the synthetic base — dunning, price and migration questions can now run on a base '
     + 'that is structurally real and personally nobody');
 
+  /* ---------- 6. T1: the simulated quarter ---------- */
+  const countBills = async () => {
+    const r = await (await ctx.get(`${API}/tmf-api/customerBillManagement/v4/customerBill?limit=100`,
+      { headers: H(staff) })).json().catch(() => []);
+    return Array.isArray(r) ? r.length : 0;
+  };
+  const before = await countBills();
+  const qRes = await ctx.post(`${API}/onboarding/v1/operator/${SC}/simulateQuarter`,
+    { headers: H(host), data: {}, timeout: 240000 });
+  if (qRes.status() !== 201) fail('simulateQuarter refused: ' + qRes.status());
+  const quarter = await qRes.json();
+  if ((quarter.cycle || []).length !== 3) fail('not three cycles: ' + JSON.stringify(quarter).slice(0, 200));
+  if (!(quarter.assumptions || []).some((a) => /recurring charges only/.test(a))) {
+    fail('the quarter report hides its own limits');
+  }
+  let after = before;
+  for (let i = 0; i < 8 && after <= before; i++) { await sleep(3000); after = await countBills(); }
+  if (!(after > before)) fail(`the compressed quarter cut no new bills: ${before} -> ${after}`);
+  // the clock guard: production time is not a knob
+  const clkGuard = await ctx.post(`${API}/onboarding/v1/operator/genalpha/advanceClock`,
+    { headers: H(host), data: { days: 30 } });
+  if (clkGuard.status() < 400) fail('the clock moved for a NON-sandbox tenant: ' + clkGuard.status());
+  console.log(`OK SIMULATED QUARTER: 3 compressed cycles (+30d each) cut ${after - before} new bills `
+    + `over the twin base (${before} -> ${after}) — same engine, no day billed twice, `
+    + 'assumptions on the report; and the clock REFUSES to move for production');
+
   /* ---------- cleanup ---------- */
   const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
     { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;

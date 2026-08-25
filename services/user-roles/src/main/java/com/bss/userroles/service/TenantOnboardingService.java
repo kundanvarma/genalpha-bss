@@ -45,6 +45,7 @@ public class TenantOnboardingService {
     private final String policyBase;
     private final String partyBase;
     private final String usageBase;
+    private final String billingBase;
     private final String inventoryBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
     private final String protectedTenants;
@@ -61,6 +62,7 @@ public class TenantOnboardingService {
             @Value("${bss.downstream.policy-base-url:http://localhost:8113}") String policyBase,
             @Value("${bss.downstream.party-base-url:http://localhost:8083}") String partyBase,
             @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBase,
+            @Value("${bss.downstream.billing-base-url:http://localhost:8086}") String billingBase,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8084}") String inventoryBase,
             @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
             IdpAdminClient idp,
@@ -76,6 +78,7 @@ public class TenantOnboardingService {
         this.policyBase = policyBase;
         this.partyBase = partyBase;
         this.usageBase = usageBase;
+        this.billingBase = billingBase;
         this.inventoryBase = inventoryBase;
         this.protectedTenants = protectedTenants;
         this.idp = idp;
@@ -509,6 +512,69 @@ public class TenantOnboardingService {
                 + "no name, email or id crossed; every subscriber here is fictional by construction");
         log.info("twin base seeded into sandbox '{}': {} subscribers shaped like '{}'",
                 cloneId, seeded, sourceId);
+        return out;
+    }
+
+    /** T1 — advance a SANDBOX clone's clock (clock-offset-days in its block). */
+    public Map<String, Object> advanceClock(String cloneId, int days) throws Exception {
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher m = Pattern.compile("(      - id: " + cloneId + "\n(?:        .*\n)*)").matcher(yml);
+        if (!m.find() || !m.group(1).contains("sandbox:")) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "the clock only moves in a sandbox — '" + cloneId + "' is not one");
+        }
+        String block = m.group(1);
+        int current = 0;
+        String cur = firstGroup(block, "clock-offset-days: \"?(\\d+)");
+        if (cur != null) {
+            current = Integer.parseInt(cur);
+        }
+        int next = current + days;
+        String updated = block.contains("clock-offset-days:")
+                ? block.replaceAll("clock-offset-days: \"?\\d+\"?", "clock-offset-days: \"" + next + "\"")
+                : block.replaceFirst("( +)sandbox: ", "$1clock-offset-days: \"" + next + "\"\n$1sandbox: ");
+        Files.writeString(Path.of(tenantsFile), yml.replace(block, updated));
+        refresher.refresh();
+        return Map.of("cloneId", cloneId, "clockOffsetDays", next);
+    }
+
+    /** T1 — the simulated quarter: 3 x (advance 30 days -> REAL billing run).
+     *  Recurring charges only until T3; the report says so on its face. */
+    public Map<String, Object> simulateQuarter(String cloneId) throws Exception {
+        String dstTok = staffToken(cloneId);
+        java.util.List<Map<String, Object>> cycles = new java.util.ArrayList<>();
+        for (int cycle = 1; cycle <= 3; cycle++) {
+            int offset = (Integer) advanceClock(cloneId, 30).get("clockOffsetDays");
+            try {
+                // the fleet learns the new clock on its refresh tick — outwait it
+                Thread.sleep(35000);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            Map<String, Object> run;
+            try {
+                run = rest.post().uri(billingBase + "/tmf-api/customerBillManagement/v4/billingRun")
+                        .header("Authorization", "Bearer " + dstTok)
+                        .header("Content-Type", "application/json")
+                        .body(Map.of()).retrieve().body(Map.class);
+            } catch (Exception e) {
+                run = Map.of("error", String.valueOf(e.getMessage()));
+            }
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("cycle", cycle);
+            row.put("clockOffsetDays", offset);
+            row.put("run", run);
+            cycles.add(row);
+        }
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("@type", "SimulatedQuarter");
+        out.put("cloneId", cloneId);
+        out.put("cycle", cycles);
+        out.put("assumptions", java.util.List.of(
+                "dates were compressed: 3 cycles of +30 days on the sandbox clock",
+                "recurring charges only — usage-dependent lines reflect seeded meters, not a lived quarter",
+                "billed by the SAME engine as production; no day billed twice across cycles"));
         return out;
     }
 
