@@ -74,6 +74,12 @@ public class TenantOnboardingController {
         return ResponseEntity.status(201).body(onboarding.simulateQuarter(id));
     }
 
+    @PostMapping("/onboarding/v1/prospectSimulation")
+    public ResponseEntity<Map<String, Object>> prospectSimulation(
+            @RequestBody Map<String, Object> dto) throws Exception {
+        return ResponseEntity.status(201).body(onboarding.prospectSimulation(dto));
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/onboarding/v1/operator/{id}")
     public ResponseEntity<Map<String, Object>> mutate(
             @org.springframework.web.bind.annotation.PathVariable("id") String id,

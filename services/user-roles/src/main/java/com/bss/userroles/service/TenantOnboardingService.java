@@ -578,6 +578,133 @@ public class TenantOnboardingService {
         return out;
     }
 
+    /**
+     * PS — THE PRE-SALES PROSPECT SIMULATOR: "your business on our BSS", in
+     * the first meeting. Input is PUBLIC: the prospect's price list and an
+     * assumed base mix — no data of theirs is touched. A fresh SANDBOX
+     * operator is minted, its shelf built from the price list, a twin base
+     * minted at the assumed mix, and the REAL engines run a compressed
+     * quarter. The report carries its assumptions on its face; the sandbox
+     * survives for the live walk-through and dies with its realm.
+     */
+    public Map<String, Object> prospectSimulation(Map<String, Object> dto) throws Exception {
+        if (!(dto.get("priceList") instanceof java.util.List<?> priceList) || priceList.isEmpty()) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "priceList [{offeringName, monthly}] is required — the prospect's PUBLIC tariffs");
+        }
+        String id = dto.get("id") == null
+                ? "ps" + String.valueOf(System.currentTimeMillis()).substring(7)
+                : String.valueOf(dto.get("id"));
+        String name = String.valueOf(dto.getOrDefault("name", "Prospect"));
+        String currency = String.valueOf(dto.getOrDefault("currency", "EUR"));
+        Map<String, Object> seed = new java.util.LinkedHashMap<>();
+        seed.put("id", id);
+        seed.put("name", name + " (simulation)");
+        seed.put("currency", currency);
+        seed.put("locale", dto.getOrDefault("locale", "en"));
+        onboard(seed);
+        markSandbox(id);
+        refresher.refresh();
+        String tok = staffToken(id);
+        waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", tok);
+
+        // the shelf, from the PUBLIC price list
+        java.math.BigDecimal bookMonthly = java.math.BigDecimal.ZERO;
+        Map<String, String> offeringByName = new java.util.LinkedHashMap<>();
+        for (Object raw : priceList) {
+            Map<?, ?> row = (Map<?, ?>) raw;
+            String offName = String.valueOf(row.get("offeringName"));
+            java.math.BigDecimal monthly = new java.math.BigDecimal(String.valueOf(row.get("monthly")));
+            try {
+                Map<String, Object> price = rest.post()
+                        .uri(catalogBase + "/tmf-api/productCatalogManagement/v4/productOfferingPrice")
+                        .header("Authorization", "Bearer " + tok)
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("name", offName + " monthly", "priceType", "recurring",
+                                "recurringChargePeriodType", "month", "recurringChargePeriodLength", 1,
+                                "lifecycleStatus", "Active",
+                                "price", Map.of("unit", currency, "value", monthly)))
+                        .retrieve().body(Map.class);
+                Map<String, Object> off = rest.post()
+                        .uri(catalogBase + "/tmf-api/productCatalogManagement/v4/productOffering")
+                        .header("Authorization", "Bearer " + tok)
+                        .header("Content-Type", "application/json")
+                        .body(Map.of("name", offName, "lifecycleStatus", "Active", "isSellable", true,
+                                "productOfferingPrice", java.util.List.of(
+                                        Map.of("id", price.get("id"), "name", price.get("name")))))
+                        .retrieve().body(Map.class);
+                offeringByName.put(offName, String.valueOf(off.get("id")));
+            } catch (Exception e) {
+                log.warn("prospect shelf row skipped '{}': {}", offName, e.getMessage());
+            }
+        }
+
+        // the assumed base — twins at the prospect's mix
+        int seeded = 0;
+        long stamp = System.currentTimeMillis();
+        if (dto.get("baseMix") instanceof java.util.List<?> mix) {
+            waitAdopt(partyBase, "/tmf-api/party/v4/individual", tok);
+            waitAdopt(inventoryBase, "/tmf-api/productInventory/v4/product", tok);
+            for (Object raw : mix) {
+                Map<?, ?> row = (Map<?, ?>) raw;
+                String offName = String.valueOf(row.get("offeringName"));
+                String offId = offeringByName.get(offName);
+                if (offId == null) {
+                    continue;
+                }
+                int n = Integer.parseInt(String.valueOf(row.get("subscribers")));
+                for (int i = 0; i < n; i++) {
+                    seeded += mintTwin(tok, offName, offId, stamp, i) ? 1 : 0;
+                }
+            }
+        }
+
+        // the quarter, on the real engines
+        Map<String, Object> quarter = seeded > 0 ? simulateQuarter(id) : Map.of("skipped", "no base mix given");
+
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        out.put("@type", "ProspectSimulation");
+        out.put("sandboxId", id);
+        out.put("prospect", name);
+        out.put("shelf", offeringByName.size());
+        out.put("twinBase", seeded);
+        out.put("quarter", quarter);
+        out.put("assumptions", java.util.List.of(
+                "input was PUBLIC only: the prospect's price list and an assumed mix — none of their data was touched",
+                "billed by the SAME engines that cut production bills, over a compressed quarter",
+                "the sandbox is walled from the outside world and dies with its realm"));
+        return out;
+    }
+
+    /** One synthetic subscriber with one product — shared by twin seeding. */
+    private boolean mintTwin(String tok, String offName, String offId, long stamp, int i) {
+        String label = "Twin-" + Integer.toHexString((offName + i).hashCode());
+        try {
+            Map<String, Object> party = rest.post().uri(partyBase + "/tmf-api/party/v4/individual")
+                    .header("Authorization", "Bearer " + tok)
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("givenName", "Tvilling", "familyName", label,
+                            "contactMedium", java.util.List.of(Map.of(
+                                    "mediumType", "email", "characteristic",
+                                    Map.of("emailAddress", label.toLowerCase() + "-" + stamp + "@twin.example")))))
+                    .retrieve().body(Map.class);
+            rest.post().uri(inventoryBase + "/tmf-api/productInventory/v4/product")
+                    .header("Authorization", "Bearer " + tok)
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("name", offName, "status", "active",
+                            "startDate", java.time.OffsetDateTime.now().toString(),
+                            "productOffering", Map.of("id", offId, "name", offName),
+                            "relatedParty", java.util.List.of(Map.of(
+                                    "id", party.get("id"), "role", "customer",
+                                    "@referredType", "Individual"))))
+                    .retrieve().body(Map.class);
+            return true;
+        } catch (Exception e) {
+            log.warn("twin mint skipped: {}", e.getMessage());
+            return false;
+        }
+    }
+
     private static String orDefault(String v, String dflt) {
         return v == null || v.isBlank() ? dflt : v;
     }
