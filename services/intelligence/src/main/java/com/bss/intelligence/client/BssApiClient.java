@@ -404,6 +404,35 @@ public class BssApiClient {
         return all;
     }
 
+    /** The FLYWHEEL's evidence: terminated products per offering name — the
+     *  measured churn baseline the price simulator uses as its floor prior. */
+    public Map<String, Integer> terminatedCountsByOffering() {
+        Map<String, Integer> out = new java.util.HashMap<>();
+        for (String gone : new String[] {"terminated", "cancelled"}) {
+        for (int offset = 0; offset < 100000; offset += 100) {
+            List<Map<String, Object>> page;
+            try {
+                String body = inventoryClient.get()
+                        .uri("/tmf-api/productInventory/v4/product?status=" + gone + "&limit=100&offset=" + offset)
+                        .retrieve().body(String.class);
+                page = parse(body);
+            } catch (Exception e) {
+                break;
+            }
+            for (Map<String, Object> product : page) {
+                Object ref = product.get("productOffering");
+                if (ref instanceof Map<?, ?> r && r.get("name") != null) {
+                    out.merge(String.valueOf(r.get("name")), 1, Integer::sum);
+                }
+            }
+            if (page.size() < 100) {
+                break;
+            }
+        }
+        }
+        return out;
+    }
+
     public List<Map<String, Object>> offerings() {
         List<Map<String, Object>> all = new java.util.ArrayList<>();
         for (int offset = 0; offset < 10000; offset += 100) {

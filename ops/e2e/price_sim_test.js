@@ -97,6 +97,18 @@ async function token(ctx, client, user, pass) {
   console.log('OK the Simulator pane lists the report — the product owner sees the forecast where they price');
   await browser.close();
 
+  /* ---------- the FLYWHEEL: the default prior is MEASURED, not assumed ---------- */
+  const fw = await (await ctx.post(SIM, { headers: H(staff), data: {
+    changes: [{ offeringName: `Sim Plan ${run}`, newMonthlyPrice: 110 }] } })).json();
+  if (!(fw.assumptions || []).some((a) => /MEASURED churn baseline/.test(a))) {
+    fail('no measured elasticity prior: ' + JSON.stringify(fw.assumptions));
+  }
+  if (!(fw.lines || []).some((l) => l.annualRevenueDeltaWithAssumedChurn !== undefined)) {
+    fail('the measured prior did not produce a churn-adjusted delta');
+  }
+  console.log('OK THE FLYWHEEL: with no assumption supplied, the simulator defaults to the '
+    + 'MEASURED churn baseline — evidence in, forecast out, override always available');
+
   console.log('\nALL P1 CHECKS PASSED — a price change is simulated against the real base with exact '
     + 'mechanics, labeled assumptions, a persisted receipt, and zero production mutation.');
 })();

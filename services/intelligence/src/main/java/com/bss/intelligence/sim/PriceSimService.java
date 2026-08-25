@@ -62,6 +62,19 @@ public class PriceSimService {
 
         // ---- the raw material: base, catalog, prices, cost side ----
         List<Map<String, Object>> products = bss.allActiveProducts();
+        // THE FLYWHEEL, v1: when no churn assumption is supplied, the sim's
+        // prior is MEASURED — lifetime terminations over the whole base.
+        boolean measuredPrior = false;
+        if (churnPct == null) {
+            int terminated = bss.terminatedCountsByOffering().values().stream()
+                    .mapToInt(Integer::intValue).sum();
+            int base = products.size() + terminated;
+            if (terminated > 0 && base > 0) {
+                churnPct = new BigDecimal(terminated * 100.0 / base)
+                        .setScale(1, RoundingMode.HALF_UP);
+                measuredPrior = true;
+            }
+        }
         List<Map<String, Object>> offerings = bss.offerings();
         Map<String, Map<String, Object>> priceById = new HashMap<>();
         for (Map<String, Object> p : bss.offeringPrices()) {
@@ -161,7 +174,11 @@ public class PriceSimService {
         List<String> assumptions = new ArrayList<>();
         assumptions.add(churnPct == null
                 ? "NO elasticity assumed — revenue delta is mechanical (every subscriber stays)"
-                : "assumed " + churnPct + "% of each raised plan's base churns (flat, user-supplied)");
+                : (measuredPrior
+                        ? "elasticity prior: " + churnPct + "% is the MEASURED churn baseline "
+                                + "(lifetime terminations over base) — a floor, not a price response; "
+                                + "pass churnPct to override"
+                        : "assumed " + churnPct + "% of each raised plan's base churns (flat, user-supplied)"));
         assumptions.add(costBasis);
         assumptions.add("base = active inventory at simulation time; usage-priced and one-time components unchanged");
 
