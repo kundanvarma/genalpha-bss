@@ -29,8 +29,10 @@ async function token(ctx) {
   const email = `qoc-${run}@example.com`;
   const login = await (await ctx.post(USER, { headers: H, data: { email, givenName: `QOC${run}`, familyName: `A${run}` } })).json();
   await ctx.post(PARTY, { headers: H, data: { id: login.id, givenName: `QOC${run}`, familyName: `A${run}` } });
-  const offerings = await (await ctx.get(`${CATALOG}/productOffering?limit=20`, { headers: H })).json();
-  const off = (offerings || []).find((o) => o.id && o.name);
+  const offerings = await (await ctx.get(`${CATALOG}/productOffering?limit=100`, { headers: H })).json();
+  // the lifecycle gate refuses non-launched offerings at order time — quote a SELLABLE one
+  const sellable = offerings.filter((o) => ['Active', 'Launched'].includes(o.lifecycleStatus));
+  const off = (sellable || []).find((o) => o.id && o.name);
   if (!off) fail('no catalog offering to quote');
   console.log(`OK using account ${login.id.slice(0, 8)} and offering "${off.name}"`);
 
