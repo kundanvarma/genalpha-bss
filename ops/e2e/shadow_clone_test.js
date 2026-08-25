@@ -131,6 +131,21 @@ async function token(ctx, realm, client, user, pass) {
   console.log('OK THE WALL: an email inside the sandbox is stored in-app and marked '
     + 'sandbox-suppressed — real engines, no real-world side effects');
 
+  /* ---------- 4b. THE WALL, every door: PSP and ad platforms ---------- */
+  const psp = await ctx.post(`${API}/tmf-api/paymentManagement/v4/payment/session`,
+    { headers: H(staff), data: { method: 'klarna', amount: { value: 10, unit: 'EUR' } } });
+  if (psp.status() < 400 || !/sandbox/.test(await psp.text())) {
+    fail('PSP wall leaked: ' + psp.status() + ' ' + (await psp.text()).slice(0, 120));
+  }
+  const act = await ctx.post(`${API}/insight/v1/audience/any-id/activate`,
+    { headers: H(staff), data: { destination: 'meta' } });
+  const actBody = await act.text();
+  if (!/sandbox/.test(actBody)) {
+    fail('ad-activation wall silent: ' + act.status() + ' ' + actBody.slice(0, 120));
+  }
+  console.log('OK EVERY DOOR: the sandbox is refused at the PSP and at the ad platforms too — '
+    + 'email, payments and activations all end at the wall');
+
   /* ---------- 5. TVILLING BASE: a subscriber base that is nobody ---------- */
   const seedRes = await ctx.post(`${API}/onboarding/v1/operator/${SC}/seedTwinBase`,
     { headers: H(host), data: { sourceId: 'genalpha', count: 12 } });

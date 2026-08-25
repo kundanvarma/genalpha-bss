@@ -33,11 +33,14 @@ public class ActivationService {
     private final ActivationJobService jobs;
     private final com.bss.insight.repository.EmailSuppressionRepository suppressions;
     private final TenantScope tenantScope;
+    private final com.bss.insight.security.TenantRegistry tenantRegistry;
 
     public ActivationService(AudienceService audiences,
             List<com.bss.insight.client.AdDestination> destinations,
             PartyTraitRepository traits, ActivationJobService jobs,
-            com.bss.insight.repository.EmailSuppressionRepository suppressions, TenantScope tenantScope) {
+            com.bss.insight.repository.EmailSuppressionRepository suppressions, TenantScope tenantScope,
+            com.bss.insight.security.TenantRegistry tenantRegistry) {
+        this.tenantRegistry = tenantRegistry;
         this.audiences = audiences;
         this.destinations = new LinkedHashMap<>();
         for (com.bss.insight.client.AdDestination d : destinations) this.destinations.put(d.name(), d);
@@ -49,6 +52,13 @@ public class ActivationService {
 
     /** Queue the export and return the job — the push runs in the background. */
     public Map<String, Object> activate(String audienceId, Map<String, Object> body) {
+        // THE SANDBOX WALL: a clone's audiences never reach an ad platform
+        com.bss.insight.security.TenantRegistry.TenantEntry te =
+                tenantRegistry.byId(tenantScope.currentTenantId());
+        if (te != null && te.isSandbox()) {
+            return Map.of("activated", false, "reason",
+                    "sandbox tenants cannot activate to external ad platforms — the wall is the point");
+        }
         String externalAudienceId = body.get("externalAudienceId") == null
                 ? null : String.valueOf(body.get("externalAudienceId"));
         String mode = "suppress".equals(body.get("mode")) ? "suppress" : "seed";

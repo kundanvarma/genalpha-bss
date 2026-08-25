@@ -51,11 +51,14 @@ public class PaymentService {
     private final DomainEventPublisher events;
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
+    private final com.bss.payment.security.TenantRegistry tenantRegistry;
 
     public PaymentService(PaymentRepository repository, com.bss.payment.psp.PspRouter pspRouter,
             com.bss.payment.psp.RedirectPspRegistry redirectRegistry, PspConfigService pspConfigs,
             PaymentMethodClient paymentMethods, DomainEventPublisher events,
-            PartyScope partyScope, TenantScope tenantScope) {
+            PartyScope partyScope, TenantScope tenantScope,
+            com.bss.payment.security.TenantRegistry tenantRegistry) {
+        this.tenantRegistry = tenantRegistry;
         this.repository = repository;
         this.pspRouter = pspRouter;
         this.redirectRegistry = redirectRegistry;
@@ -154,6 +157,7 @@ public class PaymentService {
         // (which could have charged). One stable idempotency key rides every
         // attempt. A tenant with one provider and no rules behaves exactly as before.
         String idem = dto.getCorrelatorId() != null ? dto.getCorrelatorId() : UUID.randomUUID().toString();
+        requireNotSandbox();
         List<PspAdapter> candidates = pspRouter.candidatesFor(currency);
         PspAdapter psp = null;
         PspAdapter.Authorization auth = null;
@@ -230,7 +234,19 @@ public class PaymentService {
      * and the records stay truthful — a failover can switch the payment instrument
      * (e.g. Klarna→PayPal), which the caller sees via `failedOverFrom`. */
     @Transactional(readOnly = true)
+
+    /** THE SANDBOX WALL: a shadow-operator clone never talks to a real PSP. */
+    private void requireNotSandbox() {
+        com.bss.payment.security.TenantRegistry.TenantEntry te =
+                tenantRegistry.byId(tenantScope.currentTenantId());
+        if (te != null && te.isSandbox()) {
+            throw new BadRequestException(
+                    "sandbox tenants cannot reach a payment provider — the wall is the point");
+        }
+    }
+
     public Map<String, Object> createSession(Map<String, Object> dto) {
+        requireNotSandbox();
         String method = String.valueOf(dto.get("method"));
         String tenant = tenantScope.currentTenantId();
         PspConfig primary = pspConfigs.providerForMethod(tenant, method)

@@ -39,6 +39,9 @@ public class AnalyticsForwarder {
     @SuppressWarnings("unchecked")
     public java.util.List<String> audiencesOf(String tenantId, String visitorId) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant != null && tenant.isSandbox()) {
+            return List.of();   // the sandbox wall: a clone talks to no external analytics
+        }
         if (tenant == null || !"ga4".equalsIgnoreCase(tenant.getAnalyticsProvider())) {
             return List.of();
         }
@@ -101,6 +104,9 @@ public class AnalyticsForwarder {
     public void forward(String tenantId, String visitorId, String type,
             String category, String offeringId) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
+        if (tenant != null && tenant.isSandbox()) {
+            return;   // the sandbox wall: no event leaves a clone
+        }
         if (tenant == null || !"ga4".equalsIgnoreCase(tenant.getAnalyticsProvider())
                 || tenant.getAnalyticsMeasurementId() == null
                 || tenant.getAnalyticsMeasurementId().isBlank()) {

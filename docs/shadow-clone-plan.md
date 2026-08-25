@@ -43,9 +43,10 @@ probe realm.
   offering so `count` is a scale target) each holding its product, and the
   REAL billing run bills them. Sandbox-only by guard — twins in production
   would be pollution. Proven in `shadow_clone_test` (45 twins, 40 bills).
-- Wholesale rate-card copy + the remaining egress guards (payment PSP, insight
-  GA4/ad destinations, social publish) — same one-line registry-gate pattern as
-  the communication wall; communication is the highest-stakes egress and is the
-  one proven here.
+- ~~Remaining egress guards~~ **SHIPPED (2026-08-25)**: the payment service
+  refuses PSP sessions and card charges for sandbox tenants ("the wall is the
+  point"), and insight refuses ad-platform activations and skips the GA4
+  forwarder both directions — proven in the suite ("every door" leg).
+  Wholesale rate-card copy into the clone remains a follow-up.
 - Time compression (a simulated quarter) — billing runs are already on-demand;
   the loop is an orchestration, not an engine change.
