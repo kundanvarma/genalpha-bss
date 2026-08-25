@@ -1,0 +1,19 @@
+# Phase 6 — scrape the fleet's actuator endpoints (all expose /actuator/prometheus).
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+rule_files:
+  - alert_rules.yml
+scrape_configs:
+  - job_name: bss-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # one target per service container on the compose network; in k8s the
+      # Helm chart's ServiceMonitors replace this file entirely
+      - targets: ['gateway:8080', 'billing:8080', 'product-ordering:8080',
+                  'service-orchestration:8080', 'user-roles:8080', 'payment:8080',
+                  'product-catalog:8080', 'usage:8080', 'communication:8080']
+  - job_name: keycloak
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['keycloak:9000']

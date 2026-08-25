@@ -1,0 +1,38 @@
+groups:
+  - name: bss-money-path
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.instance }} is down"
+          description: "A fleet service stopped answering its scrape for 2 minutes."
+      - alert: High5xxRate
+        expr: sum by (instance) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0.5
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.instance }} is erroring"
+          description: "Sustained 5xx rate above 0.5/s for 5 minutes — the money path may be failing."
+      - alert: JvmHeapNearLimit
+        expr: sum by (instance) (jvm_memory_used_bytes{area="heap"}) / sum by (instance) (jvm_memory_max_bytes{area="heap"}) > 0.9
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.instance }} heap above 90%"
+          description: "Ten minutes above 90% heap — an OOM kill during a billing run loses the night."
+      - alert: KafkaConsumerStalled
+        expr: sum by (instance) (rate(spring_kafka_listener_seconds_count[10m])) == 0 and on(instance) up == 1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.instance }} consumed nothing for 15m"
+          description: "An event consumer that hears nothing may be partitioned from the bus — traits, bookings and journeys silently stop."
+      - alert: HttpLatencyP99High
+        expr: histogram_quantile(0.99, sum by (instance, le) (rate(http_server_requests_seconds_bucket[5m]))) > 3
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.instance }} p99 above 3s"
+          description: "Sustained slow answers — check DB pool saturation before customers do."
