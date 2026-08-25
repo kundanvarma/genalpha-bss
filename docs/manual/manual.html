@@ -224,7 +224,32 @@ stores the message in-app marked <code>sandbox-suppressed</code>, never delivere
 same engine that cuts real bills — matched offerings with per-name deltas (a price move
 ripples through every bundle that carries it), only-in lists, portfolio totals, assumptions
 on its face. Mutate the clone, read the diff, throw the clone away: simulation with zero
-model drift. Suite <code>shadow_clone_test</code>.</p>
+model drift. The clone has since grown the full simulation substrate: <b>Tvilling base
+seeding</b> (<code>seedTwinBase</code> — the only thing read from the source is the aggregate
+offering distribution; the clone mints proportional synthetic subscribers, fictional by
+construction, sandbox-only by guard), the wall extended to <b>every door</b> (PSP sessions and
+card charges refused, ad-platform activations refused, the GA4 seam silent in both
+directions), <b>wholesale rate cards</b> travelling with the copy, and <b>time compression</b>:
+a per-tenant clock seam (<code>clock-offset-days</code>, sandbox-gated structurally) that
+billing periods, dunning's overdue decisions and usage's wholesale windows all read —
+<code>simulateQuarter</code> bills three compressed months in minutes, no day billed twice.
+Suite <code>shadow_clone_test</code>, twelve legs.</p>
+<h3>The commercial simulator, complete — five answers off the real engines</h3>
+<p><b>Prospect simulator</b> (<code>POST /onboarding/v1/prospectSimulation</code>): a prospect's
+PUBLIC price list + an assumed mix → a fresh walled sandbox, their shelf, a twin base, a billed
+compressed quarter — "your business on our BSS" in the first meeting, touching none of their
+data. <b>Chaos twin</b> (<code>GET /chaosReport?scenario=psp-outage&amp;days=N</code>): a failure
+mode priced in currency off the real ledger — revenue at risk, bills hit, how many age beyond
+terms before the outage ends; clock-composable in a clone. <b>Regulatory rehearsal</b>
+(<code>GET /ai/v1/priceRiseRehearsal</code>): the right-to-exit window counted before any letter
+exists — the cohort IS the notification list, port-out exposure = churn-flagged holders, upside
+vs annual-at-risk, with the honesty line that a score is the model's opinion, not fate.
+<b>Elasticity flywheel</b>: the price simulator's default prior is MEASURED (lifetime ceased
+products over base), labeled a floor not a price response, always overridable.
+<b>Cross-tenant priors</b> (<code>GET /ai/v1/elasticityBenchmark</code>): each tenant's baseline
+computed inside its own context, only the unnamed distribution leaves, and below the k-anonymity
+floor of three the benchmark refuses to exist. Suites <code>prospect_sim_test</code>,
+<code>chaos_twin_test</code>, <code>reg_rehearsal_test</code>, <code>elasticity_benchmark_test</code>.</p>
 <h3>The bill as a document — suite #46</h3>
 <p><code>GET /customerBill/{id}/document.pdf</code> (owner-scoped);
 <code>POST /customerBill/{id}/resend</code> emails it to the address on file. Delivery preference
