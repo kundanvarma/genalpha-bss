@@ -44,7 +44,16 @@ public class MachineTokenInterceptor implements ClientHttpRequestInterceptor {
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)
             throws IOException {
         request.getHeaders().setBearerAuth(tokenFor(tenantScope.currentTenantId()));
-        return execution.execute(request, body);
+        ClientHttpResponse response = execution.execute(request, body);
+        // KC bounced and the cached machine token is now a lie: no restart
+        // should be needed to cure a 401 — evict, re-mint, retry once
+        if (response.getStatusCode().value() == 401) {
+            response.close();
+            cache.remove(tenantScope.currentTenantId());
+            request.getHeaders().setBearerAuth(tokenFor(tenantScope.currentTenantId()));
+            return execution.execute(request, body);
+        }
+        return response;
     }
 
     private String tokenFor(String tenantId) {

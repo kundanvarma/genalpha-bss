@@ -74,11 +74,12 @@ public class KeycloakAdminClient implements IdpAdminClient {
                 "emailVerified", true,
                 "credentials", List.of(Map.of("type", "password", "value", password, "temporary", false)));
         try {
-            var response = rest.post().uri(adminBase(tenantId) + "/users")
+            var response = withFreshTokenOn401(tenantId, () -> rest.post()
+                    .uri(adminBase(tenantId) + "/users")
                     .header("Authorization", "Bearer " + tokenFor(tenantId))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(user)
-                    .retrieve().toBodilessEntity();
+                    .retrieve().toBodilessEntity());
             // Keycloak answers 201 with Location: .../users/<id>
             String location = response.getHeaders().getFirst("Location");
             if (location == null || location.isBlank()) {
@@ -92,11 +93,12 @@ public class KeycloakAdminClient implements IdpAdminClient {
 
     @Override
     public void grant(String tenantId, String userId, String roleName) {
-        rest.post().uri(adminBase(tenantId) + "/users/" + userId + "/role-mappings/realm")
+        withFreshTokenOn401(tenantId, () -> rest.post()
+                .uri(adminBase(tenantId) + "/users/" + userId + "/role-mappings/realm")
                 .header("Authorization", "Bearer " + tokenFor(tenantId))
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(List.of(roleByName(tenantId, roleName)))
-                .retrieve().toBodilessEntity();
+                .retrieve().toBodilessEntity());
     }
 
     @Override
@@ -118,9 +120,9 @@ public class KeycloakAdminClient implements IdpAdminClient {
 
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> getList(String tenantId, String path) {
-        return rest.get().uri(adminBase(tenantId) + path)
+        return withFreshTokenOn401(tenantId, () -> rest.get().uri(adminBase(tenantId) + path)
                 .header("Authorization", "Bearer " + tokenFor(tenantId))
-                .retrieve().body(List.class);
+                .retrieve().body(List.class));
     }
 
     private String adminBase(String tenantId) {
@@ -133,6 +135,17 @@ public class KeycloakAdminClient implements IdpAdminClient {
         String realm = tokenUri.substring(realmsAt + "/realms/".length(),
                 tokenUri.indexOf("/protocol/"));
         return base + "/admin/realms/" + realm;
+    }
+
+    /** KC bounced and the cached admin token is a lie: evict, re-mint,
+     *  retry ONCE — no service restart should be needed to cure a 401. */
+    private <T> T withFreshTokenOn401(String tenantId, java.util.function.Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (HttpClientErrorException.Unauthorized stale) {
+            tokens.remove(tenantId);
+            return call.get();
+        }
     }
 
     private String tokenFor(String tenantId) {
