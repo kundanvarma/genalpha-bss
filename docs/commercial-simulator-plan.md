@@ -1,6 +1,6 @@
 # The commercial simulator — simulate the money before you move it
 
-**Status:** P1 + P2 + P3 + P4 SHIPPED (2026-08-21) · migration rehearsal SHIPPED (2026-08-22) · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
+**Status:** COMPLETE (2026-08-25) — all plays shipped: P1-P4, migration rehearsal, shadow-operator clone + Tvilling base + walls + time compression T1-T3, prospect simulator, chaos twin, regulatory rehearsal, elasticity flywheel v1, cross-tenant priors · **Depends on:** the deterministic rating/billing/pricing engines, the event log, tenant onboarding, the Tvilling twin corpus, holdout/lift measurement
 
 > **P1 shipped:** `POST /ai/v1/simulate/priceChange` — the real base (paginated inventory), real catalog, wholesale cost ceiling, churn-risk overlay; assumptions on the face, dated basis, persisted receipts (`price_sim_report`), and the suite proves zero production mutation. Console: a **Simulator** pane under Catalog & Pricing (catalog:write). Suite `price_sim_test`.
 >
