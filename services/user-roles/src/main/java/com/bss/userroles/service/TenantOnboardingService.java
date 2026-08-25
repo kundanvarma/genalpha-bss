@@ -42,6 +42,7 @@ public class TenantOnboardingService {
     private final String templatePath;
     private final String tenantsFile;
     private final String catalogBase;
+    private final String policyBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
     private final String protectedTenants;
     private final IdpAdminClient idp;
@@ -54,6 +55,7 @@ public class TenantOnboardingService {
             @Value("${bss.onboarding.realm-template:infra/keycloak/nova-realm.json}") String templatePath,
             @Value("${bss.onboarding.tenants-file:infra/tenants/tenants.yml}") String tenantsFile,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
+            @Value("${bss.downstream.policy-base-url:http://localhost:8113}") String policyBase,
             @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
             IdpAdminClient idp,
             com.bss.userroles.security.TenantRegistry tenants,
@@ -65,6 +67,7 @@ public class TenantOnboardingService {
         this.templatePath = templatePath;
         this.tenantsFile = tenantsFile;
         this.catalogBase = catalogBase;
+        this.policyBase = policyBase;
         this.protectedTenants = protectedTenants;
         this.idp = idp;
         this.tenants = tenants;
@@ -349,6 +352,215 @@ public class TenantOnboardingService {
 
     /** A starter catalog in the newborn's own currency, seeded with the
      * cloned realm's own staff credential. */
+    /**
+     * THE SHADOW-OPERATOR CLONE: mint a SANDBOX tenant that is this operator,
+     * again — same onboarding machinery, then the source's catalog and rules
+     * copied over the tenants' own staff tokens, ids remapped. The sandbox
+     * flag rides the tenant block, so the whole fleet knows: real engines,
+     * no real-world side effects. Simulation by running the actual thing.
+     */
+    public Map<String, Object> cloneOperator(String sourceId, Map<String, Object> dto) throws Exception {
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher src = Pattern.compile("(      - id: " + sourceId + "\n(?:        .*\n)*)").matcher(yml);
+        if (!src.find()) {
+            throw new com.bss.userroles.exception.BadRequestException(
+                    "unknown source operator '" + sourceId + "'");
+        }
+        String block = src.group(1);
+        String srcRealm = firstGroup(block, "issuer: .*?/realms/([a-z0-9-]+)");
+        if (srcRealm == null) {
+            srcRealm = sourceId;
+        }
+        String id = String.valueOf(dto.get("id")).toLowerCase().trim();
+        String name = dto.get("name") == null
+                ? strip(firstGroup(block, "brand-name: (.*)")) + " Sandbox" : String.valueOf(dto.get("name"));
+        Map<String, Object> seed = new java.util.LinkedHashMap<>();
+        seed.put("id", id);
+        seed.put("name", name);
+        seed.put("locale", strip(orDefault(firstGroup(block, "locale: (.*)"), "en")));
+        seed.put("currency", strip(orDefault(firstGroup(block, "currency: (.*)"), "EUR")));
+        seed.put("color", strip(orDefault(firstGroup(block, "brand-color: (.*)"), "#B85C38")));
+        Map<String, Object> made = onboard(seed);
+        markSandbox(id);
+        refresher.refresh();
+        String srcTok = staffToken(srcRealm);
+        String dstTok = staffToken(id);
+        waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", dstTok);
+        waitAdopt(policyBase, "/tmf-api/policyManagement/v4/policyRule", dstTok);
+        Map<String, Object> copied = copyCatalog(srcTok, dstTok);
+        copied.put("policyRules", copyPolicyRules(srcTok, dstTok));
+        log.info("sandbox clone '{}' of '{}' is LIVE — copied {}", id, sourceId, copied);
+        Map<String, Object> out = new java.util.LinkedHashMap<>(made);
+        out.put("sourceId", sourceId);
+        out.put("sandbox", true);
+        out.put("copied", copied);
+        return out;
+    }
+
+    private static String orDefault(String v, String dflt) {
+        return v == null || v.isBlank() ? dflt : v;
+    }
+
+    /** Stamp the clone's block: the whole fleet reads this flag. */
+    private void markSandbox(String id) throws Exception {
+        String yml = Files.readString(Path.of(tenantsFile));
+        Matcher m = Pattern.compile("(      - id: " + id + "\n(?:        .*\n)*)").matcher(yml);
+        if (!m.find()) {
+            return;
+        }
+        String block = m.group(1);
+        if (!block.contains("sandbox:")) {
+            String updated = block.replaceFirst("( +)brand-name: ",
+                    "$1sandbox: \"true\"\n$1brand-name: ");
+            Files.writeString(Path.of(tenantsFile), yml.replace(block, updated));
+        }
+    }
+
+    private String staffToken(String realm) {
+        Map<String, Object> tokenRes = rest.post()
+                .uri(keycloakBase + "/realms/" + realm + "/protocol/openid-connect/token")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("grant_type=password&client_id=bss-demo&username=demo&password=demo")
+                .retrieve().body(Map.class);
+        return String.valueOf(tokenRes.get("access_token"));
+    }
+
+    private java.util.List<Map<String, Object>> fetchAll(String base, String path, String token) {
+        java.util.List<Map<String, Object>> all = new java.util.ArrayList<>();
+        for (int offset = 0; offset < 5000; offset += 100) {
+            try {
+                java.util.List<Map<String, Object>> page = rest.get()
+                        .uri(base + path + (path.contains("?") ? "&" : "?")
+                                + "limit=100&offset=" + offset)
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve().body(java.util.List.class);
+                if (page == null || page.isEmpty()) {
+                    break;
+                }
+                all.addAll(page);
+                if (page.size() < 100) {
+                    break;
+                }
+            } catch (Exception e) {
+                log.warn("clone fetch failed {} at offset {}: {}", path, offset, e.getMessage());
+                break;
+            }
+        }
+        return all;
+    }
+
+    /** The running fleet adopts a newborn within one refresh interval —
+     *  wait until this service honors the clone's token before copying. */
+    private void waitAdopt(String base, String probePath, String token) {
+        for (int i = 0; i < 30; i++) {
+            try {
+                rest.get().uri(base + probePath + "?limit=1")
+                        .header("Authorization", "Bearer " + token)
+                        .retrieve().toBodilessEntity();
+                return;
+            } catch (Exception notYet) {
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+    }
+
+    /** Any {id: <known old id>} anywhere in the payload follows the map;
+     *  href/lastUpdate are dropped — the clone mints its own. */
+    @SuppressWarnings("unchecked")
+    private Object remapIds(Object node, Map<String, String> ids) {
+        if (node instanceof Map<?, ?> m) {
+            Map<String, Object> out = new java.util.LinkedHashMap<>();
+            for (Map.Entry<?, ?> e : m.entrySet()) {
+                String k = String.valueOf(e.getKey());
+                if ("href".equals(k) || "lastUpdate".equals(k)) {
+                    continue;
+                }
+                Object v = e.getValue();
+                if ("id".equals(k) && v != null && ids.containsKey(String.valueOf(v))) {
+                    out.put(k, ids.get(String.valueOf(v)));
+                } else {
+                    out.put(k, remapIds(v, ids));
+                }
+            }
+            return out;
+        }
+        if (node instanceof java.util.List<?> l) {
+            java.util.List<Object> out = new java.util.ArrayList<>();
+            for (Object v : l) {
+                out.add(remapIds(v, ids));
+            }
+            return out;
+        }
+        return node;
+    }
+
+    private Map<String, Object> createRemapped(String base, String path, String token,
+            Map<String, Object> src, Map<String, String> ids) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>((Map<String, Object>) remapIds(src, ids));
+        String oldId = String.valueOf(src.get("id"));
+        body.remove("id");
+        try {
+            Map<String, Object> created = rest.post().uri(base + path)
+                    .header("Authorization", "Bearer " + token)
+                    .header("Content-Type", "application/json")
+                    .body(body).retrieve().body(Map.class);
+            if (created != null && created.get("id") != null) {
+                ids.put(oldId, String.valueOf(created.get("id")));
+                return created;
+            }
+        } catch (Exception e) {
+            log.warn("clone copy skipped {} '{}': {}", path, src.get("name"), e.getMessage());
+        }
+        return null;
+    }
+
+    private Map<String, Object> copyCatalog(String srcTok, String dstTok) {
+        String cat = "/tmf-api/productCatalogManagement/v4";
+        Map<String, String> ids = new java.util.HashMap<>();
+        Map<String, Object> counts = new java.util.LinkedHashMap<>();
+        int n = 0;
+        for (Map<String, Object> row : fetchAll(catalogBase, cat + "/category", srcTok)) {
+            n += createRemapped(catalogBase, cat + "/category", dstTok, row, ids) != null ? 1 : 0;
+        }
+        counts.put("categories", n);
+        n = 0;
+        for (Map<String, Object> row : fetchAll(catalogBase, cat + "/productSpecification", srcTok)) {
+            n += createRemapped(catalogBase, cat + "/productSpecification", dstTok, row, ids) != null ? 1 : 0;
+        }
+        counts.put("specifications", n);
+        n = 0;
+        for (Map<String, Object> row : fetchAll(catalogBase, cat + "/productOfferingPrice", srcTok)) {
+            n += createRemapped(catalogBase, cat + "/productOfferingPrice", dstTok, row, ids) != null ? 1 : 0;
+        }
+        counts.put("prices", n);
+        // leaves before bundles: a bundle's children must already exist to remap
+        java.util.List<Map<String, Object>> offerings = fetchAll(catalogBase, cat + "/productOffering", srcTok);
+        n = 0;
+        for (boolean bundlePass : new boolean[] {false, true}) {
+            for (Map<String, Object> row : offerings) {
+                if (Boolean.TRUE.equals(row.get("isBundle")) == bundlePass) {
+                    n += createRemapped(catalogBase, cat + "/productOffering", dstTok, row, ids) != null ? 1 : 0;
+                }
+            }
+        }
+        counts.put("offerings", n);
+        return counts;
+    }
+
+    private int copyPolicyRules(String srcTok, String dstTok) {
+        int n = 0;
+        for (Map<String, Object> row : fetchAll(policyBase, "/tmf-api/policyManagement/v4/policyRule", srcTok)) {
+            n += createRemapped(policyBase, "/tmf-api/policyManagement/v4/policyRule", dstTok,
+                    row, new java.util.HashMap<>()) != null ? 1 : 0;
+        }
+        return n;
+    }
+
     private void seedCatalog(String id, String name, String currency) {
         Map<String, Object> tokenRes = rest.post()
                 .uri(keycloakBase + "/realms/" + id + "/protocol/openid-connect/token")

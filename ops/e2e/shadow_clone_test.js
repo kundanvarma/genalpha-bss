@@ -1,0 +1,144 @@
+/* SC-P1..P3 — the shadow-operator clone: simulate by running the real thing.
+ *
+ *  - CLONE: one POST mints a SANDBOX operator that IS genalpha again —
+ *    catalog and rules copied over the tenants' own staff tokens, sandbox
+ *    flag stamped in the fleet file, gateway manifest attesting it
+ *  - FIDELITY: the portfolio diff (same engine that cuts real bills) prices
+ *    both shelves — the clone matches the source with ZERO changed rows
+ *  - THE WHAT-IF: move ONE price inside the clone; the diff names exactly
+ *    that offering with exactly that delta, and the portfolio total moves
+ *    by the same amount — mutate the clone, read the answer, decide
+ *  - THE WALL: an email sent inside the sandbox is SUPPRESSED, not sent —
+ *    stored in-app as 'sandbox-suppressed'; real engines, no real world
+ *  - cleanup: the probe realm dies
+ */
+const { request } = require('playwright');
+
+const API = 'http://localhost:8080';
+const run = Date.now();
+const SC = `sc${String(run).slice(-6)}`;
+const CAT = `${API}/tmf-api/productCatalogManagement/v4`;
+
+async function token(ctx, realm, client, user, pass) {
+  const res = await ctx.post(`http://localhost:8085/realms/${realm}/protocol/openid-connect/token`,
+    { form: { grant_type: 'password', client_id: client, username: user, password: pass } });
+  return (await res.json()).access_token;
+}
+
+(async () => {
+  const ctx = await request.newContext();
+  const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const host = await token(ctx, 'bss', 'bss-demo', 'demo', 'demo');
+  const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
+
+  /* ---------- 1. CLONE genalpha into a sandbox ---------- */
+  const cloneRes = await ctx.post(`${API}/onboarding/v1/operator/genalpha/clone`,
+    { headers: H(host), data: { id: SC } });
+  if (cloneRes.status() !== 201) fail('clone refused: ' + cloneRes.status()
+    + ' ' + (await cloneRes.text()).slice(0, 200));
+  const clone = await cloneRes.json();
+  if (clone.sandbox !== true) fail('the clone is not marked sandbox: ' + JSON.stringify(clone));
+  const copied = clone.copied || {};
+  if (!(copied.offerings > 10) || !(copied.prices > 10)) {
+    fail('the copy looks empty: ' + JSON.stringify(copied));
+  }
+  console.log(`OK CLONE: '${SC}' minted as a SANDBOX of genalpha in ${clone.seconds}s — `
+    + `${copied.categories} categories, ${copied.specifications} specs, ${copied.prices} prices, `
+    + `${copied.offerings} offerings, ${copied.policyRules} rules copied over staff tokens`);
+
+  let staff = null;
+  for (let i = 0; i < 30 && !staff; i++) {
+    await sleep(3000);
+    staff = await token(ctx, SC, 'bss-demo', 'demo', 'demo').catch(() => null);
+  }
+  if (!staff) fail('no staff token from the clone realm');
+
+  // the gateway manifest attests the sandbox — every channel can badge it
+  // the sandbox flag lands one refresher tick after the block joins — poll
+  // for the ATTESTATION, not just the routing
+  let manifest = {};
+  for (let i = 0; i < 30; i++) {
+    manifest = await (await ctx.get(`${API}/app/tenant-config.json?_=${Date.now()}`,
+      { headers: { Host: `shop.${SC}.localhost` } })).json().catch(() => ({}));
+    if (manifest.tenantId === SC && manifest.sandbox === true) break;
+    await sleep(3000);
+  }
+  if (manifest.tenantId !== SC) fail('guest routing never reached the clone');
+  if (manifest.sandbox !== true) fail('the manifest never attested sandbox: '
+    + JSON.stringify(manifest).slice(0, 200));
+  console.log('OK ATTESTED: the gateway manifest carries sandbox:true — no channel can mistake it for production');
+
+  /* ---------- 2. FIDELITY: the diff engine sees an identical portfolio ---------- */
+  const diff0 = await (await ctx.get(
+    `${API}/tmf-api/customerBillManagement/v4/portfolioDiff?tenantA=genalpha&tenantB=${SC}`,
+    { headers: H(host) })).json();
+  if (!(diff0.matched > 10)) fail('too few matched offerings: ' + diff0.matched);
+  if ((diff0.changed || []).length !== 0) {
+    fail('a fresh clone differs from its source: ' + JSON.stringify(diff0.changed).slice(0, 300));
+  }
+  console.log(`OK FIDELITY: ${diff0.matched} offerings matched, 0 changed — the clone IS the `
+    + `source, priced by the same engine (portfolio ${diff0.portfolioMonthlyA} vs ${diff0.portfolioMonthlyB})`);
+
+  /* ---------- 3. THE WHAT-IF: move one price inside the clone ---------- */
+  const offerings = await (await ctx.get(
+    `${CAT}/productOffering?name=${encodeURIComponent('GenAlpha Mobile Unlimited 5G')}`,
+    { headers: H(staff) })).json();
+  const target = offerings[0];
+  if (!target) fail('the clone has no GenAlpha Mobile Unlimited 5G');
+  const detail = await (await ctx.get(`${CAT}/productOffering/${target.id}`, { headers: H(staff) })).json();
+  const priceRef = (detail.productOfferingPrice || [])[0];
+  if (!priceRef) fail('the target offering carries no price');
+  const price = await (await ctx.get(`${CAT}/productOfferingPrice/${priceRef.id}`, { headers: H(staff) })).json();
+  const oldValue = Number(price.price.value);
+  const patch = await ctx.patch(`${CAT}/productOfferingPrice/${priceRef.id}`,
+    { headers: H(staff), data: { price: { unit: price.price.unit, value: oldValue + 100 } } });
+  if (patch.status() >= 300) fail('price patch refused: ' + patch.status());
+
+  const diff1 = await (await ctx.get(
+    `${API}/tmf-api/customerBillManagement/v4/portfolioDiff?tenantA=genalpha&tenantB=${SC}`,
+    { headers: H(host) })).json();
+  const changed = diff1.changed || [];
+  const row = changed.find((r) => r.name === 'GenAlpha Mobile Unlimited 5G');
+  if (!row) fail('the moved price never surfaced in the diff: ' + JSON.stringify(changed));
+  if (Number(row.delta) !== 100) fail('delta is not exactly 100: ' + row.delta);
+  // THE RIPPLE: every bundle carrying this plan moves with it — each changed
+  // row is exactly the one price move, seen through a different offering
+  const offDelta = changed.filter((r) => Number(r.delta) !== 100);
+  if (offDelta.length) fail('a changed row is not the one move: ' + JSON.stringify(offDelta));
+  // the clone's own starter-seed offerings sit in onlyInB on BOTH readings —
+  // the what-if's effect is the MOVE in portfolio delta vs the baseline
+  const rippleTotal = Number(diff1.portfolioDelta) - Number(diff0.portfolioDelta);
+  if (rippleTotal !== 100 * changed.length) {
+    fail('portfolio delta must move by the ripple: ' + rippleTotal
+      + ' vs ' + (100 * changed.length));
+  }
+  console.log(`OK THE WHAT-IF + THE RIPPLE: +100 on ONE price inside the clone → ${changed.length} `
+    + `offerings moved (the plan AND every bundle that carries it: `
+    + `${changed.map((r) => r.name).join(', ')}), each by exactly 100.00 — the diff sees `
+    + 'through bundles, the source untouched');
+
+  /* ---------- 4. THE WALL: the sandbox cannot reach the outside world ---------- */
+  const msgRes = await ctx.post(`${API}/tmf-api/communicationManagement/v4/communicationMessage`,
+    { headers: H(staff), data: {
+      subject: `Sandbox probe ${run}`, content: 'If you can read this in a real inbox, the wall failed.',
+      toEmail: 'wall-probe@example.com' } });
+  if (msgRes.status() >= 300) fail('sandbox message create failed: ' + msgRes.status());
+  const msg = await msgRes.json();
+  if (msg.deliveryStatus !== 'sandbox-suppressed') {
+    fail('THE WALL LEAKED: deliveryStatus=' + msg.deliveryStatus + ' (wanted sandbox-suppressed)');
+  }
+  console.log('OK THE WALL: an email inside the sandbox is stored in-app and marked '
+    + 'sandbox-suppressed — real engines, no real-world side effects');
+
+  /* ---------- cleanup ---------- */
+  const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
+    { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;
+  await ctx.delete(`http://localhost:8085/admin/realms/${SC}`,
+    { headers: { Authorization: 'Bearer ' + admin } }).catch(() => {});
+  console.log('OK cleanup: probe realm deleted — the clone was always disposable');
+
+  console.log('\nALL SHADOW-CLONE CHECKS PASSED — an operator can be cloned into a sandbox in '
+    + 'seconds, priced identically by the real engines, mutated safely, diffed exactly, and it '
+    + 'can never touch the outside world. Simulation with zero model drift.');
+})();

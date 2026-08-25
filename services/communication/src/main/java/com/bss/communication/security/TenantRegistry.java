@@ -68,6 +68,8 @@ public class TenantRegistry {
         /** ESP delivery seam: 'internal' keeps messages in-app only; 'esp'
          * ALSO sends each customer message out through the tenant's own
          * email provider (SendGrid v3 wire shape). */
+        private boolean sandbox;
+
         private String deliveryProvider = "internal";
         private String espUrl;
         private String espApiKey;
@@ -119,6 +121,14 @@ public class TenantRegistry {
 
         public void setMachineClientSecret(String machineClientSecret) {
             this.machineClientSecret = machineClientSecret;
+        }
+
+        public boolean isSandbox() {
+            return sandbox;
+        }
+
+        public void setSandbox(boolean v) {
+            this.sandbox = v;
         }
 
         public String getDeliveryProvider() {

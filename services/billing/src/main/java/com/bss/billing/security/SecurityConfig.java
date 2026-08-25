@@ -57,6 +57,7 @@ public class SecurityConfig {
                         // unapplied cash is back-office AR (reading the worklist
                         // AND resolving a row to its bill)
                         .requestMatchers(ApiConstants.BASE_PATH + "/migrationRehearsal/**").hasAuthority("billing:admin")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/portfolioDiff/**").hasAuthority("billing:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/shadowDrift/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")

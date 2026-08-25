@@ -103,7 +103,14 @@ public class TenantFileRefresher {
             for (String p : parts) {
                 base.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1));
             }
-            Method getter = entry.getClass().getMethod("get" + base);
+            Method getter;
+            try {
+                getter = entry.getClass().getMethod("get" + base);
+            } catch (NoSuchMethodException booleanField) {
+                // boolean fields answer to is<Field>() — without this, a
+                // boolean could JOIN the fleet but never live-mutate
+                getter = entry.getClass().getMethod("is" + base);
+            }
             Object current = getter.invoke(entry);
             Object next = value instanceof List ? value : resolve(String.valueOf(value));
             if (current == null ? (next == null || String.valueOf(next).isEmpty())

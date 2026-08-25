@@ -44,6 +44,7 @@ public class CommunicationMessageService {
 
     private final com.bss.communication.repository.MarketingOptOutRepository optOuts;
     private final UnsubscribeToken unsub;
+    private final com.bss.communication.security.TenantRegistry registry;
     private final int freqCapMax;
     private final int freqCapWindowHours;
 
@@ -52,6 +53,7 @@ public class CommunicationMessageService {
             com.bss.communication.client.ChannelDispatcher channels, MessageTemplateService templates,
             com.bss.communication.client.PartyLookupClient parties,
             com.bss.communication.repository.MarketingOptOutRepository optOuts, UnsubscribeToken unsub,
+            com.bss.communication.security.TenantRegistry registry,
             @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-max:0}") int freqCapMax,
             @org.springframework.beans.factory.annotation.Value("${bss.communication.frequency-cap-window-hours:24}") int freqCapWindowHours) {
         this.repository = repository;
@@ -59,6 +61,7 @@ public class CommunicationMessageService {
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.esp = esp;
+        this.registry = registry;
         this.channels = channels;
         this.templates = templates;
         this.parties = parties;
@@ -195,6 +198,14 @@ public class CommunicationMessageService {
             entity.setLastUpdate(OffsetDateTime.now());
             Map<String, Object> created = toMap(repository.save(entity));
             events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
+            // THE SANDBOX WALL: a shadow-operator clone runs the real engines
+            // but may never touch the outside world — the message stays in the
+            // in-app inbox, inspectable, honestly marked, never delivered.
+            com.bss.communication.security.TenantRegistry.TenantEntry te = registry.byId(entity.getTenantId());
+            if (te != null && te.isSandbox()) {
+                entity.setDeliveryStatus("sandbox-suppressed");
+                return toMap(repository.save(entity));
+            }
             // route to the channel's delivery seam (email/sms/push); inApp is the inbox
             channels.dispatch(entity.getTenantId(), entity.getId(), receiver,
                     entity.getSubject(), entity.getContent(), entity.getMessageType());
@@ -230,9 +241,17 @@ public class CommunicationMessageService {
         entity.setReceiverPartyId("prospect:" + email);
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
+        // THE SANDBOX WALL covers the prospect path too — raw-email egress is
+        // exactly what a sandbox must never do
+        com.bss.communication.security.TenantRegistry.TenantEntry te = registry.byId(tenantId);
+        if (te != null && te.isSandbox()) {
+            entity.setDeliveryStatus("sandbox-suppressed");
+        }
         Map<String, Object> created = toMap(repository.save(entity));
         events.publish("CommunicationMessageCreateEvent", "communicationMessage", created);
-        esp.forwardToEmail(tenantId, id, email, entity.getSubject(), entity.getContent());
+        if (te == null || !te.isSandbox()) {
+            esp.forwardToEmail(tenantId, id, email, entity.getSubject(), entity.getContent());
+        }
         return created;
     }
 

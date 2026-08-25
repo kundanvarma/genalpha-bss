@@ -34,6 +34,11 @@ public final class DownstreamClients {
         default List<Map<String, Object>> offeringsByName(String name) {
             return List.of();
         }
+
+        /** The portfolio diff enumerates a tenant's whole shelf. */
+        default List<Map<String, Object>> allOfferings() {
+            return List.of();
+        }
     }
 
     public interface UsageClient {

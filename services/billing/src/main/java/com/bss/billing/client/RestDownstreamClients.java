@@ -80,6 +80,28 @@ public class RestDownstreamClients {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
         return new DownstreamClients.CatalogClient() {
             @Override
+            public List<Map<String, Object>> allOfferings() {
+                List<Map<String, Object>> all = new java.util.ArrayList<>();
+                for (int offset = 0; offset < 5000; offset += 100) {
+                    try {
+                        List<Map<String, Object>> page = rest.get()
+                                .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset={o}",
+                                        offset)
+                                .retrieve().body(List.class);
+                        if (page == null || page.isEmpty()) {
+                            break;
+                        }
+                        all.addAll(page);
+                        if (page.size() < 100) {
+                            break;
+                        }
+                    } catch (Exception e) {
+                        break;
+                    }
+                }
+                return all;
+            }
+
             public List<Map<String, Object>> offeringsByName(String name) {
                 try {
                     List<Map<String, Object>> page = rest.get()

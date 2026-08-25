@@ -58,6 +58,7 @@ public class TenantHosts {
         private String priceParityMode;
         /** direct (default) | governed — is launch a decision here? Attested. */
         private String catalogGovernance;
+        private boolean sandbox;
         private String locale;
         private String currency;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
@@ -118,6 +119,14 @@ public class TenantHosts {
 
         public void setPriceParityMode(String v) {
             this.priceParityMode = v;
+        }
+
+        public boolean isSandbox() {
+            return sandbox;
+        }
+
+        public void setSandbox(boolean v) {
+            this.sandbox = v;
         }
 
         public String getCatalogGovernance() {
