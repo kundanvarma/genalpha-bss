@@ -41,10 +41,13 @@ public class WholesaleUsageService {
     private final ImsiRangeRepository imsiRanges;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final TenantClock clock;
 
     public WholesaleUsageService(UsageRecordRepository records, WholesaleRateCardRepository rateCards,
             WholesaleUsageLedgerRepository ledger, ImsiRangeRepository imsiRanges,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope,
+            TenantClock clock) {
+        this.clock = clock;
         this.records = records;
         this.rateCards = rateCards;
         this.ledger = ledger;
@@ -125,7 +128,7 @@ public class WholesaleUsageService {
      */
     @Transactional
     public List<Map<String, Object>> rerateDrifted(String tenant, int windowDays) {
-        LocalDate earliest = LocalDate.now(ZoneOffset.UTC).minusDays(windowDays).withDayOfMonth(1);
+        LocalDate earliest = clock.today().minusDays(windowDays).withDayOfMonth(1);   // T3: the window lives on the tenant clock
         List<Map<String, Object>> rerated = new ArrayList<>();
         for (WholesaleUsageLedger row : ledger.findByTenantIdAndPeriodStartGreaterThanEqual(tenant, earliest)) {
             LocalDate periodStart = row.getPeriodStart();

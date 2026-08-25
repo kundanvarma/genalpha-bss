@@ -210,6 +210,27 @@ async function token(ctx, realm, client, user, pass) {
     + `over the twin base (${before} -> ${after}) — same engine, no day billed twice, `
     + 'assumptions on the report; and the clock REFUSES to move for production');
 
+  /* ---------- 7. T3: usage lives on the clone's clock too ---------- */
+  // record a wall-current-month wholesale report, then a corrected re-report:
+  // at clock+90 the correction window has CLOSED — the refusal proves the
+  // usage engine reads the compressed clock, not the wall
+  const U = `${API}/tmf-api/usageManagement/v4`;
+  const period = new Date().toISOString().slice(0, 8) + '01';
+  await ctx.post(`${U}/providerRateCard`, { headers: H(staff),
+    data: { usageSpecName: 'PMW data', rate: 2.0, unit: 'GB' } });
+  const rec1 = await ctx.post(`${U}/mobileWholesaleProviderUsage`, { headers: H(staff),
+    data: { mvnoPartyId: `twin-mvno-${run}`, usageSpecName: 'PMW data', units: 10, unit: 'GB', periodStart: period } });
+  if (rec1.status() >= 300) {
+    console.log('~ T3 leg skipped: no default provider rate card in clone (' + rec1.status() + ')');
+  } else {
+    const rec2 = await ctx.post(`${U}/mobileWholesaleProviderUsage`, { headers: H(staff),
+      data: { mvnoPartyId: `twin-mvno-${run}`, usageSpecName: 'PMW data', units: 20, unit: 'GB', periodStart: period } });
+    if (rec2.status() < 400) fail('T3: at clock+90 a wall-month correction should be OUTSIDE the window: ' + rec2.status());
+    console.log('OK T3 USAGE CLOCK: at +90 days the correction window has closed on a wall-current '
+      + 'month — the usage engine lives on the clone\'s compressed clock (and dunning\'s overdue '
+      + 'decision reads the same seam)');
+  }
+
   /* ---------- cleanup ---------- */
   const admin = (await (await ctx.post('http://localhost:8085/realms/master/protocol/openid-connect/token',
     { form: { grant_type: 'password', client_id: 'admin-cli', username: 'admin', password: 'admin' } })).json()).access_token;

@@ -23,6 +23,14 @@ public class TenantClock {
         this.tenantScope = tenantScope;
     }
 
+    public java.time.OffsetDateTime now() {
+        TenantRegistry.TenantEntry te = tenants.byId(tenantScope.currentTenantId());
+        if (te != null && te.isSandbox() && te.getClockOffsetDays() > 0) {
+            return java.time.OffsetDateTime.now().plusDays(te.getClockOffsetDays());
+        }
+        return java.time.OffsetDateTime.now();
+    }
+
     public LocalDate today() {
         TenantRegistry.TenantEntry te = tenants.byId(tenantScope.currentTenantId());
         if (te != null && te.isSandbox() && te.getClockOffsetDays() > 0) {

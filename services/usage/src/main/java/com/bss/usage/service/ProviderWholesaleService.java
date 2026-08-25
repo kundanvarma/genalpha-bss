@@ -38,11 +38,14 @@ public class ProviderWholesaleService {
     private final TenantScope tenantScope;
 
     private final int rerateWindowDays;
+    private final TenantClock clock;
 
     public ProviderWholesaleService(ProviderRateCardRepository rateCards, ProviderUsageLedgerRepository ledger,
             DomainEventPublisher events, TenantScope tenantScope,
             @org.springframework.beans.factory.annotation.Value(
-                    "${bss.usage.wholesale-rerate-window-days:45}") int rerateWindowDays) {
+                    "${bss.usage.wholesale-rerate-window-days:45}") int rerateWindowDays,
+            TenantClock clock) {
+        this.clock = clock;
         this.rateCards = rateCards;
         this.ledger = ledger;
         this.events = events;
@@ -115,7 +118,7 @@ public class ProviderWholesaleService {
             return ledgerMap(row);
         }
         if (row.getPeriodStart().isBefore(
-                LocalDate.now().minusDays(rerateWindowDays).withDayOfMonth(1))) {
+                clock.today().minusDays(rerateWindowDays).withDayOfMonth(1))) {
             throw new BadRequestException("period " + row.getPeriodStart() + " is outside the "
                     + rerateWindowDays + "-day correction window — raise a dispute, the ledger "
                     + "does not silently rewrite settled history");

@@ -56,6 +56,8 @@ public class TenantRegistry {
 
     public static class TenantEntry {
 
+        private boolean sandbox;
+        private int clockOffsetDays;
         private String id;
         private String issuer;
         /** Backchannel JWKS endpoint; empty means discover from the issuer. */
@@ -65,6 +67,22 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+
+        public boolean isSandbox() {
+            return sandbox;
+        }
+
+        public void setSandbox(boolean v) {
+            this.sandbox = v;
+        }
+
+        public int getClockOffsetDays() {
+            return clockOffsetDays;
+        }
+
+        public void setClockOffsetDays(int v) {
+            this.clockOffsetDays = v;
+        }
 
         public String getId() {
             return id;

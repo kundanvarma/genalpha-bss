@@ -40,11 +40,14 @@ public class DunningService {
     private final DisputeService disputeService;
     private final com.bss.billing.tick.TickGuard tickGuard;
     private final Duration grace;
+    private final TenantClock clock;
 
     public DunningService(InstallmentPlanRepository plans, CustomerBillRepository bills,
             DomainEventPublisher events, TenantRegistry tenants,
             DisputeService disputeService, com.bss.billing.tick.TickGuard tickGuard,
-            @Value("${bss.billing.dunning-grace-ms:604800000}") long graceMs) {
+            @Value("${bss.billing.dunning-grace-ms:604800000}") long graceMs,
+            TenantClock clock) {
+        this.clock = clock;
         this.plans = plans;
         this.bills = bills;
         this.events = events;
@@ -75,7 +78,7 @@ public class DunningService {
     @Transactional
     public void sweepTenant(String tenantId) {
         for (InstallmentPlan plan : plans.findTop100ByTenantIdAndStatusAndNextDueAtBefore(
-                tenantId, InstallmentPlan.ACTIVE, OffsetDateTime.now())) {
+                tenantId, InstallmentPlan.ACTIVE, clock.now())) {   // T2: overdue is decided on the tenant clock
             CustomerBill bill = bills.findByIdAndTenantId(plan.getBillId(), tenantId).orElse(null);
             if (bill == null) {
                 continue;
@@ -93,7 +96,7 @@ public class DunningService {
                 log.info("dunning: reminded {} about bill {} (part {} of {})",
                         bill.getOwnerPartyId(), bill.getBillNo(),
                         plan.getPaidCount() + 1, plan.getInstallments());
-            } else if (plan.getRemindedAt().plus(grace).isBefore(OffsetDateTime.now())) {
+            } else if (plan.getRemindedAt().plus(grace).isBefore(clock.now())) {
                 plan.setStatus(InstallmentPlan.BROKEN);
                 plan.setNextDueAt(null);
                 plan.setLastUpdate(OffsetDateTime.now());
