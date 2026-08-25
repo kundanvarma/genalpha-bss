@@ -212,6 +212,19 @@ price-differs by exactly how much, or offering-missing — the exceptions BY NAM
 read-only promise in the assumptions (the persisted report is the only write). The scariest
 sentence in a BSS sale — "we'll migrate you" — becomes a report. Suite
 <code>migration_rehearsal_test</code>.</p>
+<h3>The shadow-operator clone — simulate by running the real thing</h3>
+<p><code>POST /onboarding/v1/operator/{sourceId}/clone {id}</code> (host desk) mints a
+<b>sandbox operator that IS the source, again</b>: same form-onboarding machinery, the
+source's catalog and rules copied over the tenants' own staff tokens (ids remapped), and
+<code>sandbox: "true"</code> stamped in its fleet block — attested in the gateway manifest so
+no channel can mistake it for production. The <b>wall</b>: a sandbox tenant can never reach
+the outside world — the communication egress (email/SMS/push, prospect raw-email included)
+stores the message in-app marked <code>sandbox-suppressed</code>, never delivered. The
+<b>answer</b>: <code>GET /portfolioDiff?tenantA&amp;tenantB</code> prices both shelves with the
+same engine that cuts real bills — matched offerings with per-name deltas (a price move
+ripples through every bundle that carries it), only-in lists, portfolio totals, assumptions
+on its face. Mutate the clone, read the diff, throw the clone away: simulation with zero
+model drift. Suite <code>shadow_clone_test</code>.</p>
 <h3>The bill as a document — suite #46</h3>
 <p><code>GET /customerBill/{id}/document.pdf</code> (owner-scoped);
 <code>POST /customerBill/{id}/resend</code> emails it to the address on file. Delivery preference
