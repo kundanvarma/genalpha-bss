@@ -44,6 +44,7 @@ public class TenantOnboardingService {
     private final String catalogBase;
     private final String policyBase;
     private final String partyBase;
+    private final String usageBase;
     private final String inventoryBase;
     private final com.bss.userroles.security.TenantRegistry tenants;
     private final String protectedTenants;
@@ -59,6 +60,7 @@ public class TenantOnboardingService {
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
             @Value("${bss.downstream.policy-base-url:http://localhost:8113}") String policyBase,
             @Value("${bss.downstream.party-base-url:http://localhost:8083}") String partyBase,
+            @Value("${bss.downstream.usage-base-url:http://localhost:8097}") String usageBase,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8084}") String inventoryBase,
             @Value("${bss.onboarding.protected-tenants:genalpha,nova}") String protectedTenants,
             IdpAdminClient idp,
@@ -73,6 +75,7 @@ public class TenantOnboardingService {
         this.catalogBase = catalogBase;
         this.policyBase = policyBase;
         this.partyBase = partyBase;
+        this.usageBase = usageBase;
         this.inventoryBase = inventoryBase;
         this.protectedTenants = protectedTenants;
         this.idp = idp;
@@ -393,8 +396,10 @@ public class TenantOnboardingService {
         String dstTok = staffToken(id);
         waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", dstTok);
         waitAdopt(policyBase, "/tmf-api/policyManagement/v4/policyRule", dstTok);
+        waitAdopt(usageBase, "/tmf-api/usageManagement/v4/wholesaleRateCard", dstTok);
         Map<String, Object> copied = copyCatalog(srcTok, dstTok);
         copied.put("policyRules", copyPolicyRules(srcTok, dstTok));
+        copied.put("rateCards", copyRateCards(srcTok, dstTok));
         log.info("sandbox clone '{}' of '{}' is LIVE — copied {}", id, sourceId, copied);
         Map<String, Object> out = new java.util.LinkedHashMap<>(made);
         out.put("sourceId", sourceId);
@@ -660,6 +665,20 @@ public class TenantOnboardingService {
         }
         counts.put("offerings", n);
         return counts;
+    }
+
+    /** The wholesale money-model travels with the clone: seeker AND provider
+     *  rate cards, so negotiation twins run in-sandbox at real agreed rates. */
+    private int copyRateCards(String srcTok, String dstTok) {
+        int n = 0;
+        String base = "/tmf-api/usageManagement/v4";
+        for (String path : new String[] {"/wholesaleRateCard", "/providerRateCard"}) {
+            for (Map<String, Object> row : fetchAll(usageBase, base + path, srcTok)) {
+                n += createRemapped(usageBase, base + path, dstTok,
+                        row, new java.util.HashMap<>()) != null ? 1 : 0;
+            }
+        }
+        return n;
     }
 
     private int copyPolicyRules(String srcTok, String dstTok) {

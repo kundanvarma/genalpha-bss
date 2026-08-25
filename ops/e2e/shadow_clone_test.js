@@ -45,7 +45,9 @@ async function token(ctx, realm, client, user, pass) {
   }
   console.log(`OK CLONE: '${SC}' minted as a SANDBOX of genalpha in ${clone.seconds}s — `
     + `${copied.categories} categories, ${copied.specifications} specs, ${copied.prices} prices, `
-    + `${copied.offerings} offerings, ${copied.policyRules} rules copied over staff tokens`);
+    + `${copied.offerings} offerings, ${copied.policyRules} rules, `
+    + `${copied.rateCards} wholesale rate cards copied over staff tokens`);
+  if (!(copied.rateCards >= 3)) fail('the wholesale money-model did not travel: ' + copied.rateCards);
 
   let staff = null;
   for (let i = 0; i < 30 && !staff; i++) {
