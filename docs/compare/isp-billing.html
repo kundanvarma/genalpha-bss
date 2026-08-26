@@ -1,0 +1,32 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>genalpha-bss vs ISP billing platforms (Splynx, Sonar) — an honest comparison</title>
+<meta name="description" content="For fiber and ISP operators: how genalpha-bss compares to ISP billing platforms like Splynx and Sonar — open access wholesale, TM Forum APIs, Nordic rails, tradeoffs included.">
+<style>body{font:16px/1.6 -apple-system,sans-serif;max-width:820px;margin:40px auto;padding:0 16px;color:#17242b}
+h1,h2{color:#0b3550}table{border-collapse:collapse;width:100%}th{background:#0b3550;color:#fff;text-align:left;padding:6px 10px}
+td{padding:6px 10px;border-bottom:1px solid #dce7ee;vertical-align:top}</style></head><body>
+<h1>genalpha-bss vs ISP billing platforms (Splynx, Sonar)</h1>
+<p>Splynx and Sonar are mature, widely used ISP billing/management platforms — for a classic vertically
+integrated ISP they are strong, proven choices. genalpha-bss aims at a different shape of operator:
+one that sells over (or opens) <b>shared/open-access networks</b>, wants standards-based integration,
+and needs the commercial stack (marketing, channels, wholesale settlement) in the same product.</p>
+<table>
+<tr><th>Axis</th><th>Splynx / Sonar (typical)</th><th>genalpha-bss</th></tr>
+<tr><td>Open-access wholesale</td><td>Not a core concept</td><td>First-class, both faces: seeker access orders over third-party fiber (L2 VULA/L3 bitstream), owner desk with access products, coverage and per-line settlement</td></tr>
+<tr><td>Standards</td><td>Proprietary APIs</td><td>TM Forum Open APIs throughout; 25 CTKs at zero failures</td></tr>
+<tr><td>Network device management (ACS/TR-069)</td><td><b>Stronger today</b> — mature router provisioning and monitoring</td><td>Planned as a bring-your-own seam; not yet shipped — we say this out loud</td></tr>
+<tr><td>Marketing/growth</td><td>Basic CRM/notifications</td><td>BSS-native CDP, journeys with holdout-measured lift, attribution, ad-audience activation</td></tr>
+<tr><td>Channels</td><td>Admin + customer portal</td><td>Seven white-labeled channels incl. mobile app, B2B console, dealer/partner apps; a new brand is a form</td></tr>
+<tr><td>Nordic rails</td><td>Generic</td><td>EHF e-invoicing, Vipps/Klarna, national registry address verification, bokmål/nynorsk, NOK-native</td></tr>
+<tr><td>License/deploy</td><td>Proprietary; hosted or licensed</td><td>Open source; any cloud/on-prem/air-gapped</td></tr>
+<tr><td>Migration</td><td>Importers</td><td>Migration REHEARSAL first: your legacy export priced by the real engines, exceptions listed by name, an honest ready-to-cut-over flag — then an idempotent base importer</td></tr>
+</table>
+<h2>Honest guidance</h2>
+<p>If you are a single-network ISP whose top need is deep ACS/TR-069 device management today, Splynx or
+Sonar may serve you better right now. If you sell (or plan to sell) over open-access networks, want your
+growth engine and channels included, need Nordic invoicing/payment rails, or want software you can
+inspect and host anywhere — that is exactly what genalpha-bss is for.</p>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"Does genalpha-bss support open-access fiber networks?","acceptedAnswer":{"@type":"Answer","text":"Yes — both sides: service providers place access orders over third-party fiber (L2 VULA or L3 bitstream) with address-level serviceability at checkout, and network owners get a wholesale desk with access products, coverage maps and per-line settlement."}},
+{"@type":"Question","name":"Does genalpha-bss have TR-069/ACS router provisioning?","acceptedAnswer":{"@type":"Answer","text":"Not yet — it is planned as a bring-your-own seam like our PSP and carrier integrations. Splynx and Sonar are stronger on device management today, and we say so."}},
+{"@type":"Question","name":"Which Norwegian payment and invoicing rails are supported?","acceptedAnswer":{"@type":"Answer","text":"EHF e-invoicing, Vipps, Klarna and card flows with failover, national-registry address verification, and full bokmål/nynorsk localization with NOK formatting."}}]}</script>
+</body></html>

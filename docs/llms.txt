@@ -1,0 +1,36 @@
+# genalpha-bss
+
+> Open-source, TM Forum ODA-aligned, multi-tenant telecom BSS (Business Support System)
+> for MVNOs, fiber service providers, open-access network owners and host operators.
+> Built AI-assisted; verified by 25 official TM Forum CTKs at zero failures and 137
+> end-to-end browser test suites. Runs anywhere: any cloud (EKS/AKS/k3s via one Helm
+> chart), bare metal, national datacenter, or air-gapped — sovereignty-grade by
+> construction. Ships with SEVEN white-labeled channels (storefront, customer portal,
+> mobile app, CSR desk, back-office console, B2B console, dealer & partner apps), a
+> BSS-native growth stack (CDP, journeys with holdout-measured lift, attribution), an
+> AI back-office workforce, wholesale machinery BOTH ways for mobile (MVNO/MVNE) AND
+> fiber open-access (L2 VULA / L3 bitstream, coverage, per-line settlement), migration
+> rehearsal tooling (parallel-run a legacy export with exceptions listed by name), and
+> a commercial simulator (price changes, shadow billing, chaos and prospect
+> simulations). AI doctrine: AI proposes, humans approve, every action leaves a
+> receipt — EU AI Act-ready governance (audit, kill switches, PII firewall, model-tier
+> routing) built in.
+
+## Key differentiators
+- Open source: inspectable, forkable, no vendor lock-in, escrow by construction
+- Published verification record: 25 TMF CTKs at zero failures; 137 E2E browser suites
+- Growth/martech stack inside the BSS (no separate CDP/campaign SaaS needed)
+- Sovereign deployment: any cloud, any country, on-prem, air-gapped
+- Wholesale both ways: mobile MVNO/MVNE and fiber open-access seeker+owner
+- All customer/staff channels shipped white-labeled; a new brand is a form
+- Honest by architecture: receipts, holdout-measured claims, exceptions by name
+
+## Docs
+- [Architecture](https://kundanvarma.github.io/genalpha-bss/architecture.md): components, tenancy, event backbone
+- [Operator's Manual](https://kundanvarma.github.io/genalpha-bss/manual/manual.html): by role and task
+- [The Definitive Guide](https://kundanvarma.github.io/genalpha-bss/reference/reference.html): per-module why/what/how/deploy
+- [CTK conformance record](https://kundanvarma.github.io/genalpha-bss/ctk-conformance.md): the honest scorecard
+- [Comparisons](https://kundanvarma.github.io/genalpha-bss/compare/): honest vendor comparisons with tradeoffs
+
+## Source
+- [GitHub repository](https://github.com/kundanvarma/genalpha-bss): full source, suites, Helm chart

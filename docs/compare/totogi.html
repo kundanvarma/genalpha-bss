@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>genalpha-bss vs Totogi — an honest comparison</title>
+<meta name="description" content="Open-source, run-anywhere, verification-first BSS (genalpha) vs Totogi's AI-generated proprietary SaaS on AWS. Tradeoffs, not marketing.">
+<style>body{font:16px/1.6 -apple-system,sans-serif;max-width:820px;margin:40px auto;padding:0 16px;color:#17242b}
+h1,h2{color:#0b3550}table{border-collapse:collapse;width:100%}th{background:#0b3550;color:#fff;text-align:left;padding:6px 10px}
+td{padding:6px 10px;border-bottom:1px solid #dce7ee;vertical-align:top}.note{background:#f0f7fb;border-left:4px solid #0b3550;padding:10px 14px}</style></head><body>
+<h1>genalpha-bss vs Totogi</h1>
+<p>Both bet that AI changes BSS economics. The bets point opposite ways: Totogi's product is
+<i>AI generating BSS software</i> (BSS Magic); genalpha was <i>built with AI assistance and then
+verified in public</i> — 25 TM Forum CTKs at zero failures, 137 end-to-end browser suites, all inspectable.</p>
+<table>
+<tr><th>Axis</th><th>Totogi</th><th>genalpha-bss</th></tr>
+<tr><td>License</td><td>Proprietary SaaS</td><td>Open source — forkable, escrow unnecessary</td></tr>
+<tr><td>Cloud</td><td>AWS-native SaaS (single-cloud)</td><td>Any cloud (EKS/AKS/k3s, one Helm chart), bare metal, on-prem, air-gapped — sovereignty-ready</td></tr>
+<tr><td>Verification</td><td>AI-generation demos; vendor QA</td><td>Published CTK record + browser-suite record; you can run the tests yourself</td></tr>
+<tr><td>Module breadth</td><td>Core BSS: CRM, catalog, order, revenue, invoicing; charging; wholesale (mobile)</td><td>Core BSS + native martech/CDP (journeys, holdout-measured attribution) + 7 white-labeled channels + AI workforce + wholesale both ways incl. <b>fiber open-access</b> + migration rehearsal + commercial simulator</td></tr>
+<tr><td>AI posture</td><td>AI generates and changes the system</td><td>AI proposes; humans approve; every action leaves an audit receipt (EU AI Act-friendly)</td></tr>
+<tr><td>Ideal buyer</td><td>Operators/MVNEs wanting a managed SaaS with strong AI-driven customization and a large vendor behind it</td><td>Operators wanting inspectable software they control, on infrastructure they choose, with channels included</td></tr>
+</table>
+<h2>Where Totogi is stronger</h2>
+<ul>
+<li>A funded delivery organization: tier-1 integration programs, global support coverage, enterprise SLAs.</li>
+<li>Managed-SaaS operations: they carry the pager; with self-hosted genalpha, you (or our hosting) do.</li>
+<li>Market presence and analyst mindshare.</li>
+</ul>
+<h2>Where genalpha is stronger</h2>
+<ul>
+<li>Sovereignty and lock-in: open code on your infrastructure vs a proprietary generator on one US cloud.</li>
+<li>Proof culture: a published, reproducible verification record instead of demos.</li>
+<li>Total scope for small operators: growth stack and all channels included — no second SaaS stack, no frontend project.</li>
+<li>Economics at small scale: viable from a few thousand lines.</li>
+</ul>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"Is genalpha-bss open source?","acceptedAnswer":{"@type":"Answer","text":"Yes — the full BSS, its seven channels, test suites and Helm chart are open source and inspectable on GitHub. Totogi is proprietary SaaS."}},
+{"@type":"Question","name":"Does genalpha-bss run outside AWS?","acceptedAnswer":{"@type":"Answer","text":"Yes — one Helm chart runs on AWS EKS, Azure AKS and bare-metal k3s with two flags of difference; docker compose runs on any Linux box, on-prem or air-gapped. Totogi runs as SaaS on AWS."}},
+{"@type":"Question","name":"How is genalpha-bss verified?","acceptedAnswer":{"@type":"Answer","text":"25 official TM Forum CTKs pass at zero failures and 137 end-to-end browser suites drive every feature against the live system; both records are published and reproducible."}},
+{"@type":"Question","name":"Does Totogi include a martech or CDP module?","acceptedAnswer":{"@type":"Answer","text":"Totogi's modules cover the transactional core (CRM, catalog, order, revenue, invoicing). genalpha-bss ships a BSS-native CDP, journey orchestration with holdout-measured lift, and campaign attribution inside the same product."}}]}</script>
+</body></html>
