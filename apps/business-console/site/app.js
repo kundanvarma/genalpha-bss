@@ -17,6 +17,10 @@ const CONSUMPTION = '/tmf-api/usageConsumption/v4';
 const INVENTORY = '/tmf-api/productInventory/v4';
 
 const el = (id) => document.getElementById(id);
+// the tenant's brand colour drives the console, same as every other channel
+if (window.BSS_BIZ_CONFIG?.brandColor) {
+  document.documentElement.style.setProperty('--teal', window.BSS_BIZ_CONFIG.brandColor);
+}
 let me = null;
 let orgId = null;
 
@@ -40,10 +44,14 @@ async function loadMembers() {
   picker.replaceChildren();
   const swapPicker = el('swap-member');
   swapPicker.replaceChildren(new Option(t('Who…'), ''));
+  el('swap-line').replaceChildren(new Option(t('Their line…'), ''));
   const reassignFrom = el('reassign-member');
   const reassignTo = el('reassign-to');
   reassignFrom.replaceChildren(new Option(t('From whom…'), ''));
   reassignTo.replaceChildren(new Option(t('To whom…'), ''));
+  window._peopleById = Object.fromEntries(members.map((m) => [m.id,
+    `${m.givenName || ''} ${m.familyName || ''}`.trim() || m.email || m.id.slice(0, 8)]));
+  resolveLineFor();
   for (const m of members) {
     const row = document.createElement('div');
     row.className = 'memberrow';
@@ -258,6 +266,15 @@ async function reassignLine() {
   } catch (e) { status.className = 'err'; status.textContent = e.message; }
 }
 
+
+/** A customer admin should never read a UUID: once people are known, every
+ *  bill line's "for whom" resolves to the person's name. */
+function resolveLineFor() {
+  for (const span of document.querySelectorAll('.linefor[data-for]')) {
+    const name = window._peopleById?.[span.dataset.for];
+    if (name) span.textContent = name;
+  }
+}
 async function swapPlan() {
   const member = el('swap-member').value;
   const line = el('swap-line');
@@ -342,10 +359,12 @@ async function loadBills() {
       .then((rates) => {
         lines.replaceChildren(...rates.map((r) => {
           const d = document.createElement('div');
-          const who = r.forParty?.id ? ` — <span data-for="${r.forParty.id}" class="linefor">${r.forParty.id.slice(0, 8)}…</span>` : '';
+          const label = window._peopleById?.[r.forParty?.id];
+          const who = r.forParty?.id ? ` — <span data-for="${r.forParty.id}" class="linefor">${label || r.forParty.id.slice(0, 8) + '…'}</span>` : '';
           d.innerHTML = `${r.name}${who} <span style="float:right">${fmtMoney(r.taxExcludedAmount.value, r.taxExcludedAmount.unit)}</span>`;
           return d;
         }));
+        resolveLineFor();
       })
       .catch(() => { lines.textContent = ''; });
   }

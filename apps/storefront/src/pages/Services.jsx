@@ -422,7 +422,7 @@ export default function Services() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               <b data-testid="loyalty-points" style={{ fontSize: '1.4rem' }}>{loyalty.balance}</b>
               <span>{t('points')}</span>
-              <button data-testid="loyalty-redeem" disabled={loyalty.balance < loyaltyProg.pointsPerGb}
+              <button className="ghost" data-testid="loyalty-redeem" disabled={loyalty.balance < loyaltyProg.pointsPerGb}
                 onClick={async () => {
                   try {
                     const r = await redeemLoyaltyData(1);
@@ -430,7 +430,7 @@ export default function Services() {
                     setLoyaltyMsg(t('Redeemed! The GB lands on this month\u2019s meter.'));
                   } catch (e) { setLoyaltyMsg(String(e.message || e)); }
                 }}>{t('Redeem 1 GB')} ({loyaltyProg.pointsPerGb} {t('points')})</button>
-              <button data-testid="loyalty-voucher" disabled={loyalty.balance < (loyaltyProg.pointsPerVoucher || 200)}
+              <button className="ghost" data-testid="loyalty-voucher" disabled={loyalty.balance < (loyaltyProg.pointsPerVoucher || 200)}
                 onClick={async () => {
                   try {
                     const r = await redeemLoyaltyVoucher();
@@ -443,7 +443,7 @@ export default function Services() {
           ) : (
             <div>
               <p style={{ margin: '4px 0 10px' }}>{t('Earn points on every bill; redeem them as data.')}</p>
-              <button data-testid="loyalty-join" onClick={async () => {
+              <button className="ghost" data-testid="loyalty-join" onClick={async () => {
                 setLoyalty(await enrollLoyalty());
               }}>{t('Join the loyalty program')}</button>
             </div>
@@ -528,13 +528,13 @@ export default function Services() {
             const monthly = pricesOf(o, prices).find((p) => p.priceType === 'recurring');
             return (
               <p key={o.id} style={{ margin: '6px 0' }} data-testid="rec-offer">
-                <Link to={`/offering/${o.id}`}>{o.name}{monthly ? ` — ${fmtPrice(monthly)}` : ''} →</Link>
+                <Link className="promolink" to={`/offering/${o.id}`}>{o.name}{monthly ? ` — ${fmtPrice(monthly)}` : ''} →</Link>
               </p>
             );
           })}
           {missing.map((m) => (
             <p key={m.cat} style={{ margin: '6px 0' }}>
-              <Link to="/">{m.label} →</Link>
+              <Link className="promolink" to="/">{m.label} →</Link>
             </p>
           ))}
         </section>
@@ -635,7 +635,7 @@ function GiftData({ hh, onDone }) {
           {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       )}
-      <input style={{ width: '9em' }} inputMode="tel"
+      <input style={{ width: '12em' }} inputMode="tel"
         placeholder={people.length ? t('…or a phone number') : t('their phone number')}
         data-testid="gift-phone" value={phone}
         onChange={(e) => { setPhone(e.target.value.replace(/[^0-9+ -]/g, '')); if (e.target.value) setTo(''); }} />
