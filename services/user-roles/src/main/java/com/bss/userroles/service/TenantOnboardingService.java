@@ -611,7 +611,21 @@ public class TenantOnboardingService {
         String tok = staffToken(id);
         waitAdopt(catalogBase, "/tmf-api/productCatalogManagement/v4/productOffering", tok);
 
-        // the shelf, from the PUBLIC price list
+        // the shelf, from the PUBLIC price list — categorized, because the
+        // storefront's line-of-business tabs hide category-less offerings
+        String categoryName = String.valueOf(dto.getOrDefault("category", "Broadband"));
+        String categoryId = null;
+        try {
+            Map<String, Object> cat = rest.post()
+                    .uri(catalogBase + "/tmf-api/productCatalogManagement/v4/category")
+                    .header("Authorization", "Bearer " + tok)
+                    .header("Content-Type", "application/json")
+                    .body(Map.of("name", categoryName, "lifecycleStatus", "Active"))
+                    .retrieve().body(Map.class);
+            categoryId = String.valueOf(cat.get("id"));
+        } catch (Exception e) {
+            log.warn("prospect category skipped: {}", e.getMessage());
+        }
         java.math.BigDecimal bookMonthly = java.math.BigDecimal.ZERO;
         Map<String, String> offeringByName = new java.util.LinkedHashMap<>();
         for (Object raw : priceList) {
@@ -628,13 +642,21 @@ public class TenantOnboardingService {
                                 "lifecycleStatus", "Active",
                                 "price", Map.of("unit", currency, "value", monthly)))
                         .retrieve().body(Map.class);
+                Map<String, Object> offBody = new java.util.LinkedHashMap<>();
+                offBody.put("name", offName);
+                offBody.put("lifecycleStatus", "Active");
+                offBody.put("isSellable", true);
+                offBody.put("productOfferingPrice", java.util.List.of(
+                        Map.of("id", price.get("id"), "name", price.get("name"))));
+                if (categoryId != null) {
+                    offBody.put("category", java.util.List.of(
+                            Map.of("id", categoryId, "name", categoryName)));
+                }
                 Map<String, Object> off = rest.post()
                         .uri(catalogBase + "/tmf-api/productCatalogManagement/v4/productOffering")
                         .header("Authorization", "Bearer " + tok)
                         .header("Content-Type", "application/json")
-                        .body(Map.of("name", offName, "lifecycleStatus", "Active", "isSellable", true,
-                                "productOfferingPrice", java.util.List.of(
-                                        Map.of("id", price.get("id"), "name", price.get("name")))))
+                        .body(offBody)
                         .retrieve().body(Map.class);
                 offeringByName.put(offName, String.valueOf(off.get("id")));
             } catch (Exception e) {
