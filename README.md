@@ -293,7 +293,7 @@ self-heals), and **Churn → Retention** driven by the AI back-office. A compani
 One build of each channel serves every tenant; the host decides the brand — **and the language
 and currency**. The tenant manifest carries `locale` + `currency` alongside logo, name and color:
 GenAlpha sells in English and EUR; Nova Telecom is a Norwegian operator — same build, Norwegian
-chrome (Tilbud, Handlekurv, Til kassen), NOK prices formatted the Norwegian way (`299,00 kr/md.`),
+chrome (Tilbud, Handlekurv, Til kassen) — in **both written standards**: bokmål and nynorsk are separate locales, so a Vestlandet operator ships «Tilbod, Handlekorg, Til kassa» by flipping one tenant field — NOK prices formatted the Norwegian way (`299,00 kr/md.`),
 and a Norwegian Keycloak sign-in. Prices carry their own currency unit end to end (catalog → cart
 → bill), so multi-currency needs no FX machinery — one currency per operator, the telco norm:
 
