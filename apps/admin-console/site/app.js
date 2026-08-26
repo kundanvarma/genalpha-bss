@@ -191,12 +191,12 @@ const RESOURCES = [
     detail: async (item) => {
       const res = await authFetch(`${BILLING_BASE}/customerBill/${item.id}/appliedCustomerBillingRate`);
       const rates = res.ok ? await res.json() : [];
-      return rates.map((r) => ({
+      return Promise.all(rates.map(async (r) => ({
         line: r.name,
         type: r.type,
         amount: `${Number(r.taxExcludedAmount?.value ?? 0).toFixed(2)} ${r.taxExcludedAmount?.unit || ''}`,
-        for: r.forParty?.id ? r.forParty.id.slice(0, 8) + '…' : '—',
-      }));
+        for: r.forParty?.id ? await partyName(r.forParty.id) : '—',
+      })));
     },
   },
   {
@@ -5812,6 +5812,16 @@ async function loadList() {
         // full value on hover, so the table never explodes.
         td.textContent = text.length > 64 ? text.slice(0, 61) + '…' : text;
         if (text.length > 64) td.title = text;
+        // an operator should never read a UUID: name-less party refs resolve
+        // to the person's (or org's) name, cached, fail-soft to the id stub
+        const nameless = Array.isArray(raw)
+          ? (raw.length && raw.every((v) => v && v.id && !v.name) ? raw : null)
+          : (raw && typeof raw === 'object' && raw.id && !raw.name && !raw.value ? [raw] : null);
+        if (nameless) {
+          Promise.all(nameless.map((v) => partyName(v.id)))
+            .then((names) => { td.textContent = names.join(', '); })
+            .catch(() => {});
+        }
       }
       tr.append(td);
     }
