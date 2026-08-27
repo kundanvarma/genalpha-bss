@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, myReferral, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold, redeemReferral } from '../api.js';
+import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, myReferral, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myNotifications, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold, redeemReferral } from '../api.js';
+import UsageControls from './UsageControls.jsx';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
 import { locale, money as intlMoney, t } from '../i18n.js';
@@ -297,7 +298,9 @@ export default function Services() {
   const latestBill = [...bills].sort((a, b) =>
     String(b.billDate || b.billNo).localeCompare(String(a.billDate || a.billNo)))[0];
   const dataBuckets = buckets.filter((b) => b.name === 'Mobile data');
-  const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data');
+  // zone-tagged buckets are travel-pass meters — they read in Usage controls
+  const zoneBuckets = buckets.filter((b) => b.zone);
+  const otherBuckets = buckets.filter((b) => b.name !== 'Mobile data' && !b.zone);
   const topUps = Object.values(offerings).filter((o) => categoryOf(o) === 'Top-ups');
   const ownsMobile = mobilePlans.length > 0 || bundleGroups.length > 0 || Boolean(number);
 
@@ -354,6 +357,7 @@ export default function Services() {
           ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.
         </p>
       )}
+      <PlanChangeNotices />
 
       {bundleGroups.map(({ bundle, components }) => (
         <section className="card" key={bundle.id} data-testid={`bundle-${bundle.id}`}
@@ -507,6 +511,10 @@ export default function Services() {
         </section>
       )}
 
+      {ownsMobile && (
+        <UsageControls boostOfferings={topUps} prices={prices} zoneBuckets={zoneBuckets} />
+      )}
+
       {latestBill && (
         <section className="card" data-testid="bill-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Latest bill')}</h2>
@@ -559,6 +567,40 @@ export default function Services() {
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * PLAN CHANGES — migration notices ride the communication channel (the same
+ * inbox as everything else); this card surfaces the ones about YOUR plan so
+ * the legally required written notice is never buried. Base-migration has no
+ * customer-facing endpoint by design: the notification IS the customer face.
+ */
+function PlanChangeNotices() {
+  const [notices, setNotices] = useState([]);
+  useEffect(() => {
+    myNotifications().then((ms) => setNotices(
+      (ms || []).filter((m) => /migrat|plan change|changing your plan|new plan|new terms|price change/i
+        .test(`${m.subject || ''} ${m.content || ''}`)),
+    )).catch(() => {});
+  }, []);
+  if (!notices.length) return null;
+  return (
+    <section className="card" data-testid="plan-change-notices" style={{ padding: '14px 18px', marginBottom: 14 }}>
+      <h2 style={{ marginTop: 0 }}>📋 {t('Changes to your plan')}</h2>
+      {notices.slice(0, 3).map((m) => (
+        <div className="row" key={m.id} data-testid="plan-change-notice">
+          <div>
+            <strong>{m.subject}</strong>
+            <div className="dim small">{m.content}</div>
+          </div>
+          <span className="dim small">{m.sendTime ? new Date(m.sendTime).toLocaleDateString() : ''}</span>
+        </div>
+      ))}
+      <p className="dim small" style={{ margin: '6px 0 0' }}>
+        <Link to="/notifications">{t('All notifications')} →</Link>
+      </p>
+    </section>
   );
 }
 

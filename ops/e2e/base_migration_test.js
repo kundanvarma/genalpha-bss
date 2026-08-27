@@ -209,12 +209,46 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await post(`${MIG}/migrationPlan/${gated.id}/pause`, {});
   console.log('OK gate-proof plan paused (left tidy)');
 
-  // UI leg (future): the console migration desk — plan builder over the
-  // catalog, simulation attach + disabled-until-simulated Arm button, wave
-  // monitor with failure drill-down; selfcare renders the notice with the
-  // one-click penalty-free exit. Not built yet; API proof stands above.
-  // const page = await ctx.newPage();
-  // await page.goto('http://localhost:8080/csr/');
+  // ---- UI leg: the console migration desk mirrors the rehearsal gate ----
+  // A throwaway DRAFT plan (no simulation attached) must render with its
+  // Arm button disabled — the desk mirrors the server's 409 gate.
+  const draftName = `UI draft ${run}`;
+  const draftPlan = await post(`${MIG}/migrationPlan`, {
+    name: draftName,
+    matrix: [{ sourceOfferingId: legacy.id, targetOfferingId: target.id,
+      targetOfferingName: target.name, deltaClass: 'neutral' }],
+    trigger: { type: 'bulk' },
+    jurisdictionPack: { noticeDays: 30 } });
+
+  const page = await ctx.newPage();
+  await page.goto(`${API}/csr/`);
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.fill('input[name="username"]', 'demo');
+  await page.fill('input[name="password"]', 'demo');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('.nav', { timeout: 30000 });
+  await page.click('.nav >> text=Migrations');
+  await page.locator('h1', { hasText: 'Migration desk' }).waitFor({ timeout: 20000 })
+    .catch(() => fail('console /migrations did not render the Migration desk'));
+  const draftRow = page.locator('[data-testid="plan-row"]', { hasText: draftName }).first();
+  await draftRow.waitFor({ timeout: 20000 })
+    .catch(() => fail('the draft plan is not on the desk\'s plan list: ' + draftName));
+  await draftRow.click();
+  await page.locator('[data-testid="plan-detail"]').waitFor({ timeout: 15000 })
+    .catch(() => fail('selecting the draft plan opened no detail section'));
+  const armBtn = page.locator('[data-testid="arm-plan"]');
+  await armBtn.waitFor({ timeout: 15000 })
+    .catch(() => fail('no Arm button on the plan detail (staff needs migration:admin)'));
+  if (!await armBtn.isDisabled()) {
+    fail('Arm must be DISABLED for a draft plan — the desk must mirror the rehearsal gate');
+  }
+  console.log('OK console desk: the Migration desk lists the draft plan and keeps Arm'
+    + ' disabled until a simulation is attached');
+  const gone = await ctx.request.delete(`${MIG}/migrationPlan/${draftPlan.id}`, { headers: H });
+  if (![200, 204].includes(gone.status())) {
+    fail('could not delete the throwaway draft plan: ' + gone.status());
+  }
+  console.log('OK throwaway draft plan deleted (left tidy)');
 
   console.log('OK base migration: rehearse -> arm -> notice -> gate -> order -> exit/rollback, all on the books');
   await browser.close();

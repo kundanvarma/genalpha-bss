@@ -289,6 +289,21 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .copilot p { margin: 4px 0; }
 .copilot ul { margin: 6px 0 4px; padding-left: 20px; }
 
+/* Care-critical party notices: deceased flag, protected address (kode 6/7). */
+.notice {
+  border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--card);
+  padding: 10px 14px; margin: 10px 0; font-size: 13.5px;
+}
+.notice.danger { border-color: var(--danger); color: var(--danger); font-weight: 600; }
+.notice.protectednote { border-color: var(--teal); color: var(--teal-text); font-weight: 600; }
+.ok { color: var(--ok); }
+
+/* Staff desks: inline selects match the stack inputs. */
+.stack select {
+  font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 7px 10px; border-radius: var(--radius-s);
+}
+
 /* Decomposed order components — the agent's per-family view of a bundle order. */
 .ordercomponents { list-style: none; margin: 6px 0 0; padding: 0;
   display: flex; flex-direction: column; gap: 3px; }

@@ -16,7 +16,12 @@ const PAYMENT = '/tmf-api/paymentManagement/v4';
 async function json(res) {
   if (!res.ok) {
     const problem = await res.json().catch(() => ({}));
-    throw new Error(problem.message || `HTTP ${res.status}`);
+    const err = new Error(problem.message || `HTTP ${res.status}`);
+    // TMF error bodies carry a machine code (e.g. CREDIT_FROZEN) — keep it so
+    // the UI can branch on WHY, not just the words.
+    err.code = problem.code || null;
+    err.status = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -635,6 +640,27 @@ export async function billRates(billId) {
   return json(await authFetch(`${BILLING}/customerBill/${billId}/appliedCustomerBillingRate`));
 }
 
+/** Collections: the customer's OWN case (party-scoped by the backend) —
+ * null when the account stands current, or the collections module is absent
+ * (fail-soft, like every optional component). */
+export async function myCollectionCase() {
+  try {
+    const cases = await json(await authFetch(`${BILLING}/collectionCase`));
+    return Array.isArray(cases) && cases.length ? cases[0] : null;
+  } catch { return null; }
+}
+
+/** "I will pay by then" — the customer's own promise-to-pay pauses the
+ * dunning ladder within the policy allowance. Amount defaults to the full
+ * overdue balance on the backend. */
+export async function promiseToPay(caseId, days) {
+  return json(await authFetch(`${BILLING}/collectionCase/${caseId}/promiseToPay`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(days ? { days: Number(days) } : {}),
+  }));
+}
+
 const QUALIFICATION = '/tmf-api/productOfferingQualification/v4';
 const APPOINTMENT = '/tmf-api/appointment/v4';
 
@@ -928,6 +954,156 @@ export async function myExperience() {
   if (!consentChoice()?.personalization) return { personalized: false };
   const res = await publicFetch(`${INSIGHT}/experience?visitorId=${visitorId()}`);
   return res.ok ? res.json() : { personalized: false };
+}
+
+// ---------------- device commerce (trade-in, financing, withdrawal) ----------------
+
+const DEVICE = '/tmf-api/deviceCommerce/v1';
+
+/** IMEI + guided condition answers → a live estimate off the residual table. */
+export async function quoteTradeIn(dto) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...dto, channel: 'shop' }),
+  }));
+}
+
+export async function acceptTradeIn(id) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/accept`, { method: 'POST' }));
+}
+
+/** My trade-ins — quoted, mailed in, graded, settled. Party-scoped server-side. */
+export async function myTradeIns() {
+  return json(await authFetch(`${DEVICE}/tradeInValuation`));
+}
+
+/** The grading came back LOWER — take the revised value, or refuse and get
+ * the device back. Money never moves without the customer's word. */
+export async function acceptTradeInRevaluation(id) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/acceptRevaluation`, { method: 'POST' }));
+}
+
+export async function rejectTradeInRevaluation(id) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/rejectRevaluation`, { method: 'POST' }));
+}
+
+/** The checkout chooser face: per-model monthly + TOTAL cost, before signing. */
+export async function financingQuote(principal, termMonths, financingModel) {
+  return json(await authFetch(`${DEVICE}/financingQuote`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ principal, termMonths, financingModel }),
+  }));
+}
+
+/** Sign the device financing agreement (instalments / pay-later) post-order. */
+export async function createDeviceAgreement(dto) {
+  return json(await authFetch(`${DEVICE}/deviceAgreement`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  }));
+}
+
+export async function myDeviceAgreements() {
+  return json(await authFetch(`${DEVICE}/deviceAgreement`));
+}
+
+export async function deviceUpgradeEligibility(agreementId) {
+  return json(await authFetch(`${DEVICE}/deviceAgreement/${agreementId}/upgradeEligibility`));
+}
+
+/** The 14-day withdrawal (angrerett): unconditional inside the window. */
+export async function openDeviceWithdrawal(agreementId) {
+  return json(await authFetch(`${DEVICE}/withdrawalCase`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ agreementId }),
+  }));
+}
+
+// ---------------- usage policy (pool, spend meters, auto top-up) ----------------
+
+const USAGE_MGMT = '/tmf-api/usageManagement/v4';
+
+/** The household data pools I own or draw — members ride along for managers. */
+export async function myAllowancePools() {
+  return json(await authFetch(`${USAGE_MGMT}/allowancePool`));
+}
+
+export async function createAllowancePool(poolGB, name = null) {
+  return json(await authFetch(`${USAGE_MGMT}/allowancePool`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ poolGB, ...(name ? { name } : {}) }),
+  }));
+}
+
+export async function addPoolMember(poolId, partyId, softLimitGB = null, hardLimitGB = null) {
+  return json(await authFetch(`${USAGE_MGMT}/allowancePool/${poolId}/member`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ partyId,
+      ...(softLimitGB != null ? { softLimitGB } : {}),
+      ...(hardLimitGB != null ? { hardLimitGB } : {}) }),
+  }));
+}
+
+export async function patchPoolMember(poolId, partyId, patch) {
+  return json(await authFetch(`${USAGE_MGMT}/allowancePool/${poolId}/member/${partyId}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }));
+}
+
+export async function removePoolMember(poolId, partyId) {
+  const res = await authFetch(`${USAGE_MGMT}/allowancePool/${poolId}/member/${partyId}`, {
+    method: 'DELETE' });
+  if (!res.ok) {
+    const problem = await res.json().catch(() => ({}));
+    throw new Error(problem.message || `HTTP ${res.status}`);
+  }
+}
+
+/** My three spend-meter faces: spend cap, content services, roaming limit. */
+export async function mySpendPolicy() {
+  return json(await authFetch(`${USAGE_MGMT}/spendPolicy`));
+}
+
+export async function patchSpendMeter(meterType, dto) {
+  return json(await authFetch(`${USAGE_MGMT}/spendPolicy/${meterType}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  }));
+}
+
+/** The audited "keep me roaming" election — service past the limit only on
+ * the customer's explicit request (EU 2022/612). */
+export async function roamingContinue() {
+  return json(await authFetch(`${USAGE_MGMT}/roamingLimit/continue`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
+export async function myAutoTopup() {
+  return json(await authFetch(`${USAGE_MGMT}/autoTopupPolicy`));
+}
+
+/** PUT semantics — enabling REQUIRES consent:true in the same request. */
+export async function setAutoTopup(dto) {
+  return json(await authFetch(`${USAGE_MGMT}/autoTopupPolicy`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  }));
+}
+
+// ---------------- directory privacy (number-directory exposure) ----------------
+
+/** My directory exposure choices (full / partial / reserved + secret number). */
+export async function myDirectorySettings() {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/directorySetting`));
+}
+
+export async function setDirectorySetting(dto) {
+  return json(await authFetch(`${PARTY}/individual/${tokenClaims().sub}/directorySetting`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  }));
 }
 
 /** On login: this browser's profile belongs to this customer now. */

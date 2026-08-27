@@ -14,9 +14,10 @@
  *  - TRAVEL PASS: zone-tagged usage inside the pass window rates free; outside
  *    the window it rates like home overage. First zone record says so.
  *
- * UI: no frontend face yet — when the selfcare "Data & limits" pane ships,
- * assert here: pool ring + member bars, the barring toggle, the roaming
- * continue dialog, the auto top-up consent checkbox.
+ * UI (leg 6, after the API proof): the selfcare faces — the seeded
+ * "Family data pool" card with member caps on /family, and the roaming
+ * limit card under usage controls on My page (both seeded for paula by
+ * seed_usage_policy.py).
  */
 const { chromium } = require('playwright');
 
@@ -187,6 +188,41 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000);
   if (again.length !== 1) fail('re-rating not idempotent');
   ok('TRAVEL PASS: re-rating is idempotent');
 
+  /* ---------- 6. UI faces: the family pool card + the roaming limit card ---------- */
+  const page = await (await browser.newContext()).newPage();
+  await page.goto(`${API}/shop/`);
+  await page.locator('.who >> text=Sign in').click();
+  await page.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await page.fill('input[name="username"]', 'paula@family.example');
+  await page.fill('input[name="password"]', 'paula');
+  await page.click('input[type="submit"], button[type="submit"]');
+  await page.waitForSelector('.nav', { timeout: 30000 });
+
+  await page.click('.nav >> text=Family');
+  const poolCard = page.locator('[data-testid^="data-pool-"]', { hasText: 'Family data pool' }).first();
+  await poolCard.waitFor({ timeout: 20000 }).catch(() =>
+    fail('the seeded "Family data pool" card is not on /family — is seed_usage_policy.py applied?'));
+  const remaining = (await poolCard.locator('[data-testid="pool-remaining"]').textContent()) || '';
+  if (!/GB left of/.test(remaining)) fail('pool card does not state remaining-of-total: ' + remaining);
+  if (!await poolCard.locator('[data-testid^="pool-member-"]').count()) {
+    fail('no member rows on the pool card — paula manages the pool, the caps must show');
+  }
+  if (!await poolCard.locator('[data-testid="pool-hard-input"]').first().count()) {
+    fail('member rows carry no cap inputs — the per-member caps face is missing');
+  }
+  ok('UI: /family shows the seeded "Family data pool" with remaining-of-total and per-member caps');
+
+  await page.click('.nav >> text=My page');
+  await page.locator('[data-testid="usage-controls"]').waitFor({ timeout: 30000 }).catch(() =>
+    fail('the usage-controls card is not on My page (it hides only when the usage-policy component is absent)'));
+  const roaming = page.locator('[data-testid="roaming-controls"]');
+  await roaming.waitFor({ timeout: 15000 }).catch(() =>
+    fail('no roaming limit card under usage controls — paula\'s 50 EUR default is seeded'));
+  if (!await roaming.locator('[data-testid="roaming-limit-input"]').count()) {
+    fail('the roaming card has no limit input — raising/lowering the limit is part of the face');
+  }
+  ok('UI: My page usage controls show the roaming limit card with its editable limit');
+
   await browser.close();
-  console.log('OK usage_policy: pool + caps + roaming wall + auto top-up + travel pass all proven');
+  console.log('OK usage_policy: pool + caps + roaming wall + auto top-up + travel pass + the selfcare faces all proven');
 })().catch((e) => fail(e.message || String(e)));

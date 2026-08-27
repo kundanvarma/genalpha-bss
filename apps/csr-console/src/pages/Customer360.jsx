@@ -7,7 +7,10 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   revokePaymentMethod, usageOf, aiNextBestOffer, orderForCustomer, sendOffer,
   simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, splitBill,
   disputeBill, issueCreditNote, transferService, findCustomerByEmail, diagnoseService,
-  openBillPdf, resendBill, setBillDeliveryFor, verifyPartyAddress } from '../api.js';
+  openBillPdf, resendBill, setBillDeliveryFor, verifyPartyAddress,
+  autoTopupOf, creditDecisionsOf, directorySettingsOf, linkRegistryPerson,
+  patchSpendPolicy, poolsOf, runRegistrySync, saveDirectorySetting,
+  spendPoliciesOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
 import { hasRole } from '../auth.js';
 
@@ -68,6 +71,14 @@ export default function Customer360() {
   const [ticketName, setTicketName] = useState('');
   const [error, setError] = useState(null);
   const [copilot, setCopilot] = useState(null);
+  const [spendPolicies, setSpendPolicies] = useState([]);
+  const [pools, setPools] = useState([]);
+  const [autoTopup, setAutoTopup] = useState(null);
+  const [creditDecisions, setCreditDecisions] = useState([]);
+  const [dirSettings, setDirSettings] = useState([]);
+  const [personRef, setPersonRef] = useState('');
+  const [syncNote, setSyncNote] = useState(null);
+  const [dirDraft, setDirDraft] = useState({ serviceRef: '', exposure: 'partial', secretNumber: false });
   const [nbo, setNbo] = useState(null); // null | 'loading' | {summary, nextActions}
   const [puks, setPuks] = useState({}); // serviceId -> revealed PUK
 
@@ -114,6 +125,11 @@ export default function Customer360() {
     redemptionsOf(id).then(setRedemptions);
     paymentMethodsOf(id).then(setMethods);
     recommendationsOf(id).then(setSuggestions);
+    spendPoliciesOf(id).then(setSpendPolicies);
+    poolsOf(id).then(setPools);
+    autoTopupOf(id).then(setAutoTopup);
+    creditDecisionsOf(id).then(setCreditDecisions);
+    directorySettingsOf(id).then(setDirSettings);
   };
   useEffect(reload, [id]);
 
@@ -147,6 +163,11 @@ export default function Customer360() {
     }
   }
 
+  // kode 6/7 discipline: a protected party's address is never requested,
+  // rendered or recorded — the notice replaces the field, not just hides it
+  const addressProtected = customer.addressProtected === true;
+  const showableAddress = !addressProtected && address && address.street1 ? address : null;
+
   return (
     <>
       {error && <p className="error">{error}</p>}
@@ -154,14 +175,26 @@ export default function Customer360() {
         <span className="avatar big">{(customer.givenName?.[0] || '?').toUpperCase()}{(customer.familyName?.[0] || '').toUpperCase()}</span>
         {customer.givenName} {customer.familyName}
       </h1>
+      {customer.deceased === true && (
+        <div className="notice danger" data-testid="deceased-flag">
+          Deceased — the registry reports this customer as deceased. Route the
+          matter to estate handling; do not market, dun, or make outbound contact.
+        </div>
+      )}
+      {addressProtected && (
+        <div className="notice protectednote" data-testid="address-protected">
+          Address protected — do not request or record it. Deliveries go to a
+          pickup point; the address appears in no console, export or directory.
+        </div>
+      )}
       <p className="dim small">
         {email || <span title={customer.id}>{customer.id.slice(0, 8)}…</span>}
         {numbers.length > 0 && <> · <span data-testid="cust-numbers">
           📞 {numbers.map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
         </span></>}
-        {address && <> · {address.street1}, {address.postCode} {address.city}</>}
-        {registered && <span className="ok" data-testid="registered-hint"> · ✓ registered address on file</span>}
-        {address && (
+        {showableAddress && <> · {showableAddress.street1}, {showableAddress.postCode} {showableAddress.city}</>}
+        {!addressProtected && registered && <span className="ok" data-testid="registered-hint"> · ✓ registered address on file</span>}
+        {showableAddress && (
           <> · <button className="linkish small" data-testid="reverify-address" disabled={regCheck === 'checking'}
             onClick={async () => {
               setRegCheck('checking');
@@ -485,6 +518,104 @@ export default function Customer360() {
             ))}
                       </div>
 
+          <h2>Spend &amp; roaming policies{!spendPolicies.length && <None />}</h2>
+          <div className="rows" data-testid="policy-card">
+            {spendPolicies.map((m) => (
+              <div className="row" key={m.meterType} data-testid={`policy-${m.meterType}`}>
+                <div>
+                  <strong>{{ spend: 'Spend cap', content: 'Content services', roaming: 'Roaming limit' }[m.meterType] || m.meterType}</strong>
+                  <div className="dim small">
+                    {m.limit ? `limit ${m.limit.value} ${m.limit.unit}` : 'no limit set'}
+                    {m.accrued ? ` · used ${m.accrued.value} ${m.accrued.unit}` : ''}
+                    {m.notifyAtPct != null ? ` · warns at ${m.notifyAtPct}%` : ''}
+                    {m.blockOnBreach ? ' · blocks on breach' : ''}
+                  </div>
+                </div>
+                <div className="rowend">
+                  {m.barred === true && <span className="state cancelled">barred</span>}
+                  {m.blocked === true && <span className="state cancelled">blocked</span>}
+                  {m.continueElected === true && <span className="state active">continue elected</span>}
+                  <span className={`state ${m.enabled ? 'active' : ''}`}>{m.enabled ? 'on' : 'off'}</span>
+                  {hasRole('usage:read') && ['roaming', 'content', 'spend'].includes(m.meterType) && (
+                    <button className="ghost" data-testid={`policy-limit-${m.meterType}`}
+                        title="Adjust the limit with the customer's say-so on the line (statutory floors apply)"
+                        onClick={() => {
+                          const v = window.prompt(`New ${m.meterType} limit (${m.limit?.unit || 'per cycle'}):`,
+                            m.limit ? String(m.limit.value) : '');
+                          if (!v) return;
+                          act(async () => {
+                            await patchSpendPolicy(id, m.meterType, { limit: Number(v), enabled: true });
+                            await logInteraction({
+                              description: `${m.meterType} limit set to ${v} on request`,
+                              channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Set limit
+                    </button>
+                  )}
+                  {hasRole('usage:read') && m.meterType === 'content' && (
+                    <button className="ghost" data-testid="policy-bar-toggle"
+                        title="Content-service barring is free and always available; a minor's barring only a guardian or staff lifts"
+                        onClick={() => act(async () => {
+                          await patchSpendPolicy(id, 'content', { barred: !m.barred });
+                          await logInteraction({
+                            description: `Content-services barring ${m.barred ? 'lifted' : 'applied'} on request`,
+                            channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                            relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                          });
+                        })}>
+                      {m.barred ? 'Lift barring' : 'Bar content'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+                      </div>
+
+          <h2>Household pool{!pools.length && <None />}</h2>
+          <div className="rows" data-testid="pool-card">
+            {pools.map((p) => {
+              const mine = (p.member || []).find((mb) => mb.partyId === id);
+              return (
+                <div className="row" key={p.id} data-testid="pool-row">
+                  <div>
+                    <strong>{p.name}</strong>
+                    <div className="dim small">
+                      {p.ownerPartyId === id ? 'owner' : 'member'}
+                      {p.remainingGB != null ? ` · ${p.remainingGB} of ${p.poolGB} ${p.units || 'GB'} left` : ''}
+                      {mine && mine.consumedGB != null ? ` · this customer used ${mine.consumedGB}` : ''}
+                      {mine && mine.softLimitGB != null ? ` · soft cap ${mine.softLimitGB}` : ''}
+                      {mine && mine.hardLimitGB != null ? ` · hard cap ${mine.hardLimitGB}` : ''}
+                    </div>
+                  </div>
+                  <span className={`state ${p.status}`}>{p.status}</span>
+                </div>
+              );
+            })}
+                      </div>
+
+          <h2>Auto top-up{(!autoTopup || !autoTopup.enabled) && <None />}</h2>
+          <div className="rows" data-testid="autotopup-card">
+            {autoTopup && autoTopup.enabled ? (
+              <div className="row">
+                <div>
+                  <strong>Auto top-up on</strong>
+                  <div className="dim small">
+                    boost {autoTopup.boostOfferingId || '—'} · trigger {autoTopup.trigger || 'depletion'}
+                    {autoTopup.triggerPct != null ? ` at ${autoTopup.triggerPct}%` : ''}
+                    {autoTopup.maxBoostsPerCycle != null ? ` · max ${autoTopup.maxBoostsPerCycle}/cycle` : ''}
+                    {autoTopup.consentAt ? ` · consented ${String(autoTopup.consentAt).slice(0, 10)}` : ''}
+                  </div>
+                </div>
+                <span className="state active">enabled</span>
+              </div>
+            ) : (
+              <p className="dim small">Off — it only ever turns on with the customer's recorded consent.</p>
+            )}
+          </div>
+
           <h2>Agreements{!agreements.length && <None />}</h2>
           <div className="rows" data-testid="agreements-card">
             {agreements.map((g) => (
@@ -666,6 +797,28 @@ export default function Customer360() {
               && <p className="dim small">No promotions or saved cards.</p>}
           </div>
 
+          <h2>Credit decisions{!creditDecisions.length && <None />}</h2>
+          <div className="rows" data-testid="credit-card">
+            {creditDecisions.map((cd) => (
+              <div className="row" key={cd.id} data-testid="credit-decision-row">
+                <div>
+                  <strong className={cd.decision === 'approve' ? 'ok' : cd.decision === 'decline' ? 'error' : undefined}>
+                    {cd.decision}
+                  </strong>
+                  <div className="dim small">
+                    {cd.scoreBand ? `band ${cd.scoreBand}` : 'no score band'}
+                    {cd.purpose ? ` · ${cd.purpose}` : ''}
+                    {cd.remarksPresent === true ? ' · payment remarks on file' : ''}
+                  </div>
+                </div>
+                <span className="dim small">{dt(cd.decidedAt)}</span>
+              </div>
+            ))}
+            {!creditDecisions.length && (
+              <p className="dim small">No stored decisions — only the decision is ever kept, never a report.</p>
+            )}
+          </div>
+
           <h2>Suggest next</h2>
           <div className="rows" data-testid="suggest-card">
             {suggestions.slice(0, 3).map((it) => (
@@ -752,6 +905,89 @@ export default function Customer360() {
                    value={note} onChange={(e) => setNote(e.target.value)} />
             <button className="ghost" type="submit">Log interaction</button>
           </form>
+
+          {hasRole('party:write') && (
+            <div data-testid="registry-tools">
+              <h2>Registry link</h2>
+              <form className="stack" onSubmit={(e) => {
+                e.preventDefault();
+                if (!personRef.trim()) return;
+                act(async () => {
+                  await linkRegistryPerson(id, personRef.trim());
+                  await logInteraction({
+                    description: 'Party linked to national-registry person for ongoing sync',
+                    channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                    relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                  });
+                });
+                setPersonRef('');
+              }}>
+                <input placeholder="registry person id (personRef)" data-testid="registry-link-input"
+                       value={personRef} onChange={(e) => setPersonRef(e.target.value)} />
+                <button className="ghost" type="submit" data-testid="registry-link-submit"
+                        disabled={!personRef.trim()}>Link registry person</button>
+                <button className="ghost" type="button" data-testid="registry-sync-now"
+                        title="Poll the registry event feed now — address changes, protections, deaths"
+                        onClick={() => act(async () => {
+                          const r = await runRegistrySync();
+                          setSyncNote(`Sync ran — processed ${r.processed ?? 0} event${(r.processed ?? 0) === 1 ? '' : 's'}.`);
+                        })}>
+                  Run sync
+                </button>
+              </form>
+              {syncNote && <p className="dim small" data-testid="registry-sync-note">{syncNote}</p>}
+
+              <h2>Directory listing{!dirSettings.length && <None />}</h2>
+              <div className="rows" data-testid="directory-card">
+                {dirSettings.map((s) => (
+                  <div className="row" key={s.id} data-testid="directory-setting-row">
+                    <span>{s.serviceRef || 'all services'}</span>
+                    <div className="rowend">
+                      {s.secretNumber === true && <span className="state cancelled">secret number</span>}
+                      <span className={`state ${s.exposure === 'reserved' ? 'cancelled' : s.exposure === 'full' ? 'active' : ''}`}>{s.exposure}</span>
+                    </div>
+                  </div>
+                ))}
+                {!dirSettings.length && (
+                  <p className="dim small">No directory choices recorded — the export applies the defaults.</p>
+                )}
+              </div>
+              <form className="stack" data-testid="directory-form" onSubmit={(e) => {
+                e.preventDefault();
+                act(async () => {
+                  await saveDirectorySetting(id, {
+                    ...(dirDraft.serviceRef.trim() ? { serviceRef: dirDraft.serviceRef.trim() } : {}),
+                    exposure: dirDraft.exposure,
+                    secretNumber: dirDraft.secretNumber,
+                  });
+                  await logInteraction({
+                    description: `Directory listing set to ${dirDraft.exposure}`
+                      + (dirDraft.secretNumber ? ' with secret number' : '')
+                      + (dirDraft.serviceRef.trim() ? ` for ${dirDraft.serviceRef.trim()}` : '')
+                      + ' on request',
+                    channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                    relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                  });
+                });
+              }}>
+                <input placeholder="service ref (blank = all services)" data-testid="directory-service"
+                       value={dirDraft.serviceRef}
+                       onChange={(e) => setDirDraft((s) => ({ ...s, serviceRef: e.target.value }))} />
+                <select data-testid="directory-exposure" value={dirDraft.exposure}
+                        onChange={(e) => setDirDraft((s) => ({ ...s, exposure: e.target.value }))}>
+                  <option value="full">full listing</option>
+                  <option value="partial">partial (no address)</option>
+                  <option value="reserved">reserved (unlisted)</option>
+                </select>
+                <label className="dim small" style={{ alignSelf: 'center', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="checkbox" data-testid="directory-secret" checked={dirDraft.secretNumber}
+                         onChange={(e) => setDirDraft((s) => ({ ...s, secretNumber: e.target.checked }))} />
+                  secret number (free; suppresses everything)
+                </label>
+                <button className="ghost" type="submit" data-testid="directory-save">Save listing</button>
+              </form>
+            </div>
+          )}
         </section>
       </div>
     </>

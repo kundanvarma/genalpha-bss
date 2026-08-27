@@ -384,6 +384,66 @@ export async function setBillDeliveryFor(customerId, preference) {
   }));
 }
 
+/* ---------------- Collections desk (billing) ----------------
+ * Cases are made by the sweeper, never POSTed. Reads ride billing:read;
+ * holds, release, write-off, the sweep trigger and the policy editor are
+ * billing:admin; the promise-to-pay entry is billing:write (staff carry it). */
+export async function collectionCases(state) {
+  return json(await authFetch(`${BILLING}/collectionCase${state ? `?state=${encodeURIComponent(state)}` : ''}`));
+}
+
+export async function collectionCaseById(id) {
+  return json(await authFetch(`${BILLING}/collectionCase/${id}`));
+}
+
+/** {days?, amount?} — amount defaults to the full overdue balance. */
+export async function casePromiseToPay(id, body) {
+  return json(await authFetch(`${BILLING}/collectionCase/${id}/promiseToPay`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {}),
+  }));
+}
+
+/** {type: 'dispute', amount} freezes ONLY the disputed amount;
+ *  {type: 'hardship'} is the manual full hold. */
+export async function caseHold(id, body) {
+  return json(await authFetch(`${BILLING}/collectionCase/${id}/hold`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function caseRelease(id, type) {
+  return json(await authFetch(`${BILLING}/collectionCase/${id}/release`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
+  }));
+}
+
+/** The ladder's end, human decision: reason REQUIRED (the auditors will ask). */
+export async function caseWriteOff(id, reason) {
+  return json(await authFetch(`${BILLING}/collectionCase/${id}/writeOff`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  }));
+}
+
+/** Walk this tenant's ladder now instead of waiting for the scheduled tick. */
+export async function runCollectionSweep() {
+  return json(await authFetch(`${BILLING}/collectionSweep`, { method: 'POST' }));
+}
+
+export async function dunningPolicies() {
+  return json(await authFetch(`${BILLING}/dunningPolicy`));
+}
+
+export async function patchDunningPolicy(id, patch) {
+  return json(await authFetch(`${BILLING}/dunningPolicy/${id}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  }));
+}
+
 /** Hardship/retention: split an unpaid bill into monthly installments. */
 export async function splitBill(billId, installments) {
   return json(await authFetch(`/tmf-api/customerBillManagement/v4/customerBill/${billId}/installmentPlan`, {
@@ -420,6 +480,195 @@ export async function sendOffer(customerId, offering, agentName) {
       relatedParty: [{ id: customerId, role: 'customer', '@referredType': 'Individual' }],
     }),
   }));
+}
+
+/* ---------------- Device desk (device-commerce) ----------------
+ * Staff faces of financing agreements, trade-in grading, the residual
+ * table and withdrawal cases. Reads need device:read; the grading verdict,
+ * revaluation calls and residual writes need device:write. */
+const DEVICE = '/tmf-api/deviceCommerce/v1';
+
+export async function deviceAgreements(status) {
+  return json(await authFetch(`${DEVICE}/deviceAgreement${status ? `?status=${encodeURIComponent(status)}` : ''}`));
+}
+
+export async function tradeInValuations(status) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation${status ? `?status=${encodeURIComponent(status)}` : ''}`));
+}
+
+/** The grading verdict: {finalGrade, finalValue, note?} — zero delta settles,
+ * anything else moves to `revalued` and waits on the customer. */
+export async function gradeTradeIn(id, body) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/grading`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function acceptRevaluation(id) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/acceptRevaluation`, { method: 'POST' }));
+}
+
+export async function rejectRevaluation(id) {
+  return json(await authFetch(`${DEVICE}/tradeInValuation/${id}/rejectRevaluation`, { method: 'POST' }));
+}
+
+export async function residualTable(deviceRef) {
+  return json(await authFetch(`${DEVICE}/tradeInResidual${deviceRef ? `?deviceRef=${encodeURIComponent(deviceRef)}` : ''}`));
+}
+
+/** Upsert by (deviceRef, ageMonths): {deviceRef, ageMonths, baseValue, currency?}. */
+export async function upsertResidual(body) {
+  return json(await authFetch(`${DEVICE}/tradeInResidual`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function deleteResidual(id) {
+  const res = await authFetch(`${DEVICE}/tradeInResidual/${id}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function withdrawalCases() {
+  return json(await authFetch(`${DEVICE}/withdrawalCase`));
+}
+
+/* ---------------- Migration desk (base-migration) ----------------
+ * Reads are migration:read; every mutation is migration:admin. The arm
+ * gate is server-enforced (409 without a simulation receipt) — the desk
+ * mirrors it by disabling the button until state=simulated. */
+const MIGRATION = '/tmf-api/baseMigration/v1';
+
+export async function migrationPlans() {
+  return json(await authFetch(`${MIGRATION}/migrationPlan?limit=100`));
+}
+
+export async function migrationPlan(id) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}`));
+}
+
+/** {name, matrix: [{sourceOfferingId, targetOfferingId, deltaClass}],
+ *  eligibility: {inBinding}, trigger: {type}, jurisdictionPack: {noticeDays}} */
+export async function createMigrationPlan(body) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function attachMigrationSimulation(id, simulationRef) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/attachSimulation`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ simulationRef }),
+  }));
+}
+
+export async function armMigrationPlan(id) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/arm`, { method: 'POST' }));
+}
+
+export async function pauseMigrationPlan(id) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/pause`, { method: 'POST' }));
+}
+
+export async function resumeMigrationPlan(id) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/resume`, { method: 'POST' }));
+}
+
+export async function migrationProgress(id) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/progress`));
+}
+
+export async function migrationCustomers(id, state) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/customer?limit=200${state ? `&state=${encodeURIComponent(state)}` : ''}`));
+}
+
+export async function exitMigrationCustomer(id, cid) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/customer/${cid}/exit`, { method: 'POST' }));
+}
+
+export async function rollbackMigrationCustomer(id, cid) {
+  return json(await authFetch(`${MIGRATION}/migrationPlan/${id}/customer/${cid}/rollback`, { method: 'POST' }));
+}
+
+/* ---------------- Usage policies (spend meters, pools, auto top-up) ----
+ * Staff query by partyId; usage:read may also PATCH the meters and the
+ * auto top-up consent (SecurityConfig allows it), so the desk can raise
+ * a roaming limit or lift a content bar with the customer on the line. */
+const USAGE_POLICY = '/tmf-api/usageManagement/v4';
+
+export async function spendPoliciesOf(partyId) {
+  try {
+    return await json(await authFetch(`${USAGE_POLICY}/spendPolicy?partyId=${encodeURIComponent(partyId)}`));
+  } catch { return []; }
+}
+
+export async function patchSpendPolicy(partyId, meterType, body) {
+  return json(await authFetch(`${USAGE_POLICY}/spendPolicy/${meterType}?partyId=${encodeURIComponent(partyId)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+/** Pools the party owns or draws from — staff list is tenant-wide, so
+ * filter to this customer here. */
+export async function poolsOf(partyId) {
+  try {
+    const all = await json(await authFetch(`${USAGE_POLICY}/allowancePool`));
+    return all.filter((p) => p.ownerPartyId === partyId
+      || (p.member || []).some((m) => m.partyId === partyId));
+  } catch { return []; }
+}
+
+export async function autoTopupOf(partyId) {
+  try {
+    return await json(await authFetch(`${USAGE_POLICY}/autoTopupPolicy?partyId=${encodeURIComponent(partyId)}`));
+  } catch { return null; }
+}
+
+/* ---------------- Credit decisions (ordering credit seam) ----------------
+ * The stored decisions only — there is never a report to show. */
+export async function creditDecisionsOf(partyId) {
+  try {
+    return await json(await authFetch(`${ORDERING}/creditDecision?relatedPartyId=${encodeURIComponent(partyId)}`));
+  } catch { return []; }
+}
+
+/* ---------------- Registry & directory tools (party-account) ----------------
+ * Back-office: link a party to its registry person, poke the sync worker,
+ * curate directory exposure, and run/inspect the directory delta export. */
+export async function linkRegistryPerson(partyId, personRef) {
+  return json(await authFetch(`${PARTY}/individual/${partyId}/registryLink`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personRef }),
+  }));
+}
+
+export async function runRegistrySync() {
+  return json(await authFetch(`${PARTY}/registrySync/run`, { method: 'POST' }));
+}
+
+export async function directorySettingsOf(partyId) {
+  try {
+    return await json(await authFetch(`${PARTY}/individual/${partyId}/directorySetting`));
+  } catch { return []; }
+}
+
+/** Upsert by (party, serviceRef): {serviceRef?, exposure?, secretNumber?}. */
+export async function saveDirectorySetting(partyId, body) {
+  return json(await authFetch(`${PARTY}/individual/${partyId}/directorySetting`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function runDirectoryExport() {
+  return json(await authFetch(`${PARTY}/directoryExport/run`, { method: 'POST' }));
+}
+
+export async function directoryExportRun(runId) {
+  return json(await authFetch(`${PARTY}/directoryExport/${encodeURIComponent(runId)}`));
 }
 
 export async function aiNextBestOffer(partyId) {

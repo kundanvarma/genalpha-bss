@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cancelOrder, myAppointments, myOrderJourney, myOrders, myShipments } from '../api.js';
+import { takeCheckoutNotice } from '../checkout.js';
 
 const TERMINAL = ['completed', 'cancelled'];
 
@@ -51,6 +52,8 @@ export default function Orders() {
   const [journeys, setJourneys] = useState({}); // order id -> flow (lazy)
   const [openJourney, setOpenJourney] = useState(null);
   const [error, setError] = useState(null);
+  // A soft "order placed, but…" note left by checkout (device follow-ups).
+  const [notice] = useState(() => takeCheckoutNotice());
 
   // The order journey — fetched the first time a customer expands "Why?".
   function toggleJourney(orderId) {
@@ -235,6 +238,7 @@ export default function Orders() {
   return (
     <>
       <h1>My orders</h1>
+      {notice && <p className="dim small" data-testid="checkout-notice">⚠️ {notice}</p>}
       <div className="rows">
         {orders.map((o) => {
           const ship = ships[o.id];

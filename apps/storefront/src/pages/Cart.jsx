@@ -4,9 +4,11 @@ import { availabilityFor, checkQualification, deliveryOptions, getOffering, getS
 import { beginLogin, isCustomer, isSignedIn, switchAccount } from '../auth.js';
 import { CART_EVENT, cartLines, ensureInCart, markCartCheckedOut, removeLine, setLineCharacteristics, setQuantity } from '../cart.js';
 import { ADDRESS_FIELDS, addressOf, isComplete, loadDraft, registeredAddressOf, saveDraft, withRegisteredAddress } from '../address.js';
-import { dueNow, loadSlotDraft, performCheckout, qualificationItems, saveSlotDraft } from '../checkout.js';
-import { checkPromotion, confirmPayment, createPaymentSession, numberOffers, paymentMethods, savePaymentMethod } from '../api.js';
-import { monthlyTotal, pricesOf } from '../money.js';
+import { dueNow, loadDevicePlanDraft, loadSlotDraft, performCheckout, qualificationItems,
+  saveDevicePlanDraft, saveSlotDraft } from '../checkout.js';
+import { checkPromotion, confirmPayment, createPaymentSession, financingQuote, numberOffers,
+  paymentMethods, quoteTradeIn, savePaymentMethod } from '../api.js';
+import { monthlyTotal, oneTimeTotal, pricesOf } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 
@@ -35,6 +37,15 @@ export default function Cart() {
   const [slot, setSlot] = useState(loadSlotDraft());
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // Credit-frozen: order create answered 422 CREDIT_FROZEN — a freeze at the
+  // credit bureau, NOT a decline. Distinct panel, prepaid path offered.
+  const [creditFrozen, setCreditFrozen] = useState(
+    () => localStorage.getItem('bss.shop.creditFrozen') === '1');
+  useEffect(() => { localStorage.removeItem('bss.shop.creditFrozen'); }, []);
+  // The device plan: financing choice + trade-in, drafted here, executed by
+  // performCheckout (survives the login redirect and the BNPL hop).
+  const [devicePlan, setDevicePlan] = useState(loadDevicePlanDraft());
+  const updateDevicePlan = (next) => { setDevicePlan(next); saveDevicePlanDraft(next); };
   const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '', portDate: '' });
   // Choose-your-number: a shortlist from the pool; '' = auto-assign (unchanged).
   const [numberWish, setNumberWish] = useState('');
@@ -103,6 +114,13 @@ export default function Cart() {
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
+
+  // A stale device plan (its line left the cart) must not haunt the checkout.
+  useEffect(() => {
+    if (!lines || !devicePlan) return;
+    if (!lines.some((l) => l.offeringId === devicePlan.offeringId)) updateDevicePlan(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines]);
 
   useEffect(() => {
     if (!lines) return;
@@ -351,12 +369,31 @@ export default function Cart() {
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
   const due = dueNow(lines, offerings, prices);
+  // Device commerce: the FIRST physical Devices-category line carries the
+  // trade-in widget and the financing chooser. Operator-book instalments move
+  // the principal off today's charge (it lands monthly on the bill); the
+  // trade-in estimate is a credit paid out after grading — shown, not charged.
+  const categoryNameOf = (o) => ((o?.category || [])[0] || {}).name || '';
+  const deviceLine = lines.find((l) => physical[l.offeringId]
+    && categoryNameOf(offerings[l.offeringId]) === 'Devices') || null;
+  const deviceOffering = deviceLine ? offerings[deviceLine.offeringId] : null;
+  const devicePrice = deviceOffering
+    ? oneTimeTotal(pricesOf(deviceOffering, prices, deviceLine.characteristics || null)) : null;
+  const planActive = devicePlan && deviceLine && devicePlan.offeringId === deviceLine.offeringId
+    ? devicePlan : null;
+  const financedOff = planActive && planActive.financing === 'OPERATOR_BOOK' && planActive.principal
+    ? planActive.principal.value * deviceLine.quantity : 0;
+  const chargeDue = due && due.value - financedOff > 0.005
+    ? { value: due.value - financedOff, unit: due.unit } : null;
+  const tradeCredit = planActive?.tradeIn
+    ? { value: Number(planActive.tradeIn.estimatedValue), unit: planActive.tradeIn.currency || due?.unit || 'EUR' }
+    : null;
   const signedIn = isSignedIn();
   // Any redirect method the operator offers (Klarna, PayPal, …), plus card.
   const redirectMethods = (payMethods || []).filter((m) => m.redirect);
   const selectedPay = (payMethods || []).find((m) => m.method === payMethod) || { method: 'card', redirect: false };
   const payingRedirect = Boolean(selectedPay.redirect);
-  const cardReady = !due || !signedIn || payingRedirect
+  const cardReady = !chargeDue || !signedIn || payingRedirect
     || (card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim());
 
   function setField(name, value) {
@@ -439,13 +476,13 @@ export default function Cart() {
         : { method: 'home', carrier: sel?.carrier || null,
           // the risk seam (F-P3) reads this off the place: registry-verified or not
           addressSource: registryVerified ? 'registry' : 'manual' };
-      if (payingRedirect && due) {
+      if (payingRedirect && chargeDue) {
         // Redirect to the provider (Klarna/PayPal) to approve. Open the session
         // first, then stash the SERVED provider + session id (failover may switch
         // the provider) so the return leg confirms the right one; the choices ride
         // the hop and the cart survives server-side.
         const session = await createPaymentSession({ method: payMethod,
-          amount: { value: due.value, unit: due.unit }, returnUrl: `${window.location.origin}/shop/cart` });
+          amount: { value: chargeDue.value, unit: chargeDue.unit }, returnUrl: `${window.location.origin}/shop/cart` });
         localStorage.setItem('bss.shop.redirectpay', JSON.stringify({
           provider: session.provider, sessionId: session.sessionId,
           simType: hasMobile ? simType : 'esim', delivery, numberWish: numberWish || null,
@@ -453,17 +490,23 @@ export default function Cart() {
         window.location.href = session.redirectUrl;
         return;
       }
-      const order = await performCheckout(lines, due ? card : null, promo?.code || null,
+      const order = await performCheckout(lines, chargeDue ? card : null, promo?.code || null,
         keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery,
         null, numberWish || null);
       localStorage.removeItem('bss.shop.promo');
-      if (due && saveCard) {
+      if (chargeDue && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
         await savePaymentMethod(card.cardNumber, card.expiry).catch(() => {});
       }
       await markCartCheckedOut(order.id);
       navigate('/orders');
     } catch (e) {
+      if (e.code === 'CREDIT_FROZEN') {
+        // A freeze is not a decline — say so, and offer the prepaid road.
+        setCreditFrozen(true);
+        setBusy(false);
+        return;
+      }
       setError(e.message);
       setBusy(false);
     }
@@ -472,6 +515,18 @@ export default function Cart() {
   return (
     <>
       <h1>{t('Cart')}</h1>
+      {creditFrozen && (
+        <div className="freezepanel" data-testid="credit-frozen">
+          <strong>❄️ Your credit information is frozen</strong>
+          <p className="small">
+            Your order couldn't be placed because your credit record is frozen at the credit
+            bureau — a protection you (or your bank) switched on, not a payment decline.
+            You can <Link to="/">choose a prepaid start instead</Link> — no credit check, pay as
+            you go — or lift the freeze with the credit bureau and try again.
+          </p>
+          <button className="ghost" onClick={() => setCreditFrozen(false)}>Try again</button>
+        </div>
+      )}
       {error && <p className="error">{error}</p>}
       <div className="rows">
         {lines.map((line, idx) => {
@@ -571,10 +626,35 @@ export default function Cart() {
             </button>
           </div>
         ))}
-        {due && (
+        {planActive && planActive.financing !== 'FULL' && (
+          <div className="row promo" data-testid="financing-row">
+            <span>📱 {deviceLine.name} — {(planActive.monthlyAmount * deviceLine.quantity).toFixed(2)} {planActive.principal.unit}/mo
+              × {planActive.termMonths} months (total {(planActive.totalCostOfOwnership * deviceLine.quantity).toFixed(2)} {planActive.principal.unit})</span>
+            {planActive.financing === 'OPERATOR_BOOK' ? (
+              <span className="linetotal ok">−{financedOff.toFixed(2)} {planActive.principal.unit} today</span>
+            ) : (
+              <span className="linetotal">via the pay-later provider</span>
+            )}
+          </div>
+        )}
+        {chargeDue && (
           <div className="row granded duenow">
             <strong>{t('Due now')}</strong>
-            <strong className="linetotal">{due.value.toFixed(2)} {due.unit}</strong>
+            <strong className="linetotal">{chargeDue.value.toFixed(2)} {chargeDue.unit}</strong>
+          </div>
+        )}
+        {tradeCredit && tradeCredit.value > 0 && (
+          <div className="row promo" data-testid="trade-in-credit">
+            <span>♻️ Trade-in credit for your old phone — paid out once we receive and check it</span>
+            <span className="linetotal ok">−{tradeCredit.value.toFixed(2)} {tradeCredit.unit}</span>
+          </div>
+        )}
+        {tradeCredit && tradeCredit.value > 0 && chargeDue && (
+          <div className="row granded" data-testid="due-after-tradein">
+            <strong>Total after trade-in</strong>
+            <strong className="linetotal ok">
+              {Math.max(chargeDue.value - tradeCredit.value, 0).toFixed(2)} {chargeDue.unit}
+            </strong>
           </div>
         )}
       </div>
@@ -585,6 +665,25 @@ export default function Cart() {
         <button className="ghost" onClick={applyPromo} disabled={!promoInput.trim()}>{t('Apply')}</button>
         {promoError && <span className="error small">{promoError}</span>}
       </div>
+
+      {deviceLine && devicePrice && (
+        <div className="devicecommerce" data-testid="device-commerce">
+          <h2>Your new {deviceLine.name}</h2>
+          <FinancingChooser deviceLine={deviceLine} devicePrice={devicePrice}
+            plan={planActive} signedIn={signedIn}
+            onPlan={(p) => {
+              updateDevicePlan(p);
+              // pay-later approves with the redirect provider — pre-select it
+              if (p?.financing === 'BNPL' && redirectMethods.length) {
+                setPayMethod(redirectMethods[0].method);
+              }
+            }} />
+          <TradeInPanel deviceLine={deviceLine} devicePrice={devicePrice}
+            plan={planActive} signedIn={signedIn}
+            onTradeIn={(tradeIn) => updateDevicePlan({
+              ...(planActive || freshDevicePlan(deviceLine, devicePrice)), tradeIn })} />
+        </div>
+      )}
 
       {(needsShipping || needsInstall) && (
         <div className="shipping">
@@ -787,7 +886,7 @@ export default function Cart() {
         </div>
       )}
 
-      {due && (signedIn ? (
+      {chargeDue && (signedIn ? (
         <div className="payment">
           <h2>{t('Payment')}</h2>
           {redirectMethods.length > 0 && (
@@ -845,11 +944,246 @@ export default function Cart() {
             : !slotReady ? 'Pick an installation slot'
             : !deliveryReady ? 'Choose a pickup point'
             : !cardReady ? 'Enter card details'
-            : payingRedirect && due && signedIn ? `Continue to ${payLabel(payMethod)} · ${due.value.toFixed(2)} ${due.unit}`
-            : due && signedIn ? `Pay ${due.value.toFixed(2)} ${due.unit} & checkout`
+            : payingRedirect && chargeDue && signedIn ? `Continue to ${payLabel(payMethod)} · ${chargeDue.value.toFixed(2)} ${chargeDue.unit}`
+            : chargeDue && signedIn ? `Pay ${chargeDue.value.toFixed(2)} ${chargeDue.unit} & checkout`
             : t('Checkout')}
         </button>
       </div>
     </>
+  );
+}
+
+/** The device plan a fresh trade-in or financing pick starts from. */
+function freshDevicePlan(deviceLine, devicePrice) {
+  return {
+    offeringId: deviceLine.offeringId,
+    deviceName: deviceLine.name,
+    principal: { value: devicePrice.value, unit: devicePrice.unit },
+    financing: 'FULL',
+    termMonths: 24,
+    monthlyAmount: null,
+    totalCostOfOwnership: devicePrice.value,
+  };
+}
+
+const TERM_CHOICES = [12, 24, 36];
+
+/**
+ * Pay in full | monthly instalments (operator) | pay later (BNPL) — every
+ * option states the monthly cost AND the total cost over the term. Total-cost
+ * transparency is deliberate: the price of spreading a phone is never fine
+ * print. Server quotes when signed in; honest local math otherwise.
+ */
+function FinancingChooser({ deviceLine, devicePrice, plan, signedIn, onPlan }) {
+  const financing = plan?.financing || 'FULL';
+  const termMonths = plan?.termMonths || 24;
+  const [quotes, setQuotes] = useState({}); // `${model}:${term}` -> quote
+
+  const localQuote = (model, term) => ({
+    financingModel: model,
+    monthlyAmount: Math.round((devicePrice.value / term) * 100) / 100,
+    totalCostOfOwnership: devicePrice.value,
+  });
+  useEffect(() => {
+    if (!signedIn) return;
+    for (const model of ['OPERATOR_BOOK', 'BNPL']) {
+      const key = `${model}:${termMonths}`;
+      if (quotes[key]) continue;
+      financingQuote(devicePrice.value, termMonths, model)
+        .then((q) => setQuotes((prev) => ({ ...prev, [key]: q })))
+        .catch(() => {}); // local math already carries the display
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signedIn, termMonths, devicePrice.value]);
+
+  const quoteFor = (model) => quotes[`${model}:${termMonths}`] || localQuote(model, termMonths);
+  const pick = (model) => {
+    if (model === 'FULL') {
+      onPlan({ ...(plan || freshDevicePlan(deviceLine, devicePrice)),
+        financing: 'FULL', monthlyAmount: null, totalCostOfOwnership: devicePrice.value });
+      return;
+    }
+    const q = quoteFor(model);
+    onPlan({ ...(plan || freshDevicePlan(deviceLine, devicePrice)),
+      financing: model, termMonths,
+      monthlyAmount: Number(q.monthlyAmount),
+      totalCostOfOwnership: Number(q.totalCostOfOwnership) });
+  };
+  const setTerm = (term) => {
+    const next = { ...(plan || freshDevicePlan(deviceLine, devicePrice)), termMonths: term };
+    if (next.financing !== 'FULL') {
+      const q = quotes[`${next.financing}:${term}`] || localQuote(next.financing, term);
+      next.monthlyAmount = Number(q.monthlyAmount);
+      next.totalCostOfOwnership = Number(q.totalCostOfOwnership);
+    }
+    onPlan(next);
+  };
+
+  const unit = devicePrice.unit;
+  const fmt = (v) => `${Number(v).toFixed(2)} ${unit}`;
+  const opQuote = quoteFor('OPERATOR_BOOK');
+  const bnplQuote = quoteFor('BNPL');
+  return (
+    <div className="finchooser" data-testid="financing-chooser">
+      <p className="dim small">How would you like to pay for the phone?</p>
+      <div className="simopts">
+        <button type="button" data-testid="fin-full"
+                className={`simopt ${financing === 'FULL' ? 'on' : ''}`}
+                onClick={() => pick('FULL')}>
+          <span className="simopt-t">💳 Pay in full</span>
+          <span className="simopt-d">{fmt(devicePrice.value)} today — total cost {fmt(devicePrice.value)}</span>
+        </button>
+        <button type="button" data-testid="fin-installments"
+                className={`simopt ${financing === 'OPERATOR_BOOK' ? 'on' : ''}`}
+                onClick={() => pick('OPERATOR_BOOK')}>
+          <span className="simopt-t">📅 Monthly instalments</span>
+          <span className="simopt-d">
+            {fmt(opQuote.monthlyAmount)}/mo × {termMonths} on your bill — total cost {fmt(opQuote.totalCostOfOwnership)}, nothing for the phone today
+          </span>
+        </button>
+        <button type="button" data-testid="fin-bnpl"
+                className={`simopt ${financing === 'BNPL' ? 'on' : ''}`}
+                onClick={() => pick('BNPL')}>
+          <span className="simopt-t">🕐 Pay later</span>
+          <span className="simopt-d">
+            {fmt(bnplQuote.monthlyAmount)}/mo × {termMonths} with the pay-later provider — total cost {fmt(bnplQuote.totalCostOfOwnership)}
+          </span>
+        </button>
+      </div>
+      {financing !== 'FULL' && (
+        <p className="small dim finterm">
+          Over{' '}
+          <select data-testid="fin-term" value={termMonths}
+                  onChange={(e) => setTerm(Number(e.target.value))}>
+            {TERM_CHOICES.map((m) => <option key={m} value={m}>{m} months</option>)}
+          </select>
+          {' '}— the agreement appears under <b>My devices</b> after checkout.
+          {!signedIn && ' Sign in at checkout to finalize the instalment agreement.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// The guided assessment — the same defects the backend prices, no black box.
+const TRADE_IN_DEFECTS = [
+  { name: 'screenCracked', label: 'The screen is cracked' },
+  { name: 'backCracked', label: 'The back is cracked' },
+  { name: 'batteryWorn', label: 'The battery drains fast' },
+  { name: 'notPoweringOn', label: 'It does not power on' },
+];
+
+/**
+ * "Trade in your old phone": IMEI + condition answers → a live estimate that
+ * shows as a cart credit line. The valuation id rides the order so the
+ * backend links them; the credit itself pays out after grading.
+ */
+function TradeInPanel({ deviceLine, devicePrice, plan, signedIn, onTradeIn }) {
+  const [open, setOpen] = useState(Boolean(plan?.tradeIn));
+  const [model, setModel] = useState('');
+  const [imei, setImei] = useState('');
+  const [age, setAge] = useState('12');
+  const [defects, setDefects] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState(null);
+  const [err, setErr] = useState(null);
+  const tradeIn = plan?.tradeIn || null;
+
+  async function estimate() {
+    setBusy(true); setErr(null); setNote(null);
+    try {
+      const v = await quoteTradeIn({
+        imei: imei.trim(),
+        deviceRef: model.trim(),
+        conditionAnswers: { ageMonths: Number(age), ...defects },
+      });
+      onTradeIn({ valuationId: v.id, estimatedValue: Number(v.estimatedValue),
+        currency: v.currency, deviceRef: v.deviceRef });
+      setNote(v.note || null);
+    } catch (e) {
+      setErr(e.message);
+    }
+    setBusy(false);
+  }
+
+  if (!signedIn) {
+    return (
+      <p className="dim small" data-testid="trade-in-signin">
+        ♻️ Have an old phone? Sign in at checkout to trade it in for credit.
+      </p>
+    );
+  }
+  if (!open) {
+    return (
+      <p className="small">
+        <button type="button" className="linkbtn" data-testid="trade-in-toggle"
+                onClick={() => setOpen(true)}>
+          ♻️ Trade in your old phone — get its value as credit
+        </button>
+      </p>
+    );
+  }
+  return (
+    <div className="tradein" data-testid="trade-in-panel">
+      <h3>♻️ Trade in your old phone</h3>
+      {tradeIn ? (
+        <>
+          <p className="small" data-testid="trade-in-estimate">
+            ✓ Estimated value for your {tradeIn.deviceRef}:{' '}
+            <strong style={{ color: 'var(--teal)' }}>
+              {Number(tradeIn.estimatedValue).toFixed(2)} {tradeIn.currency}
+            </strong>
+            {' '}— applied to your cart. Mail the phone in after checkout; the final value
+            follows the grading, and you approve any change.
+          </p>
+          {note && <p className="dim small">{note}</p>}
+          <button type="button" className="ghost" data-testid="trade-in-remove"
+                  onClick={() => { onTradeIn(null); setNote(null); }}>
+            Remove trade-in
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="dim small">
+            Answer honestly — the estimate is provisional until our partner checks the phone,
+            and you approve any revised value before it stands.
+          </p>
+          <div className="addressgrid">
+            <label className="charfield"><span>Which phone is it?</span>
+              <input data-testid="trade-in-model" value={model} placeholder="e.g. Galaxy S22"
+                     onChange={(e) => setModel(e.target.value)} /></label>
+            <label className="charfield"><span>IMEI (dial *#06#)</span>
+              <input data-testid="trade-in-imei" value={imei} inputMode="numeric"
+                     placeholder="15 digits"
+                     onChange={(e) => setImei(e.target.value.replace(/[^\d]/g, ''))} /></label>
+            <label className="charfield"><span>How old is it?</span>
+              <select data-testid="trade-in-age" value={age} onChange={(e) => setAge(e.target.value)}>
+                <option value="6">Under a year</option>
+                <option value="12">1–2 years</option>
+                <option value="24">2–3 years</option>
+                <option value="36">Over 3 years</option>
+              </select></label>
+          </div>
+          <div className="tradein-defects">
+            {TRADE_IN_DEFECTS.map((d) => (
+              <label key={d.name} className="small">
+                <input type="checkbox" data-testid={`trade-in-${d.name}`}
+                       checked={Boolean(defects[d.name])}
+                       onChange={(e) => setDefects({ ...defects, [d.name]: e.target.checked })} />
+                {' '}{d.label}
+              </label>
+            ))}
+          </div>
+          <button type="button" className="ghost" data-testid="trade-in-quote"
+                  disabled={busy || !model.trim() || imei.trim().length < 8}
+                  onClick={estimate}>
+            {busy ? 'Valuing…' : 'Get my estimate'}
+          </button>
+          {' '}
+          <button type="button" className="linkbtn small" onClick={() => setOpen(false)}>Never mind</button>
+          {err && <p className="error small" data-testid="trade-in-error">{err}</p>}
+        </>
+      )}
+    </div>
   );
 }

@@ -7,6 +7,10 @@ import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
 import Knowledge from './pages/Knowledge.jsx';
 import Stock from './pages/Stock.jsx';
+import Devices from './pages/Devices.jsx';
+import Migrations from './pages/Migrations.jsx';
+import Registry from './pages/Registry.jsx';
+import Collections from './pages/Collections.jsx';
 
 export default function App() {
   const [state, setState] = useState('signing-in');
@@ -62,6 +66,10 @@ export default function App() {
           <NavLink to="/tickets">Tickets</NavLink>
           <NavLink to="/knowledge">Knowledge</NavLink>
           {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
+          {hasRole('device:read') && <NavLink to="/devices">Devices</NavLink>}
+          {hasRole('migration:read') && <NavLink to="/migrations">Migrations</NavLink>}
+          {hasRole('billing:read') && <NavLink to="/collections">Collections</NavLink>}
+          {hasRole('party:write') && <NavLink to="/registry">Registry</NavLink>}
         </nav>
         <div className="who">
           <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
@@ -82,6 +90,10 @@ export default function App() {
           <Route path="/tickets" element={<Tickets />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/stock" element={<Stock />} />
+          <Route path="/devices" element={<Devices />} />
+          <Route path="/migrations" element={<Migrations />} />
+          <Route path="/collections" element={<Collections />} />
+          <Route path="/registry" element={<Registry />} />
         </Routes>
       </main>
     </>

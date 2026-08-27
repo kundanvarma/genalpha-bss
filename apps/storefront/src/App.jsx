@@ -17,6 +17,7 @@ import Support from './pages/Support.jsx';
 import Notifications from './pages/Notifications.jsx';
 import Services from './pages/Services.jsx';
 import Account from './pages/Account.jsx';
+import Devices from './pages/Devices.jsx';
 
 export default function App() {
   const [state, setState] = useState('boot'); // boot | guest | ready | error
@@ -57,10 +58,18 @@ export default function App() {
             await markCartCheckedOut(order.id);
             navigate('/orders');
           } catch (e) {
-            if (e.message !== PAYMENT_REQUIRED) throw e;
-            // Card details never survive a redirect: back to the cart, now
-            // signed in, to confirm payment.
-            navigate('/cart');
+            if (e.code === 'CREDIT_FROZEN') {
+              // The frozen-credit story belongs on the cart page, where the
+              // prepaid alternative is one link away.
+              localStorage.setItem('bss.shop.creditFrozen', '1');
+              navigate('/cart');
+            } else if (e.message !== PAYMENT_REQUIRED) {
+              throw e;
+            } else {
+              // Card details never survive a redirect: back to the cart, now
+              // signed in, to confirm payment.
+              navigate('/cart');
+            }
           }
         } else if (typeof returnTo === 'string') {
           // The router still sits on the redirect landing page — send the
@@ -105,6 +114,7 @@ export default function App() {
               <NavLink to="/orders">{t('My orders')}</NavLink>
               <NavLink to="/bills">{t('My bills')}</NavLink>
               <NavLink to="/services">{t('My page')}</NavLink>
+              <NavLink to="/devices">{t('My devices')}</NavLink>
               <NavLink to="/family">{t('Family')}</NavLink>
               <NavLink to="/notifications" className="cartlink">
                 {t('Inbox')}{unread > 0 && <span className="badge">{unread}</span>}
@@ -144,6 +154,7 @@ export default function App() {
           <Route path="/orders" element={<Orders />} />
           <Route path="/bills" element={<Bills />} />
           <Route path="/services" element={<Services />} />
+          <Route path="/devices" element={<Devices />} />
           <Route path="/notifications" element={<Notifications />} />
           <Route path="/support" element={<Support />} />
           <Route path="/account" element={<Account />} />

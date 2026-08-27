@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { acceptDependent, acceptFamilyInvite, addFamilyMember, decideApproval, endHouseholdLink, familyApprovals, inviteFamilyMember,
-  listOfferings, memberProducts, memberUsage, myHousehold, orderForDependent, priceIndex,
+import { acceptDependent, acceptFamilyInvite, addFamilyMember, addPoolMember, createAllowancePool,
+  decideApproval, endHouseholdLink, familyApprovals, inviteFamilyMember,
+  listOfferings, memberProducts, memberUsage, myAllowancePools, myHousehold, orderForDependent,
+  patchPoolMember, priceIndex, removePoolMember,
   requestHouseholdPayer, setAllowance, setFamilyRole } from '../api.js';
 import { tokenClaims } from '../auth.js';
 import { fmtPrice, pricesOf } from '../money.js';
@@ -161,6 +163,8 @@ export default function Family() {
         <p className="dim">{t('No family members yet.')}</p>
       )}
 
+      <DataPoolSection hh={hh} me={me} canManage={isOwner || isAdmin} />
+
       {!payer && (
         <section className="lobcard">
           <details>
@@ -300,6 +304,162 @@ function MemberCard({ member, offerings, prices, canManageRoles, canEndLink, can
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * THE FAMILY DATA POOL — one shared bucket the owner funds, everyone draws.
+ * The pool + per-member draw comes from the usage component (TMF677
+ * extension); the owner (or a family admin) sets per-member caps and adds or
+ * removes members. A plain member sees the pool's totals, not the family's
+ * per-head numbers.
+ */
+function DataPoolSection({ hh, me, canManage }) {
+  const [pools, setPools] = useState(null);
+  const [newGb, setNewGb] = useState('');
+  const [note, setNote] = useState(null);
+  const load = () => myAllowancePools().then(setPools).catch(() => setPools([]));
+  useEffect(() => { load(); }, []);
+
+  if (pools === null) return null;
+
+  const nameOf = (partyId) => {
+    if (partyId === me) return t('You');
+    if (hh?.payer?.id === partyId) return hh.payer.name || t('the payer');
+    const person = [...(hh?.dependents || []), ...(hh?.family || [])].find((d) => d.id === partyId);
+    return person ? `${person.givenName} ${person.familyName}` : t('a family member');
+  };
+  const act = async (fn, okText) => {
+    setNote(null);
+    try { await fn(); setNote(okText); load(); } catch (e) { setNote(e.message); }
+  };
+
+  // people who could join a pool: active household members (incl. me)
+  const householdIds = [me, ...[...(hh?.dependents || []), ...(hh?.family || [])]
+    .filter((d) => d.status === 'active').map((d) => d.id)];
+
+  if (!pools.length) {
+    if (!canManage) return null;
+    return (
+      <section className="lobcard" data-testid="data-pool-empty">
+        <h2>🪣 {t('Family data pool')}</h2>
+        <p className="dim" style={{ fontSize: 13, margin: '4px 0' }}>
+          {t('One shared bucket of data the whole family draws from — you fund it, everyone uses it.')}
+        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input style={{ width: '5em' }} inputMode="numeric" placeholder="GB"
+                 data-testid="pool-create-gb" value={newGb}
+                 onChange={(e) => setNewGb(e.target.value.replace(/\D/g, ''))} />
+          <button className="ghost" data-testid="pool-create" disabled={!newGb}
+                  onClick={() => act(() => createAllowancePool(Number(newGb)),
+                    t('pool created — add your family below'))}>
+            {t('Create the pool')}
+          </button>
+          {note && <span className="error" style={{ fontSize: 12.5 }}>{note}</span>}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <>
+      {pools.map((pool) => {
+        const consumed = Number(pool.consumedGB);
+        const total = Number(pool.poolGB);
+        const pct = total ? Math.min(100, (consumed / total) * 100) : 0;
+        const managed = canManage && Array.isArray(pool.member);
+        const inPool = new Set((pool.member || []).map((m) => m.partyId));
+        const addable = householdIds.filter((id) => !inPool.has(id));
+        return (
+          <section className="lobcard" key={pool.id} data-testid={`data-pool-${pool.id}`}>
+            <h2>🪣 {pool.name}</h2>
+            <div className="usage-meter" style={{ borderBottom: 'none', paddingBottom: 0 }}>
+              <div className="usage-meter-head">
+                <span data-testid="pool-remaining">
+                  {Number(pool.remainingGB)} {pool.units} {t('left of')} {total} {pool.units}
+                </span>
+                <span className="dim">{consumed} {pool.units} {t('used this month')}</span>
+              </div>
+              <div className="usage-meter-track">
+                <div className={`usage-meter-fill${pct >= 100 ? ' over' : ''}`} style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+            {managed && (pool.member || []).map((m) => (
+              <PoolMemberRow key={m.partyId} pool={pool} member={m} name={nameOf(m.partyId)}
+                isOwner={m.partyId === pool.ownerPartyId} act={act} />
+            ))}
+            {!managed && (
+              <p className="dim" style={{ fontSize: 12.5, margin: '4px 0' }}>
+                {t('You draw from this pool — the owner manages who shares it.')}
+              </p>
+            )}
+            {managed && addable.length > 0 && (
+              <AddPoolMember pool={pool} addable={addable} nameOf={nameOf} act={act} />
+            )}
+            {note && <p className="dim" data-testid="pool-note" style={{ fontSize: 12.5 }}>{note}</p>}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+/** One pool member: their draw against their caps, and the owner's levers. */
+function PoolMemberRow({ pool, member, name, isOwner, act }) {
+  const [soft, setSoft] = useState(member.softLimitGB != null ? String(member.softLimitGB) : '');
+  const [hard, setHard] = useState(member.hardLimitGB != null ? String(member.hardLimitGB) : '');
+  return (
+    <div className="row" data-testid={`pool-member-${member.partyId}`}>
+      <div>
+        <strong>{name}</strong>
+        <div className="dim small">
+          {Number(member.consumedGB)} GB {t('used')}
+          {member.hardLimitGB != null && <> · {t('cap')} {Number(member.hardLimitGB)} GB</>}
+          {member.softLimitGB != null && <> · {t('heads-up at')} {Number(member.softLimitGB)} GB</>}
+        </div>
+      </div>
+      <span className="rowend">
+        <input style={{ width: '4em' }} inputMode="decimal" placeholder={t('warn')}
+               title={t('Soft cap: a heads-up, nothing stops')}
+               data-testid="pool-soft-input" value={soft}
+               onChange={(e) => setSoft(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <input style={{ width: '4em' }} inputMode="decimal" placeholder={t('cap')}
+               title={t('Hard cap: their draw from the pool stops here')}
+               data-testid="pool-hard-input" value={hard}
+               onChange={(e) => setHard(e.target.value.replace(/[^0-9.]/g, ''))} />
+        <button className="ghost" data-testid="pool-caps-set"
+                onClick={() => act(() => patchPoolMember(pool.id, member.partyId, {
+                  softLimitGB: soft === '' ? null : Number(soft),
+                  hardLimitGB: hard === '' ? null : Number(hard),
+                }), t('caps updated'))}>
+          {t('Set caps')}
+        </button>
+        {!isOwner && (
+          <button className="ghost danger" data-testid="pool-member-remove"
+                  onClick={() => act(() => removePoolMember(pool.id, member.partyId),
+                    t('removed from the pool — their own allowance takes over'))}>
+            {t('Remove')}
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+function AddPoolMember({ pool, addable, nameOf, act }) {
+  const [pick, setPick] = useState('');
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
+      <select value={pick} data-testid="pool-add-select" onChange={(e) => setPick(e.target.value)}>
+        <option value="" disabled>{t('add someone to the pool…')}</option>
+        {addable.map((id) => <option key={id} value={id}>{nameOf(id)}</option>)}
+      </select>
+      <button className="ghost" data-testid="pool-add" disabled={!pick}
+              onClick={() => act(() => addPoolMember(pool.id, pick),
+                t('added — their data now draws from the family pool'))}>
+        {t('Add to pool')}
+      </button>
+    </div>
   );
 }
 

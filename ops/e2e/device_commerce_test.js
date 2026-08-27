@@ -14,10 +14,11 @@
  *  - withdrawal inside 14 days refunds principal + standard shipping and
  *    reverses the subsidy postings
  *
- * API-driven through the gateway. UI legs (shop financing chooser, selfcare
- * "my devices", console device desk) are the frontend arc's to add — see the
- * placeholder at the bottom. */
+ * API-driven through the gateway, then the browser faces: selfcare
+ * "My devices" (paula's seeded agreement) and the console device desk
+ * (agreement worklist + the residual table). */
 
+const { chromium } = require('playwright');
 const API = 'http://localhost:8080';
 const KC = 'http://localhost:8085/realms/bss/protocol/openid-connect/token';
 const D = '/tmf-api/deviceCommerce/v1';
@@ -281,15 +282,56 @@ const lineOn = (entry, code) => (entry.lines || []).find((l) => l.accountCode ==
   }
   ok('withdrawal inside 14 days: 729.90 refunded (incl. shipping), subsidy postings reversed');
 
-  /* ---------- UI legs (frontend arc) ----------
-   * PLACEHOLDER — the frontend agent adds browser assertions here:
-   *  - shop: financing chooser shows per-model monthly AND total cost of
-   *    ownership; trade-in widget turns IMEI + condition into a cart credit
-   *  - selfcare "my devices": paid share, upgrade-eligibility date,
-   *    trade-in tracking, withdrawal button inside the window
-   *  - console device desk: agreements, valuations awaiting grading,
-   *    delta approvals
-   * ------------------------------------------------------------------ */
+  /* ---------- 9. UI faces: shop "My devices" + console device desk ---------- */
+  const browser = await chromium.launch();
+
+  // selfcare: paula's SEEDED operator-book agreement (seed_device_commerce.py)
+  const shop = await (await browser.newContext()).newPage();
+  await shop.goto(`${API}/shop/`);
+  await shop.locator('.who >> text=Sign in').click();
+  await shop.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await shop.fill('input[name="username"]', 'paula@family.example');
+  await shop.fill('input[name="password"]', 'paula');
+  await shop.click('input[type="submit"], button[type="submit"]');
+  await shop.waitForSelector('.nav', { timeout: 30000 });
+  await shop.click('.nav >> text=My devices');
+  const card = shop.locator('[data-testid^="device-agreement-"]').first();
+  await card.waitFor({ timeout: 20000 }).catch(() =>
+    fail('shop /devices shows no agreement card for paula — is seed_device_commerce.py applied?'));
+  const cardText = (await card.textContent()) || '';
+  if (!/Monthly instalments — on your bill|Pay later|Bank financing/.test(cardText)) {
+    fail('the agreement card carries no financing label: ' + cardText.slice(0, 160));
+  }
+  const paidShare = card.locator('[data-testid="paid-share"]');
+  if (!await paidShare.count()) {
+    fail('no paid-share line on paula\'s agreement (expected on an active financed agreement)');
+  }
+  if (!/Paid so far: \d+%/.test((await paidShare.textContent()) || '')) {
+    fail('paid-share does not state the percentage: ' + await paidShare.textContent());
+  }
+  await card.locator('[data-testid="paid-share-bar"]').waitFor({ timeout: 5000 }).catch(() =>
+    fail('no paid-share progress bar on the agreement card'));
+  ok('shop "My devices": paula\'s seeded agreement renders with its financing label and paid-share bar');
+
+  // console: the device desk — agreement worklist + the residual table
+  // (this run upserted a residual row above, so the table cannot be empty)
+  const csr = await (await browser.newContext()).newPage();
+  await csr.goto(`${API}/csr/`);
+  await csr.waitForSelector('input[name="username"]', { timeout: 20000 });
+  await csr.fill('input[name="username"]', 'demo');
+  await csr.fill('input[name="password"]', 'demo');
+  await csr.click('input[type="submit"], button[type="submit"]');
+  await csr.waitForSelector('.nav', { timeout: 30000 });
+  await csr.click('.nav >> text=Devices');
+  await csr.locator('h1', { hasText: 'Device desk' }).waitFor({ timeout: 20000 }).catch(() =>
+    fail('console /devices did not render the Device desk (device:read nav/route missing?)'));
+  await csr.locator('[data-testid="agreement-list"]').waitFor({ timeout: 20000 }).catch(() =>
+    fail('no agreement list on the device desk'));
+  await csr.locator('[data-testid="residual-row"]').first().waitFor({ timeout: 20000 }).catch(() =>
+    fail('the residual table shows no rows — this run upserted one, so the desk is not reading it'));
+  ok('console device desk: agreement worklist and the residual table both render');
+
+  await browser.close();
 
   console.log('OK device_commerce: trade-in, three financing models, swap saga, grading deltas,'
     + ' withdrawal and the subsidy subledger all proven');

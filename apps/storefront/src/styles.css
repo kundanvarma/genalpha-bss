@@ -63,6 +63,12 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .regbadge { color: var(--ok); font-weight: 600; }
 .error { color: var(--danger); }
 
+/* Collections: the outstanding-balance banner on My bills. */
+.collectionsbanner {
+  border: 1px solid var(--danger); border-left-width: 4px; border-radius: 8px;
+  background: var(--card); padding: 12px 16px; margin: 0 0 18px;
+}
+
 /* Line-of-business shop tabs (Baymard: organise by service type, distinct paths) */
 .shoptabs {
   display: flex; gap: 4px; flex-wrap: wrap; margin: 18px 0 16px;
@@ -385,3 +391,24 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 
 .tracklink { margin-left: 8px; color: var(--teal); font-size: 12.5px; white-space: nowrap; }
 .journeywaiting { margin: 4px 0 8px; }
+
+/* Device commerce: trade-in + financing chooser in the cart */
+.devicecommerce { margin-top: 26px; }
+.finchooser { margin-bottom: 10px; }
+.finchooser .simopts { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.finterm select { font: inherit; font-size: 12.5px; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: var(--radius-s); padding: 3px 8px; }
+.tradein { border: 1px dashed var(--line); border-radius: var(--radius-s);
+  padding: 12px 14px; margin-top: 12px; }
+.tradein h3 { margin: 0 0 6px; font-size: 14.5px; }
+.tradein-defects { display: flex; gap: 14px; flex-wrap: wrap; margin: 10px 0; color: var(--dim); }
+.tradein-defects input { accent-color: var(--teal); }
+
+/* Credit-frozen: a freeze is not a decline — its panel must not look like an error */
+.freezepanel { border: 1px solid var(--teal); background: var(--teal-soft);
+  border-radius: var(--radius-s); padding: 12px 16px; margin: 10px 0 16px; }
+.freezepanel p { margin: 6px 0 10px; }
+.freezepanel a { color: var(--teal-text); font-weight: 600; }
+
+/* My devices */
+.devcard .usage-meter-track { max-width: 420px; }

@@ -1,6 +1,20 @@
 import { useEffect, useState } from 'react';
 import { t } from '../i18n.js';
-import { billRates, createPayment, disputeBill, myBills, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
+import { billRates, createPayment, disputeBill, myBills, myCollectionCase, myCreditNotes, myPaymentMethods, payInstallment, paymentWithSavedMethod, promiseToPay, setBillDelivery, setBillingDay, settleBill, splitBill } from '../api.js';
+
+/* The consequences line the law wants said plainly, per ladder rung. */
+const CASE_CONSEQUENCE = {
+  reminded: 'A payment reminder has been sent (the statutory reminder fee rides the bill). '
+    + 'If the balance stays unpaid, a payment demand follows and services can later be restricted.',
+  warned: 'A payment demand has been sent. Unless the balance is paid, outgoing services can be '
+    + 'restricted at the earliest one month after the demand — emergency numbers always stay reachable.',
+  restricted: 'Outgoing services are restricted — emergency numbers still work. '
+    + 'Unless the balance is paid, the line will be suspended next.',
+  suspended: 'Your line is suspended for non-payment. No subscription charges accrue while it is '
+    + 'suspended — paying restores your services at once.',
+  terminated: 'This subscription was terminated for non-payment. Please contact us to settle the remaining balance.',
+  writtenOff: 'This balance has been closed. Please contact us if you believe this is wrong.',
+};
 
 export default function Bills() {
   const [bills, setBills] = useState(null);
@@ -11,10 +25,15 @@ export default function Bills() {
   const [savedMethods, setSavedMethods] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [ccase, setCcase] = useState(null);   // the customer's own collection case
+  const [promiseDays, setPromiseDays] = useState(7);
+  const [promiseErr, setPromiseErr] = useState(null);
+  const [promiseBusy, setPromiseBusy] = useState(false);
 
   const load = () => {
     myBills().then(setBills).catch((e) => setError(e.message));
     myCreditNotes().then(setCreditNotes).catch(() => {});
+    myCollectionCase().then(setCcase).catch(() => {});
   };
   useEffect(() => { load(); }, []);
   // Hooks must run unconditionally, BEFORE the early returns below.
@@ -84,8 +103,74 @@ export default function Bills() {
 
   const cardReady = card.cardNumber.replace(/\s/g, '').length >= 12 && card.expiry.trim() && card.cvc.trim();
 
+  async function requestPaymentDate() {
+    setPromiseBusy(true);
+    setPromiseErr(null);
+    try {
+      const updated = await promiseToPay(ccase.id, promiseDays);
+      setCcase(updated);
+    } catch (e) {
+      // the backend's words verbatim — allowance used up, case closed, …
+      setPromiseErr(e.message);
+    } finally {
+      setPromiseBusy(false);
+    }
+  }
+
+  // the first bill the existing payment path can take money against
+  const payableBill = bills.find((b) => b.state === 'new'
+    || (b.state === 'partiallyPaid' && b.installmentPlan?.status === 'active'));
+  const caseOpen = ccase && ccase.state && ccase.state !== 'current';
+  const standingPromise = caseOpen && ccase.holds && ccase.holds.promiseToPay;
+  const promiseAllowed = caseOpen && !standingPromise
+    && !['terminated', 'writtenOff'].includes(ccase.state);
+
   return (
     <>
+      {caseOpen && (
+        <div className="collectionsbanner" data-testid="collections-banner">
+          <div className="row" style={{ border: 'none', padding: 0 }}>
+            <div>
+              <strong>Outstanding balance</strong>{' '}
+              <span className={`state ${ccase.state}`} data-testid="collections-state">{ccase.state}</span>
+              <div data-testid="collections-amount" style={{ marginTop: 4 }}>
+                {Number(ccase.overdueBalance?.value || 0).toFixed(2)} {ccase.overdueBalance?.unit || ''} overdue
+                {ccase.oldestDueAt && <span className="dim small"> · oldest due {String(ccase.oldestDueAt).slice(0, 10)}</span>}
+                {ccase.holds?.dispute && <span className="dim small"> · {Number(ccase.holds.dispute.amount).toFixed(2)} in dispute (not counted against you)</span>}
+              </div>
+            </div>
+            {payableBill && (
+              <button className="primary" data-testid="collections-pay-now"
+                      onClick={() => setPaying(payableBill.id)}>
+                Pay now
+              </button>
+            )}
+          </div>
+          <p className="dim small" data-testid="collections-consequence" style={{ margin: '8px 0 0' }}>
+            {CASE_CONSEQUENCE[ccase.state] || 'Please settle the outstanding balance to keep your services running.'}
+          </p>
+          {standingPromise && (
+            <p className="small" data-testid="promise-active" style={{ margin: '8px 0 0' }}>
+              ✓ You promised to pay {Number(standingPromise.amount).toFixed(2)} {ccase.overdueBalance?.unit || ''} by{' '}
+              {String(standingPromise.dueAt).slice(0, 10)} — reminders pause until then.
+            </p>
+          )}
+          {promiseAllowed && (
+            <div className="stack" data-testid="promise-form" style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span className="dim small">Need a few more days? Request a payment date:</span>
+              <select data-testid="promise-days" value={promiseDays}
+                      onChange={(e) => setPromiseDays(Number(e.target.value))}>
+                {[3, 5, 7, 10, 14].map((d) => <option key={d} value={d}>within {d} days</option>)}
+              </select>
+              <button className="ghost" data-testid="promise-submit" disabled={promiseBusy}
+                      onClick={requestPaymentDate}>
+                {promiseBusy ? 'Sending…' : 'Request a payment date'}
+              </button>
+            </div>
+          )}
+          {promiseErr && <p className="error small" data-testid="promise-error" style={{ margin: '6px 0 0' }}>{promiseErr}</p>}
+        </div>
+      )}
       <h1>My bills
         <button className="ghost" data-testid="change-billing-day" style={{ marginLeft: 12, fontSize: 13 }}
           onClick={async () => {

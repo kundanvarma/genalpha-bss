@@ -5,8 +5,9 @@
  * charges when there are any, place the single TMF622 order, and book the
  * install appointment when the cart contains serviceability-gated offerings.
  */
-import { availabilityFor, cancelOrder, checkQualification, checkoutCart, createAppointment, createPayment,
-  getOffering, myParty, priceIndex, updateMyParty, validateAddress, requestPortIn } from './api.js';
+import { acceptTradeIn, availabilityFor, cancelOrder, checkQualification, checkoutCart, createAppointment,
+  createDeviceAgreement, createPayment, getOffering, myParty, priceIndex, updateMyParty, validateAddress,
+  requestPortIn } from './api.js';
 import { addressOf, isComplete, loadDraft, shippingPlace, withPostalAddress } from './address.js';
 import { oneTimeTotal, pricesOf } from './money.js';
 
@@ -30,6 +31,40 @@ export function loadSlotDraft() {
   } catch {
     return null;
   }
+}
+
+/**
+ * The device plan (financing choice + trade-in) survives the login redirect
+ * and the BNPL hop, like the address and the install slot do. Shape:
+ * { offeringId, deviceName, principal: {value, unit},
+ *   financing: 'FULL' | 'OPERATOR_BOOK' | 'BNPL', termMonths, monthlyAmount,
+ *   totalCostOfOwnership, tradeIn: { valuationId, estimatedValue, currency } }
+ */
+const DEVICE_PLAN_KEY = 'bss.shop.devicePlan';
+
+export function saveDevicePlanDraft(plan) {
+  if (plan) {
+    localStorage.setItem(DEVICE_PLAN_KEY, JSON.stringify(plan));
+  } else {
+    localStorage.removeItem(DEVICE_PLAN_KEY);
+  }
+}
+
+export function loadDevicePlanDraft() {
+  try {
+    return JSON.parse(localStorage.getItem(DEVICE_PLAN_KEY));
+  } catch {
+    return null;
+  }
+}
+
+/** A soft post-order notice ("order placed, but…") for the next page to show. */
+const NOTICE_KEY = 'bss.shop.checkoutNotice';
+
+export function takeCheckoutNotice() {
+  const notice = localStorage.getItem(NOTICE_KEY);
+  localStorage.removeItem(NOTICE_KEY);
+  return notice;
 }
 
 /**
@@ -120,12 +155,25 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
         physical: item.physical || physicalSim }
     : item;
 
-  const annotated = lines.map((l) => withSim({
+  // The device plan (financing + trade-in) drafted in the cart — rides
+  // localStorage so it survives the login redirect and the BNPL hop.
+  const devicePlan = loadDevicePlanDraft();
+  const deviceLine = devicePlan
+    ? lines.find((l) => l.offeringId === devicePlan.offeringId) : null;
+  // The trade-in valuation id rides the device's order line as a product
+  // characteristic, so the backend can link order and valuation.
+  const withTradeIn = (item) => deviceLine && item.offeringId === devicePlan.offeringId
+      && devicePlan.tradeIn?.valuationId
+    ? { ...item, characteristics: { ...(item.characteristics || {}),
+        tradeInValuationId: devicePlan.tradeIn.valuationId } }
+    : item;
+
+  const annotated = lines.map((l) => withTradeIn(withSim({
     ...l,
     physical: Boolean(physical[l.offeringId]),
     selections: (l.selections || []).map((s) => withSim(
       { ...s, physical: Boolean(physical[s.offeringId]) }, s.name)),
-  }, l.name));
+  }, l.name)));
   const needsShipping = annotated.some((l) => l.physical || l.selections.some((s) => s.physical));
 
   // A first qualification probe tells us whether anything is
@@ -176,7 +224,15 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   }
 
   let paymentRefs = null;
-  const due = dueNow(lines, offerings, prices);
+  let due = dueNow(lines, offerings, prices);
+  // Operator-book instalments: the operator carries the device on its own
+  // book — the principal comes OFF what is due today and lands monthly on
+  // the bill instead. BNPL keeps the full amount due now (the provider pays
+  // the operator upfront; the customer's schedule is the provider's).
+  if (due && deviceLine && devicePlan.financing === 'OPERATOR_BOOK' && devicePlan.principal) {
+    const financed = devicePlan.principal.value * deviceLine.quantity;
+    due = due.value - financed > 0.005 ? { value: due.value - financed, unit: due.unit } : null;
+  }
   if (preAuthorized) {
     // Klarna (redirect) already confirmed the payment; use it, no card needed.
     paymentRefs = [{ id: preAuthorized.id, href: preAuthorized.href, '@referredType': 'Payment' }];
@@ -213,6 +269,45 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
         + 'Your order was not placed and you were not charged.');
     }
     saveSlotDraft(null);
+  }
+
+  // Device follow-ups, GRACEFUL: the order stands whatever happens here —
+  // a failed device-commerce call becomes a soft notice, never a lost order.
+  if (deviceLine) {
+    const notices = [];
+    if (devicePlan.tradeIn?.valuationId) {
+      try {
+        await acceptTradeIn(devicePlan.tradeIn.valuationId);
+      } catch {
+        notices.push('Your trade-in could not be confirmed — the offer stays open on My devices.');
+      }
+    }
+    if (devicePlan.financing === 'OPERATOR_BOOK' || devicePlan.financing === 'BNPL') {
+      try {
+        const me = await myParty();
+        await createDeviceAgreement({
+          financingModel: devicePlan.financing,
+          principal: devicePlan.principal.value * deviceLine.quantity,
+          termMonths: devicePlan.termMonths,
+          ...(devicePlan.monthlyAmount != null
+            ? { monthlyAmount: devicePlan.monthlyAmount * deviceLine.quantity } : {}),
+          totalCostOfOwnership: (devicePlan.totalCostOfOwnership ?? devicePlan.principal.value)
+            * deviceLine.quantity,
+          currency: devicePlan.principal.unit || 'EUR',
+          deviceRef: devicePlan.deviceName || deviceLine.name,
+          orderRef: order.id,
+          ...(paymentRefs?.length ? { paymentRef: paymentRefs[0].id } : {}),
+          relatedParty: [{ id: me.id, role: 'customer' }],
+        });
+      } catch {
+        notices.push('Your order is placed, but the instalment agreement could not be set up — '
+          + 'we\'ll be in touch, or contact support.');
+      }
+    }
+    saveDevicePlanDraft(null);
+    if (notices.length) {
+      localStorage.setItem(NOTICE_KEY, notices.join(' '));
+    }
   }
   return order;
 }
