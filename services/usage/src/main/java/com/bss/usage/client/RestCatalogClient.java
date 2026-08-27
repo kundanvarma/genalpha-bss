@@ -43,6 +43,34 @@ public class RestCatalogClient implements CatalogClient {
         return fresh;
     }
 
+    /** Uncached — the auto top-up path reads it once per purchase. Fails to EMPTY. */
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.Optional<java.math.BigDecimal> priceOf(String offeringId) {
+        if (offeringId == null) {
+            return java.util.Optional.empty();
+        }
+        try {
+            Map<String, Object> offering = restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
+                    .retrieve().body(Map.class);
+            if (offering != null && offering.get("productOfferingPrice") instanceof List<?> prices) {
+                for (Object o : prices) {
+                    if (o instanceof Map<?, ?> p && p.get("price") instanceof Map<?, ?> price
+                            && price.get("value") != null) {
+                        return java.util.Optional.of(
+                                new java.math.BigDecimal(String.valueOf(price.get("value"))));
+                    }
+                }
+            }
+            return java.util.Optional.empty();
+        } catch (RuntimeException e) {
+            // unreachable catalog or unmintable machine token: no price beats
+            // a failed top-up — the spend cap then simply cannot bind on price
+            return java.util.Optional.empty();
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private Map<String, String> fetch(String offeringId) {
         try {

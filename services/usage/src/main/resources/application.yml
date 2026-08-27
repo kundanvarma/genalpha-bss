@@ -51,6 +51,18 @@ bss:
     # may still auto-move (older = a dispute, not a silent mutation)
     wholesale-rerate-tick-ms: ${WHOLESALE_RERATE_TICK_MS:300000}
     wholesale-rerate-window-days: ${WHOLESALE_RERATE_WINDOW_DAYS:45}
+    policy:
+      # Country pack (Norway defaults): the statutory floor on the lowest
+      # selectable content-services cap and the default roaming financial
+      # limit (EU 2022/612 ≈ €50 ex VAT). Deployment-overridable — policy
+      # writes can never undercut the floor.
+      country: ${USAGE_POLICY_COUNTRY:NO}
+      content-cap-floor: ${CONTENT_CAP_FLOOR:250}
+      content-cap-currency: ${CONTENT_CAP_CURRENCY:NOK}
+      roaming-default-limit: ${ROAMING_DEFAULT_LIMIT:50}
+      roaming-default-currency: ${ROAMING_DEFAULT_CURRENCY:EUR}
+      # ZoneEnteredEvent dedup: first record from a zone within this window
+      zone-entry-window-days: ${ZONE_ENTRY_WINDOW_DAYS:30}
   events:
     topic: bss.usage.events
   downstream:

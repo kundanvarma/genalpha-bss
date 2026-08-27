@@ -55,6 +55,10 @@ public class UsageService {
     private final com.bss.usage.client.PolicyClient policyClient;
     private final com.bss.usage.client.NumberClient numberClient;
     private final com.bss.usage.repository.PendingDataRewardRepository pendingRewards;
+    private final PoolService poolService;
+    private final AutoTopupService autoTopup;
+    private final SpendPolicyService spendPolicy;
+    private final int zoneEntryWindowDays;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -66,8 +70,15 @@ public class UsageService {
             com.bss.usage.client.CatalogClient catalogClient,
             com.bss.usage.client.PolicyClient policyClient,
             com.bss.usage.client.NumberClient numberClient,
-            com.bss.usage.repository.PendingDataRewardRepository pendingRewards) {
+            com.bss.usage.repository.PendingDataRewardRepository pendingRewards,
+            PoolService poolService, AutoTopupService autoTopup, SpendPolicyService spendPolicy,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.usage.policy.zone-entry-window-days:30}") int zoneEntryWindowDays) {
         this.pendingRewards = pendingRewards;
+        this.poolService = poolService;
+        this.autoTopup = autoTopup;
+        this.spendPolicy = spendPolicy;
+        this.zoneEntryWindowDays = zoneEntryWindowDays;
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -122,15 +133,44 @@ public class UsageService {
         if (dto.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null) {
             entity.setProductOfferingId(String.valueOf(off.get("id")));
         }
+        // the roaming zone hint rides the record (top level or characteristic)
+        Object zone = dto.get("zone") != null ? dto.get("zone")
+                : (characteristic == null ? null : characteristic.get("zone"));
+        if (zone != null && !String.valueOf(zone).isBlank()) {
+            entity.setZone(String.valueOf(zone));
+        }
         entity.setStatus(RECEIVED);
         entity.setCreatedAt(OffsetDateTime.now());
-        records.save(entity);
+        // first record from a NEW zone inside the window = the customer just
+        // landed there (pricing info + pass upsell ride the event) — checked
+        // before the save so this record cannot mask itself
+        String newZone = entity.getZone();
+        boolean zoneEntered = newZone != null && entity.getOwnerPartyId() != null
+                && records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
+                        entity.getTenantId(), entity.getOwnerPartyId(),
+                        OffsetDateTime.now().minusDays(zoneEntryWindowDays), OffsetDateTime.now())
+                        .stream().noneMatch(r -> newZone.equals(r.getZone()));
+        // save returns the MANAGED instance (assigned id => merge); the pool
+        // decrement below must mutate that one or the covered share is lost
+        entity = records.save(entity);
+        // the household pool absorbs home-network GB before the personal meter
+        poolService.consume(entity);
+        if (zoneEntered) {
+            events.publish("ZoneEnteredEvent", "usage", Map.of(
+                    "relatedParty", List.of(Map.of("id", entity.getOwnerPartyId(), "role", "customer")),
+                    "zone", entity.getZone(),
+                    "usageDate", entity.getUsageDate().toString()), entity.getTenantId());
+        }
         // a fresh GB record may have just OPENED this party's first bucket —
         // any reward parked for them lands now
         if (entity.getOwnerPartyId() != null && "GB".equalsIgnoreCase(String.valueOf(entity.getUnits()))) {
             applyPendingRewards(entity.getTenantId(), entity.getOwnerPartyId());
         }
-        return toRecordMap(entity);
+        Map<String, Object> out = toRecordMap(entity);
+        if (zoneEntered) {
+            out.put("zoneEntered", true);
+        }
+        return out;
     }
 
     /**
@@ -148,6 +188,10 @@ public class UsageService {
 
         // Purchased top-ups raise the allowance before overage is charged.
         Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, ownerPartyId, periodStart);
+        // All the period's records (any status): travel-pass coverage replays
+        // over the full period in date order so re-rating stays deterministic.
+        List<UsageRecord> wholePeriod = records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
+                tenantId, ownerPartyId, from, to);
         // (offeringId, spec) -> summed usage
         Map<String, List<UsageRecord>> groups = new LinkedHashMap<>();
         for (UsageRecord r : unrated) {
@@ -157,8 +201,7 @@ public class UsageService {
         for (Map.Entry<String, List<UsageRecord>> group : groups.entrySet()) {
             List<UsageRecord> rs = group.getValue();
             UsageRecord first = rs.get(0);
-            BigDecimal total = rs.stream().map(UsageRecord::getValue)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal total = chargeableUsage(tenantId, ownerPartyId, first, rs, wholePeriod);
             List<UsageAllowance> rules = first.getProductOfferingId() == null ? List.of()
                     : allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
                             tenantId, first.getProductOfferingId(), first.getUsageSpecName());
@@ -182,6 +225,9 @@ public class UsageService {
                     charge.setCreatedAt(OffsetDateTime.now());
                     ratedCharges.save(charge);
                     events.publish("UsageRatedEvent", "ratedCharge", chargeMap(charge));
+                    // usage-rated charges land on the subscription spend cap
+                    spendPolicy.accrue(tenantId, ownerPartyId, "usage",
+                            charge.getAmountValue(), charge.getAmountUnit());
                 }
             }
             rs.forEach(r -> r.setStatus(RATED));
@@ -189,6 +235,58 @@ public class UsageService {
         }
         return ratedCharges.findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, ownerPartyId, periodStart)
                 .stream().map(this::chargeMap).toList();
+    }
+
+    /**
+     * What this rating pass may charge for: home usage net of the household
+     * pool, plus zone-tagged usage beyond its travel passes. Pass coverage is
+     * replayed over ALL of the period's records (any status) in date order —
+     * a re-run assigns the same coverage, so already-rated records keep the
+     * slices they consumed and only unrated leftovers are charged.
+     */
+    private BigDecimal chargeableUsage(String tenantId, String party, UsageRecord like,
+            List<UsageRecord> unrated, List<UsageRecord> wholePeriod) {
+        java.util.Set<String> unratedIds = unrated.stream().map(UsageRecord::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        List<com.bss.usage.entity.AllowanceBoost> passes = boosts
+                .findByTenantIdAndOwnerPartyId(tenantId, party).stream()
+                .filter(b -> b.getZone() != null
+                        && java.util.Objects.equals(b.getUsageSpecName(), like.getUsageSpecName()))
+                .toList();
+        Map<String, BigDecimal> passLeft = new LinkedHashMap<>();
+        passes.forEach(p -> passLeft.put(p.getId(), p.getBoostValue()));
+        BigDecimal total = BigDecimal.ZERO;
+        List<UsageRecord> siblings = wholePeriod.stream()
+                .filter(r -> java.util.Objects.equals(r.getProductOfferingId(), like.getProductOfferingId())
+                        && java.util.Objects.equals(r.getUsageSpecName(), like.getUsageSpecName()))
+                .sorted(java.util.Comparator.comparing(UsageRecord::getUsageDate)
+                        .thenComparing(UsageRecord::getId))
+                .toList();
+        for (UsageRecord r : siblings) {
+            if (r.getZone() == null) {
+                if (unratedIds.contains(r.getId())) {
+                    total = total.add(r.unpooledValue());
+                }
+                continue;
+            }
+            BigDecimal remaining = r.getValue();
+            for (com.bss.usage.entity.AllowanceBoost pass : passes) {
+                if (remaining.signum() <= 0 || !r.getZone().equals(pass.getZone())
+                        || !pass.coversDate(r.getUsageDate())) {
+                    continue;
+                }
+                BigDecimal take = remaining.min(passLeft.get(pass.getId()));
+                if (take.signum() > 0) {
+                    passLeft.merge(pass.getId(), take.negate(), BigDecimal::add);
+                    remaining = remaining.subtract(take);
+                }
+            }
+            // beyond the pass (or outside its window) zone usage rates like home
+            if (unratedIds.contains(r.getId())) {
+                total = total.add(remaining);
+            }
+        }
+        return total;
     }
 
     /**
@@ -217,6 +315,37 @@ public class UsageService {
         if (n.get("serviceId") != null) resource.put("serviceId", n.get("serviceId"));
         resource.put("units", n.get("units") == null ? "GB" : n.get("units"));
         events.publish("UsageThresholdBreachedEvent", "bucket", resource, tenantId);
+        // the same breach drives opt-in auto top-up — idempotent per breach
+        // window per cycle, so the at-least-once webhook can repeat itself
+        try (com.bss.usage.security.TenantContext ignored
+                = com.bss.usage.security.TenantContext.actAs(tenantId)) {
+            autoTopup.onThresholdBreach(tenantId, partyId, n);
+        }
+    }
+
+    /**
+     * The monetary sibling of the usage-threshold door: an external charging
+     * edge (carrier-billing gateway, OCS) reports a spend accrual; the meters
+     * decide warn/block and answer whether the charge may stand.
+     */
+    @Transactional
+    public Map<String, Object> notifySpendThreshold(Map<String, Object> n) {
+        String tenantId = n.get("tenantId") != null && !String.valueOf(n.get("tenantId")).isBlank()
+                ? String.valueOf(n.get("tenantId")) : tenantScope.currentTenantId();
+        String partyId = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
+        if (partyId == null) {
+            throw new BadRequestException("partyId is required on an OCS spend-threshold notification");
+        }
+        if (!(n.get("amount") instanceof Map<?, ?> money) || money.get("value") == null) {
+            throw new BadRequestException("amount {value, unit} is required");
+        }
+        String chargeClass = n.get("chargeClass") == null ? "usage" : String.valueOf(n.get("chargeClass"));
+        try (com.bss.usage.security.TenantContext ignored
+                = com.bss.usage.security.TenantContext.actAs(tenantId)) {
+            return spendPolicy.accrue(tenantId, partyId, chargeClass,
+                    new BigDecimal(String.valueOf(money.get("value"))),
+                    money.get("unit") == null ? null : String.valueOf(money.get("unit")));
+        }
     }
 
     /** TMF677: this month's buckets for the calling customer (or a named party for staff). */
@@ -242,6 +371,9 @@ public class UsageService {
         Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, party, periodStart);
         Map<String, Map<String, Object>> buckets = new LinkedHashMap<>();
         for (UsageRecord r : monthly) {
+            if (r.getZone() != null) {
+                continue;   // zone traffic reads from its pass bucket below
+            }
             String key = r.getProductOfferingId() + "|" + r.getUsageSpecName();
             Map<String, Object> bucket = buckets.computeIfAbsent(key, k -> {
                 Map<String, Object> b = new LinkedHashMap<>();
@@ -260,6 +392,35 @@ public class UsageService {
                 }
                 return b;
             });
+            // the personal meter shows what the personal allowance carried —
+            // the pool's share reads from the pool section
+            bucket.put("usedValue", ((BigDecimal) bucket.get("usedValue")).add(r.unpooledValue()));
+        }
+        // zone-tagged usage per (spec, zone), with any travel-pass capacity
+        Map<String, Map<String, Object>> zoneBuckets = new LinkedHashMap<>();
+        for (UsageRecord r : monthly) {
+            if (r.getZone() == null) {
+                continue;
+            }
+            String key = r.getUsageSpecName() + "|" + r.getZone();
+            Map<String, Object> bucket = zoneBuckets.computeIfAbsent(key, k -> {
+                Map<String, Object> b = new LinkedHashMap<>();
+                b.put("id", "bkt-" + Integer.toHexString((party + "|zone|" + k).hashCode()));
+                b.put("name", r.getUsageSpecName() + " — " + r.getZone());
+                b.put("zone", r.getZone());
+                b.put("usedValue", BigDecimal.ZERO);
+                b.put("units", r.getUnits());
+                BigDecimal passGb = boosts.findByTenantIdAndOwnerPartyId(tenantId, party).stream()
+                        .filter(p -> p.getZone() != null && p.getZone().equals(r.getZone())
+                                && java.util.Objects.equals(p.getUsageSpecName(), r.getUsageSpecName())
+                                && p.coversDate(r.getUsageDate()))
+                        .map(com.bss.usage.entity.AllowanceBoost::getBoostValue)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                if (passGb.signum() > 0) {
+                    b.put("allowedValue", passGb);
+                }
+                return b;
+            });
             bucket.put("usedValue", ((BigDecimal) bucket.get("usedValue")).add(r.getValue()));
         }
         // A deterministic report per party: the same customer always gets the
@@ -273,7 +434,12 @@ public class UsageService {
         report.put("@type", "UsageConsumptionReport");
         report.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
         report.put("period", Map.of("startDateTime", periodStart.toString()));
-        report.put("bucket", List.copyOf(buckets.values()));
+        List<Map<String, Object>> allBuckets = new ArrayList<>(buckets.values());
+        allBuckets.addAll(zoneBuckets.values());
+        report.put("bucket", allBuckets);
+        // TMF677 extension: the household pool this party draws (per-member
+        // buckets included for the pool's owner)
+        poolService.reportSection(party).ifPresent(pool -> report.put("pool", pool));
         return report;
     }
 
@@ -337,6 +503,12 @@ public class UsageService {
             map.put("relatedParty", List.of(Map.of("id", r.getOwnerPartyId(), "role", "customer")));
         }
         map.put("status", r.getStatus());
+        if (r.getZone() != null) {
+            map.put("zone", r.getZone());
+        }
+        if (r.getPooledValue() != null) {
+            map.put("pooledValue", r.getPooledValue());
+        }
         // TMF635 mandatory attribute — always present.
         map.putIfAbsent("usageSpecification", Map.of());
         map.put("@type", "Usage");
@@ -500,6 +672,11 @@ public class UsageService {
             if (item.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null
                     && !"modify".equalsIgnoreCase(String.valueOf(item.get("action")))) {
                 int quantity = item.get("quantity") instanceof Number n ? Math.max(1, n.intValue()) : 1;
+                // a 'zone' spec characteristic turns the boost into a travel
+                // pass: time-boxed (passValidityDays, default 7) + zone-locked
+                Map<String, String> levers = catalogClient.specCharacteristicsOf(
+                        String.valueOf(off.get("id")));
+                String zone = levers.get("zone");
                 for (UsageAllowance rule : allowances.findByTenantIdAndProductOfferingId(
                         tenantId, String.valueOf(off.get("id")))) {
                     if (!rule.isBoost()) {
@@ -517,6 +694,14 @@ public class UsageService {
                                 b.setPeriodStart(LocalDate.now().withDayOfMonth(1));
                                 b.setProductOrderId(orderId);
                                 b.setCreatedAt(OffsetDateTime.now());
+                                if (zone != null && !zone.isBlank()) {
+                                    b.setZone(zone);
+                                    b.setSource("travel-pass");
+                                    b.setValidFrom(OffsetDateTime.now());
+                                    b.setValidTo(OffsetDateTime.now().plusDays(
+                                            leverDecimal(levers, "passValidityDays",
+                                                    BigDecimal.valueOf(7)).longValue()));
+                                }
                                 return b;
                             });
                     boost.setBoostValue(boost.getBoostValue()
@@ -533,6 +718,9 @@ public class UsageService {
         Map<String, BigDecimal> bySpec = new LinkedHashMap<>();
         for (com.bss.usage.entity.AllowanceBoost boost
                 : boosts.findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, party, periodStart)) {
+            if (boost.getZone() != null) {
+                continue;   // a travel pass only feeds zone-tagged usage, never the home meter
+            }
             bySpec.merge(boost.getUsageSpecName(), boost.getBoostValue(), BigDecimal::add);
         }
         return bySpec;
@@ -635,10 +823,10 @@ public class UsageService {
         Map<String, String> offeringBySpec = new LinkedHashMap<>();
         for (UsageRecord r : records.findByTenantIdAndOwnerPartyIdAndUsageDateBetween(
                 tenantId, party, from, OffsetDateTime.now())) {
-            if (!"GB".equalsIgnoreCase(String.valueOf(r.getUnits()))) {
-                continue;
+            if (!"GB".equalsIgnoreCase(String.valueOf(r.getUnits())) || r.getZone() != null) {
+                continue;   // zone traffic burns passes, not the giftable home meter
             }
-            usedBySpec.merge(r.getUsageSpecName(), r.getValue(), BigDecimal::add);
+            usedBySpec.merge(r.getUsageSpecName(), r.unpooledValue(), BigDecimal::add);
             if (r.getProductOfferingId() != null && !baseBySpec.containsKey(r.getUsageSpecName())) {
                 allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
                                 tenantId, r.getProductOfferingId(), r.getUsageSpecName()).stream()
@@ -806,6 +994,52 @@ public class UsageService {
             }
         }
         return Map.of("period", periodStart.toString(), "rolledBuckets", rolled);
+    }
+
+    /**
+     * Grant a travel pass directly (machine/back-office seam — the shop path
+     * is a boost offering whose spec carries the 'zone' characteristic).
+     * Time-boxed, zone-locked extra GB consumed before home meters.
+     */
+    @Transactional
+    public Map<String, Object> createTravelPass(Map<String, Object> dto) {
+        String party = dto.get("partyId") == null ? null : String.valueOf(dto.get("partyId"));
+        String spec = dto.get("usageType") == null ? null : String.valueOf(dto.get("usageType"));
+        String zone = dto.get("zone") == null ? null : String.valueOf(dto.get("zone"));
+        if (party == null || spec == null || zone == null || dto.get("amountGB") == null) {
+            throw new BadRequestException("partyId, usageType, zone and amountGB are required");
+        }
+        BigDecimal gb = new BigDecimal(String.valueOf(dto.get("amountGB")));
+        if (gb.signum() <= 0) {
+            throw new BadRequestException("amountGB must be positive");
+        }
+        OffsetDateTime validFrom = dto.get("validFrom") == null ? OffsetDateTime.now()
+                : OffsetDateTime.parse(String.valueOf(dto.get("validFrom")));
+        long days = dto.get("validityDays") == null ? 7
+                : Long.parseLong(String.valueOf(dto.get("validityDays")));
+        OffsetDateTime validTo = dto.get("validTo") == null ? validFrom.plusDays(days)
+                : OffsetDateTime.parse(String.valueOf(dto.get("validTo")));
+        String tenantId = tenantScope.currentTenantId();
+        com.bss.usage.entity.AllowanceBoost pass = giftBoost(tenantId, party, spec, gb,
+                "pass-" + UUID.randomUUID(), "travel-pass", LocalDate.now().withDayOfMonth(1));
+        pass.setZone(zone);
+        pass.setValidFrom(validFrom);
+        pass.setValidTo(validTo);
+        boosts.save(pass);
+        events.publish("BucketBalanceChangeEvent", "bucket", Map.of(
+                "relatedParty", List.of(Map.of("id", party, "role", "customer")),
+                "amount", gb, "units", "GB", "usageType", spec, "source", "travel-pass",
+                "zone", zone, "validFor", Map.of(
+                        "startDateTime", validFrom.toString(), "endDateTime", validTo.toString())));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", pass.getId());
+        out.put("partyId", party);
+        out.put("usageType", spec);
+        out.put("zone", zone);
+        out.put("amountGB", gb);
+        out.put("validFor", Map.of("startDateTime", validFrom.toString(), "endDateTime", validTo.toString()));
+        out.put("@type", "TravelPass");
+        return out;
     }
 
     private static BigDecimal leverDecimal(Map<String, String> levers, String name, BigDecimal fallback) {

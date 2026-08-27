@@ -32,4 +32,12 @@ public class OcsNotificationController {
         service.notifyUsageThreshold(body);
         return ResponseEntity.accepted().body(Map.of("status", "accepted"));
     }
+
+    /** The monetary sibling: an external charging edge reports a spend
+     * accrual {partyId, chargeClass, amount}; the reply's accepted=false
+     * tells it to refuse the charge (barring, cap, roaming cut-off). */
+    @PostMapping("/spendThreshold")
+    public ResponseEntity<Map<String, Object>> spendThreshold(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.accepted().body(service.notifySpendThreshold(body));
+    }
 }

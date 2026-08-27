@@ -44,8 +44,19 @@ public class AllowanceBoost {
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 
-    /** NULL = purchased top-up; 'gift:to:<id>' / 'gift:from:<name>' / 'rollover'. */
+    /** NULL = purchased top-up; 'gift:to:<id>' / 'gift:from:<name>' / 'rollover'
+     * / 'auto-topup' / 'travel-pass'. */
     private String source;
+
+    /** Zone + validity window turn a boost into a travel pass: only usage
+     * tagged with this zone, dated inside the window, may consume it. */
+    private String zone;
+
+    @Column(name = "valid_from")
+    private OffsetDateTime validFrom;
+
+    @Column(name = "valid_to")
+    private OffsetDateTime validTo;
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
@@ -67,4 +78,16 @@ public class AllowanceBoost {
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+    public String getZone() { return zone; }
+    public void setZone(String zone) { this.zone = zone; }
+    public OffsetDateTime getValidFrom() { return validFrom; }
+    public void setValidFrom(OffsetDateTime validFrom) { this.validFrom = validFrom; }
+    public OffsetDateTime getValidTo() { return validTo; }
+    public void setValidTo(OffsetDateTime validTo) { this.validTo = validTo; }
+
+    /** In-window for this date? Non-pass boosts (no window) always are. */
+    public boolean coversDate(OffsetDateTime date) {
+        return (validFrom == null || !date.isBefore(validFrom))
+                && (validTo == null || !date.isAfter(validTo));
+    }
 }

@@ -9,4 +9,8 @@ public interface CatalogClient {
 
     /** The offering's spec characteristics as {name -> first value}, empty on any miss. */
     Map<String, String> specCharacteristicsOf(String offeringId);
+
+    /** The offering's first price value, empty on any miss — enough for the
+     * auto top-up spend cap (a boost has one one-time price). */
+    java.util.Optional<java.math.BigDecimal> priceOf(String offeringId);
 }

@@ -142,4 +142,22 @@ public class UsageRecord {
     private String payloadJson;
     public String getPayloadJson() { return payloadJson; }
     public void setPayloadJson(String payloadJson) { this.payloadJson = payloadJson; }
+
+    /** NULL = home network; set = the roaming zone this traffic burned in. */
+    @Column(name = "zone")
+    private String zone;
+    public String getZone() { return zone; }
+    public void setZone(String zone) { this.zone = zone; }
+
+    /** The portion of this record the household pool covered (never rates
+     * against the personal allowance); NULL = none. */
+    @Column(name = "pooled_value")
+    private BigDecimal pooledValue;
+    public BigDecimal getPooledValue() { return pooledValue; }
+    public void setPooledValue(BigDecimal pooledValue) { this.pooledValue = pooledValue; }
+
+    /** This record's usage net of what the pool absorbed. */
+    public BigDecimal unpooledValue() {
+        return pooledValue == null ? value : value.subtract(pooledValue);
+    }
 }

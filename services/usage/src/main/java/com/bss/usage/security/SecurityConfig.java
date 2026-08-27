@@ -72,6 +72,25 @@ public class SecurityConfig {
                         // gifting is customer self-service: their data, their call
                         // (the household check happens in the service, live)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/gift").hasAuthority("usage:read")
+                        // usage-policy self-service: pools, caps, barring, the
+                        // roaming continue and auto top-up consent — customers
+                        // act on themselves (PartyScope + household checks in
+                        // the services); staff/machine callers pass partyId.
+                        .requestMatchers(HttpMethod.POST,
+                                ApiConstants.BASE_PATH + "/allowancePool",
+                                ApiConstants.BASE_PATH + "/allowancePool/*/member",
+                                ApiConstants.BASE_PATH + "/roamingLimit/continue")
+                                .hasAnyAuthority("usage:read", "usage:write")
+                        .requestMatchers(HttpMethod.PATCH,
+                                ApiConstants.BASE_PATH + "/allowancePool/*/member/*",
+                                ApiConstants.BASE_PATH + "/spendPolicy/*")
+                                .hasAnyAuthority("usage:read", "usage:write")
+                        .requestMatchers(HttpMethod.DELETE,
+                                ApiConstants.BASE_PATH + "/allowancePool/*/member/*")
+                                .hasAnyAuthority("usage:read", "usage:write")
+                        .requestMatchers(HttpMethod.PUT,
+                                ApiConstants.BASE_PATH + "/autoTopupPolicy")
+                                .hasAnyAuthority("usage:read", "usage:write")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("usage:write")
                         .anyRequest().authenticated())
