@@ -325,6 +325,18 @@
       {
         "name": "risk:assess",
         "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
+      },
+      {
+        "name": "device:read"
+      },
+      {
+        "name": "device:write"
+      },
+      {
+        "name": "migration:read"
+      },
+      {
+        "name": "migration:admin"
       }
     ]
   },
@@ -729,6 +741,28 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-device",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "device-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-base-migration",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "base-migration-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
   ],
   "users": [
@@ -772,7 +806,9 @@
         "usage:read",
         "usage:write",
         "promotion:read",
-        "party:read"
+        "party:read",
+        "service:read",
+        "service:write"
       ]
     },
     {
@@ -850,7 +886,11 @@
         "knowledge:write",
         "insight:read",
         "ai:admin",
-        "risk:assess"
+        "risk:assess",
+        "device:read",
+        "device:write",
+        "migration:read",
+        "migration:admin"
       ],
       "id": "69eb7c8c-9c3e-4254-87e2-2fceed188668"
     },
@@ -1238,6 +1278,27 @@
       "realmRoles": [
         "ordering:read",
         "ordering:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-device",
+      "enabled": true,
+      "serviceAccountClientId": "bss-device",
+      "realmRoles": [
+        "payment:read",
+        "payment:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-base-migration",
+      "enabled": true,
+      "serviceAccountClientId": "bss-base-migration",
+      "realmRoles": [
+        "inventory:read",
+        "party:read",
+        "agreement:read",
+        "ordering:write",
+        "catalog:write"
       ]
     }
   ],

@@ -809,6 +809,81 @@ services:
       kafka:
         condition: service_started
 
+  device-commerce:
+    build: ./services/device-commerce
+    container_name: bss-device-commerce
+    restart: unless-stopped
+    environment:
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      DB_URL: jdbc:postgresql://postgres:5432/device_commerce
+      DB_USERNAME: device_commerce_app
+      DB_PASSWORD: device_commerce_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: bss-device
+      OIDC_CLIENT_SECRET: device-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      PAYMENT_BASE_URL: http://payment:8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8145:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  base-migration:
+    build: ./services/base-migration
+    container_name: bss-base-migration
+    restart: unless-stopped
+    environment:
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      DB_URL: jdbc:postgresql://postgres:5432/base_migration
+      DB_USERNAME: migration_app
+      DB_PASSWORD: migration_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: bss-base-migration
+      OIDC_CLIENT_SECRET: base-migration-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      INVENTORY_BASE_URL: http://product-inventory:8080
+      ORDERING_BASE_URL: http://product-ordering:8080
+      AGREEMENT_BASE_URL: http://agreement:8080
+      PARTY_BASE_URL: http://party-account:8080
+      INTELLIGENCE_BASE_URL: http://intelligence:8080
+      # DEMO/TEST ONLY: lifts the 30-day notice floor so e2e plans may use
+      # noticeDays 0/1. Never set in production — the floor is statutory.
+      MIGRATION_COMPRESS_CLOCKS: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8146:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   policy:
     build: ./services/policy
     container_name: bss-policy
@@ -1303,6 +1378,16 @@ services:
       # dev dunning clock: sweep every 5s, grace 20s (prod: 7 days)
       BSS_BILLING_DUNNING_TICK_MS: "5000"
       BSS_BILLING_DUNNING_GRACE_MS: "20000"
+      # collections ladder: SOM enforcement + dev-only compressed clocks
+      SOM_BASE_URL: http://service-orchestration:8080
+      # consent-driven bill channels: e-invoice -> mailbox -> print
+      EINVOICE_RAIL_BASE_URL: http://mock-efaktura:8080
+      MAILBOX_RAIL_BASE_URL: http://mock-digipost:8080
+      DIRECTDEBIT_RAIL_BASE_URL: http://mock-avtalegiro:8080
+      # DEV/E2E ONLY: statutory day-spans count as seconds so the suite can
+      # walk the ladder; never set in production
+      BSS_COLLECTIONS_COMPRESS_CLOCKS: "true"
+      BSS_COLLECTIONS_TICK_MS: "3600000"
       # run pacing: 0 in production; a suite sets it to hold a run open
       # long enough to kill it mid-flight (crash-resume proof)
       BSS_BILLING_RUN_ACCOUNT_DELAY_MS: ${RUN_ACCOUNT_DELAY_MS:-0}
@@ -1457,6 +1542,8 @@ services:
       BSS_PRIVACY_INSIGHT_URL: http://insight:8080
       BSS_PRIVACY_USER_ROLES_URL: http://user-roles:8080
       BSS_PRIVACY_INVENTORY_URL: http://product-inventory:8080
+      # Norway reference registry: feed-driven address sync (mock in dev)
+      REGISTRY_BASE_URL: http://mock-freg:8080
       DB_URL: jdbc:postgresql://postgres:5432/party_account
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: party_app
@@ -1626,7 +1713,7 @@ services:
       GOOGLE_API_URL: http://mock-social:8080
       GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
-      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events
+      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events,bss.device.events,bss.migration.events
       # signal connectors (SI-P2): secret-ref targets — the desk poll token and
       # the generic webhook's shared secret; the mocks accept any token
       SERVICEDESK_API_TOKEN: dev-desk-token
@@ -1707,6 +1794,8 @@ services:
       INTELLIGENCE_URL: http://intelligence:8080
       QUOTE_URL: http://quote:8080
       PORTING_URL: http://porting:8080
+      DEVICE_COMMERCE_URL: http://device-commerce:8080
+      BASE_MIGRATION_URL: http://base-migration:8080
       POLICY_URL: http://policy:8080
       KNOWLEDGE_URL: http://knowledge:8080
       INSIGHT_URL: http://insight:8080
@@ -1866,6 +1955,30 @@ services:
     restart: unless-stopped
     ports:
       - "8141:8080"
+
+  # Norway billing rails, mocked: e-invoice alias/RFP, digital mailbox,
+  # and the direct-debit mandate/claim/settlement file loop. A real rail
+  # = same adapter, real baseUrl + credentials.
+  mock-efaktura:
+    build: ./integrations/mock-efaktura
+    container_name: bss-mock-efaktura
+    restart: unless-stopped
+    ports:
+      - "8147:8080"
+
+  mock-digipost:
+    build: ./integrations/mock-digipost
+    container_name: bss-mock-digipost
+    restart: unless-stopped
+    ports:
+      - "8148:8080"
+
+  mock-avtalegiro:
+    build: ./integrations/mock-avtalegiro
+    container_name: bss-mock-avtalegiro
+    restart: unless-stopped
+    ports:
+      - "8149:8080"
 
   # Zendesk-shaped support desk — the reference NAMED signal connector
   # (signal-intelligence SI-P2). Its seeded tickets carry PLANTED PII on

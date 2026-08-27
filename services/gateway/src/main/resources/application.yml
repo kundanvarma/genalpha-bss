@@ -239,6 +239,14 @@ spring:
           uri: ${PORTING_URL:http://localhost:8112}
           predicates:
             - Path=/tmf-api/numberPortingManagement/**
+        - id: device-commerce
+          uri: ${DEVICE_COMMERCE_URL:http://localhost:8145}
+          predicates:
+            - Path=/tmf-api/deviceCommerce/**
+        - id: base-migration
+          uri: ${BASE_MIGRATION_URL:http://localhost:8146}
+          predicates:
+            - Path=/tmf-api/baseMigration/**
         - id: policy
           uri: ${POLICY_URL:http://localhost:8113}
           predicates:

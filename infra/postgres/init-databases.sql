@@ -42,3 +42,5 @@ CREATE DATABASE revenue;
 CREATE DATABASE process;
 CREATE DATABASE fulfilment;
 CREATE DATABASE eventhub;
+CREATE DATABASE device_commerce;
+CREATE DATABASE base_migration;
