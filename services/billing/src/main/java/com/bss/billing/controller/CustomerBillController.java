@@ -42,6 +42,7 @@ public class CustomerBillController {
     private final com.bss.billing.service.BillDistributionService distributionService;
     private final com.bss.billing.service.RemittanceService remittanceService;
     private final com.bss.billing.service.BillDocumentService documentService;
+    private final com.bss.billing.service.CollectionService collectionService;
     private final com.bss.billing.security.TenantScope tenantScope;
 
     public CustomerBillController(CustomerBillService service, FieldSelector fieldSelector,
@@ -52,6 +53,7 @@ public class CustomerBillController {
             com.bss.billing.service.BillDistributionService distributionService,
             com.bss.billing.service.RemittanceService remittanceService,
             com.bss.billing.security.TenantScope tenantScope,
+            com.bss.billing.service.CollectionService collectionService,
             com.bss.billing.service.BillDocumentService documentService) {
         this.service = service;
         this.fieldSelector = fieldSelector;
@@ -62,6 +64,7 @@ public class CustomerBillController {
         this.distributionService = distributionService;
         this.remittanceService = remittanceService;
         this.documentService = documentService;
+        this.collectionService = collectionService;
         this.tenantScope = tenantScope;
     }
 
@@ -274,10 +277,14 @@ public class CustomerBillController {
         return ResponseEntity.ok(disputeService.resolve(id, dto));
     }
 
-    /** The DUNNING window: who is overdue, who broke, what is still owed. */
+    /** The DUNNING window: who is overdue, who broke, what is still owed —
+     * installment stragglers plus every account's collection case. */
     @GetMapping("/dunning")
     public ResponseEntity<List<Map<String, Object>>> dunning() {
-        return ResponseEntity.ok(dunningService.dunningView(tenantScope.currentTenantId()));
+        List<Map<String, Object>> rows = new java.util.ArrayList<>(
+                dunningService.dunningView(tenantScope.currentTenantId()));
+        rows.addAll(collectionService.findCases(null));
+        return ResponseEntity.ok(rows);
     }
 
     /** PAY IN PARTS: split an unpaid bill into 2-12 monthly installments. */

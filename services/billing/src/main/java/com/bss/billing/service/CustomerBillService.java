@@ -46,18 +46,22 @@ public class CustomerBillService {
     private final com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository;
     private final com.bss.billing.repository.InstallmentPlanRepository plans;
     private final com.bss.billing.repository.BillDisputeRepository disputeChips;
+    // lazy: collections listens to settlements, settlements never call back
+    private final org.springframework.beans.factory.ObjectProvider<CollectionService> collections;
 
     public CustomerBillService(CustomerBillRepository repository, AppliedBillingRateRepository rateRepository,
             com.bss.billing.repository.CustomerBillOnDemandRepository onDemandRepository,
             DownstreamClients.PaymentClient paymentClient, DomainEventPublisher events, PartyScope partyScope,
             TenantScope tenantScope, ObjectMapper objectMapper,
             com.bss.billing.repository.InstallmentPlanRepository plans,
-            com.bss.billing.repository.BillDisputeRepository disputeChips) {
+            com.bss.billing.repository.BillDisputeRepository disputeChips,
+            org.springframework.beans.factory.ObjectProvider<CollectionService> collections) {
         this.repository = repository;
         this.rateRepository = rateRepository;
         this.onDemandRepository = onDemandRepository;
         this.plans = plans;
         this.disputeChips = disputeChips;
+        this.collections = collections;
         this.paymentClient = paymentClient;
         this.events = events;
         this.partyScope = partyScope;
@@ -217,6 +221,9 @@ public class CustomerBillService {
         entity.setLastUpdate(OffsetDateTime.now());
         CustomerBillDto updated = toDto(repository.save(entity));
         events.publish("CustomerBillStateChangeEvent", "customerBill", updated);
+        // the settlement is collections' cure signal — same transaction, so a
+        // payment that clears the balance reinstates services immediately
+        collections.ifAvailable(c -> c.onSettlement(entity.getTenantId(), entity.getOwnerPartyId()));
         return updated;
     }
 
@@ -318,6 +325,8 @@ public class CustomerBillService {
         if (done) {
             events.publish("CustomerBillStateChangeEvent", "customerBill", updated);
         }
+        // an installment landing can be the payment that cures the case
+        collections.ifAvailable(c -> c.onSettlement(bill.getTenantId(), bill.getOwnerPartyId()));
         return view;
     }
 
@@ -397,6 +406,7 @@ public class CustomerBillService {
                 "@type", "AttachmentRefOrValue",
                 "href", entity.getHref() + "/document.pdf",
                 "url", entity.getHref() + "/document.pdf")));
+        dto.setDistributionChannel(entity.getDistributionChannel());
         dto.setBillDate(entity.getBillDate());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setType("CustomerBill");

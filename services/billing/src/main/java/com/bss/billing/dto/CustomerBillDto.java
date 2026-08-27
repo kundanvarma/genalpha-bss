@@ -48,6 +48,9 @@ public class CustomerBillDto {
     @JsonProperty("payment")
     private List<Map<String, Object>> payment;
 
+    @JsonProperty("distributionChannel")
+    private String distributionChannel;
+
     @JsonProperty("billDate")
     private OffsetDateTime billDate;
 
@@ -122,6 +125,14 @@ public class CustomerBillDto {
 
     public void setPayment(List<Map<String, Object>> payment) {
         this.payment = payment;
+    }
+
+    public String getDistributionChannel() {
+        return distributionChannel;
+    }
+
+    public void setDistributionChannel(String distributionChannel) {
+        this.distributionChannel = distributionChannel;
     }
 
     public OffsetDateTime getBillDate() {

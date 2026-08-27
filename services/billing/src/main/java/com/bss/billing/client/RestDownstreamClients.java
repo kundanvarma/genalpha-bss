@@ -209,7 +209,9 @@ public class RestDownstreamClients {
                         .retrieve().body(Map.class);
                 String tier = res == null ? null : String.valueOf(res.get("tier"));
                 return tier == null || "none".equals(tier) || "null".equals(tier) ? null : tier;
-            } catch (RestClientException e) {
+            } catch (RuntimeException e) {
+                // fail-open includes a tenant with NO machine credentials
+                // (test registries): no tier, never a failed billing run
                 return null;
             }
         };
@@ -245,6 +247,20 @@ public class RestDownstreamClients {
             @Value("${bss.downstream.party-base-url}") String baseUrl) {
         RestClient rest = client(builder, tokenInterceptor, baseUrl);
         return new DownstreamClients.OrgClient() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public java.util.Optional<Map<String, Object>> partyOf(String partyId) {
+                try {
+                    Map<String, Object> person = rest.get()
+                            .uri("/tmf-api/party/v4/individual/{id}", partyId)
+                            .retrieve().body(Map.class);
+                    return java.util.Optional.ofNullable(person);
+                } catch (RestClientException e) {
+                    // fail open: no party view means a minimal letter, never a lost bill
+                    return java.util.Optional.empty();
+                }
+            }
+
             @Override
             @SuppressWarnings("unchecked")
             public java.util.Optional<Integer> billingAnchorDayOf(String partyId) {
@@ -313,6 +329,62 @@ public class RestDownstreamClients {
                     // fail open: no reachable policy means the company pays in full
                     return java.util.Optional.empty();
                 }
+            }
+        };
+    }
+
+    @Bean
+    DownstreamClients.SomClient somClient(RestClient.Builder builder,
+            MachineTokenInterceptor tokenInterceptor,
+            @Value("${bss.downstream.som-base-url:http://localhost:8104}") String baseUrl) {
+        RestClient rest = client(builder, tokenInterceptor, baseUrl);
+        return new DownstreamClients.SomClient() {
+            @Override
+            public List<Map<String, Object>> servicesOf(String partyId) {
+                try {
+                    List<Map<String, Object>> page = rest.get()
+                            .uri("/tmf-api/serviceInventory/v4/service?relatedPartyId={p}&limit=100", partyId)
+                            .retrieve()
+                            .body(new org.springframework.core.ParameterizedTypeReference<List<Map<String, Object>>>() {
+                            });
+                    return page == null ? List.of() : page;
+                } catch (RestClientException e) {
+                    throw new DownstreamException("service orchestration is unreachable", e);
+                }
+            }
+
+            private void post(String path, Map<String, Object> body) {
+                try {
+                    rest.post().uri("/tmf-api/serviceInventory/v4" + path)
+                            .header("Content-Type", "application/json")
+                            .body(body)
+                            .retrieve().toBodilessEntity();
+                } catch (RestClientException e) {
+                    // enforcement is fail-closed: the case does not advance
+                    // past an enforcement the network never executed
+                    throw new DownstreamException("service orchestration refused " + path, e);
+                }
+            }
+
+            @Override
+            public void restrict(String serviceId, String reason, Map<String, Object> profile) {
+                post("/service/" + serviceId + "/restrict",
+                        Map.of("reason", reason, "profile", profile));
+            }
+
+            @Override
+            public void unrestrict(String serviceId) {
+                post("/service/" + serviceId + "/unrestrict", Map.of());
+            }
+
+            @Override
+            public void suspend(String serviceId, String reason) {
+                post("/service/" + serviceId + "/suspend", Map.of("reason", reason));
+            }
+
+            @Override
+            public void resume(String serviceId) {
+                post("/service/" + serviceId + "/resume", Map.of());
             }
         };
     }
@@ -393,5 +465,65 @@ public class RestDownstreamClients {
                         .retrieve().toBodilessEntity();
             }
         };
+    }
+
+    /** The e-invoice rail's alias lookup — an EXTERNAL rail (its own
+     * credential model), so no machine-token interceptor. */
+    @Bean
+    DownstreamClients.AliasLookupClient aliasLookupClient(RestClient.Builder builder,
+            @Value("${bss.downstream.einvoice-rail-base-url:http://localhost:8147}") String baseUrl) {
+        RestClient rest = builder.baseUrl(baseUrl)
+                .requestFactory(new JdkClientHttpRequestFactory()).build();
+        return party -> {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> answer = rest.post().uri("/alias/lookup")
+                        .header("Content-Type", "application/json")
+                        .body(Map.of(
+                                "name", nameOf(party),
+                                "email", contactOf(party, "email", "emailAddress"),
+                                "phone", contactOf(party, "mobile", "phoneNumber")))
+                        .retrieve().body(Map.class);
+                return answer == null || answer.get("aliasRef") == null
+                        ? java.util.Optional.empty()
+                        : java.util.Optional.of(String.valueOf(answer.get("aliasRef")));
+            } catch (RestClientException e) {
+                // no answer is a MISS: the chain falls to the next channel
+                return java.util.Optional.empty();
+            }
+        };
+    }
+
+    @Bean
+    DownstreamClients.DirectDebitClient directDebitClient(RestClient.Builder builder,
+            @Value("${bss.downstream.directdebit-rail-base-url:http://localhost:8149}") String baseUrl) {
+        RestClient rest = builder.baseUrl(baseUrl)
+                .requestFactory(new JdkClientHttpRequestFactory()).build();
+        return claim -> rest.post().uri("/claims")
+                .header("Content-Type", "application/json")
+                .body(claim).retrieve().toBodilessEntity();
+    }
+
+    private static String nameOf(Map<String, Object> party) {
+        if (party == null) {
+            return "";
+        }
+        String given = party.get("givenName") == null ? "" : String.valueOf(party.get("givenName"));
+        String family = party.get("familyName") == null ? "" : String.valueOf(party.get("familyName"));
+        return (given + " " + family).trim();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String contactOf(Map<String, Object> party, String mediumType, String key) {
+        if (party == null || !(party.get("contactMedium") instanceof List<?> media)) {
+            return "";
+        }
+        for (Object m : media) {
+            if (m instanceof Map<?, ?> medium && mediumType.equals(medium.get("mediumType"))
+                    && medium.get("characteristic") instanceof Map<?, ?> c && c.get(key) != null) {
+                return String.valueOf(c.get(key));
+            }
+        }
+        return "";
     }
 }

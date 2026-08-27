@@ -54,6 +54,20 @@ bss:
     promotion-base-url: ${PROMOTION_BASE_URL:http://localhost:8099}
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
+    som-base-url: ${SOM_BASE_URL:http://localhost:8104}
+    # the country rails (Norway reference: eFaktura-style e-invoice alias/RFP,
+    # Digipost-style mailbox, AvtaleGiro-style direct debit) — adapters behind
+    # generic ports, mocks in dev, per-tenant agreements in production
+    einvoice-rail-base-url: ${EINVOICE_RAIL_BASE_URL:http://localhost:8147}
+    mailbox-rail-base-url: ${MAILBOX_RAIL_BASE_URL:http://localhost:8148}
+    directdebit-rail-base-url: ${DIRECTDEBIT_RAIL_BASE_URL:http://localhost:8149}
+  collections:
+    # TEST HARNESS ONLY, never production: statutory/policy day-spans count
+    # in SECONDS instead of days so a proof run lives a delinquency in
+    # minutes. The statutory numbers themselves never change.
+    compress-clocks: ${BSS_COLLECTIONS_COMPRESS_CLOCKS:false}
+  billing:
+    collections-tick-ms: ${BSS_COLLECTIONS_TICK_MS:60000}
   events:
     topic: bss.billing.events
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.

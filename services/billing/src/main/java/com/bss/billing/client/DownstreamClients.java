@@ -70,6 +70,13 @@ public final class DownstreamClients {
         /** The customer's billing anchor day (1-28); empty = calendar month. */
         java.util.Optional<Integer> billingAnchorDayOf(String partyId);
 
+        /** The party as the party API serves it — ALREADY masked for
+         * protected addresses, so anything built from this view carries no
+         * street it should not. Empty on outage. */
+        default java.util.Optional<Map<String, Object>> partyOf(String partyId) {
+            return java.util.Optional.empty();
+        }
+
         /** How this customer wants the bill delivered (paper | einvoice |
          * digital); empty = the tenant's default channel. */
         java.util.Optional<String> billDeliveryOf(String partyId);
@@ -86,6 +93,34 @@ public final class DownstreamClients {
          * charge moves to the employee's personal bill.
          */
         java.util.Optional<Map<String, Object>> deviceAllowanceOf(String orgId);
+    }
+
+    public interface SomClient {
+        /** A party's running services (TMF638 view). */
+        List<Map<String, Object>> servicesOf(String partyId);
+
+        /** Barring profile on, service stays up (emergency whitelist forced). */
+        void restrict(String serviceId, String reason, Map<String, Object> profile);
+
+        void unrestrict(String serviceId);
+
+        /** Full suspend with the reason persisted (nonpayment here). */
+        void suspend(String serviceId, String reason);
+
+        void resume(String serviceId);
+    }
+
+    public interface AliasLookupClient {
+        /** The e-invoice rail's per-send alias lookup: does this identity
+         * hold a live e-invoice address? Empty = no consent at the bank —
+         * the caller falls to the NEXT channel, by design. */
+        java.util.Optional<String> lookup(Map<String, Object> party);
+    }
+
+    public interface DirectDebitClient {
+        /** One cycle claim to the direct-debit rail. Throws on refusal —
+         * the claim row is only written when the rail accepted it. */
+        void sendClaim(Map<String, Object> claim);
     }
 
     public interface PaymentClient {

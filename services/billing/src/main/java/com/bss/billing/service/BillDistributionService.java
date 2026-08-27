@@ -41,6 +41,11 @@ public class BillDistributionService {
     private final com.bss.billing.repository.BillDistributionRepository ledger;
     private final RestClient restClient;
     private final com.bss.billing.tick.TickGuard tickGuard;
+    private final BillChannelService channels;
+    private final com.bss.billing.client.DownstreamClients.OrgClient orgs;
+    private final com.bss.billing.events.DomainEventPublisher events;
+    private final String einvoiceRailUrl;
+    private final String mailboxRailUrl;
     private final long retrySeconds;
     private final int maxAttempts;
 
@@ -54,6 +59,13 @@ public class BillDistributionService {
             com.bss.billing.repository.BillFormatProfileRepository profiles,
             com.bss.billing.repository.BillDistributionRepository ledger,
             RestClient.Builder builder, com.bss.billing.tick.TickGuard tickGuard,
+            BillChannelService channels,
+            com.bss.billing.client.DownstreamClients.OrgClient orgs,
+            com.bss.billing.events.DomainEventPublisher events,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.downstream.einvoice-rail-base-url:http://localhost:8147}") String einvoiceRailUrl,
+            @org.springframework.beans.factory.annotation.Value(
+                    "${bss.downstream.mailbox-rail-base-url:http://localhost:8148}") String mailboxRailUrl,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.billing.distribution-retry-seconds:60}") long retrySeconds,
             @org.springframework.beans.factory.annotation.Value(
@@ -64,6 +76,11 @@ public class BillDistributionService {
         this.ledger = ledger;
         this.restClient = builder.build();
         this.tickGuard = tickGuard;
+        this.channels = channels;
+        this.orgs = orgs;
+        this.events = events;
+        this.einvoiceRailUrl = einvoiceRailUrl;
+        this.mailboxRailUrl = mailboxRailUrl;
         this.retrySeconds = retrySeconds;
         this.maxAttempts = maxAttempts;
     }
@@ -95,6 +112,23 @@ public class BillDistributionService {
      */
     public void distribute(String tenantId, CustomerBill bill, List<AppliedBillingRate> lines,
             String preference) {
+        // the CONSENT CHAIN first: a per-party channel row (e-invoice rail,
+        // resolved against a LIVE alias, or the digital mailbox) beats the
+        // tenant/preference plumbing below — an alias miss at send time
+        // falls through here, and the print path is the floor
+        java.util.Optional<BillChannelService.ResolvedChannel> consent =
+                channels.resolve(tenantId, bill.getOwnerPartyId());
+        if (consent.isPresent()) {
+            String channel = consent.get().channel();
+            String kid = bill.getPaymentReference() != null ? bill.getPaymentReference()
+                    : bill.getBillNo().replaceAll("\\D", "");
+            Map<String, Object> payload = "efaktura".equals(channel)
+                    ? rfpOf(bill, kid, consent.get().aliasRef())
+                    : letterOf(orgs.partyOf(bill.getOwnerPartyId()).orElse(null), bill, lines, kid);
+            enqueue(tenantId, bill, channel, payload);
+            bill.setDistributionChannel(channel);
+            return;
+        }
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !"partner".equalsIgnoreCase(tenant.getBillDistributionProvider())
                 || tenant.getBillDistributionUrl() == null
@@ -104,6 +138,7 @@ public class BillDistributionService {
         if ("digital".equalsIgnoreCase(preference)) {
             log.info("bill {} not distributed: the customer chose digital-only delivery",
                     bill.getBillNo());
+            bill.setDistributionChannel("digital");
             return;
         }
         String format = tenant.getBillDistributionFormat();
@@ -166,6 +201,105 @@ public class BillDistributionService {
         row.setCreatedAt(OffsetDateTime.now());
         row.setLastUpdate(OffsetDateTime.now());
         ledger.save(row);
+        bill.setDistributionChannel(channel);
+    }
+
+    /** A rail send rides the SAME outbox-backed ledger as the partner path
+     * — written with the bill, drained by the relay, retried honestly. */
+    private void enqueue(String tenantId, CustomerBill bill, String channel,
+            Map<String, Object> payload) {
+        BillDistribution row = new BillDistribution();
+        row.setId(java.util.UUID.randomUUID().toString());
+        row.setTenantId(tenantId);
+        row.setBillId(bill.getId());
+        row.setBillNo(bill.getBillNo());
+        row.setFormat("efaktura".equals(channel) ? "rfp" : "letter");
+        row.setChannel(channel);
+        row.setRecipient(bill.getOwnerPartyId());
+        row.setContentType("application/json");
+        row.setPayload(toJson(payload));
+        row.setStatus(BillDistribution.PENDING);
+        row.setAttempts(0);
+        row.setNextAttemptAt(OffsetDateTime.now());
+        row.setCreatedAt(OffsetDateTime.now());
+        row.setLastUpdate(OffsetDateTime.now());
+        ledger.save(row);
+    }
+
+    /** The e-invoice rail's request-for-payment: the KID IS the bill's
+     * payment reference — the settlement file comes home on the same digits. */
+    static Map<String, Object> rfpOf(CustomerBill bill, String kid, String aliasRef) {
+        Map<String, Object> rfp = new java.util.LinkedHashMap<>();
+        rfp.put("kid", kid);
+        rfp.put("billNo", bill.getBillNo());
+        rfp.put("aliasRef", aliasRef);
+        rfp.put("partyRef", bill.getOwnerPartyId());
+        rfp.put("amount", Map.of("value", bill.getAmountDueValue(), "unit", bill.getAmountDueUnit()));
+        rfp.put("issueDate", bill.getPeriodEnd().toString());
+        rfp.put("dueDate", bill.getPeriodEnd().plusDays(14).toString());
+        return rfp;
+    }
+
+    /**
+     * The mailbox letter, built ONLY from the party API's view — which is
+     * already masked for protected addresses, so a protected party's letter
+     * carries no street by construction (postCode/city survive for routing).
+     * The addressing is the mailbox provider's job; ours is honest content.
+     */
+    public static Map<String, Object> letterOf(Map<String, Object> party, CustomerBill bill,
+            List<AppliedBillingRate> lines, String kid) {
+        Map<String, Object> letter = new java.util.LinkedHashMap<>();
+        letter.put("partyRef", bill.getOwnerPartyId());
+        letter.put("subject", "Your invoice " + bill.getBillNo());
+        StringBuilder content = new StringBuilder();
+        String name = party == null ? null : ((String.valueOf(party.getOrDefault("givenName", ""))
+                + " " + String.valueOf(party.getOrDefault("familyName", ""))).trim());
+        if (name != null && !name.isBlank()) {
+            content.append(name).append('\n');
+        }
+        Map<String, Object> postal = postalOf(party);
+        for (String key : List.of("street1", "street2", "postCode", "city")) {
+            if (postal.get(key) != null) {
+                content.append(postal.get(key)).append('\n');
+            }
+        }
+        content.append('\n').append("Invoice ").append(bill.getBillNo())
+                .append(" — amount due ").append(bill.getAmountDueValue()).append(' ')
+                .append(bill.getAmountDueUnit()).append(", payment reference ").append(kid)
+                .append(", due ").append(bill.getPeriodEnd().plusDays(14)).append('.').append('\n');
+        for (AppliedBillingRate line : lines == null ? List.<AppliedBillingRate>of() : lines) {
+            content.append("  ").append(line.getName()).append(": ")
+                    .append(line.getAmountValue()).append(' ').append(line.getAmountUnit()).append('\n');
+        }
+        letter.put("content", content.toString());
+        letter.put("invoiceMeta", Map.of(
+                "kid", kid,
+                "billNo", bill.getBillNo(),
+                "amount", Map.of("value", bill.getAmountDueValue(), "unit", bill.getAmountDueUnit()),
+                "dueDate", bill.getPeriodEnd().plusDays(14).toString()));
+        return letter;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> postalOf(Map<String, Object> party) {
+        if (party == null || !(party.get("contactMedium") instanceof List<?> media)) {
+            return Map.of();
+        }
+        for (Object m : media) {
+            if (m instanceof Map<?, ?> medium && "postalAddress".equals(medium.get("mediumType"))
+                    && medium.get("characteristic") instanceof Map<?, ?> c) {
+                return (Map<String, Object>) c;
+            }
+        }
+        return Map.of();
+    }
+
+    private static String toJson(Map<String, Object> map) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalStateException("unserializable distribution payload", e);
+        }
     }
 
     /** The RELAY: drains pending ledger rows per tenant, exponential
@@ -197,20 +331,40 @@ public class BillDistributionService {
             row.setAttempts(row.getAttempts() + 1);
             row.setLastUpdate(OffsetDateTime.now());
             try {
-                restClient.post().uri(tenant.getBillDistributionUrl() + "/invoices")
-                        .header("Authorization", "Bearer " + tenant.getBillDistributionToken())
-                        .header("Content-Type", "application/json")
-                        .body(Map.of(
-                                "billNo", row.getBillNo(),
-                                "format", row.getFormat(),
-                                "channel", row.getChannel(),
-                                "recipient", row.getRecipient(),
-                                "contentType", row.getContentType(),
-                                "payload", row.getPayload()))
-                        .retrieve().toBodilessEntity();
+                // the row's channel picks the wire: consent rails speak their
+                // own JSON; everything else is the partner's envelope
+                if ("efaktura".equals(row.getChannel())) {
+                    restClient.post().uri(einvoiceRailUrl + "/rfp")
+                            .header("Content-Type", "application/json")
+                            .body(row.getPayload()).retrieve().toBodilessEntity();
+                } else if ("mailbox".equals(row.getChannel())) {
+                    restClient.post().uri(mailboxRailUrl + "/letters")
+                            .header("Content-Type", "application/json")
+                            .body(row.getPayload()).retrieve().toBodilessEntity();
+                } else {
+                    restClient.post().uri(tenant.getBillDistributionUrl() + "/invoices")
+                            .header("Authorization", "Bearer " + tenant.getBillDistributionToken())
+                            .header("Content-Type", "application/json")
+                            .body(Map.of(
+                                    "billNo", row.getBillNo(),
+                                    "format", row.getFormat(),
+                                    "channel", row.getChannel(),
+                                    "recipient", row.getRecipient(),
+                                    "contentType", row.getContentType(),
+                                    "payload", row.getPayload()))
+                            .retrieve().toBodilessEntity();
+                }
                 row.setStatus(BillDistribution.SENT);
                 row.setSentAt(OffsetDateTime.now());
                 row.setLastError(null);
+                // the audit answer, on the record: WHICH channel carried it
+                events.publish("BillDistributedEvent", "billDistribution", Map.of(
+                        "billId", row.getBillId(),
+                        "billNo", row.getBillNo(),
+                        "channel", row.getChannel(),
+                        "relatedParty", List.of(Map.of(
+                                "id", row.getRecipient(), "role", "customer"))),
+                        tenant.getId());
                 log.info("bill {} distributed: {} via {} (attempt {})", row.getBillNo(),
                         row.getFormat(), row.getChannel(), row.getAttempts());
             } catch (Exception e) {

@@ -190,22 +190,205 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     await ctx.dispose();
   }
 
-  /* ------------------------- PART B (not built yet) -------------------------
-   * Placeholders for the bill-distribution half of the arc (BillDistributor
-   * in services/billing + eFaktura/AvtaleGiro/Digipost mocks + mock eID
-   * broker). When part B lands, add these legs:
-   *
-   *  - BILL FALLBACK: flip a party's consent flags and prove one bill rides
-   *    eFaktura -> digital mailbox -> print/PDF in that order, and that
-   *    every send records the channel actually used (BillDistributedEvent
-   *    {channel}); a collections notice rides the SAME seam.
-   *  - AVTALEGIRO: mandate file in -> stored payment authorization
-   *    (MandateRegisteredEvent); cycle claim out; OCR settlement in closes
-   *    the bill (SettlementReceivedEvent) next to the PSP flow.
-   *  - PROTECTED BILLING: the protected-address party from leg 3 receives
-   *    their bill WITHOUT a street address on any channel payload.
-   *  - EID STEP-UP: mock eID broker federated in keycloak satisfies the
-   *    verified-identity gate (acr -> step-up claim) end-to-end, so a
-   *    verified-identity offering checks out after broker login.
+  /* ======================= PART B: bill distribution ========================
+   * The consent chain (e-invoice rail -> digital mailbox -> print), the
+   * direct-debit loop (mandate file -> cycle claim -> OCR settlement), and
+   * the protected-address guarantee on the letter payload.
+   * Prereqs: mock-efaktura :8147, mock-digipost :8148, mock-avtalegiro :8149.
+   * (EID STEP-UP is a deployment exercise, not code: the broker is an OIDC
+   * IdP federated into keycloak with acr mapped to the verified-identity
+   * claim product-ordering already accepts — see docs/norway-rails-plan.md.)
    * ------------------------------------------------------------------------ */
+  const ctxB = await request.newContext();
+  const fail2 = (m) => { throw new Error(m); };
+  const HB = { Authorization: 'Bearer ' + staff, 'Content-Type': 'application/json' };
+  const BILLS = `${API}/tmf-api/customerBillManagement/v4`;
+  const EFAK = 'http://localhost:8147';
+  const MAILBOX = 'http://localhost:8148';
+  const AVTALE = 'http://localhost:8149';
+  const DIST = 'http://localhost:8124';
+  const kidOf = (billNo) => billNo.replace(/\D/g, '');
+
+  try {
+    const offerings2 = await (await ctxB.get(
+      `${CATALOG}/productOffering?lifecycleStatus=Active&limit=100`, { headers: HB })).json();
+    const plan = offerings2.find((o) => o.name === 'GenAlpha Mobile 10 GB')
+      || offerings2.find((o) => o.isBundle !== true && (o.productOfferingPrice || []).length > 0);
+    if (!plan) fail2('no billable offering on the shelf');
+
+    // a customer with a login, a party record, consent rows and one order
+    const mkCustomer = async (givenName, familyName, consents, extraMedium) => {
+      const email = `${givenName.toLowerCase()}-${run}@example.com`;
+      const login = await (await ctxB.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
+        { headers: HB, data: { email, givenName, familyName } })).json();
+      await ctxB.post(`${PARTY}/individual`, { headers: HB, data: {
+        id: login.id, givenName, familyName,
+        contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }]
+          .concat(extraMedium || []) } });
+      for (const channel of consents) {
+        const consent = await ctxB.post(`${BILLS}/partyBillingChannel`,
+          { headers: HB, data: { partyId: login.id, channel } });
+        if (consent.status() !== 200) fail2(`consent ${channel}: ` + consent.status());
+      }
+      const order = await ctxB.post(`${ORDERS}/productOrder`, { headers: HB, data: {
+        productOrderItem: [{ id: '1', action: 'add',
+          productOffering: { id: plan.id, name: plan.name } }],
+        relatedParty: [{ id: login.id, role: 'customer' }] } });
+      if (order.status() !== 201) fail2(`${givenName} order: ` + order.status());
+      return login.id;
+    };
+    const billOf = async (partyId) => {
+      for (let i = 0; i < 30; i++) {
+        await ctxB.post(`${BILLS}/billingRun`, { headers: HB });
+        const list = await (await ctxB.get(
+          `${BILLS}/customerBill?relatedPartyId=${partyId}&limit=10`, { headers: HB })).json();
+        if (list.length) return list[0];
+        await sleep(2000);
+      }
+      fail2('no bill was cut for ' + partyId);
+    };
+    const channelOn = async (billId, want) => {
+      for (let i = 0; i < 15; i++) {
+        const bill = await (await ctxB.get(
+          `${BILLS}/customerBill/${billId}`, { headers: HB })).json();
+        if (bill.distributionChannel === want) return bill;
+        await sleep(1000);
+      }
+      fail2(`bill ${billId} never recorded channel '${want}'`);
+    };
+
+    // ---- 6. CONSENT CHAIN: efaktura(paula) -> mailbox(wilma) -> print ------
+    // paula is a seeded e-invoice user: alias lookup HITS -> the RFP rail
+    const paulaId = await mkCustomer('Paula', `Payer${run}`, ['efaktura', 'mailbox']);
+    const paulaBill = await billOf(paulaId);
+    await channelOn(paulaBill.id, 'efaktura');
+    let rfp = null;
+    for (let i = 0; i < 15 && !rfp; i++) {
+      await sleep(1500);
+      const rfps = await (await ctxB.get(`${EFAK}/rfp?kid=${kidOf(paulaBill.billNo)}`)).json();
+      rfp = rfps[0] || null;
+    }
+    if (!rfp) fail2('the request-for-payment never reached the e-invoice rail');
+    if (!rfp.aliasRef || !rfp.aliasRef.startsWith('alias-')) fail2('RFP carries no alias: ' + JSON.stringify(rfp));
+    if (rfp.kid !== kidOf(paulaBill.billNo)) fail2('RFP KID mismatch');
+    console.log('OK CHAIN/EFAKTURA: paula\'s bill rode the e-invoice rail — alias looked up'
+      + ` per send, KID ${rfp.kid} on the RFP, channel recorded on the bill`);
+
+    // wilma consented to BOTH but holds no e-invoice alias: the per-send
+    // lookup MISSES and the same bill falls to the mailbox — the design point
+    const wilmaId = await mkCustomer('Wilma', `Payer${run}`, ['efaktura', 'mailbox']);
+    const wilmaBill = await billOf(wilmaId);
+    await channelOn(wilmaBill.id, 'mailbox');
+    let letter = null;
+    for (let i = 0; i < 15 && !letter; i++) {
+      await sleep(1500);
+      const letters = await (await ctxB.get(`${MAILBOX}/letters?partyRef=${wilmaId}`)).json();
+      letter = letters.find((l) => (l.subject || '').includes(wilmaBill.billNo)) || null;
+    }
+    if (!letter) fail2('the letter never reached the mailbox');
+    if (!letter.invoiceMeta || letter.invoiceMeta.kid !== kidOf(wilmaBill.billNo)) {
+      fail2('the mailbox letter carries no pay-from-mailbox metadata');
+    }
+    console.log('OK CHAIN/MAILBOX: wilma\'s alias lookup missed at send time and the SAME bill'
+      + ' fell to the digital mailbox, invoice metadata attached');
+
+    // no alias, no mailbox consent: the floor is the existing print partner
+    const printyId = await mkCustomer('Printy', `Person${run}`, ['efaktura']);
+    const printyBill = await billOf(printyId);
+    await channelOn(printyBill.id, 'print');
+    let printJob = null;
+    for (let i = 0; i < 15 && !printJob; i++) {
+      await sleep(1500);
+      const jobs = await (await ctxB.get(`${DIST}/invoices?billNo=${printyBill.billNo}`)).json();
+      printJob = jobs.find((j) => j.channel === 'print') || null;
+    }
+    if (!printJob) fail2('the fallback print job never reached the distribution partner');
+    console.log('OK CHAIN/PRINT: no consent anywhere -> the bill fell to the EXISTING print'
+      + ' partner path — the chain\'s floor, unchanged');
+
+    // every send recorded the channel on the delivery ledger too
+    const ledger = await (await ctxB.get(`${BILLS}/billDistribution`, { headers: HB })).json();
+    for (const [no, want] of [[paulaBill.billNo, 'efaktura'],
+      [wilmaBill.billNo, 'mailbox'], [printyBill.billNo, 'print']]) {
+      const row = ledger.find((r) => r.billNo === no);
+      if (!row || row.channel !== want || row.status !== 'sent') {
+        fail2(`ledger row for ${no} should be sent via ${want}: ` + JSON.stringify(row));
+      }
+    }
+    console.log('OK CHANNEL RECORD: all three sends carry their channel on the delivery ledger'
+      + ' (BillDistributedEvent rides bss.billing.events off the same rows)');
+
+    // ---- 7. DIRECT DEBIT: mandate file -> cycle claim -> OCR settles -------
+    const reg = await ctxB.post(`${AVTALE}/mandates`,
+      { data: { partyRef: printyId, accountRef: '12345678903' } });
+    if (reg.status() !== 201) fail2('bank-side mandate signup: ' + reg.status());
+    const mandateFile = await (await ctxB.get(`${AVTALE}/mandateFile`)).json();
+    const ingest = await ctxB.post(`${BILLS}/directDebit/mandateFile`,
+      { headers: HB, data: mandateFile });
+    if (ingest.status() !== 200) fail2('mandate file ingest: ' + ingest.status());
+    const mandates = await (await ctxB.get(
+      `${BILLS}/directDebit/mandate?partyId=${printyId}`, { headers: HB })).json();
+    if (!mandates.length || mandates[0].status !== 'active') {
+      fail2('the mandate is not active on the party profile: ' + JSON.stringify(mandates));
+    }
+    console.log('OK MANDATE: the bank\'s batch file registered the mandate (MandateRegisteredEvent)');
+
+    const claimRun = await (await ctxB.post(`${BILLS}/directDebit/claimRun`, { headers: HB })).json();
+    if (!claimRun.claims || claimRun.claims < 1) fail2('the cycle run claimed nothing: ' + JSON.stringify(claimRun));
+    const railClaims = await (await ctxB.get(`${AVTALE}/claims?kid=${kidOf(printyBill.billNo)}`)).json();
+    if (!railClaims.length) fail2('the claim never reached the direct-debit rail');
+    console.log(`OK CLAIM: the open bill became a claim on the rail (KID ${kidOf(printyBill.billNo)})`);
+
+    const settlementRes = await ctxB.get(`${AVTALE}/settlementFile`);
+    if (settlementRes.status() !== 200) fail2('no settlement file was produced: ' + settlementRes.status());
+    const settlement = await settlementRes.text();
+    const applied = await ctxB.post(`${BILLS}/directDebit/settlementFile`,
+      { headers: { ...HB, 'Content-Type': 'text/plain' }, data: settlement });
+    if (applied.status() !== 200) fail2('settlement ingest: ' + applied.status());
+    const settledBill = await (await ctxB.get(
+      `${BILLS}/customerBill/${printyBill.id}`, { headers: HB })).json();
+    if (settledBill.state !== 'settled') fail2('the OCR settlement did not close the bill: ' + settledBill.state);
+    const ourClaims = await (await ctxB.get(`${BILLS}/directDebit/claim`, { headers: HB })).json();
+    const ourClaim = ourClaims.find((c) => c.billNo === printyBill.billNo);
+    if (!ourClaim || ourClaim.status !== 'settled') fail2('the claim never flipped to settled');
+    console.log('OK SETTLEMENT: the OCR file came home through the remittance door and SETTLED'
+      + ' the bill (SettlementReceivedEvent) — a new settlement source next to the PSP flow');
+
+    // ---- 8. PROTECTED BILLING: the letter carries no street, ever ----------
+    const shielded = await (await ctxB.post(`${PARTY}/individual`, { headers: HB, data: {
+      givenName: 'Skjermet', familyName: `Faktura${run}`,
+      contactMedium: [
+        { mediumType: 'postalAddress', characteristic:
+          { street1: 'Hemmeligveien 13', postCode: '0567', city: 'Oslo', country: 'NO' } },
+      ] } })).json();
+    const shieldLink = await ctxB.post(`${PARTY}/individual/${shielded.id}/registryLink`,
+      { headers: HB, data: { personRef: PROTECTED_REF } });
+    if (shieldLink.status() !== 200) fail2('protected registryLink: ' + shieldLink.status());
+    await ctxB.post(`${BILLS}/partyBillingChannel`,
+      { headers: HB, data: { partyId: shielded.id, channel: 'mailbox' } });
+    const shieldOrder = await ctxB.post(`${ORDERS}/productOrder`, { headers: HB, data: {
+      productOrderItem: [{ id: '1', action: 'add',
+        productOffering: { id: plan.id, name: plan.name } }],
+      relatedParty: [{ id: shielded.id, role: 'customer' }] } });
+    if (shieldOrder.status() !== 201) fail2('protected order: ' + shieldOrder.status());
+    const shieldBill = await billOf(shielded.id);
+    await channelOn(shieldBill.id, 'mailbox');
+    let shieldLetter = null;
+    for (let i = 0; i < 15 && !shieldLetter; i++) {
+      await sleep(1500);
+      const letters = await (await ctxB.get(`${MAILBOX}/letters?partyRef=${shielded.id}`)).json();
+      shieldLetter = letters.find((l) => (l.subject || '').includes(shieldBill.billNo)) || null;
+    }
+    if (!shieldLetter) fail2('the protected party\'s letter never arrived');
+    const letterText = JSON.stringify(shieldLetter);
+    if (letterText.includes('Hemmeligveien')) fail2('STREET LEAKED into the protected letter payload');
+    if (/street1|street2|streetName/i.test(letterText)) fail2('a street field leaked into the letter');
+    if (!shieldLetter.content.includes('0567')) fail2('postCode should survive for routing');
+    console.log('OK PROTECTED BILLING: the protected party\'s letter carries NO street on the'
+      + ' wire — postCode/city survive, the masked party API is the only source');
+
+    console.log('\nALL PART-B LEGS GREEN');
+  } finally {
+    await ctxB.dispose();
+  }
 })().catch((e) => { console.error('FAIL: ' + e.message); process.exit(1); });

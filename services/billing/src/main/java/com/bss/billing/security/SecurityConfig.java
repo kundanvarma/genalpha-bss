@@ -56,12 +56,25 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/billFormatProfile/**").hasAuthority("billing:admin")
                         // unapplied cash is back-office AR (reading the worklist
                         // AND resolving a row to its bill)
+                        // collections back-office: holds, write-off, the sweep
+                        // trigger and the policy (the statutory floor's editor)
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/collectionCase/*/hold",
+                                ApiConstants.BASE_PATH + "/collectionCase/*/release",
+                                ApiConstants.BASE_PATH + "/collectionCase/*/writeOff",
+                                ApiConstants.BASE_PATH + "/collectionSweep").hasAuthority("billing:admin")
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/dunningPolicy/**",
+                                ApiConstants.BASE_PATH + "/dunningPolicy").hasAuthority("billing:admin")
+                        .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/dunningPolicy/**").hasAuthority("billing:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/migrationRehearsal/**").hasAuthority("billing:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/portfolioDiff/**").hasAuthority("billing:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/chaosReport/**").hasAuthority("billing:admin")
                         .requestMatchers(ApiConstants.BASE_PATH + "/shadowDrift/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/remittance/**").hasAuthority("billing:admin")
+                        // channel consent + the direct-debit file doors are back-office
+                        .requestMatchers(ApiConstants.BASE_PATH + "/partyBillingChannel/**",
+                                ApiConstants.BASE_PATH + "/partyBillingChannel",
+                                ApiConstants.BASE_PATH + "/directDebit/**").hasAuthority("billing:admin")
                         // the delivery ledger is back-office: seeing and retrying sends
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution/**").hasAuthority("billing:admin")
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/billDistribution").hasAuthority("billing:admin")

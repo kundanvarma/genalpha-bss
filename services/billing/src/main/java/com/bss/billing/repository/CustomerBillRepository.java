@@ -14,6 +14,12 @@ public interface CustomerBillRepository extends JpaRepository<CustomerBill, Stri
 
     Optional<CustomerBill> findByIdAndTenantId(String id, String tenantId);
 
+    java.util.List<CustomerBill> findByTenantIdAndStateIn(String tenantId,
+            java.util.Collection<String> states);
+
+    java.util.List<CustomerBill> findByTenantIdAndOwnerPartyIdAndState(String tenantId,
+            String ownerPartyId, String state);
+
     boolean existsByTenantIdAndOwnerPartyIdAndPeriodStart(String tenantId, String ownerPartyId,
             LocalDate periodStart);
 

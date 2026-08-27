@@ -54,6 +54,7 @@ public class BillingRunService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final BillingRunRecordRepository runs;
+    private final com.bss.billing.repository.CollectionCaseRepository collectionCases;
     private final com.bss.billing.tick.TickGuard tickGuard;
     private final org.springframework.transaction.support.TransactionTemplate newTx;
     private final long accountDelayMs;
@@ -71,6 +72,7 @@ public class BillingRunService {
             TenantScope tenantScope,
             BillDistributionService distribution,
             BillingRunRecordRepository runs,
+            com.bss.billing.repository.CollectionCaseRepository collectionCases,
             com.bss.billing.tick.TickGuard tickGuard,
             java.util.function.Function<String, String> loyaltyTierClient,
             org.springframework.transaction.PlatformTransactionManager transactionManager,
@@ -94,6 +96,7 @@ public class BillingRunService {
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.runs = runs;
+        this.collectionCases = collectionCases;
         this.tickGuard = tickGuard;
         // each account commits ON ITS OWN: a failure loses one bill, not
         // the run — and a crash leaves every finished bill standing
@@ -280,6 +283,14 @@ public class BillingRunService {
         }
         final Map<String, List<Map<String, Object>>> preRated = preRatedTmp;
 
+        // STATUTORY: no subscription charges while suspended for nonpayment —
+        // one cheap query up front, checked per account inside the workers
+        final java.util.Set<String> nonpaymentSuspended = new java.util.HashSet<>();
+        for (com.bss.billing.entity.CollectionCase c : collectionCases.findByTenantIdAndState(
+                tenantId, com.bss.billing.entity.CollectionCase.SUSPENDED)) {
+            nonpaymentSuspended.add(c.getAccountId());
+        }
+
         // the run's face: a crashed predecessor's RUNNING row becomes
         // superseded evidence; this run gets its own row, committed NOW so
         // even a crash one account in leaves a trace
@@ -323,7 +334,7 @@ public class BillingRunService {
                     Outcome outcome = newTx.execute(tx -> billAccount(tenantId, today,
                             defaultStart, defaultEnd, owner, orgAccounts, membersOf,
                             primaryAccountOf, personalExcess, companyShareOf,
-                            priceCache, unitCache, preRated));
+                            priceCache, unitCache, preRated, nonpaymentSuspended));
                     if (outcome == Outcome.CREATED) {
                         created.incrementAndGet();
                     } else if (outcome == Outcome.SKIPPED) {
@@ -421,7 +432,8 @@ public class BillingRunService {
             Map<String, BigDecimal> companyShareOf,
             Map<String, BigDecimal> priceCache,
             Map<String, String> unitCache,
-            Map<String, List<Map<String, Object>>> preRated) {
+            Map<String, List<Map<String, Object>>> preRated,
+            java.util.Set<String> nonpaymentSuspended) {
             // PAYDAY ALIGNMENT: the account holder's anchor day (1-28) makes
             // their own period; the clamp below NEVER re-bills a covered day,
             // so an anchor change simply takes effect from the next cycle —
@@ -455,7 +467,12 @@ public class BillingRunService {
             BigDecimal total = BigDecimal.ZERO;
             String unit = "EUR";
             Map<String, BigDecimal> monthlyByOffering = new HashMap<>();
-            for (Map<String, Object> product : owner.getValue()) {
+            // STATUTORY: an account suspended for nonpayment accrues NO
+            // recurring charges — the empty product list also keeps the
+            // pricing-rule adjustments off. Fees and usage still land.
+            List<Map<String, Object>> billableProducts = nonpaymentSuspended.contains(owner.getKey())
+                    ? List.of() : owner.getValue();
+            for (Map<String, Object> product : billableProducts) {
                 Object offeringRef = product.get("productOffering");
                 if (!(offeringRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
                     continue;
@@ -661,7 +678,17 @@ public class BillingRunService {
                     total = total.add(amount);
                 }
             }
-            if (billRates.isEmpty()) {
+            // Standalone unbilled lines (collections' reconnection fee) ride
+            // the next bill: already persisted, they only gain a bill id.
+            List<AppliedBillingRate> pendingStandalone =
+                    rates.findByTenantIdAndOwnerPartyIdAndBillIdIsNull(tenantId, owner.getKey());
+            for (AppliedBillingRate pending : pendingStandalone) {
+                total = total.add(pending.getAmountValue());
+                if (pending.getAmountUnit() != null) {
+                    unit = pending.getAmountUnit();
+                }
+            }
+            if (billRates.isEmpty() && pendingStandalone.isEmpty()) {
                 return Outcome.EMPTY;
             }
             java.util.Set<String> units = billRates.stream()
@@ -691,11 +718,17 @@ public class BillingRunService {
             bills.save(bill);
             billRates.forEach(r -> r.setBillId(id));
             rates.saveAll(billRates);
+            pendingStandalone.forEach(r -> r.setBillId(id));
+            rates.saveAll(pendingStandalone);
+            billRates.addAll(pendingStandalone); // the sent invoice names them too
             // the finished bill leaves for the tenant's distribution partner
             // (Peppol/EHF e-invoice or print house) — fail-open, never
             // blocking; the CUSTOMER's preference picks the channel
             distribution.distribute(tenantId, bill, billRates,
                     orgs.billDeliveryOf(owner.getKey()).orElse(null));
+            // distribute() stamps the delivery channel on the bill — persist
+            // it; the entity may be detached by the save above
+            bills.save(bill);
             events.publish("CustomerBillCreateEvent", "customerBill", Map.of(
                     "id", id,
                     "billNo", bill.getBillNo(),

@@ -16,6 +16,7 @@ public class CustomerBill {
     public static final String NEW = "new";
     public static final String SETTLED = "settled";
     public static final String PARTIALLY_PAID = "partiallyPaid";
+    public static final String WRITTEN_OFF = "writtenOff";
 
     @Id
     @Column(name = "id", nullable = false, updatable = false, length = 36)
@@ -55,6 +56,11 @@ public class CustomerBill {
 
     @Column(name = "payment")
     private String paymentJson;
+
+    /** The channel this bill actually left on (efaktura | mailbox | print |
+     * einvoice | digital) — recorded when the send is resolved. */
+    @Column(name = "distribution_channel")
+    private String distributionChannel;
 
     @Column(name = "bill_date")
     private OffsetDateTime billDate;
@@ -154,6 +160,14 @@ public class CustomerBill {
 
     public void setPaymentJson(String paymentJson) {
         this.paymentJson = paymentJson;
+    }
+
+    public String getDistributionChannel() {
+        return distributionChannel;
+    }
+
+    public void setDistributionChannel(String distributionChannel) {
+        this.distributionChannel = distributionChannel;
     }
 
     public OffsetDateTime getBillDate() {

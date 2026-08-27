@@ -13,4 +13,8 @@ public interface AppliedBillingRateRepository extends JpaRepository<AppliedBilli
     List<AppliedBillingRate> findByTenantId(String tenantId);
 
     Optional<AppliedBillingRate> findByIdAndTenantId(String id, String tenantId);
+
+    /** Standalone unbilled lines (reconnection fees etc.) awaiting a bill. */
+    List<AppliedBillingRate> findByTenantIdAndOwnerPartyIdAndBillIdIsNull(
+            String tenantId, String ownerPartyId);
 }
