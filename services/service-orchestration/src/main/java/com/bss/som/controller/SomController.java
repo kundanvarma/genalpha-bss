@@ -277,6 +277,85 @@ public class SomController {
     }
 
     /**
+     * RESTRICT — the enforcement primitive under a nonpayment case, lighter
+     * than suspend: the line stays up but carries a barring profile (outgoing
+     * barred / data throttled). Emergency numbers are ALWAYS whitelisted —
+     * the profile cannot switch that off. Back-office/machine only
+     * (service:write); customers never bar their own line this way.
+     */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/restrict")
+    public ResponseEntity<Map<String, Object>> restrict(
+            @org.springframework.web.bind.annotation.PathVariable String id,
+            @RequestBody(required = false) Map<String, Object> body) {
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+        if (!ServiceInstance.ACTIVE.equals(instance.getState())) {
+            throw new com.bss.som.exception.BadRequestException(
+                    "only an active service can be restricted (state: " + instance.getState() + ")");
+        }
+        Map<String, Object> dto = body == null ? Map.of() : body;
+        String reason = String.valueOf(dto.getOrDefault("reason", "nonpayment"));
+        Map<String, Object> profile = new LinkedHashMap<>();
+        if (dto.get("profile") instanceof Map<?, ?> p) {
+            p.forEach((k, v) -> profile.put(String.valueOf(k), v));
+        }
+        profile.putIfAbsent("outgoingBarred", true);
+        profile.putIfAbsent("dataThrottled", true);
+        profile.put("emergencyWhitelist", true); // statutory — not a knob
+        instance.setRestrictedAt(java.time.OffsetDateTime.now());
+        instance.setRestrictionReason(reason);
+        try {
+            instance.setRestrictionProfileJson(new ObjectMapper().writeValueAsString(profile));
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new com.bss.som.exception.BadRequestException("unserializable restriction profile");
+        }
+        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        services.save(instance);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("id", instance.getId());
+        event.put("name", instance.getName());
+        event.put("state", instance.getState());
+        event.put("reason", reason);
+        event.put("restrictionProfile", profile);
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceRestrictedEvent", "service", event);
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("@type", "ServiceRestriction");
+        return ResponseEntity.ok(response);
+    }
+
+    /** Lift the barring profile (the cure path, or an operator's hand). */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/unrestrict")
+    public ResponseEntity<Map<String, Object>> unrestrict(
+            @org.springframework.web.bind.annotation.PathVariable String id) {
+        String tenant = tenantScope.currentTenantId();
+        ServiceInstance instance = services.findByIdAndTenantId(id, tenant)
+                .orElseThrow(() -> com.bss.som.exception.NotFoundException.forResource("Service", id));
+        if (instance.getRestrictedAt() == null) {
+            throw new com.bss.som.exception.BadRequestException("this service is not restricted");
+        }
+        instance.setRestrictedAt(null);
+        instance.setRestrictionReason(null);
+        instance.setRestrictionProfileJson(null);
+        instance.setLastUpdate(java.time.OffsetDateTime.now());
+        services.save(instance);
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("id", instance.getId());
+        event.put("name", instance.getName());
+        event.put("state", instance.getState());
+        if (instance.getOwnerPartyId() != null) {
+            event.put("relatedParty", List.of(Map.of("id", instance.getOwnerPartyId(), "role", "customer")));
+        }
+        events.publish("ServiceUnrestrictedEvent", "service", event);
+        Map<String, Object> response = new LinkedHashMap<>(event);
+        response.put("@type", "ServiceRestriction");
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * TRANSFER: the subscription changes hands — the B2B classic (an
      * employee leaves, the company gives the number to the next one) and
      * the B2C give-away. The line, its number, its SIM and its usage stay
@@ -836,6 +915,25 @@ public class SomController {
         map.put("category", category);
         map.put("startDate", s.getCreatedAt().toString());
         map.put("serviceOrderId", s.getServiceOrderId());
+        // WHY a line is paused matters (vacation vs nonpayment) — say it
+        if (s.getSuspendReason() != null) {
+            map.put("suspendReason", s.getSuspendReason());
+        }
+        if (s.getResumeAt() != null) {
+            map.put("resumeAt", s.getResumeAt().toString());
+        }
+        if (s.getRestrictedAt() != null) {
+            Map<String, Object> restriction = new LinkedHashMap<>();
+            restriction.put("reason", s.getRestrictionReason());
+            restriction.put("since", s.getRestrictedAt().toString());
+            try {
+                restriction.put("profile", new ObjectMapper()
+                        .readValue(s.getRestrictionProfileJson(), Map.class));
+            } catch (Exception e) {
+                restriction.put("profile", Map.of());
+            }
+            map.put("restriction", restriction);
+        }
         // TMF638 (v3 kit) demands every array non-empty with typed entries.
         // Doctrine: fill them with DERIVED-REAL facts; where the fleet truly
         // has no relationship, the entry SAYS so (an explicit standalone

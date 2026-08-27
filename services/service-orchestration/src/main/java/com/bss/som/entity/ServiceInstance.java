@@ -46,6 +46,17 @@ public class ServiceInstance {
     @Column(name = "suspend_reason", length = 32)
     private String suspendReason;
 
+    /** Set while a barring profile is on (null = unrestricted). */
+    @Column(name = "restricted_at")
+    private OffsetDateTime restrictedAt;
+
+    @Column(name = "restriction_reason", length = 32)
+    private String restrictionReason;
+
+    /** JSON: {outgoingBarred, dataThrottled, emergencyWhitelist}. */
+    @Column(name = "restriction_profile", length = 512)
+    private String restrictionProfileJson;
+
     @Column(name = "service_order_id", nullable = false, length = 36)
     private String serviceOrderId;
 
@@ -81,4 +92,10 @@ public class ServiceInstance {
     public void setResumeAt(java.time.OffsetDateTime v) { this.resumeAt = v; }
     public String getSuspendReason() { return suspendReason; }
     public void setSuspendReason(String v) { this.suspendReason = v; }
+    public OffsetDateTime getRestrictedAt() { return restrictedAt; }
+    public void setRestrictedAt(OffsetDateTime v) { this.restrictedAt = v; }
+    public String getRestrictionReason() { return restrictionReason; }
+    public void setRestrictionReason(String v) { this.restrictionReason = v; }
+    public String getRestrictionProfileJson() { return restrictionProfileJson; }
+    public void setRestrictionProfileJson(String v) { this.restrictionProfileJson = v; }
 }

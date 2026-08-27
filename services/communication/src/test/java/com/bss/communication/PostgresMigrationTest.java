@@ -38,7 +38,7 @@ class PostgresMigrationTest {
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
         // Grows as migrations are added — assert the floor, not a brittle count.
-        assertThat(applied).isGreaterThanOrEqualTo(11);
+        assertThat(applied).isGreaterThanOrEqualTo(12);
 
         assertThat(repository.count()).isZero();
     }

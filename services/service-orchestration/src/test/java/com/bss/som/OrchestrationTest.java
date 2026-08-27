@@ -86,8 +86,9 @@ class OrchestrationTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].state").value("active"))
                 // TMF685: each activation drew a unique number from the pool
-                .andExpect(jsonPath("$[0].supportingResource[0].value").value("+46701000001"))
-                .andExpect(jsonPath("$[1].supportingResource[0].value").value("+46701000002"));
+                // (the list sorts newest-first, so assert the SET, not slots)
+                .andExpect(jsonPath("$[*].supportingResource[0].value").value(
+                        org.hamcrest.Matchers.containsInAnyOrder("+46701000001", "+46701000002")));
 
         // reads require the authority
         mockMvc.perform(get("/tmf-api/serviceOrdering/v4/serviceOrder"))

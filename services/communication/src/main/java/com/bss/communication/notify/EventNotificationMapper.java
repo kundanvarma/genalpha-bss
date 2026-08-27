@@ -100,6 +100,73 @@ public class EventNotificationMapper {
                                     + plan.getOrDefault("billNo", "") + ". Next payment of "
                                     + plan.getOrDefault("nextAmount", "?") + " due "
                                     + String.valueOf(plan.getOrDefault("nextDueAt", "")).substring(0, 10) + "."))));
+            // collections: every legally required word, at the right rung.
+            // restrict/suspend rungs speak through their dedicated events.
+            case "DunningStepReachedEvent" -> resource(event, "collectionCase").map(c -> {
+                Map<String, Object> step = c.get("step") instanceof Map<?, ?> s
+                        ? castMap(s) : Map.<String, Object>of();
+                return switch (String.valueOf(step.get("action"))) {
+                    case "remind" -> one(customer(c).map(party -> new Notification(party,
+                            "Payment reminder",
+                            "Your account has an overdue balance of " + money(c.get("overdueBalance"))
+                            + ". Please pay bill " + c.getOrDefault("billNo", "") + "."
+                            + (step.get("feeCharged") != null
+                                ? " A statutory reminder fee of " + step.get("feeCharged")
+                                    + " was added to it." : ""))));
+                    case "warn" -> one(customer(c).map(party -> new Notification(party,
+                            "Payment demand — action required",
+                            "Despite our reminder, " + money(c.get("overdueBalance"))
+                            + " remains unpaid (bill " + c.getOrDefault("billNo", "") + ")."
+                            + " Unless it is settled, outgoing services can be restricted or"
+                            + " suspended at the earliest on "
+                            + String.valueOf(step.getOrDefault("enforceableAt", "")).substring(0,
+                                    Math.min(10, String.valueOf(step.getOrDefault("enforceableAt", "")).length()))
+                            + ". Emergency numbers always stay reachable. If paying is hard right"
+                            + " now, ask us about a payment plan — there is always a way.")));
+                    case "terminate" -> one(customer(c).map(party -> new Notification(party,
+                            "Your subscription has been terminated",
+                            "After repeated demands the unpaid balance of "
+                            + money(c.get("overdueBalance")) + " led to termination."
+                            + " Contact us to settle and start again.")));
+                    default -> List.<Notification>of();
+                };
+            }).orElse(List.of());
+            case "ServiceRestrictedForNonPaymentEvent" -> one(resource(event, "collectionCase").flatMap(c ->
+                    customer(c).map(party -> new Notification(party,
+                            "Outgoing services restricted",
+                            "As warned, outgoing calls are barred and data is reduced on your"
+                            + " line. Emergency numbers still work. Pay "
+                            + money(c.get("overdueBalance")) + " to lift the restriction."))));
+            case "ServiceSuspendedForNonPaymentEvent" -> one(resource(event, "collectionCase").flatMap(c ->
+                    customer(c).map(party -> new Notification(party,
+                            "Your line is suspended",
+                            "Your line is suspended for nonpayment. No subscription charges"
+                            + " accrue while it is suspended. Pay " + money(c.get("overdueBalance"))
+                            + " to reconnect — a reconnection fee may apply."))));
+            case "CollectionCuredEvent" -> one(resource(event, "collectionCase").flatMap(c ->
+                    customer(c).map(party -> new Notification(party,
+                            "Thank you — your services are restored",
+                            "Your payment arrived and your services are back in full."
+                            + " Welcome back."))));
+            case "PromiseToPayCreatedEvent" -> one(resource(event, "promiseToPay").flatMap(p ->
+                    customer(p).map(party -> new Notification(party,
+                            "Your payment promise is registered",
+                            "We registered your promise to pay " + p.getOrDefault("amount", "?")
+                            + " " + p.getOrDefault("currency", "") + " by "
+                            + String.valueOf(p.getOrDefault("dueAt", "")).substring(0,
+                                    Math.min(10, String.valueOf(p.getOrDefault("dueAt", "")).length()))
+                            + ". Collection is paused until then."))));
+            case "PromiseToPayKeptEvent" -> one(resource(event, "promiseToPay").flatMap(p ->
+                    customer(p).map(party -> new Notification(party,
+                            "Promise kept — thank you",
+                            "You paid as promised and your account is back in order."))));
+            case "PromiseToPayBrokenEvent" -> one(resource(event, "promiseToPay").flatMap(p ->
+                    customer(p).map(party -> new Notification(party,
+                            "Missed payment promise",
+                            "The payment of " + p.getOrDefault("amount", "?") + " "
+                            + p.getOrDefault("currency", "") + " you promised did not arrive."
+                            + " Collection continues — pay now or contact us if something"
+                            + " changed."))));
             case "BillingCycleChangedEvent" -> one(resource(event, "billingCycle").flatMap(bc ->
                     customer(bc).map(party -> new Notification(party,
                             "Your billing date changed",
@@ -359,6 +426,11 @@ public class EventNotificationMapper {
     private String nameIn(Map<String, Object> resource, String key) {
         return resource.get(key) instanceof Map<?, ?> m && m.get("name") != null
                 ? String.valueOf(m.get("name")) : "a family member";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> castMap(Map<?, ?> m) {
+        return (Map<String, Object>) m;
     }
 
     @SuppressWarnings("unchecked")
