@@ -88,6 +88,11 @@ beside it.</p>
 39. <a href="#wholesaleconsole">The fixed wholesale console — the owner's authoring desk</a><br>
 40. <a href="#mobilewholesale">Mobile wholesale / MVNE — usage-metered settlement</a><br>
 41. <a href="#extendproviders">Extending the provider seams — bind, wire, or build</a><br>
+42. <a href="#collections">Collections — the statutory ladder</a><br>
+43. <a href="#devicecommerce">Device commerce — financing, trade-in, withdrawal</a><br>
+44. <a href="#basemigration">Base migration — moving the installed base</a><br>
+45. <a href="#usagepolicy">Usage policy — pools, caps &amp; the roaming wall</a><br>
+46. <a href="#norwayrails">Norway rails — registry, directory, credit, bill channels</a><br>
 </p>
 </div>
 
@@ -276,7 +281,9 @@ Retry on failures. <b>Remittance</b>: the bank posts camt.054, Nets OCR or BAI2 
 the bill through the card path's own guarantee; everything unclear parks on <b>Unapplied cash</b>
 (console tab) with its reason. Money is fail-closed: never guessed, never dropped.</p>
 <h3>Dunning (console → Dunning)</h3>
-<p>The collections worklist: overdue installments, broken plans, what is still owed.</p>
+<p>The collections worklist: overdue installments, broken plans, what is still owed. The full
+<b>statutory collections ladder</b> — case state machine, country statutory pack, holds, cure,
+the Collections desk — is chapter <a href="#collections">42</a>.</p>
 
 <h2 id="partners">6 · Partner channels — suites #48/#51</h2>
 <div class="rule"><b>Being a dealer is a row.</b> Sign a chain:
@@ -419,6 +426,9 @@ the placeholders in <code>tenants.yml</code>.</p>
 <tr><td>minio</td><td>9000</td><td>S3-protocol object store (AWS/R2/on-prem)</td><td>—</td></tr>
 <tr><td>azurite</td><td>10000</td><td>Azure Blob Storage (Microsoft's emulator)</td><td>—</td></tr>
 <tr><td>mock-llm</td><td>8127</td><td>OpenAI- and Anthropic-dialect LLM</td><td>names the model in answers; <code>GET /requests</code></td></tr>
+<tr><td>mock-efaktura</td><td>8147</td><td>e-invoice rail (consumer alias lookup + request-for-payment)</td><td><code>POST /alias/lookup · /users</code>, <code>GET /rfp</code>; ch. 46</td></tr>
+<tr><td>mock-digipost</td><td>8148</td><td>digital mailbox (letters addressed by national id)</td><td><code>GET /letters</code>, <code>POST /recipients</code>; ch. 46</td></tr>
+<tr><td>mock-avtalegiro</td><td>8149</td><td>direct-debit rail (mandates, claims, OCR settlement)</td><td><code>GET /mandateFile · /claims · /settlementFile</code>; ch. 46</td></tr>
 </table>
 
 <h2 id="prodops">13 · Production operations — suites #56/#57</h2>
@@ -1359,6 +1369,201 @@ fork-private adapters (<code>"acme-dhl"</code>). (2) Suites #90/#91/#94/#101 bin
 providers — re-run <code>ops/seed/seed_carriers_psp.py</code> after (ch. 34's gotcha, it will bite
 here too). (3) The console Test button probes <code>baseUrl/health</code> — give your mock a
 <code>/health</code> or the card shows red while bookings work.</p>
+
+<h2 id="collections">42 · Collections — the statutory ladder</h2>
+<p><b>What</b>: the path from a missed payment to a restricted, suspended, or cured customer —
+shaped by national debt-collection and telecom law, not by a retry loop. Lives in billing
+(the case + policy + money) and service-orchestration (the enforcement primitives). Suite
+<a href="../../ops/e2e/collections_test.js">collections_test.js</a>.
+<b>The case</b>: one <code>collectionCase</code> per financial account (it aggregates ALL overdue
+bills — rung actions fire once per account, never once per invoice), state machine
+<code>CURRENT → REMINDED → WARNED → RESTRICTED → SUSPENDED</code> with orthogonal holds —
+<code>PROMISE_TO_PAY</code> (pauses the ladder; a broken promise resumes it),
+<code>DISPUTE_HOLD</code> (freezes only the disputed amount — the rest still ages),
+<code>HARDSHIP_HOLD</code> (manual) — and <code>CURED</code> reachable from any state the moment
+the actionable balance drops under threshold.
+<b>The policy and its floor</b>: <code>dunningPolicy</code> per tenant (ordered steps: offset
+days, template, enforcement, fee), sitting on a <b>country statutory pack it cannot undercut</b> —
+the Norway pack pins the 14-day reminder-fee gate, the kr 38 fee cap, at most two fee-bearing
+reminders, the one-month enforcement-notice clock and the 250 minimum actionable floor. A policy
+below the floor is refused with 400 at write time; the console renders the floor read-only —
+the law's numbers are never form fields.
+<b>Enforcement</b>: <code>RESTRICTED</code> rides a new SOM primitive
+(<code>POST …/service/{id}/restrict</code>) — a barring profile lighter than suspend: outgoing
+barred, data throttled, the line stays active and <b>emergency calls stay reachable</b> (the
+whitelist is part of the profile, asserted by the suite). <code>SUSPENDED</code> is the existing
+suspend with reason <code>nonpayment</code>, and <b>billing skips MRC accrual for the
+duration</b> — the statutory rule that no subscription charges bill through a nonpayment block.
+Cure auto-resumes within the sweep and posts a reconnection fee (tenant config, contractual —
+zeroable). Fees post as rate lines through the existing AR machinery, gated by the pack.
+<b>API</b> (billing base path, <code>billing:admin</code> writes):
+<code>GET /collectionCase[/{id}]</code>, <code>POST …/{id}/promiseToPay · /hold · /release ·
+/writeOff</code>, <code>POST /collectionSweep</code> (the tick, TickGuard-locked),
+<code>GET/POST/PATCH /dunningPolicy</code>.
+<b>Faces</b>: the CSR console's <b>Collections</b> desk (case worklist by state, holds,
+promise entry, write-off, the policy list with its statutory block worded read-only) and the
+storefront Bills page — an outstanding banner with pay-now and the customer's own
+promise-to-pay. Every rung speaks to the customer through the notification templates; where the
+bill-distribution seam is bound (ch. 46) the legally required letters ride it, channel recorded.
+<b>Honest edges</b>: late-interest accrual is not booked (rarely charged consumer-side; a named
+follow-up) and the hand-off to an external collections agency is a deliberate gap — the case
+history is the file you would send.</p>
+
+<h2 id="devicecommerce">43 · Device commerce — financing, trade-in, withdrawal</h2>
+<p><b>What</b>: the device lifecycle as first-class BSS state — a new service (:8145,
+<code>/tmf-api/deviceCommerce/v1</code>; TMF-styled, since no TMF device-financing API exists).
+Suite <a href="../../ops/e2e/device_commerce_test.js">device_commerce_test.js</a>.
+<b>The agreement</b>: <code>deviceAgreement</code> = party + subscription + device (IMEI) +
+terms (principal, term, monthly, upgrade-eligibility rule, residual value) under a
+<b>financing model</b> — and the model is the port, not the product:
+<code>OPERATOR_BOOK</code> (internal driver — the operator carries the receivable, billing's
+instalment machinery underneath), <code>THIRD_PARTY_LOAN</code> (mock-bank driver — the
+financier owns title and receivable, pays out upfront; an upgrade fetches
+<code>GET …/earlySettlementQuote</code> and settles it) and <code>BNPL</code> (originates
+through the payment rail's BNPL adapter — origination is verified against the payment session,
+settlement delegates to the provider; never an operator write-off). <b>Total cost of ownership
+is a required, displayed field</b> on every offer face — monthly × term never hides the total.
+<b>Trade-in</b>: <code>tradeInValuation</code> (IMEI + condition answers → instant estimate from
+the tenant-editable <code>tradeInResidual</code> table) walks
+<code>quoted → accepted → in-transit → graded → settled</code>; a grading delta is money the
+customer must accept — a downward revision <b>waits for their yes</b> before settling, an upward
+one refunds through the PSP path. A blacklisted IMEI quotes exactly zero: lost/stolen raises a
+<code>deviceFlag</code> and pushes the IMEI through the blacklist adapter seam (mock driver
+now; a real EIR/registry feed is deployment config, not code).
+<b>Upgrade/swap</b>: eligibility on the agreement (<code>GET …/upgradeEligibility</code>) →
+trade-in quote → model-specific settlement (operator-book writes off the remainder against the
+graded value; loan/BNPL pays the early-settlement quote) → <code>POST …/{id}/swap</code>, idempotent.
+<b>Withdrawal</b>: <code>withdrawalCase</code> — the statutory 14-day clock starts at the
+<b>parcel-delivery event</b> (the same event that activates a physical SIM), the refund includes
+standard shipping, and the subsidy postings reverse.
+<b>The books (revenue)</b>: the IFRS 15 subsidy subledger, event-driven like every other
+posting family — operator-book activation books the subsidy as a <b>contract asset</b>
+(DR 1250 / CR 4030), unwound monthly; an ETF recovers the unearned subsidy against the
+remaining asset; a swap writes off against trade-in inventory; financed programs book full
+recognition at payout plus a residual-value-guarantee accrual. All idempotent per source ref.
+<b>Faces</b>: shop checkout carries the trade-in widget (IMEI + condition → live cart credit)
+and the financing chooser with per-model monthly/total; the storefront <b>My Devices</b> page
+shows each agreement's financing label, paid-share bar and upgrade date; the CSR console's
+<b>Device desk</b> (<code>device:read</code>) is the agreement worklist + the residual table.
+<b>Honest edges</b>: the monthly instalment tick driven by the billing run is a named follow-up
+(<code>POST …/recordInstallment</code> records the movement today; the per-cycle billing hook
+lands next), and open-banking affordability signals are a shaped, unbuilt port.</p>
+
+<h2 id="basemigration">44 · Base migration — moving the installed base</h2>
+<p><b>What</b>: the engine that sunsets a legacy plan, reprices a cohort, or migrates an
+age-banded/promo plan — a new service (:8146, <code>/tmf-api/baseMigration/v1</code>) that turns
+the price simulator into the front half of an execute-something pipeline. Suite
+<a href="../../ops/e2e/base_migration_test.js">base_migration_test.js</a>.
+<b>The plan</b>: <code>migrationPlan</code> = matrix rows
+<code>{sourceOfferingId → targetOfferingId, deltaClass: beneficial|neutral|detrimental}</code> +
+eligibility filters (in-binding treatment: defer-to-expiry / exclude / migrate-with-free-exit) +
+a jurisdiction pack (noticeDays = 30 for the EEA, exit-right applicability by delta class).
+States <code>draft → simulated → armed → running → done|paused</code>. <b>The rehearsal gate is
+hard</b>: <code>POST …/{id}/arm</code> without <code>POST …/{id}/attachSimulation</code> (a real
+price-simulation run) answers 409 — simulate-first is server-enforced, and the console desk
+mirrors it by keeping the Arm button disabled.
+<b>Per customer</b>: <code>scheduled → noticed → exit-window → order-emitted → migrated |
+exited | failed | rolled-back</code>. The engine enforces
+<code>orderDate ≥ noticeSentAt + noticeDays</code> as a gate, not a convention (the suite proves
+a noticed customer sits through ticks with no order until the clock passes), then emits <b>one
+TMF622 <code>modify</code> order per subscriber</b> — the existing proration-safe plan-change
+path, untouched. <b>Exit rights</b>: a detrimental delta exposes the penalty-free exit the
+European telecom code grants — in-binding customers included; <code>POST
+…/customer/{cid}/exit</code> terminates clean with the penalty-free flag for downstream billing.
+Promo-expiry rolls off with a courtesy notice and no exit right (disclosed at sale — the
+template says so honestly); age rules (<code>POST …/{id}/scanTriggers</code>) run
+<code>auto-migrate</code> (notice queued ahead of the birthday) or
+<code>lapse-to-grandfather</code> (flag only, the customer keeps the plan).
+<b>Safety</b>: every migration stores a pre-migration snapshot — <code>POST
+…/customer/{cid}/rollback</code> emits the inverse modify order; consecutive failures past
+<code>breakerThreshold</code> (default 3) trip the <b>circuit breaker</b> — the plan pauses,
+the evidence stays. <code>GET …/{id}/progress</code> is the wave monitor by state.
+<b>Faces</b>: the CSR console's <b>Migration desk</b> (<code>migration:read</code>) — plan
+list, per-plan progress, the mirrored arm gate.
+<b>Ops note</b>: <code>MIGRATION_COMPRESS_CLOCKS=true</code> (compose, demo/e2e only) lifts the
+30-day notice floor so suites can use day-zero notices — <b>never set it in production; the
+floor is statutory</b>.
+<b>Honest edges</b>: the per-wave expected-vs-billed reconciliation against shadow billing is a
+named follow-up — the simulation attach and the billing run both exist; the automated tie-out
+between them lands next.</p>
+
+<h2 id="usagepolicy">45 · Usage policy — pools, caps &amp; the roaming wall</h2>
+<p><b>What</b>: the policy layer on the usage meters — household sharing, spending caps and
+roaming limits, two of which are statutory obligations in the EEA rather than features. Suite
+<a href="../../ops/e2e/usage_policy_test.js">usage_policy_test.js</a>.
+<b>Household pools</b>: <code>allowancePool</code> (owner = the payer account) with member
+subscriptions and optional per-member caps. Consumption decrements the pool through
+<b>reserve-then-commit grants per usage record</b> — never the whole remainder to one session —
+so the classic concurrent-quota race cannot over-allocate (the suite fires 12 concurrent
+records against 8 GB remaining and the pool grants exactly what exists); a member past the hard
+cap falls back to their own allowance, and pool-covered gigabytes never rate against it.
+<b>Spend meters — one primitive, three legal faces</b>: a <code>spendMeter</code> accumulates
+rated charges per subscription per cycle under a threshold policy
+(<code>GET /spendPolicy</code>, <code>PATCH /spendPolicy/{meterType}</code>). The three
+instances: (1) the customer-settable <b>subscription cap</b>; (2) the <b>content-services
+cap</b> — barring of jointly billed content is free and always available, the lowest selectable
+limit is floored by statute (a 100 cap is refused, 250 accepted), breach blocks with a
+notification, and minor-registered subscriptions carry mandatory barring defaults; (3) the
+<b>roaming financial limit</b> — present by default (≈€50 ex VAT per the EEA roaming
+regulation) without being asked for, warning at 80%, hard cut-off at 100%, and
+<code>POST /roamingLimit/continue</code> is the customer's explicit, <b>audited</b> election to
+keep roaming; raise/lower/opt-out per subscription.
+<b>Auto top-up</b>: <code>PUT /autoTopupPolicy</code> — never default-on, the consent timestamp
+is part of the record; one boost per breach window (a replay is a no-op), a per-cycle cap that
+holds, notification per purchase, and disabled means disabled.
+<b>Travel passes &amp; zones</b>: passes are time-boxed, zone-filtered boosts
+(<code>POST /travelPass</code>); in-window zone traffic rides the pass, out-of-window traffic
+charges, re-rating is idempotent. The first usage record from a new zone emits a zone-entry
+event — the mandatory pricing information rides the notification; the pass upsell rides the
+campaign engine behind it.
+<b>Faces</b>: the storefront <b>Family</b> page shows the pool (remaining-of-total, per-member
+caps) and My page carries <b>Usage controls</b> (the roaming-limit card with its editable
+limit); the CSR 360 reads the same spend policies and pools per customer.
+<b>The deliberate absence</b>: app-specific zero-rating — unlawful in the EEA under the open
+internet rules, so no per-app classification ever enters the rating path; free-data promos are
+application-agnostic bonus meters. <b>Honest edge</b>: the roam-like-home fair-use monitor
+(4-month predominance + capped surcharges) is a named follow-up.</p>
+
+<h2 id="norwayrails">46 · Norway rails — registry, directory, credit, bill channels</h2>
+<p><b>What</b>: the reference geography's operational rails, each a country-keyed adapter
+behind a generic port — mocks keep every leg provable offline; a real rail is the same adapter
+with a real base URL and credentials. Suite
+<a href="../../ops/e2e/norway_rails_test.js">norway_rails_test.js</a>.
+<b>Registry sync</b> (party-account): <code>POST /individual/{id}/registryLink</code> stores
+the person-id link; the sync worker polls the registry's event feed
+(<code>POST /registrySync/run</code> to force a pass) with an idempotent cursor — a drained
+feed re-polls to zero — and re-fetches on address/name/death events, updating the party and
+re-emitting the address-verified event the CDP already listens to. <b>Protected addresses</b>
+(the national kode 6/7 regime) return no street: the party is flagged, the street is scrubbed
+and masked <em>everywhere</em> — staff consoles included — checkout completes with
+pickup-point delivery and no street address anywhere on the order, and every export honors the
+flag. Deceased flags land on the party for care handling, never a blind update.
+<b>Directory obligation</b>: per-party <code>directorySetting</code> — exposure
+<code>full | partial | reserved</code> plus the <b>secret number</b> (a mandatory free service:
+total suppression). <code>POST /directoryExport/run</code> produces the delta export; the suite
+proves a secret number and a protected party can never appear in it. Real directory-service
+agreements are per-tenant deployment config behind the same exporter.
+<b>Credit decisions</b> (ordering): a <code>CreditDecisionPort</code> (one bureau driver + a
+mock) feeds the existing TMF696 risk gate at checkout. A voluntary <b>credit freeze</b> answers
+as its own state — the order is refused <code>422 CREDIT_FROZEN</code> with a machine-readable
+reason the storefront turns into the prepaid path — and only the decision + timestamp are
+stored, never the report.
+<b>Bill distribution</b> (billing): an ordered channel chain per party —
+<b>e-invoice alias lookup → digital mailbox → print</b> — falling through as consent flags
+allow, with <b>every send recording the channel actually used</b> on the delivery ledger (the
+audit trail collections' statutory letters need; a protected party's letter carries no street).
+The <b>direct-debit loop</b> closes the circle: the bank's mandate file registers the
+authorization, each cycle emits a claim keyed by the bill's KID, and the OCR settlement file
+comes home through the <em>existing</em> remittance door — the same fail-closed money path as
+camt.054 — settling the bill. Env: <code>EINVOICE_RAIL_BASE_URL</code>,
+<code>MAILBOX_RAIL_BASE_URL</code>, <code>DIRECTDEBIT_RAIL_BASE_URL</code> (compose points them
+at the three mocks — ch. 12: :8147/:8148/:8149).
+<b>Faces</b>: the CSR console's <b>Registry</b> page (<code>party:write</code>) drives sync
+runs and directory settings; the CSR 360 carries the per-customer directory block.
+<b>Honest edges</b>: the production eID-broker federation is a named follow-up (the BankID-class
+step-up gate exists from the earlier arc; a mock broker container does not yet), carrier-billing
+charge ingest needs a real host-operator feed (the statutory spending caps it must respect
+already shipped — ch. 45), and a second mailbox driver is on demand behind the same port.</p>
 
 <p class="dim" style="margin-top:3rem">genalpha-bss · one hundred and fourteen suites, twenty-five CTKs at zero
 failures · the build story is <em>The Honest Machine</em> (docs/book) · the TMF vocabulary is

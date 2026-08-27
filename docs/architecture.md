@@ -83,8 +83,10 @@ flowchart TB
     subgraph Revenue["Revenue"]
         PAY["payment TMF676"]
         VAULT["payment-method TMF670"]
-        BILL["billing TMF678\n(crash-resumable run + ledger)"]
-        USAGE["usage TMF635/677"]
+        BILL["billing TMF678\n(crash-resumable run + ledger\n· statutory collections ladder\n· bill-distribution channel chain)"]
+        USAGE["usage TMF635/677\n(+ policy layer: pools ·\nspend meters · travel passes)"]
+        DEVCOM["device-commerce\n(agreements · financing port ·\ntrade-in · 14-day withdrawal)"]
+        MIGRATE["base-migration\n(rehearsal-gated cohort moves\n→ TMF622 modify orders)"]
     end
 
     subgraph Production["Production (OSS, thin)"]
@@ -135,6 +137,9 @@ TMF642/656"]
     SOM -.->|"wholesale access-SEEKER: buys the\nL2/L3 input a fiber component reliesOn,\nover a Sonata adapter (async callback)"| WHOLESALE
     WHOLESALE -.->|"PROVIDER side (a sibling tenant):\ninbound Sonata serviceOrder →\nactivate → notify retailer → settle"| GW
     QUAL -.->|"multi-owner coverage: which\nowner serves this address at L2/L3"| WHOLESALE
+    DEVCOM -.->|"financing port: internal instalments ·\nmock-bank loan · BNPL via the PSP rail"| PAY
+    MIGRATE -.->|"one notice-gated TMF622\nmodify per subscriber"| ORD
+    BILL -.->|"collections enforcement:\nrestrict (emergency whitelist) ·\nnonpayment suspend"| SOM
     CAMP -.->|"delivers via\nmachine identity"| COMM
     SHOP & APP -.->|"consent + beacons\n· For-you rail"| INSIGHT & AI
     INSIGHT -.->|experience rules| POLICY
@@ -358,6 +363,74 @@ the acting tenant's machine identity.
   — a price change propagates within `max-age` (seconds), the honest trade for absorbing a
   campaign-day surge before it reaches the JVM or Postgres. Stock ("only N left") and
   personalization are deliberately **never** cached.
+- **Collections is orchestration over what the fleet already owns — shaped by statute.** Billing
+  carries one `collectionCase` per financial account (a state machine `CURRENT → REMINDED → WARNED
+  → RESTRICTED → SUSPENDED`, with `CURED` reachable from any state and promise-to-pay / dispute /
+  hardship holds orthogonal to it) driven by a per-tenant `dunningPolicy` that sits **on top of a
+  country statutory pack it cannot undercut** — the Norway pack pins the 14-day reminder-fee gate,
+  the fee cap, the two-reminder cap, the one-month enforcement-notice clock and the minimum
+  actionable floor, and a policy below the floor is refused at write time. Enforcement rides two
+  SOM primitives: `restrict` (a new, lighter barring profile — outgoing barred, data throttled,
+  **the emergency-call whitelist always on**) and nonpayment `suspend`, during which **billing
+  skips MRC accrual** (the statutory rule that no subscription charges bill through a nonpayment
+  block). Cure auto-resumes with a configurable (zeroable) reconnection fee. Faces: a console
+  Collections desk where the statutory floor renders read-only — the law's numbers are never form
+  fields — and a storefront outstanding banner with customer-initiated promise-to-pay
+  (`collections_test.js`).
+- **Device commerce is a component, not a checkout feature (:8145).** `device_agreement` binds
+  party + subscription + IMEI to financing terms under **one `FinancingProvider` port with three
+  drivers** — internal (operator-book, delegating to billing's instalment machinery), mock-bank
+  (third-party loan: the financier owns title and receivable; upgrades fetch an early-settlement
+  quote) and BNPL through the existing payment-rail adapter (settlement delegates to the
+  provider) — so a tenant picks a financing model as config, and total cost of ownership is a
+  required, displayed field on every offer face. Trade-in is a state machine (quote → accept →
+  transit → grading → delta the customer accepts), the 14-day withdrawal clock starts at the
+  **parcel-delivery event** the bundle arc already emits, and lost/stolen pushes the IMEI through
+  a blacklist adapter seam (mock driver; a real EIR feed is deployment config — a blacklisted
+  IMEI quotes zero). Revenue consumes the agreement events into an **IFRS 15 subsidy subledger**:
+  contract asset at activation, monthly unwind, ETF recovery, swap write-off vs trade-in
+  inventory, residual-value-guarantee accrual (`device_commerce_test.js`).
+- **Base migration executes what the simulator only predicted (:8146) — and the gates are
+  server-side.** A `migrationPlan` (source→target matrix, per-row beneficial/neutral/detrimental
+  delta class) **cannot arm without an attached price-simulation** — rehearse-first is a 409, not
+  a doctrine slide. Each customer walks `scheduled → noticed → exit-window → order-emitted`, with
+  `orderDate ≥ noticeSentAt + noticeDays` enforced as a gate (30 days in the EEA jurisdiction
+  pack), then the engine emits **one TMF622 `modify` order per subscriber** — the existing
+  proration-safe plan-change path, untouched. A detrimental delta exposes the penalty-free exit
+  the European telecom code grants (in-binding included); age rules run auto-migrate or
+  lapse-to-grandfather; promo expiry gets a courtesy notice and no exit right (disclosed at
+  sale). Snapshots make rollback an inverse order; a consecutive-failure circuit breaker pauses
+  the plan and keeps the evidence (`base_migration_test.js`).
+- **Usage policy is one monetary-meter primitive wearing three legal faces.** A `spend_meter`
+  accumulates rated charges per subscription per cycle under a threshold policy; its three
+  instances are the customer-settable subscription cap, the **content-services cap** (barring
+  free and always available, the lowest selectable limit floored by statute, block-on-breach
+  with notification, mandatory barring categories for minors) and the **roaming financial
+  limit** (≈€50 ex-VAT default per the EEA roaming regulation, warning at 80%, hard cut-off at
+  100%, the explicit continue an audited event). Household **allowance pools** decrement through
+  small reserve-then-commit grants — never the whole remainder to one session — so a concurrent
+  burst cannot over-allocate the pool; per-member caps fall back to own allowance. Auto top-up
+  is opt-in with recorded consent and per-cycle caps, idempotent per breach window. Travel
+  passes are time-boxed, zone-filtered boosts; the first record from a new zone emits a
+  zone-entry event carrying the mandatory pricing information. **Zero-rating is deliberately
+  absent** — per-app price differentiation is unlawful in the EEA, so free-data promos are
+  application-agnostic bonus meters; the RLAH fair-use monitor is a named follow-up
+  (`usage_policy_test.js`).
+- **The reference geography's rails are adapters behind generic ports — never hard
+  dependencies.** Bill distribution is an ordered channel chain per party (`e-invoice alias →
+  digital mailbox → print`), each send recording the channel actually used; the direct-debit
+  loop (mandate file in → per-cycle claim out → OCR settlement back) closes bills **through the
+  existing remittance door**, and three rail mocks (:8147/:8148/:8149) keep every leg provable
+  offline. Registry sync polls the national event feed off a stored person-id link (idempotent
+  cursor), re-fetches on address/name/death events, and treats a **protected address** as a
+  first-class flag: no street stored or shown anywhere — staff consoles included — checkout
+  falls to pickup-point delivery, and every export honors it. The directory obligation is
+  modeled before any export exists (exposure levels, free secret numbers, a delta exporter that
+  can never leak a reserved entry). The credit-decision port slots into the existing TMF696
+  risk signal; a bureau freeze returns a distinct state so checkout offers prepaid, and only
+  the decision is stored. Deferred honestly: the production eID-broker federation (the step-up
+  gate exists; a mock broker container is a follow-up), real directory/bureau/rail contracts —
+  per-tenant deployment concerns behind ports (`norway_rails_test.js`).
 - **Composability is real**: cross-component calls go through conditional clients with Noop
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).
