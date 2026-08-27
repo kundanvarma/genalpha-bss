@@ -1,8 +1,8 @@
 spring:
   application:
-    name: revenue
+    name: device-commerce
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/revenue}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/device_commerce}
     username: ${DB_USERNAME:postgres}
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
@@ -20,7 +20,7 @@ spring:
     locations: classpath:db/migration,classpath:db/migration-{vendor}
     # Complete standalone connection: migrations run as the OWNING role
     # (RLS does not bind owners), never through the tenant-aware wrapper.
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/revenue}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/device_commerce}
     user: ${DB_MIGRATION_USERNAME:${DB_USERNAME:postgres}}
     password: ${DB_MIGRATION_PASSWORD:${DB_PASSWORD:postgres}}
 
@@ -47,15 +47,20 @@ springdoc:
 
 bss:
   events:
-    topic: bss.revenue.events
+    topic: bss.device.events
+  device:
+    # Withdrawal window (angrerett, EU 2011/83): unconditional days counted
+    # from physical receipt (parcel delivery event; agreement activation is
+    # the fallback clock when no delivery event arrives).
+    withdrawal-days: ${DEVICE_WITHDRAWAL_DAYS:14}
+    # Mock-bank early-settlement fee: remaining principal + this flat fee.
+    early-settlement-fee: ${DEVICE_EARLY_SETTLEMENT_FEE:49}
+    # Trade-in offers expire after this many days.
+    offer-days: ${DEVICE_OFFER_DAYS:30}
+    fulfilment-topic: ${DEVICE_FULFILMENT_TOPIC:bss.fulfilment.events}
+    som-topic: ${DEVICE_SOM_TOPIC:bss.som.events}
   downstream:
-    billing-base-url: ${BILLING_BASE_URL:http://localhost:8088}
-    loyalty-base-url: ${LOYALTY_BASE_URL:http://localhost:8114}
-    agreement-base-url: ${AGREEMENT_BASE_URL:http://localhost:8106}
-  revenue:
-    billing-topic: ${REVENUE_BILLING_TOPIC:bss.billing.events}
-    payment-topic: ${REVENUE_PAYMENT_TOPIC:bss.payment.events}
-    device-topic: ${REVENUE_DEVICE_TOPIC:bss.device.events}
+    payment-base-url: ${PAYMENT_BASE_URL:http://localhost:8087}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

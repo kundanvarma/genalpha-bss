@@ -75,6 +75,18 @@ public class RevenueService {
         DEFAULT_CHART.put("club-share:expense", new String[] {"6150", "Community sponsorship (Klubbdugnad)"});
         DEFAULT_CHART.put("club-share:payable", new String[] {"2150", "Payable to community clubs"});
         DEFAULT_CHART.put("mobile-wholesale:revenue", new String[] {"4020", "Mobile wholesale revenue"});
+        // device commerce: IFRS 15 puts more equipment revenue at delivery than
+        // cash received on subsidised operator-book bundles — the gap is a
+        // contract asset unwound monthly against service billings. Bank/BNPL
+        // programs recognise fully at payout and accrue any residual-value
+        // guarantee as a liability. Trade-ins arrive as inventory.
+        DEFAULT_CHART.put("device:contract-asset", new String[] {"1250", "Device contract asset (IFRS 15)"});
+        DEFAULT_CHART.put("device:equipment-revenue", new String[] {"4030", "Equipment revenue — devices"});
+        DEFAULT_CHART.put("device:trade-in-inventory", new String[] {"1300", "Trade-in device inventory"});
+        DEFAULT_CHART.put("device:swap-writeoff", new String[] {"5210", "Device swap write-off"});
+        DEFAULT_CHART.put("device:deduction", new String[] {"4040", "Diminished-value recovery"});
+        DEFAULT_CHART.put("device:rvg-expense", new String[] {"6200", "Residual-value guarantee expense"});
+        DEFAULT_CHART.put("device:rvg-liability", new String[] {"2500", "Residual-value guarantee liability"});
     }
 
     /** PSPs whose capture is a receivable (deferred settlement), not immediate cash.
@@ -390,6 +402,231 @@ public class RevenueService {
                 line("mobile-wholesale:receivable", amount, null, id, "Receivable from " + mvno),
                 line("mobile-wholesale:revenue", null, amount, id, desc));
         saveBalanced(tenant, sourceRef, "mobileWholesaleRevenue", desc + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /* ---------- device commerce: the subsidy subledger ---------- */
+
+    /**
+     * Operator-book device agreement activated with a subsidy: IFRS 15 books
+     * MORE equipment revenue at delivery than the instalments will collect —
+     * the gap is a contract asset. DR 1250 contract asset / CR 4030 equipment
+     * revenue for the subsidy amount; the monthly instalment feed unwinds it.
+     * Idempotent by agreement id. Bank/BNPL agreements post at payout instead.
+     */
+    @Transactional
+    public boolean postDeviceAgreementActivated(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "device-activation:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (!"OPERATOR_BOOK".equals(event.get("financingModel"))) {
+            return false;   // payout-time recognition for bank/BNPL models
+        }
+        BigDecimal subsidy = money(event.get("subsidyAmount"));
+        if (subsidy.signum() <= 0) {
+            return false;   // unsubsidised instalments: nothing beyond normal billing
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = List.of(
+                line("device:contract-asset", subsidy, null, id, "Device subsidy at delivery"),
+                line("device:equipment-revenue", null, subsidy, id, "Equipment revenue allocation (IFRS 15)"));
+        saveBalanced(tenant, sourceRef, "deviceActivation",
+                "Device agreement activated — " + id, currency, partyOf(event), posting);
+        return true;
+    }
+
+    /**
+     * One instalment landed on a subsidised operator-book agreement: part of
+     * the month's service billing settles the contract asset instead of being
+     * revenue — DR 4000 service revenue (reallocation) / CR 1250 contract
+     * asset. Keyed on (agreement, instalment no) so replays are free; the
+     * emitter gives the last instalment the rounding remainder.
+     */
+    @Transactional
+    public boolean postDeviceContractAssetUnwind(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("agreementId"));
+        Object no = event.getOrDefault("installmentNo", 0);
+        String sourceRef = "device-unwind:" + id + ":" + no;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal amount = money(event.get("unwindAmount"));
+        if (amount.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = List.of(
+                line("rate:recurringCharge", amount, null, id, "Contract-asset unwind #" + no),
+                line("device:contract-asset", null, amount, id, "Device subsidy unwound"));
+        saveBalanced(tenant, sourceRef, "deviceUnwind",
+                "Device contract-asset unwind #" + no + " — " + id, currency, null, posting);
+        return true;
+    }
+
+    /**
+     * Early termination: the ETF economically recovers the UNEARNED subsidy —
+     * DR AR for the fee, CR contract asset up to what remains on the book,
+     * any excess to equipment revenue (never a negative asset).
+     */
+    @Transactional
+    public boolean postDeviceEtf(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "device-etf:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal etf = money(event.get("etfAmount"));
+        if (etf.signum() <= 0) {
+            return false;   // schedule completed normally — nothing to recover
+        }
+        BigDecimal remaining = money(event.get("remainingSubsidy"));
+        BigDecimal offset = etf.min(remaining.signum() > 0 ? remaining : BigDecimal.ZERO);
+        BigDecimal excess = etf.subtract(offset);
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = new ArrayList<>();
+        posting.add(line("ar", etf, null, id, "Early-termination fee"));
+        if (offset.signum() > 0) {
+            posting.add(line("device:contract-asset", null, offset, id, "Unearned subsidy recovered"));
+        }
+        if (excess.signum() > 0) {
+            posting.add(line("device:equipment-revenue", null, excess, id, "ETF beyond remaining subsidy"));
+        }
+        saveBalanced(tenant, sourceRef, "deviceEtf", "Device ETF — " + id, currency, partyOf(event), posting);
+        return true;
+    }
+
+    /**
+     * Swap (operator-book): remaining instalments write off against the
+     * trade-in device received — DR 1300 inventory at graded value, DR 5210
+     * write-off for the shortfall, CR the device receivable; a trade-in worth
+     * MORE than the remainder credits equipment revenue. Any subsidy still on
+     * the book reverses in the same entry. Bank/BNPL swaps settle with the
+     * financier, not this ledger.
+     */
+    @Transactional
+    public boolean postDeviceSwap(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "device-swap:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (!"OPERATOR_BOOK".equals(event.get("financingModel"))) {
+            return false;
+        }
+        Map<String, Object> settlement = castMap(event.get("settlement"));
+        BigDecimal remaining = money(settlement.get("remainingPrincipal"));
+        BigDecimal tradeIn = money(settlement.get("tradeInValue"));
+        if (remaining.signum() <= 0 && tradeIn.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = new ArrayList<>();
+        if (tradeIn.signum() > 0) {
+            posting.add(line("device:trade-in-inventory", tradeIn, null, id, "Trade-in device received"));
+        }
+        BigDecimal writeOff = remaining.subtract(tradeIn);
+        if (writeOff.signum() > 0) {
+            posting.add(line("device:swap-writeoff", writeOff, null, id, "Instalments written off on swap"));
+        }
+        if (remaining.signum() > 0) {
+            posting.add(line("ar", null, remaining, id, "Device receivable extinguished"));
+        }
+        if (writeOff.signum() < 0) {
+            posting.add(line("device:equipment-revenue", null, writeOff.negate(), id,
+                    "Trade-in above remaining instalments"));
+        }
+        BigDecimal remainingSubsidy = money(event.get("remainingSubsidy"));
+        if (remainingSubsidy.signum() > 0) {
+            posting.add(line("device:equipment-revenue", remainingSubsidy, null, id,
+                    "Unearned subsidy reversed on swap"));
+            posting.add(line("device:contract-asset", null, remainingSubsidy, id,
+                    "Contract asset cleared on swap"));
+        }
+        saveBalanced(tenant, sourceRef, "deviceSwap", "Device swap — " + id, currency,
+                partyOf(event), posting);
+        return true;
+    }
+
+    /**
+     * Third-party payout: the bank paid the operator out upfront — full
+     * equipment-revenue recognition at payout (DR cash / CR 4030), plus a
+     * residual-value guarantee accrual when the program promises a buy-back
+     * (DR 6200 / CR 2500). Idempotent by agreement id.
+     */
+    @Transactional
+    public boolean postDevicePayout(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String id = String.valueOf(event.get("id"));
+        String sourceRef = "device-payout:" + id;
+        if (id == null || "null".equals(id) || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        if (!"THIRD_PARTY_LOAN".equals(event.get("financingModel"))) {
+            return false;   // BNPL captures already book through the payment path
+        }
+        BigDecimal principal = money(event.get("principal"));
+        if (principal.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = new ArrayList<>();
+        posting.add(line("cash", principal, null, id, "Financier payout received"));
+        posting.add(line("device:equipment-revenue", null, principal, id,
+                "Equipment revenue at payout (financier owns the receivable)"));
+        BigDecimal residual = money(event.get("residualValue"));
+        if (residual.signum() > 0) {
+            posting.add(line("device:rvg-expense", residual, null, id, "Residual-value guarantee accrual"));
+            posting.add(line("device:rvg-liability", null, residual, id,
+                    "Buy-back promised to the financier"));
+        }
+        saveBalanced(tenant, sourceRef, "devicePayout", "Financing payout — " + id, currency,
+                partyOf(event), posting);
+        return true;
+    }
+
+    /**
+     * Withdrawal (angrerett): the subsidised delivery-time recognition
+     * reverses (DR 4030 / CR 1250); a documented diminished-value deduction
+     * is the operator's to keep (DR AR / CR 4040). The cash refund itself
+     * books through the payment component's refund event — one path, never
+     * two. Keyed on the agreement so the case replays free.
+     */
+    @Transactional
+    public boolean postDeviceWithdrawal(Map<String, Object> event) {
+        String tenant = tenantScope.currentTenantId();
+        String agreementRef = String.valueOf(event.get("agreementRef"));
+        String sourceRef = "device-withdrawal:" + agreementRef;
+        if (agreementRef == null || "null".equals(agreementRef)
+                || entries.existsByTenantIdAndSourceRef(tenant, sourceRef)) {
+            return false;
+        }
+        BigDecimal subsidy = "OPERATOR_BOOK".equals(event.get("financingModel"))
+                ? money(event.get("subsidyAmount")) : BigDecimal.ZERO;
+        BigDecimal deduction = money(event.get("deduction"));
+        if (subsidy.signum() <= 0 && deduction.signum() <= 0) {
+            return false;
+        }
+        String currency = event.get("currency") == null ? "EUR" : String.valueOf(event.get("currency"));
+        List<JournalLine> posting = new ArrayList<>();
+        if (subsidy.signum() > 0) {
+            posting.add(line("device:equipment-revenue", subsidy, null, agreementRef,
+                    "Delivery-time recognition reversed"));
+            posting.add(line("device:contract-asset", null, subsidy, agreementRef,
+                    "Contract asset cleared on withdrawal"));
+        }
+        if (deduction.signum() > 0) {
+            posting.add(line("ar", deduction, null, agreementRef, "Diminished-value deduction"));
+            posting.add(line("device:deduction", null, deduction, agreementRef,
+                    "Documented diminished value retained"));
+        }
+        saveBalanced(tenant, sourceRef, "deviceWithdrawal", "Device withdrawal — " + agreementRef,
+                currency, partyOf(event), posting);
         return true;
     }
 
