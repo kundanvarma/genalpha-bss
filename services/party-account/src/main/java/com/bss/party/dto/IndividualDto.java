@@ -46,6 +46,17 @@ public class IndividualDto {
     @JsonProperty("householdPayer")
     private Map<String, Object> householdPayer;
 
+    /** Read-only: the registry shares no address for this party (protected
+     * marker) — street data is masked everywhere; channels offer pickup-point
+     * delivery. Set by registry sync only, never PATCH. */
+    @JsonProperty("addressProtected")
+    private Boolean addressProtected;
+
+    /** Read-only: a registry death event opened this flag — care flows
+     * decide, nothing terminates automatically. Set by registry sync only. */
+    @JsonProperty("deceased")
+    private Boolean deceased;
+
     @JsonProperty("@type")
     private String type = "Individual";
 
@@ -115,4 +126,9 @@ public class IndividualDto {
 
     public String getRegion() { return region; }
     public void setRegion(String region) { this.region = region; }
+
+    public Boolean getAddressProtected() { return addressProtected; }
+    public void setAddressProtected(Boolean v) { this.addressProtected = v; }
+    public Boolean getDeceased() { return deceased; }
+    public void setDeceased(Boolean v) { this.deceased = v; }
 }

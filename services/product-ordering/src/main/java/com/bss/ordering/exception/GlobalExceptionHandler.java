@@ -22,6 +22,15 @@ public class GlobalExceptionHandler {
                 .body(body);
     }
 
+    @ExceptionHandler(CreditFrozenException.class)
+    public ResponseEntity<ErrorResponse> handleCreditFrozen(CreditFrozenException ex) {
+        // 422 with a DISTINCT machine-readable code: the storefront keys the
+        // prepaid-path offer on CREDIT_FROZEN — this is not a decline.
+        ErrorResponse body = new ErrorResponse(
+                "CREDIT_FROZEN", "Unprocessable Entity", ex.getMessage(), "422");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(body);
+    }
+
     @ExceptionHandler(PolicyDeniedException.class)
     public ResponseEntity<ErrorResponse> handlePolicyDenied(PolicyDeniedException ex) {
         // 422: the order is well-formed but a data-authored rule forbids it.

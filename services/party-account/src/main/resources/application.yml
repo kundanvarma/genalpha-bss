@@ -48,6 +48,23 @@ springdoc:
 bss:
   events:
     topic: bss.party.events
+  # National-registry re-sync seam (Norway rails, P1). freg-shaped wire —
+  # mock-freg in dev; a real deployment changes base-url + the credential env
+  # var (named by secret-ref), config only. The worker polls the registry
+  # event feed per tenant; disable with sync-enabled=false.
+  registry:
+    base-url: ${REGISTRY_BASE_URL:http://localhost:8141}
+    secret-ref: ${REGISTRY_SECRET_REF:FREG_API_KEY}
+    country: ${REGISTRY_COUNTRY:NO}
+    provider: ${REGISTRY_PROVIDER:freg}
+    sync-enabled: ${REGISTRY_SYNC_ENABLED:true}
+    sync-interval-ms: ${REGISTRY_SYNC_INTERVAL_MS:30000}
+  # Directory obligation: the scheduled delta export is OFF until a tenant
+  # has a directory-partner agreement; the POST /directoryExport/run trigger
+  # serves demos and tests either way.
+  directory:
+    export-enabled: ${DIRECTORY_EXPORT_ENABLED:false}
+    export-cron: ${DIRECTORY_EXPORT_CRON:0 0 4 * * *}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

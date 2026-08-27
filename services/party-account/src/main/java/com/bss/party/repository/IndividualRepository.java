@@ -21,6 +21,8 @@ public interface IndividualRepository extends JpaRepository<Individual, String> 
 
     Optional<Individual> findByIdAndTenantId(String id, String tenantId);
 
+    java.util.List<Individual> findByTenantIdAndRegistryPersonRef(String tenantId, String registryPersonRef);
+
     java.util.List<Individual> findByTenantIdAndHouseholdPayerId(String tenantId, String payerId);
 
     java.util.List<Individual> findByTenantIdAndContactMediumJsonContaining(String tenantId, String email);

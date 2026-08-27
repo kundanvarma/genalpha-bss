@@ -72,6 +72,16 @@ bss:
         token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
         machine-client-id: ${OIDC_CLIENT_ID:bss-ordering}
         machine-client-secret: ${OIDC_CLIENT_SECRET:ordering-secret}
+  # Credit-decision seam (Norway rails, P3): ON by default in dev; scope to
+  # specific tenants with a comma list (empty = all tenants). The mock
+  # bureau ships one frozen test identity; a real bureau driver is a
+  # per-deployment bean behind the same port.
+  credit:
+    enabled: ${CREDIT_ENABLED:true}
+    tenants: ${CREDIT_TENANTS:}
+    purpose: ${CREDIT_PURPOSE:postpaid-signup}
+    mock:
+      outcomes: ${CREDIT_MOCK_OUTCOMES:frozen-test-identity:frozen}
   stock:
     enabled: ${STOCK_ENABLED:true}
   payment:

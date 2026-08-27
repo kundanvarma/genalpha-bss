@@ -69,6 +69,23 @@ public class Individual {
     @jakarta.persistence.Column(name = "topup_allowance_value")
     private java.math.BigDecimal topupAllowanceValue;
 
+    /** National-registry person link: the stable person id the re-sync
+     * worker stores and polls the registry event feed for. Never a national
+     * id number surfaced to channels — a lookup key, staff-linked. */
+    @jakarta.persistence.Column(name = "registry_person_ref", length = 64)
+    private String registryPersonRef;
+
+    /** Registry answered no_data / a protected marker (kode 6/7 shape):
+     * street-level address data is masked in EVERY read (staff and customer
+     * alike), scrubbed from storage, and excluded from every export. */
+    @jakarta.persistence.Column(name = "address_protected", nullable = false)
+    private boolean addressProtected;
+
+    /** A registry death event OPENED A FLAG — care flows decide what happens
+     * next; never an automatic termination. */
+    @jakarta.persistence.Column(name = "deceased", nullable = false)
+    private boolean deceased;
+
     public Individual() {
     }
 
@@ -140,4 +157,11 @@ public class Individual {
 
     public String getRegion() { return region; }
     public void setRegion(String region) { this.region = region; }
+
+    public String getRegistryPersonRef() { return registryPersonRef; }
+    public void setRegistryPersonRef(String v) { this.registryPersonRef = v; }
+    public boolean isAddressProtected() { return addressProtected; }
+    public void setAddressProtected(boolean v) { this.addressProtected = v; }
+    public boolean isDeceased() { return deceased; }
+    public void setDeceased(boolean v) { this.deceased = v; }
 }

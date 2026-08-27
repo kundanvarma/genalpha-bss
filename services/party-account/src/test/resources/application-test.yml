@@ -19,6 +19,10 @@ spring:
 bss:
   events:
     enabled: false
+  registry:
+    # no scheduled polling in tests — the suite drives the sync through the
+    # trigger endpoint against its own stub registry
+    sync-enabled: false
   tenants:
     default-tenant: genalpha
     registry:

@@ -66,6 +66,7 @@ public class ProductOrderService {
     private final com.bss.ordering.client.ServiceabilityClient serviceabilityClient;
     private final com.bss.ordering.client.RiskClient riskClient;
     private final com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff;
+    private final com.bss.ordering.credit.CreditDecisionService creditService;
 
     public ProductOrderService(ProductOrderRepository repository, ProductOrderMapper mapper,
             CatalogClient catalogClient, com.bss.ordering.security.VerifiedIdentity verifiedIdentity, AgreementClient agreementClient, PromotionClient promotionClient, PartyClient partyClient, InventoryClient inventoryClient,
@@ -73,7 +74,8 @@ public class ProductOrderService {
             StockClient stockClient, PaymentClient paymentClient, PolicyClient policyClient,
             com.bss.ordering.client.ServiceabilityClient serviceabilityClient,
             com.bss.ordering.client.RiskClient riskClient,
-            com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff) {
+            com.bss.ordering.client.LegacyFulfilmentHandoff legacyHandoff,
+            com.bss.ordering.credit.CreditDecisionService creditService) {
         this.repository = repository;
         this.mapper = mapper;
         this.catalogClient = catalogClient;
@@ -91,6 +93,7 @@ public class ProductOrderService {
         this.serviceabilityClient = serviceabilityClient;
         this.riskClient = riskClient;
         this.legacyHandoff = legacyHandoff;
+        this.creditService = creditService;
     }
 
     @Transactional(readOnly = true)
@@ -175,7 +178,32 @@ public class ProductOrderService {
         if (entity.getOrderDate() == null) {
             entity.setOrderDate(OffsetDateTime.now());
         }
-        enforcePolicy(dto, entity.getOwnerPartyId());
+        // Norway rails P3: the bureau's answer joins TMF696 as an ADDITIONAL
+        // SIGNAL. Frozen is a hard stop with its OWN machine code (the
+        // storefront offers the prepaid path off CREDIT_FROZEN — a freeze is
+        // not a decline); decline rides the existing hold path; review and
+        // the score band become policy-context vars the OPERATOR's rules may
+        // reference. Fail-open on driver trouble (house default), and the
+        // decision — never a report — is recorded in its own transaction so
+        // a rejected order still leaves its audit trail.
+        com.bss.ordering.credit.CreditDecisionPort.Decision credit =
+                hasAddItem(dto) ? creditService.assessParty(entity.getOwnerPartyId()) : null;
+        if (credit != null) {
+            creditService.record(entity.getOwnerPartyId(), credit);
+            if (com.bss.ordering.credit.CreditDecisionPort.FROZEN.equals(credit.decision())) {
+                throw new com.bss.ordering.exception.CreditFrozenException(
+                        "credit information is frozen at the bureau — lift the freeze"
+                                + " or continue with the prepaid path");
+            }
+        }
+        enforcePolicy(dto, entity.getOwnerPartyId(), credit);
+        if (credit != null && com.bss.ordering.credit.CreditDecisionPort.DECLINE.equals(credit.decision())
+                && !STATE_HELD.equals(entity.getState())) {
+            // the existing hold path: the order stands but waits for a human
+            entity.setState(STATE_HELD);
+            entity.setDescription(((entity.getDescription() == null ? ""
+                    : entity.getDescription() + " ") + "[credit-review]").trim());
+        }
         boolean modifyOnly = validateModifyItems(dto, entity.getOwnerPartyId());
         validatePayments(dto, entity.getOwnerPartyId(), id);
         reserveStock(dto, id);
@@ -826,11 +854,22 @@ public class ProductOrderService {
      * order" without a redeploy. A definitive DENY becomes a 422; an
      * unreachable policy service fails open (see RestPolicyClient).
      */
-    private void enforcePolicy(ProductOrderDto dto, String ownerPartyId) {
-        PolicyClient.Decision decision = policyClient.evaluateOrder(buildPolicyContext(dto, ownerPartyId));
+    private void enforcePolicy(ProductOrderDto dto, String ownerPartyId,
+            com.bss.ordering.credit.CreditDecisionPort.Decision credit) {
+        PolicyClient.Decision decision = policyClient.evaluateOrder(
+                buildPolicyContext(dto, ownerPartyId, credit));
         if (!decision.allowed()) {
             throw new com.bss.ordering.exception.PolicyDeniedException(decision.message());
         }
+    }
+
+    /** Any item that ADDS a product (explicit 'add' or no action, the TMF622
+     * default) — the signup-shaped orders the credit seam assesses; pure
+     * modify/cancel flows change no exposure and skip the bureau. */
+    private boolean hasAddItem(ProductOrderDto dto) {
+        return flattenItemMaps(dto.getProductOrderItem()).stream()
+                .anyMatch(i -> i.get("action") == null
+                        || "add".equalsIgnoreCase(String.valueOf(i.get("action"))));
     }
 
     /**
@@ -839,7 +878,8 @@ public class ProductOrderService {
      * the offerings ordered, quantity per offering, the largest single-offering
      * quantity, total units, and whether the buyer has a verified identity.
      */
-    private Map<String, Object> buildPolicyContext(ProductOrderDto dto, String ownerPartyId) {
+    private Map<String, Object> buildPolicyContext(ProductOrderDto dto, String ownerPartyId,
+            com.bss.ordering.credit.CreditDecisionPort.Decision credit) {
         List<ItemRef> items = flattenItems(dto.getProductOrderItem());
         Map<String, Integer> quantityByOffering = new java.util.LinkedHashMap<>();
         List<Map<String, Object>> itemList = new ArrayList<>();
@@ -881,6 +921,16 @@ public class ProductOrderService {
             context.put("riskScore", risk.score());
             context.put("riskLevel", risk.level());
             context.put("riskAssessmentId", risk.assessmentId());
+        }
+        // The bureau's answer, as vars the OPERATOR's rules may reference —
+        // absent when the seam is off or the bureau was unreachable, so a
+        // rule naming creditDecision simply does not fire (fail-open).
+        if (credit != null) {
+            context.put("creditDecision", credit.decision());
+            if (credit.scoreBand() != null) {
+                context.put("creditScoreBand", credit.scoreBand());
+            }
+            context.put("creditRemarksPresent", credit.remarksPresent());
         }
         return context;
     }

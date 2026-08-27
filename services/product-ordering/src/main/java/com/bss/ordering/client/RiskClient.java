@@ -38,6 +38,11 @@ public class RiskClient {
     @SuppressWarnings("unchecked")
     public Assessment assessOrder(String partyId, long totalQuantity, int lineCount,
             boolean verifiedIdentity, String addressSource) {
+        if (partyId == null) {
+            // no ordering party (staff drafts without a relatedParty):
+            // nothing to assess — same fail-open shape as an engine outage
+            return null;
+        }
         try {
             Map<String, Object> payload = new java.util.LinkedHashMap<>();
             payload.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
