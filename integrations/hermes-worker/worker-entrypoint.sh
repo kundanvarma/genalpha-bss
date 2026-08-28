@@ -45,9 +45,13 @@ mcp_servers:
                 backoffice_apply_payment, request_approval]
 CFG
 if [ -n "${WORKER_AI_API_KEY:-}" ]; then
+  # both the .env file and the process env: the runtime's credential lookup
+  # has moved between releases, cover every door it may knock on
   case "$WORKER_AI_PROVIDER" in
-    anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env ;;
-    *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env ;;
+    anthropic) echo "ANTHROPIC_API_KEY=${WORKER_AI_API_KEY}" > /root/.hermes/.env
+               export ANTHROPIC_API_KEY="${WORKER_AI_API_KEY}" ;;
+    *)         echo "OPENAI_API_KEY=${WORKER_AI_API_KEY}"    > /root/.hermes/.env
+               export OPENAI_API_KEY="${WORKER_AI_API_KEY}" ;;
   esac
   chmod 600 /root/.hermes/.env
 fi
