@@ -1005,7 +1005,9 @@ services:
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"
     volumes:
       - ./infra/tenants:/config
-      - ./infra/keycloak/nova-realm.json:/realm-template/nova-realm.json:ro
+      # DIRECTORY mount — a single-file bind pins the inode, so an edit on
+      # the host leaves the container reading a stale/truncated view
+      - ./infra/keycloak:/realm-template:ro
     ports:
       - "8100:8080"
     depends_on:
@@ -1276,7 +1278,10 @@ services:
       OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
       PARTY_BASE_URL: http://party-account:8080
       # Contact-frequency governor (dev: 5 per party per hour; prod: tune).
-      FREQUENCY_CAP_MAX: "5"
+      # dev cap: high enough that a suite's own sends never collide with the
+      # ladder (a real deployment runs 5/hour; frequency_dnc_test tracks this
+      # number — change them together)
+      FREQUENCY_CAP_MAX: "25"
       FREQUENCY_CAP_WINDOW_HOURS: "1"
       # ESP delivery seam: nova's customer messages ALSO leave via "their"
       # email provider (the SendGrid-shaped mock); genalpha stays in-app

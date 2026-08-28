@@ -92,6 +92,9 @@ run_one() {
 
 docker stop bss-worker-controller >/dev/null 2>&1 || true
 
+# collect the debris of dead runs before anything else — see the file header
+node ops/e2e/debris_sweep.js || true
+
 for s in $PREAMBLE; do run_one "$s"; done
 for f in ops/e2e/*_test.js; do
   name=$(basename "$f" .js)

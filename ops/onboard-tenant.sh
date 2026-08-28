@@ -82,9 +82,12 @@ EOF
 
 echo "== 3/4 fleet: restarting onto the new registry (config only — nothing rebuilt)"
 $DOCKER compose restart $($DOCKER compose config --services | grep -vE 'postgres|kafka|keycloak|mock-|console|storefront|mobile-app|csr-console|business-console|dealer-console') >/dev/null
-until curl -sf -o /dev/null http://localhost:8080/actuator/health \
-   && curl -sf -o /dev/null http://localhost:8081/actuator/health; do sleep 3; done
-sleep 10
+# the newborn tenant's first order rides the whole chain — gate on it, not
+# just the front door (an 80+-container fleet boots for minutes)
+for p in 8080 8081 8082 8083 8084 8100 8104 8088; do  # gateway catalog ordering inventory party user-roles som billing
+  until curl -sf -o /dev/null "http://localhost:$p/actuator/health"; do sleep 3; done
+done
+sleep 15  # SOM's Kafka consumer re-joins ~20s after health
 
 echo "== 4/4 seed: staff token, starter catalog"
 TOK=""

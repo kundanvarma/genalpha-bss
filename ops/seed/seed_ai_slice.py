@@ -72,8 +72,15 @@ def price(name, value, period=None):
 
 def offering(name, description, spec_name, price_refs):
     if name in offerings:
-        print(f"exists: {name}")
-        return offerings[name]
+        # converge to the declared state: a curation sweep may have retired it
+        existing = offerings[name]
+        if existing.get("lifecycleStatus") not in ("Active", "Launched"):
+            req("PATCH", f"{CATALOG}/productOffering/{existing['id']}",
+                {"lifecycleStatus": "Active"})
+            print(f"relaunched: {name}")
+        else:
+            print(f"exists: {name}")
+        return existing
     spec = req("POST", f"{CATALOG}/productSpecification",
                {"name": spec_name, "brand": "GenAlpha", "lifecycleStatus": "Active"})
     created = req("POST", f"{CATALOG}/productOffering", {
