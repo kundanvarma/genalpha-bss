@@ -28,11 +28,21 @@ async function json(res) {
 
 export async function listOfferings() {
   // L2 preview: staff append ?preview=1 to walk the unlaunched shelf —
-  // the SERVER decides what a token may see; guests get Active regardless
-  if (new URLSearchParams(window.location.search).get('preview') === '1') {
-    return json(await authFetch(`${CATALOG}/productOffering?limit=100`));
+  // the SERVER decides what a token may see; guests get Active regardless.
+  // The API caps a page at 100 and the shelf outgrew that — page through
+  // with offset until a short page (same lesson as priceIndex).
+  const preview = new URLSearchParams(window.location.search).get('preview') === '1';
+  const fetcher = preview ? authFetch : publicFetch;
+  const filter = preview ? '' : '&lifecycleStatus=Active';
+  const all = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await json(await fetcher(
+      `${CATALOG}/productOffering?limit=100&offset=${offset}${filter}`));
+    if (!Array.isArray(page)) break;
+    all.push(...page);
+    if (page.length < 100) break;
   }
-  return json(await publicFetch(`${CATALOG}/productOffering?limit=100&lifecycleStatus=Active`));
+  return all;
 }
 
 export async function getOffering(id) {
@@ -59,10 +69,18 @@ export async function availabilityFor(offeringId) {
   }
 }
 
-/** All active prices indexed by id, so offering price refs resolve locally. */
+/** All active prices indexed by id, so offering price refs resolve locally.
+ * The API caps a page at 100 and the price book outgrew that — page through
+ * with offset until a short page, or offerings silently lose their prices. */
 export async function priceIndex() {
-  const prices = await json(await publicFetch(`${CATALOG}/productOfferingPrice?limit=100`));
-  return Object.fromEntries(prices.map((p) => [p.id, p]));
+  const index = {};
+  for (let offset = 0; ; offset += 100) {
+    const page = await json(await publicFetch(
+      `${CATALOG}/productOfferingPrice?limit=100&offset=${offset}`));
+    for (const p of page) index[p.id] = p;
+    if (!Array.isArray(page) || page.length < 100) break;
+  }
+  return index;
 }
 
 /**

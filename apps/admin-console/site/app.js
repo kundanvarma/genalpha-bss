@@ -1624,6 +1624,9 @@ const TAB_ROLE = {
   audienceBuilder: 'insight:read',
   socialListening: 'insight:read',
   socialCare: 'insight:read',
+  // VoC is the readout over the insight signal store — same gate as its
+  // sibling sources; ungated it leaked the Marketing desk to every staff token.
+  voc: 'insight:read',
   attribution: 'campaign:read',
   landing: 'insight:read',
   profile: 'insight:read',
@@ -1631,7 +1634,11 @@ const TAB_ROLE = {
   copilot: 'catalog:write',
   growthCopilot: 'campaign:write',
   staff: 'roles:admin',
-  audit: 'ai:use',
+  // the audit trail rides with AI POWER on a desk of its own (product's
+  // copilot, ops' workforce, the governor) — marketing-staff gained ai:use
+  // for its copilot (e7e855eb), and gating the ledger on bare ai:use would
+  // drag the whole AI & Automation desk onto the marketing persona's screen
+  audit: ['catalog:write', 'workforce:use', 'ai:admin'],
   workforce: ['workforce:use', 'ai:admin'],
   reporting: ['billing:admin', 'billing:read'],
   integrations: ['roles:admin', 'document:write'],
@@ -1679,7 +1686,10 @@ function computeVisible() {
 const WORKSPACES = [
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot',
-    'simulate/priceChange'] },
+    // both simulators live where their gate lives: /ai/v1/simulate/** is
+    // catalog:write server-side, so a Sales placement leaked a one-tab Sales
+    // desk to product staff while real sellers would only have met the 403
+    'simulate/priceChange', 'simulate/prospect'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
@@ -1692,7 +1702,7 @@ const WORKSPACES = [
   // just its own desk.
   { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
     'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings', 'myOperator'] },
-  { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota', 'simulate/prospect'] },
+  { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
   { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
@@ -4580,13 +4590,15 @@ async function renderWorkforce() {
     document.querySelector('.table-wrap').after(panel);
   }
   panel.hidden = false;
-  panel.replaceChildren();
 
   const [kpiRes, pendRes, ledgerRes] = await Promise.all([
     authFetch('/ai/v1/workforce/kpis'),
     authFetch('/ai/v1/workforce/approvals?status=pending'),
     authFetch('/ai/v1/workforce/ledger'),
   ]);
+  // old rows stay on screen until the new data has arrived — no blank-panel
+  // window for any observer, human or test
+  panel.replaceChildren();
   if (!kpiRes.ok) { panel.textContent = 'Workforce data unavailable.'; return; }
   const kpis = await kpiRes.json();
   const pendings = pendRes.ok ? await pendRes.json() : [];
