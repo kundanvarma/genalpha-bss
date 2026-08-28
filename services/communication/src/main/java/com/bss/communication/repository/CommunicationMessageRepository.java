@@ -13,7 +13,12 @@ public interface CommunicationMessageRepository extends JpaRepository<Communicat
 
     java.util.List<CommunicationMessage> findByTenantIdAndReceiverPartyId(String tenantId, String receiverPartyId);
 
-    /** Contact-frequency governor: how many messages this party got recently. */
-    long countByTenantIdAndReceiverPartyIdAndCreatedAtAfter(
+    /** Contact-frequency governor: how many MARKETING messages this party got
+     * recently. Marketing rides the martech door (send/sendTemplated) and has
+     * no sourceEventId; transactional mail is minted from a domain event and
+     * always carries one — it must never eat the marketing budget, or a
+     * customer who just ordered (order received/complete/bill) becomes
+     * unreachable for the welcome journey that fired on that very order. */
+    long countByTenantIdAndReceiverPartyIdAndSourceEventIdIsNullAndCreatedAtAfter(
             String tenantId, String receiverPartyId, java.time.OffsetDateTime since);
 }

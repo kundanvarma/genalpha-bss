@@ -18,8 +18,9 @@ public interface JourneyEnrollmentRepository extends JpaRepository<JourneyEnroll
             String tenantId, String partyId, String status);
 
     /** The tick's worklist: everyone whose next step is due, per tenant
-     * (the tick acts as each tenant in turn, so RLS stays honest). */
-    List<JourneyEnrollment> findTop200ByTenantIdAndStatusAndNextActionAtBefore(
+     * (the tick acts as each tenant in turn, so RLS stays honest).
+     * Oldest-due first, so an over-batch backlog drains fairly. */
+    List<JourneyEnrollment> findTop200ByTenantIdAndStatusAndNextActionAtBeforeOrderByNextActionAtAsc(
             String tenantId, String status, OffsetDateTime cutoff);
 
     java.util.List<JourneyEnrollment> findByTenantIdAndPartyId(String tenantId, String partyId);

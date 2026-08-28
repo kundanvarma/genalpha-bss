@@ -416,9 +416,17 @@ public class CampaignService {
                     : campaign.getMessageContent();
             String content = campaign.getPromotionCode() == null
                     ? body : body.replace("{code}", campaign.getPromotionCode());
-            communication.send(partyId, subject, content,
+            CommunicationClient.SendOutcome outcome = communication.send(partyId, subject, content,
                     campaign.getName() == null ? null : Map.of("source", campaign.getName()));
-            frequency.record(partyId, "campaign");
+            if (outcome == CommunicationClient.SendOutcome.CAPPED
+                    || outcome == CommunicationClient.SendOutcome.SUPPRESSED) {
+                // still ledgered as treated (they were TARGETED — holdout math
+                // must not shift), but no touch is spent and the miss is loud
+                log.warn("campaign '{}' message to party {} was {} by communication — "
+                        + "ledgered as treated, nothing landed", campaign.getName(), partyId, outcome);
+            } else {
+                frequency.record(partyId, "campaign");
+            }
         }
         events.publish("CampaignExecutionCreateEvent", "campaignExecution", Map.of(
                 "campaignId", campaign.getId(), "partyId", partyId, "variant", execution.getVariant()));

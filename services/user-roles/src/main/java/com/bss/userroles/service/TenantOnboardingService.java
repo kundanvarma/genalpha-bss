@@ -117,6 +117,9 @@ public class TenantOnboardingService {
         long t0 = System.currentTimeMillis();
 
         String adminToken = masterAdminToken();
+        // build the clone BEFORE deleting the old realm — a bad/stale
+        // template must never destroy a serving realm
+        String realmJson = realmClone(id, name);
         // idempotent: a re-onboard replaces the realm and the block
         try {
             rest.delete().uri(keycloakBase + "/admin/realms/" + id)
@@ -127,7 +130,7 @@ public class TenantOnboardingService {
         rest.post().uri(keycloakBase + "/admin/realms")
                 .header("Authorization", "Bearer " + adminToken)
                 .header("Content-Type", "application/json")
-                .body(realmClone(id, name))
+                .body(realmJson)
                 .retrieve().toBodilessEntity();
         log.info("realm '{}' created from the template", id);
 

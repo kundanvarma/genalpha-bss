@@ -19,7 +19,7 @@ public class RestCommunicationClient implements CommunicationClient {
     }
 
     @Override
-    public void send(String partyId, String subject, String content, Map<String, Object> context) {
+    public SendOutcome send(String partyId, String subject, String content, Map<String, Object> context) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("subject", subject);
         body.put("content", content);
@@ -30,17 +30,18 @@ public class RestCommunicationClient implements CommunicationClient {
         }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
-            restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
+            Map<?, ?> reply = restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
                     .header("Content-Type", "application/json")
                     .body(body)
-                    .retrieve().toBodilessEntity();
+                    .retrieve().body(Map.class);
+            return outcomeOf(reply);
         } catch (RestClientException e) {
             throw new IllegalStateException("communication rejected the campaign message", e);
         }
     }
 
     @Override
-    public void sendTemplated(String partyId, String templateRef, String locale, String channel,
+    public SendOutcome sendTemplated(String partyId, String templateRef, String locale, String channel,
             Map<String, Object> context) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("templateRef", templateRef);
@@ -52,12 +53,28 @@ public class RestCommunicationClient implements CommunicationClient {
         }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
-            restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
+            Map<?, ?> reply = restClient.post().uri("/tmf-api/communicationManagement/v4/communicationMessage")
                     .header("Content-Type", "application/json")
                     .body(body)
-                    .retrieve().toBodilessEntity();
+                    .retrieve().body(Map.class);
+            return outcomeOf(reply);
         } catch (RestClientException e) {
             throw new IllegalStateException("communication rejected the templated campaign message", e);
         }
+    }
+
+    /** Communication answers 200 even when it declines: an all-recipients-
+     * skipped send comes back as {"status":"capped"|"suppressed"} instead of
+     * a created message. Anything else — a created message (status "sent"),
+     * an empty body — reads as SENT. */
+    private static SendOutcome outcomeOf(Map<?, ?> reply) {
+        Object status = reply == null ? null : reply.get("status");
+        if ("capped".equals(status)) {
+            return SendOutcome.CAPPED;
+        }
+        if ("suppressed".equals(status)) {
+            return SendOutcome.SUPPRESSED;
+        }
+        return SendOutcome.SENT;
     }
 }

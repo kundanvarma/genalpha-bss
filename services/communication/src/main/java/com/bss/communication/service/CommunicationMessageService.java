@@ -166,8 +166,12 @@ public class CommunicationMessageService {
             }
             // FREQUENCY CAP: the martech door governs contact frequency — a party
             // over the cap in the window is skipped, so campaigns/journeys can't
-            // over-message. Transactional mail (mint) never runs through here.
-            if (freqCapMax > 0 && repository.countByTenantIdAndReceiverPartyIdAndCreatedAtAfter(
+            // over-message. Transactional mail (mint) never runs through here,
+            // and it never counts against the marketing budget either: only
+            // martech-door messages (sourceEventId null) are tallied, so a
+            // fresh order's own receipts can't cap the welcome journey.
+            if (freqCapMax > 0 && repository
+                    .countByTenantIdAndReceiverPartyIdAndSourceEventIdIsNullAndCreatedAtAfter(
                     tenantId, receiver, OffsetDateTime.now().minusHours(freqCapWindowHours)) >= freqCapMax) {
                 capped++;
                 continue;
@@ -186,11 +190,18 @@ public class CommunicationMessageService {
             entity.setTenantId(tenantId);
             entity.setHref(ApiConstants.BASE_PATH + "/communicationMessage/" + id);
             entity.setSubject(String.valueOf(rendered.get("subject")));
-            // Unsubscribe in EVERY marketing message (the law + the honest thing) —
-            // a one-click, no-login link keyed to this recipient.
+            // Unsubscribe in every MARKETING message (the law + the honest
+            // thing) — but a transactional send (declared by the caller)
+            // must arrive verbatim, and the link is email/in-app shaped, so
+            // sms/push never carry it (an OTP is byte-exact).
             String body = rendered.get("content") == null ? "" : String.valueOf(rendered.get("content"));
-            entity.setContent(body + "\n\n—\nToo many emails? Unsubscribe: " + unsub.linkFor(receiver));
-            entity.setMessageType(rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType")));
+            String messageType = rendered.get("messageType") == null ? "inApp" : String.valueOf(rendered.get("messageType"));
+            boolean marketingFooter = !transactional(dto)
+                    && !"sms".equals(messageType) && !"push".equals(messageType);
+            entity.setContent(marketingFooter
+                    ? body + "\n\n—\nToo many emails? Unsubscribe: " + unsub.linkFor(receiver)
+                    : body);
+            entity.setMessageType(messageType);
             entity.setStatus(CommunicationMessage.SENT);
             entity.setReceiverPartyId(receiver);
             entity.setSource(dto.get("source") == null ? null : String.valueOf(dto.get("source")));
@@ -267,6 +278,17 @@ public class CommunicationMessageService {
         entity.setStatus(CommunicationMessage.READ);
         entity.setLastUpdate(OffsetDateTime.now());
         return toMap(repository.save(entity));
+    }
+
+    /** TMF681 characteristic {name:"category", value:"transactional"} — the
+     * caller's declaration that this send is service mail, not marketing. */
+    private boolean transactional(Map<String, Object> dto) {
+        if (!(dto.get("characteristic") instanceof List<?> chars)) return false;
+        for (Object c : chars) {
+            if (c instanceof Map<?, ?> m && "category".equals(String.valueOf(m.get("name")))
+                    && "transactional".equalsIgnoreCase(String.valueOf(m.get("value")))) return true;
+        }
+        return false;
     }
 
     private String receiverIn(Map<String, Object> dto) {

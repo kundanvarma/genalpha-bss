@@ -86,6 +86,10 @@ public class QuoteService {
 
         Map<String, Map<String, Object>> catalog = new LinkedHashMap<>();
         for (Map<String, Object> offering : downstream.offerings()) {
+            // only sellable lifecycles — a retired offering must fail fast at
+            // quote time, not survive to be refused at order accept
+            String lifecycle = String.valueOf(offering.get("lifecycleStatus"));
+            if (!"Active".equals(lifecycle) && !"Launched".equals(lifecycle)) continue;
             catalog.put(String.valueOf(offering.get("name")), offering);
         }
         List<Map<String, Object>> allowances = downstream.allowances();

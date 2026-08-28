@@ -396,8 +396,11 @@ public class JourneyService {
 
     @Transactional
     public void tickTenant(String tenantId) {
+        // Oldest-due first: if a backlog ever exceeds the batch, the batch is
+        // the LONGEST-waiting 200, not an arbitrary heap-order 200 — a fresh
+        // enrollment can wait a tick, but nobody waits forever.
         List<JourneyEnrollment> due = enrollments
-                .findTop200ByTenantIdAndStatusAndNextActionAtBefore(
+                .findTop200ByTenantIdAndStatusAndNextActionAtBeforeOrderByNextActionAtAsc(
                         tenantId, "active", OffsetDateTime.now());
         // Resolve each enrollment's journey once, dropping the dead/paused ones.
         Map<String, Journey> byId = new LinkedHashMap<>();
@@ -623,8 +626,9 @@ public class JourneyService {
         }
         if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
         if (journey.getName() != null) context.put("source", journey.getName());
+        com.bss.campaign.client.CommunicationClient.SendOutcome outcome;
         if (message.get("templateRef") != null) {
-            communication.sendTemplated(enrollment.getPartyId(),
+            outcome = communication.sendTemplated(enrollment.getPartyId(),
                     String.valueOf(message.get("templateRef")),
                     message.get("locale") == null ? null : String.valueOf(message.get("locale")),
                     message.get("channel") == null ? null : String.valueOf(message.get("channel")),
@@ -634,7 +638,26 @@ public class JourneyService {
             if (message.get("promotionCode") != null) {
                 content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
             }
-            communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")), content, context);
+            outcome = communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")),
+                    content, context);
+        }
+        // Communication has guardrails of its own (frequency cap, opt-out) and
+        // declines with a 200 — the postpone-not-drop rule must hold HERE too,
+        // or the step is silently lost and the enrollment walks on unmessaged.
+        if (outcome == com.bss.campaign.client.CommunicationClient.SendOutcome.CAPPED) {
+            enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
+            enrollments.save(enrollment);
+            log.info("journey '{}' postponed for party {} — communication's frequency cap",
+                    journey.getName(), enrollment.getPartyId());
+            return false;
+        }
+        if (outcome == com.bss.campaign.client.CommunicationClient.SendOutcome.SUPPRESSED) {
+            // the customer opted out of marketing: say nothing, spend nothing,
+            // and let them walk the rest of the journey in silence (retrying
+            // an opt-out forever would just be a quieter way to spam)
+            log.info("journey '{}' said nothing to party {} — marketing opt-out",
+                    journey.getName(), enrollment.getPartyId());
+            return true;
         }
         frequency.record(enrollment.getPartyId(), "journey");
         return true;
