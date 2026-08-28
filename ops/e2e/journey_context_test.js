@@ -35,6 +35,10 @@ async function token(ctx, client, user, pass) {
   const firstName = `Ada${run}`;
   const j = await (await ctx.post(JOURNEY, { headers: H(staff), data: {
     name: `Order context ${run}`, triggerEventType: 'ProductOrderCreateEvent', holdoutPercent: 0,
+    // the default conversion (order completed) would exit an instant-digital
+    // orderer BEFORE step 1 sends — this journey's point is the message, so
+    // pin conversion to an event that will not occur in the run
+    conversionEvent: 'SubscriptionRenewalEvent',
     steps: [{ type: 'message', stage: 'Welcome', channel: 'inApp',
       subject: `Order received, {{party.firstName}}`,
       content: 'Hi {{party.firstName}}, your order {{order.id}} is being processed.' }] } })).json();

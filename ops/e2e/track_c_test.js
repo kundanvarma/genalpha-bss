@@ -94,10 +94,12 @@ async function waitOrder(id, tok, pred, tries = 20) {
     if (!so) await sleep(2000);
   }
   if (!so) fail('physical item minted no shipping order');
-  if (!so.trackingRef || !so.trackingRef.startsWith('HJ')) {
-    fail('the carrier seam did not book a Helthjem tracking number: ' + JSON.stringify(so.trackingRef));
+  // which carrier books is postcode-routed CONFIG (Helthjem, Bring,
+  // PostNord...) — the invariant is that the seam booked a tracking ref
+  if (!so.trackingRef || !/^[A-Z]{2,3}\d+/.test(so.trackingRef)) {
+    fail('the carrier seam did not book a tracking number: ' + JSON.stringify(so.trackingRef));
   }
-  console.log(`OK CARRIER: the parcel was BOOKED with the carrier — Helthjem tracking`
+  console.log(`OK CARRIER: the parcel was BOOKED with the carrier — tracking`
     + ` ${so.trackingRef} rode onto shippingOrder ${so.id.slice(0, 8)}… at dispatch.`);
 
   const done = await waitOrder(mid, staff, (o) => o.state === 'completed', 20);
@@ -129,10 +131,10 @@ async function waitOrder(id, tok, pred, tries = 20) {
     psimSo = list.find((s) => s.productOrderId === psim.body.id) || null;
     if (!psimSo) await sleep(2000);
   }
-  if (!psimSo || !(psimSo.trackingRef || '').startsWith('HJ')) fail('physical SIM did not ship via Helthjem');
+  if (!psimSo || !/^[A-Z]{2,3}\d+/.test(psimSo.trackingRef || '')) fail('physical SIM did not ship via a carrier');
   const psimDone = await waitOrder(psim.body.id, staff, (o) => o.state === 'completed', 20);
   if (!psimDone) fail('physical SIM order did not complete on delivery');
-  console.log(`OK PHYSICAL SIM: the same plan with a physical SIM shipped via Helthjem`
+  console.log(`OK PHYSICAL SIM: the same plan with a physical SIM shipped via the carrier`
     + ` (${psimSo.trackingRef}) and completed on delivery — two SIM paths, two clocks, one plan.`);
 
   /* ---------- 4. an under-configured bundle is refused at order time (5b) ---------- */

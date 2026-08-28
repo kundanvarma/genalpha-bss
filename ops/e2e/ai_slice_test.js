@@ -25,6 +25,24 @@ async function staffToken(request) {
   const org = `stadium-e2e-${run}`;
   const path = 'fibre-route-stadium-north';
 
+  // Clean objects for this run, part 1: the demo-catalog curation
+  // (ops/demo-reset-catalog.py) retires every offering not on the storefront
+  // allowlist — including this PoC's seeded 'Stadium 5G Slice' and 'Edge AI
+  // Inferencing' (both Retired 2026-08-11). Ordering rightly refuses
+  // non-launched offerings at quote-accept, so relaunch them first; the seed
+  // is find-by-name and never re-activates.
+  const CAT = `${API}/tmf-api/productCatalogManagement/v4`;
+  for (const name of ['Stadium 5G Slice', 'Edge AI Inferencing']) {
+    const hits = await (await ctx.request.get(
+      `${CAT}/productOffering?name=${encodeURIComponent(name)}`, { headers: H })).json();
+    for (const o of hits.filter((o) => o.name === name
+        && !['Active', 'Launched'].includes(o.lifecycleStatus))) {
+      await ctx.request.patch(`${CAT}/productOffering/${o.id}`,
+        { headers: H, data: { lifecycleStatus: 'Active' } });
+      console.log(`relaunched retired offering for this run: ${name} (${o.id.slice(0, 8)})`);
+    }
+  }
+
   // 0. The AI chat seam: a plain-language ask becomes a structured intent.
   const drafted = await (await ctx.request.post(`${API}/ai/v1/intentDraft`, {
     headers: H,

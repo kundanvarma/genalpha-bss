@@ -87,6 +87,8 @@ async function staffToken(request) {
   await page.fill('input[name="password"]', 'Passw0rd!'); await page.fill('input[name="password-confirm"]', 'Passw0rd!');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.hero', { timeout: 30000 });
+  // the shop shelves by line of business — the plan lives under Mobile
+  await page.locator('.shoptab', { hasText: 'Mobile' }).first().click();
   await page.locator('.card:has(h2:text-is("GenAlpha Mobile Unlimited 5G"))').first().click();
   await page.waitForSelector('.pricetable', { timeout: 15000 });
   await page.click('button.primary.big');

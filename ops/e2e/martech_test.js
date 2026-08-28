@@ -33,6 +33,21 @@ async function staffToken(request, realm) {
       message: { subject, content: 'Use {code} on your next order.' },
     },
   });
+  // debris collection: a PAST run that died mid-suite leaves its ACTIVE
+  // order-triggered campaign firing on every order forever (and eating other
+  // parties' frequency-cap budget) — pause any stale twin before starting
+  const stale = await (await ctx.request.get(
+    `${API}/tmf-api/campaignManagement/v4/campaign?limit=200`,
+    { headers: as(genalpha) })).json().catch(() => []);
+  for (const c of (Array.isArray(stale) ? stale : [])) {
+    if (/^Welcome journey \d+$/.test(c.name || '') && c.name !== `Welcome journey ${run}`
+        && c.status === 'active') {
+      await ctx.request.patch(`${API}/tmf-api/campaignManagement/v4/campaign/${c.id}`,
+        { headers: { ...as(genalpha), ...json }, data: { status: 'paused' } }).catch(() => {});
+      console.log('debris: paused stale campaign', c.name);
+    }
+  }
+
   if (created.status() !== 201) fail('campaign create: ' + created.status() + ' ' + await created.text());
   const campaign = await created.json();
   if (campaign.status !== 'active') fail('campaign not active on create');

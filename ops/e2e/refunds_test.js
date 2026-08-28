@@ -110,17 +110,21 @@ async function token(ctx, user, pass) {
   const a2 = await newCustomerWithBill('unpaid');
   const d2 = await (await ctx.post(`${BILLS}/customerBill/${a2.bill.id}/dispute`,
     { headers: H(a2.tok), data: { reason: 'plan price looks wrong' } })).json();
-  await ctx.post(`${BILLS}/dispute/${d2.id}/resolve`,
-    { headers: H(staff), data: { outcome: 'credit', amount: 2, note: 'goodwill' } });
+  // late in a calendar month the prorated first bill can dip under a fixed
+  // 2 — credit half the due (2 decimals), whatever the calendar says
+  const creditAmt = Math.min(2, Math.floor(a2.bill.amountDue.value * 50) / 100);
+  const resolved2 = await ctx.post(`${BILLS}/dispute/${d2.id}/resolve`,
+    { headers: H(staff), data: { outcome: 'credit', amount: creditAmt, note: 'goodwill' } });
+  if (resolved2.status() >= 300) fail(`resolve refused: ${resolved2.status()} ${await resolved2.text()}`);
   const after = (await (await ctx.get(`${BILLS}/customerBill?limit=50`, { headers: H(a2.tok) })).json())
     .find((b) => b.id === a2.bill.id);
-  if (Math.abs(after.amountDue.value - (a2.bill.amountDue.value - 2)) > 0.001) {
+  if (Math.abs(after.amountDue.value - (a2.bill.amountDue.value - creditAmt)) > 0.001) {
     fail(`the credit did not reduce the due: ${a2.bill.amountDue.value} -> ${after.amountDue.value}`);
   }
   const lines = await (await ctx.get(
     `${BILLS}/customerBill/${a2.bill.id}/appliedCustomerBillingRate`, { headers: H(a2.tok) })).json();
   const creditLine = lines.find((r) => (r.name || '').includes('Dispute credit'));
-  if (!creditLine || Number(creditLine.taxExcludedAmount.value) !== -2) {
+  if (!creditLine || Math.abs(Number(creditLine.taxExcludedAmount.value) + creditAmt) > 0.001) {
     fail('the credit line is missing or wrong: ' + JSON.stringify(creditLine));
   }
   console.log('OK CREDITED on an unpaid bill: a negative line that says why ("Dispute credit —'

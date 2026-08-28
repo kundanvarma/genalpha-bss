@@ -62,8 +62,9 @@ async function call(method, path, tok, body) {
     so = list.find((s) => s.productOrderId === order.body.id) || null;
   }
   if (!so) fail('physical order minted no shipping order');
-  // booked with the carrier: inProgress + a Helthjem tracking number
-  if (!(so.trackingRef || '').startsWith('HJ')) {
+  // booked with A carrier: which one is postcode-routed CONFIG (Helthjem,
+  // Bring, PostNord...) — the invariant is that the seam booked a tracking ref
+  if (!/^[A-Z]{2,3}\d+/.test(so.trackingRef || '')) {
     fail('the carrier seam did not book a tracking number: ' + JSON.stringify(so.trackingRef));
   }
   // the carrier delivers on its own -> the product order completes machine-driven

@@ -65,7 +65,15 @@ async function call(method, path, tok, body) {
   ok(`PARTNERSHIP: "Wholesale access" permits ${roles.join('/')}, refuses others`);
 
   /* ---------- 2. PRODUCTS (W2) ---------- */
-  const offs = (await call('GET', `${CAT}/productOffering?limit=100`, staff)).body || [];
+  // the listing is newest-first and a page caps at 100 — page through, or
+  // the core seeds sink below suite-made debris and every .find comes home
+  // undefined
+  const offs = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = (await call('GET', `${CAT}/productOffering?limit=100&offset=${offset}`, staff)).body || [];
+    offs.push(...page);
+    if (!Array.isArray(page) || page.length < 100) break;
+  }
   const wholesale = offs.filter((o) => ((o.category || [{}])[0] || {}).name === 'Wholesale access');
   if (wholesale.length < 2) fail('the two wholesale access products are not modeled');
   const SHOP_CATS = ['Mobile plans', 'Broadband', 'TV & Add-ons', 'Partner services', 'Devices', 'Security', 'Insurance', 'Top-ups'];

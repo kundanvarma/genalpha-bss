@@ -49,11 +49,22 @@ async function apiCall(page, method, path, token, body) {
   const staff = (await staffRes.json()).access_token;
   const H = { Authorization: 'Bearer ' + staff, 'Content-Type': 'application/json' };
 
-  // two commitment-free, non-bundle, priced plans from the live catalog
-  const offers = await (await ctx.request.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
-  const prices = await (await ctx.request.get(
-    `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice?limit=100`, { headers: H })).json();
+  // two commitment-free, non-bundle, priced plans from the live catalog —
+  // both listings cap a page at 100 and newest-first sinks the seeds, so
+  // page through with offset
+  const pageAll = async (path) => {
+    const all = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await (await ctx.request.get(
+        `${API}${path}?limit=100&offset=${offset}`, { headers: H })).json();
+      if (!Array.isArray(page)) break;
+      all.push(...page);
+      if (page.length < 100) break;
+    }
+    return all;
+  };
+  const offers = await pageAll('/tmf-api/productCatalogManagement/v4/productOffering');
+  const prices = await pageAll('/tmf-api/productCatalogManagement/v4/productOfferingPrice');
   const priceById = Object.fromEntries(prices.map((p) => [p.id, p]));
   const plans = offers.filter((o) => !o.isBundle && !o.requiresVerifiedIdentity
     && !(o.productOfferingTerm || []).length

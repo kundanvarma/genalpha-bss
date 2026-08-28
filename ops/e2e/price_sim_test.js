@@ -90,10 +90,16 @@ async function token(ctx, client, user, pass) {
     await page.click('input[type="submit"], button[type="submit"]');
   }
   await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
-  await page.locator('.tab', { hasText: /^Simulator$/ }).click();
-  await page.waitForSelector('#listing-body tr', { timeout: 15000 });
-  const row = page.locator('#listing-body tr', { hasText: `Sim Plan ${run}` });
-  if (!(await row.count())) fail('the saved report is not in the Simulator pane');
+  // a tab click on an already-rendered pane may serve a listing fetched
+  // BEFORE the save — re-click to refetch until the fresh report shows
+  let seen = 0;
+  for (let i = 0; i < 6 && !seen; i++) {
+    await page.locator('.tab', { hasText: /^Simulator$/ }).click();
+    await page.waitForSelector('#listing-body tr', { timeout: 15000 });
+    seen = await page.locator('#listing-body tr', { hasText: `Sim Plan ${run}` }).count();
+    if (!seen) await page.waitForTimeout(2500);
+  }
+  if (!seen) fail('the saved report is not in the Simulator pane');
   console.log('OK the Simulator pane lists the report — the product owner sees the forecast where they price');
   await browser.close();
 

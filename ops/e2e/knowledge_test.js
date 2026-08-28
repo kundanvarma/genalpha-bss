@@ -117,7 +117,9 @@ async function token(request, realm, client, user, pass) {
   await csr.locator('[data-testid=kb-answer]').waitFor({ timeout: 30000 });
   const answer = await csr.locator('[data-testid=kb-answer]').textContent();
   const sources = await csr.locator('[data-testid=kb-sources]').textContent();
-  if (!answer.includes('According to')) fail('the ask answer is not grounded: ' + answer.slice(0, 120));
+  // a real model phrases the citation freely ("No — according to ...");
+  // grounding = it cites, not that it capitalizes like the stub
+  if (!/according to/i.test(answer)) fail('the ask answer is not grounded: ' + answer.slice(0, 120));
   if (!sources.includes('gifting and rollover')) fail('sources not named: ' + sources);
   console.log('OK the agent asked in plain words and got a grounded answer WITH sources —'
     + ' retrieved as herself, answered by the AI seam');

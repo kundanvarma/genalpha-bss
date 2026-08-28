@@ -56,10 +56,22 @@ async function token(ctx, client, user, pass) {
   console.log('OK the copilot answered with a clarifying question');
 
   /* ---------- answer -> a journey proposal card ---------- */
-  await page.fill('#growth-copilot-input', 'yes, a short series with an activation nudge and a check-in');
-  await page.click('#growth-copilot-send');
-  await page.waitForSelector('[data-testid="growth-proposal"]', { timeout: 15000 });
-  const cardText = await page.locator('[data-testid="growth-proposal"]').first().textContent();
+  // a real model may propose a single campaign for an ambiguous ask; the ask
+  // names a multi-step JOURNEY outright, and one sharper retry is allowed
+  // (the same real-model tolerance the other copilot suites carry)
+  let cardText = '';
+  const askJourney = async (phrase) => {
+    await page.fill('#growth-copilot-input', phrase);
+    await page.click('#growth-copilot-send');
+    await page.waitForSelector('[data-testid="growth-proposal"]', { timeout: 20000 });
+    cardText = await page.locator('[data-testid="growth-proposal"]').last().textContent();
+  };
+  await askJourney('yes — make it a multi-step journey: a welcome message,'
+    + ' then an activation nudge, then a check-in');
+  if (!/Journey/.test(cardText)) {
+    await askJourney('please propose it as a JOURNEY with three steps'
+      + ' (welcome, nudge, check-in), not a one-off campaign');
+  }
   if (!/Journey/.test(cardText)) fail('the proposal card is not a journey: ' + cardText.slice(0, 120));
   console.log('OK the copilot proposed a journey as a review card');
 

@@ -480,7 +480,17 @@ async function apiGet(page, path, token) {
   if ((bUsage.bucket || []).length !== 0) fail('customer B sees foreign usage: ' + JSON.stringify(bUsage).slice(0, 200));
   console.log('OK customer B has no usage buckets');
 
-  // --- Billing: a run rates Alice's provisioned products into one bill
+  // --- Billing: a run rates Alice's provisioned products into one bill.
+  // Wait until her whole fleet is ACTIVE first — on a loaded fleet one
+  // component can lag activation and its line would miss the run.
+  for (let i = 0; i < 40; i++) {
+    const prods = JSON.parse((await apiGet(a,
+      `/tmf-api/productInventory/v4/product?relatedPartyId=${alicePartyId}&limit=100`, tokenA)).body);
+    const pending = (prods || []).filter((p) => p.status && p.status !== 'active'
+      && p.status !== 'terminated' && p.status !== 'cancelled');
+    if (!pending.length) break;
+    await a.waitForTimeout(3000);
+  }
   const runRes = await setup.request.post(
     `${API}/tmf-api/customerBillManagement/v4/billingRun`, { timeout: 120000, headers: staffHeaders });
   if (runRes.status() !== 200) fail(`billing run failed: ${runRes.status()} ${await runRes.text()}`);
@@ -490,19 +500,37 @@ async function apiGet(page, path, token) {
   const billRow = a.locator('.row', { hasText: 'BILL-' }).first();
   await billRow.waitFor({ timeout: 15000 });
   const billTotal = (await billRow.locator('.linetotal').textContent()).trim();
-  // 2× bundle (64.98 + Samsung 37.49) + iPhone 17 (33.29) = 238.23/month
-  // recurring — PRORATED to the days since Alice ordered (today) — plus
+  // The monthly cast is computed from the LIVE catalog — the bundle bills
+  // its own recurring stack (its included TV rides free by design, the -15
+  // bundle discount is the deal), the picked phones bill their own MRC —
+  // PRORATED to the days since Alice ordered (today) — plus
   // 2.3 GB roaming overage × 2.50 = 5.75 usage, never prorated.
+  const monthlyOf = async (name) => {
+    const off = (await (await setup.request.get(
+      `${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent(name)}`,
+      { headers: staffHeaders })).json())[0];
+    let sum = 0;
+    for (const ref of (off?.productOfferingPrice || [])) {
+      const p = await (await setup.request.get(
+        `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice/${ref.id}`,
+        { headers: staffHeaders })).json();
+      if (p.priceType === 'recurring') sum += Number(p.price?.value || 0);
+    }
+    return sum;
+  };
+  const monthlyCast = 2 * (await monthlyOf('GenAlpha One Home & Mobile'))
+    + 2 * (await monthlyOf('Samsung Galaxy S26'))
+    + (await monthlyOf('Apple iPhone 17'));
   const nowB = new Date();
   const pStartB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), 1);
   const pEndB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth() + 1, 0);
   const dTotal = Math.round((pEndB - pStartB) / 86400000) + 1;
   const dLeft = Math.round((pEndB - Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), nowB.getUTCDate())) / 86400000) + 1;
-  const expectedRecurring = 238.23 * dLeft / dTotal; // per-line rounding drifts a few cents
+  const expectedRecurring = monthlyCast * dLeft / dTotal; // per-line rounding drifts a few cents
   const expectedBill = expectedRecurring + 5.75;
   const shown = parseFloat(billTotal);
   if (Math.abs(shown - expectedBill) > 0.06) {
-    fail(`expected ~${expectedBill.toFixed(2)} (238.23 × ${dLeft}/${dTotal} days + 5.75 usage), got "${billTotal}"`);
+    fail(`expected ~${expectedBill.toFixed(2)} (${monthlyCast.toFixed(2)} × ${dLeft}/${dTotal} days + 5.75 usage), got "${billTotal}"`);
   }
   await billRow.locator('.linkish').click();
   await a.locator('.billitems .row').first().waitFor({ timeout: 10000 });

@@ -148,8 +148,13 @@ const near = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
     .find((i) => i.productOffering && i.productOffering.id === bundle.id);
   if (!bundleItem) fail('the order misses the bundle item');
   const children = bundleItem.productOrderItem || [];
-  if (children.length !== 2) fail(`expected 2 nested children, got ${children.length}`);
-  const phoneChild = children.find((c) => c.productOffering.id === samsung.id);
+  // the configurator's 2 picks ride beside the bundle's fixed members,
+  // which ordering decomposes for per-component fulfilment
+  const picked = children.filter((c) => !c.decomposedComponent);
+  const fixed = children.filter((c) => c.decomposedComponent === true);
+  if (picked.length !== 2) fail(`expected 2 picked children, got ${picked.length}`);
+  if (fixed.length !== 2) fail(`expected the bundle's 2 fixed members decomposed alongside the picks, got ${fixed.length}`);
+  const phoneChild = picked.find((c) => c.productOffering.id === samsung.id);
   const picks = ((phoneChild.product || {}).productCharacteristic || []);
   if (!picks.some((c) => c.name === 'color' && c.value === 'Titanium Edition')
       || !picks.some((c) => c.name === 'storage' && c.value === '512GB')) {

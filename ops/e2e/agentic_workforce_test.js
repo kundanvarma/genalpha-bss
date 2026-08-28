@@ -390,9 +390,9 @@ const camt = (ref, amount) => `<?xml version="1.0" encoding="UTF-8"?>
       await new Promise((r) => setTimeout(r, 1000));
     }
     if (await paymentStatus(p3) !== 'refunded') fail('the dashboard Approve click did not refund');
-    if (!(await page.locator('[data-testid=wf-ledger-row]').count())) {
-      fail('the shift ledger is empty on the dashboard');
-    }
+    // the approve click re-renders the panel; rows repaint after the fetches
+    await page.waitForSelector('[data-testid=wf-ledger-row]', { timeout: 15000 })
+      .catch(() => fail('the shift ledger is empty on the dashboard'));
     console.log(`OK DASHBOARD: the console's Workforce tab showed ${completedCard} completed task(s),`
       + ` ${rows} pending approval(s) and the shift ledger; one Approve CLICK refunded the payment`
       + ' under the signed-in human\'s own token — the scoreboard is also the control room.');

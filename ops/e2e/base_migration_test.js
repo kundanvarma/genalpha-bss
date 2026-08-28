@@ -250,6 +250,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   }
   console.log('OK throwaway draft plan deleted (left tidy)');
 
+  // retire this run's offerings — Active uncategorized fixtures pile up as
+  // catalog debris other suites (and the shop's shelf pick) can trip over
+  for (const off of [legacy, target]) {
+    await ctx.request.patch(`${CATALOG}/productOffering/${off.id}`,
+      { headers: H, data: { lifecycleStatus: 'Retired' } }).catch(() => {});
+  }
+  console.log('OK fixtures retired (left tidy)');
+
   console.log('OK base migration: rehearse -> arm -> notice -> gate -> order -> exit/rollback, all on the books');
   await browser.close();
   process.exit(0);

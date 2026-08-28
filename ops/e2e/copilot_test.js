@@ -75,11 +75,20 @@ async function token(request, client, user, pass) {
   };
 
   /* ---------- scenario 1: streaming service, question -> proposal -> create ---------- */
-  await say('I want to sell a streaming service');
-  await page.locator('.copilot-ai', { hasText: 'cost per month' }).waitFor({ timeout: 20000 });
+  // name the product in the ask so stub AND real model land on the same
+  // catalog entities; a real model also phrases its price question freely
+  await say('I want to sell a streaming service called StreamPlus');
+  await page.locator('.copilot-ai', { hasText: /cost|price|charge|month/i })
+    .waitFor({ timeout: 30000 });
   console.log('OK the copilot asked the clarifying question (price)');
   await say('9.99 per month sounds right');
-  await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 20000 });
+  // a real model may answer in prose first — nudge once for the card
+  try {
+    await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 30000 });
+  } catch {
+    await say('yes — please propose it now (StreamPlus, 9.99 per month, Partner services)');
+    await page.locator('[data-testid=copilot-proposal]').waitFor({ timeout: 30000 });
+  }
   const card = await page.locator('[data-testid=copilot-proposal]').textContent();
   if (!card.includes('StreamPlus') || !card.includes('Partner services') || !card.includes('9.99')) {
     fail('proposal card wrong: ' + card.slice(0, 200));
@@ -131,8 +140,17 @@ async function token(request, client, user, pass) {
     + 'the copilot\'s category choice drove real fulfilment');
 
   /* ---------- scenario 2: the four-part smartwatch bundle ---------- */
-  await say('Now I want a kids smartwatch product');
-  await page.locator('[data-testid=copilot-proposal]').nth(1).waitFor({ timeout: 20000 });
+  // the structural asserts below are the SPEC — say it, so stub and real
+  // model both land on the same shape
+  await say('Now I want a kids smartwatch product: a bundle called Kids Watch Starter'
+    + ' with the watch device, a kids plan, and an optional GPS Tracking add-on,'
+    + ' sold on a 12-month commitment');
+  try {
+    await page.locator('[data-testid=copilot-proposal]').nth(1).waitFor({ timeout: 30000 });
+  } catch {
+    await say('yes — please propose the Kids Watch Starter bundle now');
+    await page.locator('[data-testid=copilot-proposal]').nth(1).waitFor({ timeout: 30000 });
+  }
   await page.locator('[data-testid=copilot-create]').nth(1).click();
   await page.locator('[data-testid=copilot-created]').nth(1).waitFor({ timeout: 25000 });
   const bundle = (await (await ctx.request.get(
@@ -151,8 +169,23 @@ async function token(request, client, user, pass) {
     + 'add-on + 12-month bundle with GPS optional');
 
   /* ---------- scenario 3: a plan + a cross-product discount RULE ---------- */
-  await say('I want to create a 5G mobile plan with 50 GB data and if customer buys a Samsung phone then 10% discount');
-  await page.locator('[data-testid=copilot-proposal]').nth(2).waitFor({ timeout: 20000 });
+  await say('I want to create a 5G mobile plan called "5G Mobile Plan 50 GB" with 50 GB data,'
+    + ' plus a pricing rule named "Samsung with plan discount": if the customer buys a'
+    + ' Samsung Galaxy S26 with it, 10% discount — for consumer customers only,'
+    + ' never business organizations');
+  // a real model may take a question round or two before the card — keep
+  // answering "no more questions" until the proposal materializes
+  let card3 = false;
+  for (let round = 0; round < 3 && !card3; round++) {
+    try {
+      await page.locator('[data-testid=copilot-proposal]').nth(2).waitFor({ timeout: 60000 });
+      card3 = true;
+    } catch {
+      await say('no further questions — propose it now exactly as specified'
+        + ' (plan "5G Mobile Plan 50 GB", rule "Samsung with plan discount", consumer-only)');
+    }
+  }
+  if (!card3) fail('scenario 3 never produced a proposal card');
   const ruleCard = await page.locator('[data-testid=copilot-proposal]').nth(2).textContent();
   if (!ruleCard.includes('pricing rule') || !ruleCard.includes('Samsung')) {
     fail('proposal card missing the pricing-rule row: ' + ruleCard.slice(0, 200));

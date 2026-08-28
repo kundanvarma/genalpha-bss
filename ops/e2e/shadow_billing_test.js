@@ -91,13 +91,24 @@ async function token(ctx, client, user, pass) {
     await page.click('input[type="submit"], button[type="submit"]');
   }
   await page.waitForSelector('#main:not([hidden])', { timeout: 15000 });
-  await page.locator('.tab', { hasText: 'Shadow billing' }).click();
-  await page.waitForSelector('#listing-body tr', { timeout: 15000 });
-  if (!(await page.locator('#listing-body tr', { hasText: `Shadow Plan ${run}` }).count())) {
-    fail('the drift is not in the Shadow billing pane');
+  // a tab click on an already-rendered pane may serve a stale listing —
+  // re-click to refetch until the fresh drift row shows
+  let drifted = 0;
+  for (let i = 0; i < 6 && !drifted; i++) {
+    await page.locator('.tab', { hasText: 'Shadow billing' }).click();
+    await page.waitForSelector('#listing-body tr', { timeout: 15000 });
+    drifted = await page.locator('#listing-body tr', { hasText: `Shadow Plan ${run}` }).count();
+    if (!drifted) await page.waitForTimeout(2500);
   }
+  if (!drifted) fail('the drift is not in the Shadow billing pane');
   console.log('OK the Shadow billing pane shows the drift — ops sees it before the customer does');
   await browser.close();
+
+  // retire the repriced fixture — a live 59-priced debris plan skews any
+  // later clone/diff or shelf pick
+  await ctx.patch(`${CAT}/productOffering/${offering.id}`,
+    { headers: H(staff), data: { lifecycleStatus: 'Retired' } }).catch(() => {});
+  console.log('OK fixture retired (left tidy)');
 
   console.log('\nALL P3 CHECKS PASSED — the parallel bill run is a standing loop: a repriced catalog '
     + 'raises a drift with exact numbers before the next invoice lands.');

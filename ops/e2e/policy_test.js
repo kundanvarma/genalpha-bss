@@ -32,12 +32,26 @@ async function tokenVia(request, clientId, username = 'demo', password = 'demo')
   const POLICY = `${API}/tmf-api/policyManagement/v4`;
   const ORDERS = `${API}/tmf-api/productOrderingManagement/v4/productOrder`;
 
-  // A plain offering (no verified-identity gate) to order in bulk.
+  // A plain, SELLABLE offering (no verified-identity gate) to order in bulk —
+  // the catalog curation sweep retires old fixtures, and a retired pick
+  // would 400 on lifecycle before the policy engine ever gets a say.
   const offerings = await (await ctx.request.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
-  const plain = offerings.find((o) => !o.requiresVerifiedIdentity && !o.isBundle);
-  if (!plain) fail('no plain offering to order');
+  const plain = offerings.find((o) => !o.requiresVerifiedIdentity && !o.isBundle
+    && ['Active', 'Launched'].includes(o.lifecycleStatus));
+  if (!plain) fail('no plain sellable offering to order');
   console.log('OK ordering target:', plain.name, plain.id);
+
+  // debris collection: a past run that died before its cleanup leaves an
+  // ENABLED max-2 rule that would veto this run's post-disable order
+  const staleRules = await (await ctx.request.get(
+    `${POLICY}/policyRule?limit=100`, { headers: H })).json();
+  for (const r of (Array.isArray(staleRules) ? staleRules : [])) {
+    if (/^E2E max-2 per order \d+$/.test(r.name || '') && r.enabled) {
+      await ctx.request.delete(`${POLICY}/policyRule/${r.id}`, { headers: H }).catch(() => {});
+      console.log('debris: removed stale rule', r.name);
+    }
+  }
 
   const orderFor = (qty) => ({
     productOrderItem: [{ action: 'add', quantity: qty, productOffering: { id: plain.id, name: plain.name } }],
@@ -86,7 +100,14 @@ async function tokenVia(request, clientId, username = 'demo', password = 'demo')
     headers: H, data: { enabled: false },
   });
   if (off.status() !== 200) fail('disable should be 200, got ' + off.status());
-  const nowOk = await ctx.request.post(ORDERS, { headers: H, data: orderFor(3) });
+  // the disable is a row change; ordering's next evaluation sees it — allow
+  // the short propagation window a loaded fleet needs
+  let nowOk = null;
+  for (let i = 0; i < 10; i++) {
+    nowOk = await ctx.request.post(ORDERS, { headers: H, data: orderFor(3) });
+    if (nowOk.status() === 201) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
   if (nowOk.status() !== 201) fail('after disabling the rule, order for 3 should pass, got ' + nowOk.status());
   console.log('OK rule disabled → same order for 3 now succeeds — NO redeploy');
 

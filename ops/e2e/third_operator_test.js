@@ -51,16 +51,18 @@ async function token(ctx, realm, user, pass) {
   const email = `first-${run}@fjord.example`;
   const login = await (await ctx.post(`${API}/tmf-api/rolesAndPermissionsManagement/v4/user`,
     { headers: H(staff), data: { email, givenName: 'Freja', familyName: `Fjord${run}` } })).json();
-  await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
+  const partyRes = await ctx.post(`${API}/tmf-api/party/v4/individual`, { headers: H(staff), data: {
     id: login.id, givenName: 'Freja', familyName: `Fjord${run}`,
     contactMedium: [{ mediumType: 'email', characteristic: { emailAddress: email } }] } });
+  if (partyRes.status() >= 400) fail(`freja's party create was refused: ${partyRes.status()}`);
   const freja = await token(ctx, 'fjord', email, login.temporaryPassword);
-  await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
+  const orderRes = await ctx.post(`${API}/tmf-api/productOrderingManagement/v4/productOrder`, {
     headers: H(freja), data: { productOrderItem: [{ action: 'add',
       productOffering: { id: plan.id, name: plan.name } }] } });
+  if (orderRes.status() >= 400) fail(`freja's order was refused: ${orderRes.status()}`);
   let line = null;
-  for (let i = 0; i < 25 && !line; i++) {
-    await sleep(2000);
+  for (let i = 0; i < 50 && !line; i++) { // a newborn tenant's fleet may still be settling
+    await sleep(3000);
     const services = await (await ctx.get(`${API}/tmf-api/serviceInventory/v4/service`,
       { headers: H(freja) })).json();
     line = (Array.isArray(services) ? services : []).find((s) => s.state === 'active') || null;

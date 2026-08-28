@@ -96,7 +96,10 @@ async function token(request) {
   const offerings = await (await ctx.request.get(
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
   const plain = offerings.find((o) => !o.requiresVerifiedIdentity && !o.isBundle
-    && (o.productOfferingPrice || []).length);
+    && (o.productOfferingPrice || []).length
+    // the shop shelves by category — an uncategorized fixture from another
+    // suite is real in the catalog but invisible in the storefront
+    && (o.category || []).length);
   if (!plain) fail('no plain priced offering for the cart preview');
   const ctxC = await browser.newContext();
   const page = await ctxC.newPage();

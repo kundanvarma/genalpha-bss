@@ -42,7 +42,9 @@ async function token(ctx, user, pass) {
 }
 
 (async () => {
-  const ctx = await request.newContext();
+  // an 80+-container fleet under parallel load needs more than the 30s
+  // Playwright default per call — the drill tests survival, not latency
+  const ctx = await request.newContext({ timeout: 90000 });
   const fail = (m) => { console.error('FAIL: ' + m); process.exit(1); };
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const H = (t) => ({ Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' });
@@ -238,4 +240,10 @@ async function token(ctx, user, pass) {
   console.log('\nALL P1 HARDENING CHECKS PASSED — the billing run survives its own death and'
     + ' resumes to exactly-once, the rate ceiling outlives its gateway, throughput has numbers'
     + ' with a tripwire, and silence now pages somebody. Fast, and still honest.');
-})().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exit(1); });
+})().catch((e) => { console.error('FAIL:', e.message.split('\n').slice(0, 3).join(' | ')); process.exitCode = 1; })
+  .finally(() => {
+    // the drill paces billing at 1500ms/account for the kill window — a run
+    // that dies mid-drill must not leave the whole fleet billing in slow motion
+    try { sh('docker compose up -d billing'); } catch { /* fleet knows best */ }
+    process.exit(process.exitCode || 0);
+  });

@@ -36,12 +36,14 @@ async function token(ctx, realm, user, pass) {
   const login = await (await ctx.post(USER, { headers: H(staff), data: { email, givenName: `Cap${run}`, familyName: `C${run}` } })).json();
   await ctx.post(PARTY, { headers: H(staff), data: { id: login.id, givenName: `Cap${run}`, familyName: `C${run}` } });
   const rp = [{ id: login.id, role: 'customer' }];
+  // CAP tracks FREQUENCY_CAP_MAX in docker-compose.yml — change them together
+  const CAP = 25;
   let sent = 0; let capped = 0;
-  for (let i = 1; i <= 6; i++) {
+  for (let i = 1; i <= CAP + 1; i++) {
     const r = await (await ctx.post(MSG, { headers: H(staff), data: { messageType: 'inApp', subject: `cap ${run} #${i}`, content: 'hi', relatedParty: rp } })).json();
     if (r.status === 'capped') capped++; else if (r.id) sent++;
   }
-  if (sent !== 5 || capped !== 1) fail(`frequency cap wrong: sent ${sent}, capped ${capped} (expected 5 + 1)`);
+  if (sent !== CAP || capped !== 1) fail(`frequency cap wrong: sent ${sent}, capped ${capped} (expected ${CAP} + 1)`);
   // Confirm in the inbox too (best-effort; the send responses already prove it).
   try {
     const custTok = await token(ctx, 'bss-biz', email, login.temporaryPassword);
@@ -49,7 +51,7 @@ async function token(ctx, realm, user, pass) {
       const res = await ctx.get(INBOX, { headers: H(custTok) });
       if (res.ok()) {
         const got = (await res.json()).filter((m) => (m.subject || '').startsWith(`cap ${run}`)).length;
-        if (got !== 5) fail(`the inbox should hold 5 (cap), holds ${got}`);
+        if (got !== CAP) fail(`the inbox should hold ${CAP} (cap), holds ${got}`);
       }
     }
   } catch (e) { /* inbox read is confirmation only */ }
