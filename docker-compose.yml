@@ -1636,7 +1636,7 @@ services:
     container_name: bss-mock-legacy
     restart: unless-stopped
     ports:
-      - "8139:8080"
+      - "8150:8080"
 
   mock-llm:
     build: ./integrations/mock-llm

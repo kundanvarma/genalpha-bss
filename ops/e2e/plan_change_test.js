@@ -200,6 +200,18 @@ async function apiCall(page, method, path, token, body) {
       name: `E2E Fiber 500 ${run}`, lifecycleStatus: 'Active', isBundle: false,
       category: [{ id: broadbandCat.id, name: 'Broadband', '@referredType': 'Category' }],
       productOfferingPrice: [{ id: f5Price.id, name: f5Price.name }] } })).json();
+  if (!fiber500.id) fail('E2E Fiber 500 not created: ' + JSON.stringify(fiber500).slice(0, 200));
+  // the gateway's browse cache holds the public catalog listing for 60s and
+  // concurrent guest traffic can re-prime it — wait until the fresh offering
+  // is actually servable before asking the UI to show it
+  let onShelf = false;
+  for (let i = 0; i < 12 && !onShelf; i++) {
+    const page1 = await (await ctx.request.get(
+      `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100&offset=0&lifecycleStatus=Active`)).json();
+    onShelf = (Array.isArray(page1) ? page1 : []).some((o) => o.id === fiber500.id);
+    if (!onShelf) await new Promise((r) => setTimeout(r, 10000));
+  }
+  if (!onShelf) fail('E2E Fiber 500 never reached the public shelf (browse cache)');
 
   const bundleOrder = await apiCall(page, 'POST', '/tmf-api/productOrderingManagement/v4/productOrder', carl, {
     productOrderItem: [{
@@ -235,8 +247,23 @@ async function apiCall(page, method, path, token, body) {
   const lineRows = await page.locator('[data-testid=line-row]').count();
   if (lineRows < 2) fail('expected multiple line rows after the bundle, got ' + lineRows);
   console.log(`OK Mobile card shows ${lineRows} lines, each with its own number and SIM`);
-  await page.click(`[data-testid=change-plan-${fiberProduct.id}]`);
-  await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
+  // the page's offering index loaded before this run minted E2E Fiber 500 —
+  // reload until the change-plan dropdown carries the fresh option, and if
+  // it never does, say what the dropdown actually held
+  let optionSeen = false;
+  for (let i = 0; i < 5 && !optionSeen; i++) {
+    await page.reload();
+    await page.waitForSelector(`[data-testid=change-plan-${fiberProduct.id}]`, { timeout: 15000 });
+    await page.click(`[data-testid=change-plan-${fiberProduct.id}]`);
+    await page.waitForSelector('[data-testid=change-plan-form] select', { timeout: 10000 });
+    optionSeen = (await page.locator(
+      `[data-testid=change-plan-form] select option[value="${fiber500.id}"]`).count()) > 0;
+    if (!optionSeen) await page.waitForTimeout(3000);
+  }
+  if (!optionSeen) {
+    const held = await page.locator('[data-testid=change-plan-form] select option').allTextContents();
+    fail(`the change-plan dropdown never offered ${fiber500.id}: ${JSON.stringify(held)}`);
+  }
   await page.selectOption('[data-testid=change-plan-form] select', fiber500.id);
   await page.click('[data-testid=change-plan-form] button.primary');
   await page.waitForSelector('[data-testid=plan-changed]', { timeout: 20000 });

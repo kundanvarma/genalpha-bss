@@ -508,29 +508,38 @@ async function apiGet(page, path, token) {
   const monthlyOf = async (name) => {
     const off = (await (await setup.request.get(
       `${API}/tmf-api/productCatalogManagement/v4/productOffering?name=${encodeURIComponent(name)}`,
-      { headers: staffHeaders })).json())[0];
+      { headers: staffHeaders })).json()).find((o) => o.name === name);
     let sum = 0;
     for (const ref of (off?.productOfferingPrice || [])) {
       const p = await (await setup.request.get(
         `${API}/tmf-api/productCatalogManagement/v4/productOfferingPrice/${ref.id}`,
         { headers: staffHeaders })).json();
-      if (p.priceType === 'recurring') sum += Number(p.price?.value || 0);
+      // unconditioned recurring components only — a conditioned premium
+      // (e.g. a colour edition) bills only when the pick matches, and
+      // Alice picked Icy Blue
+      if (p.priceType === 'recurring' && !(p.prodSpecCharValueUse || []).length) {
+        sum += Number(p.price?.value || 0);
+      }
     }
     return sum;
   };
-  const monthlyCast = 2 * (await monthlyOf('GenAlpha One Home & Mobile'))
-    + 2 * (await monthlyOf('Samsung Galaxy S26'))
-    + (await monthlyOf('Apple iPhone 17'));
   const nowB = new Date();
   const pStartB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), 1);
   const pEndB = Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth() + 1, 0);
   const dTotal = Math.round((pEndB - pStartB) / 86400000) + 1;
   const dLeft = Math.round((pEndB - Date.UTC(nowB.getUTCFullYear(), nowB.getUTCMonth(), nowB.getUTCDate())) / 86400000) + 1;
-  const expectedRecurring = monthlyCast * dLeft / dTotal; // per-line rounding drifts a few cents
+  // per-LINE proration with HALF_UP, exactly like the run rates lines
+  const round2 = (v) => Math.round(v * 100) / 100;
+  const perLine = (m) => (dLeft < dTotal ? round2(m * dLeft / dTotal) : round2(m));
+  const bundleM = await monthlyOf('GenAlpha One Home & Mobile');
+  const samsungM = await monthlyOf('Samsung Galaxy S26');
+  const iphoneM = await monthlyOf('Apple iPhone 17');
+  const expectedRecurring = 2 * perLine(bundleM) + 2 * perLine(samsungM) + perLine(iphoneM);
   const expectedBill = expectedRecurring + 5.75;
   const shown = parseFloat(billTotal);
   if (Math.abs(shown - expectedBill) > 0.06) {
-    fail(`expected ~${expectedBill.toFixed(2)} (${monthlyCast.toFixed(2)} × ${dLeft}/${dTotal} days + 5.75 usage), got "${billTotal}"`);
+    fail(`expected ~${expectedBill.toFixed(2)} (2×${bundleM} + 2×${samsungM} + ${iphoneM}`
+      + ` per-line × ${dLeft}/${dTotal} days + 5.75 usage), got "${billTotal}"`);
   }
   await billRow.locator('.linkish').click();
   await a.locator('.billitems .row').first().waitFor({ timeout: 10000 });
@@ -590,11 +599,15 @@ async function apiGet(page, path, token) {
   await a.locator('.row.noteread', { hasText: 'Order received' }).first().waitFor({ timeout: 10000 });
   console.log('OK inbox renders; mark-read works');
 
-  // Notifications are party-scoped like everything else.
+  // Notifications are party-scoped like everything else. B's own welcome
+  // (the seeded registration journey greets every new customer) is HERS —
+  // foreign means any of A's four order/billing notifications.
   const bInbox = JSON.parse((await apiGet(b,
     '/tmf-api/communicationManagement/v4/communicationMessage?limit=100', tokenB)).body);
-  if (bInbox.length !== 0) fail('customer B sees foreign notifications: ' + JSON.stringify(bInbox).slice(0, 200));
-  console.log('OK customer B has an empty inbox');
+  const crossPartyMsgs = bInbox.filter((m) =>
+    /Order received|Order complete|Installer booked|Your bill is ready/.test(m.subject || ''));
+  if (crossPartyMsgs.length !== 0) fail('customer B sees foreign notifications: ' + JSON.stringify(crossPartyMsgs).slice(0, 200));
+  console.log('OK customer B sees none of A\'s notifications');
 
   // Idempotency + isolation: rerun bills nobody twice; B has no bills
   const rerun = await (await setup.request.post(

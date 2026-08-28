@@ -84,7 +84,10 @@ async function token(ctx, client, user, pass) {
   let msg = null;
   for (let i = 0; i < 30; i++) {
     const inbox = await (await ctx.get(INBOX, { headers: H(custTok) })).json();
-    msg = inbox.find((m) => m.subject && m.subject.includes(firstName));
+    // the registration ALSO fires the seeded demo welcome journey, whose
+    // inApp message carries the same first name — match OUR journey by source
+    msg = inbox.find((m) => m.subject && m.subject.includes(firstName)
+      && (m.source || '').includes(`Templated onboarding ${run}`));
     if (msg) break;
     await sleep(1500);
   }

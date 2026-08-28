@@ -32,8 +32,12 @@ async function token(ctx, realm, user, pass) {
   await page.locator('.tab', { hasText: 'Audience builder' }).click();
   await page.waitForSelector('[data-testid="scheduler-card"]', { timeout: 10000 });
 
-  /* ---------- the card shows status + heap ---------- */
-  const statusText = await page.locator('[data-testid="scheduler-status"]').textContent();
+  /* ---------- the card shows status + heap (populated async after mount) ---------- */
+  let statusText = '';
+  for (let i = 0; i < 10 && !/JVM heap \d+ \/ \d+ MB/.test(statusText); i++) {
+    statusText = await page.locator('[data-testid="scheduler-status"]').textContent();
+    if (!/JVM heap/.test(statusText)) await page.waitForTimeout(2000);
+  }
   if (!/JVM heap \d+ \/ \d+ MB/.test(statusText)) fail('the scheduler card does not show JVM heap: ' + statusText);
   if (!/runs \d+/.test(statusText)) fail('the scheduler card does not show run activity');
   console.log('OK the Audience builder shows an auto-refresh ops card with activity + JVM heap');

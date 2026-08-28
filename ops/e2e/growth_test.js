@@ -51,20 +51,28 @@ async function token(ctx, client, user, pass) {
   console.log('OK six consented customers browsed the run-unique category — a segment of exactly six');
 
   /* ---------- the campaign: 50% holdout, 7-day window ---------- */
+  // the split is a deterministic hash of (campaignId + partyId): with six
+  // people, ~1 run in 32 rolls a degenerate 6-0 — that is arithmetic, not a
+  // defect. Re-roll with a fresh campaign (new id, new hash) when it happens.
   const CAMPAIGN = `${API}/tmf-api/campaignManagement/v4/campaign`;
-  const subject = `Growth pitch ${run}`;
-  const campaign = await (await ctx.post(CAMPAIGN, { headers: H(staff), data: {
-    name: `Growth campaign ${run}`, segmentName: SEGMENT,
-    holdoutPercent: 50, conversionWindowDays: 7,
-    message: { subject, content: 'Something for your shelf.' } } })).json();
-  const blast = await (await ctx.post(`${CAMPAIGN}/${campaign.id}/execute`,
-    { headers: H(staff), data: {} })).json();
-  let stats = await (await ctx.get(`${CAMPAIGN}/${campaign.id}/stats`, { headers: H(staff) })).json();
-  if (stats.reached + stats.heldOut !== 6) {
-    fail('the ledger does not cover the segment: ' + JSON.stringify(stats));
+  let subject; let campaign; let stats;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    subject = `Growth pitch ${run} #${attempt}`;
+    campaign = await (await ctx.post(CAMPAIGN, { headers: H(staff), data: {
+      name: `Growth campaign ${run} #${attempt}`, segmentName: SEGMENT,
+      holdoutPercent: 50, conversionWindowDays: 7,
+      message: { subject, content: 'Something for your shelf.' } } })).json();
+    await ctx.post(`${CAMPAIGN}/${campaign.id}/execute`, { headers: H(staff), data: {} });
+    stats = await (await ctx.get(`${CAMPAIGN}/${campaign.id}/stats`, { headers: H(staff) })).json();
+    if (stats.reached + stats.heldOut !== 6) {
+      fail('the ledger does not cover the segment: ' + JSON.stringify(stats));
+    }
+    if (stats.reached >= 1 && stats.heldOut >= 1) break;
+    await ctx.patch(`${CAMPAIGN}/${campaign.id}`, { headers: H(staff), data: { status: 'paused' } });
+    console.log(`degenerate ${stats.reached}-${stats.heldOut} split — re-rolling (attempt ${attempt})`);
   }
   if (stats.reached < 1 || stats.heldOut < 1) {
-    fail('a 50% holdout produced an empty variant: ' + JSON.stringify(stats));
+    fail('a 50% holdout produced an empty variant four times running: ' + JSON.stringify(stats));
   }
   console.log(`OK the blast ledgered all six: ${stats.reached} treated, ${stats.heldOut} held out`);
 

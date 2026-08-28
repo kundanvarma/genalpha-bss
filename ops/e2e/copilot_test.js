@@ -36,9 +36,14 @@ async function token(request, client, user, pass) {
   // "already exists" guard doesn't block this one
   const NAMES = ['StreamPlus', 'Kids Watch', 'Kids Plan 2 GB', 'GPS Tracking', 'Kids Watch Starter',
     '5G Mobile Plan 50 GB'];
+  // a real model may phrase the plan name its own way — match the shape,
+  // not just the exact strings, so no run's creations outlive the sweep
+  const isOurs = (name) => NAMES.includes(name)
+    || /(^|\s)(StreamPlus|Kids Watch|GPS Tracking)(\s|$)/.test(name || '')
+    || /50 GB.*(5G|Plan)|5G.*Plan.*50 GB/.test(name || '');
   const sweep = async () => {
     const offers = await (await ctx.request.get(`${CATALOG}/productOffering?limit=100`, { headers: H })).json();
-    for (const o of offers.filter((x) => NAMES.includes(x.name))) {
+    for (const o of offers.filter((x) => isOurs(x.name) && x.name !== 'GenAlpha Mobile 50 GB')) {
       await ctx.request.delete(`${CATALOG}/productOffering/${o.id}`, { headers: H });
     }
     const specs = await (await ctx.request.get(`${CATALOG}/productSpecification?limit=100`, { headers: H })).json();

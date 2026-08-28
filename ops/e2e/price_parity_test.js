@@ -54,7 +54,14 @@ async function token(ctx, realm, client, user, pass) {
     condition: JSON.stringify({ '==': [{ var: 'channel' }, 'agent'] }),
     message: 'agent channel -10%', adjustmentType: 'percent', adjustmentValue: -10,
   };
-  const refused = await ctx.post(`${POLICY}/policyRule`, { headers: H(staff), data: channelRule });
+  // the newborn tenant's tokens reach the fleet on the registry refresh
+  // tick — outlast a first-seconds 401 before judging the refusal
+  let refused = null;
+  for (let i = 0; i < 6; i++) {
+    refused = await ctx.post(`${POLICY}/policyRule`, { headers: H(staff), data: channelRule });
+    if (refused.status() !== 401) break;
+    await new Promise((r) => setTimeout(r, 10000));
+  }
   if (refused.status() !== 400) fail('uniform mode must refuse channel pricing: ' + refused.status());
   const problem = await refused.json();
   if (!/parity/i.test(problem.message || '')) fail('the refusal must explain itself: ' + JSON.stringify(problem));

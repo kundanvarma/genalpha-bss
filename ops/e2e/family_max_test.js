@@ -36,9 +36,11 @@ async function register(page, email, first, last) {
     `${API}/tmf-api/productCatalogManagement/v4/productOffering?limit=100`, { headers: H })).json();
   const fm = offers.find((o) => o.name === 'GenAlpha Family Max');
   if (!fm) fail('Family Max not seeded');
-  const by = (n) => offers.find((o) => o.name.includes(n));
-  const [ten, fifty, unl, phone] = [by('Mobile 10 GB'), by('Mobile 50 GB'),
-    by('Unlimited 5G'), by('Apple iPhone 17 Pro')];
+  // exact names — an includes() match can be shadowed by a newer,
+  // similarly-named offering (e.g. one a copilot suite created)
+  const by = (n) => offers.find((o) => o.name === n);
+  const [ten, fifty, unl, phone] = [by('GenAlpha Mobile 10 GB'), by('GenAlpha Mobile 50 GB'),
+    by('GenAlpha Mobile Unlimited 5G'), by('Apple iPhone 17 Pro')];
 
   // --- UI: the configurator enforces cardinality live
   const page = await (await browser.newContext()).newPage();

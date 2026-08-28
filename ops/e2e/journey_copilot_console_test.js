@@ -66,10 +66,10 @@ async function token(ctx, client, user, pass) {
     await page.waitForSelector('[data-testid="growth-proposal"]', { timeout: 20000 });
     cardText = await page.locator('[data-testid="growth-proposal"]').last().textContent();
   };
-  await askJourney('yes — make it a multi-step journey: a welcome message,'
-    + ' then an activation nudge, then a check-in');
+  await askJourney('yes — make it a multi-step journey with THREE separate message'
+    + ' steps: step 1 a welcome message, step 2 an activation nudge, step 3 a check-in');
   if (!/Journey/.test(cardText)) {
-    await askJourney('please propose it as a JOURNEY with three steps'
+    await askJourney('please propose it as a JOURNEY with three separate message steps'
       + ' (welcome, nudge, check-in), not a one-off campaign');
   }
   if (!/Journey/.test(cardText)) fail('the proposal card is not a journey: ' + cardText.slice(0, 120));
