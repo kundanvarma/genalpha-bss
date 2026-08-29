@@ -32,6 +32,8 @@ RESULTS="$RESULTS_DIR/results.tsv"
 
 PREAMBLE="operator_form_test third_operator_test"
 CAP=2100
+SUITE_N=0   # ROLLING_RESET (optional env): script run between suites every
+            # ROLLING_EVERY suites — a memory-tight VM's relief valve
 
 wait_ready() {
   # the fleet's two front doors: the IdP and the gateway
@@ -88,6 +90,11 @@ run_one() {
   # a young, fast fleet can out-run its own per-subject rate limiter when
   # suites go back-to-back — the pacing that slow runs used to provide
   sleep 30
+  SUITE_N=$((SUITE_N + 1))
+  if [ -n "${ROLLING_RESET:-}" ] && [ $((SUITE_N % ${ROLLING_EVERY:-25})) -eq 0 ]; then
+    bash "$ROLLING_RESET" || true
+    wait_ready
+  fi
 }
 
 docker stop bss-worker-controller >/dev/null 2>&1 || true

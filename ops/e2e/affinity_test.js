@@ -103,9 +103,17 @@ async function token(request, user, pass) {
   }
   await sleep(6500); // outlast the affinity cache TTL
   const page = await browser.newPage();
-  await page.goto(`${API}/shop/offering/${REAL_PHONE.id}`);
+  // the gateway's browse cache (60s, re-primed by other traffic) can serve
+  // the phone's page from before the co-purchases — reload until the rail
+  // appears rather than judging the first paint
   const rail = page.locator('[data-testid=also-bought]');
-  await rail.waitFor({ timeout: 15000 }).catch(() => fail('the shop showed no also-bought rail'));
+  let railUp = false;
+  for (let i = 0; i < 7 && !railUp; i++) {
+    await page.goto(`${API}/shop/offering/${REAL_PHONE.id}`);
+    railUp = await rail.waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+    if (!railUp) await sleep(12000);
+  }
+  if (!railUp) fail('the shop showed no also-bought rail');
   const items = await page.locator('[data-testid=also-bought-item]').count();
   if (items < 1) fail('the also-bought rail rendered no items');
   const railText = await rail.textContent();
