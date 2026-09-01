@@ -1,0 +1,14 @@
+The end-to-end contract and verification suites in this directory are
+licensed under the Apache License, Version 2.0 — deliberately more
+permissive than the repository's FSL license, so that anyone (users,
+forks, auditors, integrators) can freely use, adapt and extend the
+suites to verify the behaviour of this or any derived system.
+
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+or in LICENSES/Apache-2.0.txt at the repository root. Unless required by
+applicable law or agreed to in writing, software distributed under the
+License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied.

@@ -515,3 +515,14 @@ Playwright · Helm · Terraform · GitHub Actions.
 
 `.github/workflows/ci.yml` builds and tests every service on each push. CI is the source of
 truth for "it builds and passes".
+
+## License
+
+genalpha-bss is source-available under the [Business Source License 1.1](LICENSE):
+free to read, free for all non-production use, and **free in production for operators
+under 20,000 subscribers (or €3M service revenue)** — run your whole business on it.
+Above the threshold, and for offering genalpha-bss itself as a product or service, a
+commercial license applies. Every release automatically becomes
+[Apache-2.0](LICENSES/Apache-2.0.txt) two years after it ships, irrevocably. The e2e
+contract suites are Apache-2.0 today, and all previously released versions remain
+Apache-2.0 forever. Details, scope map and FAQ: [LICENSING.md](LICENSING.md).
