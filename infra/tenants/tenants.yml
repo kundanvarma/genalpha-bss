@@ -144,6 +144,346 @@ bss:
         # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
         # New tenants default OFF — raw is opt-in, never assumed.
         ai-raw-exposure: true
+      - id: chilimobil
+        issuer: ${OIDC_ISSUER_URI_CHILIMOBIL:http://localhost:8085/realms/chilimobil}
+        jwks-uri: http://keycloak:8080/realms/chilimobil/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/chilimobil/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_CHILIMOBIL:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_CHILIMOBIL:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_CHILIMOBIL:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_CHILIMOBIL:peppol}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_CHILIMOBIL:einvoice}
+        bank-token: ${BANK_TOKEN_CHILIMOBIL:}
+        social-api-url: ${SOCIAL_API_URL_CHILIMOBIL:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_CHILIMOBIL:}
+        delivery-provider: ${DELIVERY_PROVIDER_CHILIMOBIL:internal}
+        esp-url: ${ESP_URL_CHILIMOBIL:}
+        esp-api-key: ${ESP_API_KEY_CHILIMOBIL:}
+        esp-from: ${ESP_FROM_CHILIMOBIL:}
+        tagline: "Mobil, hyttebredbånd og fiber — ærlige priser, ingen binding."
+        brand-name: Chilimobil
+        brand-color: "#E63329"
+        locale: "no"
+        currency: NOK
+        business-sales: true
+        agent-commerce: ${AGENT_COMMERCE_CHILIMOBIL:off}
+        ai-visibility: ${AI_VISIBILITY_CHILIMOBIL:dark}
+        hosts: [shop.chilimobil.localhost, csr.chilimobil.localhost, console.chilimobil.localhost, biz.chilimobil.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_CHILIMOBIL:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_CHILIMOBIL:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_CHILIMOBIL:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_CHILIMOBIL:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_CHILIMOBIL:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_CHILIMOBIL:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_CHILIMOBIL:}
+        ai-provider: ${AI_PROVIDER_CHILIMOBIL:}
+        ai-base-url: ${AI_BASE_URL_CHILIMOBIL:}
+        ai-api-key: ${AI_API_KEY_CHILIMOBIL:}
+        ai-model: ${AI_MODEL_CHILIMOBIL:}
+        pim-base-url: ${PIM_BASE_URL_CHILIMOBIL:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_CHILIMOBIL:}
+        dnc-url: ${DNC_URL_CHILIMOBIL:}
+        dnc-token: ${DNC_TOKEN_CHILIMOBIL:}
+        market-feed-url: ${MARKET_FEED_URL_CHILIMOBIL:}
+        speech-url: ${SPEECH_URL_CHILIMOBIL:}
+        speech-token: ${SPEECH_TOKEN_CHILIMOBIL:}
+        market-feed-token: ${MARKET_FEED_TOKEN_CHILIMOBIL:}
+        ai-model-fast: ${AI_MODEL_FAST_CHILIMOBIL:}
+        ai-model-smart: ${AI_MODEL_SMART_CHILIMOBIL:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_CHILIMOBIL:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_CHILIMOBIL:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_CHILIMOBIL:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_CHILIMOBIL:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_CHILIMOBIL:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_CHILIMOBIL:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: fjordnett
+        issuer: ${OIDC_ISSUER_URI_FJORDNETT:http://localhost:8085/realms/fjordnett}
+        jwks-uri: http://keycloak:8080/realms/fjordnett/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/fjordnett/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_FJORDNETT:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_FJORDNETT:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_FJORDNETT:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_FJORDNETT:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_FJORDNETT:einvoice}
+        bank-token: ${BANK_TOKEN_FJORDNETT:}
+        social-api-url: ${SOCIAL_API_URL_FJORDNETT:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_FJORDNETT:}
+        delivery-provider: ${DELIVERY_PROVIDER_FJORDNETT:internal}
+        esp-url: ${ESP_URL_FJORDNETT:}
+        esp-api-key: ${ESP_API_KEY_FJORDNETT:}
+        esp-from: ${ESP_FROM_FJORDNETT:}
+        brand-name: Fjordnett
+        brand-color: "#1E7A52"
+        locale: "nn"
+        currency: NOK
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.fjordnett.localhost, csr.fjordnett.localhost, console.fjordnett.localhost, biz.fjordnett.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_FJORDNETT:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_FJORDNETT:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_FJORDNETT:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_FJORDNETT:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_FJORDNETT:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_FJORDNETT:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_FJORDNETT:}
+        ai-provider: ${AI_PROVIDER_FJORDNETT:}
+        ai-base-url: ${AI_BASE_URL_FJORDNETT:}
+        ai-api-key: ${AI_API_KEY_FJORDNETT:}
+        ai-model: ${AI_MODEL_FJORDNETT:}
+        pim-base-url: ${PIM_BASE_URL_FJORDNETT:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_FJORDNETT:}
+        dnc-url: ${DNC_URL_FJORDNETT:}
+        dnc-token: ${DNC_TOKEN_FJORDNETT:}
+        market-feed-url: ${MARKET_FEED_URL_FJORDNETT:}
+        speech-url: ${SPEECH_URL_FJORDNETT:}
+        speech-token: ${SPEECH_TOKEN_FJORDNETT:}
+        market-feed-token: ${MARKET_FEED_TOKEN_FJORDNETT:}
+        ai-model-fast: ${AI_MODEL_FAST_FJORDNETT:}
+        ai-model-smart: ${AI_MODEL_SMART_FJORDNETT:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_FJORDNETT:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_FJORDNETT:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_FJORDNETT:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_FJORDNETT:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_FJORDNETT:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_FJORDNETT:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: nordlys
+        issuer: ${OIDC_ISSUER_URI_NORDLYS:http://localhost:8085/realms/nordlys}
+        jwks-uri: http://keycloak:8080/realms/nordlys/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/nordlys/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_NORDLYS:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_NORDLYS:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_NORDLYS:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_NORDLYS:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_NORDLYS:einvoice}
+        bank-token: ${BANK_TOKEN_NORDLYS:}
+        social-api-url: ${SOCIAL_API_URL_NORDLYS:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_NORDLYS:}
+        delivery-provider: ${DELIVERY_PROVIDER_NORDLYS:internal}
+        esp-url: ${ESP_URL_NORDLYS:}
+        esp-api-key: ${ESP_API_KEY_NORDLYS:}
+        esp-from: ${ESP_FROM_NORDLYS:}
+        clock-offset-days: "90"
+        sandbox: "true"
+        brand-name: Nordlys Bredbånd (simulation)
+        brand-color: "#1B4F72"
+        locale: "no"
+        currency: NOK
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.nordlys.localhost, csr.nordlys.localhost, console.nordlys.localhost, biz.nordlys.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_NORDLYS:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_NORDLYS:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_NORDLYS:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_NORDLYS:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_NORDLYS:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_NORDLYS:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_NORDLYS:}
+        ai-provider: ${AI_PROVIDER_NORDLYS:}
+        ai-base-url: ${AI_BASE_URL_NORDLYS:}
+        ai-api-key: ${AI_API_KEY_NORDLYS:}
+        ai-model: ${AI_MODEL_NORDLYS:}
+        pim-base-url: ${PIM_BASE_URL_NORDLYS:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_NORDLYS:}
+        dnc-url: ${DNC_URL_NORDLYS:}
+        dnc-token: ${DNC_TOKEN_NORDLYS:}
+        market-feed-url: ${MARKET_FEED_URL_NORDLYS:}
+        speech-url: ${SPEECH_URL_NORDLYS:}
+        speech-token: ${SPEECH_TOKEN_NORDLYS:}
+        market-feed-token: ${MARKET_FEED_TOKEN_NORDLYS:}
+        ai-model-fast: ${AI_MODEL_FAST_NORDLYS:}
+        ai-model-smart: ${AI_MODEL_SMART_NORDLYS:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_NORDLYS:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_NORDLYS:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_NORDLYS:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_NORDLYS:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_NORDLYS:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_NORDLYS:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: sc229066
+        issuer: ${OIDC_ISSUER_URI_SC229066:http://localhost:8085/realms/sc229066}
+        jwks-uri: http://keycloak:8080/realms/sc229066/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/sc229066/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_SC229066:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_SC229066:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_SC229066:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_SC229066:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_SC229066:einvoice}
+        bank-token: ${BANK_TOKEN_SC229066:}
+        social-api-url: ${SOCIAL_API_URL_SC229066:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_SC229066:}
+        delivery-provider: ${DELIVERY_PROVIDER_SC229066:internal}
+        esp-url: ${ESP_URL_SC229066:}
+        esp-api-key: ${ESP_API_KEY_SC229066:}
+        esp-from: ${ESP_FROM_SC229066:}
+        sandbox: "true"
+        brand-name: MyGenAlpha Sandbox
+        brand-color: "#0E7C7B"
+        locale: "en"
+        currency: EUR
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.sc229066.localhost, csr.sc229066.localhost, console.sc229066.localhost, biz.sc229066.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_SC229066:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_SC229066:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_SC229066:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_SC229066:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_SC229066:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_SC229066:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_SC229066:}
+        ai-provider: ${AI_PROVIDER_SC229066:}
+        ai-base-url: ${AI_BASE_URL_SC229066:}
+        ai-api-key: ${AI_API_KEY_SC229066:}
+        ai-model: ${AI_MODEL_SC229066:}
+        pim-base-url: ${PIM_BASE_URL_SC229066:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_SC229066:}
+        dnc-url: ${DNC_URL_SC229066:}
+        dnc-token: ${DNC_TOKEN_SC229066:}
+        market-feed-url: ${MARKET_FEED_URL_SC229066:}
+        speech-url: ${SPEECH_URL_SC229066:}
+        speech-token: ${SPEECH_TOKEN_SC229066:}
+        market-feed-token: ${MARKET_FEED_TOKEN_SC229066:}
+        ai-model-fast: ${AI_MODEL_FAST_SC229066:}
+        ai-model-smart: ${AI_MODEL_SMART_SC229066:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_SC229066:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_SC229066:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_SC229066:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_SC229066:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_SC229066:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_SC229066:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: ib249958
+        issuer: ${OIDC_ISSUER_URI_IB249958:http://localhost:8085/realms/ib249958}
+        jwks-uri: http://keycloak:8080/realms/ib249958/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/ib249958/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_IB249958:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_IB249958:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_IB249958:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_IB249958:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_IB249958:einvoice}
+        bank-token: ${BANK_TOKEN_IB249958:}
+        social-api-url: ${SOCIAL_API_URL_IB249958:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_IB249958:}
+        delivery-provider: ${DELIVERY_PROVIDER_IB249958:internal}
+        esp-url: ${ESP_URL_IB249958:}
+        esp-api-key: ${ESP_API_KEY_IB249958:}
+        esp-from: ${ESP_FROM_IB249958:}
+        brand-name: Import Probe
+        brand-color: "#B85C38"
+        locale: "en"
+        currency: EUR
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.ib249958.localhost, csr.ib249958.localhost, console.ib249958.localhost, biz.ib249958.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_IB249958:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_IB249958:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_IB249958:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_IB249958:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_IB249958:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_IB249958:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_IB249958:}
+        ai-provider: ${AI_PROVIDER_IB249958:}
+        ai-base-url: ${AI_BASE_URL_IB249958:}
+        ai-api-key: ${AI_API_KEY_IB249958:}
+        ai-model: ${AI_MODEL_IB249958:}
+        pim-base-url: ${PIM_BASE_URL_IB249958:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_IB249958:}
+        dnc-url: ${DNC_URL_IB249958:}
+        dnc-token: ${DNC_TOKEN_IB249958:}
+        market-feed-url: ${MARKET_FEED_URL_IB249958:}
+        speech-url: ${SPEECH_URL_IB249958:}
+        speech-token: ${SPEECH_TOKEN_IB249958:}
+        market-feed-token: ${MARKET_FEED_TOKEN_IB249958:}
+        ai-model-fast: ${AI_MODEL_FAST_IB249958:}
+        ai-model-smart: ${AI_MODEL_SMART_IB249958:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_IB249958:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_IB249958:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_IB249958:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_IB249958:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_IB249958:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_IB249958:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: parity148420
+        issuer: ${OIDC_ISSUER_URI_PARITY148420:http://localhost:8085/realms/parity148420}
+        jwks-uri: http://keycloak:8080/realms/parity148420/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/parity148420/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_PARITY148420:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_PARITY148420:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_PARITY148420:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_PARITY148420:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_PARITY148420:einvoice}
+        bank-token: ${BANK_TOKEN_PARITY148420:}
+        social-api-url: ${SOCIAL_API_URL_PARITY148420:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_PARITY148420:}
+        delivery-provider: ${DELIVERY_PROVIDER_PARITY148420:internal}
+        esp-url: ${ESP_URL_PARITY148420:}
+        esp-api-key: ${ESP_API_KEY_PARITY148420:}
+        esp-from: ${ESP_FROM_PARITY148420:}
+        brand-name: Parity Probe
+        brand-color: "#B85C38"
+        locale: "en"
+        currency: EUR
+        business-sales: true
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.parity148420.localhost, csr.parity148420.localhost, console.parity148420.localhost, biz.parity148420.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_PARITY148420:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_PARITY148420:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_PARITY148420:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_PARITY148420:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_PARITY148420:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_PARITY148420:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_PARITY148420:}
+        ai-provider: ${AI_PROVIDER_PARITY148420:}
+        ai-base-url: ${AI_BASE_URL_PARITY148420:}
+        ai-api-key: ${AI_API_KEY_PARITY148420:}
+        ai-model: ${AI_MODEL_PARITY148420:}
+        pim-base-url: ${PIM_BASE_URL_PARITY148420:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_PARITY148420:}
+        dnc-url: ${DNC_URL_PARITY148420:}
+        dnc-token: ${DNC_TOKEN_PARITY148420:}
+        market-feed-url: ${MARKET_FEED_URL_PARITY148420:}
+        speech-url: ${SPEECH_URL_PARITY148420:}
+        speech-token: ${SPEECH_TOKEN_PARITY148420:}
+        market-feed-token: ${MARKET_FEED_TOKEN_PARITY148420:}
+        ai-model-fast: ${AI_MODEL_FAST_PARITY148420:}
+        ai-model-smart: ${AI_MODEL_SMART_PARITY148420:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_PARITY148420:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_PARITY148420:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_PARITY148420:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_PARITY148420:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_PARITY148420:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_PARITY148420:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
       - id: aurora
         issuer: ${OIDC_ISSUER_URI_AURORA:http://localhost:8085/realms/aurora}
         jwks-uri: http://keycloak:8080/realms/aurora/protocol/openid-connect/certs
@@ -166,6 +506,7 @@ bss:
         brand-color: "#AA3366"
         locale: "sv"
         currency: SEK
+        business-sales: true
         agent-commerce: "off"
         ai-visibility: "search-only"
         hosts: [shop.aurora.localhost, csr.aurora.localhost, console.aurora.localhost, biz.aurora.localhost]
@@ -196,6 +537,9 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART_AURORA:}
         ai-base-url-smart: ${AI_BASE_URL_SMART_AURORA:}
         ai-api-key-smart: ${AI_API_KEY_SMART_AURORA:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
       - id: fjord
         issuer: ${OIDC_ISSUER_URI_FJORD:http://localhost:8085/realms/fjord}
         jwks-uri: http://keycloak:8080/realms/fjord/protocol/openid-connect/certs
@@ -218,6 +562,7 @@ bss:
         brand-color: "#1B6CA8"
         locale: "da"
         currency: DKK
+        business-sales: true
         agent-commerce: ${AGENT_COMMERCE_FJORD:off}
         ai-visibility: ${AI_VISIBILITY_FJORD:dark}
         hosts: [shop.fjord.localhost, csr.fjord.localhost, console.fjord.localhost, biz.fjord.localhost]
@@ -248,3 +593,6 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART_FJORD:}
         ai-base-url-smart: ${AI_BASE_URL_SMART_FJORD:}
         ai-api-key-smart: ${AI_API_KEY_SMART_FJORD:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
