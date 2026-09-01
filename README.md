@@ -401,7 +401,7 @@ deployment:
 
 ## Quickstart
 
-Prereqs: JDK 17, Maven, Docker (with compose), ~8GB free memory for the full stack.
+Prereqs: JDK 17, Maven, Docker (with compose), Python 3. The full fleet — every service, console and demo mock — is ~90 containers: 16GB free memory is the floor, 24-32GB is comfortable. Evaluating seriously? See [EVALUATION.md](EVALUATION.md).
 
 ```bash
 mvn -q package -DskipTests            # images use the host-built jars
