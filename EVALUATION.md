@@ -42,10 +42,19 @@ git clone https://github.com/kundanvarma/genalpha-bss.git && cd genalpha-bss
 
 mvn -q package -DskipTests      # host-built jars (seconds)
 docker compose build            # image assembly (fast, thin layers)
-docker compose up -d            # the fleet; first boot pulls base images
-sleep 300                       # let ~90 containers reach steady state
-docker compose up -d            # second pass catches any boot-order stragglers
+bash ops/fleet.sh up            # tiered boot: infra -> platform -> warmup
 ```
+
+`fleet.sh up` boots the fleet the calm way — infrastructure first, then the
+platform, then the identity warmup and a route pre-warm — and takes care of
+the boot-order quirks for you. On a 16GB machine, follow it with
+`bash ops/fleet.sh demo`: every customer journey keeps working, minus ~2-3GB
+of optional weight (observability, AI extras, two optional domain services).
+`bash ops/fleet.sh status` shows load, memory and the front doors at any
+time, and if the fleet feels sluggish after many hours up,
+`bash ops/fleet.sh refresh` restarts the heaviest services and re-warms the
+routes in ~3 minutes. The tier map — what is essential, what is optional,
+and what production replaces — is documented at the top of `ops/fleet.sh`.
 
 Readiness check — both must return 200 before seeding:
 
@@ -64,10 +73,10 @@ for s in seed_genalpha_one reshape_bundle link_prices seed_stock \
          seed_device_content seed_color_pricing seed_ocs_charging; do python3 ops/seed/$s.py; done
 ```
 
-**One known first-boot wrinkle** (identity warms up last): if API calls
-return 401/500 in the first minutes after the very first boot, restart
-the machine-identity services once and give them a minute — this is a
-token-cache warmup, not a fault:
+**One known first-boot wrinkle** (identity warms up last): `fleet.sh up`
+already handles it. If you booted manually with `docker compose up -d`
+instead and see 401/500s in the first minutes, restart the
+machine-identity services once — a token-cache warmup, not a fault:
 
 ```bash
 docker restart bss-user-roles && sleep 25 && docker restart bss-product-ordering bss-som
