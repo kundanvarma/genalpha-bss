@@ -90,6 +90,22 @@ async function token(ctx, user, pass) {
   }
   console.log(`OK ESCALATION: real TMF621 ticket ${esc.ticketId.slice(0, 8)}… carries the transcript`);
 
+  /* ---------- 3b. CONVERSATIONAL escalation: saying it makes it real ---------- */
+  const gs2 = await (await ctx.post(`${CHAT}/guest/session`, {
+    headers: { 'Content-Type': 'application/json' }, data: {} })).json();
+  const wantHuman = await (await ctx.post(`${CHAT}/guest/session/${gs2.id}/message`, {
+    headers: { 'Content-Type': 'application/json' },
+    data: { text: 'I want to talk to a human please, raise a ticket' } })).json();
+  if (!wantHuman.ticketId) {
+    fail('conversational "human please" did not raise a REAL ticket: ' + JSON.stringify(wantHuman));
+  }
+  const convTicket = await (await ctx.get(
+    `${API}/tmf-api/troubleTicket/v4/troubleTicket/${wantHuman.ticketId}`,
+    { headers: H(await token(ctx, 'demo', 'demo')) })).json();
+  if (!convTicket.id) fail('conversational escalation ticket missing from TMF621');
+  console.log('OK SPOKEN ESCALATION: "human please" produced a real ticket '
+    + `${wantHuman.ticketId.slice(0, 8)}… — the model signals, the system performs`);
+
   /* ---------- 4. AGENT: desk lists, reply silences the bot ---------- */
   const anna = await token(ctx, 'agent-anna', 'agent');
   const sessions = await (await ctx.get(`${CHAT}/agent/sessions`, { headers: H(anna) })).json();

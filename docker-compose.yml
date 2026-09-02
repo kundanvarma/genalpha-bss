@@ -716,6 +716,8 @@ services:
       AI_PROVIDER: ${AI_PROVIDER:-stub}
       AI_BASE_URL: ${AI_BASE_URL:-}
       AI_MODEL: ${AI_MODEL:-}
+      AI_MODEL_FAST: ${AI_MODEL_FAST:-}
+      AI_MODEL_SMART: ${AI_MODEL_SMART:-}
       AI_API_KEY: ${AI_API_KEY:-}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx224m -XX:MaxMetaspaceSize=128m"

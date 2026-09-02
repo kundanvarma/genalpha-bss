@@ -433,6 +433,19 @@ public class BssApiClient {
         return out;
     }
 
+    /** One page of the shelf — for callers that need a taste, not the
+     * whole catalog (the full crawl below is paged and slow). */
+    public List<Map<String, Object>> offeringsFirstPage() {
+        try {
+            String body = catalogClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productOffering?limit=100")
+                    .retrieve().body(String.class);
+            return parse(body);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
     public List<Map<String, Object>> offerings() {
         List<Map<String, Object>> all = new java.util.ArrayList<>();
         for (int offset = 0; offset < 10000; offset += 100) {

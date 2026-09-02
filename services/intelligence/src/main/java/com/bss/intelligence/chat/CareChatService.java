@@ -33,15 +33,20 @@ public class CareChatService {
             customer. You are given THIS CUSTOMER'S OWN account snapshot (bills, orders, \
             usage meters) and nothing else. Answer briefly and warmly (2-4 sentences), \
             concrete numbers first. Only use the snapshot — if it does not answer the \
-            question, say so and offer to raise a ticket for a human. Never invent \
-            amounts, dates or policies. Never discuss any other customer.""";
+            question, say so and offer a human follow-up. YOU CANNOT PERFORM ACTIONS \
+            YOURSELF: if the customer wants a human or a ticket, reply with exactly \
+            [ESCALATE] and nothing else — the system will raise the real ticket. \
+            Never claim an action happened. Never invent amounts, dates or policies. \
+            Never discuss any other customer.""";
 
     private static final String SYSTEM_GUEST = """
             You are the shop assistant of a telecom operator, chatting with a visitor who \
             is not signed in. You are given the public product shelf and nothing else. \
             Help them choose (2-4 sentences, name real plans and prices from the shelf). \
-            For account-specific questions, ask them to sign in. If you cannot help, \
-            offer to leave a message for the care team. Never invent plans or prices.""";
+            For account-specific questions, ask them to sign in. YOU CANNOT PERFORM \
+            ACTIONS YOURSELF: if the visitor wants a human or a ticket, reply with \
+            exactly [ESCALATE] and nothing else — the system will raise the real \
+            ticket. Never claim an action happened. Never invent plans or prices.""";
 
     private final CareChatSessionRepository sessions;
     private final CareChatMessageRepository messages;
@@ -65,6 +70,11 @@ public class CareChatService {
         s.setTenantId(tenantScope.currentTenantId());
         s.setPartyId(partyIdOrNull);
         s.setChannel(partyIdOrNull == null ? "guest" : "authed");
+        if (partyIdOrNull == null) {
+            // warm the shelf while the visitor is still typing their first
+            // message — the crawl must never sit inside a reply
+            java.util.concurrent.CompletableFuture.runAsync(this::guestContext);
+        }
         return sessions.save(s);
     }
 
@@ -134,13 +144,43 @@ public class CareChatService {
         String context = s.getPartyId() == null ? guestContext() : accountContext(s.getPartyId());
         String prompt = "CONTEXT:\n" + context + "\n\nCONVERSATION SO FAR:\n" + history(s)
                 + "\nCUSTOMER: " + clip(text, 1000) + "\nASSISTANT:";
-        String reply;
-        try {
-            reply = governor.complete("careChat", LlmAdapter.Tier.FAST,
-                    s.getPartyId() == null ? SYSTEM_GUEST : SYSTEM_AUTHED, prompt);
-        } catch (Exception e) {
-            reply = "I'm having trouble answering right now. I can raise a ticket so a "
-                    + "human follows up — just say the word.";
+        String reply = null;
+        // provider capacity blips (529/429) are normal weather — retry with
+        // backoff before ever apologising to a customer
+        for (int attempt = 1; attempt <= 3 && reply == null; attempt++) {
+            try {
+                // pools have independent capacity: attempts 1-2 ride FAST,
+                // attempt 3 jumps to SMART rather than queueing politely
+                LlmAdapter.Tier tier = attempt < 3 ? LlmAdapter.Tier.FAST : LlmAdapter.Tier.SMART;
+                reply = governor.complete("careChat", tier,
+                        s.getPartyId() == null ? SYSTEM_GUEST : SYSTEM_AUTHED, prompt);
+            } catch (Exception e) {
+                String msg = e.toString();
+                boolean transientErr = msg.contains("529") || msg.contains("429")
+                        || msg.toLowerCase().contains("overloaded");
+                org.slf4j.LoggerFactory.getLogger(CareChatService.class)
+                        .warn("care-chat model call failed (attempt {}): {}", attempt, msg);
+                if (!transientErr || attempt == 3) {
+                    reply = "I'm having trouble answering right now. I can raise a ticket "
+                            + "so a human follows up — just say the word.";
+                } else {
+                    try {
+                        Thread.sleep(1500L * attempt);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        if (reply != null && reply.contains("[ESCALATE]")) {
+            // the model may only SIGNAL; the system performs. A real ticket,
+            // a real id, spoken truthfully — never a role-played action.
+            Map<String, Object> esc = escalate(s, null);
+            out.put("reply", "I've raised ticket " + esc.get("ticketId")
+                    + " — a human will pick this up shortly.");
+            out.put("status", s.getStatus());
+            out.put("ticketId", esc.get("ticketId"));
+            return out;
         }
         messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "bot", clip(reply, 4000)));
         s.touch();
@@ -228,7 +268,7 @@ public class CareChatService {
         }
         StringBuilder ctx = new StringBuilder("PUBLIC SHELF (name | monthly price):\n");
         try {
-            List<Map<String, Object>> offs = bss.offerings();
+            List<Map<String, Object>> offs = bss.offeringsFirstPage();
             int shown = 0;
             for (Map<String, Object> o : offs) {
                 if (!"Active".equals(o.get("lifecycleStatus"))
