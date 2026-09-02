@@ -83,6 +83,14 @@ public class SecurityConfig {
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/ledger").hasAnyAuthority("workforce:use", "ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/workforce/approvals").hasAuthority("workforce:use")
                         .requestMatchers(ApiConstants.BASE_PATH + "/workforce/**").hasAuthority("ai:use")
+                        // care chat, three faces: the guest rail is open (the
+                        // session id is the capability; answers come from the
+                        // public shelf only), the customer rail is self-scoped
+                        // like /forYou, the agent rail rides the care desk role
+                        .requestMatchers(ApiConstants.BASE_PATH + "/careChat/agent/**")
+                                .hasAnyAuthority("ticket:write", "ai:use")
+                        .requestMatchers(ApiConstants.BASE_PATH + "/careChat/guest/**").permitAll()
+                        .requestMatchers(ApiConstants.BASE_PATH + "/careChat/**").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("ai:use")

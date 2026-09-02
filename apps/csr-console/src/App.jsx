@@ -5,6 +5,7 @@ import { ensureSignedIn, signOut, tokenClaims, hasRole, isStaff } from './auth.j
 import Customers from './pages/Customers.jsx';
 import Customer360 from './pages/Customer360.jsx';
 import Tickets from './pages/Tickets.jsx';
+import Chats from './pages/Chats.jsx';
 import Knowledge from './pages/Knowledge.jsx';
 import Stock from './pages/Stock.jsx';
 import Devices from './pages/Devices.jsx';
@@ -64,6 +65,7 @@ export default function App() {
         <nav className="nav">
           <NavLink to="/" end>Customers</NavLink>
           <NavLink to="/tickets">Tickets</NavLink>
+          <NavLink to="/chats">Chats</NavLink>
           <NavLink to="/knowledge">Knowledge</NavLink>
           {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
           {hasRole('device:read') && <NavLink to="/devices">Devices</NavLink>}
@@ -88,6 +90,7 @@ export default function App() {
           <Route path="/" element={<Customers />} />
           <Route path="/customer/:id" element={<Customer360 />} />
           <Route path="/tickets" element={<Tickets />} />
+          <Route path="/chats" element={<Chats />} />
           <Route path="/knowledge" element={<Knowledge />} />
           <Route path="/stock" element={<Stock />} />
           <Route path="/devices" element={<Devices />} />

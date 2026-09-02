@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import ChatWidget from './ChatWidget.jsx';
 import { t } from './i18n.js';
 import { beginLogin, handleCallback, isCustomer, isSignedIn, signOut, switchAccount, tokenClaims } from './auth.js';
 import { ensureParty, myNotifications, stitchVisitor } from './api.js';
@@ -160,6 +161,7 @@ export default function App() {
           <Route path="/account" element={<Account />} />
         </Routes>
       </main>
+      <ChatWidget />
     </>
   );
 }
