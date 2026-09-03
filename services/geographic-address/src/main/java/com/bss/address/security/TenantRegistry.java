@@ -65,6 +65,17 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** ISO countries this operator sells into (tenants.yml `served-countries`); empty = the
+         * countries the platform ships postcode rules for. Geography is pluggable, not hardcoded. */
+        private List<String> servedCountries = new ArrayList<>();
+
+        public List<String> getServedCountries() {
+            return servedCountries;
+        }
+
+        public void setServedCountries(List<String> servedCountries) {
+            this.servedCountries = servedCountries == null ? new ArrayList<>() : servedCountries;
+        }
 
         public String getId() {
             return id;

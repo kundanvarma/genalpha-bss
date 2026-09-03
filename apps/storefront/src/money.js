@@ -1,4 +1,8 @@
-import { locale, money as intlMoney, t } from './i18n.js';
+import { country, locale, money as intlMoney, t } from './i18n.js';
+
+/** English without a country keeps its historical "39.99 EUR"; a tenant that names its
+ * country gets real Intl formatting ("$3,500" in Guyana). */
+const intlReady = locale !== 'en' || Boolean(country);
 
 /**
  * "39.99 EUR/month" from a productOfferingPrice; empty string when unpriced.
@@ -7,7 +11,7 @@ import { locale, money as intlMoney, t } from './i18n.js';
  */
 export function fmtPrice(price) {
   if (price?.price?.value == null) return '';
-  const money = locale === 'en'
+  const money = !intlReady
     ? `${price.price.value.toFixed(2)} ${price.price.unit || ''}`.trim()
     : intlMoney(price.price.value, price.price.unit);
   if (price.priceType === 'recurring' && price.recurringChargePeriodType) {
@@ -19,10 +23,17 @@ export function fmtPrice(price) {
   return money;
 }
 
+/** A bare amount with its unit, the operator's way ("$3,500" in Guyana, "299.00 EUR" in the
+ * historical English shop, "kr 299,00" in Norway). Use for totals, discounts and instalments. */
+export function fmtAmount(value, unit) {
+  if (value == null) return '';
+  return intlReady ? intlMoney(Number(value), unit) : `${Number(value).toFixed(2)} ${unit || ''}`.trim();
+}
+
 /** "{value} {unit}/month" in English; "kr 299,00/md." elsewhere. */
 export function fmtMonthly(total) {
   if (!total) return '';
-  const money = locale === 'en'
+  const money = !intlReady
     ? `${total.value.toFixed(2)} ${total.unit}`
     : intlMoney(total.value, total.unit);
   return `${money}/${t('month')}`;

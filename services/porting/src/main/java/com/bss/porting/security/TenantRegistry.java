@@ -65,6 +65,17 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** The clearinghouse adapter this operator ports through (tenants.yml `porting-gateway`:
+         * nrdb | portingxs | mock); empty = decide by the number's country. */
+        private String portingGateway;
+
+        public String getPortingGateway() {
+            return portingGateway;
+        }
+
+        public void setPortingGateway(String portingGateway) {
+            this.portingGateway = portingGateway;
+        }
 
         public String getId() {
             return id;

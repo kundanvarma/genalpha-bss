@@ -422,6 +422,10 @@ public class CustomerBillService {
         m.put("type", rate.getRateType());
         m.put("taxExcludedAmount", Map.of("unit", String.valueOf(rate.getAmountUnit()),
                 "value", rate.getAmountValue()));
+        // TMF678 appliedTax: only when the catalog price declared a rate for this line
+        if (rate.getAppliedTaxRate() != null) {
+            m.put("appliedTax", List.of(Map.of("taxCategory", "VAT", "taxRate", rate.getAppliedTaxRate())));
+        }
         // TMF678: a rate on a bill is billed; a standalone/unbilled rate is not.
         m.put("isBilled", rate.getBillId() != null);
         // Consolidated org invoices: which member this line belongs to.

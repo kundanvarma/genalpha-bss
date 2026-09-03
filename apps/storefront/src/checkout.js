@@ -132,7 +132,7 @@ function deliveryPlace(address, delivery) {
 }
 
 export async function performCheckout(lines, card = null, promotionCode = null, keepNumber = null,
-    simType = 'esim', delivery = null, preAuthorized = null, wishNumber = null) {
+    simType = 'esim', delivery = null, preAuthorized = null, wishNumber = null, simId = null) {
   const ids = [...new Set(lines.flatMap((l) => [l.offeringId, ...(l.selections || []).map((s) => s.offeringId)]))];
   const [physicalEntries, offeringList, prices] = await Promise.all([
     Promise.all(ids.map(async (id) => [id, (await availabilityFor(id)) != null])),
@@ -149,9 +149,11 @@ export async function performCheckout(lines, card = null, promotionCode = null, 
   // Choose-your-number: the picked MSISDN rides the mobile line as a
   // characteristic (like simType); porting always wins over a picked number.
   const wish = keepNumber && keepNumber.on ? null : wishNumber;
+  // SIM registration (where required): the government ID rides the mobile line too
+  const idChars = simId && simId.idNumber ? { idType: simId.idType, idNumber: simId.idNumber.trim() } : {};
   const withSim = (item, name) => isMobileLine(name)
     ? { ...item, characteristics: { ...(item.characteristics || {}), simType,
-          ...(wish ? { msisdn: wish } : {}) },
+          ...(wish ? { msisdn: wish } : {}), ...idChars },
         physical: item.physical || physicalSim }
     : item;
 

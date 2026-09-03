@@ -65,7 +65,11 @@ export default function App() {
               localStorage.setItem('bss.shop.creditFrozen', '1');
               navigate('/cart');
             } else if (e.message !== PAYMENT_REQUIRED) {
-              throw e;
+              // The order they were building could not be placed (an address
+              // the operator does not serve, a slot just taken…). That is the
+              // cart's story to tell — the sign-in itself succeeded.
+              localStorage.setItem('bss.shop.checkoutError', e.message);
+              navigate('/cart');
             } else {
               // Card details never survive a redirect: back to the cart, now
               // signed in, to confirm payment.

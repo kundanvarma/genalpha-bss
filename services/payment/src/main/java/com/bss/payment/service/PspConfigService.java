@@ -25,7 +25,7 @@ import java.util.UUID;
 @Service
 public class PspConfigService {
 
-    private static final Set<String> KNOWN = Set.of("mock", "mockbank", "stripe", "klarna", "paypal", "vipps");
+    private static final Set<String> KNOWN = Set.of("mock", "mockbank", "stripe", "klarna", "paypal", "vipps", "mmg");
 
     private final PspConfigRepository repository;
     private final TenantScope tenantScope;

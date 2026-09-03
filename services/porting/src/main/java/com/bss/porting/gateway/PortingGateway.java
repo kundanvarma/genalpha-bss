@@ -23,8 +23,17 @@ public interface PortingGateway {
 
     String name();
 
+    /** The adapter that handles {@code tenantId}'s port of a number from {@code country} — the router answers per tenant, then per country. */
+    default String nameFor(String tenantId, String country) {
+        return name();
+    }
+
     record PortingRequest(String direction, String phoneNumber, String country,
-            String otherOperator, String subscriberRef) {
+            String otherOperator, String subscriberRef, String tenantId) {
+        public PortingRequest(String direction, String phoneNumber, String country,
+                String otherOperator, String subscriberRef) {
+            this(direction, phoneNumber, country, otherOperator, subscriberRef, null);
+        }
     }
 
     /**

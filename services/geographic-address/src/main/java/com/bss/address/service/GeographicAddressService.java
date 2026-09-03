@@ -9,6 +9,7 @@ import com.bss.address.exception.NotFoundException;
 import com.bss.address.registry.RegistryAdapter;
 import com.bss.address.registry.RegistryRouter;
 import com.bss.address.repository.GeographicAddressRepository;
+import com.bss.address.security.TenantRegistry;
 import com.bss.address.security.TenantScope;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -37,22 +38,41 @@ import java.util.regex.Pattern;
 public class GeographicAddressService {
 
     /** Dev footprint: Nordic market, digits-only postcodes. */
+    /** Country-keyed postcode rules (the geography seam's reference set). A served
+     * country without a specific rule gets the generic one — never a silent rejection. */
     private static final Map<String, Pattern> POSTCODE_RULES = Map.of(
             "SE", Pattern.compile("\\d{5}"),
             "NO", Pattern.compile("\\d{4}"),
             "DK", Pattern.compile("\\d{4}"),
-            "FI", Pattern.compile("\\d{5}"));
+            "FI", Pattern.compile("\\d{5}"),
+            // Guyana Post Office 7-digit code: region, locality, district, post office (2), sub-locality (2)
+            "GY", Pattern.compile("\\d{7}"));
+    private static final Pattern GENERIC_POSTCODE = Pattern.compile("[A-Z0-9-]{3,10}");
+    /** What an operator serves when its registry entry lists nothing: the platform's reference markets. */
+    private static final Set<String> DEFAULT_SERVED = Set.of("SE", "NO", "DK", "FI");
     private static final Set<String> REQUIRED = Set.of("street1", "postCode", "city", "country");
 
     private final GeographicAddressRepository repository;
     private final TenantScope tenantScope;
     private final RegistryRouter registryRouter;
+    private final TenantRegistry tenants;
 
     public GeographicAddressService(GeographicAddressRepository repository, TenantScope tenantScope,
-            RegistryRouter registryRouter) {
+            RegistryRouter registryRouter, TenantRegistry tenants) {
         this.repository = repository;
         this.tenantScope = tenantScope;
         this.registryRouter = registryRouter;
+        this.tenants = tenants;
+    }
+
+    /** The countries THIS tenant serves: its registry list, else the platform's rule set. */
+    private Set<String> servedCountries() {
+        TenantRegistry.TenantEntry tenant = tenants.byId(tenantScope.currentTenantId());
+        if (tenant != null && tenant.getServedCountries() != null && !tenant.getServedCountries().isEmpty()) {
+            return tenant.getServedCountries().stream()
+                    .map(c -> String.valueOf(c).trim().toUpperCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+        }
+        return DEFAULT_SERVED;
     }
 
     /** Anonymous: normalize + judge. Returns the TMF673 validation shape. */
@@ -83,10 +103,10 @@ public class GeographicAddressService {
         }
         if (problem.isEmpty()) {
             String country = String.valueOf(standardized.get("country"));
-            Pattern rule = POSTCODE_RULES.get(country);
-            if (rule == null) {
+            Pattern rule = POSTCODE_RULES.getOrDefault(country, GENERIC_POSTCODE);
+            if (!servedCountries().contains(country)) {
                 problem.append("country '").append(country).append("' is not served");
-            } else if (!rule.matcher(String.valueOf(standardized.get("postCode"))).matches()) {
+            } else if (!rule.matcher(String.valueOf(standardized.get("postCode")).toUpperCase(Locale.ROOT)).matches()) {
                 problem.append("postCode '").append(standardized.get("postCode"))
                         .append("' is not a valid ").append(country).append(" postcode");
             }

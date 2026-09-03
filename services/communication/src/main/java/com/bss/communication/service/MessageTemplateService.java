@@ -26,7 +26,7 @@ import java.util.UUID;
 @Service
 public class MessageTemplateService {
 
-    private static final Set<String> CHANNELS = Set.of("inApp", "email", "sms", "push");
+    private static final Set<String> CHANNELS = Set.of("inApp", "email", "sms", "push", "whatsapp");
     private static final String RESOURCE = "MessageTemplate";
     private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() { };
 

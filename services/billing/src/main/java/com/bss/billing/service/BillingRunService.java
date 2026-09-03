@@ -196,6 +196,7 @@ public class BillingRunService {
         // dedupes simultaneous identical catalog lookups for free
         Map<String, BigDecimal> priceCache = new java.util.concurrent.ConcurrentHashMap<>();
         Map<String, String> unitCache = new java.util.concurrent.ConcurrentHashMap<>();
+        Map<String, java.util.Optional<BigDecimal>> taxCache = new java.util.concurrent.ConcurrentHashMap<>();
 
         // Configurable device co-pay: the company pays a device's monthly
         // charge only up to its deviceAllowance policy; anything above it
@@ -334,7 +335,7 @@ public class BillingRunService {
                     Outcome outcome = newTx.execute(tx -> billAccount(tenantId, today,
                             defaultStart, defaultEnd, owner, orgAccounts, membersOf,
                             primaryAccountOf, personalExcess, companyShareOf,
-                            priceCache, unitCache, preRated, nonpaymentSuspended));
+                            priceCache, unitCache, taxCache, preRated, nonpaymentSuspended));
                     if (outcome == Outcome.CREATED) {
                         created.incrementAndGet();
                     } else if (outcome == Outcome.SKIPPED) {
@@ -432,6 +433,7 @@ public class BillingRunService {
             Map<String, BigDecimal> companyShareOf,
             Map<String, BigDecimal> priceCache,
             Map<String, String> unitCache,
+            Map<String, java.util.Optional<BigDecimal>> taxCache,
             Map<String, List<Map<String, Object>>> preRated,
             java.util.Set<String> nonpaymentSuspended) {
             // PAYDAY ALIGNMENT: the account holder's anchor day (1-28) makes
@@ -517,7 +519,8 @@ public class BillingRunService {
                 if (companyShare != null) {
                     lines.add(rateOf(tenantId, ownerParty, product,
                             String.valueOf(product.getOrDefault("name", offeringId))
-                            + " (company share)", companyShare, unit));
+                            + " (company share)", companyShare, unit,
+                            taxRateFor(offeringId, productChars, taxCache)));
                     monthlyByOffering.merge(offeringId, companyShare, BigDecimal::add);
                 } else {
                     if (changedOn != null) {
@@ -532,7 +535,8 @@ public class BillingRunService {
                             lines.add(rateOf(tenantId, ownerParty, product,
                                     String.valueOf(((Map<String, Object>) product.get("previousOffering"))
                                             .getOrDefault("name", oldOfferingId))
-                                    + " (until " + changedOn + ", " + oldDays + " days)", before, unit));
+                                    + " (until " + changedOn + ", " + oldDays + " days)", before, unit,
+                                    taxRateFor(oldOfferingId, productChars, taxCache)));
                             monthlyByOffering.merge(oldOfferingId, before, BigDecimal::add);
                         }
                         effStart = changedOn; // the new plan takes over from here
@@ -552,7 +556,7 @@ public class BillingRunService {
                                         : " (from " + effStart + ", " + days + " days)";
                         lines.add(rateOf(tenantId, ownerParty, product,
                                 String.valueOf(product.getOrDefault("name", offeringId)) + window,
-                                charged, unit));
+                                charged, unit, taxRateFor(offeringId, productChars, taxCache)));
                         monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
                     }
                 }
@@ -816,6 +820,48 @@ public class BillingRunService {
         return total;
     }
 
+    /**
+     * The VAT rate an offering's recurring prices declare (TMF620 price.tax[].taxRate).
+     * One rate when every applying price agrees; null when none declares one or they
+     * disagree — then the tenant's default applies at posting. Cached per offering.
+     */
+    @SuppressWarnings("unchecked")
+    BigDecimal taxRateFor(String offeringId, Map<String, String> characteristics,
+            Map<String, java.util.Optional<BigDecimal>> taxCache) {
+        return taxCache.computeIfAbsent(offeringId + "|" + characteristics, k -> {
+            Map<String, Object> offering = catalog.offering(offeringId);
+            if (offering == null) {
+                return java.util.Optional.empty();
+            }
+            BigDecimal agreed = null;
+            boolean any = false;
+            for (Map<String, Object> priceRef
+                    : (List<Map<String, Object>>) offering.getOrDefault("productOfferingPrice", List.of())) {
+                Map<String, Object> price = catalog.price(String.valueOf(priceRef.get("id")));
+                if (price == null || !"recurring".equals(price.get("priceType")) || !priceApplies(price, characteristics)) {
+                    continue;
+                }
+                BigDecimal declared = null;
+                if (price.get("tax") instanceof List<?> taxes) {
+                    for (Object t : taxes) {
+                        if (t instanceof Map<?, ?> tm && tm.get("taxRate") != null) {
+                            declared = new BigDecimal(String.valueOf(tm.get("taxRate")));
+                        }
+                    }
+                }
+                if (declared == null) {
+                    return java.util.Optional.empty(); // a silent price means "tenant default"
+                }
+                if (any && agreed.compareTo(declared) != 0) {
+                    return java.util.Optional.empty(); // mixed rates in one line: default, honestly
+                }
+                agreed = declared;
+                any = true;
+            }
+            return java.util.Optional.ofNullable(agreed);
+        }).orElse(null);
+    }
+
     /** An unconditioned price always applies; a conditioned one needs every
      * named characteristic to hold one of its listed values. */
     @SuppressWarnings("unchecked")
@@ -909,7 +955,13 @@ public class BillingRunService {
 
     private AppliedBillingRate rateOf(String tenantId, String ownerParty,
             Map<String, Object> product, String name, BigDecimal amount, String unit) {
+        return rateOf(tenantId, ownerParty, product, name, amount, unit, null);
+    }
+
+    private AppliedBillingRate rateOf(String tenantId, String ownerParty,
+            Map<String, Object> product, String name, BigDecimal amount, String unit, BigDecimal taxRate) {
         AppliedBillingRate rate = new AppliedBillingRate();
+        rate.setAppliedTaxRate(taxRate);
         rate.setId(UUID.randomUUID().toString());
         rate.setTenantId(tenantId);
         rate.setName(name);

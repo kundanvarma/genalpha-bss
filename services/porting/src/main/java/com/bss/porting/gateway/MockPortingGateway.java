@@ -1,6 +1,5 @@
 package com.bss.porting.gateway;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -9,7 +8,6 @@ import org.springframework.stereotype.Component;
  * (invalid/quarantined at the donor) so the reject path is exercisable.
  */
 @Component
-@ConditionalOnProperty(name = "bss.porting.gateway", havingValue = "mock", matchIfMissing = true)
 public class MockPortingGateway implements PortingGateway {
 
     @Override

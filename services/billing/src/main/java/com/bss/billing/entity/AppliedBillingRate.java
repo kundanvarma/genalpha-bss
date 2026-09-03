@@ -44,6 +44,11 @@ public class AppliedBillingRate {
     @Column(name = "rate_date")
     private OffsetDateTime rateDate;
 
+    /** TMF678 appliedTax: the VAT percent this line carries (from the catalog price's TMF620 tax);
+     * null = the tenant's default rate applies. Zero-rated lines say 0 explicitly. */
+    @Column(name = "applied_tax_rate", precision = 7, scale = 3)
+    private BigDecimal appliedTaxRate;
+
     public AppliedBillingRate() {
     }
 
@@ -126,4 +131,7 @@ public class AppliedBillingRate {
     public void setRateDate(OffsetDateTime rateDate) {
         this.rateDate = rateDate;
     }
+
+    public BigDecimal getAppliedTaxRate() { return appliedTaxRate; }
+    public void setAppliedTaxRate(BigDecimal v) { this.appliedTaxRate = v; }
 }

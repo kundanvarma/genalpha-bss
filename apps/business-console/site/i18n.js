@@ -134,10 +134,15 @@ function t(s) {
 }
 
 /** "kr 299,00" in Norway; English keeps "299.00 EUR". */
+const TENANT_COUNTRY = (window.BSS_BIZ_CONFIG || {}).country || '';
+const PRICE_DECIMALS = (window.BSS_BIZ_CONFIG || {}).priceDecimals;
 function fmtMoney(value, unit) {
-  if (LOCALE === 'en') return `${Number(value).toFixed(2)} ${unit || CURRENCY}`;
+  // English without a country keeps "299.00 EUR"; a tenant that names its country formats its way
+  if (LOCALE === 'en' && !TENANT_COUNTRY) return `${Number(value).toFixed(2)} ${unit || CURRENCY}`;
   try {
-    return new Intl.NumberFormat(INTL_LOCALE, { style: 'currency', currency: unit || CURRENCY })
+    return new Intl.NumberFormat(TENANT_COUNTRY ? `${LOCALE === 'no' ? 'nb' : LOCALE}-${TENANT_COUNTRY}` : INTL_LOCALE,
+      { style: 'currency', currency: unit || CURRENCY,
+        ...(Number.isInteger(PRICE_DECIMALS) ? { minimumFractionDigits: PRICE_DECIMALS, maximumFractionDigits: PRICE_DECIMALS } : {}) })
       .format(value);
   } catch {
     return `${Number(value).toFixed(2)} ${unit || CURRENCY}`;

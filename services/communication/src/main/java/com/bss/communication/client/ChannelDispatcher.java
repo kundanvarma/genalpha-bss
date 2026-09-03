@@ -13,11 +13,13 @@ public class ChannelDispatcher {
     private final EspForwarder esp;
     private final SmsForwarder sms;
     private final PushForwarder push;
+    private final WhatsAppForwarder whatsapp;
 
-    public ChannelDispatcher(EspForwarder esp, SmsForwarder sms, PushForwarder push) {
+    public ChannelDispatcher(EspForwarder esp, SmsForwarder sms, PushForwarder push, WhatsAppForwarder whatsapp) {
         this.esp = esp;
         this.sms = sms;
         this.push = push;
+        this.whatsapp = whatsapp;
     }
 
     public void dispatch(String tenantId, String messageId, String partyId,
@@ -27,6 +29,10 @@ public class ChannelDispatcher {
             case "sms" -> sms.forward(tenantId, messageId, partyId,
                     content == null || content.isBlank() ? subject : content);
             case "push" -> push.forward(tenantId, messageId, partyId, subject, content);
+            // WhatsApp: where it is THE service channel (Guyana: utilities, banks and
+            // operators all run one) — per-tenant Business account, fail-open like SMS
+            case "whatsapp" -> whatsapp.forward(tenantId, messageId, partyId,
+                    content == null || content.isBlank() ? subject : content);
             // "email" and the "inApp" default both go through the ESP seam, which
             // itself gates on the tenant's delivery provider — so an ESP tenant
             // emails every message while an in-app tenant stays in the inbox.

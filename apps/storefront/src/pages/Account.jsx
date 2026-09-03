@@ -78,8 +78,16 @@ export default function Account() {
         {ADDRESS_FIELDS.map((f) => (
           <label className="charfield" key={f.name}>
             <span>{f.label}</span>
-            <input name={f.name} value={address[f.name] || ''}
-                   onChange={(e) => { setAddress({ ...address, [f.name]: e.target.value }); setSaved(false); }} />
+            {f.options ? (
+              <select name={f.name} value={address[f.name] || ''}
+                      onChange={(e) => { setAddress({ ...address, [f.name]: e.target.value }); setSaved(false); }}>
+                <option value="">—</option>
+                {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input name={f.name} value={address[f.name] || ''} placeholder={f.placeholder || ''}
+                     onChange={(e) => { setAddress({ ...address, [f.name]: e.target.value }); setSaved(false); }} />
+            )}
           </label>
         ))}
       </div>

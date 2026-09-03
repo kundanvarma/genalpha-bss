@@ -40,6 +40,10 @@ public class ProductOfferingPrice {
     @Column(name = "prod_spec_char_value_use", length = 2000)
     private String prodSpecCharValueUseJson;
 
+    /** TMF620 tax[]: {taxCategory, taxRate, taxAmount} — the rate this price carries (0 = zero-rated). */
+    @Column(name = "tax", length = 1000)
+    private String taxJson;
+
     @Column(name = "recurring_charge_period_type")
     private String recurringChargePeriodType;
 
@@ -161,4 +165,7 @@ public class ProductOfferingPrice {
     public void setTenantId(String tenantId) {
         this.tenantId = tenantId;
     }
+
+    public String getTaxJson() { return taxJson; }
+    public void setTaxJson(String v) { this.taxJson = v; }
 }

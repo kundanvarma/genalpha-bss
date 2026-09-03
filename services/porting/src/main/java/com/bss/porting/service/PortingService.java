@@ -78,7 +78,7 @@ public class PortingService {
         partyScope.scopedPartyId().ifPresent(order::setOwnerPartyId);
         order.setProductOrderId(dto.get("productOrderId") == null ? null
                 : String.valueOf(dto.get("productOrderId")));
-        order.setGateway(gateway.name());
+        order.setGateway(gateway.nameFor(order.getTenantId(), order.getCountry()));
         order.setStatus(PortingOrder.REQUESTED);
         order.setRequestedCutover(parseTime(dto.get("requestedCutover")));
         // The customer's port-in wish date: honest window, never the past.
@@ -92,7 +92,7 @@ public class PortingService {
         // Validate through the clearinghouse and, if accepted, schedule cutover.
         PortingGateway.Decision decision = gateway.validate(new PortingGateway.PortingRequest(
                 direction, order.getPhoneNumber(), order.getCountry(),
-                order.getOtherOperator(), order.getOwnerPartyId()));
+                order.getOtherOperator(), order.getOwnerPartyId(), order.getTenantId()));
         if (!decision.accepted()) {
             order.setStatus(PortingOrder.REJECTED);
             order.setRejectReason(decision.rejectReason());
@@ -112,7 +112,7 @@ public class PortingService {
         Map<String, Object> result = toMap(order);
         events.publish("PortingOrderCreateEvent", "portingOrder", result);
         log.info("porting {} {} via {} -> {}", direction, order.getPhoneNumber(),
-                gateway.name(), order.getStatus());
+                gateway.nameFor(order.getTenantId(), order.getCountry()), order.getStatus());
         return result;
     }
 
@@ -125,7 +125,7 @@ public class PortingService {
         }
         boolean ok = gateway.confirmCutover(new PortingGateway.PortingRequest(
                 order.getDirection(), order.getPhoneNumber(), order.getCountry(),
-                order.getOtherOperator(), order.getOwnerPartyId()));
+                order.getOtherOperator(), order.getOwnerPartyId(), order.getTenantId()));
         if (!ok) {
             throw new ConflictException("the clearinghouse did not confirm the cutover");
         }

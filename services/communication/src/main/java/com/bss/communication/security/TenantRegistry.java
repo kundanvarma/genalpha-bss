@@ -74,6 +74,34 @@ public class TenantRegistry {
         private String espUrl;
         private String espApiKey;
         private String espFrom;
+        /** WhatsApp Business (Meta Cloud API shape): base URL, the env var holding the token, the sender's phone-number id. */
+        private String whatsappUrl;
+        private String whatsappTokenRef;
+        private String whatsappPhoneId;
+
+        public String getWhatsappUrl() {
+            return whatsappUrl;
+        }
+
+        public void setWhatsappUrl(String whatsappUrl) {
+            this.whatsappUrl = whatsappUrl;
+        }
+
+        public String getWhatsappTokenRef() {
+            return whatsappTokenRef;
+        }
+
+        public void setWhatsappTokenRef(String whatsappTokenRef) {
+            this.whatsappTokenRef = whatsappTokenRef;
+        }
+
+        public String getWhatsappPhoneId() {
+            return whatsappPhoneId;
+        }
+
+        public void setWhatsappPhoneId(String whatsappPhoneId) {
+            this.whatsappPhoneId = whatsappPhoneId;
+        }
 
         public String getId() {
             return id;

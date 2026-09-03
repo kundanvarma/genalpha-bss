@@ -55,10 +55,19 @@ class GatewayRoutingTest {
     void everyComponentAndChannelHasARoute() {
         List<String> ids = routeLocator.getRoutes().map(Route::getId).collectList().block();
         assertThat(ids).containsExactlyInAnyOrder(
-                "product-catalog", "product-ordering", "product-inventory", "party-account",
-                "product-stock", "payment", "billing", "bank-remittance", "distribution-response", "qualification", "appointment",
-                "trouble-ticket", "party-interaction", "communication", "shopping-cart",
-                "usage", "agreement", "promotion", "campaign", "intelligence", "product-advisor", "quote", "sales", "flow", "porting", "user-roles", "operator-onboarding", "geographic-address", "document", "recommendation", "payment-method", "service-orchestration", "dealer-channel", "telesales-confirm", "privacy", "assurance", "policy", "knowledge", "insight", "pim", "csr-console", "admin-console", "business-console", "dealer-console", "storefront", "mobile-app");
+                "geo-bot-offering", "geo-well-known", "acp-product-feed", "acp-checkout", "legacy-estate",
+                "workforce-runtime", "product-catalog", "service-catalog", "product-configurator",
+                "product-ordering", "product-inventory", "party-account", "product-stock", "payment",
+                "billing", "bank-remittance", "distribution-response", "qualification", "appointment",
+                "trouble-ticket", "party-interaction", "communication", "communication-esp", "shopping-cart",
+                "usage", "loyalty", "agreement", "promotion", "campaign", "intelligence", "revenue",
+                "process", "sla", "incident-face", "event-hub", "fulfilment", "product-advisor", "quote",
+                "sales", "porting", "device-commerce", "base-migration", "policy", "knowledge", "insight",
+                "flow", "user-roles", "operator-onboarding", "geographic-address", "document",
+                "recommendation", "payment-method", "service-orchestration", "som-sonata-provider",
+                "dealer-channel", "telesales-confirm", "privacy", "assurance", "csr-console",
+                "admin-console", "business-console", "dealer-console", "partner-console", "storefront",
+                "mobile-app", "pim");
     }
 
     @Test

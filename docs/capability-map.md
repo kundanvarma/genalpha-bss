@@ -90,7 +90,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Detect & resolve service problems | TMF642/656 + TMF653 tests + TMF724 incidents | `assurance` + `service-orchestration` + `intelligence` | ✅ (thin; real FM/PM needs the NMS; #76: diagnose as serviceTest with history, agent memory as standard incidents) |
 | Qualify serviceability (commercial) | TMF679 | `qualification` | ✅ |
 | Qualify service delivery (technical: technology, bandwidth, alternative) | TMF645 Service Qualification | `qualification` coverage map | ✅ #79/#80 (never a bare no — the best available technology proposed on refusal; ordering gates every placed item at create; the cart names technology + speed) |
-| Schedule installations | TMF646 | `appointment` | ✅ (❌ full field-service mgmt: routing, van stock, workforce scheduling — now behind a REAL seam: work orders #73) |
+| Schedule installations | TMF646 | `appointment` | ✅ per-tenant calendar (timezone, working days, windows, horizon) + technician roster from which window capacity is DERIVED (`scheduleConfig`, `technician`, console Installers pane) + the FIELD-SERVICE SEAM: `provider: tmf646` delegates search/book/cancel to the operator's Workforce Management (TMFC046) over TMF646, dev stand-in `mock-fsm` (❌ vendor-native adapters, slot holds, dispatch/routing — see docs/field-service-seam.md) |
 | Ship & install what was sold | TMF700 Shipping Order + TMF697 Work Order | `fulfilment` (#37) | ✅ #73 (parcel + visit as resources, warehouse/installer API, machine completion when both gates pass, milestones on the process timeline; customers track deliveries) |
 | Network inventory (physical/logical), mediation (CDR pipelines) | — | — | ❌ real OSS estate — or wrap it (suite #67 pattern) |
 
@@ -134,3 +134,15 @@ management, SMS/push gateways, real OSS inventory + mediation, and the
 enterprise estate (HR, procurement, BI warehouse). Every one of these
 sits behind an existing seam or the overlay pattern (suite #67): the
 list is an integration plan, not a wall.
+
+## Market adaptations (per tenant, never per fork)
+
+| Market need | How the platform answers | Reference |
+|---|---|---|
+| Whole-dollar currency, statutory price note, country-specific address form, national porting | tenants.yml `country`, `price-decimals`, `currency-display`, `price-note`; storefront `COUNTRY_FORMS`; porting `PortingRules` + `CountryPortingRouter` (tenant `porting-gateway` first, then country, then fallback) | docs/markets/guyana.md |
+| Mobile-money wallet where cards are rare | Named PSP adapter (`mmg`) + `mock-mmg`; money never rides a generic connector | docs/markets/guyana.md |
+| Store collection as the delivery rail | http carrier seam with the operator's stores as pickup points (`mock-logistics /pickup-points`) | docs/markets/guyana.md |
+| SIM registration to a government ID | tenants.yml `sim-registration: required` → checkout captures ID type + number as mobile-line characteristics | docs/markets/guyana.md |
+| WhatsApp as the service channel | communication `whatsapp` channel (Meta Cloud API shape), per-tenant `whatsapp-url` / `whatsapp-phone-id` / `whatsapp-token-ref`, `mock-whatsapp` | docs/markets/guyana.md |
+| Per-price VAT (zero-rated categories beside standard-rated ones) | TMF620 `productOfferingPrice.tax` → TMF678 `appliedTax` on bill lines → per-line ledger posting; tenant `tax` mapping stays the default | docs/markets/guyana.md |
+| Delivery tiers by region (coast vs hinterland) | carrier config `etaByPrefix` / `etaDefault`, surfaced on every delivery option and in the cart | docs/markets/guyana.md |

@@ -19,7 +19,10 @@ public final class PortingRules {
             "NO", new Rule(Pattern.compile("^\\+47\\d{8}$"), 24, "Nkom (via NRDB)"),
             "SE", new Rule(Pattern.compile("^\\+46\\d{7,9}$"), 24, "PTS"),
             "GB", new Rule(Pattern.compile("^\\+44\\d{9,10}$"), 24, "Ofcom"),
-            "US", new Rule(Pattern.compile("^\\+1\\d{10}$"), 24, "FCC (via NPAC)"));
+            "US", new Rule(Pattern.compile("^\\+1\\d{10}$"), 24, "FCC (via NPAC)"),
+            // Guyana: closed 7-digit plan, mobile in 6xx and 7xx; MNP live 2025-02-10, free,
+            // mobile within one business day, clearinghouse Porting XS under PUC rules
+            "GY", new Rule(Pattern.compile("^\\+592[67]\\d{6}$"), 24, "PUC (via Porting XS)"));
 
     private static final Rule DEFAULT =
             new Rule(Pattern.compile("^\\+\\d{6,15}$"), 48, "national regulator");

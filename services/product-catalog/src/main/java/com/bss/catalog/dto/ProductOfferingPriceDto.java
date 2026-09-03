@@ -32,6 +32,10 @@ public class ProductOfferingPriceDto {
     @JsonProperty("prodSpecCharValueUse")
     private java.util.List<Map<String, Object>> prodSpecCharValueUse;
 
+    /** TMF620 tax: [{taxCategory, taxRate, taxAmount}] — a price declares its own VAT rate. */
+    @JsonProperty("tax")
+    private java.util.List<Map<String, Object>> tax;
+
     @JsonProperty("recurringChargePeriodType")
     private String recurringChargePeriodType;
 
@@ -103,6 +107,14 @@ public class ProductOfferingPriceDto {
 
     public java.util.List<Map<String, Object>> getProdSpecCharValueUse() {
         return prodSpecCharValueUse;
+    }
+
+    public java.util.List<Map<String, Object>> getTax() {
+        return tax;
+    }
+
+    public void setTax(java.util.List<Map<String, Object>> tax) {
+        this.tax = tax;
     }
 
     public void setProdSpecCharValueUse(java.util.List<Map<String, Object>> prodSpecCharValueUse) {

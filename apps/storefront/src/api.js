@@ -726,12 +726,21 @@ export async function queryServiceQualification(place) {
   }
 }
 
-/** TMF646 free installer slots — also anonymous. */
-export async function searchTimeSlots() {
+/** TMF646 free installer slots — also anonymous. The search says WHERE (the
+ * install address as relatedPlace) and FOR WHAT (the gated offerings as
+ * relatedEntity), so a tenant's own workforce system can answer by zone and
+ * skill; the built-in roster ignores what it does not use. */
+export async function searchTimeSlots({ place, offerings } = {}) {
+  const body = { '@type': 'SearchTimeSlot' };
+  if (place) body.relatedPlace = { role: 'installation', ...place, '@type': 'GeographicAddress' };
+  if (offerings?.length) {
+    body.relatedEntity = offerings.map((o) => ({ id: o.id, name: o.name, '@referredType': 'ProductOffering' }));
+  }
   try {
-    return await json(await publicFetch(`${APPOINTMENT}/searchTimeSlot`, { method: 'POST' }));
+    return await json(await publicFetch(`${APPOINTMENT}/searchTimeSlot`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }));
   } catch {
-    return [];
+    return { availableTimeSlot: [] };
   }
 }
 
@@ -845,9 +854,13 @@ function countryOf(number) {
   const n = (number || '').replace(/\s/g, '');
   if (n.startsWith('+47')) return 'NO';
   if (n.startsWith('+46')) return 'SE';
+  if (n.startsWith('+45')) return 'DK';
+  if (n.startsWith('+358')) return 'FI';
+  if (n.startsWith('+592')) return 'GY';
   if (n.startsWith('+44')) return 'GB';
   if (n.startsWith('+1')) return 'US';
-  return 'NO';
+  // no prefix given: the shopper is porting within the operator's own country
+  return (window.BSS_STOREFRONT_CONFIG || {}).country || 'NO';
 }
 
 /** Choose-your-number: a shortlist of available numbers from the pool —

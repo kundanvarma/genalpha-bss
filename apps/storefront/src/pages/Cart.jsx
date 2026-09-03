@@ -8,12 +8,21 @@ import { dueNow, loadDevicePlanDraft, loadSlotDraft, performCheckout, qualificat
   saveDevicePlanDraft, saveSlotDraft } from '../checkout.js';
 import { checkPromotion, confirmPayment, createPaymentSession, financingQuote, numberOffers,
   paymentMethods, quoteTradeIn, savePaymentMethod } from '../api.js';
-import { monthlyTotal, oneTimeTotal, pricesOf } from '../money.js';
+import { monthlyTotal, oneTimeTotal, pricesOf, fmtAmount } from '../money.js';
 import { setPendingCheckout } from '../pending.js';
 import { t } from '../i18n.js';
 
 // How a payment method reads to the shopper (the API gives the machine name).
-const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal' };
+const PAY_LABEL = { card: 'Card', klarna: 'Klarna', paypal: 'PayPal', mmg: 'MMG mobile money', vipps: 'Vipps' };
+
+/** Porting is a national thing: the registry that moves the number, what a number looks
+ * like, and the rules a shopper should know — keyed by the operator's country. */
+const PORTING_HINTS = {
+  NO: { placeholder: '+47 901 12 233', registry: 'the national number registry (NRDB)' },
+  GY: { placeholder: '+592 6xx xxxx or 7xx xxxx', registry: 'the Porting XS clearinghouse under PUC rules',
+    note: 'Porting is free, takes up to one business day, needs a government photo ID, and any prepaid credit on the old SIM does not carry over.' },
+};
+const PORTING_HINT = PORTING_HINTS[(window.BSS_STOREFRONT_CONFIG || {}).country] || { placeholder: '+…', registry: "your country's number registry" };
 const payLabel = (m) => PAY_LABEL[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : 'Card');
 
 export default function Cart() {
@@ -47,6 +56,10 @@ export default function Cart() {
   const [devicePlan, setDevicePlan] = useState(loadDevicePlanDraft());
   const updateDevicePlan = (next) => { setDevicePlan(next); saveDevicePlanDraft(next); };
   const [keepNumber, setKeepNumber] = useState({ on: false, number: '', currentProvider: '', portDate: '' });
+  // SIM registration: where the licence records a government photo ID at every SIM sale
+  // (Guyana), the ID rides the mobile line as characteristics — never stored loose.
+  const simRegistrationRequired = (window.BSS_STOREFRONT_CONFIG || {}).simRegistration === 'required';
+  const [simId, setSimId] = useState({ idType: 'National ID card', idNumber: '' });
   // Choose-your-number: a shortlist from the pool; '' = auto-assign (unchanged).
   const [numberWish, setNumberWish] = useState('');
   const [numberChoices, setNumberChoices] = useState([]);
@@ -95,7 +108,8 @@ export default function Cart() {
         const payment = await confirmPayment(stash.provider, stash.sessionId);
         const order = await performCheckout(lines, null, stash.promoCode || null,
           stash.keepNumber && stash.keepNumber.on ? stash.keepNumber : null,
-          stash.simType || 'esim', stash.delivery || null, payment, stash.numberWish || null);
+          stash.simType || 'esim', stash.delivery || null, payment, stash.numberWish || null,
+          stash.simId || null);
         localStorage.removeItem('bss.shop.redirectpay');
         window.history.replaceState(null, '', '/shop/cart');
         await markCartCheckedOut(order.id);
@@ -215,13 +229,26 @@ export default function Cart() {
     ? qualificationItemsResult.find((i) => i.qualificationItemResult === 'unqualified')
     : null;
 
-  // Installer slots appear once an install is needed.
+  // A checkout that failed right after the login redirect lands here with its reason.
   useEffect(() => {
-    if (!needsInstall || slots) return;
-    searchTimeSlots()
+    const carried = localStorage.getItem('bss.shop.checkoutError');
+    if (carried) {
+      localStorage.removeItem('bss.shop.checkoutError');
+      setError(carried);
+    }
+  }, []);
+
+  // Installer slots appear once an install is needed — asked for THIS address
+  // and THESE offerings, so a zone- or skill-aware calendar can answer.
+  useEffect(() => {
+    if (!needsInstall || !current) return;
+    const gated = qualificationItemsResult.filter((i) => i.serviceabilityGated)
+      .map((i) => offerings[i.productOffering?.id] || i.productOffering).filter(Boolean);
+    setSlots(null);
+    searchTimeSlots({ place: { streetName: address.street1, postCode: address.postCode, city: address.city, country: address.country }, offerings: gated })
       .then((result) => setSlots((result.availableTimeSlot || []).slice(0, 6)))
       .catch((e) => setError(e.message));
-  }, [needsInstall]);
+  }, [needsInstall, address.postCode]);
 
   // Dynamic pricing preview: what the operator's enabled pricing rules do to
   // this cart's monthly total — the same rules the bill will apply, shown
@@ -368,6 +395,7 @@ export default function Cart() {
   };
   const serviceable = !unqualifiedItem;
   const slotReady = !needsInstall || Boolean(slot);
+  const simIdReady = !(hasMobile && simRegistrationRequired) || Boolean(simId.idNumber.trim());
   const due = dueNow(lines, offerings, prices);
   // Device commerce: the FIRST physical Devices-category line carries the
   // trade-in widget and the financing chooser. Operator-book instalments move
@@ -486,13 +514,14 @@ export default function Cart() {
         localStorage.setItem('bss.shop.redirectpay', JSON.stringify({
           provider: session.provider, sessionId: session.sessionId,
           simType: hasMobile ? simType : 'esim', delivery, numberWish: numberWish || null,
-          keepNumber: keepNumber.on ? keepNumber : null, promoCode: promo?.code || null }));
+          keepNumber: keepNumber.on ? keepNumber : null, promoCode: promo?.code || null,
+          simId: hasMobile && simRegistrationRequired ? simId : null }));
         window.location.href = session.redirectUrl;
         return;
       }
       const order = await performCheckout(lines, chargeDue ? card : null, promo?.code || null,
         keepNumber.on ? keepNumber : null, hasMobile ? simType : 'esim', delivery,
-        null, numberWish || null);
+        null, numberWish || null, hasMobile && simRegistrationRequired ? simId : null);
       localStorage.removeItem('bss.shop.promo');
       if (chargeDue && saveCard) {
         // Vault only after the PSP accepted the card; failure is non-fatal.
@@ -572,7 +601,7 @@ export default function Cart() {
                 })()}
               </div>
               <div className="rowend">
-                {monthly && <span className="linetotal">{monthly.value.toFixed(2)} {monthly.unit}/mo</span>}
+                {monthly && <span className="linetotal">{fmtAmount(monthly.value, monthly.unit)}/mo</span>}
                 <div className="qty">
                   <button className="ghost" aria-label="decrease"
                           onClick={() => setQuantity(line.key, line.quantity - 1)}>−</button>
@@ -589,27 +618,27 @@ export default function Cart() {
         {grand && (
           <div className="row granded">
             <strong>{t('Total per month')}</strong>
-            <strong className="linetotal">{grand.value.toFixed(2)} {grand.unit}</strong>
+            <strong className="linetotal">{fmtAmount(grand.value, grand.unit)}</strong>
           </div>
         )}
         {promo && promoDiscount() && (
           <div className="row promo" data-testid="promo-row">
             <span>Promo <strong>{promo.code}</strong> — {promo.name} (−{promo.percentage}%)</span>
-            <span className="linetotal ok">{promoDiscount().value.toFixed(2)} {promoDiscount().unit}/mo</span>
+            <span className="linetotal ok">{fmtAmount(promoDiscount().value, promoDiscount().unit)}/mo</span>
           </div>
         )}
         {priceAdj && priceAdj.adjustments.map((a) => (
           <div className="row promo" data-testid="price-adjustment" key={a.ruleId}>
             <span>{a.label}</span>
             <span className={Number(a.amount) < 0 ? 'linetotal ok' : 'linetotal'}>
-              {Number(a.amount) > 0 ? '+' : ''}{Number(a.amount).toFixed(2)} {grand?.unit || 'EUR'}/mo
+              {Number(a.amount) > 0 ? '+' : ''}{fmtAmount(a.amount, grand?.unit || 'EUR')}/mo
             </span>
           </div>
         ))}
         {priceAdj && (
           <div className="row granded" data-testid="adjusted-total">
             <strong>{priceAdj.indicative ? t('Indicative price per month') : t('Your price per month')}</strong>
-            <strong className="linetotal ok">{Number(priceAdj.total).toFixed(2)} {grand?.unit || 'EUR'}</strong>
+            <strong className="linetotal ok">{fmtAmount(priceAdj.total, grand?.unit || 'EUR')}</strong>
           </div>
         )}
         {priceAdj?.indicative && (
@@ -628,10 +657,10 @@ export default function Cart() {
         ))}
         {planActive && planActive.financing !== 'FULL' && (
           <div className="row promo" data-testid="financing-row">
-            <span>📱 {deviceLine.name} — {(planActive.monthlyAmount * deviceLine.quantity).toFixed(2)} {planActive.principal.unit}/mo
-              × {planActive.termMonths} months (total {(planActive.totalCostOfOwnership * deviceLine.quantity).toFixed(2)} {planActive.principal.unit})</span>
+            <span>📱 {deviceLine.name} — {fmtAmount(planActive.monthlyAmount * deviceLine.quantity, planActive.principal.unit)}/mo
+              × {planActive.termMonths} months (total {fmtAmount(planActive.totalCostOfOwnership * deviceLine.quantity, planActive.principal.unit)})</span>
             {planActive.financing === 'OPERATOR_BOOK' ? (
-              <span className="linetotal ok">−{financedOff.toFixed(2)} {planActive.principal.unit} today</span>
+              <span className="linetotal ok">−{fmtAmount(financedOff, planActive.principal.unit)} today</span>
             ) : (
               <span className="linetotal">via the pay-later provider</span>
             )}
@@ -696,8 +725,16 @@ export default function Cart() {
             {ADDRESS_FIELDS.map((f) => (
               <label className="charfield" key={f.name}>
                 <span>{f.label}</span>
-                <input name={f.name} value={address[f.name] || ''}
-                       onChange={(e) => setField(f.name, e.target.value)} />
+                {f.options ? (
+                  <select name={f.name} value={address[f.name] || ''}
+                          onChange={(e) => setField(f.name, e.target.value)}>
+                    <option value="">—</option>
+                    {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                ) : (
+                  <input name={f.name} value={address[f.name] || ''} placeholder={f.placeholder || ''}
+                         onChange={(e) => setField(f.name, e.target.value)} />
+                )}
               </label>
             ))}
           </div>
@@ -734,8 +771,10 @@ export default function Cart() {
             <div className="options slotgrid">
               {slots.map((s) => {
                 const start = s.validFor.startDateTime;
+                // the operator's clock, not the visitor's: a Georgetown 09:00 must read 09:00
                 const label = new Date(start).toLocaleString(undefined,
-                  { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                    ...(window.BSS_STOREFRONT_CONFIG?.timezone ? { timeZone: window.BSS_STOREFRONT_CONFIG.timezone } : {}) });
                 const on = slot?.startDateTime === start;
                 return (
                   <label key={start} className={on ? 'option on' : 'option'}>
@@ -784,17 +823,18 @@ export default function Cart() {
                         onClick={() => { setDeliverySel(key); if (!pickup) setPickupId(''); }}>
                   <span className="simopt-t">{pickup ? `📍 ${t('Pickup point')}` : `🏠 ${t('Home delivery')}`} · {o.carrierName}</span>
                   <span className="simopt-d">{pickup
-                    ? `Collect at a ${o.carrierName} point near you`
+                    ? (o.carrierName === (window.BSS_STOREFRONT_CONFIG || {}).brandName
+                      ? t('Collect at one of our stores near you') : `Collect at a ${o.carrierName} point near you`)
                     : (shipAddress
                       ? `Delivered to ${shipAddress} by ${o.carrierName}`
-                      : `Delivered to your door by ${o.carrierName}`)}</span>
+                      : `Delivered to your door by ${o.carrierName}`)}{o.eta ? ` · ${o.eta}` : ''}</span>
                 </button>
               );
             })}
           </div>
           {selectedOpt && isPickupMethod(selectedOpt.method) && (
             <select className="pickup-select" value={pickupId} onChange={(e) => setPickupId(e.target.value)}>
-              <option value="">Choose a {selectedOpt.carrierName} pickup point…</option>
+              <option value="">{selectedOpt.carrierName === (window.BSS_STOREFRONT_CONFIG || {}).brandName ? t('Choose a store…') : `Choose a ${selectedOpt.carrierName} pickup point…`}</option>
               {(selectedOpt.points || []).map((p) => (
                 <option key={p.id} value={p.id}>{p.name} — {p.address}</option>
               ))}
@@ -838,6 +878,22 @@ export default function Cart() {
         </p>
       )}
 
+      {hasMobile && simRegistrationRequired && (
+        <div className="keepnumber simreg" data-testid="sim-registration">
+          <h2>{t('SIM registration')}</h2>
+          <p className="dim small">{t('Mobile SIMs are registered to a government photo ID. We record the type and number with your line, as the licence requires.')}</p>
+          <div className="addressgrid">
+            <label className="charfield"><span>{t('ID type')}</span>
+              <select name="idType" value={simId.idType} onChange={(e) => setSimId({ ...simId, idType: e.target.value })}>
+                {['National ID card', 'Passport', "Driver's licence", 'e-ID card'].map((o) => <option key={o} value={o}>{o}</option>)}
+              </select></label>
+            <label className="charfield"><span>{t('ID number')}</span>
+              <input name="idNumber" value={simId.idNumber} placeholder="as printed on the ID"
+                     onChange={(e) => setSimId({ ...simId, idNumber: e.target.value })} /></label>
+          </div>
+        </div>
+      )}
+
       {hasMobile && (
         <div className="keepnumber">
           <h2>{t('Your number')}</h2>
@@ -849,7 +905,7 @@ export default function Cart() {
           {keepNumber.on && (
             <div className="addressgrid" style={{ marginTop: '0.5rem' }}>
               <label className="charfield"><span>{t('Your number')}</span>
-                <input name="portNumber" value={keepNumber.number} placeholder="+47 901 12 233"
+                <input name="portNumber" value={keepNumber.number} placeholder={PORTING_HINT.placeholder}
                        onChange={(e) => setKeepNumber({ ...keepNumber, number: e.target.value })} /></label>
               <label className="charfield"><span>Current provider</span>
                 <input name="portProvider" value={keepNumber.currentProvider} placeholder="e.g. OtherTelco"
@@ -860,8 +916,8 @@ export default function Cart() {
                        onChange={(e) => setKeepNumber({ ...keepNumber, portDate: e.target.value })} /></label>
             </div>
           )}
-          {keepNumber.on && <p className="dim small">We'll port it in through your country's number
-            registry (NRDB in Norway) and activate your plan on it.
+          {keepNumber.on && <p className="dim small">We'll port it in through {PORTING_HINT.registry} and
+            activate your plan on it.{PORTING_HINT.note ? ` ${PORTING_HINT.note}` : ''}
             {keepNumber.portDate
               ? ` Your number moves on ${keepNumber.portDate} — your old plan keeps working until then.`
               : ' No date picked = as soon as possible.'}</p>}
@@ -937,12 +993,13 @@ export default function Cart() {
       <div className="cartactions">
         <Link to="/" className="dim">{t('Continue shopping')}</Link>
         <button className="primary big" onClick={checkout}
-                disabled={busy || !addressReady || !serviceable || !slotReady || !deliveryReady || !cardReady}>
+                disabled={busy || !addressReady || !serviceable || !slotReady || !deliveryReady || !simIdReady || !cardReady}>
           {busy ? 'Placing order…'
             : !addressReady ? 'Enter shipping address'
             : !serviceable ? 'Not serviceable at this address'
             : !slotReady ? 'Pick an installation slot'
             : !deliveryReady ? 'Choose a pickup point'
+            : !simIdReady ? t('Enter your ID for SIM registration')
             : !cardReady ? 'Enter card details'
             : payingRedirect && chargeDue && signedIn ? `Continue to ${payLabel(payMethod)} · ${chargeDue.value.toFixed(2)} ${chargeDue.unit}`
             : chargeDue && signedIn ? `Pay ${chargeDue.value.toFixed(2)} ${chargeDue.unit} & checkout`

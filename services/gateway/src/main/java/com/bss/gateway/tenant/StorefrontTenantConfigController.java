@@ -45,6 +45,12 @@ public class StorefrontTenantConfigController {
         if (tenant.getBrandColor() != null) manifest.put("brandColor", tenant.getBrandColor());
         manifest.put("locale", tenant.getLocale() == null ? "en" : tenant.getLocale());
         manifest.put("currency", tenant.getCurrency() == null ? "EUR" : tenant.getCurrency());
+        manifest.put("timezone", tenant.getTimezone() == null ? "UTC" : tenant.getTimezone());
+        if (tenant.getCountry() != null) manifest.put("country", tenant.getCountry());
+        if (tenant.getPriceDecimals() != null) manifest.put("priceDecimals", tenant.getPriceDecimals());
+        if (tenant.getCurrencyDisplay() != null) manifest.put("currencyDisplay", tenant.getCurrencyDisplay());
+        if (tenant.getPriceNote() != null) manifest.put("priceNote", tenant.getPriceNote());
+        if (tenant.getSimRegistration() != null) manifest.put("simRegistration", tenant.getSimRegistration());
         if (tenant.getTagline() != null) manifest.put("tagline", tenant.getTagline());
         // the pricing-policy ATTESTATION: uniform = one price everywhere;
         // per-channel = the tenant chose differentiated channel pricing and
@@ -77,6 +83,12 @@ public class StorefrontTenantConfigController {
         String brandColor = tenant != null && tenant.getBrandColor() != null ? tenant.getBrandColor() : "";
         String locale = tenant != null && tenant.getLocale() != null ? tenant.getLocale() : "en";
         String currency = tenant != null && tenant.getCurrency() != null ? tenant.getCurrency() : "EUR";
+        String timezone = tenant != null && tenant.getTimezone() != null ? tenant.getTimezone() : "UTC";
+        String country = tenant != null && tenant.getCountry() != null ? tenant.getCountry() : "";
+        String priceDecimals = tenant != null && tenant.getPriceDecimals() != null ? String.valueOf(tenant.getPriceDecimals()) : "null";
+        String currencyDisplay = tenant != null && tenant.getCurrencyDisplay() != null ? tenant.getCurrencyDisplay() : "symbol";
+        String priceNote = tenant != null && tenant.getPriceNote() != null ? tenant.getPriceNote() : "";
+        String simRegistration = tenant != null && tenant.getSimRegistration() != null ? tenant.getSimRegistration() : "off";
         boolean businessSales = tenant != null && tenant.isBusinessSales();
         String tagline = tenant != null && tenant.getTagline() != null ? tenant.getTagline() : "";
         String body = "window." + global + " = { issuer: '" + js(issuer)
@@ -85,6 +97,12 @@ public class StorefrontTenantConfigController {
                 + "', brandColor: '" + js(brandColor)
                 + "', locale: '" + js(locale)
                 + "', currency: '" + js(currency)
+                + "', timezone: '" + js(timezone)
+                + "', country: '" + js(country)
+                + "', priceDecimals: " + priceDecimals
+                + ", currencyDisplay: '" + js(currencyDisplay)
+                + "', priceNote: '" + js(priceNote)
+                + "', simRegistration: '" + js(simRegistration)
                 + "', tagline: '" + js(tagline)
                 + "', priceParity: '" + js(tenant != null ? tenant.getPriceParityMode() : "uniform")
                 + "', businessSales: " + businessSales + " };\n";

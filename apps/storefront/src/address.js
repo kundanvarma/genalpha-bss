@@ -6,16 +6,48 @@
  */
 
 const DRAFT_KEY = 'bss.shop.shippingAddress';
+const CFG = window.BSS_STOREFRONT_CONFIG || {};
 
-export const ADDRESS_FIELDS = [
-  { name: 'street1', label: 'Street and number' },
-  { name: 'postCode', label: 'Postal code' },
-  { name: 'city', label: 'City' },
-  { name: 'country', label: 'Country' },
-];
+/** The address form is the COUNTRY's, not the platform's. Each entry: how people
+ * actually write an address there, which parts are required, and what the
+ * regions are called. Unknown country = the generic European form. */
+const COUNTRY_FORMS = {
+  GY: {
+    // "Lot 12 Camp Street, Georgetown, Region 4" — lots not house numbers, villages not
+    // cities, and the 7-digit Guyana Post Office code (still lightly used, so a hint not a wall).
+    fields: [
+      { name: 'street1', label: 'Lot and street', placeholder: 'e.g. Lot 12 Camp Street' },
+      { name: 'city', label: 'Village / town', placeholder: 'e.g. Georgetown, Diamond, Bartica' },
+      { name: 'stateOrProvince', label: 'Region', options: [
+        'Region 1 — Barima-Waini', 'Region 2 — Pomeroon-Supenaam', 'Region 3 — Essequibo Islands-West Demerara',
+        'Region 4 — Demerara-Mahaica', 'Region 5 — Mahaica-Berbice', 'Region 6 — East Berbice-Corentyne',
+        'Region 7 — Cuyuni-Mazaruni', 'Region 8 — Potaro-Siparuni', 'Region 9 — Upper Takutu-Upper Essequibo',
+        'Region 10 — Upper Demerara-Berbice'] },
+      { name: 'postCode', label: 'Postcode (7-digit GPOC code)', placeholder: 'e.g. 4131519 — find yours at guypost.gy' },
+      { name: 'country', label: 'Country' },
+    ],
+  },
+};
+const GENERIC_FORM = {
+  fields: [
+    { name: 'street1', label: 'Street and number' },
+    { name: 'postCode', label: 'Postal code' },
+    { name: 'city', label: 'City' },
+    { name: 'country', label: 'Country' },
+  ],
+};
+
+export const ADDRESS_FIELDS = (COUNTRY_FORMS[CFG.country] || GENERIC_FORM).fields;
+/** What must be filled before an address counts as complete (a region is a courtesy, not a gate). */
+const REQUIRED = ['street1', 'postCode', 'city', 'country'];
 
 export function isComplete(address) {
-  return ADDRESS_FIELDS.every((f) => (address?.[f.name] || '').trim());
+  return REQUIRED.every((f) => (address?.[f] || '').trim());
+}
+
+/** A fresh address starts in the operator's own country. */
+export function defaultAddress() {
+  return CFG.country ? { country: CFG.country } : {};
 }
 
 export function saveDraft(address) {
@@ -24,9 +56,10 @@ export function saveDraft(address) {
 
 export function loadDraft() {
   try {
-    return JSON.parse(localStorage.getItem(DRAFT_KEY)) || {};
+    const saved = JSON.parse(localStorage.getItem(DRAFT_KEY));
+    return saved && Object.keys(saved).length ? saved : defaultAddress();
   } catch {
-    return {};
+    return defaultAddress();
   }
 }
 

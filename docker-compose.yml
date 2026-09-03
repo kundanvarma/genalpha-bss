@@ -795,6 +795,8 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
       OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
       PORTING_GATEWAY: ${PORTING_GATEWAY:-nrdb}
+      PORTING_GATEWAY_NO: ${PORTING_GATEWAY_NO:-nrdb}
+      PORTING_GATEWAY_GY: ${PORTING_GATEWAY_GY:-portingxs}
       PORTING_AUTO_COMPLETE_SECONDS: ${PORTING_AUTO_COMPLETE_SECONDS:-5}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
@@ -1970,6 +1972,27 @@ services:
       WINDOW_STARTS: "08:30,12:30,15:30"
     ports:
       - "8151:8080"
+
+  # Guyana's wallet, mocked: Mobile Money Guyana as a redirect PSP (MmgPspAdapter).
+  # Real MMG = partner Merchant/Biller API behind the same adapter.
+  mock-mmg:
+    build: ./integrations/mock-mmg
+    container_name: bss-mock-mmg
+    restart: unless-stopped
+    environment:
+      PUBLIC_BASE: http://localhost:8152
+    ports:
+      - "8152:8080"
+
+  # WhatsApp Business, mocked: the Meta Cloud API shape the communication
+  # service's WhatsAppForwarder speaks. Per-tenant sender (tenants.yml
+  # whatsapp-url / whatsapp-phone-id / whatsapp-token-ref).
+  mock-whatsapp:
+    build: ./integrations/mock-whatsapp
+    container_name: bss-mock-whatsapp
+    restart: unless-stopped
+    ports:
+      - "8153:8080"
 
   mock-freg:
     build: ./integrations/mock-freg

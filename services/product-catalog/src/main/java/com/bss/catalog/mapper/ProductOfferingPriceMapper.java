@@ -32,6 +32,7 @@ public class ProductOfferingPriceMapper {
         dto.setIsBundle(entity.getIsBundle());
         dto.setPrice(readJsonObject(entity.getPriceJson()));
         dto.setProdSpecCharValueUse(readJsonList(entity.getProdSpecCharValueUseJson()));
+        dto.setTax(readJsonList(entity.getTaxJson()));
         dto.setRecurringChargePeriodType(entity.getRecurringChargePeriodType());
         dto.setRecurringChargePeriodLength(entity.getRecurringChargePeriodLength());
         dto.setLifecycleStatus(entity.getLifecycleStatus());
@@ -50,6 +51,7 @@ public class ProductOfferingPriceMapper {
         entity.setIsBundle(dto.getIsBundle());
         entity.setPriceJson(writeJsonObject(dto.getPrice()));
         entity.setProdSpecCharValueUseJson(writeJsonList(dto.getProdSpecCharValueUse()));
+        entity.setTaxJson(writeJsonList(dto.getTax()));
         entity.setRecurringChargePeriodType(dto.getRecurringChargePeriodType());
         entity.setRecurringChargePeriodLength(dto.getRecurringChargePeriodLength());
         entity.setLifecycleStatus(dto.getLifecycleStatus());
@@ -73,6 +75,9 @@ public class ProductOfferingPriceMapper {
         }
         if (patch.getPrice() != null) {
             entity.setPriceJson(writeJsonObject(patch.getPrice()));
+        }
+        if (patch.getTax() != null) {
+            entity.setTaxJson(writeJsonList(patch.getTax()));
         }
         if (patch.getProdSpecCharValueUse() != null) {
             entity.setProdSpecCharValueUseJson(writeJsonList(patch.getProdSpecCharValueUse()));

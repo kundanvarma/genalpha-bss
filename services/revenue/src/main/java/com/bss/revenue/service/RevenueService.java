@@ -139,10 +139,10 @@ public class RevenueService {
         // line is computed as gross-minus-sum-of-nets so rounding can never
         // unbalance the entry.
         BigDecimal taxPct = configValueOf("tax");
-        BigDecimal divisor = BigDecimal.ONE.add(taxPct.movePointLeft(2));
         List<JournalLine> posting = new ArrayList<>();
         posting.add(line("ar", total, null, billId, "Invoice " + billEvent.getOrDefault("billNo", billId)));
         BigDecimal netSum = BigDecimal.ZERO;
+        boolean anyTax = false;
         for (Map<String, Object> rate : rates) {
             String type = String.valueOf(rate.getOrDefault("type", "recurringCharge"));
             BigDecimal amount = money(rate.get("taxExcludedAmount") instanceof Map<?, ?> a
@@ -150,8 +150,19 @@ public class RevenueService {
             if (amount.signum() == 0) {
                 continue;
             }
-            BigDecimal net = taxPct.signum() > 0
-                    ? amount.divide(divisor, 2, RoundingMode.HALF_UP) : amount;
+            // TMF678 appliedTax on the line wins (a zero-rated line says 0 explicitly);
+            // a line that says nothing carries the tenant's default rate.
+            BigDecimal linePct = taxPct;
+            if (rate.get("appliedTax") instanceof List<?> taxes) {
+                for (Object t : taxes) {
+                    if (t instanceof Map<?, ?> tm && tm.get("taxRate") != null) {
+                        linePct = new BigDecimal(String.valueOf(tm.get("taxRate")));
+                    }
+                }
+            }
+            anyTax = anyTax || linePct.signum() > 0;
+            BigDecimal net = linePct.signum() > 0
+                    ? amount.divide(BigDecimal.ONE.add(linePct.movePointLeft(2)), 2, RoundingMode.HALF_UP) : amount;
             netSum = netSum.add(net);
             // discounts arrive NEGATIVE: a negative credit is a debit to contra-revenue
             String key = DEFAULT_CHART.containsKey("rate:" + type) ? "rate:" + type : "rate:priceAdjustment";
@@ -159,10 +170,11 @@ public class RevenueService {
                     ? line(key, net.negate(), null, billId, String.valueOf(rate.get("name")))
                     : line(key, null, net, billId, String.valueOf(rate.get("name"))));
         }
-        if (taxPct.signum() > 0) {
+        if (anyTax) {
             BigDecimal tax = total.subtract(netSum);
             if (tax.signum() != 0) {
-                posting.add(line("tax", null, tax, billId, "VAT " + taxPct.stripTrailingZeros().toPlainString() + "% (tax-inclusive prices)"));
+                posting.add(line("tax", null, tax, billId, "VAT (tax-inclusive prices; per-line rates, default "
+                        + taxPct.stripTrailingZeros().toPlainString() + "%)"));
             }
         }
         saveBalanced(tenant, sourceRef, "bill", "Invoice issued — " + billId, currency, party, posting);

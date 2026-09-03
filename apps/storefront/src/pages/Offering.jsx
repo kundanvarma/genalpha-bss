@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { alsoBought, availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
 import { CART_EVENT, addToCart, cartLines, ensureInCart } from '../cart.js';
-import { fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { fmtAmount, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 
 const isChoice = (entry) => Array.isArray(entry.options);
@@ -406,7 +406,7 @@ export default function Offering() {
               {monthly && (
                 <tr className="total">
                   <td>Total per month</td>
-                  <td className="num">{monthly.value.toFixed(2)} {monthly.unit}</td>
+                  <td className="num">{fmtAmount(monthly.value, monthly.unit)}</td>
                 </tr>
               )}
             </tbody>

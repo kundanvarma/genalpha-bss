@@ -90,6 +90,12 @@ public class CarrierRouter {
                 if (("pickupPoint".equals(method) || "locker".equals(method)) && adapter != null) {
                     opt.put("points", adapter.pickupPoints(cfg, postcode));
                 }
+                // Delivery tiers are the carrier config's, keyed by postcode prefix (longest
+                // wins): a coastal capital and a river-and-air hinterland are not one SLA.
+                String eta = etaFor(cfg, postcode);
+                if (eta != null) {
+                    opt.put("eta", eta);
+                }
                 options.add(opt);
             }
         }
@@ -101,6 +107,30 @@ public class CarrierRouter {
             options.add(home);
         }
         return options;
+    }
+
+    /** config.etaByPrefix {"4": "same day", "1": "5–10 days by boat"} + config.etaDefault. */
+    private String etaFor(CarrierConfig cfg, String postcode) {
+        if (cfg.getConfig() == null || cfg.getConfig().isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> c = mapper.readValue(cfg.getConfig(), new TypeReference<Map<String, Object>>() { });
+            String best = null;
+            int bestLen = -1;
+            if (c.get("etaByPrefix") instanceof Map<?, ?> byPrefix && postcode != null) {
+                for (Map.Entry<?, ?> e : byPrefix.entrySet()) {
+                    String prefix = String.valueOf(e.getKey());
+                    if (postcode.startsWith(prefix) && prefix.length() > bestLen) {
+                        best = String.valueOf(e.getValue());
+                        bestLen = prefix.length();
+                    }
+                }
+            }
+            return best != null ? best : (c.get("etaDefault") == null ? null : String.valueOf(c.get("etaDefault")));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private List<String> parseMethods(String json) {

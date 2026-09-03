@@ -262,7 +262,8 @@ export default function Orders() {
                 {visit && (
                   <div className="small installnote">
                     🔧 Install: {new Date(visit.validFor.startDateTime).toLocaleString(undefined,
-                      { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        ...(window.BSS_STOREFRONT_CONFIG?.timezone ? { timeZone: window.BSS_STOREFRONT_CONFIG.timezone } : {}) })}
                   </div>
                 )}
                 {families.length > 0 && (

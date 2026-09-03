@@ -46,7 +46,7 @@ class PostgresMigrationTest {
 
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(11);
+        assertThat(applied).isEqualTo(17); // + V17 price tax (versions are shared across migration/ and migration-postgresql/)
 
         // A real query against the migrated schema, on the real engine.
         assertThat(repository.count()).isZero();

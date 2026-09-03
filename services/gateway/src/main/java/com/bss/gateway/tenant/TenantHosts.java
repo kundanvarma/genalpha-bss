@@ -61,6 +61,18 @@ public class TenantHosts {
         private boolean sandbox;
         private String locale;
         private String currency;
+        /** IANA zone the operator runs its calendar in (install windows, opening hours). */
+        private String timezone;
+        /** ISO-3166 country the operator sells in (address defaults, number formats, Intl locale). */
+        private String country;
+        /** Minor-unit digits shown on prices (Guyana: 0 — cents were withdrawn in 1992); null = currency default. */
+        private Integer priceDecimals;
+        /** Intl currencyDisplay: symbol | narrowSymbol | code | name. */
+        private String currencyDisplay;
+        /** A statutory price note shown beside prices (e.g. "14% VAT included"). */
+        private String priceNote;
+        /** "required" where the law or licence records a government ID at every SIM sale (Guyana); else off. */
+        private String simRegistration;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
         private String logoUrl;
         /**
@@ -151,6 +163,54 @@ public class TenantHosts {
 
         public String getCurrency() {
             return currency;
+        }
+
+        public String getTimezone() {
+            return timezone;
+        }
+
+        public String getCountry() {
+            return country;
+        }
+
+        public void setCountry(String country) {
+            this.country = country;
+        }
+
+        public Integer getPriceDecimals() {
+            return priceDecimals;
+        }
+
+        public void setPriceDecimals(Integer priceDecimals) {
+            this.priceDecimals = priceDecimals;
+        }
+
+        public String getCurrencyDisplay() {
+            return currencyDisplay;
+        }
+
+        public void setCurrencyDisplay(String currencyDisplay) {
+            this.currencyDisplay = currencyDisplay;
+        }
+
+        public String getPriceNote() {
+            return priceNote;
+        }
+
+        public String getSimRegistration() {
+            return simRegistration;
+        }
+
+        public void setSimRegistration(String simRegistration) {
+            this.simRegistration = simRegistration;
+        }
+
+        public void setPriceNote(String priceNote) {
+            this.priceNote = priceNote;
+        }
+
+        public void setTimezone(String timezone) {
+            this.timezone = timezone;
         }
 
         public void setCurrency(String currency) {

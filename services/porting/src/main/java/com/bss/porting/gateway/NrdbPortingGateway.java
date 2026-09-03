@@ -1,6 +1,5 @@
 package com.bss.porting.gateway;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,7 +12,6 @@ import org.springframework.stereotype.Component;
  * exactly like the PSP and BankID seams elsewhere in the BSS.
  */
 @Component
-@ConditionalOnProperty(name = "bss.porting.gateway", havingValue = "nrdb")
 public class NrdbPortingGateway implements PortingGateway {
 
     @Override

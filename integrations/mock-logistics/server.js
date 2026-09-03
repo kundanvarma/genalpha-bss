@@ -24,6 +24,20 @@ const DELIVER_AFTER_MS = parseInt(process.env.DELIVER_AFTER_MS || '15000', 10);
 const CARRIER = process.env.CARRIER_NAME || 'Helthjem';
 
 const shipments = new Map(); // trackingNumber -> shipment
+// Default pickup points: ENet's public store list (2026), keyed by Guyana postcode region digit
+const PICKUP_POINTS = (() => {
+  try { if (process.env.PICKUP_POINTS_JSON) return JSON.parse(process.env.PICKUP_POINTS_JSON); } catch {}
+  return [
+    { id: 'enet-camp-street', name: 'ENet Camp Street (HQ)', address: '220 Camp Street, Georgetown', openingHours: 'Mon–Fri 08:00–17:00, Sat 08:00–12:30', regionDigit: '4' },
+    { id: 'enet-giftland', name: 'ENet Giftland Mall', address: 'Giftland Mall, Turkeyen, East Coast Demerara', openingHours: 'Daily 10:00–20:00', regionDigit: '4' },
+    { id: 'enet-movietowne', name: 'ENet MovieTowne', address: 'MovieTowne, Turkeyen, East Coast Demerara', openingHours: 'Daily 10:00–21:00', regionDigit: '4' },
+    { id: 'enet-amazonia', name: 'ENet Amazonia Mall', address: 'Amazonia Mall, Providence, East Bank Demerara', openingHours: 'Daily 10:00–20:00', regionDigit: '4' },
+    { id: 'enet-cornelia-ida', name: 'ENet Cornelia Ida', address: 'Cornelia Ida, West Coast Demerara', openingHours: 'Mon–Fri 08:00–17:00, Sat 08:00–12:30', regionDigit: '3' },
+    { id: 'enet-parika', name: 'ENet Parika (Lotus Mall)', address: 'Lotus Mall, Parika, East Bank Essequibo', openingHours: 'Daily 10:00–19:00', regionDigit: '3' },
+    { id: 'enet-anna-regina', name: 'ENet Anna Regina', address: 'Anna Regina, Essequibo Coast', openingHours: 'Mon–Fri 08:00–17:00, Sat 08:00–12:30', regionDigit: '2' },
+    { id: 'enet-port-mourant', name: 'ENet Port Mourant', address: 'Port Mourant, Corentyne, Berbice', openingHours: 'Mon–Fri 08:00–17:00, Sat 08:00–12:30', regionDigit: '6' },
+  ];
+})();
 
 function post(urlStr, payload) {
   try {
@@ -119,6 +133,15 @@ const server = http.createServer((req, res) => {
       return send(200, { labelRef: `label-${s.carrierShipmentId}.pdf`, format: 'PDF' });
     }
 
+    // Pickup points for the generic http carrier seam: where a parcel or SIM can be
+    // COLLECTED. Configurable per deployment (PICKUP_POINTS_JSON); the default list is
+    // an operator's own stores — in Guyana, store collection is the normal rail (no
+    // operator home-delivers SIMs), so "pickup point" = "our store near you".
+    if (req.method === 'GET' && url.pathname === '/pickup-points') {
+      const pc = url.searchParams.get('postcode') || '';
+      const pts = PICKUP_POINTS.filter((p) => !p.regionDigit || !pc || pc.startsWith(p.regionDigit));
+      return send(200, pts.map(({ regionDigit, ...p }) => p));
+    }
     if (url.pathname === '/health' || url.pathname === '/') return send(200, { ok: true, carrier: CARRIER });
     return send(404, { error: 'not found' });
   });
