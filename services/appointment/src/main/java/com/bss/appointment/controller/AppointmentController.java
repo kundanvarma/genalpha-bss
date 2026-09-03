@@ -37,8 +37,9 @@ public class AppointmentController {
     }
 
     @PostMapping("/searchTimeSlot")
-    public ResponseEntity<Map<String, Object>> searchTimeSlot() {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.searchTimeSlot());
+    public ResponseEntity<Map<String, Object>> searchTimeSlot(
+            @RequestBody(required = false) Map<String, Object> body) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.searchTimeSlot(body));
     }
 
     @GetMapping("/appointment")

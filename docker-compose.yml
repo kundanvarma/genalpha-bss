@@ -1956,6 +1956,21 @@ services:
   # Folkeregisteret (NO) — the national-registry seam target (freg-address-plan
   # F-P1). Real Freg / a distributor needs no code change: point the tenant's
   # registry binding baseUrl at it and set the secret-ref env var.
+  # The operator's OWN workforce-management system, mocked: TM Forum's
+  # TMFC046 component face — TMF646 searchTimeSlot/appointment. A tenant
+  # that points its schedule provider here (console → Installers → provider
+  # tmf646) gets ITS calendar, not the BSS roster. Real: ServiceNow FSM,
+  # Oracle Field Service, Salesforce Field Service behind the same seam.
+  mock-fsm:
+    build: ./integrations/mock-fsm
+    container_name: bss-mock-fsm
+    restart: unless-stopped
+    environment:
+      TZ_OFFSET: "-04:00"
+      WINDOW_STARTS: "08:30,12:30,15:30"
+    ports:
+      - "8151:8080"
+
   mock-freg:
     build: ./integrations/mock-freg
     container_name: bss-mock-freg

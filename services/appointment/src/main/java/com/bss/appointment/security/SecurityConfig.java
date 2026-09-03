@@ -34,6 +34,7 @@ public class SecurityConfig {
 
     private static final String READ = "appointment:read";
     private static final String WRITE = "appointment:write";
+    private static final String ADMIN = "appointment:admin";
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, ClaimAuthoritiesConverter authoritiesConverter,
@@ -45,6 +46,11 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/searchTimeSlot").permitAll()
+                        // the operator's calendar + roster: staff-grade, never a customer read
+                        .requestMatchers(ApiConstants.BASE_PATH + "/scheduleConfig",
+                                ApiConstants.BASE_PATH + "/scheduleConfig/**",
+                                ApiConstants.BASE_PATH + "/technician",
+                                ApiConstants.BASE_PATH + "/technician/**").hasAuthority(ADMIN)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority(READ)
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

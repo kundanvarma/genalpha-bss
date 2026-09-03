@@ -45,6 +45,13 @@ public class Appointment {
     @Column(name = "place")
     private String placeJson;
 
+    @Column(name = "provider", length = 32)
+    private String provider;
+
+    /** The booking's id in the tenant's workforce system (TMF646 externalId), when booked there. */
+    @Column(name = "external_id", length = 128)
+    private String externalId;
+
     @Column(name = "creation_date")
     private OffsetDateTime creationDate;
 
@@ -149,4 +156,9 @@ public class Appointment {
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    public String getProvider() { return provider; }
+    public void setProvider(String v) { this.provider = v; }
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String v) { this.externalId = v; }
 }

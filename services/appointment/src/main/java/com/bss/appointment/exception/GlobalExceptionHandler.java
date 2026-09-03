@@ -69,6 +69,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
+    @ExceptionHandler(ProviderUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleProvider(ProviderUnavailableException ex) {
+        ErrorResponse body = new ErrorResponse(
+                "502",
+                "Bad Gateway",
+                ex.getMessage(),
+                "502");
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(body);
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ErrorResponse> handleConflict(ConflictException ex) {
         ErrorResponse body = new ErrorResponse(

@@ -9,6 +9,10 @@ import com.bss.appointment.exception.BadRequestException;
 import com.bss.appointment.exception.ConflictException;
 import com.bss.appointment.exception.NotFoundException;
 import com.bss.appointment.repository.AppointmentRepository;
+import com.bss.appointment.provider.ScheduleProvider;
+import com.bss.appointment.provider.ScheduleProviders;
+import com.bss.appointment.schedule.ScheduleConfig;
+import com.bss.appointment.schedule.ScheduleService;
 import com.bss.appointment.security.PartyScope;
 import com.bss.appointment.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,11 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,18 +30,14 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * TMF646: installer visits. Slots are two-hour windows on business days,
- * SLOT_CAPACITY bookings each — searchTimeSlot lists what is still free, and
- * creating an appointment into a full slot is a 409, checked transactionally.
+ * TMF646: installer visits. The tenant's ScheduleService says which windows
+ * exist (timezone, working days, starts, horizon) and how many visits each
+ * holds (the technician roster, or a flat default) — searchTimeSlot lists
+ * what is still free, and creating an appointment into a full window is a
+ * 409, checked transactionally.
  */
 @Service
 public class AppointmentService {
-
-    static final int SLOT_CAPACITY = 3;
-    private static final int DAYS_AHEAD = 7;
-    private static final List<LocalTime> SLOT_STARTS = List.of(
-            LocalTime.of(9, 0), LocalTime.of(11, 0), LocalTime.of(13, 0), LocalTime.of(15, 0));
-    private static final int SLOT_HOURS = 2;
 
     private static final String RESOURCE = "Appointment";
 
@@ -50,39 +46,60 @@ public class AppointmentService {
     private final PartyScope partyScope;
     private final TenantScope tenantScope;
     private final ObjectMapper objectMapper;
+    private final ScheduleService schedule;
+    private final ScheduleProviders providers;
 
     public AppointmentService(AppointmentRepository repository, DomainEventPublisher events,
-            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper) {
+            PartyScope partyScope, TenantScope tenantScope, ObjectMapper objectMapper,
+            ScheduleService schedule, ScheduleProviders providers) {
         this.repository = repository;
         this.events = events;
         this.partyScope = partyScope;
         this.tenantScope = tenantScope;
         this.objectMapper = objectMapper;
+        this.schedule = schedule;
+        this.providers = providers;
     }
 
-    /** Free slots over the next week: business days, minus fully booked ones. */
+    /**
+     * TMF646 searchTimeSlot: free windows from whoever answers the tenant's
+     * calendar — the built-in roster, or the tenant's own workforce system.
+     * The request body is the TMF646 SearchTimeSlot (relatedPlace, relatedEntity,
+     * relatedParty, requestedTimeSlot); an empty body means "anything ahead".
+     */
     @Transactional(readOnly = true)
-    public Map<String, Object> searchTimeSlot() {
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> searchTimeSlot(Map<String, Object> body) {
+        Map<String, Object> dto = body == null ? Map.of() : body;
+        ScheduleConfig cfg = schedule.current();
+        ScheduleProvider provider = providers.forConfig(cfg);
+        ScheduleProvider.SlotRequest request = new ScheduleProvider.SlotRequest(
+                cfg.getTenantId(),
+                dto.get("relatedPlace") instanceof Map<?, ?> p ? (Map<String, Object>) p : null,
+                dto.get("relatedEntity") instanceof List<?> e ? (List<Map<String, Object>>) e : null,
+                dto.get("relatedParty") instanceof Map<?, ?> rp ? (Map<String, Object>) rp : null,
+                dto.get("requestedTimeSlot") instanceof List<?> r ? (List<Map<String, Object>>) r : null);
         List<Map<String, Object>> free = new ArrayList<>();
-        LocalDate day = LocalDate.now().plusDays(1);
-        for (int d = 0; d < DAYS_AHEAD; d++, day = day.plusDays(1)) {
-            if (day.getDayOfWeek() == DayOfWeek.SATURDAY || day.getDayOfWeek() == DayOfWeek.SUNDAY) {
-                continue;
-            }
-            for (LocalTime startTime : SLOT_STARTS) {
-                OffsetDateTime start = day.atTime(startTime).atOffset(ZoneOffset.UTC);
-                if (repository.confirmedAt(start, tenantScope.currentTenantId()) < SLOT_CAPACITY) {
-                    free.add(Map.of("validFor", Map.of(
-                            "startDateTime", start.toString(),
-                            "endDateTime", start.plusHours(SLOT_HOURS).toString())));
-                }
-            }
+        for (ScheduleProvider.Window w : provider.search(cfg, request)) {
+            free.add(Map.of(
+                    "validFor", Map.of(
+                            "startDateTime", w.start().toString(),
+                            "endDateTime", w.end().toString()),
+                    "remaining", w.remaining()));
         }
-        return Map.of(
-                "id", UUID.randomUUID().toString(),
-                "@type", "SearchTimeSlot",
-                "status", "done",
-                "availableTimeSlot", free);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", UUID.randomUUID().toString());
+        out.put("@type", "SearchTimeSlot");
+        out.put("status", "done");
+        out.put("searchDate", OffsetDateTime.now().toString());
+        out.put("searchResult", free.isEmpty() ? "no availability" : "success");
+        out.put("timezone", cfg.getTimezone());
+        out.put("provider", provider.key());
+        if (request.relatedPlace() != null) {
+            out.put("relatedPlace", request.relatedPlace());
+        }
+        out.put("availableTimeSlot", free);
+        return out;
     }
 
     @Transactional(readOnly = true)
@@ -121,9 +138,14 @@ public class AppointmentService {
         if (start.isBefore(OffsetDateTime.now())) {
             throw new BadRequestException("appointments are booked in the future");
         }
-        if (repository.confirmedAt(start, tenantScope.currentTenantId()) >= SLOT_CAPACITY) {
-            throw new ConflictException("time slot " + start + " is fully booked");
-        }
+        ScheduleConfig cfg = schedule.current();
+        ScheduleProvider provider = providers.forConfig(cfg);
+        Object place = dto.get("place") != null ? dto.get("place") : dto.get("relatedPlace");
+        ScheduleProvider.Booking booking = provider.book(cfg, new ScheduleProvider.BookingRequest(
+                cfg.getTenantId(), start, end,
+                dto.get("description") == null ? null : String.valueOf(dto.get("description")),
+                place instanceof Map<?, ?> pm ? (Map<String, Object>) pm : null,
+                dto.get("relatedEntity"), partyScope.scopedPartyId().orElse(null)));
 
         Appointment entity = new Appointment();
         String id = UUID.randomUUID().toString();
@@ -136,7 +158,9 @@ public class AppointmentService {
         entity.setOwnerPartyId(partyScope.scopedPartyId().orElse(null));
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setRelatedEntityJson(writeJson(dto.get("relatedEntity")));
-        entity.setPlaceJson(writeJson(dto.get("place")));
+        entity.setPlaceJson(writeJson(place));
+        entity.setProvider(provider.key());
+        entity.setExternalId(booking.externalId());
         entity.setCreationDate(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> created = toMap(repository.save(entity));
@@ -156,6 +180,8 @@ public class AppointmentService {
         if (!Appointment.CONFIRMED.equals(entity.getStatus())) {
             throw new ConflictException("appointment is '" + entity.getStatus() + "' and cannot be cancelled");
         }
+        // cancel where it was booked first: if the workforce system refuses, we keep it confirmed
+        providers.byKey(entity.getProvider()).cancel(schedule.current(), entity.getExternalId());
         entity.setStatus(Appointment.CANCELLED);
         entity.setLastUpdate(OffsetDateTime.now());
         Map<String, Object> updated = toMap(repository.save(entity));
@@ -180,11 +206,17 @@ public class AppointmentService {
             map.put("description", entity.getDescription());
         }
         map.put("validFor", Map.of(
-                "startDateTime", entity.getStartAt().toString(),
-                "endDateTime", entity.getEndAt().toString()));
+                "startDateTime", schedule.inTenantZone(entity.getStartAt()).toString(),
+                "endDateTime", schedule.inTenantZone(entity.getEndAt()).toString()));
         if (entity.getOwnerPartyId() != null) {
             map.put("relatedParty", List.of(Map.of(
                     "id", entity.getOwnerPartyId(), "role", "customer", "@referredType", "Individual")));
+        }
+        if (entity.getExternalId() != null) {
+            map.put("externalId", entity.getExternalId());
+        }
+        if (entity.getProvider() != null) {
+            map.put("provider", entity.getProvider());
         }
         map.put("relatedEntity", readJson(entity.getRelatedEntityJson()));
         map.put("place", readJson(entity.getPlaceJson()));

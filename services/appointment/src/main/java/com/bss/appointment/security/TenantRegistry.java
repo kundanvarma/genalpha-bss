@@ -65,6 +65,16 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** IANA zone the operator schedules in (tenants.yml `timezone`); UTC when absent. */
+        private String timezone;
+
+        public String getTimezone() {
+            return timezone;
+        }
+
+        public void setTimezone(String timezone) {
+            this.timezone = timezone;
+        }
 
         public String getId() {
             return id;
