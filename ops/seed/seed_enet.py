@@ -337,6 +337,29 @@ if not any(d.get("name") == "ENet-logo" for d in docs):
     else:
         print("brand: no logo file at ops/demo-assets/enet/enet-logo.png — storefront hides the logo slot")
 
+# ---- the shop window: the operator's own campaign creative as 'banner' documents ----
+# (ops/demo-assets is git-ignored; drop ENet's public homepage creatives there)
+banner_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "demo-assets", "enet", "banners")
+existing_banners = {}
+for d in req("GET", f"{DOC}/document?category=banner"):
+    if d.get("link"):
+        existing_banners[d["name"]] = d
+    else:  # created before captions/destinations existed — replace
+        req("DELETE", f"{DOC}/document/{d['id']}")
+extra = offerings.get("Orange 30 Days Extra 5G", {})
+for fname, name, caption, link in [
+    ("switched_2.jpg", "banner-switched", "#SWITCHED — keep your number, move to Guyana's fastest network", "/?tab=Mobile"),
+    ("bundled-cpl-plan.jpg", "banner-orange-extra-tv", "Orange 30 Days Extra includes ENet TV — activate and watch on the go", f"/offering/{extra.get('id', '')}"),
+    ("myenet_app_2026_1.jpg", "banner-my-enet-app", "The all-new My ENet App is here", "https://apps.apple.com/gy/app/my-enet/id1618927353"),
+]:
+    path = os.path.join(banner_dir, fname)
+    if name in existing_banners or not os.path.exists(path):
+        continue
+    with open(path, "rb") as fh:
+        req("POST", f"{DOC}/document", {"name": name, "category": "banner", "description": caption, "link": link,
+                                         "mimeType": "image/jpeg", "content": base64.b64encode(fh.read()).decode()})
+    print(f"banner: {name}")
+
 # ---- installers: Georgetown calendar + the roster capacity derives from ----
 APPT = "http://localhost:8080/tmf-api/appointment/v4"
 put(f"{APPT}/scheduleConfig", {

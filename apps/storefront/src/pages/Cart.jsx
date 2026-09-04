@@ -621,6 +621,9 @@ export default function Cart() {
             <strong className="linetotal">{fmtAmount(grand.value, grand.unit)}</strong>
           </div>
         )}
+        {grand && (window.BSS_STOREFRONT_CONFIG || {}).priceNote && (
+          <p className="dim small" data-testid="price-note" style={{ margin: '2px 0 0' }}>{(window.BSS_STOREFRONT_CONFIG || {}).priceNote}</p>
+        )}
         {promo && promoDiscount() && (
           <div className="row promo" data-testid="promo-row">
             <span>Promo <strong>{promo.code}</strong> — {promo.name} (−{promo.percentage}%)</span>

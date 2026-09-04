@@ -90,6 +90,8 @@ public class DocumentService {
         entity.setHref(ApiConstants.BASE_PATH + "/document/" + id);
         entity.setName(String.valueOf(dto.get("name")));
         entity.setCategory(dto.get("category") == null ? null : String.valueOf(dto.get("category")));
+        entity.setDescription(dto.get("description") == null ? null : String.valueOf(dto.get("description")));
+        entity.setLink(dto.get("link") == null ? null : String.valueOf(dto.get("link")));
         entity.setContentType(mimeType);
         // Reference mode: a tenant bound to an external CMS uploads THERE and the
         // row keeps only a ref:<provider>:<assetId> key. Otherwise the hosted
@@ -187,6 +189,20 @@ public class DocumentService {
         return entity;
     }
 
+    /** Remove a document (a retired banner, a replaced logo) — tenant-scoped, 404 across tenants. */
+    @org.springframework.transaction.annotation.Transactional
+    public void delete(String id) {
+        StoredDocument doc = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+                .orElseThrow(() -> new com.bss.document.exception.NotFoundException("Document " + id + " not found"));
+        repository.delete(doc);
+    }
+
+    /** The shop window's creative: this tenant's available 'banner' documents (guests see these). */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Map<String, Object>> banners() {
+        return findAll("banner").stream().filter(m -> !Boolean.FALSE.equals(m.get("available"))).toList();
+    }
+
     private Map<String, Object> toMap(StoredDocument d) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("id", d.getId());
@@ -194,6 +210,8 @@ public class DocumentService {
         map.put("name", d.getName());
         if (d.getCategory() != null) map.put("category", d.getCategory());
         map.put("mimeType", d.getContentType());
+        if (d.getDescription() != null) map.put("description", d.getDescription());
+        if (d.getLink() != null) map.put("link", d.getLink());
         map.put("attachmentUrl", d.getHref() + "/content");
         map.put("@type", "Document");
         return map;

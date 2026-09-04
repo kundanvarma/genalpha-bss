@@ -45,7 +45,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/document/*/content",
-                                ApiConstants.BASE_PATH + "/document/brand-logo").permitAll()
+                                ApiConstants.BASE_PATH + "/document/brand-logo",
+                                ApiConstants.BASE_PATH + "/document/banners").permitAll()
                         // CMS webhooks arrive unauthenticated and are HMAC-verified inside.
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/webhook/**").permitAll()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("document:read")

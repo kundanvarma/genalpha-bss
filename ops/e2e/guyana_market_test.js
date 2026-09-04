@@ -123,6 +123,14 @@ async function call(method, path, tok, body, base = API) {
   const logo = await fetch(`${HOST}/tmf-api/documentManagement/v4/document/brand-logo`);
   if (!logo.ok || !/image\/png/.test(logo.headers.get('content-type') || '')) fail(`brand logo not served as PNG: ${logo.status} ${logo.headers.get('content-type')}`);
   console.log(`  power + brand: battery backup stocked (${stock[0].availableQuantity?.amount}), PNG logo served`);
+  /* 11. the shop window and the front door are the tenant's too */
+  const banners = await (await fetch(`${HOST}/tmf-api/documentManagement/v4/document/banners`)).json();
+  if (!Array.isArray(banners) || banners.length < 1) fail(`no banners: ${JSON.stringify(banners).slice(0, 120)}`);
+  if (!banners.every((b) => b.attachmentUrl && b.link)) fail('banner without image or destination');
+  const img = await fetch(`${HOST}${banners[0].attachmentUrl}`);
+  if (!img.ok || !/image\//.test(img.headers.get('content-type') || '')) fail('banner image not served publicly');
+  for (const k of ['supportWhatsapp', 'supportPhone', 'privacyUrl']) if (!cfg[k]) fail(`manifest lacks ${k}`);
+  console.log(`  shop window: ${banners.length} banners (first → ${banners[0].link}); front door WhatsApp ${cfg.supportWhatsapp}`);
   console.log('PASS guyana_market_test');
   process.exit(0); // keep-alive sockets must not hold the runner open
 })().catch((e) => { console.error('FAIL', e.message); process.exit(1); });

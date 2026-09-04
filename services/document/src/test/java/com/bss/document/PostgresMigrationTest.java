@@ -39,7 +39,7 @@ class PostgresMigrationTest {
         // plus V2/V5 (postgres-only RLS) — six migrations.
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(6);
+        assertThat(applied).isEqualTo(7); // + V7 banner fields
 
         assertThat(repository.count()).isZero();
     }

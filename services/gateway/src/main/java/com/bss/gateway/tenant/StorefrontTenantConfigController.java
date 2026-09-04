@@ -51,6 +51,13 @@ public class StorefrontTenantConfigController {
         if (tenant.getCurrencyDisplay() != null) manifest.put("currencyDisplay", tenant.getCurrencyDisplay());
         if (tenant.getPriceNote() != null) manifest.put("priceNote", tenant.getPriceNote());
         if (tenant.getSimRegistration() != null) manifest.put("simRegistration", tenant.getSimRegistration());
+        if (tenant.getSupportPhone() != null) manifest.put("supportPhone", tenant.getSupportPhone());
+        if (tenant.getSupportWhatsapp() != null) manifest.put("supportWhatsapp", tenant.getSupportWhatsapp());
+        if (tenant.getSupportEmail() != null) manifest.put("supportEmail", tenant.getSupportEmail());
+        if (tenant.getAppStoreUrl() != null) manifest.put("appStoreUrl", tenant.getAppStoreUrl());
+        if (tenant.getPlayStoreUrl() != null) manifest.put("playStoreUrl", tenant.getPlayStoreUrl());
+        if (tenant.getPrivacyUrl() != null) manifest.put("privacyUrl", tenant.getPrivacyUrl());
+        if (tenant.getTermsUrl() != null) manifest.put("termsUrl", tenant.getTermsUrl());
         if (tenant.getTagline() != null) manifest.put("tagline", tenant.getTagline());
         // the pricing-policy ATTESTATION: uniform = one price everywhere;
         // per-channel = the tenant chose differentiated channel pricing and
@@ -89,6 +96,13 @@ public class StorefrontTenantConfigController {
         String currencyDisplay = tenant != null && tenant.getCurrencyDisplay() != null ? tenant.getCurrencyDisplay() : "symbol";
         String priceNote = tenant != null && tenant.getPriceNote() != null ? tenant.getPriceNote() : "";
         String simRegistration = tenant != null && tenant.getSimRegistration() != null ? tenant.getSimRegistration() : "off";
+        String supportPhone = tenant != null && tenant.getSupportPhone() != null ? tenant.getSupportPhone() : "";
+        String supportWhatsapp = tenant != null && tenant.getSupportWhatsapp() != null ? tenant.getSupportWhatsapp() : "";
+        String supportEmail = tenant != null && tenant.getSupportEmail() != null ? tenant.getSupportEmail() : "";
+        String appStoreUrl = tenant != null && tenant.getAppStoreUrl() != null ? tenant.getAppStoreUrl() : "";
+        String playStoreUrl = tenant != null && tenant.getPlayStoreUrl() != null ? tenant.getPlayStoreUrl() : "";
+        String privacyUrl = tenant != null && tenant.getPrivacyUrl() != null ? tenant.getPrivacyUrl() : "";
+        String termsUrl = tenant != null && tenant.getTermsUrl() != null ? tenant.getTermsUrl() : "";
         boolean businessSales = tenant != null && tenant.isBusinessSales();
         String tagline = tenant != null && tenant.getTagline() != null ? tenant.getTagline() : "";
         String body = "window." + global + " = { issuer: '" + js(issuer)
@@ -103,6 +117,13 @@ public class StorefrontTenantConfigController {
                 + ", currencyDisplay: '" + js(currencyDisplay)
                 + "', priceNote: '" + js(priceNote)
                 + "', simRegistration: '" + js(simRegistration)
+                + "', supportPhone: '" + js(supportPhone)
+                + "', supportWhatsapp: '" + js(supportWhatsapp)
+                + "', supportEmail: '" + js(supportEmail)
+                + "', appStoreUrl: '" + js(appStoreUrl)
+                + "', playStoreUrl: '" + js(playStoreUrl)
+                + "', privacyUrl: '" + js(privacyUrl)
+                + "', termsUrl: '" + js(termsUrl)
                 + "', tagline: '" + js(tagline)
                 + "', priceParity: '" + js(tenant != null ? tenant.getPriceParityMode() : "uniform")
                 + "', businessSales: " + businessSales + " };\n";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import ChatWidget from './ChatWidget.jsx';
 import { t } from './i18n.js';
 import { beginLogin, handleCallback, isCustomer, isSignedIn, signOut, switchAccount, tokenClaims } from './auth.js';
@@ -165,8 +165,47 @@ export default function App() {
           <Route path="/account" element={<Account />} />
         </Routes>
       </main>
+      <SiteFooter />
       <ChatWidget />
     </>
   );
 }
 
+/** Every operator site ends the same way — how to reach us, where the app is,
+ * the legal pages. All of it comes from the tenant manifest, none from code. */
+function SiteFooter() {
+  const cfg = window.BSS_STOREFRONT_CONFIG || {};
+  const wa = cfg.supportWhatsapp ? `https://wa.me/${cfg.supportWhatsapp.replace(/[^0-9]/g, '')}` : null;
+  const tel = cfg.supportPhone ? `tel:${cfg.supportPhone.replace(/[^0-9+]/g, '')}` : null;
+  const any = wa || tel || cfg.supportEmail || cfg.appStoreUrl || cfg.playStoreUrl || cfg.privacyUrl || cfg.termsUrl;
+  if (!any) return null;
+  return (
+    <footer className="sitefooter" data-testid="site-footer">
+      <div className="footcol">
+        <strong>{cfg.brandName || ''}</strong>
+        {cfg.tagline && <span className="dim">{cfg.tagline}</span>}
+      </div>
+      <div className="footcol">
+        <strong>{t('Talk to us')}</strong>
+        {wa && <a href={wa} target="_blank" rel="noopener">💬 {t('WhatsApp')} {cfg.supportWhatsapp}</a>}
+        {tel && <a href={tel}>📞 {cfg.supportPhone}</a>}
+        {cfg.supportEmail && <a href={`mailto:${cfg.supportEmail}`}>✉️ {cfg.supportEmail}</a>}
+        <Link to="/support">{t('Support & FAQ')}</Link>
+      </div>
+      {(cfg.appStoreUrl || cfg.playStoreUrl) && (
+        <div className="footcol">
+          <strong>{t('The app')}</strong>
+          {cfg.appStoreUrl && <a href={cfg.appStoreUrl} target="_blank" rel="noopener"> App Store</a>}
+          {cfg.playStoreUrl && <a href={cfg.playStoreUrl} target="_blank" rel="noopener">▶ Google Play</a>}
+        </div>
+      )}
+      <div className="footcol">
+        <strong>{t('Legal')}</strong>
+        {cfg.privacyUrl && <a href={cfg.privacyUrl} target="_blank" rel="noopener">{t('Privacy policy')}</a>}
+        {cfg.termsUrl && <a href={cfg.termsUrl} target="_blank" rel="noopener">{t('Terms and conditions')}</a>}
+        {cfg.priceNote && <span className="dim small">{cfg.priceNote}</span>}
+        <span className="dim small">© {new Date().getFullYear()} {cfg.brandName || ''}</span>
+      </div>
+    </footer>
+  );
+}

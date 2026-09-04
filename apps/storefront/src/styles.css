@@ -412,3 +412,17 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 
 /* My devices */
 .devcard .usage-meter-track { max-width: 420px; }
+
+/* --- the shop window: promo strip, live coverage check, footer --- */
+.bannerstrip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 0 8px; margin: 0 0 12px; -webkit-overflow-scrolling: touch; }
+.bannerstrip .banner { flex: 0 0 min(560px, 88%); scroll-snap-align: start; margin: 0; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+.bannerstrip .banner.clickable { cursor: pointer; }
+.bannerstrip .banner img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.bannerstrip .banner figcaption { padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.coverage { margin: 12px 0; padding: 12px 16px; }
+.coverage-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.coverage-row input { flex: 1; min-width: 160px; padding: 8px 10px; }
+.sitefooter { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 18px; margin: 40px 0 16px; padding: 20px 0 0; border-top: 1px solid var(--line, #e6e6e6); font-size: 13px; }
+.sitefooter .footcol { display: flex; flex-direction: column; gap: 6px; }
+.sitefooter a { color: inherit; text-decoration: none; }
+.sitefooter a:hover { text-decoration: underline; }

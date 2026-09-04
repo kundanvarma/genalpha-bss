@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { beacon, consentChoice, forYou, getOffering, getSpec, listOfferings, myExperience, myRecommendations, priceIndex, saveConsent, submitSalesLead } from '../api.js';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { beacon, checkQualification, consentChoice, forYou, getOffering, getSpec, listBanners, listOfferings, myExperience, myRecommendations, priceIndex, queryServiceQualification, saveConsent, submitSalesLead } from '../api.js';
 import { CART_EVENT, cartLines } from '../cart.js';
 import { isSignedIn } from '../auth.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
@@ -13,7 +13,10 @@ export default function Shop() {
   const [personal, setPersonal] = useState(null);
   const [experience, setExperience] = useState(null);
   const [error, setError] = useState(null);
-  const [tab, setTab] = useState('Bundles'); // line-of-business shop tab
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get('tab') || 'Bundles'); // line-of-business shop tab (deep-linkable: /?tab=Mobile)
+  const [banners, setBanners] = useState([]);
+  useEffect(() => { listBanners().then(setBanners); }, []);
   const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
   const [planView, setPlanView] = useState('cards');  // Mobile: 'cards' | 'table' (compare is opt-in)
   const [deviceBrand, setDeviceBrand] = useState('All'); // Devices: brand filter
@@ -108,11 +111,12 @@ export default function Shop() {
   const brand = window.BSS_STOREFRONT_CONFIG || {};
   return (
     <>
+      {banners.length > 0 && <BannerStrip banners={banners} />}
       <section className="hero">
         <h1>{brand.brandName || 'Welcome'}</h1>
         <p>{brand.tagline || t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
-        {brand.priceNote && <p className="dim small" data-testid="price-note">{brand.priceNote}</p>}
       </section>
+      <CoverageCheck offerings={offerings} onSeePlans={() => setTab('Internet')} />
       <ConsentBanner onDecided={() => myExperience().then(setExperience).catch(() => {})} />
       {hero && (
         <p className="dim" data-testid="personal-banner" style={{ margin: '4px 0' }}>
@@ -474,5 +478,71 @@ function OfferingCard({ offering, prices }) {
             : own.length > 0 && <strong>{fmtPrice(own[0])}</strong>}
       </div>
     </Link>
+  );
+}
+
+/** The shop window: the operator's own creative, straight from its document
+ * store (category 'banner'), each with a destination — a plan, a tab, the app.
+ * A horizontal strip that scroll-snaps; no library, no autoplay surprises. */
+function BannerStrip({ banners }) {
+  const navigate = useNavigate();
+  const go = (b) => {
+    if (!b.link) return;
+    if (/^https?:\/\//.test(b.link)) window.open(b.link, '_blank', 'noopener');
+    else navigate(b.link.replace(/^\/shop/, ''));
+  };
+  return (
+    <section className="bannerstrip" data-testid="banner-strip" aria-label={t('Promotions')}>
+      {banners.map((b) => (
+        <figure key={b.id} className={`banner ${b.link ? 'clickable' : ''}`} onClick={() => go(b)}
+                role={b.link ? 'link' : undefined} tabIndex={b.link ? 0 : undefined}
+                onKeyDown={(e) => e.key === 'Enter' && go(b)}>
+          <img src={b.attachmentUrl} alt={b.description || b.name} loading="lazy" />
+          {b.description && <figcaption>{b.description}</figcaption>}
+        </figure>
+      ))}
+    </section>
+  );
+}
+
+/** "Is fibre at my address?" — answered LIVE by the same serviceability the
+ * checkout gates on (TMF679 against the broadband offerings' footprint), plus
+ * the TMF645 technical footprint when the network publishes one. Not a static map. */
+function CoverageCheck({ offerings, onSeePlans }) {
+  const cfg = window.BSS_STOREFRONT_CONFIG || {};
+  const [postCode, setPostCode] = useState('');
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const label = { fiber: 'Fibre', vdsl: 'VDSL', '5g-fwa': '5G broadband' };
+  const broadband = (offerings || []).filter((o) => (((o.category || [])[0] || {}).name) === 'Broadband' && !o.isBundle);
+  const check = async () => {
+    if (!postCode.trim() || !broadband.length) return;
+    setBusy(true);
+    const place = { postCode: postCode.trim(), country: cfg.country || undefined };
+    const [q, fp] = await Promise.all([
+      checkQualification(broadband.map((o) => ({ offeringId: o.id, name: o.name })), place),
+      queryServiceQualification(place),
+    ]);
+    const ok = (q?.productOfferingQualificationItem || []).filter((i) => i.qualificationItemResult === 'qualified')
+      .map((i) => broadband.find((o) => o.id === i.productOffering?.id)?.name).filter(Boolean);
+    const best = ((fp && fp.serviceQualificationItem) || [])
+      .map((i) => Object.fromEntries((i.service?.serviceCharacteristic || []).map((c) => [c.name, c.value])))
+      .sort((a, b) => (b.maxDownstreamMbps || 0) - (a.maxDownstreamMbps || 0))[0];
+    setResult(ok.length ? { ok: true, plans: ok, tech: best ? (label[best.technology] || best.technology) : null, mbps: best?.maxDownstreamMbps } : { ok: false });
+    setBusy(false);
+  };
+  return (
+    <section className="lobcard coverage" data-testid="coverage-check">
+      <div className="coverage-row">
+        <strong>{t('Is fibre at your address?')}</strong>
+        <input value={postCode} placeholder={cfg.country === 'GY' ? t('Postcode, e.g. 4131519') : t('Postcode')}
+               onChange={(e) => setPostCode(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && check()}
+               data-testid="coverage-postcode" />
+        <button className="primary" onClick={check} disabled={busy || !postCode.trim()}>{busy ? '…' : t('Check')}</button>
+      </div>
+      {result && (result.ok
+        ? <p className="serviceability ok" data-testid="coverage-result">✓ {t('Fibre is available here')}{result.tech ? ` — ${result.tech}${result.mbps ? ` ${t('up to')} ${result.mbps} Mbit/s` : ''}` : ''}: {result.plans.join(', ')} · <a href="#plans" onClick={(e) => { e.preventDefault(); onSeePlans(); }}>{t('See internet plans')}</a></p>
+        : <p className="serviceability error" data-testid="coverage-result">{t('Not in the fibre footprint yet — mobile and satellite TV work everywhere we cover.')}</p>)}
+    </section>
   );
 }

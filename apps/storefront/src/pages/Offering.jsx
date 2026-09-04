@@ -411,6 +411,9 @@ export default function Offering() {
               )}
             </tbody>
           </table>
+          {(window.BSS_STOREFRONT_CONFIG || {}).priceNote && (
+            <p className="dim small" data-testid="price-note">{(window.BSS_STOREFRONT_CONFIG || {}).priceNote}</p>
+          )}
         </>
       )}
 

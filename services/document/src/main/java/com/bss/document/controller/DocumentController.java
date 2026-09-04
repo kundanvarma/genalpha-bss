@@ -41,6 +41,18 @@ public class DocumentController {
     }
 
     /** Stable white-label logo URL — the host decides whose brand appears. */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@org.springframework.web.bind.annotation.PathVariable("id") String id) {
+        service.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** Promotional creative for the shop window — public, like the logo. */
+    @GetMapping("/banners")
+    public ResponseEntity<java.util.List<Map<String, Object>>> banners() {
+        return ResponseEntity.ok(service.banners());
+    }
+
     @GetMapping("/brand-logo")
     public ResponseEntity<byte[]> brandLogo() {
         StoredDocument doc = service.brandLogo();

@@ -726,6 +726,16 @@ export async function queryServiceQualification(place) {
   }
 }
 
+/** The shop window's promotional creative (TMF667 documents in category 'banner') — anonymous. */
+export async function listBanners() {
+  try {
+    const rows = await json(await publicFetch('/tmf-api/documentManagement/v4/document/banners'));
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
 /** TMF646 free installer slots — also anonymous. The search says WHERE (the
  * install address as relatedPlace) and FOR WHAT (the gated offerings as
  * relatedEntity), so a tenant's own workforce system can answer by zone and

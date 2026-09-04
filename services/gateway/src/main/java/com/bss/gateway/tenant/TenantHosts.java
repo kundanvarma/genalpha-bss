@@ -73,6 +73,14 @@ public class TenantHosts {
         private String priceNote;
         /** "required" where the law or licence records a government ID at every SIM sale (Guyana); else off. */
         private String simRegistration;
+        /** The operator's front door: how customers reach it and where its apps and legal pages live. */
+        private String supportPhone;
+        private String supportWhatsapp;
+        private String supportEmail;
+        private String appStoreUrl;
+        private String playStoreUrl;
+        private String privacyUrl;
+        private String termsUrl;
         /** Any URL — our TMF667 endpoint by default, a CMS CDN if the operator brings one. */
         private String logoUrl;
         /**
@@ -199,6 +207,62 @@ public class TenantHosts {
 
         public String getSimRegistration() {
             return simRegistration;
+        }
+
+        public String getSupportPhone() {
+            return supportPhone;
+        }
+
+        public void setSupportPhone(String v) {
+            this.supportPhone = v;
+        }
+
+        public String getSupportWhatsapp() {
+            return supportWhatsapp;
+        }
+
+        public void setSupportWhatsapp(String v) {
+            this.supportWhatsapp = v;
+        }
+
+        public String getSupportEmail() {
+            return supportEmail;
+        }
+
+        public void setSupportEmail(String v) {
+            this.supportEmail = v;
+        }
+
+        public String getAppStoreUrl() {
+            return appStoreUrl;
+        }
+
+        public void setAppStoreUrl(String v) {
+            this.appStoreUrl = v;
+        }
+
+        public String getPlayStoreUrl() {
+            return playStoreUrl;
+        }
+
+        public void setPlayStoreUrl(String v) {
+            this.playStoreUrl = v;
+        }
+
+        public String getPrivacyUrl() {
+            return privacyUrl;
+        }
+
+        public void setPrivacyUrl(String v) {
+            this.privacyUrl = v;
+        }
+
+        public String getTermsUrl() {
+            return termsUrl;
+        }
+
+        public void setTermsUrl(String v) {
+            this.termsUrl = v;
         }
 
         public void setSimRegistration(String simRegistration) {

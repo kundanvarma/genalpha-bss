@@ -44,6 +44,14 @@ public class StoredDocument {
     @Column(name = "available", nullable = false)
     private boolean available = true;
 
+    /** A caption for creative (a banner's headline); free text. */
+    @Column(name = "description", length = 500)
+    private String description;
+
+    /** Where a banner sends the shopper: a shop path ("/?tab=Mobile", "/offering/…") or a full URL. */
+    @Column(name = "link", length = 500)
+    private String link;
+
     @Column(name = "content_version", nullable = false)
     private int contentVersion = 0;
 
@@ -77,4 +85,9 @@ public class StoredDocument {
     public void setCreatedAt(OffsetDateTime createdAt) { this.createdAt = createdAt; }
     public OffsetDateTime getLastUpdate() { return lastUpdate; }
     public void setLastUpdate(OffsetDateTime lastUpdate) { this.lastUpdate = lastUpdate; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String v) { this.description = v; }
+    public String getLink() { return link; }
+    public void setLink(String v) { this.link = v; }
 }
