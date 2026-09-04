@@ -360,6 +360,36 @@ for fname, name, caption, link in [
                                          "mimeType": "image/jpeg", "content": base64.b64encode(fh.read()).decode()})
     print(f"banner: {name}")
 
+# ---- plan comparison: truthful per-plan characteristics (the shop's compare table reads these) ----
+SPEC = "productSpecification"
+COMPARE = {
+    "Orange 30 Days 5G":       [("Data", "80 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 100 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
+    "Orange 30 Days Extra 5G": [("Data", "100 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 250 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
+    "30 Days Data 5G":         [("Data", "60 GB"), ("Network", "5G"), ("Calls & texts", "Data only"), ("USA roaming", "—"), ("Validity", "30 days")],
+    "Voice Only 30 Days":      [("Data", "—"), ("Network", "4G/5G"), ("Calls & texts", "Unlimited ENet; off-net $10/min"), ("USA roaming", "—"), ("Validity", "30 days")],
+    "90-Day Plan":             [("Data", "150 GB (50 GB/month)"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 60 off-net + 50 intl Zone 1 min/month"), ("USA roaming", "—"), ("Validity", "90 days")],
+}
+def char(name, value):
+    return {"name": name, "valueType": "string", "configurable": False,
+            "productSpecCharacteristicValue": [{"value": value, "isDefault": True}]}
+for pname, chars in COMPARE.items():
+    o = offerings.get(pname)
+    if not o:
+        continue
+    spec_ref = o.get("productSpecification")
+    if not spec_ref:
+        spec = req("POST", f"{SPEC}", {"name": f"{pname} spec", "lifecycleStatus": "Active",
+                                       "productSpecCharacteristic": [char(n, v) for n, v in chars]})
+        req("PATCH", f"productOffering/{o['id']}", {"productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"}})
+        print(f"spec: {pname} -> {len(chars)} comparison characteristics")
+    else:
+        spec = req("GET", f"{SPEC}/{spec_ref['id']}")
+        have = {c["name"] for c in (spec.get("productSpecCharacteristic") or [])}
+        missing = [char(n, v) for n, v in chars if n not in have]
+        if missing:
+            req("PATCH", f"{SPEC}/{spec['id']}", {"productSpecCharacteristic": [*(spec.get("productSpecCharacteristic") or []), *missing]})
+            print(f"spec: {pname} +{len(missing)} characteristics")
+
 # ---- installers: Georgetown calendar + the roster capacity derives from ----
 APPT = "http://localhost:8080/tmf-api/appointment/v4"
 put(f"{APPT}/scheduleConfig", {

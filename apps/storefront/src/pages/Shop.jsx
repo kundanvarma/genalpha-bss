@@ -58,7 +58,7 @@ export default function Shop() {
   }, []);
 
   // Load each mobile plan's spec characteristics so the comparison table shows
-  // real per-plan values (Data / Network / EU roaming / Calls & texts).
+  // real per-plan values (Data / Network / Calls & texts, plus whatever else the specs declare).
   useEffect(() => {
     if (!offerings) return;
     const plans = offerings.filter((o) =>
@@ -264,7 +264,7 @@ export default function Shop() {
                           <div className="planname">{o.name.replace(/^GenAlpha /, '')}</div>
                           <div className="planprice">
                             {monthlyOf(o) !== Infinity
-                              ? <><strong>{fmtMonthly({ value: monthlyOf(o), unit: 'EUR' })}</strong></>
+                              ? <><strong>{fmtMonthly(monthlyTotal(pricesOf(o, prices)))}</strong></>
                               : <span className="dim">—</span>}
                           </div>
                         </th>
@@ -284,15 +284,19 @@ export default function Shop() {
                       <td className="feat">{t('Calls & texts')}</td>
                       {items.map((o) => <td key={o.id}>{specOf(o)['Calls & texts'] || t('Unlimited')}</td>)}
                     </tr>
-                    <tr>
-                      <td className="feat">{t('EU roaming')}</td>
-                      {items.map((o) => {
-                        const r = specOf(o)['EU roaming'];
-                        return <td key={o.id}>{r === 'Included'
-                          ? <span className="yes">✓ {t('Included')}</span>
-                          : (r ? <span className="dim">{r}</span> : '—')}</td>;
-                      })}
-                    </tr>
+                    {[...new Set(items.flatMap((o) => Object.keys(specOf(o))))]
+                      .filter((k) => !['Data', 'Network', 'Calls & texts'].includes(k))
+                      .map((k) => (
+                        <tr key={k}>
+                          <td className="feat">{t(k)}</td>
+                          {items.map((o) => {
+                            const r = specOf(o)[k];
+                            return <td key={o.id}>{r === 'Included'
+                              ? <span className="yes">✓ {t('Included')}</span>
+                              : (r ? <span className="dim">{r}</span> : '—')}</td>;
+                          })}
+                        </tr>
+                      ))}
                     <tr className="choose">
                       <td className="feat" />
                       {items.map((o) => (
