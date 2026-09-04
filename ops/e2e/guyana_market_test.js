@@ -131,6 +131,25 @@ async function call(method, path, tok, body, base = API) {
   if (!img.ok || !/image\//.test(img.headers.get('content-type') || '')) fail('banner image not served publicly');
   for (const k of ['supportWhatsapp', 'supportPhone', 'privacyUrl']) if (!cfg[k]) fail(`manifest lacks ${k}`);
   console.log(`  shop window: ${banners.length} banners (first → ${banners[0].link}); front door WhatsApp ${cfg.supportWhatsapp}`);
+  /* 12. growth (needs the marketing slice: campaign + insight) — skipped honestly when it is down */
+  const jr = await call('GET', '/tmf-api/campaignManagement/v4/journey?limit=50', staff);
+  if (jr.status === 200) {
+    const js = jr.body || [];
+    for (const [name, trig, ch] of [['Running low — Orange top-up', 'UsageThresholdBreachedEvent', 'whatsapp'], ['Churn save — Stay with ENet', 'ChurnRiskDetectedEvent', 'whatsapp'], ['Welcome to ENet', 'IndividualCreateEvent', 'inApp']]) {
+      const j = js.find((x) => x.name === name);
+      if (!j || j.status !== 'active' || j.triggerEventType !== trig || (j.steps || [{}])[0].channel !== ch) fail(`journey ${name} not as seeded: ${JSON.stringify(j).slice(0, 160)}`);
+    }
+    const promo = await call('POST', '/tmf-api/promotionManagement/v4/checkPromotion', devi, { code: 'TESTDRIVE' });
+    if (!promo.body?.valid || promo.body.percentage !== 100) fail(`TESTDRIVE not valid: ${promo.text.slice(0, 120)}`);
+    const landing = await fetch(`${HOST}/insight/v1/landing/switched/view`);
+    if (!landing.ok || !/SWITCHED/.test(await landing.text())) fail('SWITCHED landing page not public');
+    const settingsRes = await call('GET', '/tmf-api/campaignManagement/v4/settings', staff);
+    const settings = Array.isArray(settingsRes.body) ? settingsRes.body[0] : settingsRes.body; // the API answers a one-row list
+    if (settings?.timeZone !== 'America/Guyana') fail(`quiet hours zone: ${settings?.timeZone}`);
+    console.log(`  growth: ${js.length} journeys (WhatsApp-first), TESTDRIVE valid, #SWITCHED page public, quiet hours ${settings.quietStart}–${settings.quietEnd} ${settings.timeZone}`);
+  } else {
+    console.log('  growth: marketing slice is down (campaign ' + jr.status + ') — leg skipped');
+  }
   console.log('PASS guyana_market_test');
   process.exit(0); // keep-alive sockets must not hold the runner open
 })().catch((e) => { console.error('FAIL', e.message); process.exit(1); });

@@ -6,6 +6,10 @@
 #                          then the identity warmup — the calm cold start
 #   ops/fleet.sh demo      full journeys, minus optional weight (~16GB fits)
 #   ops/fleet.sh full      everything on (wants 24-32GB)
+#   ops/fleet.sh growth    the consumer-operator demo shape on a 21GB VM: the
+#                          marketing slice (campaign insight event-hub flow) ON,
+#                          the B2B/care/ledger weight OFF — shop, checkout,
+#                          journeys, audiences, landing pages, loyalty all work
 #   ops/fleet.sh refresh   relief valve: restart the heaviest JVMs + re-warm
 #                          every route — run after hours of uptime, or ~15
 #                          minutes before a live demo
@@ -107,6 +111,18 @@ case "${1:-}" in
     $DC up -d >/dev/null 2>&1
     echo "[fleet] full fleet on (wants 24-32GB free for comfort)."
     ;;
+  growth)
+    # RAM is the lever, tenants are rows: swap weight the consumer demo never
+    # touches (B2B quotes, care tickets, ledger, assurance, martech bridge) for
+    # the marketing slice. Reversible with 'up'.
+    docker stop bss-quote bss-trouble-ticket bss-party-interaction bss-knowledge bss-bridge bss-revenue bss-assurance >/dev/null 2>&1
+    docker start bss-campaign bss-insight bss-event-hub bss-flow >/dev/null 2>&1
+    for c in bss-campaign bss-insight; do
+      for i in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Health.Status}}' $c 2>/dev/null)" = healthy ] && break; sleep 5; done
+    done
+    echo "[fleet] growth shape: marketing slice on, B2B/care/ledger off. Journeys, audiences, landing pages, loyalty live."
+    ;;
+
   refresh)
     echo "[fleet] relief valve: restarting the heaviest JVMs"
     KEEP="postgres|kafka|keycloak|gateway|prometheus|console|storefront|mobile-app|mock-|keeper|worker-controller|redis|minio|azurite"

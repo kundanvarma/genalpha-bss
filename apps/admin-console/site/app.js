@@ -2042,7 +2042,7 @@ function stepBuilderControl(field) {
     const t = node.type;
     if (t !== 'exit') { const i = inp('e.g. Welcome', node.stage); bind('stage', i); rows.push(row('Stage (label)', i)); }
     if (t === 'message') {
-      const ch = selEl(['inApp', 'email', 'sms', 'push'], node.channel || 'inApp'); ch.addEventListener('change', () => { node.channel = ch.value; serialize(); }); rows.push(row('Channel', ch));
+      const ch = selEl(['inApp', 'email', 'sms', 'push', 'whatsapp'], node.channel || 'inApp'); ch.addEventListener('change', () => { node.channel = ch.value; serialize(); }); rows.push(row('Channel', ch));
       const su = inp('Subject line — type {{ for a name', node.subject); bind('subject', su); rows.push(msgRow('Subject', su));
       const co = ta('Message body — {{ inserts a name, {code} a promo code', node.content); bind('content', co); rows.push(msgRow('Message', co, true));
     } else if (t === 'wait') {
