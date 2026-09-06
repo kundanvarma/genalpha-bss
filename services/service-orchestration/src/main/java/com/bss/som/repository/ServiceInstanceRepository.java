@@ -12,6 +12,9 @@ public interface ServiceInstanceRepository extends JpaRepository<ServiceInstance
 
     List<ServiceInstance> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 
+    /** Boost passes past their hour: the sweep releases them (the core already has). */
+    List<ServiceInstance> findTop100ByTenantIdAndSliceUntilBefore(String tenantId, java.time.OffsetDateTime before);
+
     List<ServiceInstance> findByTenantIdAndDeliveryPath(String tenantId, String deliveryPath);
 
     List<ServiceInstance> findTop100ByTenantIdAndStateAndResumeAtBefore(

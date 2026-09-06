@@ -60,6 +60,17 @@ public class ServiceInstance {
     @Column(name = "service_order_id", nullable = false, length = 36)
     private String serviceOrderId;
 
+    /** The network slice profile this line rides (null = best effort) and, for a boost pass, when it lapses. */
+    @Column(name = "slice_profile", length = 64)
+    private String sliceProfile;
+
+    @Column(name = "slice_until")
+    private OffsetDateTime sliceUntil;
+
+    /** The product order that bought the current slice (idempotency for boost passes). */
+    @Column(name = "slice_order_id", length = 36)
+    private String sliceOrderId;
+
     @Column(name = "owner_party_id", length = 64)
     private String ownerPartyId;
 
@@ -98,4 +109,11 @@ public class ServiceInstance {
     public void setRestrictionReason(String v) { this.restrictionReason = v; }
     public String getRestrictionProfileJson() { return restrictionProfileJson; }
     public void setRestrictionProfileJson(String v) { this.restrictionProfileJson = v; }
+
+    public String getSliceProfile() { return sliceProfile; }
+    public void setSliceProfile(String v) { this.sliceProfile = v; }
+    public OffsetDateTime getSliceUntil() { return sliceUntil; }
+    public void setSliceUntil(OffsetDateTime v) { this.sliceUntil = v; }
+    public String getSliceOrderId() { return sliceOrderId; }
+    public void setSliceOrderId(String v) { this.sliceOrderId = v; }
 }

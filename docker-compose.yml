@@ -331,6 +331,7 @@ services:
       OIDC_CLIENT_ID: bss-usage
       OIDC_CLIENT_SECRET: usage-secret
       OCS_BASE_URL: http://mock-ocs:8080
+      SLICE_BASE_URL: http://mock-5gc:8080
       PARTY_BASE_URL: http://party-account:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       POLICY_BASE_URL: http://policy:8080
@@ -1161,6 +1162,7 @@ services:
       CATALOG_BASE_URL: http://product-catalog:8080
       # the charging master: blank = no online charging in this deployment
       OCS_BASE_URL: http://mock-ocs:8080
+      SLICE_BASE_URL: http://mock-5gc:8080
       PARTY_BASE_URL: http://party-account:8080
       ASSURANCE_BASE_URL: http://assurance:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -1898,6 +1900,16 @@ services:
       OCS_THRESHOLDS: "0.8"
     ports:
       - "8115:8080"
+
+  # The 5G standalone core's SLICE control, mocked (PCF/NSSF or a vendor slice
+  # manager — Mavenir/Ericsson/Nokia). The SOM applies a slice profile to a
+  # line for a boost pass or a priority tier; the core reverts on its own clock.
+  mock-5gc:
+    build: ./integrations/mock-5gc
+    container_name: bss-mock-5gc
+    restart: unless-stopped
+    ports:
+      - "8154:8080"
 
   # C2 logistics seam target — a Helthjem-shaped parcel carrier (stands in for
   # Helthjem / Posten-Bring / PostNord behind fulfilment's LogisticsClient).

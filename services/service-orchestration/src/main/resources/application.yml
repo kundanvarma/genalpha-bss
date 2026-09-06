@@ -57,6 +57,8 @@ bss:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     ocs-base-url: ${OCS_BASE_URL:}
+    # 5G SA slice control (PCF/NSSF or a vendor slice manager); blank = no slicing here
+    slice-base-url: ${SLICE_BASE_URL:}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8080}
   wholesale:
     # open access: which owner-OSS integration to use — 'mock' activates instantly

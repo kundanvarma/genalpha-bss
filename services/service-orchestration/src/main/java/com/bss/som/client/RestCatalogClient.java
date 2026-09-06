@@ -78,6 +78,49 @@ public class RestCatalogClient implements CatalogClient {
         return computeCharging(offeringId);
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public Optional<SliceIntent> sliceIntentOf(String offeringId) {
+        if (offeringId == null) {
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> offering = restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
+                    .retrieve().body(Map.class);
+            Object specRef = offering == null ? null : offering.get("productSpecification");
+            if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+                return Optional.empty();
+            }
+            Map<String, Object> spec = restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", String.valueOf(ref.get("id")))
+                    .retrieve().body(Map.class);
+            String profile = null;
+            Integer hours = null;
+            if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
+                for (Object c : chars) {
+                    if (!(c instanceof Map<?, ?> ch) || !(ch.get("productSpecCharacteristicValue") instanceof List<?> vals)
+                            || vals.isEmpty() || !(vals.get(0) instanceof Map<?, ?> v0) || v0.get("value") == null) {
+                        continue;
+                    }
+                    String name = String.valueOf(ch.get("name"));
+                    if ("sliceProfile".equals(name)) {
+                        profile = String.valueOf(v0.get("value"));
+                    } else if ("boostHours".equals(name)) {
+                        try {
+                            hours = Integer.parseInt(String.valueOf(v0.get("value")).trim());
+                        } catch (NumberFormatException ignored) {
+                            // a non-numeric boostHours is treated as open-ended
+                        }
+                    }
+                }
+            }
+            return profile == null ? Optional.empty() : Optional.of(new SliceIntent(profile, hours));
+        } catch (RestClientException e) {
+            return Optional.empty();
+        }
+    }
+
     private Optional<String> computeCharging(String offeringId) {
         {
             try {

@@ -24,4 +24,12 @@ public interface CatalogClient {
      * provision there.
      */
     Optional<String> chargingSpecOf(String offeringId);
+
+    /**
+     * The offering's slice intent (spec characteristics `sliceProfile` and,
+     * for a time-boxed boost pass, `boostHours`). Empty = best effort.
+     */
+    Optional<SliceIntent> sliceIntentOf(String offeringId);
+
+    record SliceIntent(String profile, Integer boostHours) { }
 }

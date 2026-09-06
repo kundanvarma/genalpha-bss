@@ -390,6 +390,44 @@ for pname, chars in COMPARE.items():
             req("PATCH", f"{SPEC}/{spec['id']}", {"productSpecCharacteristic": [*(spec.get("productSpecCharacteristic") or []), *missing]})
             print(f"spec: {pname} +{len(missing)} characteristics")
 
+# ---- network slicing (5G SA): a match-day BOOST PASS and a priority plan tier ----
+# The spec's sliceProfile names the core's profile; boostHours makes it a time-boxed pass.
+# The core (PCF/NSSF — mock-5gc in dev) enforces the window; the OCS only rates the traffic.
+def ensure_spec_chars(offering, chars):
+    ref = offering.get("productSpecification")
+    if not ref:
+        spec = req("POST", f"{SPEC}", {"name": f"{offering['name']} spec", "lifecycleStatus": "Active",
+                                       "productSpecCharacteristic": [char(n, v) for n, v in chars]})
+        req("PATCH", f"productOffering/{offering['id']}", {"productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"}})
+        return True
+    spec = req("GET", f"{SPEC}/{ref['id']}")
+    have = {c["name"] for c in (spec.get("productSpecCharacteristic") or [])}
+    missing = [char(n, v) for n, v in chars if n not in have]
+    if missing:
+        req("PATCH", f"{SPEC}/{spec['id']}", {"productSpecCharacteristic": [*(spec.get("productSpecCharacteristic") or []), *missing]})
+    return bool(missing)
+
+ensure_offering("Match Day Boost", "Top-ups", 500,
+                "Priority on the 5G network for 6 hours — smooth streams and calls when the whole stand is online. "
+                "Turns on the moment you buy it, switches itself off after. (Demo price.)",
+                price_type="oneTime", period=None)
+if ensure_spec_chars(offerings["Match Day Boost"], [("sliceProfile", "priority"), ("boostHours", "6"),
+                                                    ("Priority network", "6 hours"), ("Validity", "6 hours")]):
+    print("spec: Match Day Boost -> sliceProfile=priority, boostHours=6")
+
+ensure_offering("Orange 30 Days Priority 5G", "Mobile plans", 6500,
+                "Everything in Orange 30 Days Extra, on the priority 5G slice all month — first in line "
+                "at the stadium, the mall and the traffic jam. (Demo tier.)")
+if ensure_spec_chars(offerings["Orange 30 Days Priority 5G"], [("sliceProfile", "priority"),
+        ("Data", "100 GB"), ("Network", "5G priority slice"), ("Calls & texts", "Unlimited ENet + 250 off-net min/SMS"),
+        ("USA roaming", "Included"), ("Validity", "30 days"), ("Priority network", "Included")]):
+    print("spec: Orange 30 Days Priority 5G -> sliceProfile=priority (tier)")
+for pname in ("Orange 30 Days Priority 5G monthly", "Match Day Boost"):
+    p = req("GET", f"productOfferingPrice?limit=100")
+    row = next((x for x in p if x["name"] == pname), None)
+    if row and (row.get("tax") or [{}])[0].get("taxRate") != 14:
+        req("PATCH", f"productOfferingPrice/{row['id']}", {"tax": [{"taxCategory": "VAT", "taxRate": 14}]})
+
 # ---- installers: Georgetown calendar + the roster capacity derives from ----
 APPT = "http://localhost:8080/tmf-api/appointment/v4"
 put(f"{APPT}/scheduleConfig", {

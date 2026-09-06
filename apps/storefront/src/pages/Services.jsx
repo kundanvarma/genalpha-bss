@@ -381,6 +381,7 @@ export default function Services() {
               <LineDoctor serviceId={sv.id} />
               <p className="dim" data-testid="my-number">{t('Your number:')} <strong style={{ color: 'var(--teal)' }}>{numberOf(sv)}</strong>
                 {sv.state === 'suspended' && <span className="state suspended" data-testid="line-paused"> {t('paused')}</span>}
+                <SliceBadge service={sv} />
                 {' '}
                 {sv.state === 'active' ? (
                   <button className="ghost" data-testid="pause-line"
@@ -608,6 +609,8 @@ function PlanChangeNotices() {
  * A held order is the ask-to-buy path — the family admin decides. */
 function TopUp({ offering, price, onBought }) {
   const [state, setState] = useState(null); // null | 'busy' | 'done' | 'held' | error
+  // a BOOST PASS is a top-up that buys network priority, not data
+  const isBoost = /boost|priority/i.test(`${offering.name || ''} ${offering.description || ''}`);
   async function buy() {
     setState('busy');
     try {
@@ -620,6 +623,8 @@ function TopUp({ offering, price, onBought }) {
       // the boost lands via the event stream; give it a beat then refresh
       setTimeout(onBought, 2500);
       setTimeout(onBought, 6000);
+      // a boost pass lands on the LINE (slice at the core, stamp on the record) — give it longer
+      if (isBoost) { setTimeout(onBought, 12000); setTimeout(onBought, 20000); }
     } catch (e) { setState(e.message); }
   }
   return (
@@ -627,7 +632,7 @@ function TopUp({ offering, price, onBought }) {
       <button className="ghost" data-testid={`topup-${offering.id}`} disabled={state === 'busy'} onClick={buy}>
         {state === 'busy' ? t('Buying…') : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
       </button>
-      {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ added to this month's allowance</span>}
+      {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ {isBoost ? t('priority network is on for your line — see the badge above') : t("added to this month's allowance")}</span>}
       {state === 'held' && <span className="dim" data-testid="topup-held">
         {' '}🔔 {t('sent to your family admin for approval — you\'ll hear the moment they decide')}</span>}
       {state && state !== 'done' && state !== 'held' && state !== 'busy' && <span className="error"> {state}</span>}
@@ -754,5 +759,21 @@ function ReferralCard() {
         {msg && <span data-testid="referral-msg" className="dim">{msg}</span>}
       </div>
     </section>
+  );
+}
+
+/** The slice this line rides, read straight off the TMF638 service record —
+ * "Priority network until 22:00" while a boost pass runs, nothing otherwise. */
+function SliceBadge({ service }) {
+  const chars = Object.fromEntries((service.serviceCharacteristic || []).map((c) => [c.name, c.value]));
+  if (!chars.sliceProfile || chars.sliceProfile === 'default') return null;
+  const tz = (window.BSS_STOREFRONT_CONFIG || {}).timezone;
+  const until = chars.sliceUntil ? new Date(chars.sliceUntil).toLocaleString(undefined,
+    { weekday: 'short', hour: '2-digit', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) }) : null;
+  return (
+    <span className="state slice" data-testid="slice-badge" title={`Slice profile: ${chars.sliceProfile}`}
+          style={{ marginLeft: 6, background: 'var(--teal-soft, #fde8d3)', color: 'var(--teal-text, #b45309)', padding: '1px 8px', borderRadius: 999, fontSize: 12 }}>
+      ⚡ {t('Priority network')}{until ? ` · ${t('until')} ${until}` : ''}
+    </span>
   );
 }

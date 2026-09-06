@@ -999,6 +999,13 @@ public class SomController {
                 "href", "/tmf-api/geographicSiteManagement/v4/geographicSite/sa-" + s.getTenantId(),
                 "name", "service area", "role", "serviceArea",
                 "@type", "RelatedPlaceRefOrValue"));
+        // network slice: what priority this line rides right now, and until when
+        if (s.getSliceProfile() != null) {
+            characteristics.add(Map.of("name", "sliceProfile", "valueType", "string", "value", s.getSliceProfile()));
+            if (s.getSliceUntil() != null) {
+                characteristics.add(Map.of("name", "sliceUntil", "valueType", "dateTime", "value", s.getSliceUntil().toString()));
+            }
+        }
         map.put("place", places);
         map.put("supportingResource", supporting);
         map.put("serviceCharacteristic", characteristics);

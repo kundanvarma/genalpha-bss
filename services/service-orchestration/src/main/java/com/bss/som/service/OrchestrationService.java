@@ -55,6 +55,7 @@ public class OrchestrationService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.som.client.OcsProvisioningClient ocs;
+    private final com.bss.som.client.SliceProvisioningClient slices;
     private final com.bss.som.security.TenantRegistry tenants;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.tick.TickGuard tickGuard;
@@ -76,6 +77,7 @@ public class OrchestrationService {
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
+            com.bss.som.client.SliceProvisioningClient slices,
             com.bss.som.security.TenantRegistry tenants,
             com.bss.som.repository.NumberQuarantineRepository quarantine,
             com.bss.som.tick.TickGuard tickGuard,
@@ -95,6 +97,7 @@ public class OrchestrationService {
         this.sims = sims;
         this.catalog = catalog;
         this.ocs = ocs;
+        this.slices = slices;
         this.tenants = tenants;
         this.quarantine = quarantine;
         this.pukVault = pukVault;
@@ -203,7 +206,15 @@ public class OrchestrationService {
             if ("Insurance".equals(category) || "Top-ups".equals(category)) {
                 // insurance covers, top-ups boost an allowance — neither is a
                 // service; they bill, and that's the whole story. Nothing to
-                // fulfil, so the item is done.
+                // fulfil, so the item is done. EXCEPT a top-up that carries slice
+                // intent — a BOOST PASS: the customer's mobile line rides a
+                // priority slice for the pass's hours. The core enforces the
+                // window; the line's record carries it so everyone can see it.
+                String offeringId = offering == null || offering.get("id") == null ? null : String.valueOf(offering.get("id"));
+                final String passName = name;
+                final String passOwner = owner;
+                catalog.sliceIntentOf(offeringId).ifPresent(intent ->
+                        applyBoostPass(tenant, passOwner, productOrderId, passName, intent));
                 log.info("'{}' is billing-only ({}) — no service to provision", name, category);
                 if (itemId != null) {
                     ordering.updateItemState(productOrderId, itemId, "completed");
@@ -372,6 +383,17 @@ public class OrchestrationService {
                 if (chargingSpec != null) {
                     ocs.provision(tenant, owner, serviceId, chargingSpec);
                 }
+                // a PRIORITY TIER: the plan itself names a slice profile, so the
+                // line rides it for as long as the plan does (no expiry)
+                catalog.sliceIntentOf(so.getOfferingId()).ifPresent(intent -> {
+                    services.findById(serviceId).ifPresent(line -> {
+                        line.setSliceProfile(intent.profile());
+                        line.setSliceUntil(null);
+                        line.setSliceOrderId(productOrderId);
+                        services.save(line);
+                    });
+                    slices.apply(tenant, serviceId, intent.profile(), null);
+                });
             }
 
             // C4 — a physical item's service order is HELD inProgress until its
@@ -885,6 +907,14 @@ public class OrchestrationService {
     /** Coarse product family from a catalog category — mirrors the ordering
      *  service's decomposition axis, so SOM fulfils each component by its class
      *  (a handset never draws a phone number; broadband installs; TV is digital). */
+    /** A line named after a mobile offering (the service carries its offering's name). */
+    static boolean isMobileLine(String name) {
+        String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        return n.contains("mobile") || n.contains("orange") || n.contains("prepaid") || n.contains("sim")
+                || n.contains("5g") || n.contains("4g") || n.contains("phone plan")
+                || (n.contains("day") && (n.contains("gb") || n.contains("data") || n.contains("voice")));
+    }
+
     static String componentType(String category) {
         String c = category == null ? "" : category.toLowerCase();
         if (c.contains("broadband") || c.contains("internet") || c.contains("fiber") || c.contains("fibre")) {
@@ -958,6 +988,93 @@ public class OrchestrationService {
         events.publish("ServiceResumedEvent", "service", event);
         log.info("resumed service {} ({})", instance.getName(), how);
         return event;
+    }
+
+    /**
+     * A BOOST PASS: the customer's active mobile line rides {@code intent.profile()}
+     * for {@code intent.boostHours()} from now. Idempotent per order (a re-delivered
+     * event never doubles the window); a pass on a line already boosted extends
+     * from the later of now and the current expiry. Fail-open on the core.
+     */
+    void applyBoostPass(String tenant, String owner, String productOrderId, String passName,
+            com.bss.som.client.CatalogClient.SliceIntent intent) {
+        if (owner == null) {
+            log.warn("boost pass '{}' on order {} has no owner — nothing to boost", passName, productOrderId);
+            return;
+        }
+        ServiceInstance line = services.findByTenantIdAndOwnerPartyId(tenant, owner).stream()
+                .filter(sv -> ServiceInstance.ACTIVE.equals(sv.getState()))
+                .filter(sv -> isMobileLine(sv.getName()))
+                .findFirst().orElse(null);
+        if (line == null) {
+            log.warn("boost pass '{}' on order {}: customer {} has no active mobile line", passName, productOrderId, owner);
+            return;
+        }
+        if (productOrderId != null && productOrderId.equals(line.getSliceOrderId())) {
+            return; // the same order already applied — idempotent
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime from = line.getSliceUntil() != null && line.getSliceUntil().isAfter(now)
+                && intent.profile().equals(line.getSliceProfile()) ? line.getSliceUntil() : now;
+        OffsetDateTime until = intent.boostHours() == null ? null : from.plusHours(intent.boostHours());
+        line.setSliceProfile(intent.profile());
+        line.setSliceUntil(until);
+        line.setSliceOrderId(productOrderId);
+        services.save(line);
+        slices.apply(tenant, line.getId(), intent.profile(), until);
+        Map<String, Object> ev = new java.util.LinkedHashMap<>();
+        ev.put("id", line.getId());
+        ev.put("name", line.getName());
+        ev.put("sliceProfile", intent.profile());
+        if (until != null) {
+            ev.put("sliceUntil", until.toString());
+        }
+        ev.put("boostPass", passName);
+        ev.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+        events.publish("ServiceSliceChangeEvent", "service", ev);
+        log.info("boost pass '{}': line {} rides '{}'{}", passName, line.getId(), intent.profile(),
+                until == null ? "" : " until " + until);
+    }
+
+    /** Boost passes lapse on their own clock: the core already reverted; the record follows and says so. */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${bss.som.slice-tick-ms:10000}")
+    public void sliceExpiryTick() {
+        if (!tickGuard.claim("slice-expiry", java.time.Duration.ofSeconds(60))) {
+            return;
+        }
+        try {
+            for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (com.bss.som.security.TenantContext ignored =
+                        com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                    for (ServiceInstance lapsed : services.findTop100ByTenantIdAndSliceUntilBefore(
+                            tenant.getId(), OffsetDateTime.now())) {
+                        try {
+                            String was = lapsed.getSliceProfile();
+                            lapsed.setSliceProfile(null);
+                            lapsed.setSliceUntil(null);
+                            lapsed.setSliceOrderId(null);
+                            services.save(lapsed);
+                            slices.release(tenant.getId(), lapsed.getId());
+                            Map<String, Object> ev = new java.util.LinkedHashMap<>();
+                            ev.put("id", lapsed.getId());
+                            ev.put("name", lapsed.getName());
+                            ev.put("sliceProfile", "default");
+                            ev.put("lapsedProfile", was);
+                            if (lapsed.getOwnerPartyId() != null) {
+                                ev.put("relatedParty", List.of(Map.of("id", lapsed.getOwnerPartyId(), "role", "customer")));
+                            }
+                            events.publish("ServiceSliceChangeEvent", "service", ev);
+                            log.info("boost pass lapsed: line {} back to best effort (was '{}')", lapsed.getId(), was);
+                        } catch (Exception e) {
+                            log.warn("slice expiry failed for {}: {}", lapsed.getId(), e.getMessage());
+                        }
+                    }
+                }
+            }
+        } finally {
+            tickGuard.release("slice-expiry");
+        }
     }
 
     /** The hold lifts itself: due suspensions resume, tenant by tenant
