@@ -33,6 +33,13 @@ public class OcsNotificationController {
         return ResponseEntity.accepted().body(Map.of("status", "accepted"));
     }
 
+    /** Slice-aware charging: the OCS reports GB that rode the PRIORITY slice; the
+     * BSS rates the uplift as its own line ("Priority data") on the next bill. */
+    @PostMapping("/priorityUsage")
+    public ResponseEntity<Map<String, Object>> priorityUsage(@RequestBody Map<String, Object> body) {
+        return ResponseEntity.accepted().body(service.recordPriorityUsage(body));
+    }
+
     /** The monetary sibling: an external charging edge reports a spend
      * accrual {partyId, chargeClass, amount}; the reply's accepted=false
      * tells it to refuse the charge (barring, cap, roaming cut-off). */

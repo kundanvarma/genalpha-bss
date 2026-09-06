@@ -8,6 +8,8 @@ import java.util.List;
 
 public interface RatedChargeRepository extends JpaRepository<RatedCharge, String> {
 
+    List<RatedCharge> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
+
     List<RatedCharge> findByTenantIdAndOwnerPartyIdAndPeriodStart(
             String tenantId, String ownerPartyId, LocalDate periodStart);
 }

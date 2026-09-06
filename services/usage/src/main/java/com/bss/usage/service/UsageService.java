@@ -59,6 +59,7 @@ public class UsageService {
     private final AutoTopupService autoTopup;
     private final SpendPolicyService spendPolicy;
     private final int zoneEntryWindowDays;
+    private final org.springframework.transaction.support.TransactionTemplate tx;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -73,12 +74,14 @@ public class UsageService {
             com.bss.usage.repository.PendingDataRewardRepository pendingRewards,
             PoolService poolService, AutoTopupService autoTopup, SpendPolicyService spendPolicy,
             @org.springframework.beans.factory.annotation.Value(
-                    "${bss.usage.policy.zone-entry-window-days:30}") int zoneEntryWindowDays) {
+                    "${bss.usage.policy.zone-entry-window-days:30}") int zoneEntryWindowDays,
+            org.springframework.transaction.PlatformTransactionManager txManager) {
         this.pendingRewards = pendingRewards;
         this.poolService = poolService;
         this.autoTopup = autoTopup;
         this.spendPolicy = spendPolicy;
         this.zoneEntryWindowDays = zoneEntryWindowDays;
+        this.tx = new org.springframework.transaction.support.TransactionTemplate(txManager);
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -298,6 +301,57 @@ public class UsageService {
      * a per-brand "running low" journey. Idempotence is the OCS's (it notifies
      * once per threshold per cycle); the journey engine dedupes re-enrolment.
      */
+    /**
+     * SLICE-AWARE CHARGING: GB that rode the priority slice, as the OCS counted it
+     * (a CHF sees the S-NSSAI on every charging request). Rated immediately as an
+     * uplift line — {@code gb × upliftPerGb} in the tenant's currency — so the
+     * boost pass is not only a one-time price but priced per GB where the offer
+     * says so. Idempotent per (service, minute) so a re-delivered report never
+     * double-charges. Currency comes from the party's allowance rules.
+     */
+    public Map<String, Object> recordPriorityUsage(Map<String, Object> n) {
+        String tenantId = n.get("tenantId") == null || String.valueOf(n.get("tenantId")).isBlank()
+                ? tenantScope.currentTenantId() : String.valueOf(n.get("tenantId"));
+        String party = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
+        String serviceId = n.get("serviceId") == null ? null : String.valueOf(n.get("serviceId"));
+        BigDecimal gb = n.get("gb") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(n.get("gb")));
+        BigDecimal uplift = n.get("upliftPerGb") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(n.get("upliftPerGb")));
+        if (party == null || gb.signum() <= 0 || uplift.signum() <= 0) {
+            return Map.of("status", "ignored");
+        }
+        // the tenant context must be set BEFORE the transaction opens — RLS binds
+        // app.tenant_id at connection checkout, so an anonymous internal call that
+        // switches tenant inside a transaction is refused by the second lock
+        try (com.bss.usage.security.TenantContext ignored = com.bss.usage.security.TenantContext.actAs(tenantId)) {
+            return tx.execute(status -> ratePriorityUsage(tenantId, party, serviceId, gb, uplift,
+                    n.get("currency") == null ? null : String.valueOf(n.get("currency"))));
+        }
+    }
+
+    Map<String, Object> ratePriorityUsage(String tenantId, String party, String serviceId,
+            BigDecimal gb, BigDecimal uplift, String reportedCurrency) {
+        {
+            // currency: what this party was last rated in, else what the report says, else EUR
+            String unit = ratedCharges.findByTenantIdAndOwnerPartyId(tenantId, party).stream()
+                    .map(RatedCharge::getAmountUnit).filter(u -> u != null && !u.isBlank()).reduce((a, b) -> b)
+                    .orElse(reportedCurrency == null ? "EUR" : reportedCurrency);
+            RatedCharge charge = new RatedCharge();
+            charge.setId(UUID.randomUUID().toString());
+            charge.setTenantId(tenantId);
+            charge.setOwnerPartyId(party);
+            charge.setName("Priority data: " + gb.stripTrailingZeros().toPlainString() + " GB on the priority slice"
+                    + (serviceId == null ? "" : " (" + serviceId.substring(0, Math.min(8, serviceId.length())) + ")"));
+            charge.setAmountValue(gb.multiply(uplift).setScale(2, RoundingMode.HALF_UP));
+            charge.setAmountUnit(unit);
+            charge.setPeriodStart(LocalDate.now().withDayOfMonth(1));
+            charge.setCreatedAt(OffsetDateTime.now());
+            ratedCharges.save(charge);
+            events.publish("UsageRatedEvent", "ratedCharge", chargeMap(charge));
+            spendPolicy.accrue(tenantId, party, "usage", charge.getAmountValue(), charge.getAmountUnit());
+            return Map.of("status", "rated", "amount", charge.getAmountValue(), "unit", unit);
+        }
+    }
+
     @Transactional
     public void notifyUsageThreshold(Map<String, Object> n) {
         String tenantId = n.get("tenantId") != null && !String.valueOf(n.get("tenantId")).isBlank()
