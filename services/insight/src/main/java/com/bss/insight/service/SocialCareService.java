@@ -40,24 +40,15 @@ public class SocialCareService {
     private final DomainEventPublisher events;
     private final SignalService signalService;
     private final TenantScope tenantScope;
-    private final RestClient social;
-    private final String accountId;
-    private final String token;
-    private final boolean enabled;
+    private final com.bss.insight.social.SocialProviders providers;
 
     public SocialCareService(SocialDmRepository dms, DomainEventPublisher events,
-            SignalService signalService, TenantScope tenantScope, RestClient.Builder builder,
-            @Value("${bss.downstream.social-api-url:}") String baseUrl,
-            @Value("${bss.downstream.social-account-id:}") String accountId,
-            @Value("${bss.downstream.social-access-token:}") String token) {
+            SignalService signalService, TenantScope tenantScope, com.bss.insight.social.SocialProviders providers) {
         this.dms = dms;
         this.events = events;
         this.signalService = signalService;
         this.tenantScope = tenantScope;
-        this.social = builder.baseUrl(baseUrl == null ? "" : baseUrl).build();
-        this.accountId = accountId;
-        this.token = token;
-        this.enabled = baseUrl != null && !baseUrl.isBlank() && accountId != null && !accountId.isBlank();
+        this.providers = providers;
     }
 
     /** Pull DMs, score them, store the new ones, and request tickets for the ones that need care. */
@@ -67,12 +58,10 @@ public class SocialCareService {
         String tenantId = tenantScope.currentTenantId();
         int ingested = 0;
         int ticketsRequested = 0;
+        com.bss.insight.social.SocialConfig cfg = providers.current();
+        boolean enabled = cfg.enabled();
         if (enabled) {
-            Map<String, Object> body = social.get().uri("/v1/{acct}/dms", accountId)
-                    .header("Authorization", "Bearer " + token)
-                    .retrieve().body(Map.class);
-            List<Map<String, Object>> data = body != null && body.get("data") instanceof List<?> l
-                    ? (List<Map<String, Object>>) l : List.of();
+            List<Map<String, Object>> data = providers.providerFor(cfg).dms(cfg);
             for (Map<String, Object> m : data) {
                 String platform = String.valueOf(m.getOrDefault("platform", "x"));
                 String externalId = m.get("id") == null ? null : String.valueOf(m.get("id"));

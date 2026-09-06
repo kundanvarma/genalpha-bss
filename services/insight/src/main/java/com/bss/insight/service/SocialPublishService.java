@@ -15,46 +15,30 @@ import java.util.Map;
 @Service
 public class SocialPublishService {
 
-    private final RestClient social;
-    private final String accountId;
-    private final String token;
-    private final boolean enabled;
+    private final com.bss.insight.social.SocialProviders providers;
 
-    public SocialPublishService(RestClient.Builder builder,
-            @Value("${bss.downstream.social-api-url:}") String baseUrl,
-            @Value("${bss.downstream.social-account-id:}") String accountId,
-            @Value("${bss.downstream.social-access-token:}") String token) {
-        this.social = builder.baseUrl(baseUrl == null ? "" : baseUrl).build();
-        this.accountId = accountId;
-        this.token = token;
-        this.enabled = baseUrl != null && !baseUrl.isBlank() && accountId != null && !accountId.isBlank();
+    public SocialPublishService(com.bss.insight.social.SocialProviders providers) {
+        this.providers = providers;
     }
 
-    @SuppressWarnings("unchecked")
     public Map<String, Object> publish(String content) {
-        if (!enabled) {
+        com.bss.insight.social.SocialConfig cfg = providers.current();
+        if (!cfg.enabled()) {
             return Map.of("published", false, "reason", "no social handle configured for this tenant");
         }
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("content is required to publish");
         }
-        Map<String, Object> res = social.post().uri("/v1/{acct}/posts", accountId)
-                .header("Authorization", "Bearer " + token)
-                .body(Map.of("message", content))
-                .retrieve().body(Map.class);
-        return Map.of("published", true, "id", res == null ? "" : String.valueOf(res.get("id")),
-                "permalink", res == null ? "" : String.valueOf(res.get("permalink")));
+        Map<String, Object> res = providers.providerFor(cfg).publish(cfg, content);
+        return Map.of("published", true, "id", String.valueOf(res.getOrDefault("id", "")),
+                "permalink", String.valueOf(res.getOrDefault("permalink", "")), "provider", cfg.providerName());
     }
 
-    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> posts() {
-        if (!enabled) {
+        com.bss.insight.social.SocialConfig cfg = providers.current();
+        if (!cfg.enabled()) {
             return List.of();
         }
-        Map<String, Object> body = social.get().uri("/v1/{acct}/posts", accountId)
-                .header("Authorization", "Bearer " + token)
-                .retrieve().body(Map.class);
-        return body != null && body.get("data") instanceof List<?> l
-                ? (List<Map<String, Object>>) l : List.of();
+        return providers.providerFor(cfg).posts(cfg);
     }
 }

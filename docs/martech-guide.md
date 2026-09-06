@@ -182,6 +182,43 @@ even if the message is delivered twice.
 
 ---
 
+### Going live with Meta — the `meta` adapter
+
+Listening, care, publishing, Lead Ads and Custom Audiences all run through one
+per-tenant seam. In the demo it points at `mock-social`; for a real Facebook
+Page and Instagram account, switch the **tenant** (never the deployment) to the
+Graph adapter:
+
+| tenants.yml key | Value for a real page |
+|---|---|
+| `social-provider` | `meta` |
+| `social-api-url` | `https://graph.facebook.com` |
+| `social-api-version` | `v21.0` (or newer) |
+| `social-account-id` | the Facebook **Page id** |
+| `social-ig-user-id` | the Instagram professional account id (optional; enables IG mentions and DMs) |
+| `social-access-token` | a long-lived **Page access token** |
+| `social-ads-token` | a System User token with `ads_management` (Custom Audiences); falls back to the page token |
+| `social-lead-form-id` | the Lead Ads form id (lead import) |
+
+What the adapter calls, and the permission each needs:
+
+| Feature | Graph call | Permission |
+|---|---|---|
+| Listening | `GET /{page}/tagged`, comments on `GET /{page}/feed`, `GET /{ig}/tags` | `pages_read_engagement`, `pages_read_user_content`, `instagram_basic`, `instagram_manage_comments` |
+| Care (DMs) | `GET /{page}/conversations?platform=messenger\|instagram` | `pages_messaging`, `instagram_manage_messages` |
+| Publishing | `POST /{page}/feed` | `pages_manage_posts` |
+| Audiences | `POST /{audience}/users` with `payload.schema=[EMAIL]` and SHA-256 rows | `ads_management` |
+| Lead Ads | `GET /{form}/leads` | `leads_retrieval` |
+
+A **Development-mode** app grants all of these to people with a role on the
+app, so a test page needs no App Review. Connect only a page you control and
+keep it **unpublished** while it feeds a demo tenant: whatever the page receives
+lands in social listening and social care as customer data.
+
+Each feed is fenced: a missing permission (Instagram not linked, say) fails that
+feed and nothing else. The brand's own replies are dropped from mentions and
+DMs. Syncs read the first 50 rows and are idempotent per platform id.
+
 ## 7. Runs on *any* BSS — the add-on story
 
 Everything above reads the operational bus and writes to owned channels — which means the whole

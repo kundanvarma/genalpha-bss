@@ -67,6 +67,9 @@ public class TenantRegistry {
         private String machineClientSecret;
         /** Social lead-ads seam (Meta wire shape): where TMF699 pulls
          * lead-gen form entries from. Null url = not connected. */
+        /** which social adapter this tenant speaks: mock (dev shape) | meta (Graph API) */
+        private String socialProvider;
+        private String socialApiVersion;
         private String socialApiUrl;
         private String socialAccessToken;
         private String socialLeadFormId;
@@ -119,6 +122,18 @@ public class TenantRegistry {
             this.machineClientSecret = machineClientSecret;
         }
 
+        public String getSocialProvider() { return socialProvider; }
+        public void setSocialProvider(String v) { this.socialProvider = v; }
+        public String getSocialApiVersion() { return socialApiVersion; }
+        public void setSocialApiVersion(String v) { this.socialApiVersion = v; }
+        /** Graph API base (url + version) for 'meta', the dev base for 'mock'. */
+        public String socialBase() {
+            String u = socialApiUrl == null ? "" : socialApiUrl.replaceAll("/+$", "");
+            return "meta".equalsIgnoreCase(socialProvider)
+                    ? u + "/" + (socialApiVersion == null || socialApiVersion.isBlank() ? "v21.0" : socialApiVersion.trim())
+                    : u + "/v1";
+        }
+        public boolean isMeta() { return "meta".equalsIgnoreCase(socialProvider); }
         public String getSocialApiUrl() {
             return socialApiUrl;
         }

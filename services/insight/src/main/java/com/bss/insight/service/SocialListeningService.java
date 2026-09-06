@@ -33,23 +33,14 @@ public class SocialListeningService {
     private final SocialMentionRepository mentions;
     private final SignalService signalService;
     private final TenantScope tenantScope;
-    private final RestClient social;
-    private final String accountId;
-    private final String token;
-    private final boolean enabled;
+    private final com.bss.insight.social.SocialProviders providers;
 
     public SocialListeningService(SocialMentionRepository mentions, SignalService signalService,
-            TenantScope tenantScope, RestClient.Builder builder,
-            @Value("${bss.downstream.social-api-url:}") String baseUrl,
-            @Value("${bss.downstream.social-account-id:}") String accountId,
-            @Value("${bss.downstream.social-access-token:}") String token) {
+            TenantScope tenantScope, com.bss.insight.social.SocialProviders providers) {
         this.mentions = mentions;
         this.signalService = signalService;
         this.tenantScope = tenantScope;
-        this.social = builder.baseUrl(baseUrl == null ? "" : baseUrl).build();
-        this.accountId = accountId;
-        this.token = token;
-        this.enabled = baseUrl != null && !baseUrl.isBlank() && accountId != null && !accountId.isBlank();
+        this.providers = providers;
     }
 
     /** Pull the brand's mentions, score sentiment, store the new ones. */
@@ -58,12 +49,10 @@ public class SocialListeningService {
     public Map<String, Object> sync() {
         String tenantId = tenantScope.currentTenantId();
         int ingested = 0;
+        com.bss.insight.social.SocialConfig cfg = providers.current();
+        boolean enabled = cfg.enabled();
         if (enabled) {
-            Map<String, Object> body = social.get().uri("/v1/{acct}/mentions", accountId)
-                    .header("Authorization", "Bearer " + token)
-                    .retrieve().body(Map.class);
-            List<Map<String, Object>> data = body != null && body.get("data") instanceof List<?> l
-                    ? (List<Map<String, Object>>) l : List.of();
+            List<Map<String, Object>> data = providers.providerFor(cfg).mentions(cfg);
             for (Map<String, Object> m : data) {
                 String platform = String.valueOf(m.getOrDefault("platform", "x"));
                 String externalId = m.get("id") == null ? null : String.valueOf(m.get("id"));

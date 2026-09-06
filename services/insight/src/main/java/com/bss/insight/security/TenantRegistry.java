@@ -81,6 +81,20 @@ public class TenantRegistry {
         private String analyticsPropertyId;
         private String analyticsDataToken;
 
+        /** The social seam, PER TENANT: which platform adapter ('mock' | 'meta'),
+         * its API base url + version, the brand's page/account id, an optional
+         * Instagram professional account, the page access token and (Meta) the
+         * ads token for Custom Audiences. Empty url = this tenant has no social
+         * line wired; the deployment-wide fallback keeps the default demo tenant
+         * working. Two operators never share a page or a token. */
+        private String socialProvider;
+        private String socialApiUrl;
+        private String socialApiVersion;
+        private String socialAccountId;
+        private String socialIgUserId;
+        private String socialAccessToken;
+        private String socialAdsToken;
+
         public boolean isSandbox() {
             return sandbox;
         }
@@ -150,6 +164,20 @@ public class TenantRegistry {
         public String getAnalyticsPropertyId() { return analyticsPropertyId; }
         public void setAnalyticsPropertyId(String v) { this.analyticsPropertyId = v; }
         public String getAnalyticsDataToken() { return analyticsDataToken; }
+        public String getSocialProvider() { return socialProvider; }
+        public void setSocialProvider(String v) { this.socialProvider = v; }
+        public String getSocialApiUrl() { return socialApiUrl; }
+        public void setSocialApiUrl(String v) { this.socialApiUrl = v; }
+        public String getSocialApiVersion() { return socialApiVersion; }
+        public void setSocialApiVersion(String v) { this.socialApiVersion = v; }
+        public String getSocialAccountId() { return socialAccountId; }
+        public void setSocialAccountId(String v) { this.socialAccountId = v; }
+        public String getSocialIgUserId() { return socialIgUserId; }
+        public void setSocialIgUserId(String v) { this.socialIgUserId = v; }
+        public String getSocialAccessToken() { return socialAccessToken; }
+        public void setSocialAccessToken(String v) { this.socialAccessToken = v; }
+        public String getSocialAdsToken() { return socialAdsToken; }
+        public void setSocialAdsToken(String v) { this.socialAdsToken = v; }
         public void setAnalyticsDataToken(String v) { this.analyticsDataToken = v; }
     }
 }

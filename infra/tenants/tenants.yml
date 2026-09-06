@@ -22,6 +22,11 @@ bss:
         bank-token: ${BANK_TOKEN:}
         social-api-url: ${SOCIAL_API_URL:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN:}
+        social-provider: ${SOCIAL_PROVIDER:mock}
+        social-api-version: ${SOCIAL_API_VERSION:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN:}
         delivery-provider: ${DELIVERY_PROVIDER:internal}
         esp-url: ${ESP_URL:}
         esp-api-key: ${ESP_API_KEY:}
@@ -103,6 +108,11 @@ bss:
         bank-token: ${BANK_TOKEN_NOVA:}
         social-api-url: ${SOCIAL_API_URL_NOVA:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_NOVA:}
+        social-provider: ${SOCIAL_PROVIDER_NOVA:mock}
+        social-api-version: ${SOCIAL_API_VERSION_NOVA:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_NOVA:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_NOVA:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_NOVA:}
         delivery-provider: ${DELIVERY_PROVIDER_NOVA:internal}
         esp-url: ${ESP_URL_NOVA:}
         esp-api-key: ${ESP_API_KEY_NOVA:}
@@ -162,6 +172,11 @@ bss:
         bank-token: ${BANK_TOKEN_CHILIMOBIL:}
         social-api-url: ${SOCIAL_API_URL_CHILIMOBIL:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_CHILIMOBIL:}
+        social-provider: ${SOCIAL_PROVIDER_CHILIMOBIL:mock}
+        social-api-version: ${SOCIAL_API_VERSION_CHILIMOBIL:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_CHILIMOBIL:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_CHILIMOBIL:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_CHILIMOBIL:}
         delivery-provider: ${DELIVERY_PROVIDER_CHILIMOBIL:internal}
         esp-url: ${ESP_URL_CHILIMOBIL:}
         esp-api-key: ${ESP_API_KEY_CHILIMOBIL:}
@@ -222,6 +237,11 @@ bss:
         bank-token: ${BANK_TOKEN_FJORDNETT:}
         social-api-url: ${SOCIAL_API_URL_FJORDNETT:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_FJORDNETT:}
+        social-provider: ${SOCIAL_PROVIDER_FJORDNETT:mock}
+        social-api-version: ${SOCIAL_API_VERSION_FJORDNETT:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_FJORDNETT:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_FJORDNETT:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_FJORDNETT:}
         delivery-provider: ${DELIVERY_PROVIDER_FJORDNETT:internal}
         esp-url: ${ESP_URL_FJORDNETT:}
         esp-api-key: ${ESP_API_KEY_FJORDNETT:}
@@ -281,6 +301,11 @@ bss:
         bank-token: ${BANK_TOKEN_NORDLYS:}
         social-api-url: ${SOCIAL_API_URL_NORDLYS:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_NORDLYS:}
+        social-provider: ${SOCIAL_PROVIDER_NORDLYS:mock}
+        social-api-version: ${SOCIAL_API_VERSION_NORDLYS:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_NORDLYS:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_NORDLYS:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_NORDLYS:}
         delivery-provider: ${DELIVERY_PROVIDER_NORDLYS:internal}
         esp-url: ${ESP_URL_NORDLYS:}
         esp-api-key: ${ESP_API_KEY_NORDLYS:}
@@ -342,6 +367,11 @@ bss:
         bank-token: ${BANK_TOKEN_SC229066:}
         social-api-url: ${SOCIAL_API_URL_SC229066:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_SC229066:}
+        social-provider: ${SOCIAL_PROVIDER_SC229066:mock}
+        social-api-version: ${SOCIAL_API_VERSION_SC229066:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_SC229066:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_SC229066:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_SC229066:}
         delivery-provider: ${DELIVERY_PROVIDER_SC229066:internal}
         esp-url: ${ESP_URL_SC229066:}
         esp-api-key: ${ESP_API_KEY_SC229066:}
@@ -399,6 +429,11 @@ bss:
         bank-token: ${BANK_TOKEN_IB249958:}
         social-api-url: ${SOCIAL_API_URL_IB249958:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_IB249958:}
+        social-provider: ${SOCIAL_PROVIDER_IB249958:mock}
+        social-api-version: ${SOCIAL_API_VERSION_IB249958:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_IB249958:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_IB249958:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_IB249958:}
         delivery-provider: ${DELIVERY_PROVIDER_IB249958:internal}
         esp-url: ${ESP_URL_IB249958:}
         esp-api-key: ${ESP_API_KEY_IB249958:}
@@ -455,6 +490,11 @@ bss:
         bank-token: ${BANK_TOKEN_PARITY148420:}
         social-api-url: ${SOCIAL_API_URL_PARITY148420:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_PARITY148420:}
+        social-provider: ${SOCIAL_PROVIDER_PARITY148420:mock}
+        social-api-version: ${SOCIAL_API_VERSION_PARITY148420:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_PARITY148420:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_PARITY148420:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_PARITY148420:}
         delivery-provider: ${DELIVERY_PROVIDER_PARITY148420:internal}
         esp-url: ${ESP_URL_PARITY148420:}
         esp-api-key: ${ESP_API_KEY_PARITY148420:}
@@ -511,6 +551,11 @@ bss:
         bank-token: ${BANK_TOKEN_AURORA:}
         social-api-url: ${SOCIAL_API_URL_AURORA:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_AURORA:}
+        social-provider: ${SOCIAL_PROVIDER_AURORA:mock}
+        social-api-version: ${SOCIAL_API_VERSION_AURORA:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_AURORA:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_AURORA:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_AURORA:}
         delivery-provider: ${DELIVERY_PROVIDER_AURORA:internal}
         esp-url: ${ESP_URL_AURORA:}
         esp-api-key: ${ESP_API_KEY_AURORA:}
@@ -570,6 +615,11 @@ bss:
         bank-token: ${BANK_TOKEN_FJORD:}
         social-api-url: ${SOCIAL_API_URL_FJORD:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_FJORD:}
+        social-provider: ${SOCIAL_PROVIDER_FJORD:mock}
+        social-api-version: ${SOCIAL_API_VERSION_FJORD:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_FJORD:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_FJORD:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_FJORD:}
         delivery-provider: ${DELIVERY_PROVIDER_FJORD:internal}
         esp-url: ${ESP_URL_FJORD:}
         esp-api-key: ${ESP_API_KEY_FJORD:}
@@ -629,6 +679,11 @@ bss:
         bank-token: ${BANK_TOKEN_ENET:}
         social-api-url: ${SOCIAL_API_URL_ENET:}
         social-access-token: ${SOCIAL_ACCESS_TOKEN_ENET:}
+        social-provider: ${SOCIAL_PROVIDER_ENET:mock}
+        social-api-version: ${SOCIAL_API_VERSION_ENET:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_ENET:}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_ENET:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_ENET:}
         delivery-provider: ${DELIVERY_PROVIDER_ENET:internal}
         esp-url: ${ESP_URL_ENET:}
         esp-api-key: ${ESP_API_KEY_ENET:}
@@ -706,8 +761,13 @@ bss:
         bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_TARANGA:ehf}
         bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_TARANGA:einvoice}
         bank-token: ${BANK_TOKEN_TARANGA:}
-        social-api-url: ${SOCIAL_API_URL_TARANGA:}
-        social-access-token: ${SOCIAL_ACCESS_TOKEN_TARANGA:}
+        social-api-url: ${SOCIAL_API_URL_TARANGA:http://mock-social:8080}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_TARANGA:taranga-page-token}
+        social-provider: ${SOCIAL_PROVIDER_TARANGA:meta}
+        social-api-version: ${SOCIAL_API_VERSION_TARANGA:v21.0}
+        social-account-id: ${SOCIAL_ACCOUNT_ID_TARANGA:taranga-demo-page}
+        social-ig-user-id: ${SOCIAL_IG_USER_ID_TARANGA:}
+        social-ads-token: ${SOCIAL_ADS_TOKEN_TARANGA:}
         delivery-provider: ${DELIVERY_PROVIDER_TARANGA:internal}
         esp-url: ${ESP_URL_TARANGA:}
         esp-api-key: ${ESP_API_KEY_TARANGA:}

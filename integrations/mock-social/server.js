@@ -35,6 +35,9 @@ let postSeq = Date.now() + 2;
  *  (distinct from public mentions). The BSS pulls these and opens tickets. */
 const dms = new Map();
 let dmSeq = Date.now() + 3;
+/** 'graph:'+page -> {tagged, posts(with comments), conversations, tags} — the Graph-shaped mirror */
+const graph = new Map();
+let graphSeq = Date.now() + 4;
 
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -53,6 +56,89 @@ const server = http.createServer((req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/health') {
     return json(200, { status: 'UP' });
+  }
+
+  // ---------------------------------------------------------------------------
+  // META GRAPH API SHAPE — the same brand data behind the real wire format, so
+  // the 'meta' adapter is proven end to end here before a real Page is wired:
+  //   GET  /vNN.N/{page}/tagged                      posts that tag the page
+  //   GET  /vNN.N/{page}/feed?fields=…comments…      page posts with comments
+  //   POST /vNN.N/{page}/feed {message}              publish
+  //   GET  /vNN.N/{page}/posts                       published posts
+  //   GET  /vNN.N/{page}/conversations?platform=     messenger | instagram threads
+  //   GET  /vNN.N/{ig}/tags                          Instagram mentions
+  //   POST /vNN.N/{audience}/users {payload:{schema,data}}
+  //   GET  /vNN.N/{form}/leads                       (Lead Ads shape is shared)
+  // Seeding (test convenience): POST /graph-seed/{page}/tagged {from,message},
+  //   /graph-seed/{page}/comment {from,message}, /graph-seed/{page}/conversation
+  //   {platform,from,message}, /graph-seed/{ig}/tag {username,caption}
+  // ---------------------------------------------------------------------------
+  const seed = url.pathname.match(/^\/graph-seed\/([^/]+)\/(tagged|comment|conversation|tag)$/);
+  if (seed && req.method === 'POST') {
+    return readBody((p) => {
+      const key = 'graph:' + seed[1];
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, '+0000');
+      const g = graph.get(key) || { tagged: [], posts: [], conversations: [], tags: [] };
+      let id;
+      if (seed[2] === 'tagged') {
+        id = `${seed[1]}_${graphSeq++}`;
+        g.tagged.push({ id, message: String(p.message || ''), from: { name: p.from || 'Someone', id: p.fromId || 'u' + graphSeq }, created_time: now, permalink_url: `https://www.facebook.com/${id}` });
+      } else if (seed[2] === 'comment') {
+        if (!g.posts.length) g.posts.push({ id: `${seed[1]}_${graphSeq++}`, message: 'Welcome to our page', created_time: now, comments: { data: [] } });
+        const post = g.posts[g.posts.length - 1];
+        id = `${post.id}_${graphSeq++}`;
+        post.comments.data.push({ id, message: String(p.message || ''), from: { name: p.from || 'Someone', id: p.fromId || 'u' + graphSeq }, created_time: now });
+      } else if (seed[2] === 'conversation') {
+        id = `m_${graphSeq++}`;
+        g.conversations.push({ id: `t_${graphSeq++}`, platform: p.platform || 'messenger', updated_time: now,
+          messages: { data: [{ id, message: String(p.message || ''), from: { name: p.from || 'Someone', id: p.fromId || 'u' + graphSeq, username: p.username }, created_time: now }] } });
+      } else {
+        id = `${graphSeq++}`;
+        g.tags.push({ id, caption: String(p.caption || ''), username: p.username || 'someone', timestamp: now, permalink: `https://www.instagram.com/p/${id}/` });
+      }
+      graph.set(key, g);
+      json(200, { id });
+    });
+  }
+  const gm = url.pathname.match(/^\/v\d+\.\d+\/([^/]+)\/(tagged|feed|posts|conversations|tags|users|leads)$/);
+  if (gm) {
+    if (!authed()) return json(400, { error: { message: 'An access token is required to request this resource.', code: 104 } });
+    const key = 'graph:' + gm[1];
+    const g = graph.get(key) || { tagged: [], posts: [], conversations: [], tags: [] };
+    const now = new Date().toISOString().replace(/\.\d{3}Z$/, '+0000');
+    switch (gm[2]) {
+      case 'tagged': return json(200, { data: g.tagged, paging: {} });
+      case 'feed':
+        if (req.method === 'POST') {
+          return readBody((p) => {
+            const post = { id: `${gm[1]}_${graphSeq++}`, message: String(p.message || ''), created_time: now, permalink_url: '', comments: { data: [] } };
+            post.permalink_url = `https://www.facebook.com/${post.id}`;
+            g.posts.push(post); graph.set(key, g);
+            json(200, { id: post.id });
+          });
+        }
+        return json(200, { data: g.posts.map((p) => ({ id: p.id, message: p.message, created_time: p.created_time, comments: p.comments })), paging: {} });
+      case 'posts': return json(200, { data: g.posts.map((p) => ({ id: p.id, message: p.message, created_time: p.created_time, permalink_url: p.permalink_url })), paging: {} });
+      case 'conversations': {
+        const platform = url.searchParams.get('platform') || 'messenger';
+        return json(200, { data: g.conversations.filter((c) => c.platform === platform).map(({ platform: _p, ...c }) => c), paging: {} });
+      }
+      case 'tags': return json(200, { data: g.tags, paging: {} });
+      case 'users':
+        if (req.method === 'POST') {
+          return readBody((payload) => {
+            const pl = payload.payload || {};
+            if (!Array.isArray(pl.data) || !pl.schema) return json(400, { error: { message: 'payload.schema and payload.data are required', code: 100 } });
+            const bucket = audiences.get(gm[1]) || new Set();
+            for (const row of pl.data) bucket.add(String(Array.isArray(row) ? row[0] : row));
+            audiences.set(gm[1], bucket);
+            return json(200, { audience_id: gm[1], num_received: pl.data.length, num_invalid_entries: 0, session_id: String(Date.now()) });
+          });
+        }
+        return json(200, [...(audiences.get(gm[1]) || [])]);
+      case 'leads': return json(200, { data: leadForms.get(gm[1]) || [], paging: {} });
+      default: break;
+    }
   }
 
   // Google Customer Match shape: POST /google/v1/{listId}/members with

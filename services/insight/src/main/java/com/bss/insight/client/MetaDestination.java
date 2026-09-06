@@ -10,43 +10,36 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-/** Meta Custom Audiences: POST /v1/{id}/users {schema:[EMAIL_SHA256], data:[[h]]}. */
+/** Meta Custom Audiences through the tenant's social adapter (Graph API payload, or the dev shape). */
 @Component
 public class MetaDestination implements AdDestination {
 
     private static final Logger log = LoggerFactory.getLogger(MetaDestination.class);
     private static final int BATCH = 500;
 
-    private final RestClient http;
-    private final String baseUrl;
-    private final String token;
+    private final com.bss.insight.social.SocialProviders providers;
 
-    public MetaDestination(RestClient.Builder builder,
-            @Value("${bss.downstream.social-api-url:}") String baseUrl,
-            @Value("${bss.downstream.social-access-token:}") String token) {
-        this.http = builder.build();
-        this.baseUrl = baseUrl;
-        this.token = token;
+    public MetaDestination(com.bss.insight.social.SocialProviders providers) {
+        this.providers = providers;
     }
 
     public String name() { return "meta"; }
 
-    public boolean enabled() { return baseUrl != null && !baseUrl.isBlank(); }
+    /** Per tenant: the current tenant's social line (or the deployment fallback) has a url. */
+    public boolean enabled() { return providers.current().audiencesEnabled(); }
 
+    /** Batches of 500 through the tenant's adapter: the Graph payload for 'meta', the dev shape for 'mock'. */
     public int push(String externalAudienceId, List<String> hashedEmails) {
-        if (!enabled() || hashedEmails.isEmpty()) return 0;
+        com.bss.insight.social.SocialConfig cfg = providers.current();
+        if (!cfg.audiencesEnabled() || hashedEmails.isEmpty()) return 0;
+        com.bss.insight.social.SocialProvider provider = providers.providerFor(cfg);
         int sent = 0;
         for (int i = 0; i < hashedEmails.size(); i += BATCH) {
-            List<List<String>> data = new ArrayList<>();
-            for (String h : hashedEmails.subList(i, Math.min(i + BATCH, hashedEmails.size()))) data.add(List.of(h));
+            List<String> batch = hashedEmails.subList(i, Math.min(i + BATCH, hashedEmails.size()));
             try {
-                http.post().uri(baseUrl + "/v1/{aid}/users", externalAudienceId)
-                        .header("Authorization", "Bearer " + token)
-                        .body(Map.of("schema", List.of("EMAIL_SHA256"), "data", data))
-                        .retrieve().toBodilessEntity();
-                sent += data.size();
+                sent += provider.pushAudience(cfg, externalAudienceId, batch);
             } catch (Exception e) {
-                log.warn("meta push batch failed ({} rows): {}", data.size(), e.getMessage());
+                log.warn("meta push batch failed ({} rows): {}", batch.size(), e.getMessage());
             }
         }
         return sent;

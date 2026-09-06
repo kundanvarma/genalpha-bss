@@ -48,10 +48,14 @@ public class SocialClient {
         List<List<String>> data = emails.stream()
                 .map(e -> List.of(sha256(e.trim().toLowerCase())))
                 .toList();
+        // the Graph API wants {payload:{schema:[EMAIL],data}} with pre-hashed rows; the dev mock its flat shape
+        Object body = tenant.isMeta()
+                ? Map.of("payload", Map.of("schema", List.of("EMAIL"), "data", data))
+                : Map.of("schema", List.of("EMAIL_SHA256"), "data", data);
         Map<String, Object> response = socialClient.post()
-                .uri(tenant.getSocialApiUrl() + "/v1/" + audienceId + "/users")
+                .uri(tenant.socialBase() + "/" + audienceId + "/users")
                 .header("Authorization", "Bearer " + tenant.getSocialAccessToken())
-                .body(Map.of("schema", List.of("EMAIL_SHA256"), "data", data))
+                .body(body)
                 .retrieve().body(Map.class);
         return response != null && response.get("num_received") instanceof Number n
                 ? n.intValue() : 0;

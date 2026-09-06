@@ -109,7 +109,8 @@ public class SalesService {
                     "no social lead form is configured for this tenant — the seam is per-tenant");
         }
         Map<String, Object> response = socialClient.get()
-                .uri(tenant.getSocialApiUrl() + "/v1/" + tenant.getSocialLeadFormId() + "/leads")
+                .uri(tenant.socialBase() + "/" + tenant.getSocialLeadFormId() + "/leads"
+                        + (tenant.isMeta() ? "?fields=id,created_time,field_data&limit=100" : ""))
                 .header("Authorization", "Bearer " + tenant.getSocialAccessToken())
                 .retrieve().body(Map.class);
         int imported = 0;
