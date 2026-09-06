@@ -712,7 +712,7 @@ bss:
         esp-api-key: ${ESP_API_KEY_TARANGA:}
         esp-from: ${ESP_FROM_TARANGA:}
         brand-name: Taranga
-        brand-color: "#0B5FA5"
+        brand-color: "#4A4AC3"
         locale: "en"
         currency: NOK
         timezone: Europe/Oslo

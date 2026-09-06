@@ -28,7 +28,7 @@ APPT = "http://localhost:8080/tmf-api/appointment/v4"
 STOCK = "http://localhost:8080/tmf-api/productStockManagement/v4"
 REV = "http://localhost:8080/revenue/v1"
 CUR = "NOK"
-BRAND = "#0B5FA5"
+BRAND = "#4A4AC3"  # the wave in the Taranga logo
 
 
 def token():
@@ -304,14 +304,15 @@ for name, zone, days, start, end, skills in [
         print(f"technician: {name} ({zone})")
 print("calendar: Europe/Oslo, Mon-Fri, 08/10/13/15 windows")
 
-# ---- the brand: the Taranga wordmark (infra/brand, in-repo) and three shop-window banners --
+# ---- the brand: the Taranga logo (infra/brand, in-repo: the animated GIF is the master;
+# the header uses the trimmed wave + wordmark PNG, tagline dropped at 30 px) and three banners --
 docs = req("GET", f"{DOC}/document")
 if not any(d.get("name") == "Taranga-logo" for d in docs):
-    logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "infra", "brand", "taranga-logo.svg")
+    logo = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "infra", "brand", "taranga-logo-header.png")
     with open(logo, "rb") as fh:
-        req("POST", f"{DOC}/document", {"name": "Taranga-logo", "category": "brand", "mimeType": "image/svg+xml",
+        req("POST", f"{DOC}/document", {"name": "Taranga-logo", "category": "brand", "mimeType": "image/png",
                                          "content": base64.b64encode(fh.read()).decode()})
-    print("brand: Taranga wordmark uploaded")
+    print("brand: Taranga logo uploaded")
 
 
 def banner_svg(title, sub, bg1, bg2):
@@ -333,11 +334,11 @@ boost = offerings.get("Match Day Boost", {})
 fiber = offerings.get("Taranga Fiber 1000", {})
 for name, caption, link, title, sub, c1, c2 in [
     ("banner-match-day-boost", "Priority when it matters — Match Day Boost, 29 kr for 6 hours", f"/offering/{boost.get('id', '')}",
-     "Priority when it matters", "Match Day Boost · 6 hours on the priority 5G slice · 29 kr", "#0B5FA5", "#19B3C4"),
+     "Priority when it matters", "Match Day Boost · 6 hours on the priority 5G slice · 29 kr", "#4A4AC3", "#7B7BE0"),
     ("banner-fiber-1000", "Taranga Fiber 1000 — now in Oslo, Bergen and Trondheim", f"/offering/{fiber.get('id', '')}",
-     "Fiber 1000 has arrived", "Oslo · Bergen · Trondheim · Wi-Fi 6 router included · 999 kr", "#062C4F", "#0B5FA5"),
+     "Fiber 1000 has arrived", "Oslo · Bergen · Trondheim · Wi-Fi 6 router included · 999 kr", "#22226B", "#4A4AC3"),
     ("banner-switch", "Switch to Taranga — keep your number, ported in a day", "/?tab=Mobile",
-     "Switch and keep your number", "Ported in a day · no binding · EU/EEA roaming included", "#19B3C4", "#0B5FA5"),
+     "Switch and keep your number", "Ported in a day · no binding · EU/EEA roaming included", "#7B7BE0", "#4A4AC3"),
 ]:
     if name in existing_banners:
         continue

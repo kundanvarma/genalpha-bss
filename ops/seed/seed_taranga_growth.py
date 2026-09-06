@@ -137,7 +137,7 @@ except Exception:
 if "switch" not in pages:
     req("POST", LANDING, {"slug": "switch", "headline": "Switch to Taranga — keep your number",
         "subhead": "Porting is free and takes a day. Leave your number and we'll call, or order online with BankID.",
-        "ctaLabel": "Switch to Taranga", "brandColor": "#0B5FA5",
+        "ctaLabel": "Switch to Taranga", "brandColor": "#4A4AC3",
         "logoUrl": "http://shop.taranga.localhost:8080/tmf-api/documentManagement/v4/document/brand-logo",
         **({"offeringId": m20["id"]} if m20 else {})})
     print("landing: /insight/v1/landing/switch/view")
