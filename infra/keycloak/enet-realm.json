@@ -931,7 +931,8 @@
     "catalog:read",
     "party:read",
     "assurance:read",
-    "insight:read"
+    "insight:read",
+    "assurance:write"
    ]
   },
   {

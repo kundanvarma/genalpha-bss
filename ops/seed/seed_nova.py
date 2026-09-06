@@ -140,11 +140,11 @@ def ensure_slice_spec(offering, chars):
 kampboost = ensure_offering("Nova Kampboost", "Top-ups",
     ensure_price("Nova Kampboost", "oneTime", 29.00),
     "Prioritert 5G i 6 timer — for kampen, konserten og køen. Slår seg på med en gang, av av seg selv etterpå.")
-ensure_slice_spec(kampboost, [("sliceProfile", "priority"), ("boostHours", "6"), ("Prioritert nett", "6 timer")])
+ensure_slice_spec(kampboost, [("sliceProfile", "priority"), ("boostHours", "6"), ("sliceChargingSpecId", "RG-UNL-PRIO"), ("guaranteedDlMbps", "25"), ("Prioritert nett", "6 timer · 25 Mbit/s garantert")])
 prio = ensure_offering("Nova Unlimited 5G Prioritert", "Mobile plans",
     ensure_price("Nova Unlimited 5G Prioritert Monthly", "recurring", 349.00, "month"),
     "Ubegrenset data på det prioriterte 5G-laget hele måneden — først i køen, alltid.")
-ensure_slice_spec(prio, [("sliceProfile", "priority"), ("Data", "Ubegrenset"), ("Network", "5G prioritert"),
+ensure_slice_spec(prio, [("chargingSpecId", "RG-UNL"), ("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-UNL-PRIO"), ("guaranteedDlMbps", "25"), ("Data", "Ubegrenset"), ("Network", "5G prioritert"),
                           ("Calls & texts", "Fri tale og SMS"), ("EU roaming", "Included"), ("Prioritert nett", "Included")])
 
 # allowances so meters show included data (tenant-scoped: nova token = nova rows)

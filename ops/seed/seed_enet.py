@@ -363,8 +363,8 @@ for fname, name, caption, link in [
 # ---- plan comparison: truthful per-plan characteristics (the shop's compare table reads these) ----
 SPEC = "productSpecification"
 COMPARE = {
-    "Orange 30 Days 5G":       [("Data", "80 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 100 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
-    "Orange 30 Days Extra 5G": [("Data", "100 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 250 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
+    "Orange 30 Days 5G":       [("chargingSpecId", "RG-DATA-60"), ("Data", "80 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 100 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
+    "Orange 30 Days Extra 5G": [("chargingSpecId", "RG-DATA-60"), ("Data", "100 GB"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 250 off-net min/SMS"), ("USA roaming", "Included"), ("Validity", "30 days")],
     "30 Days Data 5G":         [("Data", "60 GB"), ("Network", "5G"), ("Calls & texts", "Data only"), ("USA roaming", "—"), ("Validity", "30 days")],
     "Voice Only 30 Days":      [("Data", "—"), ("Network", "4G/5G"), ("Calls & texts", "Unlimited ENet; off-net $10/min"), ("USA roaming", "—"), ("Validity", "30 days")],
     "90-Day Plan":             [("Data", "150 GB (50 GB/month)"), ("Network", "5G"), ("Calls & texts", "Unlimited ENet + 60 off-net + 50 intl Zone 1 min/month"), ("USA roaming", "—"), ("Validity", "90 days")],
@@ -411,14 +411,17 @@ ensure_offering("Match Day Boost", "Top-ups", 500,
                 "Priority on the 5G network for 6 hours — smooth streams and calls when the whole stand is online. "
                 "Turns on the moment you buy it, switches itself off after. (Demo price.)",
                 price_type="oneTime", period=None)
+# sliceChargingSpecId = the OCS rate plan the line rides while boosted (priority GB rated with an uplift);
+# guaranteedDlMbps = the promise the assurance sweep measures (shortfall → service problem → SLA credit)
 if ensure_spec_chars(offerings["Match Day Boost"], [("sliceProfile", "priority"), ("boostHours", "6"),
-                                                    ("Priority network", "6 hours"), ("Validity", "6 hours")]):
-    print("spec: Match Day Boost -> sliceProfile=priority, boostHours=6")
+                                                    ("sliceChargingSpecId", "RG-DATA-60-PRIO"), ("guaranteedDlMbps", "25"),
+                                                    ("Priority network", "6 hours · 25 Mbit/s guaranteed"), ("Validity", "6 hours")]):
+    print("spec: Match Day Boost -> sliceProfile=priority, boostHours=6, charging RG-DATA-60-PRIO, guarantee 25 Mbit/s")
 
 ensure_offering("Orange 30 Days Priority 5G", "Mobile plans", 6500,
                 "Everything in Orange 30 Days Extra, on the priority 5G slice all month — first in line "
                 "at the stadium, the mall and the traffic jam. (Demo tier.)")
-if ensure_spec_chars(offerings["Orange 30 Days Priority 5G"], [("sliceProfile", "priority"),
+if ensure_spec_chars(offerings["Orange 30 Days Priority 5G"], [("chargingSpecId", "RG-DATA-60"), ("sliceProfile", "priority"), ("sliceChargingSpecId", "RG-DATA-60-PRIO"), ("guaranteedDlMbps", "25"),
         ("Data", "100 GB"), ("Network", "5G priority slice"), ("Calls & texts", "Unlimited ENet + 250 off-net min/SMS"),
         ("USA roaming", "Included"), ("Validity", "30 days"), ("Priority network", "Included")]):
     print("spec: Orange 30 Days Priority 5G -> sliceProfile=priority (tier)")
