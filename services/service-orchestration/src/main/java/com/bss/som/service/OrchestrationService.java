@@ -1051,6 +1051,9 @@ public class OrchestrationService {
         ev.put("id", line.getId());
         ev.put("name", line.getName());
         ev.put("sliceProfile", intent.profile());
+        // state lets a journey trigger on "on" and EXIT on "lapsed" (a boost-on
+        // message must not be cut short by the pass order completing)
+        ev.put("state", "on");
         if (until != null) {
             ev.put("sliceUntil", until.toString());
         }
@@ -1183,6 +1186,7 @@ public class OrchestrationService {
                             ev.put("id", lapsed.getId());
                             ev.put("name", lapsed.getName());
                             ev.put("sliceProfile", "default");
+                            ev.put("state", "lapsed");
                             ev.put("lapsedProfile", was);
                             if (lapsed.getOwnerPartyId() != null) {
                                 ev.put("relatedParty", List.of(Map.of("id", lapsed.getOwnerPartyId(), "role", "customer")));

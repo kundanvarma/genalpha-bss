@@ -114,15 +114,24 @@ JOURNEYS = [
          "content": "Hi {{party.firstName}}, you left something in your cart. Finish in a tap — pay by card or MMG, "
                     "collect at any ENet store or we deliver."}]),
 ]
+# a transactional journey must not exit on the DEFAULT rule (a completed order):
+# the boost pass order completes right after the slice event, which would cut the
+# "boost on" message short. It enters on state=on and exits when the slice lapses.
+RULES = {
+    "Boost on — enjoy the match": {"triggerState": "on", "conversionEvent": "ServiceSliceChangeEvent:lapsed"},
+}
 for name, trigger, holdout, steps in JOURNEYS:
+    rules = RULES.get(name, {})
     if name in journeys:
         have = journeys[name]
-        if have.get("triggerEventType") != trigger or (have.get("steps") or [{}])[0].get("channel") != steps[0]["channel"]:
-            req("PATCH", f"{CAMPAIGN}/journey/{have['id']}", {"triggerEventType": trigger, "steps": steps})
+        stale = have.get("triggerEventType") != trigger or (have.get("steps") or [{}])[0].get("channel") != steps[0]["channel"]
+        stale = stale or any(have.get(k) != v for k, v in rules.items())
+        if stale:
+            req("PATCH", f"{CAMPAIGN}/journey/{have['id']}", {"triggerEventType": trigger, "steps": steps, **rules})
             print(f"journey: {name} corrected -> {trigger}, {steps[0]['channel']}")
         continue
     j = req("POST", f"{CAMPAIGN}/journey", {"name": name, "triggerEventType": trigger,
-                                             "holdoutPercent": holdout, "steps": steps})
+                                             "holdoutPercent": holdout, "steps": steps, **rules})
     req("PATCH", f"{CAMPAIGN}/journey/{j['id']}", {"status": "active"})
     print(f"journey: {name} ({trigger}, {steps[0]['channel']}) active")
 
