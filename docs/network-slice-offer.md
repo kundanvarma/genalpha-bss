@@ -36,6 +36,13 @@ The catalog declares slice intent on the product specification:
 
 `SLICE_BASE_URL` blank = no slicing in this deployment; every call is a logged no-op. The dev stand-in `mock-5gc` (:8154) knows four profiles with S-NSSAI and QoS shapes (`GET /profiles`), applies `PUT /subscribers/{id}/slice {profile, until}`, and expires on its own clock. A production adapter implements the same four calls against the operator's PCF / slice manager API.
 
+## What the standards and the market say (checked 2026-09-06)
+
+- **Who decides, who rates.** GSMA NG.116 (v10, 2024): a device may use a slice when its S-NSSAI is in the subscriber's subscription data (UDM/UDR); the PCF sets QoS and URSP policy (TS 29.512), the NSSF selects the slice (TS 23.501), and the charging function rates it over Nchf (TS 32.291), slice-aware through CEF/NWDAF triggers. That is exactly the split above: the BSS states intent to the core's policy side and provisions the charging side separately.
+- **Live consumer products.** VodafoneThree "SuperMobile" (UK, Sep 2026): slicing on 5G SA sold as a £3 to £12 monthly uplift or add-on with a 15 Mbps guarantee. EE "Fast Lane" £5 a month. Singtel "5G+ Priority": a 48-hour Priority Pass at S$5 or S$19.90 monthly — the time-boxed pass shape this arc ships. Orange FR, OTE and WindTre sell equivalents. T-Mobile and Verizon run first-responder slices. Verify current prices before quoting.
+- **Mavenir.** Its Converged Charging System is a 3GPP CHF (Nchf, Diameter, Release 15/16 charging models) with "network slice charging" via CEF and NWDAF triggers, tenants for slicing, and REST OpenAPIs northbound; Mavenir Digital Enablement holds TM Forum Platinum Open API status. Its packet core lists PCF, UDM and NSSF. No public per-subscriber slice-assignment API is documented, and whether a given operator's core is 5G SA is not public — ask.
+- **Other charging systems** behind the same seam: Amdocs Charging (which absorbed Matrixx in January 2026), CSG Ascendon with CHF support in its mediation layer, Ericsson Charging, Huawei CBS.
+
 ## Not built
 
 Skills-based slice selection per app (a gaming slice only for gaming traffic), slice SLAs and assurance metrics, wholesale slice-as-a-service. Verify any competitor's product name and price before quoting it.
