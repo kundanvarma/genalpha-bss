@@ -62,6 +62,7 @@ const TRIGGER_EVENTS = [
   { value: 'ShippingOrderStateChangeEvent', label: 'Parcel/handset shipped or delivered' },
   { value: 'BucketBalanceChangeEvent', label: 'Data balance topped up (top-up bought / loyalty data gifted)' },
   { value: 'UsageThresholdBreachedEvent', label: 'Data running low (OCS usage threshold, e.g. 80% used)' },
+  { value: 'ServiceSliceChangeEvent', label: 'Network priority changed (boost pass on / lapsed, priority tier)' },
 ];
 
 // Retention plays as one-click starting points: picking one prefills the
@@ -1914,6 +1915,9 @@ const MSG_TOKENS = [
   { token: 'tracking.carrier', label: 'Carrier' },
   { token: 'usage.remaining', label: 'Data remaining (GB)' },
   { token: 'usage.percentUsed', label: 'Percent used' },
+  { token: 'slice.profile', label: 'Network priority profile' },
+  { token: 'slice.until', label: 'Priority ends at' },
+  { token: 'slice.pass', label: 'Boost pass name' },
   { token: 'organization.name', label: 'Company (B2B)' },
 ];
 
@@ -4648,6 +4652,44 @@ async function renderIntegrations() {
     instC.append(wrap);
   }
   await loadInstallers();
+
+  // --- Network priority: which lines ride a slice right now (boost passes / tiers) ---
+  const SVC_INV = '/tmf-api/serviceInventory/v4';
+  const { c: sliceC, head: sliceHead } = card('Network priority', '5G slice seam');
+  grid.append(sliceC);
+  async function loadSlices() {
+    const tenantCfg = window.BSS_CONSOLE_CONFIG || {};
+    [...sliceC.querySelectorAll('[data-slice-body]')].forEach((n) => n.remove());
+    sliceHead.querySelector('[data-slice-pill]')?.remove();
+    const res = await authFetch(`${SVC_INV}/service?limit=100`);
+    const all = res.ok ? await res.json() : [];
+    const charsOf = (sv) => Object.fromEntries((sv.serviceCharacteristic || []).map((c) => [c.name, c.value]));
+    const boosted = all.filter((sv) => sv.state === 'active' && charsOf(sv).sliceProfile && charsOf(sv).sliceProfile !== 'default');
+    const p = pill(boosted.length ? `${boosted.length} line${boosted.length === 1 ? '' : 's'} on priority` : 'best effort', boosted.length > 0);
+    p.dataset.slicePill = '1';
+    sliceHead.append(p);
+    const wrap = document.createElement('div');
+    wrap.dataset.sliceBody = '1';
+    wrap.style.cssText = 'margin-top:0.7rem;display:flex;flex-direction:column;gap:0.4rem;font-size:0.9rem';
+    const intro = document.createElement('div');
+    intro.innerHTML = 'The core decides the slice (PCF/NSSF or a vendor slice manager); the OCS only rates it. '
+      + 'A plan or a top-up with <code>sliceProfile</code> on its spec puts a line on priority — a <code>boostHours</code> pass lapses on its own clock.';
+    wrap.append(intro);
+    if (!boosted.length) {
+      const none = document.createElement('div'); none.className = 'dimhint'; none.textContent = 'No line rides a priority slice at the moment.'; wrap.append(none);
+    }
+    for (const sv of boosted.slice(0, 25)) {
+      const ch = charsOf(sv);
+      const line = document.createElement('div');
+      line.style.cssText = 'display:flex;justify-content:space-between;gap:0.5rem';
+      const who = (sv.relatedParty || []).find((r) => r.role === 'customer')?.id || '';
+      line.innerHTML = `<span><b>${(sv.supportingResource || [{}])[0].value || sv.name}</b> · ${sv.name}${who ? ' · ' + who.slice(0, 8) : ''}</span>`
+        + `<span>⚡ ${ch.sliceProfile}${ch.sliceUntil ? ' · until ' + new Date(ch.sliceUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', ...(tenantCfg.timezone ? { timeZone: tenantCfg.timezone } : {}) }) : ' · open-ended'}</span>`;
+      wrap.append(line);
+    }
+    sliceC.append(wrap);
+  }
+  await loadSlices();
 
   // --- Payment / PSP: LIVE, per-tenant menu ---
   const PAY = '/tmf-api/paymentManagement/v4';

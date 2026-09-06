@@ -99,6 +99,11 @@ public class BusinessEventListener {
         if (resource.get("remainingGB") != null) ctx.put("usage.remaining", resource.get("remainingGB"));
         if (resource.get("percentUsed") != null) ctx.put("usage.percentUsed", resource.get("percentUsed"));
         if (resource.get("bucketName") != null) ctx.put("usage.bucket", resource.get("bucketName"));
+        // Network slice (boost pass / priority tier): which profile, until when, which pass
+        if (resource.get("sliceProfile") != null) ctx.put("slice.profile", resource.get("sliceProfile"));
+        if (resource.get("sliceUntil") != null) ctx.put("slice.until", resource.get("sliceUntil"));
+        if (resource.get("boostPass") != null) ctx.put("slice.pass", resource.get("boostPass"));
+        if (resource.get("lapsedProfile") != null) ctx.put("slice.lapsed", resource.get("lapsedProfile"));
         return ctx;
     }
 

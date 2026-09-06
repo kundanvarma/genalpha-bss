@@ -330,6 +330,13 @@ export default function Customer360() {
                 <div className="rowend">
                   <span className="msisdn">{sv.supportingResource[0].value}</span>
                   <span className={`state ${sv.state}`}>{sv.state}</span>
+                  {(() => {
+                    // network slice: what priority the line rides right now (boost pass / tier)
+                    const ch = Object.fromEntries((sv.serviceCharacteristic || []).map((c) => [c.name, c.value]));
+                    if (!ch.sliceProfile || ch.sliceProfile === 'default') return null;
+                    return <span className="state slice" data-testid="csr-slice" title={`slice profile ${ch.sliceProfile}`}
+                      style={{ background: '#fde8d3', color: '#b45309', whiteSpace: 'nowrap' }}>⚡ priority{ch.sliceUntil ? ` until ${new Date(ch.sliceUntil).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit', ...((window.BSS_CSR_CONFIG || {}).timezone ? { timeZone: window.BSS_CSR_CONFIG.timezone } : {}) })}` : ''}</span>;
+                  })()}
                   {sv.state === 'active' && (
                     puks[sv.id]
                       ? <span className="dim small" data-testid="csr-puk">

@@ -82,14 +82,46 @@ const charsOf = (sv) => Object.fromEntries((sv.serviceCharacteristic || []).map(
   if (ocsSub && /priority|slice/i.test(JSON.stringify(ocsSub))) fail('the OCS should know nothing about slices');
   console.log(`  boost pass: record sliceProfile=priority until ${charsOf(boosted).sliceUntil.slice(0, 16)} (${hours.toFixed(1)}h); core S-NSSAI ${core1.snssai.sst}/${core1.snssai.sd}, 5QI ${core1.qos['5qi']}; OCS untouched`);
 
-  /* 3. a second pass EXTENDS from the current expiry */
+  /* 2b. the growth loop closed: the boost-on journey (ServiceSliceChangeEvent → WhatsApp) fires — when the marketing slice is up */
+  {
+    const jr = await call('GET', '/tmf-api/campaignManagement/v4/journey?limit=50', staff);
+    if (jr.status === 200 && (jr.body || []).some((j) => j.triggerEventType === 'ServiceSliceChangeEvent' && j.status === 'active')) {
+      await call('PATCH', `/tmf-api/party/v4/individual/${(await call('GET', '/tmf-api/party/v4/individual?limit=1', cust)).body[0].id}`, cust, { contactMedium: [{ mediumType: 'phone', preferred: true, characteristic: { phoneNumber: `+592 710 ${String(run).slice(-4)}` } }] });
+      // the pass above already fired the event before the phone existed; buy once more so the journey has a number to reach
+      await call('POST', `${ORDERS}/productOrder`, cust, { productOrderItem: [{ action: 'add', productOffering: { id: pass.id, name: pass.name } }] });
+      // the journey ENROLS on the event regardless of the hour; the SEND is guarded by the
+      // tenant's quiet hours and weekly cap (parked, not dropped) — prove enrolment always,
+      // and the WhatsApp only when the guard lets it through right now
+      const jid = (jr.body || []).find((j) => j.triggerEventType === 'ServiceSliceChangeEvent' && j.status === 'active').id;
+      let entered = 0;
+      for (let i = 0; i < 15 && !entered; i++) { await sleep(1500); const st = (await call('GET', `/tmf-api/campaignManagement/v4/journey/${jid}/stats`, staff)).body; entered = st?.entered || 0; }
+      if (!entered) fail('the boost-on journey never enrolled anyone on ServiceSliceChangeEvent');
+      const settings = (await call('GET', '/tmf-api/campaignManagement/v4/settings', staff)).body;
+      const s0 = Array.isArray(settings) ? settings[0] : settings;
+      let wa = null;
+      for (let i = 0; i < 12 && !wa; i++) { await sleep(1500); const out = await (await fetch(`http://localhost:8153/outbox?to=592710${String(run).slice(-4)}`)).json(); wa = out.find((m) => /priority/i.test(m.body || '')); }
+      if (wa) {
+        if (!/until/.test(wa.body) || /\{\{/.test(wa.body)) fail(`journey tokens not rendered: ${wa.body}`);
+        console.log(`  journey: enrolled ${entered}; WhatsApp "${wa.body.slice(0, 70)}…" — slice tokens rendered`);
+      } else if (s0?.quietActive || s0?.capActive) {
+        console.log(`  journey: enrolled ${entered}; send parked by the guard (quiet ${s0.quietStart}–${s0.quietEnd} ${s0.timeZone}, quietActive=${s0.quietActive}) — delivered when the window opens`);
+      } else {
+        fail('the boost-on WhatsApp journey enrolled but never sent, and no guard explains it');
+      }
+    } else {
+      console.log('  journey: marketing slice down or boost-on journey not seeded — leg skipped');
+    }
+  }
+
+  /* 3. a second pass EXTENDS from the CURRENT expiry (re-read: the journey leg may have bought one already) */
+  const untilNow = new Date(charsOf((await call('GET', `${INV}/service/${line.id}`, cust)).body).sliceUntil).getTime();
   const o3 = await call('POST', `${ORDERS}/productOrder`, cust, { productOrderItem: [{ action: 'add', productOffering: { id: pass.id, name: pass.name } }] });
   if (o3.status !== 201) fail(`second pass: ${o3.status}`);
   let extended = null;
-  for (let i = 0; i < 20 && !extended; i++) { await sleep(1500); const sv = (await call('GET', `${INV}/service/${line.id}`, cust)).body; const u = sv && charsOf(sv).sliceUntil; if (u && new Date(u).getTime() > until1 + 3600e3) extended = sv; }
+  for (let i = 0; i < 20 && !extended; i++) { await sleep(1500); const sv = (await call('GET', `${INV}/service/${line.id}`, cust)).body; const u = sv && charsOf(sv).sliceUntil; if (u && new Date(u).getTime() > untilNow + 3600e3) extended = sv; }
   if (!extended) fail('second pass did not extend the window');
   const until2 = new Date(charsOf(extended).sliceUntil).getTime();
-  if (Math.abs((until2 - until1) / 3600e3 - 6) > 0.1) fail(`extension should add 6h, added ${((until2 - until1) / 3600e3).toFixed(2)}h`);
+  if (Math.abs((until2 - untilNow) / 3600e3 - 6) > 0.1) fail(`extension should add 6h, added ${((until2 - untilNow) / 3600e3).toFixed(2)}h`);
   console.log(`  second pass: window extended to ${charsOf(extended).sliceUntil.slice(0, 16)} (+6h from the previous expiry, not from now)`);
 
   /* 4. lapse: a staff-only "Test Boost" pass with a MINUTE window (boostHours=0.02 is not

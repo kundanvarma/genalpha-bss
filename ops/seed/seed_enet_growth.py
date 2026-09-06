@@ -103,6 +103,11 @@ JOURNEYS = [
          "subject": "A thank-you from ENet, {{party.firstName}}",
          "content": "{{party.firstName}}, we'd hate to lose you. Use code {code} for 20% off Orange 30 Days Extra 5G for two months — "
                     "100 GB, USA roaming included. Reply here if anything's wrong and a person will call you."}]),
+    ("Boost on — enjoy the match", "ServiceSliceChangeEvent", 0, [
+        {"type": "message", "stage": "Boost on", "channel": "whatsapp",
+         "subject": "Priority network is on, {{party.firstName}}",
+         "content": "{{party.firstName}}, your {{slice.pass}} is live — your line rides the priority 5G slice until {{slice.until}}. "
+                    "Enjoy the match. It switches itself off after; buy another any time from My ENet."}]),
     ("Cart abandoned — finish in a tap", "ShoppingCartAbandonedEvent", 0, [
         {"type": "message", "stage": "Nudge", "channel": "whatsapp",
          "subject": "Your ENet cart is waiting",

@@ -630,8 +630,9 @@ function TopUp({ offering, price, onBought }) {
   return (
     <p style={{ margin: '8px 0 0' }}>
       <button className="ghost" data-testid={`topup-${offering.id}`} disabled={state === 'busy'} onClick={buy}>
-        {state === 'busy' ? t('Buying…') : `${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
+        {state === 'busy' ? t('Buying…') : `${isBoost ? '⚡ ' : ''}${offering.name}${price ? ` — ${fmtPrice(price)}` : ''}`}
       </button>
+      {isBoost && !state && offering.description && <span className="dim small"> {offering.description.split('.')[0]}.</span>}
       {state === 'done' && <span className="dim" data-testid="topup-done"> ✓ {isBoost ? t('priority network is on for your line — see the badge above') : t("added to this month's allowance")}</span>}
       {state === 'held' && <span className="dim" data-testid="topup-held">
         {' '}🔔 {t('sent to your family admin for approval — you\'ll hear the moment they decide')}</span>}

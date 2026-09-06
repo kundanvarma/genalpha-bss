@@ -119,6 +119,34 @@ topup = ensure_offering(
     ensure_price("Nova Datapåfyll 5 GB", "oneTime", 59.00),
     "5 GB ekstra data denne måneden — engangskjøp")
 
+# ---- 5G SA network slicing as a product (Telia/Telenor/Elisa all run SA): a boost pass + a tier ----
+def ensure_slice_spec(offering, chars):
+    spec_ref = offering.get("productSpecification")
+    mk = lambda n, v: {"name": n, "valueType": "string", "configurable": False,
+                       "productSpecCharacteristicValue": [{"value": v, "isDefault": True}]}
+    if not spec_ref:
+        spec = req("POST", "productSpecification", {"name": f"{offering['name']} spec", "lifecycleStatus": "Active",
+                                                    "productSpecCharacteristic": [mk(n, v) for n, v in chars]})
+        req("PATCH", f"productOffering/{offering['id']}", {"productSpecification": ref(spec, "ProductSpecification")})
+        print(f"spec: {offering['name']} -> {', '.join(n for n, _ in chars)}")
+        return
+    spec = req("GET", f"productSpecification/{spec_ref['id']}")
+    have = {c["name"] for c in (spec.get("productSpecCharacteristic") or [])}
+    missing = [mk(n, v) for n, v in chars if n not in have]
+    if missing:
+        req("PATCH", f"productSpecification/{spec['id']}", {"productSpecCharacteristic": [*(spec.get("productSpecCharacteristic") or []), *missing]})
+        print(f"spec: {offering['name']} +{len(missing)}")
+
+kampboost = ensure_offering("Nova Kampboost", "Top-ups",
+    ensure_price("Nova Kampboost", "oneTime", 29.00),
+    "Prioritert 5G i 6 timer — for kampen, konserten og køen. Slår seg på med en gang, av av seg selv etterpå.")
+ensure_slice_spec(kampboost, [("sliceProfile", "priority"), ("boostHours", "6"), ("Prioritert nett", "6 timer")])
+prio = ensure_offering("Nova Unlimited 5G Prioritert", "Mobile plans",
+    ensure_price("Nova Unlimited 5G Prioritert Monthly", "recurring", 349.00, "month"),
+    "Ubegrenset data på det prioriterte 5G-laget hele måneden — først i køen, alltid.")
+ensure_slice_spec(prio, [("sliceProfile", "priority"), ("Data", "Ubegrenset"), ("Network", "5G prioritert"),
+                          ("Calls & texts", "Fri tale og SMS"), ("EU roaming", "Included"), ("Prioritert nett", "Included")])
+
 # allowances so meters show included data (tenant-scoped: nova token = nova rows)
 existing_allow = {(a["productOffering"]["id"], a["usageType"])
                   for a in req("GET", f"{USAGE}/usageAllowance?limit=100")}
