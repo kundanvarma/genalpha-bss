@@ -30,6 +30,7 @@ bss:
         brand-color: "#0E7C7B"
         locale: en
         currency: EUR
+        timezone: Europe/Oslo
         # Show the B2B lead-capture on the consumer shop (this operator has a
         # business line). Off by default — an MVNO with no B2B never advertises one.
         business-sales: true
@@ -110,6 +111,9 @@ bss:
         brand-color: "#5B3FA8"
         locale: "no"
         currency: NOK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
         ai-visibility: ${AI_VISIBILITY_NOVA:search-only}
@@ -167,6 +171,9 @@ bss:
         brand-color: "#E63329"
         locale: "no"
         currency: NOK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_CHILIMOBIL:off}
         ai-visibility: ${AI_VISIBILITY_CHILIMOBIL:dark}
@@ -223,6 +230,9 @@ bss:
         brand-color: "#1E7A52"
         locale: "nn"
         currency: NOK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
         ai-visibility: "search-only"
@@ -281,6 +291,9 @@ bss:
         brand-color: "#1B4F72"
         locale: "no"
         currency: NOK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
         ai-visibility: "search-only"
@@ -506,6 +519,9 @@ bss:
         brand-color: "#AA3366"
         locale: "sv"
         currency: SEK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
         ai-visibility: "search-only"
@@ -562,6 +578,9 @@ bss:
         brand-color: "#1B6CA8"
         locale: "da"
         currency: DKK
+        timezone: Europe/Oslo
+        country: NO
+        porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_FJORD:off}
         ai-visibility: ${AI_VISIBILITY_FJORD:dark}
@@ -593,6 +612,80 @@ bss:
         ai-provider-smart: ${AI_PROVIDER_SMART_FJORD:}
         ai-base-url-smart: ${AI_BASE_URL_SMART_FJORD:}
         ai-api-key-smart: ${AI_API_KEY_SMART_FJORD:}
+        # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
+        # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      - id: enet
+        issuer: ${OIDC_ISSUER_URI_ENET:http://localhost:8085/realms/enet}
+        jwks-uri: http://keycloak:8080/realms/enet/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/enet/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_ENET:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_ENET:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_ENET:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_ENET:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_ENET:einvoice}
+        bank-token: ${BANK_TOKEN_ENET:}
+        social-api-url: ${SOCIAL_API_URL_ENET:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_ENET:}
+        delivery-provider: ${DELIVERY_PROVIDER_ENET:internal}
+        esp-url: ${ESP_URL_ENET:}
+        esp-api-key: ${ESP_API_KEY_ENET:}
+        esp-from: ${ESP_FROM_ENET:}
+        brand-name: ENet
+        brand-color: "#F78F1E"
+        locale: "en"
+        currency: GYD
+        timezone: America/Guyana
+        served-countries: [GY]
+        country: GY
+        price-decimals: 0
+        currency-display: narrowSymbol
+        price-note: "Prices in Guyana dollars. 14% VAT included where it applies; residential internet data is zero-rated."
+        tagline: Your Everything Network
+        sim-registration: required
+        porting-gateway: portingxs
+        support-phone: "+592 231 3890"
+        support-whatsapp: "+592 624 5153"
+        support-email: customerservice@enetworks.gy
+        app-store-url: https://apps.apple.com/gy/app/my-enet/id1618927353
+        privacy-url: https://enetworks.gy/privacy-policies
+        terms-url: https://enetworks.gy/terms-conditions
+        whatsapp-url: ${WHATSAPP_URL_ENET:http://mock-whatsapp:8080}
+        whatsapp-token-ref: WHATSAPP_TOKEN_ENET
+        whatsapp-phone-id: ${WHATSAPP_PHONE_ID_ENET:592624515300}
+        business-sales: false
+        agent-commerce: "off"
+        ai-visibility: "search-only"
+        hosts: [shop.enet.localhost, csr.enet.localhost, console.enet.localhost, biz.enet.localhost]
+        analytics-provider: ${ANALYTICS_PROVIDER_ENET:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_ENET:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_ENET:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_ENET:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_ENET:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_ENET:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_ENET:}
+        ai-provider: ${AI_PROVIDER_ENET:}
+        ai-base-url: ${AI_BASE_URL_ENET:}
+        ai-api-key: ${AI_API_KEY_ENET:}
+        ai-model: ${AI_MODEL_ENET:}
+        pim-base-url: ${PIM_BASE_URL_ENET:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_ENET:}
+        dnc-url: ${DNC_URL_ENET:}
+        dnc-token: ${DNC_TOKEN_ENET:}
+        market-feed-url: ${MARKET_FEED_URL_ENET:}
+        speech-url: ${SPEECH_URL_ENET:}
+        speech-token: ${SPEECH_TOKEN_ENET:}
+        market-feed-token: ${MARKET_FEED_TOKEN_ENET:}
+        ai-model-fast: ${AI_MODEL_FAST_ENET:}
+        ai-model-smart: ${AI_MODEL_SMART_ENET:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_ENET:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_ENET:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_ENET:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_ENET:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_ENET:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_ENET:}
         # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
         # New tenants default OFF — raw is opt-in, never assumed.
         ai-raw-exposure: true
