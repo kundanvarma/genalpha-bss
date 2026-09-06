@@ -1,1138 +1,1382 @@
 {
- "realm": "enet",
- "enabled": true,
- "registrationAllowed": true,
- "registrationEmailAsUsername": true,
- "resetPasswordAllowed": true,
- "defaultRoles": [
-  "customer"
- ],
- "roles": {
-  "realm": [
-   {
-    "name": "catalog:read"
-   },
-   {
-    "name": "catalog:write"
-   },
-   {
-    "name": "ordering:read"
-   },
-   {
-    "name": "ordering:write"
-   },
-   {
-    "name": "inventory:read"
-   },
-   {
-    "name": "inventory:write"
-   },
-   {
-    "name": "party:read"
-   },
-   {
-    "name": "party:write"
-   },
-   {
-    "name": "stock:read"
-   },
-   {
-    "name": "stock:write"
-   },
-   {
-    "name": "payment:read"
-   },
-   {
-    "name": "payment:write"
-   },
-   {
-    "name": "billing:read"
-   },
-   {
-    "name": "billing:write"
-   },
-   {
-    "name": "qualification:read"
-   },
-   {
-    "name": "qualification:write"
-   },
-   {
-    "name": "wholesale:admin"
-   },
-   {
-    "name": "appointment:read"
-   },
-   {
-    "name": "appointment:write"
-   },
-   {
-    "name": "ticket:read"
-   },
-   {
-    "name": "ticket:write"
-   },
-   {
-    "name": "interaction:read"
-   },
-   {
-    "name": "interaction:write"
-   },
-   {
-    "name": "communication:read"
-   },
-   {
-    "name": "communication:write"
-   },
-   {
-    "name": "customer",
-    "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
-    "composite": true,
-    "composites": {
-     "realm": [
-      "catalog:read",
-      "ordering:read",
-      "ordering:write",
-      "inventory:read",
-      "party:read",
-      "party:write",
-      "payment:read",
-      "payment:write",
-      "billing:read",
-      "billing:write",
-      "appointment:read",
-      "appointment:write",
-      "ticket:read",
-      "ticket:write",
-      "interaction:read",
-      "communication:read",
-      "communication:write",
-      "usage:read",
-      "agreement:read",
-      "recommendation:read",
-      "paymentmethod:read",
-      "paymentmethod:write",
-      "service:read",
-      "knowledge:read"
-     ]
-    }
-   },
-   {
-    "name": "agent",
-    "description": "Assisted-channel agent: org-scoped via the token's org claim; works tickets and interactions, fulfils orders",
-    "composite": true,
-    "composites": {
-     "realm": [
-      "catalog:read",
-      "ordering:read",
-      "ordering:write",
-      "inventory:read",
-      "party:read",
-      "stock:read",
-      "billing:read",
-      "payment:read",
-      "appointment:read",
-      "qualification:read",
-      "ticket:read",
-      "ticket:write",
-      "interaction:read",
-      "interaction:write",
-      "usage:read",
-      "usage:write",
-      "agreement:read",
-      "promotion:read",
-      "service:read",
-      "assurance:read",
-      "paymentmethod:read",
-      "paymentmethod:write",
-      "recommendation:read",
-      "ai:use",
-      "porting:read",
-      "porting:write",
-      "knowledge:read",
-      "communication:write"
-     ]
-    }
-   },
-   {
-    "name": "usage:read",
-    "description": "usage:read"
-   },
-   {
-    "name": "usage:write",
-    "description": "usage:write"
-   },
-   {
-    "name": "agreement:read",
-    "description": "agreement:read"
-   },
-   {
-    "name": "agreement:write",
-    "description": "agreement:write"
-   },
-   {
-    "name": "promotion:read",
-    "description": "promotion:read"
-   },
-   {
-    "name": "promotion:write",
-    "description": "promotion:write"
-   },
-   {
-    "name": "policy:read",
-    "description": "policy:read"
-   },
-   {
-    "name": "policy:write",
-    "description": "policy:write"
-   },
-   {
-    "name": "policy:evaluate",
-    "description": "policy:evaluate \u2014 machine scope for the order pipeline"
-   },
-   {
-    "name": "roles:admin",
-    "description": "manage users and role grants via TMF672"
-   },
-   {
-    "name": "address:read",
-    "description": "address:read"
-   },
-   {
-    "name": "address:write",
-    "description": "address:write"
-   },
-   {
-    "name": "recommendation:read",
-    "description": "recommendation:read"
-   },
-   {
-    "name": "paymentmethod:read",
-    "description": "paymentmethod:read"
-   },
-   {
-    "name": "paymentmethod:write",
-    "description": "paymentmethod:write"
-   },
-   {
-    "name": "service:read",
-    "description": "service:read"
-   },
-   {
-    "name": "service:write",
-    "description": "service:write"
-   },
-   {
-    "name": "assurance:read",
-    "description": "assurance:read"
-   },
-   {
-    "name": "assurance:write",
-    "description": "assurance:write"
-   },
-   {
-    "name": "document:read",
-    "description": "document:read"
-   },
-   {
-    "name": "document:write",
-    "description": "document:write"
-   },
-   {
-    "name": "campaign:read",
-    "description": "View campaigns and their executions"
-   },
-   {
-    "name": "campaign:write",
-    "description": "Create and manage campaigns"
-   },
-   {
-    "name": "ai:use",
-    "description": "Use AI assist features (staff tooling)"
-   },
-   {
-    "name": "quote:read",
-    "description": "View B2B quotes"
-   },
-   {
-    "name": "quote:write",
-    "description": "Create and manage B2B quotes"
-   },
-   {
-    "name": "porting:read",
-    "description": "View number porting orders"
-   },
-   {
-    "name": "porting:write",
-    "description": "Create/manage number porting"
-   },
-   {
-    "name": "billing:admin",
-    "description": "back-office view of all customer bills"
-   },
-   {
-    "name": "appointment:admin",
-    "description": "back-office view of all appointments"
-   },
-   {
-    "name": "business:admin",
-    "description": "B2B customer admin: manages their own organization's people and lines",
-    "composite": true,
-    "composites": {
-     "realm": [
-      "customer"
-     ]
-    }
-   },
-   {
-    "name": "knowledge:read",
-    "description": "Read the knowledge base (audience-filtered)"
-   },
-   {
-    "name": "knowledge:write",
-    "description": "Author knowledge articles"
-   },
-   {
-    "name": "insight:read",
-    "description": "Read visitor insight profiles (back office)"
-   },
-   {
-    "name": "workforce:use",
-    "description": "digital-worker task queue access"
-   },
-   {
-    "name": "digital-worker",
-    "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs \u2014 nothing more",
-    "composite": true,
-    "composites": {
-     "realm": [
-      "workforce:use",
-      "ticket:read",
-      "ticket:write",
-      "interaction:read",
-      "interaction:write",
-      "party:read",
-      "ordering:read",
-      "billing:read",
-      "billing:admin"
-     ]
-    }
-   },
-   {
-    "name": "ai:admin",
-    "description": "Govern the AI control plane: budgets, kill-switch, model-contract suspension"
-   },
-   {
-    "name": "risk:assess",
-    "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
-   },
-   {
-    "name": "device:read"
-   },
-   {
-    "name": "device:write"
-   },
-   {
-    "name": "migration:read"
-   },
-   {
-    "name": "migration:admin"
-   }
-  ]
- },
- "clients": [
-  {
-   "clientId": "bss-ordering",
-   "name": "product-ordering machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "ordering-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-catalog",
-   "name": "product-catalog machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "catalog-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-billing",
-   "name": "billing machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "billing-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-console",
-   "name": "Catalog admin console (SPA, authorization code + PKCE)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": false,
-   "redirectUris": [
-    "http://console.enet.localhost:8080/*",
-    "http://localhost:8080/console/*"
-   ],
-   "webOrigins": [
-    "http://console.enet.localhost:8080",
-    "http://localhost:8080"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   }
-  },
-  {
-   "clientId": "bss-storefront",
-   "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": false,
-   "redirectUris": [
-    "http://localhost:8080/shop/*",
-    "http://shop.enet.localhost:8080/*"
-   ],
-   "webOrigins": [
-    "http://localhost:8080",
-    "http://shop.enet.localhost:8080"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   }
-  },
-  {
-   "clientId": "bss-demo",
-   "name": "BSS demo client (password grant, local development only)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "directAccessGrantsEnabled": true,
-   "standardFlowEnabled": false,
-   "protocolMappers": [
-    {
-     "name": "agent-delegation-audience",
-     "protocol": "openid-connect",
-     "protocolMapper": "oidc-audience-mapper",
-     "consentRequired": false,
-     "config": {
-      "included.client.audience": "bss-agent",
-      "access.token.claim": "true",
-      "id.token.claim": "false"
-     }
-    }
-   ]
-  },
-  {
-   "clientId": "bss-csr",
-   "name": "CSR console (assisted channel; SPA, authorization code + PKCE)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": true,
-   "redirectUris": [
-    "http://csr.enet.localhost:8080/*",
-    "http://localhost:8080/csr/*"
-   ],
-   "webOrigins": [
-    "http://csr.enet.localhost:8080",
-    "http://localhost:8080"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   },
-   "protocolMappers": [
-    {
-     "name": "org",
-     "protocol": "openid-connect",
-     "protocolMapper": "oidc-usermodel-attribute-mapper",
-     "config": {
-      "user.attribute": "org",
-      "claim.name": "org",
-      "jsonType.label": "String",
-      "id.token.claim": "true",
-      "access.token.claim": "true",
-      "userinfo.token.claim": "true"
-     }
-    }
-   ]
-  },
-  {
-   "clientId": "bss-user-admin",
-   "name": "product-ordering machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "user-admin-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false,
-   "description": "TMF672 user-roles component: manages this realm's users"
-  },
-  {
-   "clientId": "bss-recommendation",
-   "name": "product-ordering machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "recommendation-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false,
-   "description": "TMF680 recommender: reads catalog and inventory"
-  },
-  {
-   "clientId": "bss-payment",
-   "name": "product-ordering machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "payment-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false,
-   "description": "payment service: resolves saved methods in the vault"
-  },
-  {
-   "clientId": "bss-som",
-   "name": "product-ordering machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "som-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false,
-   "description": "thin SOM: completes product orders after activation"
-  },
-  {
-   "clientId": "bss-app",
-   "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": false,
-   "redirectUris": [
-    "http://app.enet.localhost:8080/*",
-    "http://localhost:8080/app/*",
-    "http://shop.enet.localhost:8080/app/*",
-    "genalphabss://*"
-   ],
-   "webOrigins": [
-    "http://localhost:8080",
-    "http://shop.enet.localhost:8080"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   },
-   "description": "mobile app channel (public, PKCE)"
-  },
-  {
-   "clientId": "bss-campaign",
-   "name": "campaign machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "campaign-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-intelligence",
-   "name": "intelligence machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "intelligence-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-quote",
-   "name": "quote machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "quote-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-assurance",
-   "name": "assurance machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "assurance-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-stepup",
-   "name": "verified-identity step-up (dev BankID/Vipps simulator)",
-   "description": "Authenticating through this client stands in for a completed BankID/Vipps step-up: its tokens carry verified_identity=true. A real deployment brokers BankID and gates the claim behind it.",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": true,
-   "redirectUris": [
-    "http://localhost:8080/*",
-    "http://*.localhost:8080/*",
-    "http://localhost:*/*"
-   ],
-   "webOrigins": [
-    "+"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   },
-   "protocolMappers": [
-    {
-     "name": "verified-identity-claim",
-     "protocol": "openid-connect",
-     "protocolMapper": "oidc-hardcoded-claim-mapper",
-     "consentRequired": false,
-     "config": {
-      "claim.name": "verified_identity",
-      "claim.value": "true",
-      "jsonType.label": "boolean",
-      "id.token.claim": "true",
-      "access.token.claim": "true",
-      "userinfo.token.claim": "true"
-     }
-    }
-   ]
-  },
-  {
-   "clientId": "bss-biz",
-   "name": "Business console (customer-admin SPA, code + PKCE)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": true,
-   "standardFlowEnabled": true,
-   "directAccessGrantsEnabled": true,
-   "redirectUris": [
-    "http://localhost:8080/biz/*",
-    "http://biz.enet.localhost:8080/biz/*",
-    "http://localhost:8080/dealer-app/*",
-    "http://biz.enet.localhost:8080/dealer-app/*"
-   ],
-   "webOrigins": [
-    "http://localhost:8080",
-    "http://biz.enet.localhost:8080"
-   ],
-   "attributes": {
-    "pkce.code.challenge.method": "S256"
-   }
-  },
-  {
-   "clientId": "bss-inventory",
-   "name": "product-inventory machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "inventory-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-usage",
-   "name": "usage machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "usage-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-insight",
-   "name": "insight machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "insight-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-communication",
-   "name": "communication machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "communication-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-agent",
-   "name": "agentic-commerce delegation client (OAuth token exchange, commerce scope only)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "agent-secret",
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false,
-   "serviceAccountsEnabled": false,
-   "fullScopeAllowed": false,
-   "attributes": {
-    "standard.token.exchange.enabled": "true"
-   }
-  },
-  {
-   "clientId": "bss-loyalty",
-   "name": "loyalty machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "loyalty-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-revenue",
-   "name": "loyalty machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "revenue-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-fulfilment",
-   "name": "loyalty machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "fulfilment-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-device",
-   "name": "loyalty machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "device-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  },
-  {
-   "clientId": "bss-base-migration",
-   "name": "loyalty machine identity (client credentials; dev secret)",
-   "enabled": true,
-   "protocol": "openid-connect",
-   "publicClient": false,
-   "secret": "base-migration-secret",
-   "serviceAccountsEnabled": true,
-   "standardFlowEnabled": false,
-   "directAccessGrantsEnabled": false
-  }
- ],
- "users": [
-  {
-   "username": "service-account-bss-ordering",
-   "enabled": true,
-   "serviceAccountClientId": "bss-ordering",
-   "realmRoles": [
-    "catalog:read",
-    "party:read",
-    "inventory:write",
-    "stock:write",
-    "payment:read",
-    "payment:write",
-    "agreement:read",
-    "agreement:write",
-    "promotion:write",
-    "promotion:read",
-    "policy:evaluate",
-    "inventory:read",
-    "risk:assess"
-   ]
-  },
-  {
-   "username": "service-account-bss-catalog",
-   "enabled": true,
-   "serviceAccountClientId": "bss-catalog",
-   "realmRoles": [
-    "policy:evaluate"
-   ]
-  },
-  {
-   "username": "service-account-bss-billing",
-   "enabled": true,
-   "serviceAccountClientId": "bss-billing",
-   "realmRoles": [
-    "inventory:read",
-    "catalog:read",
-    "payment:read",
-    "payment:write",
-    "usage:read",
-    "usage:write",
-    "promotion:read",
-    "party:read",
-    "service:read",
-    "service:write"
-   ]
-  },
-  {
-   "username": "demo",
-   "enabled": true,
-   "email": "demo@bss.local",
-   "emailVerified": true,
-   "firstName": "Demo",
-   "lastName": "User",
-   "requiredActions": [],
-   "credentials": [
-    {
-     "type": "password",
-     "value": "demo",
-     "temporary": false
-    }
-   ],
-   "realmRoles": [
-    "catalog:read",
-    "catalog:write",
-    "ordering:read",
-    "ordering:write",
-    "inventory:read",
-    "inventory:write",
-    "party:read",
-    "party:write",
-    "stock:read",
-    "stock:write",
-    "payment:read",
-    "payment:write",
-    "billing:read",
-    "billing:write",
-    "qualification:read",
-    "qualification:write",
-    "wholesale:admin",
-    "appointment:read",
-    "appointment:write",
-    "ticket:read",
-    "ticket:write",
-    "interaction:read",
-    "interaction:write",
-    "communication:read",
-    "communication:write",
-    "usage:read",
-    "usage:write",
-    "agreement:read",
-    "agreement:write",
-    "promotion:read",
-    "promotion:write",
-    "roles:admin",
-    "address:read",
-    "address:write",
-    "recommendation:read",
-    "paymentmethod:read",
-    "paymentmethod:write",
-    "service:read",
-    "service:write",
-    "assurance:read",
-    "assurance:write",
-    "document:read",
-    "document:write",
-    "campaign:read",
-    "campaign:write",
-    "policy:read",
-    "policy:write",
-    "ai:use",
-    "quote:read",
-    "quote:write",
-    "porting:read",
-    "porting:write",
-    "policy:evaluate",
-    "billing:admin",
-    "appointment:admin",
-    "knowledge:read",
-    "knowledge:write",
-    "insight:read",
-    "ai:admin",
-    "risk:assess",
-    "device:read",
-    "device:write",
-    "migration:read",
-    "migration:admin"
-   ]
-  },
-  {
-   "username": "service-account-bss-user-admin",
-   "enabled": true,
-   "serviceAccountClientId": "bss-user-admin",
-   "realmRoles": [],
-   "clientRoles": {
-    "realm-management": [
-     "view-users",
-     "query-users",
-     "manage-users",
-     "view-realm"
-    ]
-   }
-  },
-  {
-   "username": "service-account-bss-recommendation",
-   "enabled": true,
-   "serviceAccountClientId": "bss-recommendation",
-   "realmRoles": [
-    "catalog:read",
-    "inventory:read",
-    "insight:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-payment",
-   "enabled": true,
-   "serviceAccountClientId": "bss-payment",
-   "realmRoles": [
-    "paymentmethod:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-som",
-   "enabled": true,
-   "serviceAccountClientId": "bss-som",
-   "realmRoles": [
-    "ordering:read",
-    "ordering:write",
-    "porting:read",
-    "catalog:read",
-    "party:read",
-    "assurance:read",
-    "insight:read",
-    "assurance:write"
-   ]
-  },
-  {
-   "username": "service-account-bss-campaign",
-   "enabled": true,
-   "serviceAccountClientId": "bss-campaign",
-   "realmRoles": [
-    "communication:write",
-    "communication:read",
-    "insight:read",
-    "party:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-intelligence",
-   "enabled": true,
-   "serviceAccountClientId": "bss-intelligence",
-   "realmRoles": [
-    "agreement:read",
-    "usage:read",
-    "ticket:read",
-    "assurance:read",
-    "recommendation:read",
-    "insight:read",
-    "inventory:read",
-    "catalog:read",
-    "catalog:write",
-    "billing:read",
-    "billing:admin",
-    "ticket:write",
-    "ordering:read",
-    "party:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-quote",
-   "enabled": true,
-   "serviceAccountClientId": "bss-quote",
-   "realmRoles": [
-    "service:read",
-    "catalog:read",
-    "usage:read",
-    "ordering:write",
-    "ai:use",
-    "agreement:write",
-    "insight:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-assurance",
-   "enabled": true,
-   "serviceAccountClientId": "bss-assurance",
-   "realmRoles": [
-    "service:read",
-    "service:write",
-    "ticket:write",
-    "ticket:read",
-    "agreement:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-inventory",
-   "enabled": true,
-   "serviceAccountClientId": "bss-inventory",
-   "realmRoles": [
-    "party:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-usage",
-   "enabled": true,
-   "serviceAccountClientId": "bss-usage",
-   "realmRoles": [
-    "party:read",
-    "catalog:read",
-    "policy:evaluate",
-    "service:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-insight",
-   "enabled": true,
-   "serviceAccountClientId": "bss-insight",
-   "realmRoles": [
-    "policy:evaluate"
-   ]
-  },
-  {
-   "username": "service-account-bss-communication",
-   "enabled": true,
-   "serviceAccountClientId": "bss-communication",
-   "realmRoles": [
-    "party:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-loyalty",
-   "enabled": true,
-   "serviceAccountClientId": "bss-loyalty",
-   "realmRoles": [
-    "promotion:write",
-    "promotion:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-revenue",
-   "enabled": true,
-   "serviceAccountClientId": "bss-revenue",
-   "realmRoles": [
-    "billing:read",
-    "campaign:read",
-    "agreement:read"
-   ]
-  },
-  {
-   "username": "service-account-bss-fulfilment",
-   "enabled": true,
-   "serviceAccountClientId": "bss-fulfilment",
-   "realmRoles": [
-    "ordering:read",
-    "ordering:write"
-   ]
-  },
-  {
-   "username": "service-account-bss-device",
-   "enabled": true,
-   "serviceAccountClientId": "bss-device",
-   "realmRoles": [
-    "payment:read",
-    "payment:write"
-   ]
-  },
-  {
-   "username": "service-account-bss-base-migration",
-   "enabled": true,
-   "serviceAccountClientId": "bss-base-migration",
-   "realmRoles": [
-    "inventory:read",
-    "party:read",
-    "agreement:read",
-    "ordering:write",
-    "catalog:write"
-   ]
-  },
-  {
-   "id": "5e1a7c2b-3d4e-4f60-9a1b-2c3d4e5f6071",
-   "username": "devi@enet.example",
-   "email": "devi@enet.example",
-   "firstName": "Devi",
-   "lastName": "Persaud",
-   "enabled": true,
-   "emailVerified": true,
-   "credentials": [
-    {
-     "type": "password",
-     "value": "devi"
-    }
-   ],
-   "realmRoles": [
+  "realm": "enet",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "resetPasswordAllowed": true,
+  "defaultRoles": [
     "customer"
-   ]
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "catalog:read"
+      },
+      {
+        "name": "catalog:write"
+      },
+      {
+        "name": "ordering:read"
+      },
+      {
+        "name": "ordering:write"
+      },
+      {
+        "name": "inventory:read"
+      },
+      {
+        "name": "inventory:write"
+      },
+      {
+        "name": "party:read"
+      },
+      {
+        "name": "party:write"
+      },
+      {
+        "name": "stock:read"
+      },
+      {
+        "name": "stock:write"
+      },
+      {
+        "name": "payment:read"
+      },
+      {
+        "name": "payment:write"
+      },
+      {
+        "name": "billing:read"
+      },
+      {
+        "name": "billing:write"
+      },
+      {
+        "name": "qualification:read"
+      },
+      {
+        "name": "qualification:write"
+      },
+      {
+        "name": "wholesale:admin"
+      },
+      {
+        "name": "appointment:read"
+      },
+      {
+        "name": "appointment:write"
+      },
+      {
+        "name": "ticket:read"
+      },
+      {
+        "name": "ticket:write"
+      },
+      {
+        "name": "interaction:read"
+      },
+      {
+        "name": "interaction:write"
+      },
+      {
+        "name": "communication:read"
+      },
+      {
+        "name": "communication:write"
+      },
+      {
+        "name": "customer",
+        "description": "Party-scoped self-service customer: services restrict reads/writes to the token subject's own resources",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "catalog:read",
+            "ordering:read",
+            "ordering:write",
+            "inventory:read",
+            "party:read",
+            "party:write",
+            "payment:read",
+            "payment:write",
+            "billing:read",
+            "billing:write",
+            "appointment:read",
+            "appointment:write",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "communication:read",
+            "communication:write",
+            "usage:read",
+            "agreement:read",
+            "recommendation:read",
+            "paymentmethod:read",
+            "paymentmethod:write",
+            "service:read",
+            "knowledge:read"
+          ]
+        }
+      },
+      {
+        "name": "agent",
+        "description": "Assisted-channel agent: org-scoped via the token's org claim; works tickets and interactions, fulfils orders",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "catalog:read",
+            "ordering:read",
+            "ordering:write",
+            "inventory:read",
+            "party:read",
+            "stock:read",
+            "billing:read",
+            "payment:read",
+            "appointment:read",
+            "qualification:read",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "interaction:write",
+            "usage:read",
+            "usage:write",
+            "agreement:read",
+            "promotion:read",
+            "service:read",
+            "assurance:read",
+            "paymentmethod:read",
+            "paymentmethod:write",
+            "recommendation:read",
+            "ai:use",
+            "porting:read",
+            "porting:write",
+            "knowledge:read",
+            "communication:write"
+          ]
+        }
+      },
+      {
+        "name": "usage:read",
+        "description": "usage:read"
+      },
+      {
+        "name": "usage:write",
+        "description": "usage:write"
+      },
+      {
+        "name": "agreement:read",
+        "description": "agreement:read"
+      },
+      {
+        "name": "agreement:write",
+        "description": "agreement:write"
+      },
+      {
+        "name": "promotion:read",
+        "description": "promotion:read"
+      },
+      {
+        "name": "promotion:write",
+        "description": "promotion:write"
+      },
+      {
+        "name": "policy:read",
+        "description": "policy:read"
+      },
+      {
+        "name": "policy:write",
+        "description": "policy:write"
+      },
+      {
+        "name": "policy:evaluate",
+        "description": "policy:evaluate \u2014 machine scope for the order pipeline"
+      },
+      {
+        "name": "roles:admin",
+        "description": "manage users and role grants via TMF672"
+      },
+      {
+        "name": "address:read",
+        "description": "address:read"
+      },
+      {
+        "name": "address:write",
+        "description": "address:write"
+      },
+      {
+        "name": "recommendation:read",
+        "description": "recommendation:read"
+      },
+      {
+        "name": "paymentmethod:read",
+        "description": "paymentmethod:read"
+      },
+      {
+        "name": "paymentmethod:write",
+        "description": "paymentmethod:write"
+      },
+      {
+        "name": "service:read",
+        "description": "service:read"
+      },
+      {
+        "name": "service:write",
+        "description": "service:write"
+      },
+      {
+        "name": "assurance:read",
+        "description": "assurance:read"
+      },
+      {
+        "name": "assurance:write",
+        "description": "assurance:write"
+      },
+      {
+        "name": "document:read",
+        "description": "document:read"
+      },
+      {
+        "name": "document:write",
+        "description": "document:write"
+      },
+      {
+        "name": "campaign:read",
+        "description": "View campaigns and their executions"
+      },
+      {
+        "name": "campaign:write",
+        "description": "Create and manage campaigns"
+      },
+      {
+        "name": "ai:use",
+        "description": "Use AI assist features (staff tooling)"
+      },
+      {
+        "name": "quote:read",
+        "description": "View B2B quotes"
+      },
+      {
+        "name": "quote:write",
+        "description": "Create and manage B2B quotes"
+      },
+      {
+        "name": "porting:read",
+        "description": "View number porting orders"
+      },
+      {
+        "name": "porting:write",
+        "description": "Create/manage number porting"
+      },
+      {
+        "name": "billing:admin",
+        "description": "back-office view of all customer bills"
+      },
+      {
+        "name": "appointment:admin",
+        "description": "back-office view of all appointments"
+      },
+      {
+        "name": "business:admin",
+        "description": "B2B customer admin: manages their own organization's people and lines",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "customer"
+          ]
+        }
+      },
+      {
+        "name": "knowledge:read",
+        "description": "Read the knowledge base (audience-filtered)"
+      },
+      {
+        "name": "knowledge:write",
+        "description": "Author knowledge articles"
+      },
+      {
+        "name": "insight:read",
+        "description": "Read visitor insight profiles (back office)"
+      },
+      {
+        "name": "workforce:use",
+        "description": "digital-worker task queue access"
+      },
+      {
+        "name": "digital-worker",
+        "description": "a hired AI worker: the workforce queue + the care/back-office authorities a shift needs \u2014 nothing more",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "workforce:use",
+            "ticket:read",
+            "ticket:write",
+            "interaction:read",
+            "interaction:write",
+            "party:read",
+            "ordering:read",
+            "billing:read",
+            "billing:admin"
+          ]
+        }
+      },
+      {
+        "name": "ai:admin",
+        "description": "Govern the AI control plane: budgets, kill-switch, model-contract suspension"
+      },
+      {
+        "name": "risk:assess",
+        "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
+      },
+      {
+        "name": "device:read"
+      },
+      {
+        "name": "device:write"
+      },
+      {
+        "name": "migration:read"
+      },
+      {
+        "name": "migration:admin"
+      },
+      {
+        "name": "finance-staff",
+        "description": "desk role (composite)",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "billing:admin",
+            "billing:read",
+            "party:read"
+          ]
+        }
+      },
+      {
+        "name": "growth-staff",
+        "description": "desk role (composite)",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "marketing-staff",
+            "sales-staff"
+          ]
+        }
+      },
+      {
+        "name": "ops-staff",
+        "description": "desk role (composite)",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "ai:use",
+            "appointment:admin",
+            "knowledge:write",
+            "ordering:read",
+            "ordering:write",
+            "porting:write",
+            "workforce:use"
+          ]
+        }
+      },
+      {
+        "name": "marketing-staff",
+        "description": "desk role (composite)",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "ai:use",
+            "campaign:read",
+            "campaign:write",
+            "insight:read"
+          ]
+        }
+      },
+      {
+        "name": "sales-staff",
+        "description": "desk role (composite)",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": [
+            "quote:read",
+            "quote:write"
+          ]
+        }
+      }
+    ]
   },
-  {
-   "id": "7b2c8d3e-4f5a-4b71-8c2d-3e4f5a6b7182",
-   "username": "ravi@demerara.example",
-   "email": "ravi@demerara.example",
-   "firstName": "Ravi",
-   "lastName": "Singh",
-   "enabled": true,
-   "emailVerified": true,
-   "credentials": [
+  "clients": [
     {
-     "type": "password",
-     "value": "ravi"
+      "clientId": "bss-ordering",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "ordering-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-catalog",
+      "name": "product-catalog machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "catalog-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-billing",
+      "name": "billing machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "billing-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-console",
+      "name": "Catalog admin console (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://console.enet.localhost:8080/*",
+        "http://localhost:8080/console/*"
+      ],
+      "webOrigins": [
+        "http://console.enet.localhost:8080",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "bss-storefront",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/shop/*",
+        "http://shop.enet.localhost:8080/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://shop.enet.localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "bss-demo",
+      "name": "BSS demo client (password grant, local development only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "agent-delegation-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "bss-agent",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bss-csr",
+      "name": "CSR console (assisted channel; SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://csr.enet.localhost:8080/*",
+        "http://localhost:8080/csr/*"
+      ],
+      "webOrigins": [
+        "http://csr.enet.localhost:8080",
+        "http://localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "org",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "org",
+            "claim.name": "org",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bss-user-admin",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "user-admin-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "description": "TMF672 user-roles component: manages this realm's users"
+    },
+    {
+      "clientId": "bss-recommendation",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "recommendation-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "description": "TMF680 recommender: reads catalog and inventory"
+    },
+    {
+      "clientId": "bss-payment",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "payment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "description": "payment service: resolves saved methods in the vault"
+    },
+    {
+      "clientId": "bss-som",
+      "name": "product-ordering machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "som-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "description": "thin SOM: completes product orders after activation"
+    },
+    {
+      "clientId": "bss-app",
+      "name": "Self-service storefront channel (SPA, authorization code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://app.enet.localhost:8080/*",
+        "http://localhost:8080/app/*",
+        "http://shop.enet.localhost:8080/app/*",
+        "genalphabss://*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://shop.enet.localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "description": "mobile app channel (public, PKCE)"
+    },
+    {
+      "clientId": "bss-campaign",
+      "name": "campaign machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "campaign-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-intelligence",
+      "name": "intelligence machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "intelligence-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-quote",
+      "name": "quote machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "quote-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-assurance",
+      "name": "assurance machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "assurance-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-stepup",
+      "name": "verified-identity step-up (dev BankID/Vipps simulator)",
+      "description": "Authenticating through this client stands in for a completed BankID/Vipps step-up: its tokens carry verified_identity=true. A real deployment brokers BankID and gates the claim behind it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8080/*",
+        "http://*.localhost:8080/*",
+        "http://localhost:*/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "verified-identity-claim",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "verified_identity",
+            "claim.value": "true",
+            "jsonType.label": "boolean",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "bss-biz",
+      "name": "Business console (customer-admin SPA, code + PKCE)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost:8080/biz/*",
+        "http://biz.enet.localhost:8080/biz/*",
+        "http://localhost:8080/dealer-app/*",
+        "http://biz.enet.localhost:8080/dealer-app/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://biz.enet.localhost:8080"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "bss-inventory",
+      "name": "product-inventory machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "inventory-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-usage",
+      "name": "usage machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "usage-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-insight",
+      "name": "insight machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "insight-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-communication",
+      "name": "communication machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "communication-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-agent",
+      "name": "agentic-commerce delegation client (OAuth token exchange, commerce scope only)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "agent-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "attributes": {
+        "standard.token.exchange.enabled": "true"
+      }
+    },
+    {
+      "clientId": "bss-loyalty",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "loyalty-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-revenue",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "revenue-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-fulfilment",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "fulfilment-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-device",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "device-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "bss-base-migration",
+      "name": "loyalty machine identity (client credentials; dev secret)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "base-migration-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     }
-   ],
-   "realmRoles": [
-    "customer",
-    "business:admin"
-   ]
-  }
- ],
- "displayName": "ENet",
- "internationalizationEnabled": true,
- "supportedLocales": [
-  "en",
-  "no"
- ],
- "defaultLocale": "no",
- "scopeMappings": [
-  {
-   "client": "bss-agent",
-   "roles": [
-    "catalog:read",
-    "ordering:read",
-    "ordering:write",
-    "payment:read",
-    "payment:write"
-   ]
-  }
- ],
- "accessTokenLifespan": 1800
+  ],
+  "users": [
+    {
+      "username": "service-account-bss-ordering",
+      "enabled": true,
+      "serviceAccountClientId": "bss-ordering",
+      "realmRoles": [
+        "catalog:read",
+        "party:read",
+        "inventory:write",
+        "stock:write",
+        "payment:read",
+        "payment:write",
+        "agreement:read",
+        "agreement:write",
+        "promotion:write",
+        "promotion:read",
+        "policy:evaluate",
+        "inventory:read",
+        "risk:assess"
+      ]
+    },
+    {
+      "username": "service-account-bss-catalog",
+      "enabled": true,
+      "serviceAccountClientId": "bss-catalog",
+      "realmRoles": [
+        "policy:evaluate"
+      ]
+    },
+    {
+      "username": "service-account-bss-billing",
+      "enabled": true,
+      "serviceAccountClientId": "bss-billing",
+      "realmRoles": [
+        "inventory:read",
+        "catalog:read",
+        "payment:read",
+        "payment:write",
+        "usage:read",
+        "usage:write",
+        "promotion:read",
+        "party:read",
+        "service:read",
+        "service:write"
+      ]
+    },
+    {
+      "username": "demo",
+      "enabled": true,
+      "email": "demo@bss.local",
+      "emailVerified": true,
+      "firstName": "Demo",
+      "lastName": "User",
+      "requiredActions": [],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "demo",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "ordering:read",
+        "ordering:write",
+        "inventory:read",
+        "inventory:write",
+        "party:read",
+        "party:write",
+        "stock:read",
+        "stock:write",
+        "payment:read",
+        "payment:write",
+        "billing:read",
+        "billing:write",
+        "qualification:read",
+        "qualification:write",
+        "wholesale:admin",
+        "appointment:read",
+        "appointment:write",
+        "ticket:read",
+        "ticket:write",
+        "interaction:read",
+        "interaction:write",
+        "communication:read",
+        "communication:write",
+        "usage:read",
+        "usage:write",
+        "agreement:read",
+        "agreement:write",
+        "promotion:read",
+        "promotion:write",
+        "roles:admin",
+        "address:read",
+        "address:write",
+        "recommendation:read",
+        "paymentmethod:read",
+        "paymentmethod:write",
+        "service:read",
+        "service:write",
+        "assurance:read",
+        "assurance:write",
+        "document:read",
+        "document:write",
+        "campaign:read",
+        "campaign:write",
+        "policy:read",
+        "policy:write",
+        "ai:use",
+        "quote:read",
+        "quote:write",
+        "porting:read",
+        "porting:write",
+        "policy:evaluate",
+        "billing:admin",
+        "appointment:admin",
+        "knowledge:read",
+        "knowledge:write",
+        "insight:read",
+        "ai:admin",
+        "risk:assess",
+        "device:read",
+        "device:write",
+        "migration:read",
+        "migration:admin"
+      ]
+    },
+    {
+      "username": "service-account-bss-user-admin",
+      "enabled": true,
+      "serviceAccountClientId": "bss-user-admin",
+      "realmRoles": [],
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "manage-users",
+          "view-realm"
+        ]
+      }
+    },
+    {
+      "username": "service-account-bss-recommendation",
+      "enabled": true,
+      "serviceAccountClientId": "bss-recommendation",
+      "realmRoles": [
+        "catalog:read",
+        "inventory:read",
+        "insight:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-payment",
+      "enabled": true,
+      "serviceAccountClientId": "bss-payment",
+      "realmRoles": [
+        "paymentmethod:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-som",
+      "enabled": true,
+      "serviceAccountClientId": "bss-som",
+      "realmRoles": [
+        "ordering:read",
+        "ordering:write",
+        "porting:read",
+        "catalog:read",
+        "party:read",
+        "assurance:read",
+        "insight:read",
+        "assurance:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-campaign",
+      "enabled": true,
+      "serviceAccountClientId": "bss-campaign",
+      "realmRoles": [
+        "communication:write",
+        "communication:read",
+        "insight:read",
+        "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-intelligence",
+      "enabled": true,
+      "serviceAccountClientId": "bss-intelligence",
+      "realmRoles": [
+        "agreement:read",
+        "usage:read",
+        "ticket:read",
+        "assurance:read",
+        "recommendation:read",
+        "insight:read",
+        "inventory:read",
+        "catalog:read",
+        "catalog:write",
+        "billing:read",
+        "billing:admin",
+        "ticket:write",
+        "ordering:read",
+        "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-quote",
+      "enabled": true,
+      "serviceAccountClientId": "bss-quote",
+      "realmRoles": [
+        "service:read",
+        "catalog:read",
+        "usage:read",
+        "ordering:write",
+        "ai:use",
+        "agreement:write",
+        "insight:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-assurance",
+      "enabled": true,
+      "serviceAccountClientId": "bss-assurance",
+      "realmRoles": [
+        "service:read",
+        "service:write",
+        "ticket:write",
+        "ticket:read",
+        "agreement:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-inventory",
+      "enabled": true,
+      "serviceAccountClientId": "bss-inventory",
+      "realmRoles": [
+        "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-usage",
+      "enabled": true,
+      "serviceAccountClientId": "bss-usage",
+      "realmRoles": [
+        "party:read",
+        "catalog:read",
+        "policy:evaluate",
+        "service:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-insight",
+      "enabled": true,
+      "serviceAccountClientId": "bss-insight",
+      "realmRoles": [
+        "policy:evaluate"
+      ]
+    },
+    {
+      "username": "service-account-bss-communication",
+      "enabled": true,
+      "serviceAccountClientId": "bss-communication",
+      "realmRoles": [
+        "party:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-loyalty",
+      "enabled": true,
+      "serviceAccountClientId": "bss-loyalty",
+      "realmRoles": [
+        "promotion:write",
+        "promotion:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-revenue",
+      "enabled": true,
+      "serviceAccountClientId": "bss-revenue",
+      "realmRoles": [
+        "billing:read",
+        "campaign:read",
+        "agreement:read"
+      ]
+    },
+    {
+      "username": "service-account-bss-fulfilment",
+      "enabled": true,
+      "serviceAccountClientId": "bss-fulfilment",
+      "realmRoles": [
+        "ordering:read",
+        "ordering:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-device",
+      "enabled": true,
+      "serviceAccountClientId": "bss-device",
+      "realmRoles": [
+        "payment:read",
+        "payment:write"
+      ]
+    },
+    {
+      "username": "service-account-bss-base-migration",
+      "enabled": true,
+      "serviceAccountClientId": "bss-base-migration",
+      "realmRoles": [
+        "inventory:read",
+        "party:read",
+        "agreement:read",
+        "ordering:write",
+        "catalog:write"
+      ]
+    },
+    {
+      "id": "5e1a7c2b-3d4e-4f60-9a1b-2c3d4e5f6071",
+      "username": "devi@enet.example",
+      "email": "devi@enet.example",
+      "firstName": "Devi",
+      "lastName": "Persaud",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "devi"
+        }
+      ],
+      "realmRoles": [
+        "customer"
+      ]
+    },
+    {
+      "id": "7b2c8d3e-4f5a-4b71-8c2d-3e4f5a6b7182",
+      "username": "ravi@demerara.example",
+      "email": "ravi@demerara.example",
+      "firstName": "Ravi",
+      "lastName": "Singh",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ravi"
+        }
+      ],
+      "realmRoles": [
+        "customer",
+        "business:admin"
+      ]
+    },
+    {
+      "username": "nalini@enet.example",
+      "email": "nalini@enet.example",
+      "firstName": "Nalini",
+      "lastName": "Ramdhani",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "nalini",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "agent",
+        "porting:read",
+        "porting:write",
+        "service:read",
+        "service:write"
+      ]
+    },
+    {
+      "username": "jerome@enet.example",
+      "email": "jerome@enet.example",
+      "firstName": "Jerome",
+      "lastName": "Fraser",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "jerome",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "party:read",
+        "ticket:read",
+        "ticket:write",
+        "interaction:read",
+        "interaction:write",
+        "ordering:read",
+        "inventory:read",
+        "service:read",
+        "billing:read",
+        "usage:read",
+        "agreement:read",
+        "appointment:read",
+        "recommendation:read",
+        "catalog:read",
+        "promotion:read",
+        "paymentmethod:read"
+      ]
+    },
+    {
+      "username": "shivani@enet.example",
+      "email": "shivani@enet.example",
+      "firstName": "Shivani",
+      "lastName": "Mohamed",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "shivani",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "marketing-staff"
+      ]
+    },
+    {
+      "username": "kwame@enet.example",
+      "email": "kwame@enet.example",
+      "firstName": "Kwame",
+      "lastName": "Adams",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "kwame",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "sales-staff"
+      ]
+    },
+    {
+      "username": "latoya@enet.example",
+      "email": "latoya@enet.example",
+      "firstName": "Latoya",
+      "lastName": "Cummings",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "latoya",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "growth-staff"
+      ]
+    },
+    {
+      "username": "rohan@enet.example",
+      "email": "rohan@enet.example",
+      "firstName": "Rohan",
+      "lastName": "Jaikaran",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "rohan",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "stock:read",
+        "stock:write",
+        "qualification:read",
+        "qualification:write",
+        "policy:read",
+        "policy:write",
+        "policy:evaluate",
+        "document:read",
+        "document:write",
+        "ai:use",
+        "knowledge:read",
+        "knowledge:write"
+      ]
+    },
+    {
+      "username": "dwayne@enet.example",
+      "email": "dwayne@enet.example",
+      "firstName": "Dwayne",
+      "lastName": "Benn",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dwayne",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "finance-staff"
+      ]
+    },
+    {
+      "username": "fazil@enet.example",
+      "email": "fazil@enet.example",
+      "firstName": "Fazil",
+      "lastName": "Khan",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "fazil",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ops-staff"
+      ]
+    }
+  ],
+  "displayName": "ENet",
+  "internationalizationEnabled": true,
+  "supportedLocales": [
+    "en",
+    "no"
+  ],
+  "defaultLocale": "no",
+  "scopeMappings": [
+    {
+      "client": "bss-agent",
+      "roles": [
+        "catalog:read",
+        "ordering:read",
+        "ordering:write",
+        "payment:read",
+        "payment:write"
+      ]
+    }
+  ],
+  "accessTokenLifespan": 1800
 }
