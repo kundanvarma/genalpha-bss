@@ -15,6 +15,9 @@ public interface ServiceInstanceRepository extends JpaRepository<ServiceInstance
     /** Boost passes past their hour: the sweep releases them (the core already has). */
     List<ServiceInstance> findTop100ByTenantIdAndSliceUntilBefore(String tenantId, java.time.OffsetDateTime before);
 
+    /** Lines carrying a SOLD guarantee — the assurance sweep measures these. */
+    List<ServiceInstance> findTop100ByTenantIdAndSliceGuaranteedDlMbpsIsNotNull(String tenantId);
+
     List<ServiceInstance> findByTenantIdAndDeliveryPath(String tenantId, String deliveryPath);
 
     List<ServiceInstance> findTop100ByTenantIdAndStateAndResumeAtBefore(

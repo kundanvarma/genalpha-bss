@@ -31,5 +31,15 @@ public interface CatalogClient {
      */
     Optional<SliceIntent> sliceIntentOf(String offeringId);
 
-    record SliceIntent(String profile, Integer boostHours) { }
+    /**
+     * @param profile          the core's slice profile name
+     * @param boostHours       present = a time-boxed pass
+     * @param chargingSpecId   the OCS rate plan the line moves to while on the slice (slice-aware charging); null = charging unchanged
+     * @param guaranteedDlMbps a sold guarantee the assurance side measures against; null = best-effort priority
+     */
+    record SliceIntent(String profile, Integer boostHours, String chargingSpecId, Integer guaranteedDlMbps) {
+        public SliceIntent(String profile, Integer boostHours) {
+            this(profile, boostHours, null, null);
+        }
+    }
 }

@@ -56,6 +56,7 @@ public class OrchestrationService {
     private final TenantScope tenantScope;
     private final com.bss.som.client.OcsProvisioningClient ocs;
     private final com.bss.som.client.SliceProvisioningClient slices;
+    private final com.bss.som.client.AssuranceClient assurance;
     private final com.bss.som.security.TenantRegistry tenants;
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.tick.TickGuard tickGuard;
@@ -78,6 +79,7 @@ public class OrchestrationService {
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
             com.bss.som.client.SliceProvisioningClient slices,
+            com.bss.som.client.AssuranceClient assurance,
             com.bss.som.security.TenantRegistry tenants,
             com.bss.som.repository.NumberQuarantineRepository quarantine,
             com.bss.som.tick.TickGuard tickGuard,
@@ -98,6 +100,7 @@ public class OrchestrationService {
         this.catalog = catalog;
         this.ocs = ocs;
         this.slices = slices;
+        this.assurance = assurance;
         this.tenants = tenants;
         this.quarantine = quarantine;
         this.pukVault = pukVault;
@@ -390,7 +393,9 @@ public class OrchestrationService {
                         line.setSliceProfile(intent.profile());
                         line.setSliceUntil(null);
                         line.setSliceOrderId(productOrderId);
+                        line.setSliceGuaranteedDlMbps(intent.guaranteedDlMbps());
                         services.save(line);
+                        moveToSliceChargingPlan(tenant, line, intent.chargingSpecId());
                     });
                     slices.apply(tenant, serviceId, intent.profile(), null);
                 });
@@ -1013,6 +1018,21 @@ public class OrchestrationService {
         if (productOrderId != null && productOrderId.equals(line.getSliceOrderId())) {
             return; // the same order already applied — idempotent
         }
+        // DEVICE ELIGIBILITY: a slice needs a 5G standalone handset. The network told
+        // us the model (DeviceDetectedEvent); a phone that cannot ride a slice must not
+        // be sold silence — the pass is refused loudly (event + log), never applied.
+        if (line.getDeviceModel() != null && !sliceCapable(line.getDeviceModel())) {
+            Map<String, Object> ev = new java.util.LinkedHashMap<>();
+            ev.put("id", line.getId());
+            ev.put("name", line.getName());
+            ev.put("boostPass", passName);
+            ev.put("refused", "device-not-slice-capable");
+            ev.put("deviceModel", line.getDeviceModel());
+            ev.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
+            events.publish("ServiceSliceRefusedEvent", "service", ev);
+            log.warn("boost pass '{}' refused for line {}: device '{}' is not slice-capable", passName, line.getId(), line.getDeviceModel());
+            return;
+        }
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime from = line.getSliceUntil() != null && line.getSliceUntil().isAfter(now)
                 && intent.profile().equals(line.getSliceProfile()) ? line.getSliceUntil() : now;
@@ -1020,8 +1040,13 @@ public class OrchestrationService {
         line.setSliceProfile(intent.profile());
         line.setSliceUntil(until);
         line.setSliceOrderId(productOrderId);
+        line.setSliceGuaranteedDlMbps(intent.guaranteedDlMbps());
         services.save(line);
         slices.apply(tenant, line.getId(), intent.profile(), until);
+        // SLICE-AWARE CHARGING: the OCS rates priority traffic on its own rating
+        // group — the line moves to the slice rate plan for the window and back
+        // after. The OCS is still the charging master; we only say which plan.
+        moveToSliceChargingPlan(tenant, line, intent.chargingSpecId());
         Map<String, Object> ev = new java.util.LinkedHashMap<>();
         ev.put("id", line.getId());
         ev.put("name", line.getName());
@@ -1029,11 +1054,107 @@ public class OrchestrationService {
         if (until != null) {
             ev.put("sliceUntil", until.toString());
         }
+        if (intent.guaranteedDlMbps() != null) {
+            ev.put("guaranteedDlMbps", intent.guaranteedDlMbps());
+        }
         ev.put("boostPass", passName);
         ev.put("relatedParty", List.of(Map.of("id", owner, "role", "customer")));
         events.publish("ServiceSliceChangeEvent", "service", ev);
         log.info("boost pass '{}': line {} rides '{}'{}", passName, line.getId(), intent.profile(),
                 until == null ? "" : " until " + until);
+    }
+
+    /** Move the line's OCS subscriber to the slice rate plan, remembering the base plan for the way back. */
+    private void moveToSliceChargingPlan(String tenant, ServiceInstance line, String sliceChargingSpec) {
+        if (sliceChargingSpec == null || sliceChargingSpec.isBlank()) {
+            return; // the offer sells priority without a rating change
+        }
+        if (line.getSliceBaseChargingSpec() == null) {
+            // the base plan comes from the line's own offering (spec chargingSpecId)
+            String base = serviceOrders.findById(line.getServiceOrderId())
+                    .flatMap(so -> catalog.chargingSpecOf(so.getOfferingId())).orElse(null);
+            line.setSliceBaseChargingSpec(base == null ? "" : base);
+            services.save(line);
+        }
+        // a line whose plan has no charging footprint has no OCS subscriber yet — the
+        // slice plan IS its first charging footprint, so provision rather than move
+        if (line.getSliceBaseChargingSpec().isBlank()) {
+            ocs.provision(tenant, line.getOwnerPartyId(), line.getId(), sliceChargingSpec);
+            return;
+        }
+        ocs.changeRatePlan(tenant, line.getId(), sliceChargingSpec);
+    }
+
+    private void restoreBaseChargingPlan(String tenant, ServiceInstance line) {
+        String base = line.getSliceBaseChargingSpec();
+        if (base != null && !base.isBlank()) {
+            ocs.changeRatePlan(tenant, line.getId(), base);
+        }
+        line.setSliceBaseChargingSpec(null);
+    }
+
+    /** Which handsets can ride a slice: 5G standalone. The network's model string is the truth;
+     * a conservative list, extended per operator through configuration in production. */
+    static boolean sliceCapable(String deviceModel) {
+        String m = deviceModel == null ? "" : deviceModel.toLowerCase(java.util.Locale.ROOT);
+        if (m.contains("4g") || m.contains("lte-only") || m.contains("feature phone")) {
+            return false;
+        }
+        // iPhone 12+ / Galaxy S21+ / Pixel 6+ and anything self-declared 5G are SA-capable in practice
+        java.util.regex.Matcher iphone = java.util.regex.Pattern.compile("iphone\\s*(\\d+)").matcher(m);
+        if (iphone.find()) {
+            return Integer.parseInt(iphone.group(1)) >= 12;
+        }
+        java.util.regex.Matcher galaxy = java.util.regex.Pattern.compile("galaxy\\s*s(\\d+)").matcher(m);
+        if (galaxy.find()) {
+            return Integer.parseInt(galaxy.group(1)) >= 21;
+        }
+        java.util.regex.Matcher pixel = java.util.regex.Pattern.compile("pixel\\s*(\\d+)").matcher(m);
+        if (pixel.find()) {
+            return Integer.parseInt(pixel.group(1)) >= 6;
+        }
+        return m.contains("5g") || m.isBlank();
+    }
+
+    /** The network saw a handset on a customer's line (EIR): remember it on the line for eligibility. */
+    @org.springframework.transaction.annotation.Transactional
+    public void onDeviceDetected(String tenant, String partyId, String deviceModel) {
+        for (ServiceInstance line : services.findByTenantIdAndOwnerPartyId(tenant, partyId)) {
+            if (ServiceInstance.ACTIVE.equals(line.getState()) && isMobileLine(line.getName())) {
+                line.setDeviceModel(deviceModel);
+                services.save(line);
+            }
+        }
+    }
+
+    /**
+     * A SOLD GUARANTEE is measured, not promised: for every line on a slice with a
+     * guaranteed downlink, read the core's delivered KPI; a shortfall becomes an
+     * assurance service problem (the SLA ledger credits it) — once per window.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(
+            fixedDelayString = "${bss.som.slice-assurance-tick-ms:20000}")
+    public void sliceAssuranceTick() {
+        if (!tickGuard.claim("slice-assurance", java.time.Duration.ofSeconds(60))) {
+            return;
+        }
+        try {
+            for (com.bss.som.security.TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (com.bss.som.security.TenantContext ignored =
+                        com.bss.som.security.TenantContext.actAs(tenant.getId())) {
+                    for (ServiceInstance line : services.findTop100ByTenantIdAndSliceGuaranteedDlMbpsIsNotNull(tenant.getId())) {
+                        slices.quality(tenant.getId(), line.getId()).ifPresent(q -> {
+                            if (q.measuredDlMbps() != null && q.measuredDlMbps() < line.getSliceGuaranteedDlMbps()) {
+                                assurance.reportSliceShortfall(tenant.getId(), line.getId(), line.getOwnerPartyId(),
+                                        line.getSliceGuaranteedDlMbps(), q.measuredDlMbps(), q.windowMinutes());
+                            }
+                        });
+                    }
+                }
+            }
+        } finally {
+            tickGuard.release("slice-assurance");
+        }
     }
 
     /** Boost passes lapse on their own clock: the core already reverted; the record follows and says so. */
@@ -1054,6 +1175,8 @@ public class OrchestrationService {
                             lapsed.setSliceProfile(null);
                             lapsed.setSliceUntil(null);
                             lapsed.setSliceOrderId(null);
+                            lapsed.setSliceGuaranteedDlMbps(null);
+                            restoreBaseChargingPlan(tenant.getId(), lapsed);
                             services.save(lapsed);
                             slices.release(tenant.getId(), lapsed.getId());
                             Map<String, Object> ev = new java.util.LinkedHashMap<>();

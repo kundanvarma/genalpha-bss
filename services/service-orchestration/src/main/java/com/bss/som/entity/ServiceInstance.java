@@ -71,6 +71,18 @@ public class ServiceInstance {
     @Column(name = "slice_order_id", length = 36)
     private String sliceOrderId;
 
+    /** Slice-aware charging: the rate plan the line rode BEFORE the slice (restored at lapse). */
+    @Column(name = "slice_base_charging_spec", length = 64)
+    private String sliceBaseChargingSpec;
+
+    /** A sold guarantee (Mbit/s downlink) the assurance side measures against; null = none sold. */
+    @Column(name = "slice_guaranteed_dl_mbps")
+    private Integer sliceGuaranteedDlMbps;
+
+    /** The handset the network last saw on this line (EIR / DeviceDetectedEvent) — slice eligibility reads it. */
+    @Column(name = "device_model", length = 128)
+    private String deviceModel;
+
     @Column(name = "owner_party_id", length = 64)
     private String ownerPartyId;
 
@@ -116,4 +128,11 @@ public class ServiceInstance {
     public void setSliceUntil(OffsetDateTime v) { this.sliceUntil = v; }
     public String getSliceOrderId() { return sliceOrderId; }
     public void setSliceOrderId(String v) { this.sliceOrderId = v; }
+
+    public String getSliceBaseChargingSpec() { return sliceBaseChargingSpec; }
+    public void setSliceBaseChargingSpec(String v) { this.sliceBaseChargingSpec = v; }
+    public Integer getSliceGuaranteedDlMbps() { return sliceGuaranteedDlMbps; }
+    public void setSliceGuaranteedDlMbps(Integer v) { this.sliceGuaranteedDlMbps = v; }
+    public String getDeviceModel() { return deviceModel; }
+    public void setDeviceModel(String v) { this.deviceModel = v; }
 }

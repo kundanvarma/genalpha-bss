@@ -29,4 +29,11 @@ public interface SliceProvisioningClient {
     void release(String tenantId, String serviceId);
 
     Optional<SliceState> current(String tenantId, String serviceId);
+
+    /** What the slice DELIVERED to the line over the last window (the core's own KPI). */
+    record SliceQuality(Double measuredDlMbps, Double measuredLatencyMs, Integer windowMinutes) { }
+
+    default Optional<SliceQuality> quality(String tenantId, String serviceId) {
+        return Optional.empty();
+    }
 }

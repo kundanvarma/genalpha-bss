@@ -84,6 +84,27 @@ public class RestSliceProvisioningClient implements SliceProvisioningClient {
         }
     }
 
+    @Override
+    @SuppressWarnings("unchecked")
+    public Optional<SliceQuality> quality(String tenantId, String serviceId) {
+        if (!enabled) {
+            return Optional.empty();
+        }
+        try {
+            Map<String, Object> resp = restClient.get().uri("/subscribers/{id}/quality", serviceId)
+                    .retrieve().body(Map.class);
+            if (resp == null) {
+                return Optional.empty();
+            }
+            return Optional.of(new SliceQuality(
+                    resp.get("measuredDlMbps") == null ? null : Double.valueOf(String.valueOf(resp.get("measuredDlMbps"))),
+                    resp.get("measuredLatencyMs") == null ? null : Double.valueOf(String.valueOf(resp.get("measuredLatencyMs"))),
+                    resp.get("windowMinutes") == null ? null : Integer.valueOf(String.valueOf(resp.get("windowMinutes")))));
+        } catch (RuntimeException e) {
+            return Optional.empty();
+        }
+    }
+
     private static SliceState stateOf(Map<String, Object> resp) {
         String profile = resp == null || resp.get("profile") == null ? "default" : String.valueOf(resp.get("profile"));
         OffsetDateTime until = resp != null && resp.get("until") != null ? OffsetDateTime.parse(String.valueOf(resp.get("until"))) : null;

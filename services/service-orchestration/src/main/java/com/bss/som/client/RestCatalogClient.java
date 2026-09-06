@@ -97,6 +97,8 @@ public class RestCatalogClient implements CatalogClient {
                     .retrieve().body(Map.class);
             String profile = null;
             Integer hours = null;
+            String chargingSpec = null;
+            Integer guaranteed = null;
             if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
                 for (Object c : chars) {
                     if (!(c instanceof Map<?, ?> ch) || !(ch.get("productSpecCharacteristicValue") instanceof List<?> vals)
@@ -112,10 +114,18 @@ public class RestCatalogClient implements CatalogClient {
                         } catch (NumberFormatException ignored) {
                             // a non-numeric boostHours is treated as open-ended
                         }
+                    } else if ("sliceChargingSpecId".equals(name)) {
+                        chargingSpec = String.valueOf(v0.get("value")).trim();
+                    } else if ("guaranteedDlMbps".equals(name)) {
+                        try {
+                            guaranteed = Integer.parseInt(String.valueOf(v0.get("value")).trim());
+                        } catch (NumberFormatException ignored) {
+                            // no number = no guarantee sold
+                        }
                     }
                 }
             }
-            return profile == null ? Optional.empty() : Optional.of(new SliceIntent(profile, hours));
+            return profile == null ? Optional.empty() : Optional.of(new SliceIntent(profile, hours, chargingSpec, guaranteed));
         } catch (RestClientException e) {
             return Optional.empty();
         }
