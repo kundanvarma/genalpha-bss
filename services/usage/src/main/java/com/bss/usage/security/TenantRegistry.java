@@ -67,6 +67,18 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** Tenant currency (tenants.yml `currency`): the fallback unit for
+         * charges that arrive without one (an OCS uplift on a party with no
+         * rated history yet). */
+        private String currency;
+
+        public String getCurrency() {
+            return currency;
+        }
+
+        public void setCurrency(String v) {
+            this.currency = v;
+        }
 
         public boolean isSandbox() {
             return sandbox;

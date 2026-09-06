@@ -60,6 +60,7 @@ public class UsageService {
     private final SpendPolicyService spendPolicy;
     private final int zoneEntryWindowDays;
     private final org.springframework.transaction.support.TransactionTemplate tx;
+    private final com.bss.usage.security.TenantRegistry tenantRegistry;
 
     public UsageService(UsageRecordRepository records, UsageAllowanceRepository allowances,
             com.bss.usage.repository.UsageSpecificationRepository specs,
@@ -75,13 +76,15 @@ public class UsageService {
             PoolService poolService, AutoTopupService autoTopup, SpendPolicyService spendPolicy,
             @org.springframework.beans.factory.annotation.Value(
                     "${bss.usage.policy.zone-entry-window-days:30}") int zoneEntryWindowDays,
-            org.springframework.transaction.PlatformTransactionManager txManager) {
+            org.springframework.transaction.PlatformTransactionManager txManager,
+            com.bss.usage.security.TenantRegistry tenantRegistry) {
         this.pendingRewards = pendingRewards;
         this.poolService = poolService;
         this.autoTopup = autoTopup;
         this.spendPolicy = spendPolicy;
         this.zoneEntryWindowDays = zoneEntryWindowDays;
         this.tx = new org.springframework.transaction.support.TransactionTemplate(txManager);
+        this.tenantRegistry = tenantRegistry;
         this.records = records;
         this.allowances = allowances;
         this.specs = specs;
@@ -334,7 +337,11 @@ public class UsageService {
             // currency: what this party was last rated in, else what the report says, else EUR
             String unit = ratedCharges.findByTenantIdAndOwnerPartyId(tenantId, party).stream()
                     .map(RatedCharge::getAmountUnit).filter(u -> u != null && !u.isBlank()).reduce((a, b) -> b)
-                    .orElse(reportedCurrency == null ? "EUR" : reportedCurrency);
+                    .orElseGet(() -> {
+                        if (reportedCurrency != null && !reportedCurrency.isBlank()) return reportedCurrency;
+                        var t = tenantRegistry.byId(tenantId);
+                        return t != null && t.getCurrency() != null && !t.getCurrency().isBlank() ? t.getCurrency() : "EUR";
+                    });
             RatedCharge charge = new RatedCharge();
             charge.setId(UUID.randomUUID().toString());
             charge.setTenantId(tenantId);
