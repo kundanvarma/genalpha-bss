@@ -31,6 +31,7 @@ const PROFILES = {
   'live-video': { snssai: { sst: 1, sd: '0000A3' }, qos: { '5qi': 7, priority: 3, gbrUlMbps: 20 }, label: 'Uplink priority (live video)' },
 };
 const subs = new Map(); // serviceId -> { profile, until, appliedAt, tenantId }
+const quality = new Map(); // serviceId -> pinned KPI overrides (tests)
 
 function current(serviceId) {
   const s = subs.get(serviceId);
@@ -48,6 +49,24 @@ const server = http.createServer((req, res) => {
   const send = (code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
   if (req.method === 'GET' && url.pathname === '/health') return send(200, { status: 'UP', system: 'mock-5gc (PCF/NSSF stand-in)' });
   if (req.method === 'GET' && url.pathname === '/profiles') return send(200, Object.entries(PROFILES).map(([k, v]) => ({ profile: k, ...v })));
+  // What the slice actually DELIVERED to a line: the core's own KPI for the last
+  // window (a real core exposes this through its NWDAF / slice-assurance NF). A
+  // test can pin a degraded value to prove the guarantee path.
+  const q = /^\/subscribers\/([^/]+)\/quality$/.exec(url.pathname);
+  if (q) {
+    const serviceId = decodeURIComponent(q[1]);
+    if (req.method === 'PUT') {
+      let raw = ''; req.on('data', (c) => { raw += c; });
+      req.on('end', () => { try { quality.set(serviceId, JSON.parse(raw || '{}')); } catch { return send(400, { error: 'bad json' }); } return send(200, current(serviceId)); });
+      return;
+    }
+    const cur = current(serviceId); const pinned = quality.get(serviceId) || {};
+    const gbr = cur.qos && cur.qos.gbrDlMbps ? cur.qos.gbrDlMbps : null;
+    return send(200, { serviceId, profile: cur.profile, active: cur.active,
+      measuredDlMbps: pinned.measuredDlMbps != null ? pinned.measuredDlMbps : (cur.active ? (gbr ? gbr * 2.4 : 48) : 18),
+      measuredLatencyMs: pinned.measuredLatencyMs != null ? pinned.measuredLatencyMs : (cur.active ? 22 : 45),
+      windowMinutes: 15, measuredAt: new Date().toISOString() });
+  }
   const m = /^\/subscribers\/([^/]+)\/slice$/.exec(url.pathname);
   if (!m) return send(404, { error: 'not found' });
   const serviceId = decodeURIComponent(m[1]);

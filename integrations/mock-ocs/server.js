@@ -42,6 +42,19 @@ function notifyBss(payload) {
   }
 }
 
+/* Priority-slice usage: a CHF sees the S-NSSAI on every request and rates the
+ * traffic on its rating group; this mock tells the BSS how many GB rode the
+ * priority slice so usage can rate the uplift line. Blank URL = nobody to tell. */
+const NOTIFY_PRIORITY_URL = process.env.OCS_NOTIFY_PRIORITY_URL || '';
+function notifyPriority(payload) {
+  try {
+    const u = new URL(NOTIFY_PRIORITY_URL); const body = JSON.stringify(payload);
+    const req = http.request({ hostname: u.hostname, port: u.port || 80, path: u.pathname, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } });
+    req.on('error', (e) => console.error('mock-ocs: priority notify failed:', e.message)); req.write(body); req.end();
+  } catch (e) { console.error('mock-ocs: bad OCS_NOTIFY_PRIORITY_URL:', e.message); }
+}
+
 /* After usage lands, emit a breach for each newly-crossed threshold. Idempotent
  * per cycle: a threshold notifies ONCE until a top-up or cycle re-arms it. */
 function checkThresholds(sub) {
@@ -72,6 +85,13 @@ const RATE_PLANS = {
   'RG-DATA-50': { name: '50 GB counter', gb: 50,  rollover: true },
   'RG-DATA-60': { name: '60 GB counter', gb: 60,  rollover: true },
   'RG-UNL':     { name: 'Unlimited',     gb: 1000, rollover: false },
+  // SLICE-AWARE plans: the same counter, but traffic on the priority slice is
+  // rated with an uplift per GB (a CHF sees the S-NSSAI on every charging
+  // request — TS 32.291 — and picks the rating group). A boost pass moves the
+  // line here for its window; the tier lives here permanently.
+  'RG-DATA-60-PRIO': { name: '60 GB counter (priority slice)', gb: 60,  rollover: true,  priorityUpliftPerGb: 0.5, base: 'RG-DATA-60' },
+  'RG-DATA-50-PRIO': { name: '50 GB counter (priority slice)', gb: 50,  rollover: true,  priorityUpliftPerGb: 0.5, base: 'RG-DATA-50' },
+  'RG-UNL-PRIO':     { name: 'Unlimited (priority slice)',     gb: 1000, rollover: false, priorityUpliftPerGb: 0.5, base: 'RG-UNL' },
 };
 
 const subscribers = new Map(); // id -> subscriber
@@ -137,6 +157,12 @@ const server = http.createServer((req, res) => {
         if (sub.status === 'suspended') return send(409, { error: 'line is suspended' });
         const bucket = sub.buckets[0];
         bucket.usedGB = Number((bucket.usedGB + Number(body.gb || 0)).toFixed(3));
+        // on a priority plan the OCS counts the priority GB too (rated as an uplift by the BSS)
+        if (RATE_PLANS[sub.ratePlanId] && RATE_PLANS[sub.ratePlanId].priorityUpliftPerGb) {
+          bucket.priorityGB = Number(((bucket.priorityGB || 0) + Number(body.gb || 0)).toFixed(3));
+          if (NOTIFY_PRIORITY_URL) notifyPriority({ tenantId: sub.tenantId, partyId: sub.partyId, serviceId: sub.serviceId,
+            ratePlanId: sub.ratePlanId, gb: Number(body.gb || 0), upliftPerGb: RATE_PLANS[sub.ratePlanId].priorityUpliftPerGb, units: 'GB' });
+        }
         checkThresholds(sub); // "running low" notifications, once per threshold per cycle
         return send(200, sub);
       }
@@ -158,9 +184,14 @@ const server = http.createServer((req, res) => {
         const plan = RATE_PLANS[body.ratePlanId];
         if (!plan) return send(404, { error: `unknown rate plan '${body.ratePlanId}'` });
         const carried = sub.buckets[0]?.rolloverGB || 0;
+        const prev = RATE_PLANS[sub.ratePlanId] || {};
+        const sameCounter = (plan.base || body.ratePlanId) === (prev.base || sub.ratePlanId);
+        const usedBefore = sub.buckets[0]?.usedGB || 0;
+        const prioBefore = sub.buckets[0]?.priorityGB || 0;
         sub.ratePlanId = body.ratePlanId;
         sub.buckets = [bucketFor(plan, body.ratePlanId)];
         sub.buckets[0].rolloverGB = carried;
+        if (sameCounter) { sub.buckets[0].usedGB = usedBefore; sub.buckets[0].priorityGB = prioBefore; } // slice move: same counter, different rating
         return send(200, sub);
       }
       if (req.method === 'GET' && !m[2]) return send(200, sub);

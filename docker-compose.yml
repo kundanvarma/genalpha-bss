@@ -1898,6 +1898,8 @@ services:
       # Northbound: the OCS tells the BSS when a line crosses a usage threshold.
       OCS_NOTIFY_URL: http://usage:8080/internal/ocs/usageThreshold
       OCS_THRESHOLDS: "0.8"
+      # Priority-slice GB (slice-aware charging): the BSS rates the uplift line
+      OCS_NOTIFY_PRIORITY_URL: http://usage:8080/internal/ocs/priorityUsage
     ports:
       - "8115:8080"
 
