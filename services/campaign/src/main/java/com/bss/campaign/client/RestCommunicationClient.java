@@ -19,11 +19,12 @@ public class RestCommunicationClient implements CommunicationClient {
     }
 
     @Override
-    public SendOutcome send(String partyId, String subject, String content, Map<String, Object> context) {
+    public SendOutcome send(String partyId, String subject, String content, String channel,
+            Map<String, Object> context) {
         Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("subject", subject);
         body.put("content", content);
-        body.put("messageType", "inApp");
+        body.put("messageType", channel == null || channel.isBlank() ? "inApp" : channel);
         if (context != null && !context.isEmpty()) {
             body.put("context", context);
             if (context.get("source") != null) body.put("source", context.get("source"));

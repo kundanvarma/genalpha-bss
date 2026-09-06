@@ -65,6 +65,17 @@ public class TenantRegistry {
         private String tokenUri;
         private String machineClientId;
         private String machineClientSecret;
+        /** tenants.yml `timezone`: message tokens that carry a time render in
+         * the customer's local zone (a boost that ends "Sun 3:12 PM", not ISO). */
+        private String timezone;
+
+        public String getTimezone() {
+            return timezone;
+        }
+
+        public void setTimezone(String v) {
+            this.timezone = v;
+        }
         /** Social platform seam (Meta Marketing API wire shape): where a
          * segment's hashed emails go for retargeting. Null url = no
          * platform connected for this tenant. */

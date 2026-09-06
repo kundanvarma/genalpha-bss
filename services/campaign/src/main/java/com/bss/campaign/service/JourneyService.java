@@ -639,7 +639,7 @@ public class JourneyService {
                 content = content.replace("{code}", String.valueOf(message.get("promotionCode")));
             }
             outcome = communication.send(enrollment.getPartyId(), String.valueOf(message.get("subject")),
-                    content, context);
+                    content, message.get("channel") == null ? null : String.valueOf(message.get("channel")), context);
         }
         // Communication has guardrails of its own (frequency cap, opt-out) and
         // declines with a 200 — the postpone-not-drop rule must hold HERE too,

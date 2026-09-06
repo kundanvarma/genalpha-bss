@@ -31,9 +31,13 @@ public class BusinessEventListener {
     private final com.bss.campaign.service.JourneyService journeys;
     private final com.bss.campaign.service.ReferralService referrals;
 
+    private final com.bss.campaign.security.TenantRegistry tenants;
+
     public BusinessEventListener(CampaignService campaigns, ObjectMapper objectMapper,
             com.bss.campaign.service.JourneyService journeys,
-            com.bss.campaign.service.ReferralService referrals) {
+            com.bss.campaign.service.ReferralService referrals,
+            com.bss.campaign.security.TenantRegistry tenants) {
+        this.tenants = tenants;
         this.referrals = referrals;
         this.campaigns = campaigns;
         this.objectMapper = objectMapper;
@@ -67,7 +71,7 @@ public class BusinessEventListener {
             String state = resource.get("state") != null ? String.valueOf(resource.get("state"))
                     : resource.get("status") != null ? String.valueOf(resource.get("status")) : null;
             List<String> offeringIds = offeringsOf(resource);
-            Map<String, Object> context = contextOf(eventType, resource);
+            Map<String, Object> context = contextOf(eventType, resource, tenantId);
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 campaigns.onEvent(eventType, state, party, offeringIds);
                 journeys.onEvent(eventType, state, party, offeringIds, context);
@@ -87,7 +91,19 @@ public class BusinessEventListener {
      * message can say "your order {{order.id}} shipped — track it {{tracking.url}}".
      * Stored on the enrollment; resolved at send time.
      */
-    private Map<String, Object> contextOf(String eventType, Map<String, Object> resource) {
+    /** An ISO instant rendered in the tenant's zone for a customer-facing message. */
+    private Object localTime(Object iso, String tenantId) {
+        try {
+            var te = tenants.byId(tenantId);
+            String tz = te != null && te.getTimezone() != null && !te.getTimezone().isBlank() ? te.getTimezone() : "UTC";
+            return java.time.format.DateTimeFormatter.ofPattern("EEE d MMM, h:mm a", java.util.Locale.ENGLISH)
+                    .withZone(java.time.ZoneId.of(tz)).format(java.time.Instant.parse(String.valueOf(iso)));
+        } catch (Exception e) {
+            return iso;
+        }
+    }
+
+    private Map<String, Object> contextOf(String eventType, Map<String, Object> resource, String tenantId) {
         Map<String, Object> ctx = new java.util.LinkedHashMap<>();
         Object orderId = resource.get("productOrderId") != null ? resource.get("productOrderId")
                 : (eventType != null && eventType.startsWith("ProductOrder") ? resource.get("id") : null);
@@ -101,7 +117,7 @@ public class BusinessEventListener {
         if (resource.get("bucketName") != null) ctx.put("usage.bucket", resource.get("bucketName"));
         // Network slice (boost pass / priority tier): which profile, until when, which pass
         if (resource.get("sliceProfile") != null) ctx.put("slice.profile", resource.get("sliceProfile"));
-        if (resource.get("sliceUntil") != null) ctx.put("slice.until", resource.get("sliceUntil"));
+        if (resource.get("sliceUntil") != null) ctx.put("slice.until", localTime(resource.get("sliceUntil"), tenantId));
         if (resource.get("boostPass") != null) ctx.put("slice.pass", resource.get("boostPass"));
         if (resource.get("lapsedProfile") != null) ctx.put("slice.lapsed", resource.get("lapsedProfile"));
         return ctx;

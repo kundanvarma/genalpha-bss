@@ -14,7 +14,16 @@ public interface CommunicationClient {
     }
 
     /** Send inline copy with a personalization context ({{order.id}} etc.). */
-    SendOutcome send(String partyId, String subject, String content, java.util.Map<String, Object> context);
+    default SendOutcome send(String partyId, String subject, String content, java.util.Map<String, Object> context) {
+        return send(partyId, subject, content, null, context);
+    }
+
+    /** Send inline copy on a named channel (inApp | email | sms | push | whatsapp);
+     * null = in-app. A journey step's channel is honoured for inline copy exactly
+     * as it is for a template — a "WhatsApp-first" journey must not fall back
+     * to the inbox in silence. */
+    SendOutcome send(String partyId, String subject, String content, String channel,
+            java.util.Map<String, Object> context);
 
     /** Send via a reusable template — communication renders the localized,
      *  tokenized copy for the given channel and context. */
