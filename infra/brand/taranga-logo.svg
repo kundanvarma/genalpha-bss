@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 160" width="640" height="160" role="img" aria-label="Taranga">
+  <title>Taranga</title>
+  <!-- the wave: three swells, the brand's one idea: every signal, one fabric -->
+  <g fill="none" stroke-linecap="round" stroke-width="18">
+    <path d="M22 96 C 52 56, 84 56, 114 96 S 176 136, 206 96" stroke="#0B5FA5"/>
+    <path d="M22 122 C 52 82, 84 82, 114 122 S 176 162, 206 122" stroke="#19B3C4" opacity="0.85"/>
+    <path d="M22 70 C 52 30, 84 30, 114 70 S 176 110, 206 70" stroke="#0B5FA5" opacity="0.45"/>
+  </g>
+  <text x="240" y="112" font-family="-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="92" font-weight="800" letter-spacing="-3" fill="#0B5FA5">Taranga</text>
+</svg>

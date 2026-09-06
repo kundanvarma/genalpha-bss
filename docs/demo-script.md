@@ -306,6 +306,8 @@ URL: `http://localhost:8080/partner/` as `demo` / `demo`
 | Guided demo (safety net) | `localhost:8080/flow/demo.html` | `demo` / `demo` |
 | Nova storefront (NO/NOK) | `shop.nova.localhost:8080/shop/` | `nils@nova.local` / `nils` |
 | Nova business console | `biz.nova.localhost:8080/biz/` | `birgit@fjellheim.no` / `birgit` |
+| Taranga storefront (vendor demo tenant, EN/NOK) | `shop.taranga.localhost:8080/shop/` | `mira@taranga.example` / `mira`; business `olav@fjordbygg.example` / `olav` |
+| Taranga CSR / console / business | `csr.` `console.` `biz.taranga.localhost:8080/` | `demo` / `demo` |
 | Wholesale partner portal | `localhost:8080/partner/` | `demo` / `demo` (access seeker; Bergen `5020` / Trondheim `7010`) |
 
 Demo card: `4242 4242 4242 4242` pays, `…0002` declines. Promo: `WELCOME10`.

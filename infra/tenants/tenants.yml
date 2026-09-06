@@ -112,7 +112,7 @@ bss:
         locale: "no"
         currency: NOK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_NOVA:discovery}
@@ -172,7 +172,7 @@ bss:
         locale: "no"
         currency: NOK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_CHILIMOBIL:off}
@@ -231,7 +231,7 @@ bss:
         locale: "nn"
         currency: NOK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
@@ -292,7 +292,7 @@ bss:
         locale: "no"
         currency: NOK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
@@ -520,7 +520,7 @@ bss:
         locale: "sv"
         currency: SEK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: "off"
@@ -579,7 +579,7 @@ bss:
         locale: "da"
         currency: DKK
         timezone: Europe/Oslo
-        country: NO
+        country: "NO"
         porting-gateway: nrdb
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_FJORD:off}
@@ -688,4 +688,73 @@ bss:
         ai-api-key-smart: ${AI_API_KEY_SMART_ENET:}
         # T-P3: this tenant allows RAW-exposure AI use-cases (legacy copilots).
         # New tenants default OFF — raw is opt-in, never assumed.
+        ai-raw-exposure: true
+      # Taranga — the vendor's own demo tenant (Taranga AS, taranga.no): a Norwegian
+      # converged operator shown in English, NOK, on the built-in Norway rails
+      # (Posten/Helthjem, Vipps/Klarna, NRDB porting, freg). The hosted demo
+      # (AWS/Azure) serves it on *.taranga.no; locally on *.taranga.localhost.
+      - id: taranga
+        issuer: ${OIDC_ISSUER_URI_TARANGA:http://localhost:8085/realms/taranga}
+        jwks-uri: http://keycloak:8080/realms/taranga/protocol/openid-connect/certs
+        token-uri: http://keycloak:8080/realms/taranga/protocol/openid-connect/token
+        machine-client-id: ${OIDC_CLIENT_ID:bss-assurance}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:assurance-secret}
+        bill-distribution-provider: ${BILL_DISTRIBUTION_PROVIDER_TARANGA:none}
+        bill-distribution-url: ${BILL_DISTRIBUTION_URL_TARANGA:}
+        bill-distribution-token: ${BILL_DISTRIBUTION_TOKEN_TARANGA:}
+        bill-distribution-format: ${BILL_DISTRIBUTION_FORMAT_TARANGA:ehf}
+        bill-distribution-channel: ${BILL_DISTRIBUTION_CHANNEL_TARANGA:einvoice}
+        bank-token: ${BANK_TOKEN_TARANGA:}
+        social-api-url: ${SOCIAL_API_URL_TARANGA:}
+        social-access-token: ${SOCIAL_ACCESS_TOKEN_TARANGA:}
+        delivery-provider: ${DELIVERY_PROVIDER_TARANGA:internal}
+        esp-url: ${ESP_URL_TARANGA:}
+        esp-api-key: ${ESP_API_KEY_TARANGA:}
+        esp-from: ${ESP_FROM_TARANGA:}
+        brand-name: Taranga
+        brand-color: "#0B5FA5"
+        locale: "en"
+        currency: NOK
+        timezone: Europe/Oslo
+        served-countries: ["NO"]
+        country: "NO"
+        tagline: Ride the wave
+        porting-gateway: nrdb
+        support-phone: "+47 21 00 00 00"
+        support-email: hello@taranga.no
+        privacy-url: https://taranga.no/privacy
+        terms-url: https://taranga.no/terms
+        business-sales: true
+        agent-commerce: ${AGENT_COMMERCE_TARANGA:full}
+        ai-visibility: "search-only"
+        hosts: [shop.taranga.localhost, csr.taranga.localhost, console.taranga.localhost, biz.taranga.localhost,
+                shop.taranga.no, csr.taranga.no, console.taranga.no, biz.taranga.no, demo.taranga.no]
+        analytics-provider: ${ANALYTICS_PROVIDER_TARANGA:internal}
+        analytics-mp-url: ${ANALYTICS_MP_URL_TARANGA:https://www.google-analytics.com}
+        analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_TARANGA:}
+        analytics-api-secret: ${ANALYTICS_API_SECRET_TARANGA:}
+        analytics-data-url: ${ANALYTICS_DATA_URL_TARANGA:}
+        analytics-property-id: ${ANALYTICS_PROPERTY_ID_TARANGA:}
+        analytics-data-token: ${ANALYTICS_DATA_TOKEN_TARANGA:}
+        ai-provider: ${AI_PROVIDER_TARANGA:}
+        ai-base-url: ${AI_BASE_URL_TARANGA:}
+        ai-api-key: ${AI_API_KEY_TARANGA:}
+        ai-model: ${AI_MODEL_TARANGA:}
+        pim-base-url: ${PIM_BASE_URL_TARANGA:}
+        social-lead-form-id: ${SOCIAL_LEAD_FORM_ID_TARANGA:}
+        dnc-url: ${DNC_URL_TARANGA:}
+        dnc-token: ${DNC_TOKEN_TARANGA:}
+        market-feed-url: ${MARKET_FEED_URL_TARANGA:}
+        speech-url: ${SPEECH_URL_TARANGA:}
+        speech-token: ${SPEECH_TOKEN_TARANGA:}
+        market-feed-token: ${MARKET_FEED_TOKEN_TARANGA:}
+        ai-model-fast: ${AI_MODEL_FAST_TARANGA:}
+        ai-model-smart: ${AI_MODEL_SMART_TARANGA:}
+        ai-provider-fast: ${AI_PROVIDER_FAST_TARANGA:}
+        ai-base-url-fast: ${AI_BASE_URL_FAST_TARANGA:}
+        ai-api-key-fast: ${AI_API_KEY_FAST_TARANGA:}
+        ai-provider-smart: ${AI_PROVIDER_SMART_TARANGA:}
+        ai-base-url-smart: ${AI_BASE_URL_SMART_TARANGA:}
+        ai-api-key-smart: ${AI_API_KEY_SMART_TARANGA:}
+        # the vendor's own demo tenant: copilots may see raw context
         ai-raw-exposure: true

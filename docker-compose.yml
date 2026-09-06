@@ -71,6 +71,8 @@ services:
     volumes:
       - ./infra/keycloak/bss-realm.json:/opt/keycloak/data/import/bss-realm.json:ro
       - ./infra/keycloak/nova-realm.json:/opt/keycloak/data/import/nova-realm.json:ro
+      - ./infra/keycloak/enet-realm.json:/opt/keycloak/data/import/enet-realm.json:ro
+      - ./infra/keycloak/taranga-realm.json:/opt/keycloak/data/import/taranga-realm.json:ro
 
   product-catalog:
     build: ./services/product-catalog

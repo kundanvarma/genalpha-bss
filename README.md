@@ -432,6 +432,7 @@ Then browse:
 | http://localhost:8080/console/ | Admin console — `demo` / `demo` (all areas) |
 | http://localhost:8080/console/ | Admin console, product persona — `pat@bss.local` / `pat` (product tabs only) |
 | http://shop.nova.localhost:8080/shop/ | Nova Telecom's white-label storefront (own realm, own catalog) |
+| http://shop.taranga.localhost:8080/shop/ | **Taranga** — the vendor's own demo tenant (Taranga AS): a Norwegian converged operator in English and NOK on the built-in Norway rails — `mira@taranga.example` / `mira` (B2C), `olav@fjordbygg.example` / `olav` (business admin), staff `demo` / `demo` on `csr.`/`console.`/`biz.taranga.localhost`. The hosted demo serves the same tenant on `*.taranga.no`. Seed: `python3 ops/seed/seed_taranga.py && python3 ops/seed/seed_taranga_growth.py` |
 | http://localhost:8080/partner/ | **Wholesale partner portal** — `demo` / `demo` (the access seeker's desk): check an address for open-access fibre (Bergen `5020`, Trondheim `7010`), buy the L2/L3 SKUs, watch a wholesale order ride MEF Sonata to the owner, read what you owe. Nova plays the fibre **owner** on its own realm — the two meet cross-tenant |
 
 Demo cards: `4242 4242 4242 4242` pays, anything ending `0002` declines. Promo code: `WELCOME10`.
