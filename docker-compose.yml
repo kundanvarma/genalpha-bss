@@ -1272,6 +1272,12 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/communication
       # SMS delivery seam — the mock A2P gateway (Twilio wire shape)
       SMS_GATEWAY_URL: http://mock-sms:8080
+      # WhatsApp Business (Meta Cloud API) — per-tenant seams resolved from
+      # tenants.yml; point a tenant at the real Graph API by exporting these
+      # (URL https://graph.facebook.com, the phone-number id, and the token).
+      WHATSAPP_URL_ENET: ${WHATSAPP_URL_ENET:-http://mock-whatsapp:8080}
+      WHATSAPP_PHONE_ID_ENET: ${WHATSAPP_PHONE_ID_ENET:-592624515300}
+      WHATSAPP_TOKEN_ENET: ${WHATSAPP_TOKEN_ENET:-}
       # Runtime role is RLS-restricted; Flyway migrates as the owner.
       DB_USERNAME: communication_app
       DB_PASSWORD: communication_app
