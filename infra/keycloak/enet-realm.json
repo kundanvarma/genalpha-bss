@@ -452,11 +452,13 @@
       "directAccessGrantsEnabled": false,
       "redirectUris": [
         "http://console.enet.localhost:8080/*",
-        "http://localhost:8080/console/*"
+        "http://localhost:8080/console/*",
+        "https://console-enet.taranga.no/*"
       ],
       "webOrigins": [
         "http://console.enet.localhost:8080",
-        "http://localhost:8080"
+        "http://localhost:8080",
+        "https://console-enet.taranga.no"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
@@ -472,11 +474,13 @@
       "directAccessGrantsEnabled": false,
       "redirectUris": [
         "http://localhost:8080/shop/*",
-        "http://shop.enet.localhost:8080/*"
+        "http://shop.enet.localhost:8080/*",
+        "https://shop-enet.taranga.no/*"
       ],
       "webOrigins": [
         "http://localhost:8080",
-        "http://shop.enet.localhost:8080"
+        "http://shop.enet.localhost:8080",
+        "https://shop-enet.taranga.no"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
@@ -514,11 +518,13 @@
       "directAccessGrantsEnabled": true,
       "redirectUris": [
         "http://csr.enet.localhost:8080/*",
-        "http://localhost:8080/csr/*"
+        "http://localhost:8080/csr/*",
+        "https://csr-enet.taranga.no/*"
       ],
       "webOrigins": [
         "http://csr.enet.localhost:8080",
-        "http://localhost:8080"
+        "http://localhost:8080",
+        "https://csr-enet.taranga.no"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
@@ -599,11 +605,14 @@
         "http://app.enet.localhost:8080/*",
         "http://localhost:8080/app/*",
         "http://shop.enet.localhost:8080/app/*",
-        "genalphabss://*"
+        "genalphabss://*",
+        "https://app-enet.taranga.no/*",
+        "https://shop-enet.taranga.no/app/*"
       ],
       "webOrigins": [
         "http://localhost:8080",
-        "http://shop.enet.localhost:8080"
+        "http://shop.enet.localhost:8080",
+        "https://shop-enet.taranga.no"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
@@ -703,11 +712,14 @@
         "http://localhost:8080/biz/*",
         "http://biz.enet.localhost:8080/biz/*",
         "http://localhost:8080/dealer-app/*",
-        "http://biz.enet.localhost:8080/dealer-app/*"
+        "http://biz.enet.localhost:8080/dealer-app/*",
+        "https://biz-enet.taranga.no/biz/*",
+        "https://biz-enet.taranga.no/dealer-app/*"
       ],
       "webOrigins": [
         "http://localhost:8080",
-        "http://biz.enet.localhost:8080"
+        "http://biz.enet.localhost:8080",
+        "https://biz-enet.taranga.no"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256"

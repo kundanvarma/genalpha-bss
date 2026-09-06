@@ -658,7 +658,8 @@ bss:
         business-sales: false
         agent-commerce: "off"
         ai-visibility: "search-only"
-        hosts: [shop.enet.localhost, csr.enet.localhost, console.enet.localhost, biz.enet.localhost]
+        hosts: [shop.enet.localhost, csr.enet.localhost, console.enet.localhost, biz.enet.localhost,
+                shop-enet.taranga.no, csr-enet.taranga.no, console-enet.taranga.no, biz-enet.taranga.no]
         analytics-provider: ${ANALYTICS_PROVIDER_ENET:internal}
         analytics-mp-url: ${ANALYTICS_MP_URL_ENET:https://www.google-analytics.com}
         analytics-measurement-id: ${ANALYTICS_MEASUREMENT_ID_ENET:}
