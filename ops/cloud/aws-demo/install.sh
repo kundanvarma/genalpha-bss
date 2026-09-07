@@ -132,6 +132,30 @@ else
   as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d >/dev/null 2>&1; COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh demo"
 fi
 
+# ---------- 6b. boot hook: after a stop/start, shed to the demo slice on its own ----------
+# Docker restarts the FULL fleet on boot (restart policies); on a 32 GB box that
+# sits at the memory ceiling. This oneshot waits for Keycloak, then runs the same
+# 'fleet.sh demo' the install ran, so a plain start is hands-off.
+cat > /etc/systemd/system/taranga-demo-slice.service <<UNIT
+[Unit]
+Description=Taranga demo: shed the fleet to the demo slice after boot
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=$DEMO_USER
+WorkingDirectory=$APP_DIR
+Environment=COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
+ExecStartPre=/bin/bash -c 'for i in \$(seq 1 120); do curl -sf -o /dev/null http://localhost:8085/realms/bss/.well-known/openid-configuration && exit 0; sleep 5; done; exit 1'
+ExecStart=$APP_DIR/ops/fleet.sh demo
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload && systemctl enable taranga-demo-slice.service >/dev/null 2>&1 && log "boot hook: demo slice after every start"
+
 # ---------- 7. front door ----------
 log "Caddyfile"
 DEMO_DOMAIN="$DEMO_DOMAIN" DEMO_ENET="$DEMO_ENET" LETSENCRYPT_EMAIL="$LETSENCRYPT_EMAIL" \

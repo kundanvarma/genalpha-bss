@@ -66,7 +66,9 @@ Public doors when done:
 
 Compute is the whole bill. Stop the instance when nobody is presenting; disk and
 the IP keep billing (~$15/month), compute stops. Boot to healthy is ~10 minutes
-(`ops/fleet.sh status` on the box tells you when).
+(`ops/fleet.sh status` on the box tells you when). A systemd oneshot
+(`taranga-demo-slice.service`) sheds the fleet to the demo slice after every
+start, so a plain start needs no hands.
 
 ```bash
 aws ec2 stop-instances  --instance-ids i-…      # after the demo
