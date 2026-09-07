@@ -8,7 +8,10 @@ HOSTS="shop.$D csr.$D console.$D biz.$D demo.$D"
 GATE=""
 if [ -n "${DEMO_GATE_USER:-}" ] && [ -n "${DEMO_GATE_PASSWORD:-}" ]; then
   HASH=$(caddy hash-password --plaintext "$DEMO_GATE_PASSWORD")
-  GATE="	basic_auth {
+  # gate the page, not the app's own API calls: those carry a Bearer token and
+  # would be refused by basic_auth (Authorization header collision)
+  GATE="	@page not header Authorization Bearer*
+	basic_auth @page {
 		$DEMO_GATE_USER $HASH
 	}"
 fi
