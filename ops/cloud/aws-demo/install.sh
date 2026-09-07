@@ -66,17 +66,24 @@ fi
 sysctl -q -w vm.max_map_count=262144; grep -q max_map_count /etc/sysctl.conf || echo 'vm.max_map_count=262144' >> /etc/sysctl.conf
 
 # ---------- 2. repo ----------
-if [ ! -f "$HOME_DIR/.ssh/id_ed25519" ]; then
+# GIT_URL=local: the checkout was copied onto the box (rsync from a laptop);
+# skip the deploy key and the clone/pull, use what is in APP_DIR as-is.
+if [ "${GIT_URL:-}" = "local" ]; then
+  [ -d "$APP_DIR" ] || { echo "[install] GIT_URL=local but $APP_DIR is missing — rsync the repo first"; exit 1; }
+  log "repo: local checkout at $APP_DIR ($(cd "$APP_DIR" && git rev-parse --short HEAD 2>/dev/null || echo 'no git'))"
+elif [ ! -f "$HOME_DIR/.ssh/id_ed25519" ]; then
   as_user "ssh-keygen -q -t ed25519 -N '' -C 'taranga-demo-deploy' -f ~/.ssh/id_ed25519"
   as_user "ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null"
   echo; echo "Add this READ-ONLY deploy key to the GitHub repo (Settings → Deploy keys), then re-run:"; echo
   cat "$HOME_DIR/.ssh/id_ed25519.pub"; echo; exit 0
 fi
 mkdir -p "$(dirname "$APP_DIR")" && chown "$DEMO_USER" "$(dirname "$APP_DIR")"
-if [ ! -d "$APP_DIR/.git" ]; then
-  log "clone $GIT_URL ($GIT_REF)"; as_user "git clone -q --branch '$GIT_REF' '$GIT_URL' '$APP_DIR'"
-else
-  log "pull $GIT_REF"; as_user "cd '$APP_DIR' && git fetch -q && git checkout -q '$GIT_REF' && git pull -q --ff-only"
+if [ "${GIT_URL:-}" != "local" ]; then
+  if [ ! -d "$APP_DIR/.git" ]; then
+    log "clone $GIT_URL ($GIT_REF)"; as_user "git clone -q --branch '$GIT_REF' '$GIT_URL' '$APP_DIR'"
+  else
+    log "pull $GIT_REF"; as_user "cd '$APP_DIR' && git fetch -q && git checkout -q '$GIT_REF' && git pull -q --ff-only"
+  fi
 fi
 cd "$APP_DIR"
 
@@ -92,7 +99,7 @@ if [ ! -f .env ]; then
 fi
 
 # ---------- 4. build ----------
-STAMP=.cloud-build-$(git rev-parse --short HEAD)
+STAMP=.cloud-build-$(git rev-parse --short HEAD 2>/dev/null || date +%s)
 if [ ! -f "$STAMP" ]; then
   log "maven package (all 40 modules, tests skipped) — 10–20 min"
   as_user "cd '$APP_DIR' && mvn -q -T 1C package -DskipTests"

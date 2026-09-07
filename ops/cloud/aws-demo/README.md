@@ -43,6 +43,8 @@ git clone --depth 1 git@github.com:kundanvarma/genalpha-bss.git /tmp/bootstrap  
 sudo -E DEMO_DOMAIN=taranga.no LETSENCRYPT_EMAIL=you@taranga.no /tmp/bootstrap/ops/cloud/aws-demo/install.sh
 ```
 
+Alternative without a deploy key: `rsync` the checkout from a laptop to `/opt/taranga/bss` and set `GIT_URL=local` in the env file; the script then uses that checkout as-is.
+
 The first run writes `/etc/taranga-demo.env` and stops — review it (ENet on or
 off, console gate user/password, real-model AI keys) and re-run. The second run
 prints a **deploy key**; add it to the GitHub repo as a read-only deploy key and
