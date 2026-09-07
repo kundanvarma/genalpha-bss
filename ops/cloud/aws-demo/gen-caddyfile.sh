@@ -15,10 +15,12 @@ fi
 echo "{
 	email $EMAIL
 }"
+app_of() { case "$1" in shop*|demo*) echo shop;; csr*) echo csr;; console*) echo console;; biz*) echo biz;; esac; }
 for h in $HOSTS; do
   echo "$h {"
   case "$h" in console.*|csr.*|biz.*|console-enet.*|csr-enet.*|biz-enet.*) [ -n "$GATE" ] && echo "$GATE";; esac
-  echo "	encode zstd gzip
+  echo "	redir / /$(app_of "$h")/ 302
+	encode zstd gzip
 	reverse_proxy localhost:8080
 }"
 done
