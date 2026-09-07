@@ -3,8 +3,8 @@
 Devi Persaud (devi@enet.example) gets what a real customer of a few weeks has:
 a mobile line on Orange 30 Days 5G with her number as her WhatsApp contact, an
 installed-address on file, a fibre order with a booked installation window, a
-data top-up, two-thirds of her month's data used (which trips the "running low"
-journey), a bill from a billing run, and a closed support ticket. Everything is
+data top-up, 50 of 60 GB used this month (which trips the "running low"
+journey with 10 GB left), a bill from a billing run, and a closed support ticket. Everything is
 fictional; nothing here touches a real network or person. Idempotent — each
 step checks before it acts, so re-runs add nothing.
 Needs the demo slice up; the ticket step is skipped when trouble-ticket is down.
@@ -134,11 +134,13 @@ if line:
             print("usage: OCS subscriber provisioned for the existing line (dev fleet catch-up)")
         if sub:
             used = sum(float(b.get("usedGB", 0)) for b in (sub.get("buckets") or []))
-            if used < 60:
-                gb = 66 - used
+            if used < 45:
+                # 50 of the 60 GB counter: past the 80 % threshold, 10 GB left — the
+                # "running low" WhatsApp reads right and the meter is not yet empty
+                gb = 50 - used
                 urllib.request.urlopen(urllib.request.Request(f"{OCS}/subscribers/{sub['id']}/usage", data=json.dumps({"gb": gb}).encode(),
                                                               headers={"Content-Type": "application/json"}, method="POST")).read()
-                print(f"usage: +{gb:.0f} GB on the line → 66 GB used this month (running-low journey fires)")
+                print(f"usage: +{gb:.0f} GB on the line → 50 of 60 GB used this month (running-low journey fires, 10 GB left)")
             else:
                 print(f"usage: {used:.0f} GB already used this month")
         else:
