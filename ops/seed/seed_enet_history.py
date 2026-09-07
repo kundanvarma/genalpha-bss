@@ -67,8 +67,19 @@ def wait_line(tok, pred, tries=30):
 
 staff = token("demo", "demo")
 devi = token("devi@enet.example", "devi")
-_, me = call("GET", f"{PARTY}/individual?limit=1", devi)
-me = me[0]
+_, mine = call("GET", f"{PARTY}/individual?limit=1", devi)
+if mine:
+    me = mine[0]
+else:
+    # a fresh fleet: the realm user exists, the party record does not until her first
+    # sign-in — create it under her identity id, as self-registration would
+    import base64
+    payload = devi.split(".")[1]
+    sub = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))["sub"]
+    st, me = call("POST", f"{PARTY}/individual", staff, {"id": sub, "givenName": "Devi", "familyName": "Persaud"})
+    if not me:
+        raise SystemExit("could not create Devi's party record")
+    print("party: created for devi@enet.example (fresh fleet)")
 print(f"Devi: party {me['id'][:8]}")
 _, offers = call("GET", f"{CAT}/productOffering?limit=100", staff)
 offer = {o["name"]: o for o in offers}
