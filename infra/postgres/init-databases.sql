@@ -44,3 +44,6 @@ CREATE DATABASE fulfilment;
 CREATE DATABASE eventhub;
 CREATE DATABASE device_commerce;
 CREATE DATABASE base_migration;
+-- Keycloak keeps the realms here (compose: KC_DB_URL → postgres/keycloak).
+-- Missing from this file until 2026-09-07: the laptop had it by hand, a fresh box did not.
+CREATE DATABASE keycloak;
