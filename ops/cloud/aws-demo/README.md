@@ -48,7 +48,7 @@ off, console gate user/password, real-model AI keys) and re-run. The second run
 prints a **deploy key**; add it to the GitHub repo as a read-only deploy key and
 re-run. From there it is unattended: packages, clone, `.env` with generated
 passwords, Maven build (10–20 min), image build, `fleet.sh up`, `fleet.sh demo`,
-seeds, Caddy. Re-running is always safe; it pulls, rebuilds only when the commit
+seeds (Taranga; ENet catalog, growth and Devi's history so the customer 360 is lived-in), Caddy. Re-running is always safe; it pulls, rebuilds only when the commit
 changed, and restarts what is down.
 
 Public doors when done:

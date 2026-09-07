@@ -117,7 +117,7 @@ if [ ! -f .cloud-seeded ]; then
   as_user "cd '$APP_DIR' && python3 ops/seed/seed_taranga.py && python3 ops/seed/seed_taranga_growth.py"
   if [ "${DEMO_ENET:-0}" = "1" ]; then
     log "seeds: enet"
-    as_user "cd '$APP_DIR' && python3 ops/seed/seed_enet.py && python3 ops/seed/seed_enet_growth.py"
+    as_user "cd '$APP_DIR' && python3 ops/seed/seed_enet.py && python3 ops/seed/seed_enet_growth.py && python3 ops/seed/seed_enet_history.py"
   fi
   touch .cloud-seeded; chown "$DEMO_USER" .cloud-seeded
 else
