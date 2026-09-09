@@ -807,7 +807,7 @@ bss:
         # before launch — "authority|label"; an approver may launch past them.
         # The shop window: static (one lead banner + tiles — the research default) |
         # carousel (arrows, dots, 6 s auto-rotate on desktop only, never on mobile)
-        shop-window: static
+        shop-window: ${SHOP_WINDOW_TARANGA:carousel}
         launch-governance: ${LAUNCH_GOVERNANCE_TARANGA:envelope}
         ai-proposals: ${AI_PROPOSALS_TARANGA:trust}
         approval-expiry-days: 60
