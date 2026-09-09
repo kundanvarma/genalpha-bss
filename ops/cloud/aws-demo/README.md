@@ -17,7 +17,7 @@ Region **eu-north-1 (Stockholm)**. Set a **Budget** alarm before the first insta
 | Setting | Value |
 |---|---|
 | AMI | Ubuntu Server 24.04 LTS, x86_64 |
-| Type | `m6i.2xlarge` (8 vCPU, 32 GB) — the demo slice; `r6i.2xlarge` (64 GB) for the full fleet |
+| Type | `r6i.2xlarge` (8 vCPU, 64 GB) — the whole fleet fits, demos never hit the memory wall; `m6i.2xlarge` (32 GB) runs the demo slice only |
 | Disk | 120 GB gp3 |
 | Security group | inbound **22** (your IPs only), **80**, **443**; nothing else — compose publishes many ports on the host, the SG is the fence |
 | Elastic IP | allocate and attach; DNS points here |
