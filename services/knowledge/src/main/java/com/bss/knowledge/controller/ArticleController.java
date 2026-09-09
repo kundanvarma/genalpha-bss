@@ -32,8 +32,9 @@ public class ArticleController {
     public ResponseEntity<List<Map<String, Object>>> find(
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String category,
-            @RequestParam(required = false) String audience) {
-        return ResponseEntity.ok(service.find(q, category, audience));
+            @RequestParam(required = false) String audience,
+            @RequestParam(required = false) String tag) {
+        return ResponseEntity.ok(service.find(q, category, audience, tag));
     }
 
     @GetMapping("/article/{id}")

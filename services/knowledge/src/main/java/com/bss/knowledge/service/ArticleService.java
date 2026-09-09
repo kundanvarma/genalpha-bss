@@ -52,6 +52,13 @@ public class ArticleService {
 
     @Transactional(readOnly = true)
     public List<Map<String, Object>> find(String q, String category, String audience) {
+        return find(q, category, audience, null);
+    }
+
+    /** With a context TAG (e.g. "pane:approvals", "csr:tickets", "shop:bills"): the shelf for
+     *  one screen — the audience gate still applies, a customer never sees a product how-to. */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> find(String q, String category, String audience, String tag) {
         String tenantId = tenantScope.currentTenantId();
         List<Article> hits = (q == null || q.isBlank())
                 ? repository.findByTenantIdOrderByLastUpdateDesc(tenantId)
@@ -74,8 +81,21 @@ public class ArticleService {
                 .filter(a -> author || "published".equals(a.getStatus()))
                 .filter(a -> category == null || category.equals(a.getCategory()))
                 .filter(a -> audience == null || audience.equals(a.getAudience()))
+                .filter(a -> tag == null || hasTag(a, tag))
                 .map(this::toMap)
                 .toList();
+    }
+
+    private static boolean hasTag(Article a, String tag) {
+        if (a.getTags() == null) {
+            return false;
+        }
+        for (String t : a.getTags().split(",")) {
+            if (t.trim().equalsIgnoreCase(tag.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Transactional(readOnly = true)
@@ -167,9 +187,19 @@ public class ArticleService {
         if (authorities.contains("knowledge:write")) {
             return AUDIENCES;
         }
-        if (authorities.contains("catalog:write")) {
-            // product owners: their how-tos plus everything customer-facing
+        if (authorities.contains("customer")) {
+            // THE MODULE WALL: a customer's self-service authorities (billing:write,
+            // ticket:write…) look like staff ones — the customer role decides, first
+            return Set.of("customer", "all");
+        }
+        if (authorities.contains("catalog:write") || authorities.contains("campaign:write")
+                || authorities.contains("billing:write") || authorities.contains("catalog:approve")) {
+            // back-office staff (product, marketing, finance, approvers): their
+            // how-tos plus everything customer-facing — never a customer
             return Set.of("customer", "csr", "sales", "productOwner", "all");
+        }
+        if (authorities.contains("ticket:write") || authorities.contains("wholesale:admin")) {
+            return Set.of("customer", "csr", "sales", "all");
         }
         if (authorities.contains("agent")) {
             return Set.of("customer", "csr", "sales", "all");

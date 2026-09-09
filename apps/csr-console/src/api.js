@@ -257,11 +257,18 @@ export async function searchKnowledge(q) {
 }
 
 /** Grounded answer with sources — retrieval runs as the asker. */
-export async function askKnowledge(question) {
+/** The shelf for one screen: articles tagged for it, audience-gated by the server. */
+export async function shelfKnowledge(tag) {
+  const res = await authFetch(`${KNOWLEDGE}/article?tag=${encodeURIComponent(tag)}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function askKnowledge(question, context) {
   const res = await authFetch('/ai/v1/knowledgeAsk', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, context }),
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `HTTP ${res.status}`);
   return res.json();

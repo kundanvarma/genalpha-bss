@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
 import ChatWidget from './ChatWidget.jsx';
+import HelpDrawer from './HelpDrawer.jsx';
 import { t } from './i18n.js';
 import { beginLogin, handleCallback, isCustomer, isSignedIn, signOut, switchAccount, tokenClaims } from './auth.js';
 import { ensureParty, myNotifications, stitchVisitor } from './api.js';
@@ -130,6 +131,7 @@ export default function App() {
           {customer && <NavLink to="/account">{t('Account')}</NavLink>}
         </nav>
         <div className="who">
+          <HelpDrawer />
           {customer ? (
             <>
               <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>

@@ -74,6 +74,13 @@ public class CopilotController {
         String question = String.valueOf(request.getOrDefault("question", ""));
         var auth = SecurityContextHolder.getContext().getAuthentication();
         String bearer = auth instanceof JwtAuthenticationToken jwt ? jwt.getToken().getTokenValue() : "";
-        return ResponseEntity.ok(knowledgeAsk.ask(bearer, question));
+        String context = request.get("context") == null ? null : String.valueOf(request.get("context"));
+        return ResponseEntity.ok(knowledgeAsk.ask(bearer, question, context));
+    }
+
+    /** What people asked that no article answered — the content team's to-do list. */
+    @org.springframework.web.bind.annotation.GetMapping("/knowledgeGaps")
+    public ResponseEntity<java.util.List<Map<String, Object>>> knowledgeGaps() {
+        return ResponseEntity.ok(knowledgeAsk.gaps());
     }
 }

@@ -5961,6 +5961,8 @@ async function renderPipelineBoard() {
 async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
+  helpButtonFor(active);
+  renderKnowledgeGaps(active);
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.getElementById('workforce-panel')?.setAttribute('hidden', '');
@@ -6865,4 +6867,128 @@ async function renderEnvelopes() {
     openEditor({ name: sentence.replace(/[.,;:]+$/, '').slice(0, 60), experience: { envelope: p } });
   });
   await load();
+}
+
+
+/* ---------------- Contextual help: the shelf for this pane ----------------
+ * Layer 1 of help, zero tokens: the published articles tagged for the pane
+ * the user is on (pane:<path>), audience-gated by the server from the token —
+ * a customer never sees a product how-to, a CSR never sees an approval
+ * how-to. Search (layer 2) and Ask (layer 3, metered) live in the same drawer. */
+function helpButtonFor(resource) {
+  const head = document.querySelector('.panel-head');
+  if (!head) return;
+  let btn = document.getElementById('help-button');
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'help-button'; btn.type = 'button'; btn.className = 'ghost help-button'; btn.title = 'Help for this page';
+    btn.dataset.testid = 'help-button'; btn.textContent = '?';
+    btn.addEventListener('click', () => openHelpDrawer(active));
+    head.append(btn);
+  }
+  btn.dataset.pane = resource.path;
+  const drawer = document.getElementById('help-drawer');
+  if (drawer && !drawer.hidden) openHelpDrawer(resource);
+}
+
+async function openHelpDrawer(resource) {
+  let drawer = document.getElementById('help-drawer');
+  if (!drawer) {
+    drawer = document.createElement('aside'); drawer.id = 'help-drawer'; drawer.className = 'help-drawer'; drawer.dataset.testid = 'help-drawer';
+    document.body.append(drawer);
+  }
+  drawer.hidden = false;
+  drawer.replaceChildren();
+  const head = document.createElement('div'); head.className = 'help-head';
+  const h = document.createElement('h2'); h.textContent = `Help: ${resource.title}`;
+  const close = document.createElement('button'); close.className = 'ghost'; close.textContent = '×'; close.title = 'Close'; close.dataset.testid = 'help-close';
+  close.addEventListener('click', () => { drawer.hidden = true; });
+  head.append(h, close);
+  const search = document.createElement('input'); search.placeholder = 'Search all help…'; search.dataset.testid = 'help-search';
+  const list = document.createElement('div'); list.dataset.testid = 'help-list';
+  const askRow = document.createElement('div'); askRow.className = 'help-ask';
+  const roles = (tokenClaims().realm_access || {}).roles || [];
+  drawer.append(head, search, list);
+  const render = (articles, label) => {
+    list.replaceChildren();
+    if (label) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = label; list.append(p); }
+    if (!articles.length) {
+      const p = document.createElement('p'); p.className = 'dim'; p.dataset.testid = 'help-empty';
+      p.textContent = search.value.trim() ? 'Nothing found. Try other words' + (roles.includes('ai:use') ? ', or ask.' : '.') : 'No help written for this page yet.';
+      list.append(p);
+    }
+    for (const a of articles) {
+      const d = document.createElement('details'); d.dataset.testid = 'help-article';
+      const sum = document.createElement('summary'); sum.textContent = a.title; d.append(sum);
+      const body = document.createElement('div'); body.className = 'help-body'; body.textContent = a.body; d.append(body);
+      list.append(d);
+    }
+  };
+  const shelf = async () => {
+    const r = await authFetch(`${KNOWLEDGE_BASE}/article?tag=${encodeURIComponent('pane:' + resource.path)}`);
+    render(r.ok ? await r.json() : [], null);
+  };
+  let timer = null;
+  search.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = search.value.trim();
+      if (!q) { shelf(); return; }
+      const r = await authFetch(`${KNOWLEDGE_BASE}/article?q=${encodeURIComponent(q)}`);
+      render(r.ok ? await r.json() : [], `Results for “${q}”`);
+    }, 300);
+  });
+  if (roles.includes('ai:use')) {
+    const ask = document.createElement('button'); ask.className = 'primary'; ask.textContent = '✨ Ask'; ask.dataset.testid = 'help-ask';
+    const out = document.createElement('div'); out.dataset.testid = 'help-answer'; out.className = 'help-answer';
+    ask.addEventListener('click', async () => {
+      const q = search.value.trim(); if (!q) { out.textContent = 'Type a question first.'; return; }
+      ask.disabled = true; out.textContent = 'Asking…';
+      const r = await authFetch('/ai/v1/knowledgeAsk', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: q, context: 'pane:' + resource.path }) });
+      const a = await r.json().catch(() => ({}));
+      out.replaceChildren();
+      const p = document.createElement('p'); p.textContent = a.answer || a.message || 'no answer'; out.append(p);
+      if ((a.sources || []).length) { const s = document.createElement('p'); s.className = 'dim'; s.textContent = 'Sources: ' + a.sources.map((x) => x.title).join(' · ') + (a.cached ? ' · cached answer' : ''); out.append(s); }
+      ask.disabled = false;
+    });
+    askRow.append(ask); drawer.append(askRow, out);
+  }
+  await shelf();
+}
+
+
+/* The Knowledge tab's to-do list: questions people asked that no article answered.
+ * Writing the article moves the question from the metered Ask back to the free shelf. */
+async function renderKnowledgeGaps(resource) {
+  let box = document.getElementById('knowledge-gaps');
+  if (resource.path !== 'article') { if (box) box.hidden = true; return; }
+  if (!box) {
+    box = document.createElement('div'); box.id = 'knowledge-gaps'; box.dataset.testid = 'knowledge-gaps';
+    box.style.cssText = 'margin:0 0 12px;padding:10px 14px;border:1px dashed var(--line,#ccc);border-radius:10px;font-size:13px';
+    document.querySelector('.panel-head')?.after(box);
+  }
+  box.hidden = false;
+  box.textContent = 'Loading unanswered questions…';
+  const gaps = await authFetch('/ai/v1/knowledgeGaps').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+  box.replaceChildren();
+  const h = document.createElement('strong'); h.textContent = gaps.length ? `Unanswered questions (${gaps.length}) — write the article, and Ask stops being needed for it` : 'No unanswered questions on record.';
+  box.append(h);
+  if (gaps.length) {
+    const ul = document.createElement('ul'); ul.style.cssText = 'margin:6px 0 0 18px;padding:0';
+    for (const g of gaps.slice(0, 12)) {
+      const li = document.createElement('li'); li.dataset.testid = 'knowledge-gap';
+      li.textContent = `“${g.question}” — asked ${g.asked}×${g.context ? ` from ${g.context}` : ''}`;
+      const b = document.createElement('button'); b.className = 'ghost'; b.textContent = 'Write it'; b.style.marginLeft = '8px';
+      b.addEventListener('click', () => {
+        const title = document.querySelector('#fields [name="title"]'); const tags = document.querySelector('#fields [name="tags"]');
+        el('editor').hidden = false;
+        if (title) title.value = g.question.charAt(0).toUpperCase() + g.question.slice(1) + (g.question.endsWith('?') ? '' : '?');
+        if (tags && g.context) tags.value = g.context;
+        title?.focus();
+      });
+      li.append(b); ul.append(li);
+    }
+    box.append(ul);
+  }
 }

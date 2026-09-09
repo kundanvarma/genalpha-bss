@@ -64,6 +64,9 @@ public class SecurityConfig {
                                 ApiConstants.BASE_PATH + "/runbook/*/*").hasAuthority("ai:admin")
                         .requestMatchers(HttpMethod.GET,
                                 ApiConstants.BASE_PATH + "/governance/adminCheck").hasAuthority("ai:admin")
+                        // the knowledge-gap list is for whoever writes the help
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/knowledgeGaps")
+                                .hasAnyAuthority("knowledge:write", "catalog:write", "campaign:write")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         // the commercial simulator: pricing is the product
                         // owner's decision, so simulating it is their tool too
