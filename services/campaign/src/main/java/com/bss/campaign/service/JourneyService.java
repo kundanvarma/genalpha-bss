@@ -53,6 +53,15 @@ public class JourneyService {
     private final FrequencyGuard frequency;
     private final com.bss.campaign.client.CatalogClient catalog;
     private final com.bss.campaign.tick.TickGuard tickGuard;
+    /** Auto-tuning: an arm needs this many treated enrolments before it may be judged. */
+    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-min-per-arm:20}")
+    private int tuneMinPerArm = 20;
+    /** The traffic floor every arm keeps, so the desk keeps learning. */
+    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-floor-percent:10}")
+    private int tuneFloorPercent = 10;
+    /** One-sided z at which a difference counts as evidence (1.64 ≈ 95 %). */
+    @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-z:1.64}")
+    private double tuneZ = 1.64;
     private final com.bss.campaign.repository.ArbitrationDecisionRepository arbitration;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
@@ -96,6 +105,10 @@ public class JourneyService {
         entity.setConversionEvent(str(dto.get("conversionEvent")));
         if (dto.get("holdoutPercent") != null) {
             entity.setHoldoutPercent(requireHoldout(dto.get("holdoutPercent")));
+        }
+        applyArms(entity, dto.containsKey("arms") ? dto.get("arms") : dto.get("messageVariants"), true);
+        if (dto.get("autoTune") != null) {
+            entity.setAutoTune(Boolean.parseBoolean(String.valueOf(dto.get("autoTune"))));
         }
         if (dto.get("priority") != null) {
             entity.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
@@ -225,6 +238,12 @@ public class JourneyService {
         }
         // variants are stamped at enrollment, so a holdout change only
         // buckets NEW entrants — per-variant lift math stays valid
+        if (patch.containsKey("arms") || patch.containsKey("messageVariants")) {
+            applyArms(entity, patch.containsKey("arms") ? patch.get("arms") : patch.get("messageVariants"), true);
+        }
+        if (patch.get("autoTune") != null) {
+            entity.setAutoTune(Boolean.parseBoolean(String.valueOf(patch.get("autoTune"))));
+        }
         if (patch.get("holdoutPercent") != null) {
             entity.setHoldoutPercent(requireHoldout(patch.get("holdoutPercent")));
         }
@@ -360,6 +379,9 @@ public class JourneyService {
         enrollment.setJourneyId(journey.getId());
         enrollment.setPartyId(partyId);
         enrollment.setVariant(holdout ? "holdout" : "treated");
+        if (!holdout) {
+            enrollment.setArm(dealArm(journey, partyId));
+        }
         enrollment.setEnrolledAt(OffsetDateTime.now());
         enrollment.setNextActionAt(OffsetDateTime.now());
         if (context != null && !context.isEmpty()) {
@@ -494,7 +516,8 @@ public class JourneyService {
             Map<String, Object> step = steps.get(index);
             String type = String.valueOf(step.get("type"));
             if ("message".equals(type)) {
-                if (!"holdout".equals(enrollment.getVariant()) && !sendGuarded(journey, enrollment, step)) {
+                Map<String, Object> spoken = index == firstMessageIndex(steps) ? withArm(journey, enrollment, step) : step;
+                if (!"holdout".equals(enrollment.getVariant()) && !sendGuarded(journey, enrollment, spoken)) {
                     return; // parked by quiet hours or the frequency cap
                 }
                 index = nextIndex(step, ids, index);
@@ -722,6 +745,12 @@ public class JourneyService {
         stats.put("completedUnconverted",
                 all.stream().filter(e -> "completed".equals(e.getStatus())).count());
         stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
+        List<Map<String, Object>> armDefs = armsOf(journey);
+        if (!armDefs.isEmpty()) {
+            stats.put("arms", armRows(journey, armDefs, all));
+            stats.put("autoTune", journey.isAutoTune());
+            stats.put("tuningLog", tuningLogOf(journey));
+        }
         Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
         Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
         if (treatedRate != null) {
@@ -810,6 +839,13 @@ public class JourneyService {
         if (j.getConversionEvent() != null) map.put("conversionEvent", j.getConversionEvent());
         map.put("holdoutPercent", j.getHoldoutPercent());
         map.put("priority", j.getPriority());
+        List<Map<String, Object>> arms = armsOf(j);
+        if (!arms.isEmpty()) {
+            map.put("arms", arms);
+            map.put("autoTune", j.isAutoTune());
+            map.put("armWeights", weightsOf(j, arms));
+            map.put("tuningLog", tuningLogOf(j));
+        }
         try {
             map.put("steps", objectMapper.readValue(j.getSteps(), STEP_LIST));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
@@ -819,5 +855,310 @@ public class JourneyService {
         map.put("lastUpdate", j.getLastUpdate());
         map.put("@type", "Journey");
         return map;
+    }
+
+    // ---------------- A/B arms + auto-tuning ----------------
+
+    /** Enrol a list of parties by hand (an offline list, a store's walk-ins, a test cohort). */
+    @Transactional
+    public Map<String, Object> enrollParties(String journeyId, List<String> partyIds, Map<String, Object> context) {
+        Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
+        int n = 0;
+        Map<String, String> dealt = new LinkedHashMap<>(); // who got which arm (holdout: "holdout")
+        for (String p : partyIds == null ? List.<String>of() : partyIds) {
+            if (p != null && !p.isBlank() && enroll(journey, p.trim(), context)) {
+                n++;
+                JourneyEnrollment e = enrollments.findByTenantIdAndJourneyId(journey.getTenantId(), journey.getId()).stream()
+                        .filter(x -> p.trim().equals(x.getPartyId())).findFirst().orElse(null);
+                if (e != null) {
+                    dealt.put(p.trim(), "holdout".equals(e.getVariant()) ? "holdout" : (e.getArm() == null ? "" : e.getArm()));
+                }
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("journeyId", journeyId);
+        out.put("enrolled", n);
+        out.put("dealt", dealt);
+        return out;
+    }
+
+    /** Record a conversion that did not arrive as an event (a store sale, a call-centre close). */
+    @Transactional
+    public Map<String, Object> recordConversion(String journeyId, String partyId, java.math.BigDecimal value) {
+        String tenant = tenantScope.currentTenantId();
+        journeys.findByIdAndTenantId(journeyId, tenant).orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
+        JourneyEnrollment e = enrollments.findByTenantIdAndJourneyId(tenant, journeyId).stream()
+                .filter(x -> partyId.equals(x.getPartyId())).findFirst().orElse(null);
+        if (e == null) {
+            throw new BadRequestException("party " + partyId + " is not enrolled in this journey");
+        }
+        if (!"converted".equals(e.getStatus())) {
+            e.setStatus("converted");
+            e.setConvertedAt(OffsetDateTime.now());
+            e.setConversionValue(value);
+            enrollments.save(e);
+        }
+        return Map.of("journeyId", journeyId, "partyId", partyId, "status", e.getStatus(), "arm", e.getArm() == null ? "" : e.getArm());
+    }
+
+    /** The tuner, on demand: judge the arms and shift traffic if the evidence is there. */
+    @Transactional
+    public Map<String, Object> tune(String journeyId) {
+        Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
+                .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
+        return tuneJourney(journey);
+    }
+
+    /** The tuner, on a clock: every auto-tune journey of every tenant. */
+    @Scheduled(fixedDelayString = "${bss.campaign.journey-tune-ms:600000}", initialDelayString = "${bss.campaign.journey-tune-ms:600000}")
+    public void tuneTick() {
+        if (!tickGuard.claim("journey-tune", java.time.Duration.ofSeconds(120))) {
+            return;
+        }
+        try {
+            for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
+                try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
+                    for (Journey j : journeys.findByTenantId(tenant.getId())) {
+                        if (j.isAutoTune() && Journey.ACTIVE.equals(j.getStatus()) && armsOf(j).size() >= 2) {
+                            tuneJourney(j);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("journey tuner skipped tenant '{}': {}", tenant.getId(), e.getMessage());
+                }
+            }
+        } finally {
+            tickGuard.release("journey-tune");
+        }
+    }
+
+    /**
+     * The rule, in one place and in plain words: every arm keeps a floor of traffic;
+     * an arm is judged only after it has enough treated enrolments; the best arm
+     * takes the rest of the traffic only when its conversion rate beats the runner-up
+     * with a one-sided z above the threshold. Otherwise nothing moves. Every call
+     * writes a ledger entry — shift, hold, or waiting — with the numbers it saw.
+     */
+    private Map<String, Object> tuneJourney(Journey journey) {
+        List<Map<String, Object>> arms = armsOf(journey);
+        List<JourneyEnrollment> all = enrollments.findByTenantIdAndJourneyId(journey.getTenantId(), journey.getId());
+        List<Map<String, Object>> rows = armRows(journey, arms, all);
+        Map<String, Integer> before = weightsOf(journey, arms);
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("at", OffsetDateTime.now().toString());
+        entry.put("arms", rows);
+        entry.put("before", before);
+        String decision;
+        Map<String, Integer> after = new LinkedHashMap<>(before);
+        if (arms.size() < 2) {
+            decision = "hold";
+            entry.put("why", "fewer than two arms");
+        } else if (rows.stream().anyMatch(r -> ((Number) r.get("enrolled")).longValue() < tuneMinPerArm)) {
+            decision = "waiting";
+            entry.put("why", "every arm needs at least " + tuneMinPerArm + " treated enrolments before it is judged");
+        } else {
+            List<Map<String, Object>> sorted = new java.util.ArrayList<>(rows);
+            sorted.sort((a, b) -> Double.compare(((Number) b.get("rate")).doubleValue(), ((Number) a.get("rate")).doubleValue()));
+            Map<String, Object> best = sorted.get(0);
+            Map<String, Object> second = sorted.get(1);
+            long n1 = ((Number) best.get("enrolled")).longValue(), c1 = ((Number) best.get("converted")).longValue();
+            long n2 = ((Number) second.get("enrolled")).longValue(), c2 = ((Number) second.get("converted")).longValue();
+            double p1 = (double) c1 / n1, p2 = (double) c2 / n2, p = (double) (c1 + c2) / (n1 + n2);
+            double se = Math.sqrt(p * (1 - p) * (1.0 / n1 + 1.0 / n2));
+            double z = se == 0 ? 0 : (p1 - p2) / se;
+            entry.put("z", Math.round(z * 100) / 100.0);
+            entry.put("threshold", tuneZ);
+            if (z >= tuneZ) {
+                int others = tuneFloorPercent * (arms.size() - 1);
+                for (Map<String, Object> a : arms) {
+                    after.put(String.valueOf(a.get("name")), tuneFloorPercent);
+                }
+                after.put(String.valueOf(best.get("name")), 100 - others);
+                decision = after.equals(before) ? "hold" : "shift";
+                entry.put("why", "\"" + best.get("name") + "\" converts at " + best.get("rate") + " % vs " + second.get("rate")
+                        + " % for \"" + second.get("name") + "\" (z " + entry.get("z") + " ≥ " + tuneZ + ")");
+            } else {
+                decision = "hold";
+                entry.put("why", "the difference between \"" + best.get("name") + "\" and \"" + second.get("name")
+                        + "\" is not evidence yet (z " + entry.get("z") + " < " + tuneZ + ")");
+            }
+        }
+        entry.put("decision", decision);
+        entry.put("after", after);
+        if ("shift".equals(decision)) {
+            try {
+                journey.setArmWeights(objectMapper.writeValueAsString(after));
+            } catch (Exception ignore) { /* keep the previous weights */ }
+            log.info("journey '{}' tuned: {} → {} — {}", journey.getName(), before, after, entry.get("why"));
+        }
+        List<Map<String, Object>> logRows = new java.util.ArrayList<>(tuningLogOf(journey));
+        logRows.add(entry);
+        while (logRows.size() > 30) {
+            logRows.remove(0);
+        }
+        try {
+            String encoded = objectMapper.writeValueAsString(logRows);
+            while (encoded.length() > 7900 && logRows.size() > 1) {
+                logRows.remove(0);
+                encoded = objectMapper.writeValueAsString(logRows);
+            }
+            journey.setTuningLog(encoded);
+        } catch (Exception ignore) { /* the ledger is best-effort */ }
+        journey.setLastUpdate(OffsetDateTime.now());
+        journeys.save(journey);
+        Map<String, Object> out = new LinkedHashMap<>(entry);
+        out.put("journeyId", journey.getId());
+        return out;
+    }
+
+    private void applyArms(Journey entity, Object raw, boolean resetWeights) {
+        List<Map<String, Object>> arms = parseArms(raw);
+        try {
+            entity.setArms(arms.isEmpty() ? null : objectMapper.writeValueAsString(arms));
+        } catch (Exception e) {
+            throw new BadRequestException("arms must be a JSON list of {name, subject, content}");
+        }
+        if (resetWeights) {
+            Map<String, Integer> w = new LinkedHashMap<>();
+            for (int i = 0; i < arms.size(); i++) {
+                int base = 100 / arms.size();
+                w.put(String.valueOf(arms.get(i).get("name")), i == 0 ? 100 - base * (arms.size() - 1) : base);
+            }
+            try {
+                entity.setArmWeights(arms.isEmpty() ? null : objectMapper.writeValueAsString(w));
+            } catch (Exception ignore) { /* equal split by construction */ }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseArms(Object raw) {
+        if (raw == null) {
+            return List.of();
+        }
+        try {
+            List<Map<String, Object>> list = raw instanceof String s
+                    ? (s.isBlank() ? List.of() : objectMapper.readValue(s, STEP_LIST))
+                    : objectMapper.convertValue(raw, STEP_LIST);
+            java.util.Set<String> names = new java.util.HashSet<>();
+            for (Map<String, Object> a : list) {
+                String name = str(a.get("name"));
+                if (name == null || name.isBlank() || !names.add(name)) {
+                    throw new BadRequestException("every arm needs a unique name");
+                }
+            }
+            return list;
+        } catch (BadRequestException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BadRequestException("arms must be a JSON list of {name, subject, content}");
+        }
+    }
+
+    private List<Map<String, Object>> armsOf(Journey j) {
+        if (j.getArms() == null || j.getArms().isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(j.getArms(), STEP_LIST);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private Map<String, Integer> weightsOf(Journey j, List<Map<String, Object>> arms) {
+        Map<String, Integer> w = new LinkedHashMap<>();
+        for (int i = 0; i < arms.size(); i++) {
+            int base = arms.isEmpty() ? 0 : 100 / arms.size();
+            w.put(String.valueOf(arms.get(i).get("name")), i == 0 ? 100 - base * (arms.size() - 1) : base);
+        }
+        if (j.getArmWeights() != null && !j.getArmWeights().isBlank()) {
+            try {
+                Map<String, Object> saved = objectMapper.readValue(j.getArmWeights(),
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() { });
+                for (Map.Entry<String, Object> en : saved.entrySet()) {
+                    if (w.containsKey(en.getKey())) {
+                        w.put(en.getKey(), ((Number) en.getValue()).intValue());
+                    }
+                }
+            } catch (Exception ignore) { /* equal split */ }
+        }
+        return w;
+    }
+
+    private List<Map<String, Object>> tuningLogOf(Journey j) {
+        if (j.getTuningLog() == null || j.getTuningLog().isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(j.getTuningLog(), STEP_LIST);
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** Deterministic per party, weighted by the CURRENT weights: a new weight moves new enrolments, never old ones. */
+    private String dealArm(Journey journey, String partyId) {
+        List<Map<String, Object>> arms = armsOf(journey);
+        if (arms.size() < 2) {
+            return arms.isEmpty() ? null : str(arms.get(0).get("name"));
+        }
+        Map<String, Integer> w = weightsOf(journey, arms);
+        int bucket = Math.floorMod((journey.getId() + ":" + partyId + ":arm").hashCode(), 100);
+        int acc = 0;
+        for (Map<String, Object> a : arms) {
+            acc += w.getOrDefault(String.valueOf(a.get("name")), 0);
+            if (bucket < acc) {
+                return str(a.get("name"));
+            }
+        }
+        return str(arms.get(arms.size() - 1).get("name"));
+    }
+
+    private static int firstMessageIndex(List<Map<String, Object>> steps) {
+        for (int i = 0; i < steps.size(); i++) {
+            if ("message".equals(String.valueOf(steps.get(i).get("type")))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The step, spoken in the enrolment's arm: the arm's subject/content replace the step's, the channel stays. */
+    private Map<String, Object> withArm(Journey journey, JourneyEnrollment enrollment, Map<String, Object> step) {
+        if (enrollment.getArm() == null) {
+            return step;
+        }
+        for (Map<String, Object> a : armsOf(journey)) {
+            if (enrollment.getArm().equals(str(a.get("name")))) {
+                Map<String, Object> spoken = new LinkedHashMap<>(step);
+                if (a.get("subject") != null) spoken.put("subject", a.get("subject"));
+                if (a.get("content") != null) spoken.put("content", a.get("content"));
+                if (a.get("templateRef") != null) spoken.put("templateRef", a.get("templateRef"));
+                return spoken;
+            }
+        }
+        return step;
+    }
+
+    private List<Map<String, Object>> armRows(Journey journey, List<Map<String, Object>> arms, List<JourneyEnrollment> all) {
+        Map<String, Integer> w = weightsOf(journey, arms);
+        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        for (Map<String, Object> a : arms) {
+            String name = str(a.get("name"));
+            List<JourneyEnrollment> mine = all.stream().filter(e -> name.equals(e.getArm()) && !"holdout".equals(e.getVariant())).toList();
+            long conv = mine.stream().filter(e -> "converted".equals(e.getStatus())).count();
+            java.math.BigDecimal revenue = mine.stream().filter(e -> e.getConversionValue() != null)
+                    .map(JourneyEnrollment::getConversionValue).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("name", name);
+            row.put("weight", w.getOrDefault(name, 0));
+            row.put("enrolled", (long) mine.size());
+            row.put("converted", conv);
+            row.put("rate", mine.isEmpty() ? 0.0 : Math.round((double) conv / mine.size() * 1000) / 10.0);
+            row.put("revenue", revenue);
+            rows.add(row);
+        }
+        return rows;
     }
 }

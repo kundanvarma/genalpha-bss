@@ -67,6 +67,28 @@ public class Journey {
     @Column(name = "steps_edited_at")
     private OffsetDateTime stepsEditedAt;
 
+    /** A/B arms: message variants [{name, subject, content}] for the first message step. */
+    @Column(length = 4000)
+    private String arms;
+    /** Shift traffic to the winning arm on evidence (never below the floor per arm). */
+    @Column(name = "auto_tune")
+    private boolean autoTune;
+    /** Current traffic weights per arm, JSON {name: percent}. */
+    @Column(name = "arm_weights", length = 1000)
+    private String armWeights;
+    /** The tuning ledger: every decision with its evidence, newest last, JSON list. */
+    @Column(name = "tuning_log", length = 8000)
+    private String tuningLog;
+
+    public String getArms() { return arms; }
+    public void setArms(String v) { this.arms = v; }
+    public boolean isAutoTune() { return autoTune; }
+    public void setAutoTune(boolean v) { this.autoTune = v; }
+    public String getArmWeights() { return armWeights; }
+    public void setArmWeights(String v) { this.armWeights = v; }
+    public String getTuningLog() { return tuningLog; }
+    public void setTuningLog(String v) { this.tuningLog = v; }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getHref() { return href; }

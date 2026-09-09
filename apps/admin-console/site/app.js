@@ -505,6 +505,9 @@ const RESOURCES = [
       { name: 'steps', label: 'Steps — build the journey stage by stage (add a message, a wait, a decision…). Edit as JSON under Advanced.', kind: 'stepbuilder', required: true },
       { name: 'conversionEvent', label: 'Conversion = exit rule (blank: completed orders)', placeholder: 'ProductOrderStateChangeEvent:completed' },
       { name: 'holdoutPercent', label: 'Holdout % — control group, no messages, measurable lift', kind: 'number', placeholder: '0' },
+      { name: 'arms', label: 'Message variants (A/B arms) — a JSON list of {name, subject, content}; the first message step speaks in the arm each customer is dealt. Blank = one message.', kind: 'jsontext',
+        placeholder: '[{"name":"A","subject":"…","content":"…"},{"name":"B","subject":"…","content":"…"}]' },
+      { name: 'autoTune', label: 'Auto-tune — shift traffic to the winning arm once the evidence is clear (each arm keeps a 10 % floor; every shift is logged with its numbers)', kind: 'checkbox' },
       { name: 'priority', label: 'Priority — NBA arbitration (0 = always-on; higher wins when journeys compete for the same customer)', kind: 'number', placeholder: '0' },
     ],
     // Describe the journey and the copilot drafts the staged steps + copy into
@@ -542,7 +545,14 @@ const RESOURCES = [
         lift: s.liftPoints != null ? `${s.liftPoints} points` : '— (needs a holdout)',
         note: [s.note, s.editNote].filter(Boolean).join(' · ') || `${s.completedUnconverted} completed unconverted`,
         revenue: s.revenue ? `treated ${s.revenue.treated} · holdout ${s.revenue.holdout}`
-          + (s.revenue.liftPerCustomer != null ? ` · lift ${s.revenue.liftPerCustomer} per customer/month` : '') : '—'
+          + (s.revenue.liftPerCustomer != null ? ` · lift ${s.revenue.liftPerCustomer} per customer/month` : '') : '—',
+        ...(s.arms ? {
+          arms: s.arms.map((a) => `${a.name}: ${a.weight}% of traffic · ${a.enrolled} sent · ${a.converted} converted (${a.rate}%)`).join(' | '),
+          tuning: (s.autoTune ? 'auto-tune on · ' : 'auto-tune off · ') + (() => {
+            const last = (s.tuningLog || []).slice(-1)[0];
+            return last ? `last decision ${last.decision}: ${last.why}` : 'no decision yet';
+          })()
+        } : {})
       }];
     },
     rowAction: {

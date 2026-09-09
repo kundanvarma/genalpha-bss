@@ -27,6 +27,13 @@ public class JourneyEnrollment {
 
     private String variant = "treated";
 
+    /** The A/B arm this treated enrolment was dealt (null: no arms, or holdout). */
+    @Column(name = "arm", length = 32)
+    private String arm;
+
+    public String getArm() { return arm; }
+    public void setArm(String v) { this.arm = v; }
+
     /** active | converted | completed */
     private String status = "active";
 
