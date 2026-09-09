@@ -2322,7 +2322,9 @@ function moneyControl(field) {
   amount.step = 'any';
   amount.placeholder = 'amount';
   const unit = document.createElement('input');
-  unit.placeholder = 'currency (EUR)';
+  const tenantCurrency = (window.BSS_CONSOLE_CONFIG || {}).currency || 'EUR';
+  unit.placeholder = tenantCurrency;
+  unit.value = tenantCurrency;
   unit.className = 'unit';
   const row = document.createElement('div');
   row.className = 'moneyrow';
@@ -2330,11 +2332,11 @@ function moneyControl(field) {
   controls[field.name] = {
     get: () => {
       if (!amount.value.trim()) return undefined;
-      return { unit: unit.value.trim() || 'EUR', value: Number(amount.value) };
+      return { unit: unit.value.trim() || tenantCurrency, value: Number(amount.value) };
     },
     set: (item) => {
       amount.value = item[field.name]?.value ?? '';
-      unit.value = item[field.name]?.unit ?? '';
+      unit.value = item[field.name]?.unit ?? tenantCurrency;
     },
   };
   return [row];
@@ -6160,6 +6162,7 @@ async function loadList() {
       }
     });
   }
+  search.removeAttribute('hidden');
   search.placeholder = active.serverSearch ? 'Search all visitors by id…' : 'Filter this page…';
   search.value = listFilter;
   const sortVal = (it, c) => {
@@ -6576,6 +6579,8 @@ const GOV_STATE_LABEL = { requested: 'Waiting for approval', approved: 'Approved
 
 async function renderApprovalsDesk() {
   const panel = copilotPanel();
+  document.getElementById('list-search')?.setAttribute('hidden', '');
+  document.querySelector('.pager')?.setAttribute('hidden', '');
   panel.replaceChildren();
   panel.dataset.testid = 'approvals-desk';
   const settings = await authFetch(`${API_BASE}/governance/settings`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -6762,6 +6767,8 @@ function jsonLogicApply(rule, data) {
 
 async function renderEnvelopes() {
   const panel = copilotPanel();
+  document.getElementById('list-search')?.setAttribute('hidden', '');
+  document.querySelector('.pager')?.setAttribute('hidden', '');
   panel.replaceChildren();
   panel.dataset.testid = 'envelopes';
   const cur = (window.BSS_CONSOLE_CONFIG || {}).currency || '';

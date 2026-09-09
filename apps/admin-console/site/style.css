@@ -337,3 +337,5 @@ th { border-bottom-color: var(--line); }
 .help-drawer .help-body { white-space: pre-wrap; font-size: 13px; margin-top: 6px; line-height: 1.45; }
 .help-drawer .help-answer { font-size: 13px; }
 .help-drawer[hidden] { display: none; }
+.pager[hidden] { display: none !important; }
+#list-search[hidden] { display: none !important; }
