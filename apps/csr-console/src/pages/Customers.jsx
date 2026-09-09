@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { customerByNumber, searchCustomers } from '../api.js';
+import { desk } from '../desk.js';
 
 /**
  * The agent's front door, search-as-you-type: any fragment of a name, an
@@ -28,7 +29,7 @@ export default function Customers() {
       } else {
         hits = await searchCustomers(q.trim());
       }
-      if (mySeq === seq.current) { setResults(hits); setError(null); }
+      if (mySeq === seq.current) { setResults(hits); setError(null); if (q.trim() && !hits.length) desk('search.empty', 'customers', { query: q.trim().slice(0, 60) }); }
     } catch (e) {
       if (mySeq === seq.current) setError(e.message);
     }

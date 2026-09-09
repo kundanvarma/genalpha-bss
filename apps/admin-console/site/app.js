@@ -523,6 +523,7 @@ const RESOURCES = [
         controls.triggerEventType?.set({ triggerEventType: draft.triggerEventType });
         controls.holdoutPercent?.set({ holdoutPercent: draft.holdoutPercent });
         controls.steps.set({ steps: JSON.stringify(draft.steps, null, 2) });
+        DESK.lastDraft = { form: 'journeys', steps: JSON.stringify(draft.steps, null, 2), name: draft.name };
       },
     },
     assemble: (body) => {
@@ -1484,6 +1485,14 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'desk-suggestions',
+    title: 'Suggestions',
+    deskLearning: true, // custom panel: what the desk learned from how it is used
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'audit',
     base: '/ai/v1',
     title: 'AI Audit',
@@ -1706,7 +1715,7 @@ const WORKSPACES = [
   { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
-  { label: 'AI & Automation', tabs: ['audit', 'runbook', 'workforce'] },
+  { label: 'AI & Automation', tabs: ['desk-suggestions', 'audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.
   { label: 'Privacy & governance', tabs: ['profile', 'aiflows'] },
@@ -1717,6 +1726,37 @@ let active = RESOURCES[0];
 let offset = 0;
 // #200: every list tab gets search + sortable columns — one engine, all tabs.
 let listFilter = '';
+
+// ---- DESK LEARNING: what staff DO on this desk (a tab, a form, a field, an empty
+// search, a rewritten draft) — never what they see, never a customer. Batched to
+// insight; the tenant can switch it off (desk-learning) and the desk goes quiet.
+const DESK = {
+  queue: [], on: true, started: null, lastDraft: null,
+  session: (() => { let v = sessionStorage.getItem('bss.desk.session'); if (!v) { v = Math.random().toString(36).slice(2, 12); sessionStorage.setItem('bss.desk.session', v); } return v; })(),
+};
+function desk(event, target, props) {
+  if (!DESK.on) return;
+  DESK.queue.push({ desk: 'console', event, target: target || null, props: props || null, session: DESK.session });
+  if (DESK.queue.length >= 20) deskFlush();
+}
+async function deskFlush() {
+  if (!DESK.on || !DESK.queue.length) return;
+  const batch = DESK.queue.splice(0, 50);
+  try {
+    const r = await authFetch('/insight/v1/desk/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(batch), keepalive: true });
+    if (r.status === 403 || r.status === 404) { DESK.on = false; return; }
+    if (r.ok) { const j = await r.json().catch(() => null); if (j && j.enabled === false) DESK.on = false; }
+  } catch { /* fail-soft: learning never breaks the desk */ }
+}
+setInterval(deskFlush, 5000);
+window.addEventListener('pagehide', deskFlush);
+// a cheap edit distance for "did the copilot draft survive": 1 - Jaccard over words
+function deskEditRatio(a, b) {
+  const w = (t) => new Set(String(t || '').toLowerCase().split(/\W+/).filter((x) => x.length > 2));
+  const A = w(a), B = w(b); if (!A.size && !B.size) return 0;
+  let inter = 0; for (const x of A) if (B.has(x)) inter++;
+  return 1 - inter / (A.size + B.size - inter);
+}
 let listSortCol = null;
 let listSortDir = 1;
 let editingId = null;
@@ -1757,7 +1797,8 @@ function renderTabs() {
     const b = document.createElement('button');
     b.textContent = r.title;
     b.className = r === active ? 'tab on' : 'tab';
-    b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing();
+    b.addEventListener('click', () => { if (DESK.started && !DESK.started.submitted) desk('form.abandon', DESK.started.form); DESK.started = null; desk('tab.open', r.path);
+      active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing();
       sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
     return b;
   };
@@ -2627,6 +2668,32 @@ function renderEditor() {
     wrap.dataset.field = f.name;
     return wrap;
   }));
+  // presets the desk learned for this form: one click prefills the shared values
+  if (!active.readOnly && active.fields.length) {
+    authFetch(`/insight/v1/desk/presets?desk=console&form=${encodeURIComponent(active.path)}`).then(async (r) => {
+      if (!r.ok) return;
+      const list = await r.json();
+      if (!Array.isArray(list) || !list.length) return;
+      const row = document.createElement('div');
+      row.className = 'presets';
+      row.style.cssText = 'grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;font-size:.85rem';
+      const cap = document.createElement('span'); cap.className = 'dim'; cap.textContent = 'Presets the desk learned:'; row.append(cap);
+      for (const p of list) {
+        const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'ghost small'; chip.textContent = p.name;
+        chip.title = Object.entries(p.values || {}).map(([k, v]) => `${k} = ${v}`).join(' · ');
+        chip.addEventListener('click', () => {
+          for (const [k, v] of Object.entries(p.values || {})) {
+            const c = el('editor').elements[k]; if (!c) continue;
+            if (c.type === 'checkbox') c.checked = String(v) === 'true'; else c.value = v;
+            c.dispatchEvent(new Event('input', { bubbles: true })); c.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          desk('preset.use', active.path, { preset: p.id });
+        });
+        row.append(chip);
+      }
+      el('fields').prepend(row);
+    }).catch(() => {});
+  }
   wireVisibility();
   if (active.aiAssist) {
     el('fields').append(aiAssistRow(active.aiAssist));
@@ -5919,6 +5986,15 @@ async function loadList() {
     renderWorkforce();
     return;
   }
+  if (active.deskLearning) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    renderDeskLearning();
+    return;
+  }
   if (active.reporting || active.integrations) {
     el('editor').hidden = true;
     el('total').textContent = '';
@@ -5988,6 +6064,7 @@ async function loadList() {
     });
   }
   el('total').textContent = listFilter ? `${shown.length} of ${total} total` : `${total} total`;
+  if (listFilter && shown.length === 0) desk('search.empty', active.path, { query: listFilter });
   el('listing-head').replaceChildren((() => {
     const tr = document.createElement('tr');
     for (const c of active.columns) {
@@ -6205,6 +6282,112 @@ async function save(event) {
   loadList();
 }
 
+// the submit hook: the form's VALUES SHAPE (short fields kept, free text as presence),
+// the copilot draft's survival, and — for a new journey — its id so a holdout can be suggested
+function deskOnSubmit() {
+  if (!active) return;
+  const fd = new FormData(el('editor'));
+  const values = {};
+  for (const [k, v] of fd.entries()) { if (typeof v === 'string') values[k] = v.length > 80 ? v.slice(0, 80) : v; }
+  const creating = !editingId;
+  const props = { values, mode: creating ? 'create' : 'edit' };
+  if (DESK.lastDraft && DESK.lastDraft.form === active.path) {
+    props.editRatio = Number(deskEditRatio(DESK.lastDraft.steps, values.steps).toFixed(2));
+    desk('copilot.draft', active.path, { editRatio: props.editRatio });
+    DESK.lastDraft = null;
+  }
+  if (DESK.started) DESK.started.submitted = true;
+  const name = values.name;
+  const form = active.path;
+  if (creating && form === 'journeys' && name) {
+    // resolve the created id after the save lands, so the suggestion can act on it
+    setTimeout(async () => {
+      try {
+        const r = await authFetch('/tmf-api/campaignManagement/v4/journey?limit=100');
+        const list = r.ok ? await r.json() : [];
+        const hit = (Array.isArray(list) ? list : []).find((j) => j.name === name);
+        desk('form.submit', form, { ...props, createdId: hit ? hit.id : null, createdName: name });
+      } catch { desk('form.submit', form, props); }
+    }, 1500);
+  } else {
+    desk('form.submit', form, props);
+  }
+}
+
+// ---- the Suggestions panel: what the desk learned this week, with evidence,
+// one-click actions, and the anonymised report for the vendor's backlog
+async function renderDeskLearning() {
+  const host = el('listing-body');
+  host.replaceChildren();
+  const panel = document.createElement('div');
+  panel.className = 'desk-learning';
+  panel.style.cssText = 'display:grid;gap:1rem;max-width:64rem';
+  const intro = document.createElement('p'); intro.className = 'dim';
+  intro.textContent = 'The desk learns from how it is used — actions, never screens; staff as a hash; no customer data. '
+    + 'Suggestions with a button are safe to accept; the rest are for the people who build the product.';
+  panel.append(intro);
+  let sugg = [], friction = null;
+  try {
+    const [a, b] = await Promise.all([authFetch('/insight/v1/desk/suggestions'), authFetch('/insight/v1/desk/friction?days=7')]);
+    sugg = a.ok ? await a.json() : []; friction = b.ok ? await b.json() : null;
+  } catch { /* shown below */ }
+  if (friction && friction.enabled === false) {
+    const off = document.createElement('p'); off.textContent = 'Desk learning is switched off for this tenant (desk-learning in the tenant configuration).'; panel.append(off);
+    host.append(panel); return;
+  }
+  const live = sugg.filter((x) => !x.quiet);
+  const h = document.createElement('h3'); h.textContent = live.length ? `${live.length} suggestion${live.length === 1 ? '' : 's'} this week` : 'No suggestions yet — the desk needs a week of use to notice patterns.';
+  panel.append(h);
+  for (const sg of live) {
+    const card = document.createElement('div');
+    card.style.cssText = 'border:1px solid var(--line,#e5e5ea);border-radius:8px;padding:.8rem 1rem;display:grid;gap:.4rem;background:#fff';
+    const t = document.createElement('strong'); t.textContent = sg.title; card.append(t);
+    const ev = document.createElement('div'); ev.className = 'dim'; ev.textContent = sg.evidence; card.append(ev);
+    const who = document.createElement('span'); who.className = 'pill'; who.textContent = sg.audience === 'vendor' ? 'for the product team' : 'for this desk'; who.style.cssText = 'font-size:.75rem;justify-self:start'; card.append(who);
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:.5rem';
+    if (sg.action) {
+      const ok = document.createElement('button'); ok.className = 'primary small'; ok.textContent = sg.action.kind === 'preset' ? 'Save preset' : 'Apply';
+      ok.addEventListener('click', async () => {
+        ok.disabled = true;
+        try {
+          const r = await authFetch(`/insight/v1/desk/suggestions/${sg.id}/accept`, { method: 'POST' });
+          const res = r.ok ? await r.json() : {};
+          if (res.action && res.action.path) {
+            // the desk runs the fix with the signed-in user's own rights — insight holds no credential for it
+            const done = await authFetch(res.action.path, { method: res.action.method || 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(res.action.body || {}) });
+            ev.textContent = done.ok ? 'Applied.' : `The desk could not apply it (${done.status}).`;
+          } else if (res.preset) {
+            ev.textContent = `Saved as "${res.preset.name}" — it appears above the ${res.preset.form} form.`;
+          } else { ev.textContent = 'Accepted.'; }
+          desk('suggestion.accept', sg.kind, { id: sg.id });
+        } catch (e) { ev.textContent = 'Could not apply: ' + e.message; }
+      });
+      row.append(ok);
+    }
+    const no = document.createElement('button'); no.className = 'ghost small'; no.textContent = 'Dismiss';
+    no.addEventListener('click', async () => { await authFetch(`/insight/v1/desk/suggestions/${sg.id}/dismiss`, { method: 'POST' }).catch(() => {}); desk('suggestion.dismiss', sg.kind, { id: sg.id }); card.remove(); });
+    row.append(no); card.append(row); panel.append(card);
+  }
+  if (friction) {
+    const fh = document.createElement('h3'); fh.textContent = 'Friction report, last 7 days'; panel.append(fh);
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:.6rem';
+    const stat = (label, value) => { const d = document.createElement('div'); d.style.cssText = 'border:1px solid var(--line,#e5e5ea);border-radius:8px;padding:.6rem .8rem;background:#fafafa'; const v = document.createElement('div'); v.style.cssText = 'font-size:1.4rem;font-weight:700'; v.textContent = value; const l = document.createElement('div'); l.className = 'dim'; l.textContent = label; d.append(v, l); return d; };
+    grid.append(stat('desk actions', friction.events), stat('people active', friction.activeStaff),
+      stat('forms abandoned', (friction.abandonedForms || []).reduce((n, x) => n + (x.count || 0), 0)),
+      stat('empty searches', (friction.emptySearches || []).reduce((n, x) => n + (x.count || 0), 0)),
+      stat('copilot drafts rewritten', (friction.copilotRewrites || []).reduce((n, x) => n + (x.count || 0), 0)),
+      stat('features never opened', (friction.unusedFeatures || []).length));
+    panel.append(grid);
+    const exp = document.createElement('button'); exp.className = 'ghost small'; exp.textContent = 'Copy the anonymised report for the product team';
+    exp.style.justifySelf = 'start';
+    exp.addEventListener('click', async () => {
+      try { const r = await authFetch('/insight/v1/desk/export?days=7'); const j = await r.json(); await navigator.clipboard.writeText(JSON.stringify(j, null, 2)); exp.textContent = 'Copied — counts only, no names, no values.'; } catch { exp.textContent = 'Could not copy.'; }
+    });
+    panel.append(exp);
+  }
+  host.append(panel);
+}
+
 async function main() {
   const ready = await ensureSignedIn().catch((e) => {
     el('signin').hidden = false;
@@ -6254,7 +6437,14 @@ async function main() {
   el('username').textContent = tokenClaims().preferred_username || '';
   el('logout').hidden = false;
   el('logout').addEventListener('click', signOut);
+  el('editor').addEventListener('focusin', (e) => {
+    const name = e.target && e.target.name; if (!name || !active) return;
+    if (!DESK.started || DESK.started.form !== active.path) { DESK.started = { form: active.path, submitted: false }; desk('form.start', active.path); }
+    desk('form.field', active.path, { field: name });
+  });
+  el('editor').addEventListener('submit', deskOnSubmit);
   el('editor').addEventListener('submit', save);
+  desk('desk.tabs', 'console', { tabs: RESOURCES.map((r) => r.path) });
   el('cancel-edit').addEventListener('click', stopEditing);
   el('prev').addEventListener('click', () => { offset = Math.max(0, offset - PAGE_SIZE); loadList(); });
   el('next').addEventListener('click', () => { offset += PAGE_SIZE; loadList(); });

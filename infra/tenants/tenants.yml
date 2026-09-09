@@ -38,6 +38,7 @@ bss:
         timezone: Europe/Oslo
         # Show the B2B lead-capture on the consumer shop (this operator has a
         # business line). Off by default — an MVNO with no B2B never advertises one.
+        desk-learning: ${DESK_LEARNING:true}
         business-sales: true
         # Agentic commerce exposure: off (dark to agents) | discovery
         # (findable, no agent checkout) | full. New tenants default OFF —
@@ -710,6 +711,7 @@ bss:
         whatsapp-url: ${WHATSAPP_URL_ENET:http://mock-whatsapp:8080}
         whatsapp-token-ref: WHATSAPP_TOKEN_ENET
         whatsapp-phone-id: ${WHATSAPP_PHONE_ID_ENET:592624515300}
+        desk-learning: ${DESK_LEARNING_ENET:true}
         business-sales: false
         agent-commerce: "off"
         ai-visibility: "search-only"
@@ -785,6 +787,7 @@ bss:
         support-email: hello@taranga.no
         privacy-url: https://taranga.no/privacy
         terms-url: https://taranga.no/terms
+        desk-learning: ${DESK_LEARNING_TARANGA:true}
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_TARANGA:full}
         ai-visibility: "search-only"

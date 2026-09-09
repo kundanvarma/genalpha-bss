@@ -59,6 +59,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/landing/*").hasAuthority("insight:read")
                         // the stitch needs a verified token — the subject IS the party
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/stitch").authenticated()
+                        // desk learning: any signed-in desk may report usage and read its presets;
+                        // the report, the suggestions and the export are for insight readers
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/desk/event").authenticated()
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/desk/presets").authenticated()
+                        .requestMatchers(ApiConstants.BASE_PATH + "/desk/**").hasAuthority("insight:read")
                         // the raw profile is back-office only
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/profile",
                                 ApiConstants.BASE_PATH + "/partyProfile",

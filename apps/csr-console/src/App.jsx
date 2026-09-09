@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
+import { desk } from './desk.js';
 import { openProblems } from './api.js';
 import { ensureSignedIn, signOut, tokenClaims, hasRole, isStaff } from './auth.js';
 import Customers from './pages/Customers.jsx';
@@ -62,7 +63,7 @@ export default function App() {
           <span className="area">csr console</span>
           {claims.org && <span className="orgbadge">{claims.org}</span>}
         </div>
-        <nav className="nav">
+        <nav className="nav" onClick={(e) => { const a = e.target.closest && e.target.closest('a'); if (a) desk('tab.open', a.getAttribute('href') || a.textContent); }}>
           <NavLink to="/" end>Customers</NavLink>
           <NavLink to="/tickets">Tickets</NavLink>
           <NavLink to="/chats">Chats</NavLink>

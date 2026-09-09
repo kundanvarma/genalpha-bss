@@ -94,6 +94,9 @@ public class TenantRegistry {
         private String socialIgUserId;
         private String socialAccessToken;
         private String socialAdsToken;
+        /** Desk learning (tenants.yml desk-learning): may this tenant's desks report
+         * how they are used, so the platform can suggest improvements? Off by default. */
+        private boolean deskLearning;
 
         public boolean isSandbox() {
             return sandbox;
@@ -177,6 +180,8 @@ public class TenantRegistry {
         public String getSocialAccessToken() { return socialAccessToken; }
         public void setSocialAccessToken(String v) { this.socialAccessToken = v; }
         public String getSocialAdsToken() { return socialAdsToken; }
+        public boolean isDeskLearning() { return deskLearning; }
+        public void setDeskLearning(boolean v) { this.deskLearning = v; }
         public void setSocialAdsToken(String v) { this.socialAdsToken = v; }
         public void setAnalyticsDataToken(String v) { this.analyticsDataToken = v; }
     }
