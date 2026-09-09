@@ -54,6 +54,9 @@ const shelf = async (tok, tag) => (await call('GET', `${KB}?tag=${encodeURICompo
   const gaps = (await call('GET', '/ai/v1/knowledgeGaps', sigrid)).body || [];
   const g = gaps.find((x) => x.question === nonsense.toLowerCase());
   if (!g || g.context !== 'pane:copilot') fail(`gap not listed for staff: ${JSON.stringify(gaps.slice(0, 2))}`);
+  const dismissed = await call('DELETE', `/ai/v1/knowledgeGaps/${g.id}`, sigrid);
+  if (dismissed.status >= 300) fail(`dismiss: ${dismissed.status}`);
+  if (((await call('GET', '/ai/v1/knowledgeGaps', sigrid)).body || []).some((x) => x.id === g.id)) fail('dismissed gap still listed');
   const noGaps = await call('GET', '/ai/v1/knowledgeGaps', mira);
   if (noGaps.status < 400) fail('customers must not read the gap list');
   console.log(`  ask: ${a1.sources.length} sources (${a1.model || 'stub'}) · repeat cached · gap "${g.question.slice(0, 24)}…" recorded from ${g.context} · customer refused (${noGaps.status})`);

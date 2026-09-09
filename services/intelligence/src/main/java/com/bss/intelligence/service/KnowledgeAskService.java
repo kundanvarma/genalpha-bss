@@ -154,6 +154,11 @@ public class KnowledgeAskService {
         return out;
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public void dismiss(String id) {
+        gaps.findById(id).filter(g -> g.getTenantId().equals(tenantScope.currentTenantId())).ifPresent(gaps::delete);
+    }
+
     public int cacheSize() {
         return cache.size();
     }

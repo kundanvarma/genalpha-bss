@@ -67,6 +67,8 @@ public class SecurityConfig {
                         // the knowledge-gap list is for whoever writes the help
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/knowledgeGaps")
                                 .hasAnyAuthority("knowledge:write", "catalog:write", "campaign:write")
+                        .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/knowledgeGaps/*")
+                                .hasAnyAuthority("knowledge:write", "catalog:write", "campaign:write")
                         .requestMatchers("/advisor/v1/**").hasAuthority("catalog:write")
                         // the commercial simulator: pricing is the product
                         // owner's decision, so simulating it is their tool too

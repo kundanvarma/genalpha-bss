@@ -83,4 +83,10 @@ public class CopilotController {
     public ResponseEntity<java.util.List<Map<String, Object>>> knowledgeGaps() {
         return ResponseEntity.ok(knowledgeAsk.gaps());
     }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/knowledgeGaps/{id}")
+    public ResponseEntity<Void> dismissGap(@org.springframework.web.bind.annotation.PathVariable String id) {
+        knowledgeAsk.dismiss(id);
+        return ResponseEntity.noContent().build();
+    }
 }

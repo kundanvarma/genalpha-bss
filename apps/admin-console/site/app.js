@@ -6992,14 +6992,19 @@ async function renderKnowledgeGaps(resource) {
   if (!box) {
     box = document.createElement('div'); box.id = 'knowledge-gaps'; box.dataset.testid = 'knowledge-gaps';
     box.style.cssText = 'margin:0 0 12px;padding:10px 14px;border:1px dashed var(--line,#ccc);border-radius:10px;font-size:13px';
-    document.querySelector('.panel-head')?.after(box);
+    (document.getElementById('tab-intro') || document.querySelector('.panel-head'))?.after(box);
   }
   box.hidden = false;
   box.textContent = 'Loading unanswered questions…';
   const gaps = await authFetch('/ai/v1/knowledgeGaps').then((r) => (r.ok ? r.json() : [])).catch(() => []);
   box.replaceChildren();
-  const h = document.createElement('strong'); h.textContent = gaps.length ? `Unanswered questions (${gaps.length}) — write the article, and Ask stops being needed for it` : 'No unanswered questions on record.';
+  const h = document.createElement('strong'); h.textContent = gaps.length ? `Questions nobody has written help for yet (${gaps.length})` : 'Every question people asked the ? drawer has an article.';
   box.append(h);
+  if (gaps.length) {
+    const why = document.createElement('div'); why.className = 'dim'; why.style.cssText = 'font-size:12px;margin:2px 0 4px';
+    why.textContent = 'Someone typed these into a ? drawer and no article matched. Write it starts the article; Dismiss drops the question.';
+    box.append(why);
+  }
   if (gaps.length) {
     const ul = document.createElement('ul'); ul.style.cssText = 'margin:6px 0 0 18px;padding:0';
     for (const g of gaps.slice(0, 12)) {
@@ -7013,7 +7018,9 @@ async function renderKnowledgeGaps(resource) {
         if (tags && g.context) tags.value = g.context;
         title?.focus();
       });
-      li.append(b); ul.append(li);
+      const d = document.createElement('button'); d.className = 'ghost'; d.textContent = 'Dismiss'; d.style.marginLeft = '4px'; d.dataset.testid = 'knowledge-gap-dismiss';
+      d.addEventListener('click', async () => { await authFetch(`/ai/v1/knowledgeGaps/${g.id}`, { method: 'DELETE' }); renderKnowledgeGaps(resource); });
+      li.append(b, d); ul.append(li);
     }
     box.append(ul);
   }
