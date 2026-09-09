@@ -218,6 +218,29 @@ public class StubAdapter implements LlmAdapter {
                     + "\"category\":[{\"name\":\"Partner services\"}],"
                     + "\"specRef\":\"s1\",\"priceRefs\":[\"p1\"]}]}}";
         }
+        if (lastOwner.contains("social") || lastOwner.contains("zero-rated") || lastOwner.contains("zero rated")
+                || lastOwner.contains("whatsapp") || lastOwner.contains("tiktok")) {
+            String price = lastOwner.replaceAll("(?s).*?(\\d+(?:[.,]\\d{1,2})?).*", "$1").replace(',', '.');
+            if (price.length() > 8 || price.isEmpty() || !Character.isDigit(price.charAt(0))) {
+                price = "12";
+            }
+            String launch = java.time.OffsetDateTime.now().plusDays(7).withNano(0).toString();
+            return "{\"kind\":\"proposal\",\"message\":\"A social pack: 10 GB with WhatsApp, Instagram"
+                    + " and TikTok zero-rated (they never touch the allowance — the OCS gets the app list"
+                    + " at activation), 30-day validity, sold in the app and the web shop, on sale from next"
+                    + " week. Say the word and I will create it.\",\"proposal\":{"
+                    + "\"specs\":[{\"ref\":\"s1\",\"name\":\"Social 10 GB Service\","
+                    + "\"productSpecCharacteristic\":["
+                    + "{\"name\":\"Data\",\"configurable\":false,\"productSpecCharacteristicValue\":[{\"value\":\"10 GB\"}]},"
+                    + "{\"name\":\"Validity\",\"configurable\":false,\"productSpecCharacteristicValue\":[{\"value\":\"30 days\"}]},"
+                    + "{\"name\":\"zeroRatedApps\",\"configurable\":false,\"productSpecCharacteristicValue\":[{\"value\":\"WhatsApp, Instagram, TikTok\"}]}]}],"
+                    + "\"prices\":[{\"ref\":\"p1\",\"name\":\"Social 10 GB\","
+                    + "\"priceType\":\"oneTime\",\"price\":{\"unit\":\"EUR\",\"value\":" + price + "}}],"
+                    + "\"offerings\":[{\"ref\":\"o1\",\"name\":\"Social 10 GB\","
+                    + "\"description\":\"10 GB for 30 days — WhatsApp, Instagram and TikTok never count.\","
+                    + "\"category\":[{\"name\":\"Top-ups\"}],\"specRef\":\"s1\",\"priceRefs\":[\"p1\"],"
+                    + "\"validFor\":{\"startDateTime\":\"" + launch + "\"},\"channel\":[\"web\",\"app\"]}]}}";
+        }
         if (asksWatch) {
             return "{\"kind\":\"proposal\",\"message\":\"A kids smartwatch sells best as a"
                     + " small bundle: the watch on installments (Devices — it ships), a"

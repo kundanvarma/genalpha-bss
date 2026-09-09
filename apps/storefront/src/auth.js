@@ -188,6 +188,9 @@ export function isSignedIn() {
 /** Fetch with the bearer token; expiry refreshes SILENTLY and single-flight —
  * the login redirect is the last resort, never the first answer to a 401. */
 export async function authFetch(url, options) {
+  // the sales channel this front end sells through — the catalog enforces
+  // an offer's channel list server-side, this header only says who is asking
+  options = { ...(options || {}), headers: { 'X-Channel': 'web', ...((options && options.headers) || {}) } };
   let token = currentToken();
   if (!token) {
     if (await tryRefresh()) {

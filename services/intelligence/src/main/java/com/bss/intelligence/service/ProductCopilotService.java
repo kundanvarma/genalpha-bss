@@ -65,6 +65,9 @@ public class ProductCopilotService {
                 describes a product in plain language; you help them model and create it. \
                 The modeling rules of this catalog:
                 - An OFFERING is what is sold; a SPECIFICATION describes what it is. \
+                Zero-rated apps ("social media does not count", "free WhatsApp") are a spec \
+                characteristic named "zeroRatedApps" with configurable false and the app list as \
+                its value (e.g. "WhatsApp, Instagram, TikTok") — the OCS zero-rates them at activation. \
                 Configurable characteristics (color, storage) become pickers in the shop; \
                 characteristics with "configurable": false render as an About-facts table.
                 - CATEGORIES drive placement AND fulfilment: "Mobile plans" and "Broadband" \
@@ -95,6 +98,10 @@ public class ProductCopilotService {
                 "price": {"unit", "value"}, "prodSpecCharValueUse"?}], \
                 "offerings": [{"ref": "o1", "name", "description", "category": [{"name"}], \
                 "specRef"?, "priceRefs": [], "isBundle"?, "productOfferingTerm"?, \
+                "validFor"?: {"startDateTime": ISO, "endDateTime"?: ISO} (when the owner names a \
+                launch date or a campaign window), "channel"?: ["web","app","store","telesales",\
+                "care","business","partner","agent-acp","agent-mcp","agent-a2a"] (ONLY the channels \
+                the owner names; omit = every channel), \
                 "bundledChildren"?: [{"offeringRef" or "existingName", "optional": true|false}]}], \
                 "pricingRules": [{"name", "message", "adjustmentType": "percent"|"amount", \
                 "adjustmentValue": -10, "whenCartHas": ["o1", "Samsung Galaxy S26"], \

@@ -80,6 +80,13 @@ class PaymentOrchestrationTest {
                "productOffering": {"id": "po-x", "name": "Thing"}}]}
             """;
 
+    @org.junit.jupiter.api.BeforeEach
+    void catalogAnswersForEveryOffering() {
+        // every added offering must exist on the channel — this suite is about payment, not the shelf
+        given(catalogClient.findOffering(anyString()))
+                .willReturn(java.util.Optional.of(new CatalogClient.OfferingRef("po-x", "Thing")));
+    }
+
     private void stockOk() {
         given(stockClient.reserve(anyString(), anyString(), anyInt(), anyString()))
                 .willReturn(StockClient.ReserveOutcome.reserved());

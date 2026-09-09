@@ -57,6 +57,9 @@ public class ProductOfferingDto {
     @JsonProperty("productOfferingTerm")
     private List<Map<String, Object>> productOfferingTerm;
 
+    @JsonProperty("channel")
+    private java.util.List<java.util.Map<String, Object>> channel;
+
     @JsonProperty("attachment")
     private List<Map<String, Object>> attachment;
 
@@ -196,4 +199,7 @@ public class ProductOfferingDto {
 
     public java.util.Map<String, String> getValidFor() { return validFor; }
     public void setValidFor(java.util.Map<String, String> v) { this.validFor = v; }
+
+    public java.util.List<java.util.Map<String, Object>> getChannel() { return channel; }
+    public void setChannel(java.util.List<java.util.Map<String, Object>> v) { this.channel = v; }
 }

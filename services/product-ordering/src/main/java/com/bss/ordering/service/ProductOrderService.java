@@ -154,6 +154,7 @@ public class ProductOrderService {
         requireSameOrgForBusinessAdmin(dto);
         validateReferences(dto);
         requireVerifiedIdentityIfNeeded(dto);
+        requireOfferingsAvailable(dto);
         validateBundleComposition(dto);
         validateServiceability(dto);
         if (dto.getState() == null || dto.getState().isBlank()) {
@@ -585,6 +586,23 @@ public class ProductOrderService {
      * (BankID/Vipps), the order is refused with a 403 the channel recognizes
      * as a step-up prompt — not a generic denial.
      */
+    /**
+     * Every ADDED offering must exist for THIS channel: the catalog answers the
+     * forwarded X-Channel (a store-only pack ordered from the web shop is 404
+     * there), and a draft or retired offer is no offer at all.
+     */
+    private void requireOfferingsAvailable(ProductOrderDto dto) {
+        for (ItemRef item : flattenItems(dto.getProductOrderItem())) {
+            if (item.offeringId() == null || item.offeringId().isBlank()) {
+                continue;
+            }
+            if (catalogClient.findOffering(item.offeringId()).isEmpty()) {
+                throw new OrderValidationException("productOffering '" + item.offeringId()
+                        + "' is not available on this sales channel");
+            }
+        }
+    }
+
     private void requireVerifiedIdentityIfNeeded(ProductOrderDto dto) {
         for (ItemRef item : flattenItems(dto.getProductOrderItem())) {
             boolean needed = catalogClient.findOffering(item.offeringId())

@@ -10,6 +10,7 @@ async function call(path, options = {}) {
   const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
+      'X-Channel': 'app',
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
       Authorization: 'Bearer ' + getToken(),
       ...(options.headers || {}),

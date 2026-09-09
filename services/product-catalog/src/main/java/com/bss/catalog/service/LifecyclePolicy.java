@@ -40,9 +40,17 @@ public class LifecyclePolicy {
      *  customers do not — and only staff may see the unlaunched shelf. */
     public boolean staffCaller() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.getAuthorities() != null && auth.getAuthorities().stream()
-                .anyMatch(a -> "catalog:read".equals(a.getAuthority())
-                        || "catalog:write".equals(a.getAuthority()));
+        if (auth == null || auth.getAuthorities() == null) {
+            return false;
+        }
+        // catalog:read is what every customer carries to browse — it is not
+        // staff. Authoring authority is; so is a machine caller (a service
+        // account fulfils store-only orders and must see every channel).
+        boolean writer = auth.getAuthorities().stream().anyMatch(a -> "catalog:write".equals(a.getAuthority()));
+        boolean machine = auth.getPrincipal() instanceof org.springframework.security.oauth2.jwt.Jwt jwt
+                && (jwt.getClaimAsString("preferred_username") == null
+                    || jwt.getClaimAsString("preferred_username").startsWith("service-account-"));
+        return writer || machine;
     }
 
     /** Launched/Active AND inside its validFor window — the ONLY thing a
@@ -63,6 +71,29 @@ public class LifecyclePolicy {
                     : OffsetDateTime.parse(window.get("endDateTime"));
         }
         return launched(dto.getLifecycleStatus()) && inWindow(from, to);
+    }
+
+    /** Sellable AND available in the channel: an empty channel list means everywhere. */
+    public boolean sellableIn(ProductOffering entity, String channel) {
+        return sellable(entity) && inChannel(entity.getChannelJson(), channel);
+    }
+
+    public boolean sellableDtoIn(ProductOfferingDto dto, String channel) {
+        if (!sellableDto(dto)) {
+            return false;
+        }
+        if (channel == null || dto.getChannel() == null || dto.getChannel().isEmpty()) {
+            return true;
+        }
+        return dto.getChannel().stream().anyMatch(c -> c != null && channel.equals(String.valueOf(c.get("id"))));
+    }
+
+    private static boolean inChannel(String channelJson, String channel) {
+        if (channel == null || channelJson == null || channelJson.isBlank() || "[]".equals(channelJson.trim())) {
+            return true;
+        }
+        // cheap and exact: the stored form is a JSON list of {"id":"..."} refs
+        return channelJson.contains("\"id\":\"" + channel + "\"") || channelJson.contains("\"id\": \"" + channel + "\"");
     }
 
     public static boolean launched(String status) {

@@ -38,3 +38,6 @@ backups/
 *.tfstate
 *.tfstate.backup
 .terraform/
+
+# python seed caches
+__pycache__/

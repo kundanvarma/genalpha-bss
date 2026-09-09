@@ -32,7 +32,8 @@ public class ProductOfferingMapper {
         dto.setName(entity.getName());
         dto.setDescription(entity.getDescription());
         dto.setLifecycleStatus(entity.getLifecycleStatus());
-        dto.setVersion(entity.getVersion());
+        // an unversioned offering is its first version — TMF620 lists version among the mandatory attributes
+        dto.setVersion(entity.getVersion() == null || entity.getVersion().isBlank() ? "1.0" : entity.getVersion());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setProductSpecification(readJsonObject(entity.getProductSpecificationJson()));
         dto.setIsBundle(entity.getIsBundle());
@@ -42,6 +43,7 @@ public class ProductOfferingMapper {
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
         dto.setProductOfferingTerm(readJsonObjectList(entity.getProductOfferingTermJson()));
         dto.setAttachment(readJsonObjectList(entity.getAttachmentJson()));
+        dto.setChannel(readJsonObjectList(entity.getChannelJson()));
         dto.setType("ProductOffering");
         if (entity.getValidFrom() != null || entity.getValidTo() != null) {
             java.util.Map<String, String> window = new java.util.LinkedHashMap<>();
@@ -69,6 +71,7 @@ public class ProductOfferingMapper {
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
         entity.setProductOfferingTermJson(writeJsonObjectList(dto.getProductOfferingTerm()));
         entity.setAttachmentJson(writeJsonObjectList(dto.getAttachment()));
+        entity.setChannelJson(writeJsonObjectList(dto.getChannel()));
         applyWindow(dto, entity);
         return entity;
     }
@@ -113,6 +116,9 @@ public class ProductOfferingMapper {
         if (patch.getProductOfferingTerm() != null) {
             entity.setProductOfferingTermJson(writeJsonObjectList(patch.getProductOfferingTerm()));
         }
+        if (patch.getChannel() != null) {
+            entity.setChannelJson(writeJsonObjectList(patch.getChannel()));
+        }
         if (patch.getAttachment() != null) {
             entity.setAttachmentJson(writeJsonObjectList(patch.getAttachment()));
         }
@@ -140,7 +146,7 @@ public class ProductOfferingMapper {
         }
     }
 
-    private String writeJsonObjectList(List<Map<String, Object>> value) {
+    public String writeJsonObjectList(List<Map<String, Object>> value) {
         if (value == null) {
             return null;
         }

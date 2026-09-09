@@ -51,6 +51,7 @@ bss:
   process:
     ordering-topic: ${PROCESS_ORDERING_TOPIC:bss.ordering.events}
     som-topic: ${PROCESS_SOM_TOPIC:bss.som.events}
+    catalog-topic: ${PROCESS_CATALOG_TOPIC:bss.catalog.events}
     sweep-interval-ms: ${PROCESS_SWEEP_INTERVAL_MS:15000}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);

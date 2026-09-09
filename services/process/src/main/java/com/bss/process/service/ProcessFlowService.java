@@ -153,6 +153,152 @@ public class ProcessFlowService {
         record(flow, "ProductOrderCreateEvent", "bss.ordering.events", resource);
     }
 
+    /**
+     * Launch governance, mirrored as a TMF701 flow: the catalog decides, this
+     * flow is the auditable timeline with an SLA clock per task (approval
+     * allowance, readiness allowances, launch). Correlation = the offering id.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public void onGovernance(String offeringId, String action, Map<String, Object> resource, String topic) {
+        String tenant = tenantScope.currentTenantId();
+        ProcessFlow flow = flows.findByTenantIdAndCorrelationId(tenant, offeringId).orElse(null);
+        if (flow == null) {
+            if (!List.of("requested", "approved", "launched").contains(action)) {
+                return;
+            }
+            if (specs.findByTenantIdAndCode(tenant, "offer-launch-governance").isEmpty()) {
+                seedSpec(tenant, "offer-launch-governance", "Offer: intent to launch",
+                        "A new offer asks to go on sale: approval (or a pre-approved envelope), "
+                                + "readiness by each owner, then launch — every step ledgered.",
+                        List.of(task("requested", "Launch requested", 0),
+                                task("approved", "Launch approval", 5 * 24 * 3600),
+                                task("launched", "On sale", 30 * 24 * 3600)));
+            }
+            flow = new ProcessFlow();
+            flow.setId(UUID.randomUUID().toString());
+            flow.setTenantId(tenant);
+            flow.setSpecCode("offer-launch-governance");
+            flow.setCorrelationId(offeringId);
+            flow.setState(ProcessFlow.IN_PROGRESS);
+            flow.setStartedAt(OffsetDateTime.now());
+            flow.setLastUpdate(OffsetDateTime.now());
+            flow.setMessage(String.valueOf(resource.get("name")));
+            flows.save(flow);
+            int seq = 0;
+            TaskFlow req = newTask(flow, "requested", "Launch requested: " + resource.get("name"), seq++, 0L);
+            req.setState(TaskFlow.COMPLETED);
+            req.setCompletedAt(OffsetDateTime.now());
+            tasks.save(req);
+            TaskFlow appr = newTask(flow, "approved", "Launch approval", seq++, 5L * 24 * 3600);
+            appr.setState(TaskFlow.IN_PROGRESS);
+            tasks.save(appr);
+            if (resource.get("readiness") instanceof List<?> readiness) {
+                for (Object o : readiness) {
+                    if (o instanceof Map<?, ?> r) {
+                        TaskFlow t = newTask(flow, "ready:" + r.get("owner"), String.valueOf(r.get("label")), seq++, 3L * 24 * 3600);
+                        t.setState(Boolean.TRUE.equals(r.get("done")) ? TaskFlow.COMPLETED : TaskFlow.PENDING);
+                        tasks.save(t);
+                    }
+                }
+            }
+            TaskFlow launch = newTask(flow, "launched", "On sale", seq, 30L * 24 * 3600);
+            launch.setState(TaskFlow.PENDING);
+            tasks.save(launch);
+        }
+        record(flow, "ProductOfferingGovernanceEvent", topic, resource);
+        List<TaskFlow> flowTasks = tasks.findAllByTenantIdAndProcessFlowIdOrderBySeqAsc(tenant, flow.getId());
+        String note = resource.get("note") == null ? null : String.valueOf(resource.get("note"));
+        String actor = resource.get("actor") == null ? "" : String.valueOf(resource.get("actor"));
+        switch (action) {
+            case "approved" -> {
+                complete(flowTasks, "approved", (resource.get("envelope") instanceof Map<?, ?> env
+                        ? "pre-approved by envelope '" + env.get("name") + "'" : "approved by " + actor));
+                flowTasks.stream().filter(t -> t.getCode().startsWith("ready:") && TaskFlow.PENDING.equals(t.getState()))
+                        .forEach(t -> { t.setState(TaskFlow.IN_PROGRESS); t.setStartedAt(OffsetDateTime.now()); tasks.save(t); });
+            }
+            case "ready" -> {
+                String code = "ready:" + resource.get("owner");
+                if (Boolean.FALSE.equals(resource.get("done"))) {
+                    flowTasks.stream().filter(t -> code.equals(t.getCode())).forEach(t -> {
+                        t.setState(TaskFlow.IN_PROGRESS); t.setCompletedAt(null); t.setMessage("reopened by " + actor); tasks.save(t); });
+                } else {
+                    complete(flowTasks, code, "done by " + actor + (note == null ? "" : " — " + note));
+                }
+            }
+            case "rejected" -> {
+                flow.setState(ProcessFlow.CANCELLED);
+                flow.setCompletedAt(OffsetDateTime.now());
+                flow.setMessage("rejected by " + actor + (note == null ? "" : ": " + note));
+                flowTasks.stream().filter(t -> !TaskFlow.COMPLETED.equals(t.getState()))
+                        .forEach(t -> { t.setState(TaskFlow.FAILED); t.setMessage("launch rejected"); tasks.save(t); });
+            }
+            case "held" -> {
+                TaskFlow cur = current(flowTasks);
+                if (cur != null) {
+                    cur.setState(TaskFlow.HELD);
+                    cur.setMessage("on hold" + (resource.get("holdUntil") == null ? "" : " until " + resource.get("holdUntil"))
+                            + (note == null ? "" : " — " + note));
+                    tasks.save(cur);
+                }
+                flow.setMessage("held by " + actor);
+            }
+            case "resumed" -> {
+                flowTasks.stream().filter(t -> TaskFlow.HELD.equals(t.getState())).forEach(t -> {
+                    t.setState(TaskFlow.IN_PROGRESS); t.setStartedAt(OffsetDateTime.now()); t.setMessage("resumed"); tasks.save(t); });
+                flow.setMessage("resumed");
+            }
+            case "expired", "voided" -> {
+                flowTasks.stream().filter(t -> "approved".equals(t.getCode())).forEach(t -> {
+                    t.setState(TaskFlow.IN_PROGRESS); t.setCompletedAt(null); t.setStartedAt(OffsetDateTime.now());
+                    t.setMessage(action.equals("expired") ? "approval expired — needs a fresh decision" : "approval voided — substance changed"); tasks.save(t); });
+                flow.setMessage(action);
+            }
+            case "launched" -> {
+                for (TaskFlow t : flowTasks) {
+                    if (!TaskFlow.COMPLETED.equals(t.getState())) {
+                        t.setState(TaskFlow.COMPLETED);
+                        t.setCompletedAt(OffsetDateTime.now());
+                        t.setMessage("launched".equals(t.getCode()) ? "on sale — " + actor : t.getMessage() == null ? "closed by launch" : t.getMessage());
+                        tasks.save(t);
+                    }
+                }
+                flow.setState(ProcessFlow.COMPLETED);
+                flow.setCompletedAt(OffsetDateTime.now());
+                flow.setMessage("on sale");
+            }
+            case "unlaunched" -> flow.setMessage("withdrawn from sale by " + actor);
+            default -> { }
+        }
+        flow.setLastUpdate(OffsetDateTime.now());
+        flows.save(flow);
+        publishFlowState(flow, action);
+    }
+
+    private TaskFlow newTask(ProcessFlow flow, String code, String name, int seq, Long allowance) {
+        TaskFlow t = new TaskFlow();
+        t.setId(UUID.randomUUID().toString());
+        t.setTenantId(flow.getTenantId());
+        t.setProcessFlowId(flow.getId());
+        t.setCode(code);
+        t.setName(name == null ? code : name.substring(0, Math.min(128, name.length())));
+        t.setSeq(seq);
+        t.setAllowanceSeconds(allowance);
+        t.setStartedAt(OffsetDateTime.now());
+        return t;
+    }
+
+    private void complete(List<TaskFlow> flowTasks, String code, String message) {
+        for (TaskFlow t : flowTasks) {
+            if (code.equals(t.getCode()) && !TaskFlow.COMPLETED.equals(t.getState())) {
+                t.setState(TaskFlow.COMPLETED);
+                t.setCompletedAt(OffsetDateTime.now());
+                t.setMessage(message == null ? null : message.substring(0, Math.min(512, message.length())));
+                tasks.save(t);
+            }
+        }
+    }
+
     /** Journal an event onto the flow's timeline without advancing tasks. */
     @Transactional
     public void recordOnly(String orderId, String eventType, String topic, Map<String, Object> resource) {
@@ -480,7 +626,8 @@ public class ProcessFlowService {
         map.put("id", flow.getId());
         map.put("href", "/tmf-api/processFlowManagement/v4/processFlow/" + flow.getId());
         map.put("specCode", flow.getSpecCode());
-        map.put("productOrderId", flow.getCorrelationId());
+        map.put(flow.getSpecCode() != null && flow.getSpecCode().startsWith("offer-") ? "productOfferingId" : "productOrderId",
+                flow.getCorrelationId());
         map.put("state", flow.getState());
         if (flow.getMessage() != null) {
             map.put("message", flow.getMessage());

@@ -122,6 +122,7 @@ async function workerApi(method, path, payload) {
   const res = await fetch(`${GATEWAY}${path}`, {
     method,
     headers: {
+      'X-Channel': 'agent-mcp',
       Authorization: `Bearer ${await workerToken()}`,
       ...(payload ? { 'Content-Type': 'application/json' } : {}),
     },
@@ -137,7 +138,7 @@ async function workerApi(method, path, payload) {
 async function anonApi(method, path, payload, headers = {}) {
   const res = await fetch(`${GATEWAY}${path}`, {
     method,
-    headers: { ...(payload ? { 'Content-Type': 'application/json' } : {}), ...headers },
+    headers: { 'X-Channel': 'agent-mcp', ...(payload ? { 'Content-Type': 'application/json' } : {}), ...headers },
     ...(payload ? { body: JSON.stringify(payload) } : {}),
   });
   const text = await res.text();
@@ -149,6 +150,7 @@ async function api(method, path, payload) {
   const res = await fetch(`${GATEWAY}${path}`, {
     method,
     headers: {
+      'X-Channel': 'agent-mcp',
       Authorization: `Bearer ${await token()}`,
       ...(payload ? { 'Content-Type': 'application/json' } : {}),
     },

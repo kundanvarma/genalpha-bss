@@ -29,12 +29,14 @@ public class LaunchEmitter {
     private final ProductOfferingRepository offerings;
     private final DomainEventPublisher events;
     private final TenantRegistry tenants;
+    private final LaunchGovernanceService governance;
 
     public LaunchEmitter(ProductOfferingRepository offerings, DomainEventPublisher events,
-            TenantRegistry tenants) {
+            TenantRegistry tenants, LaunchGovernanceService governance) {
         this.offerings = offerings;
         this.events = events;
         this.tenants = tenants;
+        this.governance = governance;
     }
 
     @Scheduled(fixedDelayString = "${bss.catalog.launch-tick-ms:60000}")
@@ -44,6 +46,10 @@ public class LaunchEmitter {
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
                 for (ProductOffering offering : offerings.findByTenantId(tenant.getId())) {
+                    governance.tick(offering, now); // approvals expire, dated holds lift
+                    if (LaunchGovernanceService.HELD.equals(offering.getGovernanceState())) {
+                        continue; // a held offer never announces itself
+                    }
                     if (offering.getAnnouncedAt() != null
                             || !LifecyclePolicy.launched(offering.getLifecycleStatus())
                             || offering.getValidFrom() == null

@@ -97,9 +97,18 @@ public class PolicyService {
         String d = (domain == null || domain.isBlank()) ? "order" : domain;
         List<PolicyRule> rules = repository.findByDomainAndEnabledTrueOrderByPriorityAsc(d);
         for (PolicyRule rule : rules) {
-            if (engine.matches(rule.getCondition(), context) && "deny".equalsIgnoreCase(rule.getEffect())) {
+            if (!engine.matches(rule.getCondition(), context)) {
+                continue;
+            }
+            if ("deny".equalsIgnoreCase(rule.getEffect())) {
                 log.info("policy deny: rule '{}' ({}) matched at domain '{}'", rule.getName(), rule.getId(), d);
                 return Decision.deny(rule);
+            }
+            if ("allow".equalsIgnoreCase(rule.getEffect())) {
+                // a matching ALLOW rule is a named permission — launch envelopes
+                // ("inside this envelope, no approval needed") read the rule back
+                log.info("policy allow: rule '{}' ({}) matched at domain '{}'", rule.getName(), rule.getId(), d);
+                return Decision.allowBy(rule);
             }
         }
         return Decision.allow();
@@ -108,6 +117,10 @@ public class PolicyService {
     public record Decision(boolean allowed, String ruleId, String ruleName, String message) {
         static Decision allow() {
             return new Decision(true, null, null, null);
+        }
+
+        static Decision allowBy(PolicyRule rule) {
+            return new Decision(true, rule.getId(), rule.getName(), rule.getMessage());
         }
 
         static Decision deny(PolicyRule rule) {
@@ -120,7 +133,7 @@ public class PolicyService {
         public Map<String, Object> toMap() {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("decision", allowed ? "allow" : "deny");
-            if (!allowed) {
+            if (!allowed || ruleId != null) {
                 m.put("ruleId", ruleId);
                 m.put("ruleName", ruleName);
                 m.put("message", message);

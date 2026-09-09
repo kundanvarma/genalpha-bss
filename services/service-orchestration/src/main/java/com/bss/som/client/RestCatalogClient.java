@@ -13,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RestCatalogClient implements CatalogClient {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RestCatalogClient.class);
+
     private final RestClient restClient;
     /** Offerings don't change category mid-flight; cache per id, forever. */
     private final Map<String, Optional<String>> cache = new ConcurrentHashMap<>();
@@ -76,6 +78,39 @@ public class RestCatalogClient implements CatalogClient {
             return Optional.of(cached);
         }
         return computeCharging(offeringId);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.List<String> zeroRatedAppsOf(String offeringId) {
+        if (offeringId == null) {
+            return java.util.List.of();
+        }
+        try {
+            Map<String, Object> offering = restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productOffering/{id}", offeringId)
+                    .retrieve().body(Map.class);
+            Object specRef = offering == null ? null : offering.get("productSpecification");
+            if (!(specRef instanceof Map<?, ?> ref) || ref.get("id") == null) {
+                return java.util.List.of();
+            }
+            Map<String, Object> spec = restClient.get()
+                    .uri("/tmf-api/productCatalogManagement/v4/productSpecification/{id}", String.valueOf(ref.get("id")))
+                    .retrieve().body(Map.class);
+            if (spec != null && spec.get("productSpecCharacteristic") instanceof List<?> chars) {
+                for (Object c : chars) {
+                    if (c instanceof Map<?, ?> ch && "zeroRatedApps".equals(String.valueOf(ch.get("name")))
+                            && ch.get("productSpecCharacteristicValue") instanceof List<?> vals && !vals.isEmpty()
+                            && vals.get(0) instanceof Map<?, ?> v0 && v0.get("value") != null) {
+                        return java.util.Arrays.stream(String.valueOf(v0.get("value")).split(","))
+                                .map(String::trim).filter(x -> !x.isEmpty()).toList();
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("catalog: zero-rated apps unreadable for offering {}: {}", offeringId, e.getMessage());
+        }
+        return java.util.List.of();
     }
 
     @Override

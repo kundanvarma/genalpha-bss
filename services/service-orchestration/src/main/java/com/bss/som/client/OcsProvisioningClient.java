@@ -16,6 +16,12 @@ public interface OcsProvisioningClient {
 
     void provision(String tenantId, String partyId, String serviceId, String chargingSpecId);
 
+    /** Provision with the apps the plan zero-rates — the OCS rates those to nothing. */
+    default void provision(String tenantId, String partyId, String serviceId, String chargingSpecId,
+            java.util.List<String> zeroRatedApps) {
+        provision(tenantId, partyId, serviceId, chargingSpecId);
+    }
+
     void changeRatePlan(String tenantId, String serviceId, String chargingSpecId);
 
     /** Pause / unpause charging for a line (vacation hold). Fail-open. */

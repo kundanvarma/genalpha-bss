@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private static final String READ = "catalog:read";
     private static final String WRITE = "catalog:write";
     private static final String WHOLESALE_ADMIN = "wholesale:admin";
 
@@ -63,6 +64,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**").permitAll()
                         .requestMatchers(ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**")
                                 .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
+                        // launch governance: reading the desk is catalog:read, every
+                        // door is catalog:write; approve/reject check catalog:approve inside
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/governance/**").hasAuthority(READ)
+                        .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/productOffering/*/governance").hasAuthority(READ)
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/governance/dry-run").hasAuthority(READ)
+                        .requestMatchers(ApiConstants.BASE_PATH + "/governance/**").hasAuthority(WRITE)
+                        // a readiness tick, a hold or a resume is any staff member's (marketing,
+                        // care, finance) — the service checks who owns the item; the rest is authoring
+                        .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/productOffering/*/governance/ready",
+                                ApiConstants.BASE_PATH + "/productOffering/*/governance/hold",
+                                ApiConstants.BASE_PATH + "/productOffering/*/governance/resume").hasAuthority(READ)
+                        .requestMatchers(ApiConstants.BASE_PATH + "/productOffering/*/governance/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").permitAll()
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority(WRITE)

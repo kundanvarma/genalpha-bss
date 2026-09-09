@@ -158,6 +158,8 @@ class OrderOrchestrationTest {
 
     @Test
     void completingACartOrder_provisionsOneProductPerItemUnit() throws Exception {
+        given(catalogClient.findOffering(anyString()))
+                .willReturn(Optional.of(new CatalogClient.OfferingRef("po-x", "Thing")));
         String id = createOrder("""
                 {"description": "cart order", "productOrderItem": [
                   {"id": "1", "action": "add", "quantity": 2,

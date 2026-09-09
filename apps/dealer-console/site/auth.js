@@ -110,6 +110,9 @@ function signOut() {
 
 /** Fetch with the bearer token; a 401 restarts login (token expired/revoked). */
 async function authFetch(url, options) {
+  // the sales channel this front end sells through — the catalog enforces
+  // an offer's channel list server-side, this header only says who is asking
+  options = { ...(options || {}), headers: { 'X-Channel': 'store', ...((options && options.headers) || {}) } };
   const token = currentToken();
   if (!token) {
     await beginLogin();

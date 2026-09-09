@@ -50,6 +50,11 @@ public class OrderEventListener {
         handle(payload, "bss.fulfilment.events");
     }
 
+    @KafkaListener(topics = "${bss.process.catalog-topic:bss.catalog.events}", groupId = "process")
+    public void onCatalogEvent(String payload) {
+        handle(payload, "bss.catalog.events");
+    }
+
     @SuppressWarnings("unchecked")
     private void handle(String payload, String topic) {
         try {
@@ -101,6 +106,12 @@ public class OrderEventListener {
                         if (!"null".equals(orderId) && "completed".equals(resource.get("state"))) {
                             // physical flows: fulfilment implicitly done when SOM provisions
                             service.onMilestone(orderId, "provisioned", eventType, topic, resource);
+                        }
+                    }
+                    case "ProductOfferingGovernanceEvent" -> {
+                        String offeringId = String.valueOf(resource.get("id"));
+                        if (!"null".equals(offeringId)) {
+                            service.onGovernance(offeringId, String.valueOf(resource.get("action")), resource, topic);
                         }
                     }
                     default -> { }

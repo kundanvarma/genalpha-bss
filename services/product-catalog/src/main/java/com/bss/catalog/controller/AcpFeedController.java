@@ -35,13 +35,17 @@ import java.util.stream.Collectors;
 @RequestMapping("/acp")
 public class AcpFeedController {
 
+    private final com.bss.catalog.service.LifecyclePolicy lifecycle;
+
     private final ProductOfferingService offerings;
     private final ProductOfferingPriceService prices;
     private final TenantRegistry tenants;
     private final TenantScope tenantScope;
 
     public AcpFeedController(ProductOfferingService offerings, ProductOfferingPriceService prices,
-            TenantRegistry tenants, TenantScope tenantScope) {
+            TenantRegistry tenants, TenantScope tenantScope,
+            com.bss.catalog.service.LifecyclePolicy lifecycle) {
+        this.lifecycle = lifecycle;
         this.offerings = offerings;
         this.prices = prices;
         this.tenants = tenants;
@@ -59,6 +63,9 @@ public class AcpFeedController {
                 Map.of("lifecycleStatus", "Active")).items()) {
             if (onlyId != null && !onlyId.equals(offering.getId())) {
                 continue;
+            }
+            if (!lifecycle.sellableDtoIn(offering, "agent-acp")) {
+                continue; // held back from AI shopping agents by the offer's channel list
             }
             Map<String, Object> product = toFeedItem(offering, priceIndex);
             if (product != null) {

@@ -711,6 +711,17 @@ bss:
         whatsapp-url: ${WHATSAPP_URL_ENET:http://mock-whatsapp:8080}
         whatsapp-token-ref: WHATSAPP_TOKEN_ENET
         whatsapp-phone-id: ${WHATSAPP_PHONE_ID_ENET:592624515300}
+        # Intent-to-launch governance: none (a write is a launch) | envelope
+        # (offers inside a pre-approved envelope launch by themselves, the rest
+        # ask an approver) | always (every launch asks). Readiness owners tick
+        # before launch — "authority|label"; an approver may launch past them.
+        launch-governance: ${LAUNCH_GOVERNANCE_ENET:envelope}
+        ai-proposals: ${AI_PROPOSALS_ENET:trust}
+        approval-expiry-days: 60
+        launch-readiness:
+          - "campaign:write|Marketing collateral and launch journey ready"
+          - "ticket:write|Care team briefed"
+          - "billing:write|Billing and finance checked"
         desk-learning: ${DESK_LEARNING_ENET:true}
         business-sales: false
         agent-commerce: "off"
@@ -787,6 +798,17 @@ bss:
         support-email: hello@taranga.no
         privacy-url: https://taranga.no/privacy
         terms-url: https://taranga.no/terms
+        # Intent-to-launch governance: none (a write is a launch) | envelope
+        # (offers inside a pre-approved envelope launch by themselves, the rest
+        # ask an approver) | always (every launch asks). Readiness owners tick
+        # before launch — "authority|label"; an approver may launch past them.
+        launch-governance: ${LAUNCH_GOVERNANCE_TARANGA:envelope}
+        ai-proposals: ${AI_PROPOSALS_TARANGA:trust}
+        approval-expiry-days: 60
+        launch-readiness:
+          - "campaign:write|Marketing collateral and launch journey ready"
+          - "ticket:write|Care team briefed"
+          - "billing:write|Billing and finance checked"
         desk-learning: ${DESK_LEARNING_TARANGA:true}
         business-sales: true
         agent-commerce: ${AGENT_COMMERCE_TARANGA:full}

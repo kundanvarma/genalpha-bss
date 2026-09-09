@@ -16,7 +16,19 @@ public class RestCatalogClient implements CatalogClient {
 
     public RestCatalogClient(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url}") String baseUrl) {
-        this.restClient = builder.baseUrl(baseUrl).requestInterceptor(tokenInterceptor).build();
+        // forward the customer's sales channel (X-Channel) so the catalog answers
+        // for THAT channel: a dealer-only offer ordered from the web shop is unknown
+        this.restClient = builder.baseUrl(baseUrl).requestInterceptor(tokenInterceptor)
+                .requestInterceptor((request, body, execution) -> {
+                    if (org.springframework.web.context.request.RequestContextHolder.getRequestAttributes()
+                            instanceof org.springframework.web.context.request.ServletRequestAttributes attrs) {
+                        String ch = attrs.getRequest().getHeader("X-Channel");
+                        if (ch != null && !ch.isBlank() && !request.getHeaders().containsKey("X-Channel")) {
+                            request.getHeaders().add("X-Channel", ch.trim());
+                        }
+                    }
+                    return execution.execute(request, body);
+                }).build();
     }
 
     @Override

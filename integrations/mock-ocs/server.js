@@ -131,6 +131,9 @@ const server = http.createServer((req, res) => {
         id: 'sub-' + Math.random().toString(36).slice(2, 10),
         tenantId: body.tenantId, partyId: body.partyId, serviceId: body.serviceId,
         ratePlanId: body.ratePlanId, buckets: [bucketFor(plan, body.ratePlanId)],
+        // apps the plan zero-rates: usage tagged with one of them is counted, never charged
+        zeroRatedApps: Array.isArray(body.zeroRatedApps) ? body.zeroRatedApps.map((a) => String(a).toLowerCase()) : [],
+        zeroRatedGB: 0,
         notified: new Set(), // thresholds already notified this cycle
       };
       subscribers.set(sub.id, sub);
@@ -156,6 +159,11 @@ const server = http.createServer((req, res) => {
       if (req.method === 'POST' && m[2] === 'usage') {
         if (sub.status === 'suspended') return send(409, { error: 'line is suspended' });
         const bucket = sub.buckets[0];
+        // zero-rated app traffic (a real OCS sees the app via the rating group / URR): counted, not charged
+        if (body.app && (sub.zeroRatedApps || []).includes(String(body.app).toLowerCase())) {
+          sub.zeroRatedGB = Number(((sub.zeroRatedGB || 0) + Number(body.gb || 0)).toFixed(3));
+          return send(200, { ...sub, zeroRated: true, app: body.app });
+        }
         bucket.usedGB = Number((bucket.usedGB + Number(body.gb || 0)).toFixed(3));
         // on a priority plan the OCS counts the priority GB too (rated as an uplift by the BSS)
         if (RATE_PLANS[sub.ratePlanId] && RATE_PLANS[sub.ratePlanId].priorityUpliftPerGb) {

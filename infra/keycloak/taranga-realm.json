@@ -337,6 +337,12 @@
       },
       {
         "name": "migration:admin"
+      },
+      {
+        "name": "catalog:approve",
+        "description": "May approve, reject and force-launch product offerings (launch governance)",
+        "composite": false,
+        "clientRole": false
       }
     ]
   },
@@ -897,7 +903,8 @@
         "device:read",
         "device:write",
         "migration:read",
-        "migration:admin"
+        "migration:admin",
+        "catalog:approve"
       ]
     },
     {
@@ -1123,6 +1130,100 @@
         "customer",
         "business:admin"
       ]
+    },
+    {
+      "id": "9c1d1a20-0000-4000-8000-00000000a001",
+      "username": "sigrid@taranga.example",
+      "email": "sigrid@taranga.example",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Sigrid",
+      "lastName": "Haugen",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "sigrid",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "stock:read",
+        "stock:write",
+        "qualification:read",
+        "qualification:write",
+        "policy:read",
+        "policy:write",
+        "policy:evaluate",
+        "document:read",
+        "document:write",
+        "ai:use",
+        "knowledge:read",
+        "knowledge:write",
+        "insight:read"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "9c1d1a20-0000-4000-8000-00000000a002",
+      "username": "henrik@taranga.example",
+      "email": "henrik@taranga.example",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Henrik",
+      "lastName": "Solberg",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "henrik",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "catalog:write",
+        "catalog:approve",
+        "billing:read",
+        "billing:write",
+        "billing:admin",
+        "policy:read",
+        "policy:write",
+        "policy:evaluate",
+        "insight:read",
+        "ai:use",
+        "campaign:read",
+        "ticket:read"
+      ],
+      "requiredActions": []
+    },
+    {
+      "id": "9c1d1a20-0000-4000-8000-00000000a003",
+      "username": "ingrid@taranga.example",
+      "email": "ingrid@taranga.example",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ingrid",
+      "lastName": "Dahl",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "ingrid",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "catalog:read",
+        "campaign:read",
+        "campaign:write",
+        "communication:read",
+        "communication:write",
+        "insight:read",
+        "party:read",
+        "ai:use",
+        "knowledge:read"
+      ],
+      "requiredActions": []
     }
   ],
   "displayName": "Taranga",

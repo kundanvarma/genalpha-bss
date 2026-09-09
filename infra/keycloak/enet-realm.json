@@ -405,6 +405,12 @@
             "quote:write"
           ]
         }
+      },
+      {
+        "name": "catalog:approve",
+        "description": "May approve, reject and force-launch product offerings (launch governance)",
+        "composite": false,
+        "clientRole": false
       }
     ]
   },
@@ -965,7 +971,8 @@
         "device:read",
         "device:write",
         "migration:read",
-        "migration:admin"
+        "migration:admin",
+        "catalog:approve"
       ]
     },
     {
@@ -1349,7 +1356,8 @@
         }
       ],
       "realmRoles": [
-        "finance-staff"
+        "finance-staff",
+        "catalog:approve"
       ]
     },
     {

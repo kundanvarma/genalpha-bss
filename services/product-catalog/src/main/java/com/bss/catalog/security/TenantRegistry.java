@@ -79,6 +79,23 @@ public class TenantRegistry {
         private String legacyCatalogBaseUrl;
         /** GEO: crawler visibility — open | search-only | dark. */
         private String aiVisibility = "search-only";
+        /** Launch governance: none (default — a write is a launch) | envelope (pre-approved
+         *  envelopes launch by themselves, everything else asks) | always (every launch asks). */
+        private String launchGovernance = "none";
+        /** AI proposals: trust (a copilot proposal is treated like a human draft) | approve (always asks). */
+        private String aiProposals = "trust";
+        /** Readiness owners, "authority|label" each — every launch waits for these ticks unless forced. */
+        private java.util.List<String> launchReadiness = new java.util.ArrayList<>();
+        /** How long an approval stays good for before the launch must be re-approved. */
+        private int approvalExpiryDays = 60;
+        public String getLaunchGovernance() { return launchGovernance; }
+        public void setLaunchGovernance(String launchGovernance) { this.launchGovernance = launchGovernance; }
+        public String getAiProposals() { return aiProposals; }
+        public void setAiProposals(String aiProposals) { this.aiProposals = aiProposals; }
+        public java.util.List<String> getLaunchReadiness() { return launchReadiness; }
+        public void setLaunchReadiness(java.util.List<String> launchReadiness) { this.launchReadiness = launchReadiness; }
+        public int getApprovalExpiryDays() { return approvalExpiryDays; }
+        public void setApprovalExpiryDays(int approvalExpiryDays) { this.approvalExpiryDays = approvalExpiryDays; }
         private String brandName;
 
         public String getAiVisibility() { return aiVisibility; }

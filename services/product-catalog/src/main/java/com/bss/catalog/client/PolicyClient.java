@@ -40,6 +40,22 @@ public class PolicyClient {
         this.anonymousClient = builder.clone().baseUrl(baseUrl).build();
     }
 
+    /** The raw verdict for any domain — null when the policy service cannot answer,
+     *  which launch governance reads as "no envelope matched" (fail-closed). */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> evaluateRaw(String domain, Map<String, Object> context) {
+        try {
+            return evaluateClient.post()
+                    .uri(BASE + "/evaluate")
+                    .body(Map.of("domain", domain, "context", context))
+                    .retrieve()
+                    .body(Map.class);
+        } catch (RestClientException e) {
+            log.warn("policy service unreachable for domain '{}': {}", domain, e.getMessage());
+            return null;
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public Verdict evaluate(Map<String, Object> context) {
         try {

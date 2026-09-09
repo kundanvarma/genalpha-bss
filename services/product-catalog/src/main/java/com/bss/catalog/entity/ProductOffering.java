@@ -53,6 +53,23 @@ public class ProductOffering {
     @Column(name = "attachment", length = 4000)
     private String attachmentJson;
 
+    /** TMF620 channel[]: ChannelRef list as JSON; null/empty = every channel. */
+    @Column(name = "channel", length = 2000)
+    private String channelJson;
+
+    /** Launch governance (internal, never on the TMF DTO): none|requested|approved|rejected|held|launched|expired. */
+    @Column(name = "governance_state", length = 24)
+    private String governanceState;
+
+    @Column(name = "governance_json", length = 8000)
+    private String governanceJson;
+
+    @Column(name = "launch_hold_until")
+    private OffsetDateTime launchHoldUntil;
+
+    @Column(name = "approval_expires_at")
+    private OffsetDateTime approvalExpiresAt;
+
     /** JSON list of commitment terms, echoed verbatim. */
     @Column(name = "product_offering_term", length = 4000)
     private String productOfferingTermJson;
@@ -212,4 +229,16 @@ public class ProductOffering {
     public void setValidTo(java.time.OffsetDateTime v) { this.validTo = v; }
     public java.time.OffsetDateTime getAnnouncedAt() { return announcedAt; }
     public void setAnnouncedAt(java.time.OffsetDateTime v) { this.announcedAt = v; }
+
+    public String getChannelJson() { return channelJson; }
+    public void setChannelJson(String v) { this.channelJson = v; }
+
+    public String getGovernanceState() { return governanceState; }
+    public void setGovernanceState(String governanceState) { this.governanceState = governanceState; }
+    public String getGovernanceJson() { return governanceJson; }
+    public void setGovernanceJson(String governanceJson) { this.governanceJson = governanceJson; }
+    public OffsetDateTime getLaunchHoldUntil() { return launchHoldUntil; }
+    public void setLaunchHoldUntil(OffsetDateTime launchHoldUntil) { this.launchHoldUntil = launchHoldUntil; }
+    public OffsetDateTime getApprovalExpiresAt() { return approvalExpiresAt; }
+    public void setApprovalExpiresAt(OffsetDateTime approvalExpiresAt) { this.approvalExpiresAt = approvalExpiresAt; }
 }

@@ -31,16 +31,30 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
 
     @Override
     public void provision(String tenantId, String partyId, String serviceId, String chargingSpecId) {
+        provision(tenantId, partyId, serviceId, chargingSpecId, java.util.List.of());
+    }
+
+    @Override
+    public void provision(String tenantId, String partyId, String serviceId, String chargingSpecId,
+            java.util.List<String> zeroRatedApps) {
         if (!enabled) {
             return;
         }
         try {
+            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("tenantId", tenantId);
+            body.put("partyId", partyId);
+            body.put("serviceId", serviceId);
+            body.put("ratePlanId", chargingSpecId);
+            if (zeroRatedApps != null && !zeroRatedApps.isEmpty()) {
+                body.put("zeroRatedApps", zeroRatedApps);
+            }
             restClient.post().uri("/subscribers")
                     .header("Content-Type", "application/json")
-                    .body(Map.of("tenantId", tenantId, "partyId", partyId,
-                            "serviceId", serviceId, "ratePlanId", chargingSpecId))
+                    .body(body)
                     .retrieve().toBodilessEntity();
-            log.info("OCS: subscriber provisioned for service {} on rate plan {}", serviceId, chargingSpecId);
+            log.info("OCS: subscriber provisioned for service {} on rate plan {}{}", serviceId, chargingSpecId,
+                    zeroRatedApps == null || zeroRatedApps.isEmpty() ? "" : " zero-rating " + zeroRatedApps);
         } catch (RuntimeException e) {
             // fail open: charging reconciliation is an ops process, activation is not
             log.warn("OCS provisioning failed for service {} ({}) — activation proceeds, reconcile later",

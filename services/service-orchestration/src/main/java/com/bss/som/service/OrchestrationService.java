@@ -384,7 +384,8 @@ public class OrchestrationService {
                 // provisioned THERE — the OCS stays the charging master
                 String chargingSpec = catalog.chargingSpecOf(so.getOfferingId()).orElse(null);
                 if (chargingSpec != null) {
-                    ocs.provision(tenant, owner, serviceId, chargingSpec);
+                    // zero-rated apps ride along: the OCS, not the BSS, makes them free
+                    ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
                 }
                 // a PRIORITY TIER: the plan itself names a slice profile, so the
                 // line rides it for as long as the plan does (no expiry)

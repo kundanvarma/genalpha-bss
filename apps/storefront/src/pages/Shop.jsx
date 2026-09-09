@@ -274,7 +274,17 @@ export default function Shop() {
                   <tbody>
                     <tr>
                       <td className="feat">{t('Data')}</td>
-                      {items.map((o) => <td key={o.id} className="hero">{dataText(o)}</td>)}
+                      {items.map((o) => (
+                        <td key={o.id} className="hero">
+                          {dataText(o)}
+                          {specOf(o).zeroRatedApps && (
+                            <div data-testid="zero-rated" title={specOf(o).zeroRatedApps}
+                              style={{ fontSize: 12, fontWeight: 400, marginTop: 2, color: 'var(--teal-text, #0f766e)' }}>
+                              {t('Free')}: {specOf(o).zeroRatedApps}
+                            </div>
+                          )}
+                        </td>
+                      ))}
                     </tr>
                     <tr>
                       <td className="feat">{t('Network')}</td>

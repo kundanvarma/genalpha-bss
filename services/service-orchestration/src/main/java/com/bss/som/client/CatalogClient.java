@@ -31,6 +31,9 @@ public interface CatalogClient {
      */
     Optional<SliceIntent> sliceIntentOf(String offeringId);
 
+    /** The apps a plan zero-rates (spec characteristic "zeroRatedApps", comma-separated) — empty when none. */
+    java.util.List<String> zeroRatedAppsOf(String offeringId);
+
     /**
      * @param profile          the core's slice profile name
      * @param boostHours       present = a time-boxed pass

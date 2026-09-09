@@ -36,10 +36,16 @@ public class ProductOfferingService {
     private final com.bss.catalog.security.TenantRegistry tenants;
     private final LifecyclePolicy lifecycle;
 
+    private final Channels channels;
+    private final LaunchGovernanceService governance;
+
     public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.catalog.pim.ProductContentSource content, LegacyFederation legacy,
             com.bss.catalog.security.TenantRegistry tenants,
-            LifecyclePolicy lifecycle) {
+            LifecyclePolicy lifecycle,
+            Channels channels, LaunchGovernanceService governance) {
+        this.governance = governance;
+        this.channels = channels;
         this.lifecycle = lifecycle;
         this.repository = repository;
         this.mapper = mapper;
@@ -53,6 +59,10 @@ public class ProductOfferingService {
     @Transactional(readOnly = true)
     public PagedResult<ProductOfferingDto> findAll(int offset, int limit, Map<String, String> filters) {
         boolean staff = lifecycle.staffCaller();
+        // the channel this request sells through: what the front end declared,
+        // else the web shop for the shop-facing world; staff see every channel
+        // unless they ask for one (a machine caller forwarding a customer's header)
+        String channel = channels.requested().orElse(staff ? null : Channels.DEFAULT);
         if (!staff) {
             // L1 enforcement: a guest or customer NEVER sees the unlaunched
             // shelf, whatever their query says — the deep pass caught the
@@ -63,7 +73,7 @@ public class ProductOfferingService {
         Page<ProductOffering> page = repository.findAll(probeFor(filters), new OffsetPageRequest(offset, limit));
         List<ProductOfferingDto> items = new java.util.ArrayList<>(
                 page.getContent().stream()
-                        .filter(e -> staff || lifecycle.sellable(e))
+                        .filter(e -> staff ? (channel == null || lifecycle.sellableIn(e, channel)) : lifecycle.sellableIn(e, channel))
                         .map(mapper::toDto).map(this::withContent).toList());
         // THE OVERLAY SEAM: a tenant wrapping a legacy estate sees that
         // catalog federated in — read-through, legacy-prefixed, fail-soft.
@@ -71,7 +81,7 @@ public class ProductOfferingService {
         List<ProductOfferingDto> federated = offset == 0
                 ? legacy.offeringsFor(tenants.byId(tenantScope.currentTenantId())) : List.of();
         for (ProductOfferingDto f : federated) {
-            if (staff || lifecycle.sellableDto(f)) {
+            if (staff ? (channel == null || lifecycle.sellableDtoIn(f, channel)) : lifecycle.sellableDtoIn(f, channel)) {
                 items.add(f);
             }
         }
@@ -138,9 +148,12 @@ public class ProductOfferingService {
         }
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
-        if (!lifecycle.staffCaller() && !lifecycle.sellable(entity)) {
-            // an unlaunched (or out-of-window) offering does not exist for
-            // the shop-facing world — 404, not 403, no oracle
+        boolean staffCaller = lifecycle.staffCaller();
+        String channel = channels.requested().orElse(staffCaller ? null : Channels.DEFAULT);
+        if ((!staffCaller && !lifecycle.sellableIn(entity, channel))
+                || (staffCaller && channel != null && !lifecycle.sellableIn(entity, channel))) {
+            // an unlaunched, out-of-window, or wrong-channel offering does not
+            // exist for the shop-facing world — 404, not 403, no oracle
             throw NotFoundException.forResource(RESOURCE, id);
         }
         return withContent(mapper.toDto(entity));
@@ -148,12 +161,14 @@ public class ProductOfferingService {
 
     @Transactional
     public ProductOfferingDto create(ProductOfferingDto dto) {
+        Channels.requireKnown(dto.getChannel());
         if (lifecycle.governed()) {
             // L1 governed mode: creation is a DRAFT, launch is a decision
             dto.setLifecycleStatus("In design");
         } else if (dto.getLifecycleStatus() == null) {
             dto.setLifecycleStatus("Active");
         }
+        governance.beforeCreate(dto); // with governance on, only an approver's write lands live
         ProductOffering entity = mapper.toEntity(dto);
         // fixture-stable ids: a caller MAY supply the id (the demo seeds pin
         // well-known ids the suites share — same doctrine as persona ids in
@@ -164,21 +179,29 @@ public class ProductOfferingService {
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/productOffering/" + id);
         entity.setLastUpdate(OffsetDateTime.now());
-        ProductOfferingDto created = mapper.toDto(repository.save(entity));
+        ProductOffering saved = repository.save(entity);
+        governance.afterCreate(saved);
+        ProductOfferingDto created = mapper.toDto(saved);
         events.publish("ProductOfferingCreateEvent", "productOffering", created);
         return created;
     }
 
     @Transactional
     public ProductOfferingDto patch(String id, ProductOfferingDto patch) {
+        Channels.requireKnown(patch.getChannel());
         ProductOffering entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
         String before = entity.getLifecycleStatus();
         if (patch.getLifecycleStatus() != null) {
             lifecycle.requireLegalTransition(before, patch.getLifecycleStatus());
         }
+        // launch governance: a move to Launched needs an approval (or an approver);
+        // a substance change after approval voids it
+        boolean launchingNow = governance.beforePatch(entity, patch);
+        String hashBefore = governance.substanceHash(entity);
         mapper.applyPatch(patch, entity);
         entity.setLastUpdate(OffsetDateTime.now());
+        governance.afterPatch(entity, hashBefore, launchingNow);
         ProductOfferingDto updated = mapper.toDto(repository.save(entity));
         if (patch.getLifecycleStatus() != null && !patch.getLifecycleStatus().equals(before)) {
             events.publish("ProductOfferingStateChangeEvent", "productOffering", updated);
