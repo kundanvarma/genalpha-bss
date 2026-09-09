@@ -234,8 +234,9 @@ public class DeskLearningService {
                     valuesJson = "{}";
                 }
                 // the same preset accepted twice is one preset
+                final String wanted = valuesJson;
                 DeskPreset existing = presets.findByTenantIdAndDeskAndFormOrderByCreatedAtDesc(tenant, str(action.get("desk")), str(action.get("form")))
-                        .stream().filter(x -> valuesJson.equals(x.getValuesJson())).findFirst().orElse(null);
+                        .stream().filter(x -> wanted.equals(x.getValuesJson())).findFirst().orElse(null);
                 if (existing != null) {
                     result.put("preset", presetView(existing));
                     return result;
