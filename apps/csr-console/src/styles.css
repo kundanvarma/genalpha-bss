@@ -325,3 +325,4 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .help-drawer summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .help-drawer .help-body { white-space: pre-wrap; font-size: 13px; margin-top: 6px; line-height: 1.45; }
 .help-drawer .help-answer { font-size: 13px; }
+.help-drawer[hidden] { display: none; }

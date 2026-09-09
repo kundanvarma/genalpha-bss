@@ -436,3 +436,4 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .help-drawer details { border: 1px solid #e5e5e5; border-radius: 8px; padding: 6px 10px; margin: 0 0 6px; }
 .help-drawer summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .help-drawer .help-body { white-space: pre-wrap; font-size: 13px; margin-top: 6px; line-height: 1.45; }
+.help-drawer[hidden] { display: none; }
