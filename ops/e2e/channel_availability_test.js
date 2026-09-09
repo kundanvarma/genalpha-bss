@@ -70,6 +70,7 @@ const CAT = '/tmf-api/productCatalogManagement/v4';
   const patched = await call('PATCH', `${CAT}/productOffering/${id}`, staff, { channel: [] });
   if (patched.status >= 300 || !(await seen(mira, { 'X-Channel': 'web' }))) fail('clearing the list should make it sellable everywhere');
   console.log('  default: offers with no channel list stay on every channel; clearing the list reopens the web');
+  await call('PATCH', `${CAT}/productOffering/${id}`, staff, { lifecycleStatus: 'Retired' }); // leave the shelf as we found it
 
   console.log('PASS channel_availability_test');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });

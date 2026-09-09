@@ -126,6 +126,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   if (!mirror) console.log('  TMF701: no mirror flow yet (event lag) — the catalog trail is the source of truth');
   else console.log(`  TMF701: flow ${mirror.specCode || mirror.processFlowSpecification?.code || ''} state=${mirror.state} tasks=${(mirror.taskFlow || []).length}`);
   console.log(`  trail: ${actions}`);
+  await gov(inside.id, 'unlaunch', henrik, { note: 'test cleanup' }); // leave the shelf as we found it
 
   console.log('PASS launch_governance_test');
 })().catch((e) => { console.error('FAIL:', e.message); process.exit(1); });
