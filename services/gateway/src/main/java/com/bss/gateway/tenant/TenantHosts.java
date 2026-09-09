@@ -73,6 +73,8 @@ public class TenantHosts {
         private String priceNote;
         /** "required" where the law or licence records a government ID at every SIM sale (Guyana); else off. */
         private String simRegistration;
+        /** The shop window: static (lead banner + tiles, the research default) | carousel (arrows, dots, desktop auto-rotate). */
+        private String shopWindow;
         /** The operator's front door: how customers reach it and where its apps and legal pages live. */
         private String supportPhone;
         private String supportWhatsapp;
@@ -207,6 +209,14 @@ public class TenantHosts {
 
         public String getSimRegistration() {
             return simRegistration;
+        }
+
+        public String getShopWindow() {
+            return shopWindow;
+        }
+
+        public void setShopWindow(String shopWindow) {
+            this.shopWindow = shopWindow;
         }
 
         public String getSupportPhone() {

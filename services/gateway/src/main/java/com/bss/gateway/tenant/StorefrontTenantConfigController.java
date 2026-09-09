@@ -50,6 +50,7 @@ public class StorefrontTenantConfigController {
         if (tenant.getPriceDecimals() != null) manifest.put("priceDecimals", tenant.getPriceDecimals());
         if (tenant.getCurrencyDisplay() != null) manifest.put("currencyDisplay", tenant.getCurrencyDisplay());
         if (tenant.getPriceNote() != null) manifest.put("priceNote", tenant.getPriceNote());
+        manifest.put("shopWindow", tenant.getShopWindow() == null ? "static" : tenant.getShopWindow());
         if (tenant.getSimRegistration() != null) manifest.put("simRegistration", tenant.getSimRegistration());
         if (tenant.getSupportPhone() != null) manifest.put("supportPhone", tenant.getSupportPhone());
         if (tenant.getSupportWhatsapp() != null) manifest.put("supportWhatsapp", tenant.getSupportWhatsapp());
@@ -96,6 +97,7 @@ public class StorefrontTenantConfigController {
         String currencyDisplay = tenant != null && tenant.getCurrencyDisplay() != null ? tenant.getCurrencyDisplay() : "symbol";
         String priceNote = tenant != null && tenant.getPriceNote() != null ? tenant.getPriceNote() : "";
         String simRegistration = tenant != null && tenant.getSimRegistration() != null ? tenant.getSimRegistration() : "off";
+        String shopWindow = tenant != null && tenant.getShopWindow() != null ? tenant.getShopWindow() : "static";
         String supportPhone = tenant != null && tenant.getSupportPhone() != null ? tenant.getSupportPhone() : "";
         String supportWhatsapp = tenant != null && tenant.getSupportWhatsapp() != null ? tenant.getSupportWhatsapp() : "";
         String supportEmail = tenant != null && tenant.getSupportEmail() != null ? tenant.getSupportEmail() : "";
@@ -117,6 +119,7 @@ public class StorefrontTenantConfigController {
                 + ", currencyDisplay: '" + js(currencyDisplay)
                 + "', priceNote: '" + js(priceNote)
                 + "', simRegistration: '" + js(simRegistration)
+                + "', shopWindow: '" + js(shopWindow)
                 + "', supportPhone: '" + js(supportPhone)
                 + "', supportWhatsapp: '" + js(supportWhatsapp)
                 + "', supportEmail: '" + js(supportEmail)

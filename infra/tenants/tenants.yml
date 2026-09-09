@@ -715,6 +715,9 @@ bss:
         # (offers inside a pre-approved envelope launch by themselves, the rest
         # ask an approver) | always (every launch asks). Readiness owners tick
         # before launch — "authority|label"; an approver may launch past them.
+        # The shop window: static (one lead banner + tiles — the research default) |
+        # carousel (arrows, dots, 6 s auto-rotate on desktop only, never on mobile)
+        shop-window: carousel
         launch-governance: ${LAUNCH_GOVERNANCE_ENET:envelope}
         ai-proposals: ${AI_PROPOSALS_ENET:trust}
         approval-expiry-days: 60
@@ -802,6 +805,9 @@ bss:
         # (offers inside a pre-approved envelope launch by themselves, the rest
         # ask an approver) | always (every launch asks). Readiness owners tick
         # before launch — "authority|label"; an approver may launch past them.
+        # The shop window: static (one lead banner + tiles — the research default) |
+        # carousel (arrows, dots, 6 s auto-rotate on desktop only, never on mobile)
+        shop-window: static
         launch-governance: ${LAUNCH_GOVERNANCE_TARANGA:envelope}
         ai-proposals: ${AI_PROPOSALS_TARANGA:trust}
         approval-expiry-days: 60

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { beacon, checkQualification, consentChoice, forYou, getOffering, getSpec, listBanners, listOfferings, myExperience, myRecommendations, priceIndex, queryServiceQualification, saveConsent, submitSalesLead } from '../api.js';
 import { CART_EVENT, cartLines } from '../cart.js';
@@ -508,9 +508,15 @@ function BannerStrip({ banners }) {
     if (/^https?:\/\//.test(b.link)) window.open(b.link, '_blank', 'noopener');
     else navigate(b.link.replace(/^\/shop/, ''));
   };
-  // Static, not a carousel: research (NN/g, Baymard) finds people scroll past
-  // rotating banners and a static layout performs at least as well — one lead
-  // banner, the rest as tiles beneath, at most four in total, no scrollbar.
+  // Tenant setting shop-window: static (default) | carousel.
+  // Static: research (NN/g, Baymard) finds people scroll past rotating banners
+  // and a static layout performs at least as well — one lead banner, the rest
+  // as tiles beneath, at most four in total, no scrollbar.
+  // Carousel: built to the same research — arrows and dots, auto-rotate on
+  // desktop only (6 s), paused on hover and after any interaction, never on
+  // mobile, at most five slides, keyboard-reachable, never a scrollbar.
+  const mode = (window.BSS_STOREFRONT_CONFIG || {}).shopWindow === 'carousel' ? 'carousel' : 'static';
+  if (mode === 'carousel') return <BannerCarousel banners={banners.slice(0, 5)} go={go} />;
   const [lead, ...rest] = banners.slice(0, 4);
   const tile = (b, cls) => (
     <figure key={b.id} className={`banner ${cls} ${b.link ? 'clickable' : ''}`} onClick={() => go(b)}
@@ -524,6 +530,50 @@ function BannerStrip({ banners }) {
     <section className="bannerstrip" data-testid="banner-strip" aria-label={t('Promotions')}>
       {lead && tile(lead, 'lead')}
       {rest.length > 0 && <div className="bannertiles">{rest.map((b) => tile(b, 'tile'))}</div>}
+    </section>
+  );
+}
+
+function BannerCarousel({ banners, go }) {
+  const [i, setI] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const touchX = useRef(null);
+  const n = banners.length;
+  const coarse = typeof window !== 'undefined' && (window.matchMedia?.('(pointer: coarse)').matches || window.innerWidth < 640);
+  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const autoplay = n > 1 && !coarse && !reduced && !paused;
+  useEffect(() => {
+    if (!autoplay) return undefined;
+    const t = setInterval(() => setI((k) => (k + 1) % n), 6000);
+    return () => clearInterval(t);
+  }, [autoplay, n]);
+  const stop = () => setPaused(true); // any interaction ends auto-rotation for good
+  const step = (d) => { stop(); setI((k) => (k + d + n) % n); };
+  if (!n) return null;
+  const b = banners[i];
+  return (
+    <section className="bannercarousel" data-testid="banner-strip" data-mode="carousel" aria-roledescription="carousel" aria-label={t('Promotions')}
+             onMouseEnter={() => setPaused(true)} onMouseLeave={() => { if (!paused) return; }}
+             onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+             onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - (touchX.current ?? 0); if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1); }}
+             onKeyDown={(e) => { if (e.key === 'ArrowRight') step(1); if (e.key === 'ArrowLeft') step(-1); }} tabIndex={0}>
+      <figure className={`banner lead ${b.link ? 'clickable' : ''}`} key={b.id} onClick={() => { stop(); go(b); }}
+              role={b.link ? 'link' : undefined} aria-live="polite">
+        <img src={b.attachmentUrl} alt={b.description || b.name} />
+        {b.description && <figcaption>{b.description}</figcaption>}
+      </figure>
+      {n > 1 && (
+        <>
+          <button type="button" className="carousel-arrow prev" aria-label={t('Previous')} data-testid="carousel-prev" onClick={(e) => { e.stopPropagation(); step(-1); }}>‹</button>
+          <button type="button" className="carousel-arrow next" aria-label={t('Next')} data-testid="carousel-next" onClick={(e) => { e.stopPropagation(); step(1); }}>›</button>
+          <div className="carousel-dots" role="tablist">
+            {banners.map((x, k) => (
+              <button type="button" key={x.id} role="tab" aria-selected={k === i} aria-label={`${k + 1} / ${n}`} data-testid="carousel-dot"
+                      className={k === i ? 'on' : ''} onClick={(e) => { e.stopPropagation(); stop(); setI(k); }} />
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }
