@@ -45,6 +45,9 @@ sudo -E DEMO_DOMAIN=taranga.no LETSENCRYPT_EMAIL=you@taranga.no /tmp/bootstrap/o
 
 Alternative without a deploy key: `rsync` the checkout from a laptop to `/opt/taranga/bss` and set `GIT_URL=local` in the env file; the script then uses that checkout as-is.
 
+**Rsync must exclude `.env`** (and build output): the box's `.env` holds the generated Postgres and Keycloak passwords; a laptop `.env` copied over it breaks every database login. Use
+`rsync -az --delete --exclude .env --exclude 'services/*/target' --exclude 'apps/*/node_modules' --exclude 'apps/*/dist' ./ ubuntu@<ip>:/opt/taranga/bss/` and include `.git` so the build stamp sees the new commit.
+
 The first run writes `/etc/taranga-demo.env` and stops — review it (ENet on or
 off, console gate user/password, real-model AI keys) and re-run. The second run
 prints a **deploy key**; add it to the GitHub repo as a read-only deploy key and
