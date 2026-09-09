@@ -108,20 +108,26 @@ const RESOURCES = [
     path: 'productOffering',
     title: 'Product Offerings',
     fields: [
-      { name: 'name', label: 'Name', required: true },
-      { name: 'description', label: 'Description' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
-      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
-      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
-      { name: 'channel', label: 'Channels — where this offer is sold (none ticked = every channel, including AI agents)', kind: 'multiselect', options: CHANNELS, refType: 'Channel' },
-      { name: 'version', label: 'Version' },
-      { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification' },
-      { name: 'category', label: 'Categories (drive placement & fulfilment)', kind: 'reflist', resource: 'category', referredType: 'Category' },
-      { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment' },
+      // row 1 — identity
+      { name: 'name', label: 'Name', required: true, half: true },
+      { name: 'description', label: 'Description', half: true, hint: 'What the shop shows under the name.' },
+      // row 2 — lifecycle and window
+      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
+      { name: 'version', label: 'Version', placeholder: '1.0' },
+      { name: 'validFrom', label: 'Available from', placeholder: '2026-10-01T00:00:00+02:00', hint: 'ISO date-time; blank = immediately' },
+      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time; blank = forever' },
+      // row 3 — what it is
+      { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
+      { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
-      { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering' },
-      { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice' },
-      { name: 'attachment', label: 'Artwork — gallery shots & colour variants', kind: 'artwork' },
+      // row 4 — placement and price
+      { name: 'category', label: 'Categories', kind: 'reflist', resource: 'category', referredType: 'Category', half: true, hint: 'Drive shop placement and fulfilment' },
+      { name: 'productOfferingPrice', label: 'Prices', kind: 'reflist', resource: 'productOfferingPrice', referredType: 'ProductOfferingPrice', half: true, hint: 'One or more; discounts are pricing rules' },
+      // row 5 — where it is sold
+      { name: 'channel', label: 'Channels', kind: 'multiselect', options: CHANNELS, refType: 'Channel', wide: true, hint: 'Where this offer is sold. Nothing ticked = every channel, including AI agents.' },
+      // row 6 — composition and art
+      { name: 'bundledProductOffering', label: 'Bundle composition', kind: 'bundlecomposer', resource: 'productOffering', referredType: 'ProductOffering', wide: true },
+      { name: 'attachment', label: 'Artwork', kind: 'artwork', wide: true, hint: 'Gallery shots and colour variants' },
     ],
     assemble: (body) => {
       const out = { ...body };
@@ -1631,8 +1637,6 @@ const TAB_ROLE = {
   processFlow: ['workforce:use', 'service:write'],
   runbook: 'ai:admin',
   serviceableArea: 'qualification:write',
-  coverageMap: ['qualification:write', 'wholesale:admin'],
-  serviceSpecification: ['catalog:write', 'wholesale:admin'],
   wholesaleOwners: 'wholesale:admin',
   accessProduct: 'wholesale:admin',
   wholesaleSettlement: 'wholesale:admin',
@@ -1688,6 +1692,16 @@ const TAB_ROLE = {
   workforce: ['workforce:use', 'ai:admin'],
   reporting: ['billing:admin', 'billing:read'],
   integrations: ['roles:admin', 'document:write'],
+  // DEPARTMENT WALLS (last wins over the older per-tab gates above):
+  // Marketing is marketing's desk; Wholesale the wholesale desk; the platform
+  // and AI governance rooms are the admin's — a product manager sees the
+  // catalog, their help and their suggestions, nothing else
+  growthCopilot: 'campaign:write', landing: 'campaign:read', audienceBuilder: 'campaign:read', audience: 'campaign:read',
+  attribution: 'campaign:read', socialListening: 'campaign:read', socialCare: ['campaign:read', 'ticket:write'], voc: 'campaign:read',
+  coverageMap: 'wholesale:admin', serviceSpecification: 'wholesale:admin',
+  audit: 'ai:admin', workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
+  policyRule: ['roles:admin', 'policy:admin'], integrations: 'roles:admin', staff: 'roles:admin',
+  approvals: 'catalog:write', envelopes: 'catalog:write',
 };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
@@ -2699,7 +2713,8 @@ function renderEditor() {
   el('editor').hidden = Boolean(active.readOnly) || (Boolean(active.noCreate) && !editingId);
   el('fields').replaceChildren(...active.fields.map((f) => {
     const wrap = document.createElement('label');
-    wrap.className = 'field' + (f.kind === 'checkbox' ? ' check' : '') + ' field-' + (f.kind || 'text');
+    wrap.className = 'field' + (f.kind === 'checkbox' ? ' check' : '') + ' field-' + (f.kind || 'text')
+      + (f.wide ? ' wide' : '') + (f.half ? ' half' : '');
     const caption = document.createElement('span');
     caption.textContent = f.label + (f.required ? ' *' : '');
     const parts =
@@ -2720,6 +2735,7 @@ function renderEditor() {
       f.kind === 'codepick' ? codePickControl(f) :
       textControl(f, f.kind === 'number' ? 'number' : 'text');
     wrap.append(caption, ...parts);
+    if (f.hint) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = f.hint; wrap.append(h); }
     if (f.tokens && parts[0] && (parts[0].tagName === 'INPUT' || parts[0].tagName === 'TEXTAREA')) {
       wrap.append(tokenChips(parts[0])); // personalization chips + {{ autocomplete
     }
@@ -2730,8 +2746,11 @@ function renderEditor() {
   if (!active.readOnly && active.fields.length) {
     authFetch(`/insight/v1/desk/presets?desk=console&form=${encodeURIComponent(active.path)}`).then(async (r) => {
       if (!r.ok) return;
-      const list = await r.json();
+      let list = await r.json();
       if (!Array.isArray(list) || !list.length) return;
+      const seen = new Set();
+      list = list.filter((p) => { const k = p.name + '|' + JSON.stringify(p.values || {}); if (seen.has(k)) return false; seen.add(k); return true; });
+      el('fields').querySelectorAll('.presets').forEach((x) => x.remove());
       const row = document.createElement('div');
       row.className = 'presets';
       row.style.cssText = 'grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;font-size:.85rem';

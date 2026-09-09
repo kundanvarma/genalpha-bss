@@ -60,8 +60,18 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 
 .editor { border: 1px dashed var(--line); padding: 14px 16px 16px; margin: 16px 0 22px; }
 .editor h2 { font-size: 13px; margin: 0 0 12px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
-.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
-.field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dim); }
+.fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 16px; align-items: start; }
+@media (max-width: 1100px) { .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--dim); min-width: 0; }
+.field.half { grid-column: span 2; }
+.field.wide { grid-column: 1 / -1; }
+.field > input, .field > select, .field > textarea { width: 100%; box-sizing: border-box; }
+.field .hint { font-size: 11.5px; color: var(--dim); opacity: .85; line-height: 1.3; }
+.field select[multiple] { min-height: 118px; }
+.field.check { align-self: end; padding-bottom: 8px; }
+.field-multiselect .multiselect { display: grid !important; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px 14px !important; padding: 8px 10px; border: 1px solid var(--line); background: var(--paper); }
+.field-multiselect .multiselect label { font-size: 12.5px; color: var(--ink); }
 .field input {
   font: inherit; color: var(--ink); background: var(--paper);
   border: 1px solid var(--line); padding: 7px 10px;
