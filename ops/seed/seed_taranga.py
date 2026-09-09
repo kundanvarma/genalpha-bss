@@ -334,17 +334,18 @@ boost = offerings.get("Match Day Boost", {})
 fiber = offerings.get("Taranga Fiber 1000", {})
 for name, caption, link, title, sub, c1, c2 in [
     ("banner-match-day-boost", "Priority when it matters — Match Day Boost, 29 kr for 6 hours", f"/offering/{boost.get('id', '')}",
-     "Priority when it matters", "Match Day Boost · 6 hours on the priority 5G slice · 29 kr", "#4A4AC3", "#7B7BE0"),
+     "Priority when it matters", "Match Day Boost · 6 hours on the priority 5G slice · 29 kr", "#E8542F", "#F4A261"),
     ("banner-fiber-1000", "Taranga Fiber 1000 — now in Oslo, Bergen and Trondheim", f"/offering/{fiber.get('id', '')}",
-     "Fiber 1000 has arrived", "Oslo · Bergen · Trondheim · Wi-Fi 6 router included · 999 kr", "#22226B", "#4A4AC3"),
+     "Fiber 1000 has arrived", "Oslo · Bergen · Trondheim · Wi-Fi 6 router included · 999 kr", "#0B5D5A", "#2A9D8F"),
     ("banner-switch", "Switch to Taranga — keep your number, ported in a day", "/?tab=Mobile",
      "Switch and keep your number", "Ported in a day · no binding · EU/EEA roaming included", "#7B7BE0", "#4A4AC3"),
 ]:
+    body = {"name": name, "category": "banner", "description": caption, "link": link, "mimeType": "image/svg+xml",
+            "content": base64.b64encode(banner_svg(title, sub, c1, c2).encode()).decode()}
     if name in existing_banners:
-        continue
-    req("POST", f"{DOC}/document", {"name": name, "category": "banner", "description": caption, "link": link,
-                                     "mimeType": "image/svg+xml",
-                                     "content": base64.b64encode(banner_svg(title, sub, c1, c2).encode()).decode()})
+        # creative refreshed: the document store keeps immutable content — replace the row
+        req("DELETE", f"{DOC}/document/{existing_banners[name]['id']}", quiet=True)
+    req("POST", f"{DOC}/document", body)
     print(f"banner: {name}")
 
 print("\nTaranga tenant seeded: 4 mobile plans + priority tier, Fiber 300/1000/2500, TV + Sport + mesh, top-ups + Match Day Boost, "
@@ -353,7 +354,7 @@ print("\nTaranga tenant seeded: 4 mobile plans + priority tier, Fiber 300/1000/2
 
 
 # ---- B2B: Olav's company, so the business console has an organization to show ------------
-PARTY = "/tmf-api/party/v4"
+PARTY = "http://localhost:8080/tmf-api/party/v4"  # absolute: req() prefixes relative paths with the catalog base
 def sub_of(username, password):
     """The persona's Keycloak subject — the party id the consoles key on."""
     import base64

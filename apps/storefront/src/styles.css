@@ -50,7 +50,7 @@ body {
   color: var(--dim); text-decoration: none; padding: 6px 12px; font-size: 13.5px;
   border: 1px solid transparent;
 }
-.nav a.active { color: var(--teal-text); border-color: var(--teal); background: var(--teal-soft); font-weight: 600; }
+.nav a.active { color: var(--ink); border-color: transparent; border-bottom: 2px solid var(--teal); border-radius: 0; background: transparent; font-weight: 600; }
 .who { display: flex; align-items: center; gap: 12px; }
 .user { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--dim); }
 
@@ -89,7 +89,7 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
   font: inherit; font-size: 13px; color: var(--dim); padding: 5px 14px;
 }
 .chip:hover { color: var(--fg); border-color: var(--dim); }
-.chip.on { color: #fff; background: var(--teal); border-color: var(--teal); }
+.chip.on { color: var(--ink); background: var(--card); border-color: var(--ink); font-weight: 600; }
 
 /* Plan comparison table (T-Mobile/Verizon style: plans as columns, features as rows) */
 .comparewrap { overflow-x: auto; margin-bottom: 14px; }
@@ -97,12 +97,12 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .comparetable th, .comparetable td {
   border: 1px solid var(--line); padding: 12px 14px; text-align: center; vertical-align: middle;
 }
-.comparetable thead th { background: var(--teal-soft); border-bottom: 2px solid var(--teal); }
+.comparetable thead th { background: transparent; border-bottom: 2px solid var(--ink); }
 .comparetable td.feat, .comparetable th.feat {
   text-align: left; color: var(--dim); font-weight: 500; background: none; white-space: nowrap;
 }
 .comparetable .planname { font-weight: 700; color: var(--fg); }
-.comparetable .planprice strong { color: var(--teal); font-size: 17px; }
+.comparetable .planprice strong { color: var(--ink); font-size: 18px; letter-spacing: -0.01em; }
 .comparetable td.hero { font-size: 20px; font-weight: 800; color: var(--fg); }
 .comparetable .yes { color: var(--ok); font-weight: 700; }
 .comparetable .no { color: var(--dim); }
@@ -118,18 +118,18 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
   display: block; border: 1px solid var(--line); background: var(--card);
   padding: 16px 18px; text-decoration: none; color: inherit; position: relative;
 }
-.card:hover { border-color: var(--teal); }
-.card.bundle { border-width: 2px; border-color: var(--teal); }
+.card:hover { border-color: var(--dim); box-shadow: var(--shadow); }
+.card.bundle { border-width: 1px; border-color: var(--line); background: color-mix(in srgb, var(--card) 96%, var(--ink)); }
 .card h2 { margin: 6px 0 4px; font-size: 16.5px; }
 .card p { margin: 0 0 8px; font-size: 13.5px; }
 .tag {
   font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px;
-  text-transform: uppercase; letter-spacing: 0.1em; color: var(--teal-text);
-  background: var(--teal-soft); padding: 2px 8px;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim);
+  background: color-mix(in srgb, var(--card) 92%, var(--ink)); padding: 2px 8px; border-radius: 4px;
 }
 .includes { margin: 0 0 10px; padding-left: 18px; font-size: 13px; color: var(--dim); }
 .includes.big { font-size: 15px; color: var(--ink); }
-.pricing strong { color: var(--teal); font-size: 15.5px; }
+.pricing strong { color: var(--ink); font-size: 16px; }
 
 .detail { max-width: 620px; }
 .promos { margin: 4px 0 12px; }
@@ -176,7 +176,7 @@ h2 { font-size: 16px; margin: 18px 0 8px; }
 .pricetable { border-collapse: collapse; width: 100%; font-size: 14px; margin-bottom: 18px; }
 .pricetable td { border-bottom: 1px solid var(--line); padding: 8px 0; }
 .pricetable .num { text-align: right; }
-.pricetable .total td { font-weight: 700; border-bottom: none; color: var(--teal); }
+.pricetable .total td { font-weight: 700; border-bottom: none; color: var(--ink); font-size: 15px; }
 
 button.primary {
   background: var(--teal); color: #fff; border: 1px solid var(--teal);
@@ -373,14 +373,11 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .charfield input, .charfield select, .supportform input, .promobar input { border-radius: var(--radius-s); }
 .state { border-radius: 999px; }
 .hero {
-  margin: 4px 0 26px; padding: 34px 34px 30px; border-radius: var(--radius);
-  color: #fff; box-shadow: var(--shadow);
-  background:
-    radial-gradient(120% 200% at 100% 0%, color-mix(in srgb, var(--teal) 60%, #ffffff30) 0%, transparent 55%),
-    linear-gradient(135deg, var(--teal), color-mix(in srgb, var(--teal) 70%, #05221f));
+  margin: 4px 0 22px; padding: 22px 26px; border-radius: var(--radius);
+  color: var(--ink); background: var(--card); border: 1px solid var(--line); border-left: 6px solid var(--teal);
 }
-.hero h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -0.02em; color: #fff; }
-.hero p { margin: 0; font-size: 15px; opacity: 0.88; max-width: 46ch; }
+.hero h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; color: var(--ink); }
+.hero p { margin: 0; font-size: 15px; color: var(--dim); max-width: 60ch; }
 .keepnum-toggle { display: block; margin-top: 0.5rem; color: var(--dim); }
 
 /* Long names/emails must never stretch the header. */
@@ -414,11 +411,17 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .devcard .usage-meter-track { max-width: 420px; }
 
 /* --- the shop window: promo strip, live coverage check, footer --- */
-.bannerstrip { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 0 8px; margin: 0 0 12px; -webkit-overflow-scrolling: touch; }
-.bannerstrip .banner { flex: 0 0 min(560px, 88%); scroll-snap-align: start; margin: 0; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+/* The shop window: one lead banner, then tiles — static, no scrollbar, no autoplay. */
+.bannerstrip { display: flex; flex-direction: column; gap: 12px; margin: 0 0 18px; }
+.bannerstrip .banner { margin: 0; border-radius: var(--radius); overflow: hidden; background: var(--card); box-shadow: var(--shadow); }
 .bannerstrip .banner.clickable { cursor: pointer; }
-.bannerstrip .banner img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
-.bannerstrip .banner figcaption { padding: 8px 12px; font-size: 13px; font-weight: 600; }
+.bannerstrip .banner.clickable:hover img { transform: scale(1.015); }
+.bannerstrip .banner img { display: block; width: 100%; object-fit: cover; object-position: left center; transition: transform .25s ease; }
+.bannerstrip .banner.lead img { aspect-ratio: 21 / 9; }
+.bannerstrip .banner.tile img { aspect-ratio: 16 / 7; }
+.bannerstrip .banner figcaption { padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.bannertiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+@media (max-width: 640px) { .bannerstrip .banner.lead img { aspect-ratio: 16 / 9; } .bannerstrip .banner.tile img { aspect-ratio: 16 / 9; } }
 .coverage { margin: 12px 0; padding: 12px 16px; }
 .coverage-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .coverage-row input { flex: 1; min-width: 160px; padding: 8px 10px; }

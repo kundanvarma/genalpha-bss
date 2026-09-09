@@ -112,10 +112,13 @@ export default function Shop() {
   return (
     <>
       {banners.length > 0 && <BannerStrip banners={banners} />}
-      <section className="hero">
-        <h1>{brand.brandName || 'Welcome'}</h1>
-        <p>{brand.tagline || t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
-      </section>
+      {/* the logo already says who we are — the welcome card only fills an empty window */}
+      {banners.length === 0 && (
+        <section className="hero">
+          <h1>{brand.brandName || 'Welcome'}</h1>
+          <p>{brand.tagline || t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
+        </section>
+      )}
       <CoverageCheck offerings={offerings} onSeePlans={() => setTab('Internet')} />
       <ConsentBanner onDecided={() => myExperience().then(setExperience).catch(() => {})} />
       {hero && (
@@ -424,9 +427,9 @@ function ConsentBanner({ onDecided }) {
   return (
     <section className="lobcard" data-testid="consent-banner" style={{
       padding: '14px 18px',
-      border: '2px solid var(--teal)',
-      background: 'var(--teal-soft, rgba(69,175,172,.12))',
-      boxShadow: '0 6px 22px rgba(0,0,0,.12)' }}>
+      border: '1px solid var(--line)',
+      background: 'var(--card, #fff)',
+      boxShadow: '0 6px 22px rgba(0,0,0,.08)' }}>
       <p style={{ margin: '0 0 10px', fontSize: 15, fontWeight: 600 }}>
         🍪 {t('May we use your browsing here to personalize offers?')}
       </p>
@@ -436,7 +439,7 @@ function ConsentBanner({ onDecided }) {
       <div style={{ display: 'flex', gap: 10, maxWidth: 460 }}>
         <button className="primary" data-testid="consent-accept" style={{ flex: 1 }}
           onClick={() => decide(true)}>{t('Yes, personalize')}</button>
-        <button className="primary" data-testid="consent-reject" style={{ flex: 1 }}
+        <button className="ghost" data-testid="consent-reject" style={{ flex: 1 }}
           onClick={() => decide(false)}>{t('No thanks')}</button>
       </div>
     </section>
@@ -505,16 +508,22 @@ function BannerStrip({ banners }) {
     if (/^https?:\/\//.test(b.link)) window.open(b.link, '_blank', 'noopener');
     else navigate(b.link.replace(/^\/shop/, ''));
   };
+  // Static, not a carousel: research (NN/g, Baymard) finds people scroll past
+  // rotating banners and a static layout performs at least as well — one lead
+  // banner, the rest as tiles beneath, at most four in total, no scrollbar.
+  const [lead, ...rest] = banners.slice(0, 4);
+  const tile = (b, cls) => (
+    <figure key={b.id} className={`banner ${cls} ${b.link ? 'clickable' : ''}`} onClick={() => go(b)}
+            role={b.link ? 'link' : undefined} tabIndex={b.link ? 0 : undefined}
+            onKeyDown={(e) => e.key === 'Enter' && go(b)}>
+      <img src={b.attachmentUrl} alt={b.description || b.name} loading={cls === 'lead' ? 'eager' : 'lazy'} />
+      {b.description && <figcaption>{b.description}</figcaption>}
+    </figure>
+  );
   return (
     <section className="bannerstrip" data-testid="banner-strip" aria-label={t('Promotions')}>
-      {banners.map((b) => (
-        <figure key={b.id} className={`banner ${b.link ? 'clickable' : ''}`} onClick={() => go(b)}
-                role={b.link ? 'link' : undefined} tabIndex={b.link ? 0 : undefined}
-                onKeyDown={(e) => e.key === 'Enter' && go(b)}>
-          <img src={b.attachmentUrl} alt={b.description || b.name} loading="lazy" />
-          {b.description && <figcaption>{b.description}</figcaption>}
-        </figure>
-      ))}
+      {lead && tile(lead, 'lead')}
+      {rest.length > 0 && <div className="bannertiles">{rest.map((b) => tile(b, 'tile'))}</div>}
     </section>
   );
 }
