@@ -263,9 +263,9 @@ function PolicyEditor({ policy, act }) {
     active: policy.active,
   });
   const field = (key, label, testid) => (
-    <label className="dim small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <label className="dim small captioned">
       {label}
-      <input type="number" min="0" step="0.01" style={{ maxWidth: 110, flex: 'none' }}
+      <input type="number" min="0" step="0.01"
              data-testid={testid} value={draft[key] ?? ''}
              onChange={(e) => setDraft((s) => ({ ...s, [key]: e.target.value }))} />
     </label>

@@ -210,11 +210,17 @@ main.wide { max-width: 1100px; }
 .ticket { border: 1px solid var(--line); background: var(--card); padding: 4px 14px 12px; margin-bottom: 12px; }
 .ticket .row { border-bottom: none; }
 .ticketnote { margin: 2px 0; }
-.stack { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
-.stack input {
-  flex: 1; min-width: 160px; font: inherit; color: var(--ink); background: var(--paper);
-  border: 1px solid var(--line); padding: 7px 10px;
+.stack { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: stretch; }
+.stack input, .stack select {
+  flex: 1 1 180px; min-width: 0; height: 38px; box-sizing: border-box; font: inherit; color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); padding: 7px 10px; border-radius: var(--radius-s);
 }
+.stack input[type="checkbox"] { flex: none; height: auto; width: 16px; }
+.stack > button { flex: none; height: 38px; }
+.stack > label.dim.small { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; }
+/* captioned fields inside a stack: caption above, control below, equal columns */
+.stack > label.captioned { display: flex; flex-direction: column; gap: 4px; flex: 1 1 160px; min-width: 0; }
+.stack > label.captioned input { width: 100%; max-width: none !important; flex: none !important; }
 .tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
 .tab {
   border: 1px solid var(--line); background: var(--card); color: var(--dim);

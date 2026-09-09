@@ -699,7 +699,8 @@ const RESOURCES = [
   {
     path: 'article',
     base: KNOWLEDGE_BASE,
-    title: 'Knowledge',
+    title: 'Help articles',
+    intro: 'This is where help is WRITTEN. To read the help for the screen you are on, press the ? at the top right of any tab — it shows the articles tagged for that screen, gated by who may read them. Tags say where an article appears (pane:approvals, csr:tickets, shop:bills); the audience says who may read it.',
     // The library every channel reads: FAQs for customers, cheat-sheets for
     // CSRs, how-tos for product owners. Content is DATA — publish here and
     // the shop's Support page, the CSR desk and the ask-AI answer from it
@@ -5984,6 +5985,7 @@ async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
   helpButtonFor(active);
+  renderIntro(active);
   renderKnowledgeGaps(active);
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
@@ -7015,4 +7017,17 @@ async function renderKnowledgeGaps(resource) {
     }
     box.append(ul);
   }
+}
+
+
+/* A one-paragraph orientation under a tab's title, when the tab needs one. */
+function renderIntro(resource) {
+  let p = document.getElementById('tab-intro');
+  if (!resource.intro) { if (p) p.hidden = true; return; }
+  if (!p) {
+    p = document.createElement('p'); p.id = 'tab-intro'; p.className = 'dim'; p.dataset.testid = 'tab-intro';
+    p.style.cssText = 'margin:0 0 12px;font-size:13px;max-width:900px;line-height:1.45';
+    document.querySelector('.panel-head')?.after(p);
+  }
+  p.hidden = false; p.textContent = resource.intro;
 }

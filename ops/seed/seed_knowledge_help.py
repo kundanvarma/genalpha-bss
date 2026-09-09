@@ -127,6 +127,14 @@ article("Prices and pricing rules", PO, ["pane:productOfferingPrice", "catalog"]
 • Discounts, bundles-of-two, consumer-only offers are PRICING RULES (Platform › Rules, domain pricing), applied in the cart and the bill run.
 • Tax rides on the price (per-price tax); the shop shows the tenant's VAT note.
 """)
+article("Writing help articles", PO, ["pane:article", "knowledge"], "Catalog how-to", """
+Help articles are the shelf behind the ? on every screen — this tab is where they are written.
+• Title and body: plain words, numbered steps. One screen or task per article.
+• Who is this for: the audience gate. Customers only ever see "customer" and "all"; CSRs the CSR shelf; product owners the how-tos. A customer can never read a product how-to, whatever the tag says.
+• Search tags: where the article appears — pane:<console tab> (pane:approvals, pane:envelopes), csr:<desk page> (csr:tickets), shop:<shop page> (shop:bills). Several tags = several screens.
+• Status: only published articles show. Drafts stay here.
+• Unanswered questions at the top of this tab are what people asked that no article answered — Write it prefills a new article; once published, Ask is no longer needed for that question.
+""")
 article("Journeys and campaigns", PO, ["pane:journeys", "pane:campaigns", "marketing"], "Marketing how-to", """
 • A campaign is the umbrella; a journey is the sequence (welcome, winback, running-low, launch day).
 • Journeys start on business events (order placed, usage threshold, offer launched) or on an audience.

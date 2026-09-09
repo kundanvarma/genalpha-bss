@@ -18,6 +18,15 @@ const INVENTORY = '/tmf-api/productInventory/v4';
 
 const el = (id) => document.getElementById(id);
 // the tenant's brand colour drives the console, same as every other channel
+// the company policy is priced in the tenant's currency unless a saved policy says otherwise
+if (window.BSS_BIZ_CONFIG?.currency) {
+  const sel = document.getElementById('policy-unit');
+  if (sel) {
+    const cur = window.BSS_BIZ_CONFIG.currency;
+    if (![...sel.options].some((o) => o.value === cur)) sel.append(new Option(cur, cur));
+    sel.value = cur;
+  }
+}
 if (window.BSS_BIZ_CONFIG?.brandColor) {
   document.documentElement.style.setProperty('--teal', window.BSS_BIZ_CONFIG.brandColor);
 }
@@ -314,7 +323,10 @@ function loadPolicy(org) {
   const allowance = org?.deviceAllowance;
   if (allowance?.value != null) {
     el('policy-allowance').value = allowance.value;
-    el('policy-unit').value = allowance.unit || 'EUR';
+    const unit = allowance.unit || window.BSS_BIZ_CONFIG?.currency || 'EUR';
+    const sel = el('policy-unit');
+    if (![...sel.options].some((o) => o.value === unit)) sel.append(new Option(unit, unit));
+    sel.value = unit;
   }
 }
 

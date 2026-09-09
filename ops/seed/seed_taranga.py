@@ -350,3 +350,32 @@ for name, caption, link, title, sub, c1, c2 in [
 print("\nTaranga tenant seeded: 4 mobile plans + priority tier, Fiber 300/1000/2500, TV + Sport + mesh, top-ups + Match Day Boost, "
       "Home + Mobile bundle, allowances, +47 41 number pool, Helthjem/Posten, Vipps + Klarna, 25% MVA, NO collections, "
       "Oslo/Bergen/Trondheim footprint + roster, wordmark + 3 banners — all NOK.")
+
+
+# ---- B2B: Olav's company, so the business console has an organization to show ------------
+PARTY = "/tmf-api/party/v4"
+def sub_of(username, password):
+    """The persona's Keycloak subject — the party id the consoles key on."""
+    import base64
+    data = urllib.parse.urlencode({"grant_type": "password", "client_id": "bss-demo", "username": username, "password": password}).encode()
+    with urllib.request.urlopen(urllib.request.Request(KEYCLOAK, data=data)) as r:
+        t = json.load(r)["access_token"]
+    p = t.split(".")[1]
+    p += "=" * (-len(p) % 4)
+    return json.loads(base64.urlsafe_b64decode(p))["sub"]
+
+
+OLAV_ID = sub_of("olav@fjordbygg.example", "olav")
+orgs = req("GET", f"{PARTY}/organization?limit=100", quiet=True) or []
+org = next((o for o in orgs if isinstance(o, dict) and str(o.get("tradingName", "")).startswith("Fjordbygg")), None)
+if not org:
+    org = req("POST", f"{PARTY}/organization", {"tradingName": "Fjordbygg AS", "name": "Fjordbygg AS", "isLegalEntity": True})
+    print("organization: Fjordbygg AS")
+me = req("GET", f"{PARTY}/individual/{OLAV_ID}", quiet=True)
+if org and not me:
+    req("POST", f"{PARTY}/individual", {"id": OLAV_ID, "givenName": "Olav", "familyName": "Fjordbygg", "organization": {"id": org["id"]},
+                                         "contactMedium": [{"mediumType": "email", "characteristic": {"emailAddress": "olav@fjordbygg.example"}}]})
+    print("olav linked to Fjordbygg AS")
+elif org and me and not (me.get("organization") or {}).get("id"):
+    req("PATCH", f"{PARTY}/individual/{OLAV_ID}", {"organization": {"id": org["id"]}})
+    print("olav linked to Fjordbygg AS")
