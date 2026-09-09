@@ -159,13 +159,14 @@ const RESOURCES = [
     path: 'productSpecification',
     title: 'Product Specifications',
     fields: [
-      { name: 'name', label: 'Name', required: true },
-      { name: 'brand', label: 'Brand' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
-      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
-      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
-      { name: 'productSpecCharacteristic', label: 'Characteristics (JSON array)', kind: 'jsontext',
-        placeholder: '[{"name": "color", "productSpecCharacteristicValue": [{"value": "Black"}]}]' },
+      { name: 'name', label: 'Name', required: true, half: true },
+      { name: 'brand', label: 'Brand', half: true, hint: 'Shown on device cards; blank for plans' },
+      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
+      { name: 'validFrom', label: 'Available from', placeholder: 'blank = immediately', hint: 'ISO date-time' },
+      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time' },
+      { name: 'productSpecCharacteristic', label: 'Characteristics', kind: 'jsontext', wide: true,
+        hint: 'JSON array. Facts the shop shows and the systems read: Data, Validity, chargingSpecId, sliceProfile, zeroRatedApps. "configurable": true makes a picker.',
+        placeholder: '[{"name": "Data", "configurable": false, "productSpecCharacteristicValue": [{"value": "20 GB"}]}]' },
     ],
     columns: ['name', 'brand', 'lifecycleStatus', 'lastUpdate'],
   },
@@ -173,16 +174,16 @@ const RESOURCES = [
     path: 'productOfferingPrice',
     title: 'Product Offering Prices',
     fields: [
-      { name: 'name', label: 'Name', required: true },
-      { name: 'priceType', label: 'Price type', placeholder: 'recurring' },
-      { name: 'price', label: 'Price', kind: 'money' },
-      { name: 'recurringChargePeriodType', label: 'Charge period', placeholder: 'month' },
-      { name: 'recurringChargePeriodLength', label: 'Period length', kind: 'number', placeholder: '1' },
+      { name: 'name', label: 'Name', required: true, half: true },
+      { name: 'priceType', label: 'Price type', kind: 'select', options: [{ value: 'recurring', label: 'recurring (per period)' }, { value: 'oneTime', label: 'one-time' }, { value: 'usage', label: 'usage' }], default: 'recurring', hint: 'What is charged, when' },
+      { name: 'price', label: 'Price', kind: 'money', hint: 'Amount and currency' },
+      { name: 'recurringChargePeriodType', label: 'Charge period', kind: 'select', options: [{ value: 'month', label: 'month' }, { value: 'week', label: 'week' }, { value: 'day', label: 'day' }, { value: 'year', label: 'year' }], default: 'month', hint: 'Recurring prices only' },
+      { name: 'recurringChargePeriodLength', label: 'Period length', kind: 'number', placeholder: '1', hint: 'e.g. 1 = every month' },
+      { name: 'version', label: 'Version', placeholder: '1.0' },
       { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
-      { name: 'lifecycleStatus', label: 'Lifecycle status (In study → In design → In test → Launched/Active → Retired)', placeholder: 'Active' },
-      { name: 'validFrom', label: 'Available from (ISO date-time, blank = immediately)' },
-      { name: 'validTo', label: 'Available until (ISO date-time, blank = forever)' },
-      { name: 'version', label: 'Version' },
+      { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
+      { name: 'validFrom', label: 'Available from', placeholder: 'blank = immediately', hint: 'ISO date-time' },
+      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time' },
     ],
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
@@ -1699,8 +1700,9 @@ const TAB_ROLE = {
   growthCopilot: 'campaign:write', landing: 'campaign:read', audienceBuilder: 'campaign:read', audience: 'campaign:read',
   attribution: 'campaign:read', socialListening: 'campaign:read', socialCare: ['campaign:read', 'ticket:write'], voc: 'campaign:read',
   coverageMap: 'wholesale:admin', serviceSpecification: 'wholesale:admin',
-  audit: 'ai:admin', workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
-  policyRule: ['roles:admin', 'policy:admin'], integrations: 'roles:admin', staff: 'roles:admin',
+  // the AI audit trail rides along with AI power, by design (auditability)
+  audit: ['ai:use', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
+  policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
 };
 let visible = RESOURCES;
@@ -1964,9 +1966,10 @@ function selectControl(field) {
   for (const opt of field.options) {
     select.append(new Option(opt.label, opt.value));
   }
+  if (field.default) select.value = field.default;
   controls[field.name] = {
     get: () => select.value || undefined,
-    set: (item) => { select.value = item[field.name] ?? ''; },
+    set: (item) => { select.value = item[field.name] ?? (item.id ? '' : field.default ?? ''); },
   };
   return [select];
 }
@@ -6782,10 +6785,10 @@ async function renderEnvelopes() {
       channel: CHANNELS.map((c) => c.value), zeroRatedApps: 'any', bundles: 'any' }, (rule && rule.experience && rule.experience.envelope) || {});
     editor.hidden = false; editor.replaceChildren();
     const h = document.createElement('h3'); h.style.cssText = 'font-size:15px;margin:0 0 8px'; h.textContent = rule && rule.id ? `Edit envelope: ${rule.name}` : 'New envelope';
-    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 16px';
-    const field = (label, control) => { const l = document.createElement('label'); l.className = 'field'; const sp = document.createElement('span'); sp.textContent = label; l.append(sp, control); return l; };
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 16px;align-items:start';
+    const field = (label, control, span) => { const l = document.createElement('label'); l.className = 'field'; if (span) l.style.gridColumn = `span ${span}`; const sp = document.createElement('span'); sp.textContent = label; l.append(sp, control); return l; };
     const name = document.createElement('input'); name.value = rule ? rule.name || '' : ''; name.placeholder = 'Everyday top-ups'; name.dataset.testid = 'env-name';
-    const cat = document.createElement('div'); cat.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px 10px';
+    const cat = document.createElement('div'); cat.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 14px;padding:8px 10px;border:1px solid var(--line,#ddd);background:var(--paper,#fff)';
     for (const c of catNames) { const l = document.createElement('label'); l.style.cssText = 'display:inline-flex;gap:4px;font-weight:400'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = c; cb.checked = (p.category || []).map((x) => x.toLowerCase()).includes(c.toLowerCase()); cb.dataset.testid = `env-cat-${c}`; cb.addEventListener('change', () => { p.category = [...cat.querySelectorAll('input:checked')].map((x) => x.value); sync(); }); l.append(cb, document.createTextNode(c)); cat.append(l); }
     const sel = (opts, val, on) => { const s = document.createElement('select'); for (const [v, lab] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = lab; if (v === val) o.selected = true; s.append(o); } s.addEventListener('change', () => { on(s.value); sync(); }); return s; };
     const num = (val, ph, on, testid) => { const i = document.createElement('input'); i.type = 'number'; i.min = '0'; i.value = val; i.placeholder = ph; i.dataset.testid = testid; i.addEventListener('input', () => { on(i.value); sync(); }); return i; };
@@ -6794,12 +6797,14 @@ async function renderEnvelopes() {
     const priceMax = num(p.priceMax, '399', (v) => { p.priceMax = v; }, 'env-price-max');
     const allowance = num(p.allowanceMaxGb, 'any', (v) => { p.allowanceMaxGb = v; }, 'env-allowance');
     const validity = num(p.validityMaxDays, 'any', (v) => { p.validityMaxDays = v; }, 'env-validity');
-    const ch = document.createElement('div'); ch.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px 10px';
+    const ch = document.createElement('div'); ch.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 14px;padding:8px 10px;border:1px solid var(--line,#ddd);background:var(--paper,#fff)';
     for (const c of CHANNELS) { const l = document.createElement('label'); l.style.cssText = 'display:inline-flex;gap:4px;font-weight:400'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = c.value; cb.checked = (p.channel || []).includes(c.value); cb.dataset.testid = `env-ch-${c.value}`; cb.addEventListener('change', () => { p.channel = [...ch.querySelectorAll('input:checked')].map((x) => x.value); sync(); }); l.append(cb, document.createTextNode(c.label)); ch.append(l); }
     const zero = sel([['any', 'allowed'], ['no', 'not allowed']], p.zeroRatedApps, (v) => { p.zeroRatedApps = v; });
     const bundles = sel([['any', 'allowed'], ['no', 'not allowed']], p.bundles, (v) => { p.bundles = v; });
-    grid.append(field('Name', name), field('Categories (any of)', cat), field('Price type', priceType), field(`Price from (${cur})`, priceMin), field(`Price up to (${cur})`, priceMax),
-      field('Data allowance up to (GB)', allowance), field('Validity up to (days)', validity), field('Channels', ch), field('Zero-rated apps', zero), field('Bundles', bundles));
+    grid.append(field('Name', name, 2), field('Price type', priceType),
+      field(`Price from (${cur})`, priceMin), field(`Price up to (${cur})`, priceMax), field('Data allowance up to (GB)', allowance),
+      field('Validity up to (days)', validity), field('Zero-rated apps', zero), field('Bundles', bundles),
+      field('Categories (any of — none ticked = any category)', cat, 3), field('Channels (the offer may be sold only through these)', ch, 3));
     const readback = document.createElement('p'); readback.dataset.testid = 'env-readback'; readback.style.cssText = 'margin:10px 0 4px;font-size:13px';
     const warn = document.createElement('p'); warn.className = 'error'; warn.style.cssText = 'font-size:12px;margin:0 0 6px';
     const preview = document.createElement('div'); preview.dataset.testid = 'env-preview'; preview.className = 'dim'; preview.style.cssText = 'font-size:12px;margin:0 0 10px';

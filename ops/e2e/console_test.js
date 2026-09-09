@@ -134,7 +134,7 @@ const run = Date.now();
 
   // 5. Create a price via the form (money control), then delete it
   await page.fill('input[name="name"]', 'E2E Throwaway Price');
-  await page.fill('input[name="priceType"]', 'oneTime');
+  await page.selectOption('select[name="priceType"]', 'oneTime');
   await page.fill('.moneyrow input:not(.unit)', '9.99');
   await page.fill('.moneyrow input.unit', 'EUR');
   await page.click('#save');
