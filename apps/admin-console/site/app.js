@@ -1874,8 +1874,7 @@ function renderTabs() {
     }
     const row = document.createElement('div');
     row.className = 'tabgroup-row';
-    row.style.height = `${rows.length * 2}px`;
-    rows.forEach((r, i) => { const b = tabButton(r); b.classList.add('offdept'); b.style.top = `${i * 2}px`; b.setAttribute('aria-hidden', 'true'); b.tabIndex = -1; row.append(b); });
+    rows.forEach((r, i) => { const b = tabButton(r); b.classList.add('offdept'); b.style.left = `${2 + i * 2}px`; b.setAttribute('aria-hidden', 'true'); b.tabIndex = -1; row.append(b); });
     group.append(row);
     return group;
   };
@@ -6213,7 +6212,7 @@ async function loadList() {
     return tr;
   })());
 
-  el('listing-body').replaceChildren(...shown.map((item) => {
+  el('listing-body').replaceChildren(...(Array.isArray(shown) ? shown : []).map((item) => {
     const tr = document.createElement('tr');
     if (item && item.id != null) tr.dataset.id = String(item.id);
     for (const c of active.columns) {

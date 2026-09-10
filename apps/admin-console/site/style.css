@@ -220,9 +220,9 @@ th { border-bottom-color: var(--line); }
 }
 .tabgroup-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
 /* department buttons in the rail; the page tabs beneath are 1px silent stubs (see renderTabs) */
-.tabgroup { padding: 0; overflow: visible; }
-.tabgroup-row { position: relative; }
-.tabs .tab.offdept { position: absolute; left: 0; width: 1px; height: 1px; padding: 0; margin: 0; border: 0; opacity: 0; overflow: hidden; font-size: 1px; line-height: 1px; }
+.tabgroup { padding: 0; overflow: visible; position: relative; }
+.tabgroup-row { position: absolute; top: 2px; left: 0; height: 0; }
+.tabs .tab.offdept { position: absolute; top: 0; width: 1px; height: 1px; padding: 0; margin: 0; border: 0; opacity: 0; overflow: hidden; font-size: 1px; line-height: 1px; z-index: 2; }
 .tabgroup-label.dept { display: block; width: 100%; text-align: left; background: transparent; border: none; cursor: pointer;
   font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; color: var(--ink); padding: 12px 14px; border-radius: 12px; }
 .tabgroup-label.dept:hover { background: var(--card); }
