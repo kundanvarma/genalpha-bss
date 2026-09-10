@@ -46,7 +46,7 @@ sudo -E DEMO_DOMAIN=taranga.no LETSENCRYPT_EMAIL=you@taranga.no /tmp/bootstrap/o
 Alternative without a deploy key: `rsync` the checkout from a laptop to `/opt/taranga/bss` and set `GIT_URL=local` in the env file; the script then uses that checkout as-is.
 
 **Rsync must exclude `.env`** (and build output): the box's `.env` holds the generated Postgres and Keycloak passwords; a laptop `.env` copied over it breaks every database login. Use
-`rsync -az --delete --exclude .env --exclude 'services/*/target' --exclude 'apps/*/node_modules' --exclude 'apps/*/dist' ./ ubuntu@<ip>:/opt/taranga/bss/` and include `.git` so the build stamp sees the new commit.
+`rsync -az --delete --exclude .env --exclude docker-compose.cloud.yml --exclude '.cloud-build-*' --exclude .cloud-seeded --exclude 'services/*/target' --exclude 'apps/*/node_modules' --exclude 'apps/*/dist' ./ ubuntu@<ip>:/opt/taranga/bss/` and include `.git` so the build stamp sees the new commit. `docker-compose.cloud.yml` is generated on the box (not in the repo): deleting it breaks every `docker compose` call there until `install.sh` regenerates it.
 
 The first run writes `/etc/taranga-demo.env` and stops — review it (ENet on or
 off, console gate user/password, real-model AI keys) and re-run. The second run
