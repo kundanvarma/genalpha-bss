@@ -36,6 +36,10 @@ public class CampaignExecution {
     @Column(name = "arm", length = 32)
     private String arm;
 
+    /** The decision-log id of the choice that produced this row (null before the log existed). */
+    @Column(name = "decision_id", length = 36)
+    private String decisionId;
+
     @Column(name = "converted_at")
     private OffsetDateTime convertedAt;
 
@@ -66,4 +70,6 @@ public class CampaignExecution {
     public void setConversionRef(String conversionRef) { this.conversionRef = conversionRef; }
     public java.math.BigDecimal getConversionValue() { return conversionValue; }
     public void setConversionValue(java.math.BigDecimal v) { this.conversionValue = v; }
+    public String getDecisionId() { return decisionId; }
+    public void setDecisionId(String v) { this.decisionId = v; }
 }

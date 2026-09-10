@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/desk/event").authenticated()
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/desk/presets").authenticated()
                         .requestMatchers(ApiConstants.BASE_PATH + "/desk/**").hasAuthority("insight:read")
+                        // the decision log and its receipts are for insight readers
+                        .requestMatchers(ApiConstants.BASE_PATH + "/decisions/**").hasAuthority("insight:read")
                         // the raw profile is back-office only
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/profile",
                                 ApiConstants.BASE_PATH + "/partyProfile",

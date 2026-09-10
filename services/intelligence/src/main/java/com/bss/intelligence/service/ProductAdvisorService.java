@@ -45,13 +45,18 @@ public class ProductAdvisorService {
     private final TenantScope tenantScope;
     private final LlmRouter llm;
     private final com.bss.intelligence.llm.AiGovernor governor;
+    private final com.bss.intelligence.events.DomainEventPublisher events;
+    /** Everything the advisor can find — the eligible set of catalog.advisorProposal. */
+    private static final List<String> FINDING_KINDS = List.of("TOPUP_ATTACH", "MARKET_PRICE");
 
     public ProductAdvisorService(RestClient.Builder builder, MachineTokenInterceptor tokenInterceptor,
             @Value("${bss.downstream.catalog-base-url:http://localhost:8081}") String catalogBase,
             @Value("${bss.downstream.billing-base-url:http://localhost:8088}") String billingBase,
             @Value("${bss.downstream.inventory-base-url:http://localhost:8083}") String inventoryBase,
             TenantRegistry tenants, TenantScope tenantScope, LlmRouter llm,
-            com.bss.intelligence.llm.AiGovernor governor) {
+            com.bss.intelligence.llm.AiGovernor governor,
+            com.bss.intelligence.events.DomainEventPublisher events) {
+        this.events = events;
         this.catalog = builder.baseUrl(catalogBase).requestInterceptor(tokenInterceptor).build();
         this.billing = builder.baseUrl(billingBase).requestInterceptor(tokenInterceptor).build();
         this.inventory = builder.baseUrl(inventoryBase).requestInterceptor(tokenInterceptor).build();
@@ -191,6 +196,12 @@ public class ProductAdvisorService {
                 log.debug("no narrative — the receipts stand alone: {}", e.getMessage());
             }
         }
+        // the proposal the console posts back to /adopt carries the finding's decision id
+        for (Map<String, Object> f : out) {
+            if (f.get("proposal") instanceof Map<?, ?> pr && f.get("decisionId") != null) {
+                ((Map<String, Object>) pr).put("decisionId", f.get("decisionId"));
+            }
+        }
         return out;
     }
 
@@ -225,6 +236,20 @@ public class ProductAdvisorService {
         // to which resource — not just what it said
         governor.recordAction("advisor-adopt", "catalog.createDraftOffering",
                 String.valueOf(draft.get("id")), "ok");
+        if (proposal.get("decisionId") != null) {
+            // the product owner's adoption is the proposal's outcome
+            Map<String, Object> outcome = new LinkedHashMap<>();
+            outcome.put("decisionId", String.valueOf(proposal.get("decisionId")));
+            outcome.put("outcome", "adopted");
+            outcome.put("value", draft.get("id"));
+            outcome.put("observedAt", java.time.OffsetDateTime.now().toString());
+            outcome.put("@type", "DecisionOutcome");
+            try {
+                events.publish("DecisionOutcomeEvent", "decisionOutcome", outcome);
+            } catch (RuntimeException e) {
+                log.debug("advisor adoption not logged as an outcome: {}", e.getMessage());
+            }
+        }
         return Map.of("offeringId", draft.get("id"), "lifecycleStatus", "In study");
     }
 
@@ -237,7 +262,48 @@ public class ProductAdvisorService {
         map.put("suggestion", suggestion);
         map.put("evidence", evidence);
         map.put("@type", "AdvisorFinding");
+        // a finding is a DECISION of the BSS (catalog.advisorProposal): the id
+        // is content-derived so repeated reads log once, and "adopt" joins back
+        String decisionId = "advisor-" + sha(tenantScope.currentTenantId() + "|" + kind + "|" + offering);
+        map.put("decisionId", decisionId);
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("decisionId", decisionId);
+        record.put("decisionPoint", "catalog.advisorProposal");
+        record.put("subjectType", "offering");
+        record.put("subjectId", offering);
+        record.put("candidates", FINDING_KINDS);
+        record.put("eligibleActions", FINDING_KINDS);
+        record.put("constraints", List.of("proposal-only: the advisor never changes the catalog"));
+        record.put("action", kind);
+        record.put("policy", "advisor-arithmetic");
+        record.put("policyVersion", "1");
+        record.put("reason", insight);
+        record.put("context", Map.of("offering", offering));
+        record.put("evidence", evidence == null ? Map.of() : evidence);
+        record.put("autonomy", "medium");
+        record.put("fallback", false);
+        record.put("source", "intelligence");
+        record.put("decidedAt", java.time.OffsetDateTime.now().toString());
+        record.put("@type", "Decision");
+        try {
+            events.publish("DecisionRecordedEvent", "decision", record);
+        } catch (RuntimeException e) {
+            log.debug("advisor finding not logged as a decision: {}", e.getMessage());
+        }
         return map;
+    }
+
+    private static String sha(String s) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder b = new StringBuilder();
+            for (int i = 0; i < 6; i++) {
+                b.append(String.format("%02x", h[i]));
+            }
+            return b.toString();
+        } catch (Exception e) {
+            return Integer.toHexString(s.hashCode());
+        }
     }
 
     private Map<String, Object> draftProposal(String name, String description, BigDecimal value) {

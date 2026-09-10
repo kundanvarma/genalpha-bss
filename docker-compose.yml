@@ -1733,6 +1733,8 @@ services:
       GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
       BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events,bss.device.events,bss.migration.events
+      # the decision log: every service that decides adaptively publishes DecisionRecordedEvent on its own topic
+      BSS_INSIGHT_DECISION_TOPICS: bss.campaign.events,bss.intelligence.events
       # signal connectors (SI-P2): secret-ref targets — the desk poll token and
       # the generic webhook's shared secret; the mocks accept any token
       SERVICEDESK_API_TOKEN: dev-desk-token

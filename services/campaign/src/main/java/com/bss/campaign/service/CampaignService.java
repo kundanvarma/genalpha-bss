@@ -51,12 +51,15 @@ public class CampaignService {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final FrequencyGuard frequency;
     private final com.bss.campaign.client.CatalogClient catalog;
+    private final com.bss.campaign.decision.DecisionPoints decisions;
 
     public CampaignService(CampaignRepository campaigns, CampaignExecutionRepository executions,
             CommunicationClient communication, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.campaign.client.InsightClient insight,
             com.fasterxml.jackson.databind.ObjectMapper objectMapper, FrequencyGuard frequency,
-            com.bss.campaign.client.CatalogClient catalog) {
+            com.bss.campaign.client.CatalogClient catalog,
+            com.bss.campaign.decision.DecisionPoints decisions) {
+        this.decisions = decisions;
         this.campaigns = campaigns;
         this.executions = executions;
         this.communication = communication;
@@ -186,6 +189,7 @@ public class CampaignService {
                 execution.setConversionRef(eventType);
                 execution.setConversionValue(value);
                 executions.save(execution);
+                decisions.outcome(execution.getDecisionId(), "conversion", value);
                 log.info("campaign '{}' conversion: party {} ({}) worth {}/month",
                         campaign.getName(), partyId, execution.getVariant(), value);
             }
@@ -386,20 +390,40 @@ public class CampaignService {
                     campaign.getName(), partyId);
             return false;
         }
-        boolean holdout = campaign.getHoldoutPercent() > 0
-                && Math.floorMod((campaign.getId() + partyId).hashCode(), 100) < campaign.getHoldoutPercent();
+        // THE DECISION: holdout, or which arm — through the seam, so the
+        // record carries the eligible set, the policy and the propensity, and
+        // the conversion later joins back by id. The guards above are the
+        // constraints that ran first; they are named in the record.
         List<Map<String, Object>> arms = armsOf(campaign);
-        Map<String, Object> arm = holdout || arms == null ? null
-                // a DIFFERENT hash than the holdout bucket, so arms split the
-                // treated group evenly instead of mirroring the holdout edge
-                : arms.get(Math.floorMod((campaign.getId() + ":arm:" + partyId).hashCode(),
-                        arms.size()));
+        List<String> candidates = new java.util.ArrayList<>();
+        candidates.add("holdout");
+        if (arms == null || arms.isEmpty()) {
+            candidates.add("message");
+        } else {
+            arms.forEach(a -> candidates.add(String.valueOf(a.get("name"))));
+        }
+        Map<String, Object> ctx = new java.util.LinkedHashMap<>();
+        ctx.put("seed", campaign.getId());
+        ctx.put("campaignId", campaign.getId());
+        ctx.put("partyId", partyId);
+        ctx.put("holdoutPercent", campaign.getHoldoutPercent());
+        ctx.put("guards", List.of("once-per-customer", "quiet-hours", "frequency-cap"));
+        com.bss.campaign.decision.DecisionRecord dealt = decisions.decide(
+                com.bss.campaign.decision.DecisionPoints.CAMPAIGN_TREATMENT, partyId, ctx, candidates,
+                List.of(), "holdout");
+        boolean holdout = "holdout".equals(dealt.action());
+        Map<String, Object> arm = null;
+        if (!holdout && arms != null) {
+            arm = arms.stream().filter(a -> dealt.action().equals(String.valueOf(a.get("name"))))
+                    .findFirst().orElse(null);
+        }
         CampaignExecution execution = new CampaignExecution();
         execution.setId(UUID.randomUUID().toString());
         execution.setTenantId(tenant);
         execution.setCampaignId(campaign.getId());
         execution.setPartyId(partyId);
         execution.setVariant(holdout ? "holdout" : "treated");
+        execution.setDecisionId(dealt.decisionId());
         if (arm != null) {
             execution.setArm(String.valueOf(arm.get("name")));
         }

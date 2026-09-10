@@ -50,6 +50,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DeskLearningService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeskLearningService.class);
+
     private static final Set<String> PRESET_IGNORE = Set.of("name", "id", "description", "subject", "content",
             "steps", "code", "email", "phone", "msisdn", "href");
     private final DeskEventRepository events;
@@ -59,8 +61,12 @@ public class DeskLearningService {
     private final TenantRegistry registry;
     private final ObjectMapper json;
 
+    private final com.bss.insight.decision.DecisionLogService decisionLog;
+
     public DeskLearningService(DeskEventRepository events, DeskPresetRepository presets,
-            DeskDecisionRepository decisions, TenantScope tenantScope, TenantRegistry registry, ObjectMapper json) {
+            DeskDecisionRepository decisions, TenantScope tenantScope, TenantRegistry registry, ObjectMapper json,
+            com.bss.insight.decision.DecisionLogService decisionLog) {
+        this.decisionLog = decisionLog;
         this.events = events;
         this.presets = presets;
         this.decisions = decisions;
@@ -262,6 +268,8 @@ public class DeskLearningService {
         d.setDecision(decision);
         d.setDecidedAt(OffsetDateTime.now());
         decisions.save(d);
+        // the human's verdict is the suggestion's outcome
+        decisionLog.outcome(tenant, "desk-" + suggestionId, decision, null, null);
         return result;
     }
 
@@ -400,8 +408,38 @@ public class DeskLearningService {
         s.put("audience", audience);
         if (action != null) s.put("action", action);
         s.put("quiet", quiet.contains(id));
+        // the suggestion IS a decision of the BSS (desk.suggestion): logged once
+        // per content-derived id, so the accept/dismiss can be attributed later
+        String decisionId = "desk-" + id;
+        s.put("decisionId", decisionId);
+        try {
+            Map<String, Object> record = new LinkedHashMap<>();
+            record.put("decisionId", decisionId);
+            record.put("decisionPoint", "desk.suggestion");
+            record.put("subjectType", "desk");
+            record.put("subjectId", target);
+            record.put("candidates", SUGGESTION_KINDS);
+            record.put("eligibleActions", SUGGESTION_KINDS);
+            record.put("constraints", List.of());
+            record.put("action", kind);
+            record.put("policy", "desk-rules");
+            record.put("policyVersion", "1");
+            record.put("reason", evidence);
+            record.put("context", Map.of("target", target, "audience", audience));
+            record.put("evidence", Map.of("title", title));
+            record.put("autonomy", "medium");
+            record.put("fallback", false);
+            record.put("source", "insight");
+            record.put("decidedAt", OffsetDateTime.now().toString());
+            decisionLog.record(tenantScope.currentTenantId(), record);
+        } catch (RuntimeException e) {
+            log.debug("desk suggestion {} not logged as a decision: {}", id, e.getMessage());
+        }
         return s;
     }
+
+    /** Everything the desk rules can suggest — the eligible set of desk.suggestion. */
+    private static final List<String> SUGGESTION_KINDS = List.of("preset", "holdout", "abandon", "search", "rewrite", "unused");
 
     private Map<String, Object> presetView(DeskPreset p) {
         Map<String, Object> v = new LinkedHashMap<>();

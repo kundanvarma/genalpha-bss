@@ -23,6 +23,9 @@ numbers that produced it, so a marketer can disagree with it.
 4. A new weight moves **new** enrolments only; a customer keeps the arm they
    were dealt, so per-arm rates stay clean.
 5. The ledger (`tuningLog`, last 30) records at / arms / before / after / z / why.
+6. The rule runs as the `z-threshold-tuner` policy behind the DecisionPoint
+   `journey.armWeights`; every judgement is also a decision-log row and the
+   ledger entry carries its `decisionId` (`docs/decision-log.md`).
 
 The clock runs every `journey-tune-ms` (default 10 min) over every active
 auto-tune journey of every tenant; `POST …/journey/{id}/tune` runs it now.

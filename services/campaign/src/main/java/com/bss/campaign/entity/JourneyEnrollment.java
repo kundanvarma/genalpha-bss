@@ -31,6 +31,10 @@ public class JourneyEnrollment {
     @Column(name = "arm", length = 32)
     private String arm;
 
+    /** The decision-log id of the choice that produced this row (null before the log existed). */
+    @Column(name = "decision_id", length = 36)
+    private String decisionId;
+
     public String getArm() { return arm; }
     public void setArm(String v) { this.arm = v; }
 
@@ -89,4 +93,6 @@ public class JourneyEnrollment {
     public void setConvertedAt(OffsetDateTime v) { this.convertedAt = v; }
     public java.math.BigDecimal getConversionValue() { return conversionValue; }
     public void setConversionValue(java.math.BigDecimal v) { this.conversionValue = v; }
+    public String getDecisionId() { return decisionId; }
+    public void setDecisionId(String v) { this.decisionId = v; }
 }

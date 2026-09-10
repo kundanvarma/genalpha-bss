@@ -63,13 +63,16 @@ public class JourneyService {
     @org.springframework.beans.factory.annotation.Value("${bss.campaign.journey-tune-z:1.64}")
     private double tuneZ = 1.64;
     private final com.bss.campaign.repository.ArbitrationDecisionRepository arbitration;
+    private final com.bss.campaign.decision.DecisionPoints decisions;
 
     public JourneyService(JourneyRepository journeys, JourneyEnrollmentRepository enrollments,
             CommunicationClient communication, InsightClient insight,
             TenantScope tenantScope, TenantRegistry tenants, ObjectMapper objectMapper,
             FrequencyGuard frequency, com.bss.campaign.client.CatalogClient catalog,
             com.bss.campaign.tick.TickGuard tickGuard,
-            com.bss.campaign.repository.ArbitrationDecisionRepository arbitration) {
+            com.bss.campaign.repository.ArbitrationDecisionRepository arbitration,
+            com.bss.campaign.decision.DecisionPoints decisions) {
+        this.decisions = decisions;
         this.journeys = journeys;
         this.enrollments = enrollments;
         this.communication = communication;
@@ -337,6 +340,7 @@ public class JourneyService {
                 enrollment.setConvertedAt(OffsetDateTime.now());
                 enrollment.setConversionValue(value);
                 enrollments.save(enrollment);
+                decisions.outcome(enrollment.getDecisionId(), "conversion", value);
                 log.info("journey '{}' conversion: party {} exited from step {} ({}) worth {}/month",
                         journey.getName(), partyId, enrollment.getStepIndex(),
                         enrollment.getVariant(), value);
@@ -371,16 +375,38 @@ public class JourneyService {
         if (enrollments.existsByTenantIdAndJourneyIdAndPartyId(tenant, journey.getId(), partyId)) {
             return false;
         }
-        boolean holdout = journey.getHoldoutPercent() > 0
-                && Math.floorMod((journey.getId() + partyId).hashCode(), 100) < journey.getHoldoutPercent();
+        // THE DECISION: holdout, or which arm — one choice, one record, one id;
+        // the conversion later joins back to it. Same hashes as always, so a
+        // customer keeps the bucket they were dealt before the log existed.
+        List<Map<String, Object>> arms = armsOf(journey);
+        List<String> candidates = new java.util.ArrayList<>();
+        candidates.add("holdout");
+        if (arms.isEmpty()) {
+            candidates.add("message");
+        } else {
+            arms.forEach(a -> candidates.add(str(a.get("name"))));
+        }
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("seed", journey.getId());
+        ctx.put("journeyId", journey.getId());
+        ctx.put("partyId", partyId);
+        ctx.put("holdoutPercent", journey.getHoldoutPercent());
+        if (!arms.isEmpty()) {
+            ctx.put("weights", weightsOf(journey, arms));
+        }
+        com.bss.campaign.decision.DecisionRecord dealt = decisions.decide(
+                com.bss.campaign.decision.DecisionPoints.JOURNEY_ENROLMENT, partyId, ctx, candidates,
+                List.of(), "holdout");
+        boolean holdout = "holdout".equals(dealt.action());
         JourneyEnrollment enrollment = new JourneyEnrollment();
         enrollment.setId(UUID.randomUUID().toString());
         enrollment.setTenantId(tenant);
         enrollment.setJourneyId(journey.getId());
         enrollment.setPartyId(partyId);
         enrollment.setVariant(holdout ? "holdout" : "treated");
-        if (!holdout) {
-            enrollment.setArm(dealArm(journey, partyId));
+        enrollment.setDecisionId(dealt.decisionId());
+        if (!holdout && !arms.isEmpty()) {
+            enrollment.setArm(dealt.action());
         }
         enrollment.setEnrolledAt(OffsetDateTime.now());
         enrollment.setNextActionAt(OffsetDateTime.now());
@@ -475,10 +501,25 @@ public class JourneyService {
             Journey winner) {
         enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
         enrollments.save(enrollment);
+        // the choice itself goes through the seam: candidates are the two
+        // journeys, the policy says which speaks, the record carries the priorities
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("partyId", enrollment.getPartyId());
+        Map<String, Integer> priorities = new LinkedHashMap<>();
+        if (winner != null) {
+            priorities.put(winner.getId(), winner.getPriority());
+        }
+        priorities.put(held.getId(), held.getPriority());
+        ctx.put("priorities", priorities);
+        List<String> candidates = new java.util.ArrayList<>(priorities.keySet());
+        com.bss.campaign.decision.DecisionRecord nba = decisions.decide(
+                com.bss.campaign.decision.DecisionPoints.JOURNEY_NEXT_BEST_ACTION, enrollment.getPartyId(),
+                ctx, candidates, List.of(), winner == null ? held.getId() : winner.getId());
         com.bss.campaign.entity.ArbitrationDecision d = new com.bss.campaign.entity.ArbitrationDecision();
         d.setId(UUID.randomUUID().toString());
         d.setTenantId(tenantId);
         d.setPartyId(enrollment.getPartyId());
+        d.setDecisionId(nba.decisionId());
         d.setWinnerJourneyId(winner == null ? null : winner.getId());
         d.setHeldJourneyId(held.getId());
         d.setReason("held '" + held.getName() + "' (priority " + held.getPriority() + ") — '"
@@ -502,6 +543,7 @@ public class JourneyService {
             m.put("heldJourneyId", d.getHeldJourneyId());
             m.put("reason", d.getReason());
             m.put("decidedAt", d.getDecidedAt());
+            if (d.getDecisionId() != null) m.put("decisionId", d.getDecisionId());
             return m;
         }).toList();
     }
@@ -898,6 +940,7 @@ public class JourneyService {
             e.setConvertedAt(OffsetDateTime.now());
             e.setConversionValue(value);
             enrollments.save(e);
+            decisions.outcome(e.getDecisionId(), "conversion", value);
         }
         return Map.of("journeyId", journeyId, "partyId", partyId, "status", e.getStatus(), "arm", e.getArm() == null ? "" : e.getArm());
     }
@@ -949,43 +992,31 @@ public class JourneyService {
         entry.put("at", OffsetDateTime.now().toString());
         entry.put("arms", rows);
         entry.put("before", before);
-        String decision;
+        // the rule lives in ZThresholdTunerPolicy behind the seam; this method
+        // only feeds it the numbers and keeps the journey's ledger
+        Map<String, Object> ctx = new LinkedHashMap<>();
+        ctx.put("journeyId", journey.getId());
+        ctx.put("rows", rows);
+        ctx.put("before", before);
+        ctx.put("minPerArm", tuneMinPerArm);
+        ctx.put("floorPercent", tuneFloorPercent);
+        ctx.put("threshold", tuneZ);
+        com.bss.campaign.decision.DecisionRecord judged = decisions.decide(
+                com.bss.campaign.decision.DecisionPoints.JOURNEY_ARM_WEIGHTS, journey.getId(), ctx,
+                List.of("shift", "hold", "waiting"), List.of(), "hold");
+        String decision = judged.action();
         Map<String, Integer> after = new LinkedHashMap<>(before);
-        if (arms.size() < 2) {
-            decision = "hold";
-            entry.put("why", "fewer than two arms");
-        } else if (rows.stream().anyMatch(r -> ((Number) r.get("enrolled")).longValue() < tuneMinPerArm)) {
-            decision = "waiting";
-            entry.put("why", "every arm needs at least " + tuneMinPerArm + " treated enrolments before it is judged");
-        } else {
-            List<Map<String, Object>> sorted = new java.util.ArrayList<>(rows);
-            sorted.sort((a, b) -> Double.compare(((Number) b.get("rate")).doubleValue(), ((Number) a.get("rate")).doubleValue()));
-            Map<String, Object> best = sorted.get(0);
-            Map<String, Object> second = sorted.get(1);
-            long n1 = ((Number) best.get("enrolled")).longValue(), c1 = ((Number) best.get("converted")).longValue();
-            long n2 = ((Number) second.get("enrolled")).longValue(), c2 = ((Number) second.get("converted")).longValue();
-            double p1 = (double) c1 / n1, p2 = (double) c2 / n2, p = (double) (c1 + c2) / (n1 + n2);
-            double se = Math.sqrt(p * (1 - p) * (1.0 / n1 + 1.0 / n2));
-            double z = se == 0 ? 0 : (p1 - p2) / se;
-            entry.put("z", Math.round(z * 100) / 100.0);
-            entry.put("threshold", tuneZ);
-            if (z >= tuneZ) {
-                int others = tuneFloorPercent * (arms.size() - 1);
-                for (Map<String, Object> a : arms) {
-                    after.put(String.valueOf(a.get("name")), tuneFloorPercent);
-                }
-                after.put(String.valueOf(best.get("name")), 100 - others);
-                decision = after.equals(before) ? "hold" : "shift";
-                entry.put("why", "\"" + best.get("name") + "\" converts at " + best.get("rate") + " % vs " + second.get("rate")
-                        + " % for \"" + second.get("name") + "\" (z " + entry.get("z") + " ≥ " + tuneZ + ")");
-            } else {
-                decision = "hold";
-                entry.put("why", "the difference between \"" + best.get("name") + "\" and \"" + second.get("name")
-                        + "\" is not evidence yet (z " + entry.get("z") + " < " + tuneZ + ")");
-            }
+        if (judged.evidence().get("after") instanceof Map<?, ?> a) {
+            a.forEach((k, v) -> after.put(String.valueOf(k), ((Number) v).intValue()));
         }
+        if (judged.evidence().containsKey("z")) {
+            entry.put("z", judged.evidence().get("z"));
+            entry.put("threshold", tuneZ);
+        }
+        entry.put("why", judged.reason());
         entry.put("decision", decision);
         entry.put("after", after);
+        entry.put("decisionId", judged.decisionId());
         if ("shift".equals(decision)) {
             try {
                 journey.setArmWeights(objectMapper.writeValueAsString(after));
@@ -1095,24 +1126,6 @@ public class JourneyService {
         } catch (Exception e) {
             return List.of();
         }
-    }
-
-    /** Deterministic per party, weighted by the CURRENT weights: a new weight moves new enrolments, never old ones. */
-    private String dealArm(Journey journey, String partyId) {
-        List<Map<String, Object>> arms = armsOf(journey);
-        if (arms.size() < 2) {
-            return arms.isEmpty() ? null : str(arms.get(0).get("name"));
-        }
-        Map<String, Integer> w = weightsOf(journey, arms);
-        int bucket = Math.floorMod((journey.getId() + ":" + partyId + ":arm").hashCode(), 100);
-        int acc = 0;
-        for (Map<String, Object> a : arms) {
-            acc += w.getOrDefault(String.valueOf(a.get("name")), 0);
-            if (bucket < acc) {
-                return str(a.get("name"));
-            }
-        }
-        return str(arms.get(arms.size() - 1).get("name"));
     }
 
     private static int firstMessageIndex(List<Map<String, Object>> steps) {

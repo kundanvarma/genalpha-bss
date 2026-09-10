@@ -37,6 +37,10 @@ public class ArbitrationDecision {
     @Column(name = "decided_at")
     private OffsetDateTime decidedAt;
 
+    /** The decision-log id of the choice that produced this row (null before the log existed). */
+    @Column(name = "decision_id", length = 36)
+    private String decisionId;
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getTenantId() { return tenantId; }
@@ -51,4 +55,6 @@ public class ArbitrationDecision {
     public void setReason(String reason) { this.reason = reason; }
     public OffsetDateTime getDecidedAt() { return decidedAt; }
     public void setDecidedAt(OffsetDateTime v) { this.decidedAt = v; }
+    public String getDecisionId() { return decisionId; }
+    public void setDecisionId(String v) { this.decisionId = v; }
 }
