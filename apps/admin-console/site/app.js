@@ -1702,9 +1702,10 @@ const TAB_ROLE = {
   attribution: 'campaign:read', socialListening: 'campaign:read', socialCare: ['campaign:read', 'ticket:write'], voc: 'campaign:read',
   coverageMap: 'wholesale:admin', serviceSpecification: 'wholesale:admin',
   // the AI audit trail rides along with AI power, by design (auditability)
-  audit: ['ai:use', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
+  audit: ['catalog:write', 'ai:admin'], workforce: ['workforce:use', 'ai:admin'], profile: 'ai:admin', aiflows: 'ai:admin',
   policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
+  'desk-suggestions': ['catalog:write', 'ai:admin'], // AI & Automation is the product owner's and the admin's room (suite #87)
 };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
@@ -5430,6 +5431,7 @@ function startEditing(item) {
   el('save').textContent = 'Save changes';
   el('cancel-edit').hidden = false;
   el('editor').hidden = false; // reveal for noCreate tabs
+  el('editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
   for (const f of active.fields) {
     controls[f.name].set(item);
   }
@@ -5986,9 +5988,11 @@ async function renderPipelineBoard() {
 async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
+  renderCrumb(active);
   helpButtonFor(active);
   renderIntro(active);
   renderKnowledgeGaps(active);
+  newButtonFor(active);
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.getElementById('workforce-panel')?.setAttribute('hidden', '');
@@ -7034,14 +7038,55 @@ async function renderKnowledgeGaps(resource) {
 }
 
 
-/* A one-paragraph orientation under a tab's title, when the tab needs one. */
+/* A one-paragraph orientation under a tab's title: the tab's own intro, else the
+ * page's GOAL — what a person on it is working towards (Ivan: say what the page is for). */
+const PAGE_GOALS = {
+  productOffering: 'Goal: every offer on the shelf is right and on sale when it should be. Watch: drafts waiting, offers past their window.',
+  productSpecification: 'Goal: the facts behind each offer (data, validity, pickers) are complete, so the shop, the network and the bill agree.',
+  productOfferingPrice: 'Goal: one price per thing a customer pays for; discounts live in Rules, not here.',
+  approvals: 'Goal: nothing launches without its decision and its readiness — and nothing waits longer than it must.',
+  envelopes: 'Goal: routine launches need no meeting. Keep the envelopes tight enough that only the exceptions reach the desk.',
+  productStock: 'Goal: what the shop sells is in stock; what is out of stock says so before checkout.',
+  customerBill: 'Goal: every bill is right, on time, and paid. Watch: disputes open, bills overdue.',
+  productOrder: 'Goal: every order reaches active without a hand touching it; the ones that stall are visible here first.',
+  campaign: 'Goal: campaigns with a measurable lift. Watch: holdout on, consent respected, spend against plan.',
+  journey: 'Goal: the right message at the right moment, provably better than silence.',
+  article: 'Goal: every question staff and customers ask has an answer on the shelf, so Ask is the exception.',
+  policyRule: 'Goal: business rules as data — pricing, eligibility, launch envelopes — readable by the people they affect.',
+  appointment: 'Goal: installations booked into real capacity, never overbooked, never idle.',
+  processFlow: 'Goal: see where an order or a launch is, and how long each step took against its allowance.',
+};
 function renderIntro(resource) {
   let p = document.getElementById('tab-intro');
-  if (!resource.intro) { if (p) p.hidden = true; return; }
+  const text = resource.intro || PAGE_GOALS[resource.path];
+  if (!text) { if (p) p.hidden = true; return; }
   if (!p) {
     p = document.createElement('p'); p.id = 'tab-intro'; p.className = 'dim'; p.dataset.testid = 'tab-intro';
     p.style.cssText = 'margin:0 0 12px;font-size:13px;max-width:900px;line-height:1.45';
     document.querySelector('.panel-head')?.after(p);
   }
-  p.hidden = false; p.textContent = resource.intro;
+  p.hidden = false; p.textContent = text;
+}
+
+/* ---------------- Interaction hierarchy: department › page, list first, form on demand ---------------- */
+function renderCrumb(resource) {
+  const ws = WORKSPACES.find((w) => w.tabs.includes(resource.path));
+  const c = el('crumb');
+  if (c) c.textContent = ws ? `${ws.label} › ${resource.title}` : resource.title;
+}
+
+function newButtonFor(resource) {
+  const b = el('new-button');
+  if (!b) return;
+  const creatable = !resource.readOnly && !resource.noCreate && !resource.copilot && !resource.approvals
+    && !resource.envelopes && !resource.growthCopilot && !resource.audienceBuilder && !resource.pipelineBoard
+    && !resource.socialListening && (resource.fields || []).length > 0;
+  b.hidden = !creatable;
+  b.textContent = `+ New ${resource.singular || resource.title.replace(/s$/, '').toLowerCase()}`;
+  b.onclick = () => {
+    stopEditing();
+    const ed = el('editor'); ed.hidden = false;
+    ed.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => ed.querySelector('input:not([type=checkbox]), select, textarea')?.focus(), 350);
+  };
 }

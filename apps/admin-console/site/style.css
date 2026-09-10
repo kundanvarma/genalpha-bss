@@ -44,8 +44,11 @@ body {
 .who { display: flex; align-items: center; gap: 12px; }
 .user { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--dim); }
 
-main { max-width: 1000px; margin: 0 auto; padding: 26px; }
-.tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+main { max-width: 1400px; margin: 0 auto; padding: 22px 26px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+/* the rail: departments, each listing its pages — the interaction hierarchy is
+   department (left) → page (left, under it) → content (centre) */
+.tabs { display: flex; flex-direction: column; flex-wrap: nowrap; width: 250px; gap: 10px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
 .tab {
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   padding: 7px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
@@ -208,14 +211,22 @@ th { border-bottom-color: var(--line); }
    any TEXT in the tab area reads as a tab, and unclickable text reads as
    a BROKEN tab — so the department name lives on the BOX (a legend on a
    bordered container), never loose in the row. */
-#tabs { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: stretch; }
+#tabs { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 10px; align-items: stretch; }
 .tabgroup {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem;
   border: 1px solid var(--line); border-radius: 12px;
-  padding: 0.55rem 0.7rem 0.7rem;
+  padding: 0.6rem 0.6rem 0.65rem;
   background: color-mix(in srgb, var(--card) 55%, transparent);
 }
-.tabgroup-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.tabgroup-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+.tabs .tab { text-align: left; width: 100%; border-radius: 8px; border-color: transparent; padding: 6px 10px; }
+.tabs .tab:hover { border-color: var(--line); background: var(--card); }
+.tabs .tab.on { border-color: transparent; }
+.crumb { margin: 0 0 4px; font-size: 12px; color: var(--dim); letter-spacing: 0.02em; }
+.newbtn { margin-left: auto; }
+.panel-head .help-button { margin-left: 8px; }
+.editor { margin: 22px 0 0; }
+.panel { min-height: 60vh; }
 .tabgroup-label {
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
   font-weight: 800; color: var(--ink); user-select: none;
