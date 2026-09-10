@@ -992,6 +992,16 @@ export default function Cart() {
       ) : (
         <p className="dim small paynote">You'll confirm the payment after signing in.</p>
       ))}
+      {!chargeDue && signedIn && lines.length > 0 && (
+        <div className="payment" data-testid="payment-none-due">
+          <h2>{t('Payment')}</h2>
+          <p className="dim small">{t('Nothing to pay today — the monthly charges arrive on your first bill.')}</p>
+          <p className="dim small">
+            {t('Bills can be paid by')} {[t('card'), ...redirectMethods.map((m) => payLabel(m.method))].join(', ')}
+            {' '}{t('or automatically from a saved card')}.
+          </p>
+        </div>
+      )}
 
       <div className="cartactions">
         <Link to="/" className="dim">{t('Continue shopping')}</Link>
