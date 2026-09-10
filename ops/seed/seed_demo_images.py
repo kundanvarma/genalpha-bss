@@ -240,6 +240,8 @@ def kind(name, cats):
     cat = cats[0] if cats else ""
     if name in PLAN_HERO or cat == "Mobile plans":
         return "plan"
+    if re.search(r"router|mesh|modem|hub|ont\b|battery", name, re.I):
+        return "device"   # an accessory is a device whatever shelf it sits on
     if cat == "Devices":
         return "device"
     if cat == "Bundles":
