@@ -4232,6 +4232,7 @@ function eligibleWords(d) {
   return (d.eligibleActions || []).map((a) => actionWords({ ...d, action: a })).join(', ');
 }
 function constraintWords(c) {
+  if (/^learning-contract: paused$/.test(c)) return 'the rule was paused';
   const m = String(c).match(/^([^:]+): (.+?) — (.+)$/);
   if (!m) return String(c).replace(/^learning-contract: /, 'the learning contract: ');
   const rule = { 'learning-contract': 'the learning contract', consent: 'consent', 'channel-availability': 'channel availability' }[m[1]] || m[1];
@@ -4262,9 +4263,13 @@ function receiptLines(d, names) {
   const removed = (d.constraints || []).filter((c) => !/capped at/.test(c)).map(constraintWords);
   const capped = (d.constraints || []).find((c) => /capped at/.test(c));
   lines.push(`It could have chosen: ${eligibleWords(d) || 'nothing'}.${removed.length ? ' Not this time: ' + removed.join('; ') + '.' : ''}${capped ? ' The control group was ' + capped.replace(/^learning-contract: holdout /, '') + '.' : ''}`);
-  lines.push(`It chose: ${actionWords(d)}${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance under the current split` : ' — no chance involved, this rule is fixed'}${d.fallback ? '. The rule could not decide, so the fallback answered' : ''}.`);
-  lines.push(`Because: ${d.reason || 'no reason was recorded'}${d.reason && !/[.)]$/.test(d.reason) ? '.' : ''}`);
-  lines.push(`Who was allowed to decide: ${AUTONOMY_WORDS[d.autonomy] || 'unclassified'}, ${d.contract ? `under learning contract version ${String(d.contract).split('@')[1] || '?'}` : 'under the default rules'} (rule “${d.policy}”, version ${d.policyVersion}).`);
+  const paused = (d.constraints || []).some((c) => /^learning-contract: paused$/.test(c));
+  lines.push(d.fallback
+    ? `It chose: ${actionWords(d)} — the fallback answer, because ${paused ? 'the rule was paused' : 'the rule could not decide'}.`
+    : `It chose: ${actionWords(d)}${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance under the current split` : ' — no chance involved, this rule is fixed'}.`);
+  const why = paused ? 'the learning contract is paused, so nothing is decided until someone resumes it' : (d.reason || 'no reason was recorded');
+  lines.push(`Because: ${why}${!/[.)]$/.test(why) ? '.' : ''}`);
+  lines.push(`Who was allowed to decide: ${AUTONOMY_WORDS[d.autonomy] || 'unclassified'}, ${d.contract ? `under learning contract version ${String(d.contract).split('@')[1] || '?'}` : 'under the default rules'}.`);
   const o = outcomeWords(d);
   lines.push(o ? `What happened next: the customer ${o}, ${when(d.outcomeAt)}.` : 'What happened next: nothing yet.');
   return lines;
@@ -4353,7 +4358,7 @@ async function renderDecisions() {
 /* ---------------- Learning contracts: "what the system may decide" (phase 4) ---------------- */
 const OBJECTIVES = [['conversion', 'purchases (conversions)'], ['adopted', 'proposals adopted'], ['accepted', 'suggestions accepted'], ['', 'nothing in particular — just record']];
 const AUTONOMY_CARDS = [
-  ['', 'Point default', ''],
+  ['', 'Leave it as it is', ''],
   ['high', 'Runs on its own', 'reversible choices, like which message to send'],
   ['medium', 'Recommends, a person can override', 'traffic shifts, proposals'],
   ['low', 'Never without a person', 'money, rights, statute'],
@@ -4435,7 +4440,7 @@ async function renderLearningContracts() {
     cap.addEventListener('input', () => { slider.value = cap.value; capOffBox.checked = false; syncCap(); });
     capWrap.append(slider, cap, document.createTextNode(' %'), capOff);
 
-    const autonomy = radios('autonomy', AUTONOMY_CARDS.map(([v, l, h]) => [v, v ? l : `${l} (${row.autonomy})`, h]), c.autonomy, 'contract-autonomy');
+    const autonomy = radios('autonomy', AUTONOMY_CARDS.map(([v, l, h]) => [v, v ? l : `${l} — ${(AUTONOMY_CARDS.find((a) => a[0] === row.autonomy) || [])[1] || row.autonomy}`, h]), c.autonomy, 'contract-autonomy');
 
     const fbOpts = row.name === 'journey.enrolment' || row.name === 'campaign.treatment'
       ? [['', 'Hold the customer out (no message)'], ['message', 'Send the plain message'], ['__named', 'A named variant:']]
@@ -6486,6 +6491,7 @@ async function loadList() {
   renderKnowledgeGaps(active);
   newButtonFor(active);
   closeDrawer();
+  if (typeof closeSideDrawer === 'function') closeSideDrawer(); // the reading drawer never outlives its page
   renderKpis(active);
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');

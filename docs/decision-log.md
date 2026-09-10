@@ -102,13 +102,23 @@ the propensity stays a true probability.
 
 ## Console (phase 3)
 
-**AI & Automation › Decisions**: KPIs (decisions, with outcome, with
-propensity, fallbacks), filter by point and subject, one row per decision,
-click for the receipt — the five sentences plus the exact context, eligible
-set, constraints and evidence. **AI & Automation › Learning contracts**: one
-row per point with its state (defaults / version / paused), an inline editor,
-Back to defaults, and a dry run. Both pages have a `?` shelf
-(`pane:decisions`, `pane:learning-contracts`).
+**AI & Automation › Decisions — "Why did we do that?"** One sentence per
+decision ("customer 7f3a… in Winter warm-up got message variant B"), a pill
+for what followed (bought 299 NOK · 40 % chance · fell back), filter chips
+per kind of decision and a search by customer or journey id. A row opens the
+receipt in the reading drawer: six sentences — what we looked at, what it
+could have chosen (and what a contract removed), what it chose and with what
+chance, why, who was allowed to decide and under which contract version,
+what happened next — with the raw record folded away for engineers.
+
+**AI & Automation › Learning contracts — "What the system may decide."** One
+card per kind of decision with the intent as a sentence ("optimises for
+purchases · any variant · at most 20 % held out · runs on its own"), Change
+and Pause. The editor asks questions: what to optimise, what must never
+happen, which choices are allowed, at most how many customers held out
+(slider), how much it may do alone (three cards), what happens if it cannot
+decide, is it running. "Try it" picks a real journey and a customer id and
+answers in one sentence, recording nothing. Both pages have a `?` shelf.
 
 ## Proof
 
