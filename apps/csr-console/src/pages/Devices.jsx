@@ -24,12 +24,17 @@ export default function Devices() {
   const [residuals, setResiduals] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [grade, setGrade] = useState({});         // valuationId -> {finalGrade, finalValue}
-  const [residualDraft, setResidualDraft] = useState({ deviceRef: '', ageMonths: '', baseValue: '', currency: 'EUR' });
+  const [residualDraft, setResidualDraft] = useState({ deviceRef: '', ageMonths: '', baseValue: '', currency: window.BSS_CSR_CONFIG?.currency || 'EUR' });
   const [error, setError] = useState(null);
 
+  // an honest message when the device desk is not running (the fleet's demo
+  // slice can shed it): a 5xx from the gateway is the service, not the data
+  const deskDown = (e) => (/HTTP 5\d\d|Failed to fetch|NetworkError/.test(e.message)
+    ? `The device desk is not running right now (${e.message}). Ask ops to start the device-commerce service; nothing here is lost.`
+    : e.message);
   const reloadAgreements = () => {
     deviceAgreements(status === 'all' ? null : status)
-      .then(setAgreements).catch((e) => setError(e.message));
+      .then(setAgreements).catch((e) => { setAgreements([]); setError(deskDown(e)); });
   };
   const reloadTradeIns = () => {
     Promise.all([tradeInValuations('accepted'), tradeInValuations('in-transit')])

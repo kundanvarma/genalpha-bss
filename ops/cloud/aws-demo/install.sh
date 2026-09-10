@@ -32,6 +32,8 @@ AI_PROVIDER=${AI_PROVIDER:-stub}
 AI_BASE_URL=${AI_BASE_URL:-}
 AI_API_KEY=${AI_API_KEY:-}
 AI_MODEL=${AI_MODEL:-}
+# FLEET_SHAPE: full (every module, needs ~64 GB — the r6i.2xlarge) | demo (the slice, fits 32 GB)
+FLEET_SHAPE=${FLEET_SHAPE:-full}
 EOF
   echo "[install] wrote $CONF — review it, then re-run."; exit 0
 fi
@@ -117,9 +119,9 @@ export COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
 
 # ---------- 6. fleet + seeds ----------
 if [ ! -f .cloud-seeded ]; then
-  log "fleet up (first boot ~5 min), then the demo slice"
+  log "fleet up (first boot ~5 min), then shape: $FLEET_SHAPE"
   as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh up"
-  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh demo"
+  [ "$FLEET_SHAPE" = "demo" ] && as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh demo"
   log "seeds: taranga"
   as_user "cd '$APP_DIR' && python3 ops/seed/seed_taranga.py && python3 ops/seed/seed_taranga_growth.py"
   if [ "${DEMO_ENET:-0}" = "1" ]; then
@@ -129,7 +131,7 @@ if [ ! -f .cloud-seeded ]; then
   touch .cloud-seeded; chown "$DEMO_USER" .cloud-seeded
 else
   log "fleet already seeded — starting what is down"
-  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d >/dev/null 2>&1; COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh demo"
+  as_user "cd '$APP_DIR' && COMPOSE_FILE=$COMPOSE_FILE docker compose up -d >/dev/null 2>&1; COMPOSE_FILE=$COMPOSE_FILE ops/fleet.sh $FLEET_SHAPE"
 fi
 
 # ---------- 6b. boot hook: after a stop/start, shed to the demo slice on its own ----------
@@ -138,7 +140,7 @@ fi
 # 'fleet.sh demo' the install ran, so a plain start is hands-off.
 cat > /etc/systemd/system/taranga-demo-slice.service <<UNIT
 [Unit]
-Description=Taranga demo: shed the fleet to the demo slice after boot
+Description=Taranga demo: settle the fleet ($FLEET_SHAPE) after boot
 After=docker.service network-online.target
 Wants=docker.service
 
@@ -148,13 +150,13 @@ User=$DEMO_USER
 WorkingDirectory=$APP_DIR
 Environment=COMPOSE_FILE=docker-compose.yml:docker-compose.cloud.yml
 ExecStartPre=/bin/bash -c 'for i in \$(seq 1 120); do curl -sf -o /dev/null http://localhost:8085/realms/bss/.well-known/openid-configuration && exit 0; sleep 5; done; exit 1'
-ExecStart=$APP_DIR/ops/fleet.sh demo
+ExecStart=$APP_DIR/ops/fleet.sh $FLEET_SHAPE
 RemainAfterExit=yes
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-systemctl daemon-reload && systemctl enable taranga-demo-slice.service >/dev/null 2>&1 && log "boot hook: demo slice after every start"
+systemctl daemon-reload && systemctl enable taranga-demo-slice.service >/dev/null 2>&1 && log "boot hook: fleet shape '$FLEET_SHAPE' after every start"
 
 # ---------- 7. front door ----------
 log "Caddyfile"

@@ -177,7 +177,11 @@ export default function Devices() {
   const [error, setError] = useState(null);
 
   const load = () => {
-    myDeviceAgreements().then(setAgreements).catch((e) => setError(e.message));
+    myDeviceAgreements().then(setAgreements).catch((e) => {
+      setAgreements([]);
+      setError(/HTTP 5\d\d|Failed to fetch|NetworkError/.test(e.message)
+        ? t('Your devices are not available right now — please try again in a few minutes.') : e.message);
+    });
     myTradeIns().then(setTradeIns).catch(() => {});
   };
   useEffect(load, []);
