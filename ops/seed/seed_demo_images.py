@@ -28,6 +28,7 @@ DOCS = "/tmf-api/documentManagement/v4/document"
 REALM = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--realm" and i + 1 < len(sys.argv)), "bss")
 KC = f"http://localhost:8085/realms/{REALM}/protocol/openid-connect/token"
 FORCE = "--force" in sys.argv
+ONLY = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--only" and i + 1 < len(sys.argv)), None)
 ASSETS = os.path.join(os.path.dirname(__file__), "..", "demo-assets", "devices")
 BRAND = {"bss": "#0E7C7B", "taranga": "#4A4AC3", "enet": "#F78F1E"}.get(REALM, "#0E7C7B")   # the tenant's brand colour
 INK = "#0b1f2a"
@@ -121,6 +122,23 @@ def plan_tile(name, hero):
         + txt(50, 250, hero, big, 800, "#fff", "start")
         + txt(52, 300, "per month, unlimited calls & texts", 26, 500, "#fff", "start", 0.85)
         + signal, BRAND, "#0a5c5b")
+
+
+def accessory_tile(name):
+    # A router / mesh point / hub: a low box with two antennae and status lights —
+    # generic, no trade dress, tinted with the tenant's brand.
+    inner = (
+        '<line x1="250" y1="130" x2="250" y2="205" stroke="#e6e9ef" stroke-width="10" stroke-linecap="round"/>'
+        '<line x1="390" y1="130" x2="390" y2="205" stroke="#e6e9ef" stroke-width="10" stroke-linecap="round"/>'
+        '<rect x="200" y="200" width="240" height="88" rx="18" fill="#1c2430" stroke="#ffffff33" stroke-width="2"/>'
+        '<rect x="200" y="200" width="240" height="88" rx="18" fill="url(#sheen)"/>'
+        f'<circle cx="236" cy="244" r="7" fill="{BRAND}"/><circle cx="262" cy="244" r="7" fill="{BRAND}" opacity="0.7"/>'
+        '<circle cx="288" cy="244" r="7" fill="#7ee787"/>'
+        '<path d="M320 170 a44 44 0 0 1 88 0" stroke="#ffffff55" stroke-width="8" fill="none" stroke-linecap="round"/>'
+        '<path d="M338 170 a26 26 0 0 1 52 0" stroke="#ffffff88" stroke-width="8" fill="none" stroke-linecap="round"/>'
+        '<defs><linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff22"/><stop offset="1" stop-color="#00000000"/></linearGradient></defs>'
+        + txt(320, 372, name if len(name) <= 22 else name[:21] + "…", 28, 700, "#fff"))
+    return svg(inner, "#0f172a", "#1e2a44")
 
 
 def device_tile(name):
@@ -226,6 +244,8 @@ active = [o for o in offs if (o.get("lifecycleStatus") or "").lower() == "active
 did = 0
 for o in active:
     name = o.get("name") or ""
+    if ONLY and ONLY.lower() not in name.lower():
+        continue
     has_img = bool((o.get("attachment") or [{}])[0].get("url"))
     cats = [c.get("name") for c in (o.get("category") or [])]
     k = kind(name, cats)
@@ -248,9 +268,9 @@ for o in active:
     if k == "device" and not DEVICE_SLUGS.get(name):
         # an accessory (router, mesh point…) with no photo set: a clean device tile, like any other kind
         if not has_img or FORCE:
-            b64 = base64.b64encode(device_tile(name).encode()).decode()
+            b64 = base64.b64encode(accessory_tile(name).encode()).decode()
             link(o, upload(f"tile-{name}", "image/svg+xml", b64), "image/svg+xml")
-            print(f"  {name}: device tile")
+            print(f"  {name}: accessory tile")
             did += 1
         continue
     if k == "device":
