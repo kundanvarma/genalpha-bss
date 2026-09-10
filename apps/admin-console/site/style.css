@@ -352,10 +352,10 @@ th { border-bottom-color: var(--line); }
 #list-search[hidden] { display: none !important; }
 
 /* the form is a drawer: parked off the right edge until "+ New", Edit, or a field takes focus */
-.editor { position: fixed; top: 0; right: 0; height: 100vh; width: min(760px, 96vw); overflow-y: auto; margin: 0;
+#editor { position: fixed; top: 0; right: 0; height: 100vh; width: min(760px, 96vw); overflow-y: auto; margin: 0;
   background: var(--card); border: none; border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0,0,0,.12);
   padding: 22px 26px 40px; z-index: 60; transform: translateX(102%); transition: transform .22s ease; border-radius: 0; }
-.editor.open { transform: none; }
+#editor.open { transform: none; }
 .drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .18); z-index: 55; pointer-events: none; }
 .drawer-backdrop[hidden] { display: none; }
 /* live KPIs beside the goal, and the rows they point at */
