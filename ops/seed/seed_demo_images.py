@@ -24,10 +24,12 @@ import urllib.request
 GATEWAY = "http://localhost:8080"
 CATALOG = "/tmf-api/productCatalogManagement/v4"
 DOCS = "/tmf-api/documentManagement/v4/document"
-KC = "http://localhost:8085/realms/bss/protocol/openid-connect/token"
+# --realm <name>: the tenant to dress (bss = genalpha, taranga, enet, …)
+REALM = next((sys.argv[i + 1] for i, a in enumerate(sys.argv) if a == "--realm" and i + 1 < len(sys.argv)), "bss")
+KC = f"http://localhost:8085/realms/{REALM}/protocol/openid-connect/token"
 FORCE = "--force" in sys.argv
 ASSETS = os.path.join(os.path.dirname(__file__), "..", "demo-assets", "devices")
-BRAND = "#0E7C7B"   # GenAlpha teal
+BRAND = {"bss": "#0E7C7B", "taranga": "#4A4AC3", "enet": "#F78F1E"}.get(REALM, "#0E7C7B")   # the tenant's brand colour
 INK = "#0b1f2a"
 
 # The data allowance shown as the hero on a mobile-plan tile.
@@ -189,9 +191,24 @@ def device_colors(o):
     return []
 
 
+def plan_hero(o):
+    """The allowance shown big on a plan tile: the curated map, else the spec's Data fact, else the name."""
+    name = o.get("name") or ""
+    if name in PLAN_HERO:
+        return PLAN_HERO[name]
+    spec_id = (o.get("productSpecification") or {}).get("id")
+    if spec_id:
+        spec = req("GET", f"{CATALOG}/productSpecification/{spec_id}") or {}
+        for ch in (spec.get("productSpecCharacteristic") or []):
+            if str(ch.get("name")) in ("Data", "data") and ch.get("productSpecCharacteristicValue"):
+                return str(ch["productSpecCharacteristicValue"][0].get("value"))
+    m = re.search(r"(\d+\s*GB|Unlimited)", name, re.I)
+    return m.group(1) if m else ""
+
+
 def kind(name, cats):
     cat = cats[0] if cats else ""
-    if name in PLAN_HERO:
+    if name in PLAN_HERO or cat == "Mobile plans":
         return "plan"
     if cat == "Devices":
         return "device"
@@ -225,9 +242,18 @@ for o in active:
             if photo:
                 per_color[c] = photo
         default = find_photo(slug) if slug else None  # whole-device -> shop-grid hero
-        if not per_color and not default:
-            # no real photos: keep the generated per-colour GALLERY untouched.
+        if slug and not per_color and not default:
+            # a known handset without real photos: keep the generated per-colour GALLERY untouched.
             continue
+    if k == "device" and not DEVICE_SLUGS.get(name):
+        # an accessory (router, mesh point…) with no photo set: a clean device tile, like any other kind
+        if not has_img or FORCE:
+            b64 = base64.b64encode(device_tile(name).encode()).decode()
+            link(o, upload(f"tile-{name}", "image/svg+xml", b64), "image/svg+xml")
+            print(f"  {name}: device tile")
+            did += 1
+        continue
+    if k == "device":
         current = (req("GET", f"{CATALOG}/productOffering/{o['id']}") or {}).get("attachment") or []
         atts, hero_url, hero_mime = [], None, None
         for a in current:
@@ -264,7 +290,7 @@ for o in active:
     if has_img and not FORCE:
         continue
     if k == "plan":
-        art = plan_tile(name, PLAN_HERO[name])
+        art = plan_tile(name, plan_hero(o))
     elif k == "device":
         art = device_tile(name.replace("Apple ", ""))
     elif k in ("bundle", "fiber", "tv"):

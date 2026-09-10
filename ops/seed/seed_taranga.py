@@ -279,6 +279,44 @@ for pname in ("Taranga Mobile Priority 5G monthly", "Match Day Boost"):
     if row and float((row.get("tax") or [{}])[0].get("taxRate") or 0) != 25:
         req("PATCH", f"productOfferingPrice/{row['id']}", {"tax": [{"taxCategory": "MVA", "taxRate": 25}]})
 
+# ---- handsets: the shop's device shelf, with colour/storage pickers and 24-month instalments --
+def ensure_variant_spec(name, brand, variants):
+    """A spec whose characteristics are PICKERS (configurable): colour and storage."""
+    existing = req("GET", f"productSpecification?name={urllib.parse.quote(name)}&limit=20", quiet=True) or []
+    hit = next((x for x in existing if x.get("name") == name), None)
+    chars = [{"name": k, "configurable": True, "valueType": "string",
+              "productSpecCharacteristicValue": [{"value": v} for v in vals]} for k, vals in variants]
+    body = {"name": name, "brand": brand, "lifecycleStatus": "Active", "version": "1.0", "productSpecCharacteristic": chars}
+    if hit:
+        return hit
+    made = req("POST", "productSpecification", body)
+    print(f"spec: {name}")
+    return made
+
+
+def ensure_handset(name, brand, description, monthly, variants):
+    spec = ensure_variant_spec(name, brand, variants)
+    price = ensure_price(f"{name} instalment (24 months)", monthly)
+    if name in offerings:
+        return offerings[name]
+    offerings[name] = req("POST", "productOffering", {
+        "name": name, "description": description, "lifecycleStatus": "Active", "isBundle": False, "isSellable": True,
+        "category": [cat_ref("Devices")],
+        "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
+        "productOfferingPrice": [{"id": price["id"], "name": price["name"], "@referredType": "ProductOfferingPrice"}],
+        "productOfferingTerm": [{"name": "24 months", "description": "24 monthly instalments, no interest",
+                                 "duration": {"amount": 24, "units": "month"}}]})
+    print(f"handset: {name} ({monthly} {CUR}/month × 24)")
+    return offerings[name]
+
+
+ensure_handset("Apple iPhone 17 Pro", "Apple", "Apple's flagship: ProMotion display, titanium body. 24 monthly instalments, no interest.", 549,
+               [("color", ["Deep Blue", "Silver"]), ("storage", ["256GB", "512GB", "1TB"])])
+ensure_handset("Apple iPhone 17", "Apple", "The iPhone for everyone, on 24 monthly instalments.", 399,
+               [("color", ["Lavender", "Green"]), ("storage", ["128GB", "256GB"])])
+ensure_handset("Samsung Galaxy S26", "Samsung", "Samsung's flagship with Galaxy AI, on 24 monthly instalments.", 449,
+               [("color", ["Phantom Black", "Cream", "Icy Blue"]), ("storage", ["256GB", "512GB"])])
+
 # ---- a device so the Devices tab has stock ----------------------------------------------
 ensure_offering("Wi-Fi 6 Router (spare)", "Devices", 1490,
                 "The same Wi-Fi 6 router we install with fibre, as a spare or for a cabin. Ships with Posten.",
