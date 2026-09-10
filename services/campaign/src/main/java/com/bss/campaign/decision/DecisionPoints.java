@@ -40,10 +40,12 @@ public class DecisionPoints {
     public static final String JOURNEY_ARM_WEIGHTS = "journey.armWeights";
 
     private final DomainEventPublisher events;
+    private final ContractProvider contracts;
     private final Map<String, DecisionPointSpec> registry = new LinkedHashMap<>();
 
-    public DecisionPoints(DomainEventPublisher events) {
+    public DecisionPoints(DomainEventPublisher events, ContractProvider contracts) {
         this.events = events;
+        this.contracts = contracts;
         register(new DecisionPointSpec(JOURNEY_ENROLMENT, "party", "high",
                 "a customer enters a journey: holdout, or which message variant (arm)",
                 new HoldoutThenWeightedHashPolicy()));
@@ -101,12 +103,50 @@ public class DecisionPoints {
     public DecisionRecord decide(DecisionPointSpec spec, DecisionPolicy policy, String subjectId,
             Map<String, Object> context, List<String> candidates, List<Constraint> constraints,
             String fallbackAction) {
-        List<String> eligible = new ArrayList<>();
+        return run(spec, policy, subjectId, context, candidates, constraints, fallbackAction, true);
+    }
+
+    /** What WOULD be decided — same seam, nothing recorded, nothing published (the contract dry-run). */
+    public DecisionRecord preview(String decisionPoint, String subjectId, Map<String, Object> context,
+            List<String> candidates, String fallbackAction) {
+        DecisionPointSpec spec = spec(decisionPoint);
+        return run(spec, spec.policy(), subjectId, context, candidates, List.of(), fallbackAction, false);
+    }
+
+    private DecisionRecord run(DecisionPointSpec spec, DecisionPolicy policy, String subjectId,
+            Map<String, Object> context, List<String> candidates, List<Constraint> constraints,
+            String fallbackAction, boolean record) {
+        // THE LEARNING CONTRACT: the tenant's intent for this point, applied
+        // before the policy — allowed actions, exploration cap, autonomy,
+        // fallback, and the pause switch. Every effect is a named constraint line.
+        Contract contract = contracts == null ? null : contracts.contractFor(spec.name()).orElse(null);
+        List<Constraint> all = new ArrayList<>(constraints == null ? List.<Constraint>of() : constraints);
         List<String> fired = new ArrayList<>();
-        DecisionRequest probe = new DecisionRequest(spec.name(), spec.subjectType(), subjectId, context, candidates);
+        Map<String, Object> ctx = new LinkedHashMap<>(context == null ? Map.of() : context);
+        String fallback = fallbackAction;
+        String autonomy = spec.autonomy();
+        if (contract != null) {
+            if (contract.fallbackAction() != null && !contract.fallbackAction().isBlank()) {
+                fallback = contract.fallbackAction();
+            }
+            if (contract.autonomy() != null && !contract.autonomy().isBlank()) {
+                autonomy = contract.autonomy();
+            }
+            if (contract.allowedActions() != null) {
+                all.add(0, new AllowedActionsConstraint(contract.allowedActions()));
+            }
+            if (contract.explorationMaxPercent() != null && ctx.get("holdoutPercent") instanceof Number h
+                    && h.intValue() > contract.explorationMaxPercent()) {
+                ctx.put("holdoutPercent", contract.explorationMaxPercent());
+                fired.add("learning-contract: holdout capped at " + contract.explorationMaxPercent()
+                        + " % (asked " + h.intValue() + " %)");
+            }
+        }
+        List<String> eligible = new ArrayList<>();
+        DecisionRequest probe = new DecisionRequest(spec.name(), spec.subjectType(), subjectId, ctx, candidates);
         for (String action : candidates) {
             boolean keep = true;
-            for (Constraint c : constraints == null ? List.<Constraint>of() : constraints) {
+            for (Constraint c : all) {
                 Optional<String> why = c.reject(action, probe);
                 if (why.isPresent()) {
                     fired.add(c.name() + ": " + action + " — " + why.get());
@@ -118,33 +158,56 @@ public class DecisionPoints {
                 eligible.add(action);
             }
         }
-        DecisionRequest request = new DecisionRequest(spec.name(), spec.subjectType(), subjectId, context, eligible);
+        DecisionRequest request = new DecisionRequest(spec.name(), spec.subjectType(), subjectId, ctx, eligible);
         Decision decision;
-        boolean fallback = false;
-        if (eligible.isEmpty()) {
-            decision = Decision.deterministic(fallbackAction, "no eligible action — fallback", Map.of());
-            fallback = true;
+        boolean fellBack = false;
+        if (contract != null && !contract.enabled()) {
+            decision = Decision.deterministic(fallback, "learning contract paused — fallback answers", Map.of());
+            fellBack = true;
+            fired.add("learning-contract: paused");
+        } else if (eligible.isEmpty()) {
+            decision = Decision.deterministic(fallback, "no eligible action — fallback", Map.of());
+            fellBack = true;
         } else {
             try {
                 decision = policy.decide(request);
                 if (decision == null || decision.action() == null || !eligible.contains(decision.action())) {
-                    decision = Decision.deterministic(fallbackAction,
+                    decision = Decision.deterministic(fallback,
                             "policy answered outside the eligible set — fallback", Map.of());
-                    fallback = true;
+                    fellBack = true;
                 }
             } catch (RuntimeException e) {
                 log.warn("decision point {} policy {} failed: {} — fallback '{}'", spec.name(), policy.name(),
-                        e.getMessage(), fallbackAction);
-                decision = Decision.deterministic(fallbackAction, "policy failed: " + e.getMessage(), Map.of());
-                fallback = true;
+                        e.getMessage(), fallback);
+                decision = Decision.deterministic(fallback, "policy failed: " + e.getMessage(), Map.of());
+                fellBack = true;
             }
         }
-        DecisionRecord record = new DecisionRecord(UUID.randomUUID().toString(), spec.name(), spec.subjectType(),
+        DecisionRecord out = new DecisionRecord(UUID.randomUUID().toString(), spec.name(), spec.subjectType(),
                 subjectId, List.copyOf(candidates), eligible, fired, decision.action(), decision.propensity(),
                 policy.name(), policy.version(), decision.reason(), request.context(), decision.evidence(),
-                spec.autonomy(), fallback, SOURCE, OffsetDateTime.now());
-        publish(record);
-        return record;
+                autonomy, fellBack, SOURCE, OffsetDateTime.now(), contract == null ? null : contract.ref());
+        if (record) {
+            publish(out);
+        }
+        return out;
+    }
+
+    /** The contract's allowed-action list as a constraint, so the receipt names it like any other rule. */
+    static final class AllowedActionsConstraint implements Constraint {
+        private final List<String> allowed;
+
+        AllowedActionsConstraint(List<String> allowed) {
+            this.allowed = allowed;
+        }
+
+        public String name() {
+            return "learning-contract";
+        }
+
+        public Optional<String> reject(String action, DecisionRequest request) {
+            return allowed.contains(action) ? Optional.empty() : Optional.of("not in the contract's allowed actions");
+        }
     }
 
     private void publish(DecisionRecord record) {

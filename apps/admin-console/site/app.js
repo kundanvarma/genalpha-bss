@@ -1488,6 +1488,22 @@ const RESOURCES = [
     columns: [],
   },
   {
+    path: 'decisions',
+    title: 'Decisions',
+    decisions: true, // continuous learning: the decision log and its receipts
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
+    path: 'learning-contracts',
+    title: 'Learning contracts',
+    learningContracts: true, // continuous learning: intent per decision point, as configuration
+    readOnly: true,
+    fields: [],
+    columns: [],
+  },
+  {
     path: 'voc',
     title: 'Voice of Customer',
     voc: true, // SI-P4: battery aggregates per aspect + early-warning alerts
@@ -1706,6 +1722,8 @@ const TAB_ROLE = {
   policyRule: ['catalog:write', 'roles:admin'], integrations: 'roles:admin', staff: 'roles:admin',
   approvals: 'catalog:write', envelopes: 'catalog:write',
   'desk-suggestions': ['catalog:write', 'ai:admin'], // AI & Automation is the product owner's and the admin's room (suite #87)
+  // the decision log and the contracts are the product owner's and the admin's room, like the suggestions (gro, marketing, sees no AI desk)
+  decisions: ['catalog:write', 'ai:admin'], 'learning-contracts': ['catalog:write', 'ai:admin'],
 };
 let visible = RESOURCES;
 // The baseline SHOP-CUSTOMER composite — EXACTLY what every self-registered
@@ -1769,7 +1787,7 @@ const WORKSPACES = [
   { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
-  { label: 'AI & Automation', tabs: ['desk-suggestions', 'audit', 'runbook', 'workforce'] },
+  { label: 'AI & Automation', tabs: ['desk-suggestions', 'decisions', 'learning-contracts', 'audit', 'runbook', 'workforce'] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.
   { label: 'Privacy & governance', tabs: ['profile', 'aiflows'] },
@@ -4082,6 +4100,229 @@ async function renderAiFlows() {
   panel.append(intro, totals, table);
 }
 
+/* ---------------- Decisions: the decision log and its receipts (continuous learning, phase 3) ---------------- */
+const DECISIONS_BASE = '/insight/v1/decisions';
+const POINT_LABELS = {
+  'journey.enrolment': 'Journey enrolment', 'campaign.treatment': 'Campaign treatment',
+  'journey.nextBestAction': 'Next-best-action', 'journey.armWeights': 'Arm weights (tuner)',
+  'catalog.advisorProposal': 'Advisor proposal', 'desk.suggestion': 'Desk suggestion',
+};
+const pointLabel = (p) => POINT_LABELS[p] || p;
+const fmtWhen = (s) => { if (!s) return ''; const d = new Date(s); return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleString(); };
+const fmtProp = (p) => (p === null || p === undefined ? 'deterministic' : `${Math.round(Number(p) * 1000) / 10} %`);
+
+async function renderDecisions() {
+  document.getElementById('list-search')?.setAttribute('hidden', '');
+  document.querySelector('.pager')?.setAttribute('hidden', '');
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'decisions-pane';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'Every adaptive choice the BSS made: what it saw, what it could choose, what it chose, by which '
+    + 'policy and with what probability — and what followed. Open a row for the receipt.';
+
+  const bar = document.createElement('div'); bar.className = 'staffbar';
+  const pointSel = document.createElement('select'); pointSel.dataset.testid = 'decisions-point';
+  const subject = document.createElement('input'); subject.placeholder = 'subject id (a customer, a journey, an offering)';
+  subject.dataset.testid = 'decisions-subject';
+  const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Show'; go.dataset.testid = 'decisions-show';
+  bar.append(pointSel, subject, go);
+
+  const receipt = document.createElement('div'); receipt.className = 'panel'; receipt.dataset.testid = 'decision-receipt';
+  receipt.hidden = true; receipt.style.cssText = 'padding:12px 16px;margin:0 0 14px;border-left:3px solid var(--teal)';
+  const list = document.createElement('div'); list.dataset.testid = 'decisions-list';
+
+  const summary = await authFetch(`${DECISIONS_BASE}/summary`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const points = [...new Set((summary?.points || []).map((p) => p.decisionPoint))];
+  const all = document.createElement('option'); all.value = ''; all.textContent = 'every decision point'; pointSel.append(all);
+  for (const p of points) { const o = document.createElement('option'); o.value = p; o.textContent = pointLabel(p); pointSel.append(o); }
+
+  const showReceipt = async (id) => {
+    receipt.replaceChildren(); receipt.hidden = false;
+    const r = await authFetch(`${DECISIONS_BASE}/${encodeURIComponent(id)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+    if (!r) { receipt.textContent = 'This decision is not in the log any more.'; return; }
+    const head = document.createElement('div'); head.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:12px';
+    const title = document.createElement('strong'); title.textContent = `Receipt · ${pointLabel(r.decisionPoint)} · ${r.subjectId || ''}`;
+    const close = document.createElement('button'); close.className = 'ghost'; close.textContent = 'Close';
+    close.addEventListener('click', () => { receipt.hidden = true; });
+    head.append(title, close);
+    const ol = document.createElement('ol'); ol.style.cssText = 'margin:8px 0 6px 18px;padding:0;line-height:1.5';
+    for (const line of (r.receipt || [])) { const li = document.createElement('li'); li.textContent = line; ol.append(li); }
+    const details = document.createElement('details'); details.style.fontSize = '12px';
+    const sum = document.createElement('summary'); sum.textContent = 'context · eligible · constraints · evidence'; details.append(sum);
+    const pre = document.createElement('pre'); pre.style.cssText = 'white-space:pre-wrap;margin:6px 0 0;font-size:12px';
+    pre.textContent = JSON.stringify({ context: r.context, eligibleActions: r.eligibleActions, constraints: r.constraints,
+      evidence: r.evidence, contract: r.contract, decisionId: r.decisionId }, null, 2);
+    details.append(pre);
+    receipt.append(head, ol, details);
+    receipt.scrollIntoView({ block: 'nearest' });
+  };
+
+  const load = async () => {
+    list.replaceChildren();
+    const q = new URLSearchParams({ limit: '100' });
+    if (pointSel.value) q.set('decisionPoint', pointSel.value);
+    if (subject.value.trim()) q.set('subjectId', subject.value.trim());
+    const rows = await authFetch(`${DECISIONS_BASE}?${q}`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!Array.isArray(rows) || !rows.length) {
+      const p = document.createElement('p'); p.className = 'dim';
+      p.textContent = 'No decisions on the log for this filter. Decisions arrive as journeys enrol, campaigns reach, the tuner judges and the advisor proposes.';
+      list.append(p); return;
+    }
+    const head = document.createElement('div'); head.className = 'dim';
+    head.style.cssText = 'display:grid;grid-template-columns:150px 150px 1fr 130px 170px 90px 130px;gap:10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:0 12px 4px';
+    for (const t of ['when', 'decision point', 'subject', 'chosen', 'policy', 'propensity', 'outcome']) { const s = document.createElement('span'); s.textContent = t; head.append(s); }
+    list.append(head);
+    for (const d of rows) {
+      const row = document.createElement('div'); row.className = 'panel'; row.dataset.testid = 'decision-row'; row.dataset.id = d.decisionId;
+      row.style.cssText = 'padding:8px 12px;margin:4px 0;display:grid;grid-template-columns:150px 150px 1fr 130px 170px 90px 130px;gap:10px;align-items:baseline;cursor:pointer;font-size:13px';
+      const cells = [fmtWhen(d.decidedAt), pointLabel(d.decisionPoint), d.subjectId || '', d.action || '',
+        `${d.policy} v${d.policyVersion}`, fmtProp(d.propensity), d.outcome ? `${d.outcome}${d.outcomeValue ? ' · ' + d.outcomeValue : ''}` : '—'];
+      cells.forEach((c, i) => { const s = document.createElement('span'); s.textContent = c; if (i === 3) s.style.fontWeight = '600'; if (i === 6 && d.outcome) s.style.color = '#2e7d32'; row.append(s); });
+      if (d.fallback) { row.style.borderLeft = '3px solid #f59e0b'; row.title = 'fallback — the policy did not answer'; }
+      row.addEventListener('click', () => showReceipt(d.decisionId));
+      list.append(row);
+    }
+  };
+  go.addEventListener('click', load);
+  pointSel.addEventListener('change', load);
+  panel.append(intro, bar, receipt, list);
+  await load();
+}
+
+/* ---------------- Learning contracts: intent per DecisionPoint, as configuration (phase 4) ---------------- */
+async function renderLearningContracts() {
+  document.getElementById('list-search')?.setAttribute('hidden', '');
+  document.querySelector('.pager')?.setAttribute('hidden', '');
+  const panel = copilotPanel();
+  panel.replaceChildren();
+  panel.dataset.testid = 'contracts-pane';
+  const intro = document.createElement('p');
+  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
+  intro.textContent = 'One contract per decision point: what to optimise, what must hold, which actions are allowed, how much '
+    + 'may be explored, how much autonomy the point has, and what answers when the policy cannot. The seam reads it on every '
+    + 'decision and every receipt cites the version it ran under.';
+  const editor = document.createElement('div'); editor.className = 'panel'; editor.dataset.testid = 'contract-editor';
+  editor.hidden = true; editor.style.cssText = 'padding:12px 16px;margin:0 0 14px;border-left:3px solid var(--teal)';
+  const list = document.createElement('div'); list.dataset.testid = 'contract-list';
+
+  const field = (label, control, hint) => {
+    const w = document.createElement('label'); w.style.cssText = 'display:flex;flex-direction:column;gap:4px;font-size:12px';
+    const t = document.createElement('span'); t.textContent = label; t.style.fontWeight = '600';
+    w.append(t, control);
+    if (hint) { const h = document.createElement('span'); h.className = 'dim'; h.style.fontSize = '11px'; h.textContent = hint; w.append(h); }
+    return w;
+  };
+  const input = (val, ph, testid) => { const i = document.createElement('input'); i.value = val ?? ''; i.placeholder = ph || ''; if (testid) i.dataset.testid = testid; return i; };
+  const area = (val, ph, testid) => { const a = document.createElement('textarea'); a.rows = 3; a.value = val ?? ''; a.placeholder = ph || ''; if (testid) a.dataset.testid = testid; return a; };
+  const sel = (opts, val, testid) => { const s = document.createElement('select'); if (testid) s.dataset.testid = testid;
+    for (const [v, l] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = l; if (v === (val ?? '')) o.selected = true; s.append(o); } return s; };
+  const lines = (v) => (Array.isArray(v) ? v.join('\n') : '');
+  const split = (s) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+
+  const openEditor = (row) => {
+    editor.replaceChildren(); editor.hidden = false;
+    const c = row.contract || {};
+    const title = document.createElement('strong');
+    title.textContent = `${pointLabel(row.name)} — ${row.description} · policy ${row.policy} v${row.policyVersion}`;
+    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0';
+    const objective = sel([['', 'none'], ['conversion', 'conversion'], ['adopted', 'adopted'], ['accepted', 'accepted']], c.objective, 'contract-objective');
+    const secondary = input((c.secondaryMetrics || []).join(', '), 'revenue, activation, care-contacts', 'contract-secondary');
+    const guardrails = area(lines(c.guardrails), 'one rule per line — consent, statute, brand', 'contract-guardrails');
+    const allowed = input(c.allowedActions ? c.allowedActions.join(', ') : '', 'empty = every candidate', 'contract-allowed');
+    const cap = input(c.explorationMaxPercent ?? '', 'empty = no cap', 'contract-cap'); cap.type = 'number'; cap.min = 0; cap.max = 90;
+    const autonomy = sel([['', `point default (${row.autonomy})`], ['high', 'high — reversible, runs alone'], ['medium', 'medium — recommendations, traffic shifts'], ['low', 'low — money, rights, statute']], c.autonomy, 'contract-autonomy');
+    const fallback = input(c.fallbackAction ?? '', 'empty = the caller\'s default', 'contract-fallback');
+    const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = c.enabled !== false; enabled.dataset.testid = 'contract-enabled';
+    const notes = area(c.notes ?? '', 'why this contract is shaped this way', 'contract-notes');
+    grid.append(field('Objective', objective, 'the outcome this point is optimised for'),
+      field('Secondary metrics', secondary, 'must not degrade; comma-separated'),
+      field('Allowed actions', allowed, 'comma-separated; a candidate outside the list is removed before the policy'),
+      field('Exploration cap %', cap, 'the most customers a holdout may leave silent'),
+      field('Autonomy', autonomy), field('Fallback action', fallback, 'answers when the policy cannot, or when paused'),
+      field('Policy enabled', enabled, 'off = paused: the fallback answers every decision'));
+    const wide = document.createElement('div'); wide.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 10px';
+    wide.append(field('Guardrails', guardrails, 'hard rules in words — evaluated by the constraints, shown on the receipt'), field('Notes', notes));
+    const actions = document.createElement('div'); actions.className = 'actions'; actions.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+    const save = document.createElement('button'); save.className = 'primary'; save.textContent = 'Save contract'; save.dataset.testid = 'contract-save';
+    const reset = document.createElement('button'); reset.className = 'ghost'; reset.textContent = 'Back to defaults'; reset.dataset.testid = 'contract-reset';
+    const cancel = document.createElement('button'); cancel.className = 'ghost'; cancel.textContent = 'Close';
+    const msg = document.createElement('span'); msg.className = 'dim'; msg.dataset.testid = 'contract-msg';
+    actions.append(save, reset, cancel, msg);
+    const body = () => ({ objective: objective.value || null, secondaryMetrics: split(secondary.value), guardrails: split(guardrails.value),
+      allowedActions: allowed.value.trim() ? split(allowed.value) : null, explorationMaxPercent: cap.value === '' ? null : Number(cap.value),
+      autonomy: autonomy.value || null, fallbackAction: fallback.value.trim() || null, enabled: enabled.checked, notes: notes.value.trim() || null });
+    save.addEventListener('click', async () => {
+      msg.textContent = 'saving…';
+      const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}`, { method: 'PUT',
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
+      if (!r.ok) { msg.textContent = (await r.json().catch(() => ({}))).message || 'save failed'; return; }
+      const saved = await r.json();
+      msg.textContent = `saved as version ${saved.contract.version}`;
+      await load();
+    });
+    reset.addEventListener('click', async () => {
+      const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}`, { method: 'DELETE' });
+      msg.textContent = r.ok ? 'back to the point\'s defaults' : 'reset failed';
+      await load(); editor.hidden = true;
+    });
+    cancel.addEventListener('click', () => { editor.hidden = true; });
+
+    /* dry run: what the point WOULD decide for a sample context under this contract */
+    const dry = document.createElement('div'); dry.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px solid var(--line)';
+    const dryTitle = document.createElement('div'); dryTitle.style.cssText = 'font-weight:600;font-size:12px;margin-bottom:6px';
+    dryTitle.textContent = 'Dry run — nothing is recorded';
+    const dryBar = document.createElement('div'); dryBar.className = 'staffbar'; dryBar.style.margin = '0 0 8px';
+    const cands = input('holdout, A, B', 'candidates, comma-separated', 'dryrun-candidates');
+    const party = input(`party-${Date.now() % 1000}`, 'subject id', 'dryrun-subject');
+    const hold = input('10', 'holdout %', 'dryrun-holdout'); hold.type = 'number'; hold.style.maxWidth = '90px';
+    const run = document.createElement('button'); run.className = 'ghost'; run.textContent = 'Try it'; run.dataset.testid = 'dryrun-run';
+    dryBar.append(cands, party, hold, run);
+    const out = document.createElement('div'); out.dataset.testid = 'dryrun-result'; out.style.fontSize = '13px';
+    run.addEventListener('click', async () => {
+      out.textContent = 'deciding…';
+      const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}/dryRun`, { method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subjectId: party.value.trim(), candidates: split(cands.value),
+          context: { partyId: party.value.trim(), holdoutPercent: Number(hold.value || 0), seed: 'dry-run' } }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) { out.textContent = d.message || 'dry run failed'; return; }
+      out.replaceChildren();
+      const s1 = document.createElement('div'); s1.innerHTML = `Would choose <strong>${d.action}</strong> of [${(d.eligibleActions || []).join(', ')}] by ${d.policy} v${d.policyVersion}, propensity ${fmtProp(d.propensity)}${d.fallback ? ' — FALLBACK' : ''}.`;
+      const s2 = document.createElement('div'); s2.className = 'dim'; s2.textContent = `${d.reason}${(d.constraints || []).length ? ' · constraints: ' + d.constraints.join('; ') : ''} · autonomy ${d.autonomy}${d.contract ? ' · contract ' + d.contract : ' · no contract (defaults)'}`;
+      out.append(s1, s2);
+    });
+    dry.append(dryTitle, dryBar, out);
+    editor.append(title, grid, wide, actions, dry);
+    editor.scrollIntoView({ block: 'nearest' });
+  };
+
+  const load = async () => {
+    list.replaceChildren();
+    const rows = await authFetch(`${CAMPAIGN_BASE}/learningContract`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!Array.isArray(rows) || !rows.length) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = 'The campaign service is not reachable — no decision points to show.'; list.append(p); return; }
+    for (const row of rows) {
+      const c = row.contract || {};
+      const r = document.createElement('div'); r.className = 'panel'; r.dataset.testid = 'contract-row'; r.dataset.point = row.name;
+      r.style.cssText = 'padding:10px 12px;margin:6px 0;display:grid;grid-template-columns:190px 1fr 190px 120px 90px auto;gap:12px;align-items:baseline;font-size:13px';
+      const name = document.createElement('span'); name.style.fontWeight = '600'; name.textContent = pointLabel(row.name);
+      const desc = document.createElement('span'); desc.className = 'dim'; desc.textContent = `${row.description} · ${row.policy} v${row.policyVersion}`;
+      const state = document.createElement('span'); state.dataset.testid = 'contract-state';
+      state.textContent = c.defaults ? 'defaults — no contract yet' : `v${c.version}${c.updatedBy ? ' · ' + c.updatedBy : ''}${c.objective ? ' · optimises ' + c.objective : ''}`;
+      const auto = document.createElement('span'); auto.textContent = `autonomy ${c.autonomy || row.autonomy}`;
+      const on = document.createElement('span'); on.textContent = c.enabled === false ? 'PAUSED' : 'on';
+      if (c.enabled === false) { on.style.cssText = 'color:#b45309;font-weight:700'; r.style.borderLeft = '3px solid #f59e0b'; }
+      const edit = document.createElement('button'); edit.className = 'ghost'; edit.textContent = c.defaults ? 'Write contract' : 'Edit'; edit.dataset.testid = 'contract-edit';
+      edit.addEventListener('click', () => openEditor(row));
+      r.append(name, desc, state, auto, on, edit);
+      list.append(r);
+    }
+  };
+  panel.append(intro, editor, list);
+  await load();
+}
+
 async function renderVoc() {
   const panel = copilotPanel();
   panel.replaceChildren();
@@ -6095,6 +6336,15 @@ async function loadList() {
     renderAiFlows();
     return;
   }
+  if (active.decisions || active.learningContracts) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    if (active.decisions) renderDecisions(); else renderLearningContracts();
+    return;
+  }
   if (active.staff) {
     el('editor').hidden = true;
     el('total').textContent = '';
@@ -7062,6 +7312,8 @@ const PAGE_GOALS = {
   policyRule: 'Goal: business rules as data — pricing, eligibility, launch envelopes — readable by the people they affect.',
   appointment: 'Goal: installations booked into real capacity, never overbooked, never idle.',
   processFlow: 'Goal: see where an order or a launch is, and how long each step took against its allowance.',
+  decisions: 'Goal: any choice the BSS made can be explained to a customer or an auditor in five sentences. Watch: fallbacks, decisions with no outcome.',
+  'learning-contracts': 'Goal: every decision point runs under a written intent — objective, guardrails, allowed actions, exploration cap, autonomy. Watch: points on defaults, paused points.',
 };
 function renderIntro(resource) {
   let p = document.getElementById('tab-intro');
@@ -7087,7 +7339,7 @@ function newButtonFor(resource) {
   if (!b) return;
   const creatable = !resource.readOnly && !resource.noCreate && !resource.copilot && !resource.approvals
     && !resource.envelopes && !resource.growthCopilot && !resource.audienceBuilder && !resource.pipelineBoard
-    && !resource.socialListening && (resource.fields || []).length > 0;
+    && !resource.socialListening && !resource.decisions && !resource.learningContracts && (resource.fields || []).length > 0;
   b.hidden = !creatable;
   b.textContent = `+ New ${resource.singular || resource.title.replace(/s$/, '').toLowerCase()}`;
   b.onclick = () => {
@@ -7174,6 +7426,27 @@ const PAGE_KPIS = {
       { label: 'published', value: arts.length - drafts.length, tone: 'ok' },
       { label: 'drafts', value: drafts.length, tone: drafts.length ? 'warn' : 'ok', ids: drafts.map((a) => a.id) },
       { label: 'unanswered questions', value: gaps.length, tone: gaps.length ? 'warn' : 'ok' },
+    ];
+  },
+  decisions: async () => {
+    const s = await authFetch(`${DECISIONS_BASE}/summary`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!s) return [];
+    const fallbacks = (s.points || []).reduce((n, p) => n + (p.fallbacks || 0), 0);
+    return [
+      { label: 'decisions', value: s.decisions, tone: 'ok' },
+      { label: 'with outcome', value: s.decisions ? `${Math.round(1000 * s.withOutcome / s.decisions) / 10} %` : '0 %', tone: 'ok' },
+      { label: 'with propensity', value: s.decisions ? `${Math.round(1000 * s.withPropensity / s.decisions) / 10} %` : '0 %', tone: 'ok' },
+      { label: 'fallbacks', value: fallbacks, tone: fallbacks ? 'warn' : 'ok' },
+    ];
+  },
+  'learning-contracts': async () => {
+    const rows = await authFetch(`${CAMPAIGN_BASE}/learningContract`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const written = rows.filter((r) => r.contract && !r.contract.defaults).length;
+    const paused = rows.filter((r) => r.contract && r.contract.enabled === false).length;
+    return [
+      { label: 'decision points', value: rows.length, tone: 'ok' },
+      { label: 'on defaults', value: rows.length - written, tone: rows.length - written ? 'warn' : 'ok' },
+      { label: 'paused', value: paused, tone: paused ? 'warn' : 'ok' },
     ];
   },
 };

@@ -107,6 +107,24 @@ An envelope is a launch shape the business has already approved: category, price
 • Turn off an envelope to make every such launch ask again. Clone to make a variant.
 Envelopes are policy rules (domain "launch") — they also appear under Platform › Rules.
 """)
+article("Decisions: reading a receipt", PO, ["pane:decisions", "ai", "governance"], "Learning how-to", """
+Every adaptive choice the BSS makes is one row here: who it was about, what it could choose, what it chose, by which policy and version, with what probability, and what followed.
+• Filter by decision point (journey enrolment, campaign treatment, next-best-action, the tuner, advisor proposals, desk suggestions) or by a subject id — a customer, a journey, an offering.
+• Open a row for the receipt: five sentences an auditor or a customer can read. The details underneath hold the exact context, eligible actions, constraints and evidence.
+• "Propensity" is the probability the policy chose that action. Deterministic rules have none. A row marked fallback means the policy did not answer and the contract's fallback did.
+• An outcome (a conversion, an adoption, an accept) joins the row later by id. No outcome yet is normal for young decisions.
+Names, addresses and message text are never here — identifiers and numbers only.
+""")
+article("Learning contracts: writing the intent for a decision point", PO, ["pane:learning-contracts", "ai", "governance"], "Learning how-to", """
+A learning contract is the written intent for one decision point, as configuration the seam reads on every decision.
+• Objective: the outcome the point is optimised for (conversion for enrolments and treatments).
+• Guardrails: the hard rules in words — consent, statute, brand. They are what the constraints enforce; the receipt names them.
+• Allowed actions: a candidate outside the list is removed before the policy looks. Empty = every candidate.
+• Exploration cap: the most customers a holdout may leave silent. A journey asking for more is capped and the receipt says so.
+• Autonomy: high for reversible message choices, medium for recommendations and traffic shifts, low for money, rights or statute.
+• Fallback and pause: switch the policy off and the fallback answers every decision — the emergency brake.
+Every save is a new version; old receipts keep citing the version they ran under. Use Dry run to see what the point would decide before you save.
+""")
 article("What the product copilot can and cannot do", PO, ["pane:copilot", "ai"], "Catalog how-to", """
 The copilot proposes; you decide. Describe the product ("a social pack with WhatsApp free, 30 days, app and web, from next Monday"). It returns a full proposal: spec, prices, offering, launch date, channels, zero-rated apps, pricing rules.
 • Make it real creates the rows and then asks for a launch like anyone else. The verdict is shown: "launches by itself — inside envelope …" or "needs an approver".
@@ -131,7 +149,7 @@ article("Writing help articles", PO, ["pane:article", "knowledge"], "Catalog how
 Help articles are the shelf behind the ? on every screen — this tab is where they are written.
 • Title and body: plain words, numbered steps. One screen or task per article.
 • Who is this for: the audience gate. Customers only ever see "customer" and "all"; CSRs the CSR shelf; product owners the how-tos. A customer can never read a product how-to, whatever the tag says.
-• Search tags: where the article appears — pane:<console tab> (pane:approvals, pane:envelopes), csr:<desk page> (csr:tickets), shop:<shop page> (shop:bills). Several tags = several screens.
+• Search tags: where the article appears — pane:<console tab> (pane:approvals, pane:envelopes, pane:decisions, pane:learning-contracts), csr:<desk page> (csr:tickets), shop:<shop page> (shop:bills). Several tags = several screens.
 • Status: only published articles show. Drafts stay here.
 • Unanswered questions at the top of this tab are what people asked that no article answered — Write it prefills a new article; once published, Ask is no longer needed for that question.
 """)

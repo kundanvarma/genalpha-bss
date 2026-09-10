@@ -49,7 +49,7 @@ public class HoldoutThenWeightedHashPolicy implements DecisionPolicy {
         if (arms.isEmpty()) {
             return new Decision(HOLDOUT, 1.0, "nothing to send", Map.of());
         }
-        Map<String, Integer> weights = weightsOf(r, arms);
+        Map<String, Double> weights = weightsOf(r, arms);
         String chosen;
         if (arms.size() == 1) {
             chosen = arms.get(0);
@@ -58,17 +58,17 @@ public class HoldoutThenWeightedHashPolicy implements DecisionPolicy {
             chosen = arms.get(Math.floorMod((seed + ":arm:" + partyId).hashCode(), arms.size()));
         } else {
             int bucket = Math.floorMod((seed + ":" + partyId + ":arm").hashCode(), 100);
-            int acc = 0;
+            double acc = 0;
             chosen = arms.get(arms.size() - 1);
             for (String a : arms) {
-                acc += weights.getOrDefault(a, 0);
+                acc += weights.getOrDefault(a, 0d);
                 if (bucket < acc) {
                     chosen = a;
                     break;
                 }
             }
         }
-        double propensity = treatedShare * weights.getOrDefault(chosen, 0) / 100.0;
+        double propensity = treatedShare * weights.getOrDefault(chosen, 0d) / 100.0;
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("holdoutPercent", holdoutPercent);
         evidence.put("weights", weights);
@@ -77,18 +77,26 @@ public class HoldoutThenWeightedHashPolicy implements DecisionPolicy {
                 evidence);
     }
 
+    /** Weights over the ELIGIBLE arms, normalised to 100 — when a constraint removed an arm,
+     *  its traffic is shared out pro rata and the propensity stays a true probability. */
     @SuppressWarnings("unchecked")
-    private Map<String, Integer> weightsOf(DecisionRequest r, List<String> arms) {
-        Map<String, Integer> w = new LinkedHashMap<>();
+    private Map<String, Double> weightsOf(DecisionRequest r, List<String> arms) {
+        Map<String, Double> w = new LinkedHashMap<>();
         int base = 100 / arms.size();
         for (int i = 0; i < arms.size(); i++) {
-            w.put(arms.get(i), i == 0 ? 100 - base * (arms.size() - 1) : base);
+            w.put(arms.get(i), (double) (i == 0 ? 100 - base * (arms.size() - 1) : base));
         }
         if (r.ctx("weights") instanceof Map<?, ?> given) {
             for (Map.Entry<?, ?> en : ((Map<Object, Object>) given).entrySet()) {
                 if (w.containsKey(String.valueOf(en.getKey())) && en.getValue() instanceof Number n) {
-                    w.put(String.valueOf(en.getKey()), n.intValue());
+                    w.put(String.valueOf(en.getKey()), n.doubleValue());
                 }
+            }
+        }
+        double sum = w.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (sum > 0 && Math.abs(sum - 100) > 0.0001) {
+            for (Map.Entry<String, Double> en : w.entrySet()) {
+                en.setValue(Math.round(en.getValue() * 100 / sum * 100) / 100.0);
             }
         }
         return w;

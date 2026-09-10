@@ -73,6 +73,43 @@ Every journey enrolment and campaign execution keeps its `decision_id`
 records carry theirs; an advisor finding and the proposal it hands to
 `/adopt` carry theirs.
 
+## Learning Contracts (phase 4) — intent as configuration
+
+One contract per DecisionPoint per tenant, stored with the seam that enforces
+it (campaign, table `learning_contract`, V27/V28) and edited in the console
+under **AI & Automation › Learning contracts**:
+
+| Field | What the seam does with it |
+|---|---|
+| `objective` | the outcome the point is optimised for; shown beside the outcome rate |
+| `secondaryMetrics`, `guardrails` | recorded intent — what must not degrade, the hard rules in words the constraints enforce |
+| `allowedActions` | a candidate outside the list is removed BEFORE the policy, as the `learning-contract` constraint (named on the receipt) |
+| `explorationMaxPercent` | caps `holdoutPercent` in the context; the receipt says "holdout capped at N % (asked M %)" |
+| `autonomy` | overrides the point's class on every record |
+| `fallbackAction` | answers when nothing is eligible, the policy fails — or the point is paused |
+| `enabled` | `false` = paused: the fallback answers every decision and the record says "learning contract paused" |
+
+Every save is a new version; every decision record cites `contract: "<id>@<version>"`,
+so a change of intent is as attributable as a change of policy. When an arm
+is removed by a contract the remaining weights are shared out pro rata, so
+the propensity stays a true probability.
+
+| Call | What |
+|---|---|
+| `GET /tmf-api/campaignManagement/v4/learningContract` | every point with its contract, or the defaults marked `defaults: true` |
+| `GET / PUT / DELETE …/learningContract/{decisionPoint}` | read, upsert (version + 1), back to defaults |
+| `POST …/learningContract/{decisionPoint}/dryRun {context, candidates}` | what the point WOULD decide under the current contract — nothing recorded |
+
+## Console (phase 3)
+
+**AI & Automation › Decisions**: KPIs (decisions, with outcome, with
+propensity, fallbacks), filter by point and subject, one row per decision,
+click for the receipt — the five sentences plus the exact context, eligible
+set, constraints and evidence. **AI & Automation › Learning contracts**: one
+row per point with its state (defaults / version / paused), an inline editor,
+Back to defaults, and a dry run. Both pages have a `?` shelf
+(`pane:decisions`, `pane:learning-contracts`).
+
 ## Proof
 
 `ops/e2e/decision_log_test.js` (#121): the registry; sixty enrolments logged
@@ -81,11 +118,18 @@ equals (1 − holdout) × weight; the holdout decision at holdout %; a conversio
 joins back by id and the receipt reads it; the tuner's judgement is a
 deterministic decision with rows and evidence; the summary's propensity
 coverage; no message text in the log; the ENet tenant reads nothing.
+`ops/e2e/learning_contract_test.js` (#122): defaults per point; a contract
+with allowed actions, a 10 % cap and autonomy low (a 95 % cap refused); the
+dry run applies it without recording; a live journey asking 40 % holdout and
+a B arm gets neither, the record cites the contract version and the
+propensity is 0.9; pause makes the fallback answer and say so; the console
+Decisions page shows the receipt and the Learning contracts page edits to v3
+and dry-runs; the ENet tenant sees only its own defaults.
 Unit: `DecisionPointsTest` — determinism against the historical hashes,
-constraints before policy, fallback on failure, the tuner rule.
+constraints before policy, fallback on failure, the tuner rule, the contract
+(allowed actions, cap, autonomy, pause, citation), preview without recording.
 
 ## Not in this slice
 
-The Decision Receipt page in the console (phase 3), Learning Contracts as
-tenant configuration (phase 4), a contextual bandit behind the same seam
-(phase 5), and replay / off-policy evaluation over the log (phase 6).
+A contextual bandit behind the same seam (phase 5), and replay / off-policy
+evaluation over the log (phase 6) — both wait for a tenant with live traffic.

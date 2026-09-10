@@ -51,6 +51,8 @@ public class DecisionLog {
     private String source;
     @Column(name = "decided_at")
     private OffsetDateTime decidedAt;
+    @Column(length = 80)
+    private String contract;
     @Column(length = 40)
     private String outcome;
     @Column(name = "outcome_value", precision = 14, scale = 2)
@@ -96,6 +98,8 @@ public class DecisionLog {
     public void setSource(String v) { this.source = v; }
     public OffsetDateTime getDecidedAt() { return decidedAt; }
     public void setDecidedAt(OffsetDateTime v) { this.decidedAt = v; }
+    public String getContract() { return contract; }
+    public void setContract(String v) { this.contract = v; }
     public String getOutcome() { return outcome; }
     public void setOutcome(String v) { this.outcome = v; }
     public BigDecimal getOutcomeValue() { return outcomeValue; }

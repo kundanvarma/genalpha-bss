@@ -28,7 +28,8 @@ public record DecisionRecord(
         String autonomy,
         boolean fallback,
         String source,
-        OffsetDateTime decidedAt) {
+        OffsetDateTime decidedAt,
+        String contract) {
 
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
@@ -49,6 +50,7 @@ public record DecisionRecord(
         m.put("autonomy", autonomy);
         m.put("fallback", fallback);
         m.put("source", source);
+        m.put("contract", contract);
         m.put("decidedAt", decidedAt.toString());
         m.put("@type", "Decision");
         return m;

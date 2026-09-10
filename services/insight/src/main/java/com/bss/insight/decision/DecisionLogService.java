@@ -77,6 +77,7 @@ public class DecisionLogService {
         d.setFallback(Boolean.TRUE.equals(decision.get("fallback")));
         d.setSource(cut(str(decision.getOrDefault("source", "unknown")), 40));
         d.setDecidedAt(parseTime(decision.get("decidedAt")));
+        d.setContract(cut(str(decision.get("contract")), 80));
         decisions.save(d);
         return true;
     }
@@ -142,7 +143,8 @@ public class DecisionLogService {
                 + (d.isFallback() ? " — FALLBACK, the policy did not answer" : "") + ".");
         lines.add("Why: " + (d.getReason() == null ? "no reason recorded" : d.getReason()));
         lines.add("Autonomy: " + (d.getAutonomy() == null ? "unclassified" : d.getAutonomy())
-                + " — decided by " + d.getSource() + " at " + d.getDecidedAt() + ".");
+                + " — decided by " + d.getSource() + " at " + d.getDecidedAt()
+                + (d.getContract() == null ? ", no learning contract (defaults)." : ", under learning contract " + d.getContract() + "."));
         lines.add(d.getOutcome() == null ? "Outcome: none attributed yet."
                 : "Outcome: " + d.getOutcome() + (d.getOutcomeValue() == null ? ""
                         : " worth " + d.getOutcomeValue().stripTrailingZeros().toPlainString()) + " at " + d.getOutcomeAt() + ".");
@@ -208,6 +210,7 @@ public class DecisionLogService {
         m.put("fallback", d.isFallback());
         m.put("source", d.getSource());
         m.put("decidedAt", d.getDecidedAt());
+        m.put("contract", d.getContract());
         if (d.getOutcome() != null) {
             m.put("outcome", d.getOutcome());
             m.put("outcomeValue", d.getOutcomeValue());

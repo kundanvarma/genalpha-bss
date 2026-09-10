@@ -19,7 +19,8 @@ import static org.mockito.Mockito.verify;
 class DecisionPointsTest {
 
     private final DomainEventPublisher events = Mockito.mock(DomainEventPublisher.class);
-    private final DecisionPoints points = new DecisionPoints(events);
+    private Contract contract = null;
+    private final DecisionPoints points = new DecisionPoints(events, point -> Optional.ofNullable(contract));
 
     @Test
     @SuppressWarnings("unchecked")
@@ -130,6 +131,42 @@ class DecisionPointsTest {
         points.outcome("d-1", "conversion", 349);
         points.outcome(null, "conversion", 349);
         verify(events, Mockito.times(1)).publish(eq("DecisionOutcomeEvent"), eq("decisionOutcome"), Mockito.any());
+    }
+
+    @Test
+    void theLearningContractShapesEveryDecisionAndIsCited() {
+        Map<String, Object> ctx = Map.of("seed", "j5", "partyId", "p-7", "holdoutPercent", 40, "weights", Map.of("A", 50, "B", 50));
+        contract = new Contract("c-1", 3, "conversion", List.of("revenue"), List.of("no marketing without consent"),
+                List.of("holdout", "A"), 10, "low", null, true);
+        DecisionRecord r = points.decide(DecisionPoints.JOURNEY_ENROLMENT, "p-7", ctx, List.of("holdout", "A", "B"), List.of(), "holdout");
+        assertThat(r.eligibleActions()).containsExactly("holdout", "A");
+        assertThat(r.constraints()).anyMatch(c -> c.startsWith("learning-contract: B"));
+        assertThat(r.constraints()).anyMatch(c -> c.contains("holdout capped at 10 %"));
+        assertThat(r.context().get("holdoutPercent")).isEqualTo(10);
+        assertThat(r.autonomy()).isEqualTo("low");
+        assertThat(r.contract()).isEqualTo("c-1@3");
+        if ("holdout".equals(r.action())) {
+            assertThat(r.propensity()).isEqualTo(0.10);
+        } else {
+            assertThat(r.action()).isEqualTo("A");
+            assertThat(r.propensity()).isEqualTo(0.9);
+        }
+
+        contract = new Contract("c-1", 4, "conversion", List.of(), List.of(), null, null, null, "A", false);
+        DecisionRecord paused = points.decide(DecisionPoints.JOURNEY_ENROLMENT, "p-7", ctx, List.of("holdout", "A", "B"), List.of(), "holdout");
+        assertThat(paused.fallback()).isTrue();
+        assertThat(paused.action()).isEqualTo("A");
+        assertThat(paused.reason()).contains("paused");
+        assertThat(paused.contract()).isEqualTo("c-1@4");
+    }
+
+    @Test
+    void previewDecidesWithoutRecording() {
+        Mockito.clearInvocations(events);
+        DecisionRecord r = points.preview(DecisionPoints.JOURNEY_ENROLMENT, "p-9",
+                Map.of("seed", "j6", "partyId", "p-9", "holdoutPercent", 0), List.of("holdout", "message"), "holdout");
+        assertThat(r.action()).isEqualTo("message");
+        Mockito.verifyNoInteractions(events);
     }
 
     private static Map<String, Object> row(String name, long enrolled, long converted) {
