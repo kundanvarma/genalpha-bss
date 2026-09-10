@@ -339,6 +339,16 @@ ensure_handset("Apple iPhone 17", "Apple", "The iPhone for everyone. Pay in full
 ensure_handset("Samsung Galaxy S26", "Samsung", "Samsung's flagship with Galaxy AI. Pay in full or spread it over 24 months.", 10990,
                [("color", ["Phantom Black", "Cream", "Icy Blue"]), ("storage", ["256GB", "512GB"])], {"512GB": 1200})
 
+# handsets are stock-managed goods: a stock row is what makes the cart treat them as
+# physical (delivery, and the pay-in-full / instalments / Klarna chooser)
+for hs, qty in (("Apple iPhone 17 Pro", 40), ("Apple iPhone 17", 60), ("Samsung Galaxy S26", 50)):
+    o = offerings.get(hs)
+    if o and not req("GET", f"{STOCK}/productStock?productOfferingId={o['id']}", quiet=True):
+        req("POST", f"{STOCK}/productStock", {"name": f"{hs} stock",
+            "productOffering": {"id": o["id"], "name": hs, "@referredType": "ProductOffering"},
+            "stockedQuantity": {"amount": qty, "units": "unit"}})
+        print(f"stock: {hs} × {qty}")
+
 # ---- a device so the Devices tab has stock ----------------------------------------------
 ensure_offering("Wi-Fi 6 Router (spare)", "Devices", 1490,
                 "The same Wi-Fi 6 router we install with fibre, as a spare or for a cabin. Ships with Posten.",
