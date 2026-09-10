@@ -350,3 +350,25 @@ th { border-bottom-color: var(--line); }
 .help-drawer[hidden] { display: none; }
 .pager[hidden] { display: none !important; }
 #list-search[hidden] { display: none !important; }
+
+/* the form is a drawer: parked off the right edge until "+ New", Edit, or a field takes focus */
+.editor { position: fixed; top: 0; right: 0; height: 100vh; width: min(760px, 96vw); overflow-y: auto; margin: 0;
+  background: var(--card); border: none; border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0,0,0,.12);
+  padding: 22px 26px 40px; z-index: 60; transform: translateX(102%); transition: transform .22s ease; border-radius: 0; }
+.editor.open { transform: none; }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .18); z-index: 55; pointer-events: none; }
+.drawer-backdrop[hidden] { display: none; }
+/* live KPIs beside the goal, and the rows they point at */
+.kpis { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.kpi { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12.5px;
+  border: 1px solid var(--line); color: var(--dim); background: var(--card); }
+.kpi strong { font-size: 15px; color: var(--ink); }
+.kpi.warn { border-color: #f59e0b; } .kpi.warn strong { color: #b45309; }
+.kpi.bad { border-color: #dc2626; } .kpi.bad strong { color: #b91c1c; }
+.kpi.ok strong { color: var(--ink); }
+#listing-body tr.flag td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+/* the sibling pages of the department, as a row above the title (Ivan's sketch) */
+.pagerow { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.pagetab { border: none; background: transparent; font: inherit; font-size: 13px; color: var(--dim); padding: 5px 10px; cursor: pointer; border-radius: 6px; }
+.pagetab:hover { background: color-mix(in srgb, var(--card) 90%, var(--ink)); color: var(--ink); }
+.pagetab.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--teal); border-radius: 0; }

@@ -5431,7 +5431,7 @@ function startEditing(item) {
   el('save').textContent = 'Save changes';
   el('cancel-edit').hidden = false;
   el('editor').hidden = false; // reveal for noCreate tabs
-  el('editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  openDrawer();
   for (const f of active.fields) {
     controls[f.name].set(item);
   }
@@ -5989,10 +5989,13 @@ async function loadList() {
   const current = active;   // guard: a slow fetch must not paint over a tab switched mid-flight
   el('resource-title').textContent = active.title;
   renderCrumb(active);
+  renderPageRow(active);
   helpButtonFor(active);
   renderIntro(active);
   renderKnowledgeGaps(active);
   newButtonFor(active);
+  closeDrawer();
+  renderKpis(active);
   document.getElementById('staff-panel')?.setAttribute('hidden', '');
   document.getElementById('copilot-panel')?.setAttribute('hidden', '');
   document.getElementById('workforce-panel')?.setAttribute('hidden', '');
@@ -6208,6 +6211,7 @@ async function loadList() {
 
   el('listing-body').replaceChildren(...shown.map((item) => {
     const tr = document.createElement('tr');
+    if (item && item.id != null) tr.dataset.id = String(item.id);
     for (const c of active.columns) {
       const td = document.createElement('td');
       if (item[c] === undefined && active.augmentRow) {
@@ -7086,7 +7090,156 @@ function newButtonFor(resource) {
   b.onclick = () => {
     stopEditing();
     const ed = el('editor'); ed.hidden = false;
-    ed.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => ed.querySelector('input:not([type=checkbox]), select, textarea')?.focus(), 350);
+    openDrawer();
+    setTimeout(() => ed.querySelector('input:not([type=checkbox]), select, textarea')?.focus(), 150);
   };
 }
+
+
+/* ---------------- The page's KPIs, live, beside its goal — and the rows that make them ----------------
+ * Each entry answers "how are we doing against this page's goal" from the APIs, and
+ * names the row ids that need attention so the table can mark them. */
+const DAY = 24 * 3600 * 1000;
+const ageDays = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / DAY));
+const PAGE_KPIS = {
+  productOffering: async () => {
+    const [offers, queue] = await Promise.all([
+      authFetch(`${API_BASE}/productOffering?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+      authFetch(`${API_BASE}/governance/queue`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ]);
+    const now = Date.now();
+    const drafts = offers.filter((o) => ['In study', 'In design', 'In test'].includes(o.lifecycleStatus));
+    const past = offers.filter((o) => ['Active', 'Launched'].includes(o.lifecycleStatus) && o.validFor?.endDateTime && new Date(o.validFor.endDateTime).getTime() < now);
+    const waiting = queue.filter((q) => ['requested', 'approved', 'held'].includes(q.governanceState));
+    return [
+      { label: 'drafts', value: drafts.length, tone: drafts.length ? 'warn' : 'ok', ids: drafts.map((o) => o.id) },
+      { label: 'waiting on a decision', value: waiting.length, tone: waiting.length ? 'warn' : 'ok', ids: waiting.map((q) => q.id) },
+      { label: 'past their window', value: past.length, tone: past.length ? 'bad' : 'ok', ids: past.map((o) => o.id) },
+    ];
+  },
+  approvals: async () => {
+    const queue = await authFetch(`${API_BASE}/governance/queue`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const waiting = queue.filter((q) => q.governanceState === 'requested');
+    const held = queue.filter((q) => q.governanceState === 'held');
+    const oldest = waiting.length ? Math.max(...waiting.map((q) => ageDays(q.requestedAt || q.lastUpdate))) : 0;
+    return [
+      { label: 'waiting for approval', value: waiting.length, tone: waiting.length ? 'warn' : 'ok' },
+      { label: 'oldest wait (days)', value: oldest, tone: oldest > 3 ? 'bad' : 'ok' },
+      { label: 'on hold', value: held.length, tone: held.length ? 'warn' : 'ok' },
+    ];
+  },
+  envelopes: async () => {
+    const rules = await authFetch(`${POLICY_BASE}/policyRule?limit=200`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const envs = rules.filter((r) => r.domain === 'launch');
+    return [{ label: 'envelopes', value: envs.length, tone: 'ok' }, { label: 'switched off', value: envs.filter((e) => e.enabled === false).length, tone: 'ok' }];
+  },
+  customerBill: async () => {
+    const bills = await authFetch(`${active.base}/customerBill?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const now = Date.now();
+    const unpaid = bills.filter((b) => !/settled|paid|closed/i.test(b.state || ''));
+    const overdue = unpaid.filter((b) => b.paymentDueDate && new Date(b.paymentDueDate).getTime() < now);
+    return [
+      { label: 'unpaid', value: unpaid.length, tone: unpaid.length ? 'warn' : 'ok', ids: unpaid.map((b) => b.id) },
+      { label: 'overdue', value: overdue.length, tone: overdue.length ? 'bad' : 'ok', ids: overdue.map((b) => b.id) },
+    ];
+  },
+  productOrder: async () => {
+    const orders = await authFetch(`${active.base}/productOrder?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const open = orders.filter((o) => !/completed|cancelled|closed|rejected/i.test(o.state || ''));
+    const stale = open.filter((o) => ageDays(o.orderDate || o.creationDate || o.lastUpdate) > 2);
+    return [
+      { label: 'in flight', value: open.length, tone: 'ok' },
+      { label: 'older than 2 days', value: stale.length, tone: stale.length ? 'bad' : 'ok', ids: stale.map((o) => o.id) },
+    ];
+  },
+  journey: async () => {
+    const js = await authFetch(`${active.base}/journey?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    const live = js.filter((j) => /active|live|running/i.test(j.state || j.status || ''));
+    const noHoldout = js.filter((j) => !(Number(j.holdoutPercent) > 0));
+    return [
+      { label: 'live', value: live.length, tone: 'ok' },
+      { label: 'without a holdout', value: noHoldout.length, tone: noHoldout.length ? 'warn' : 'ok', ids: noHoldout.map((j) => j.id) },
+    ];
+  },
+  article: async () => {
+    const [arts, gaps] = await Promise.all([
+      authFetch(`${KNOWLEDGE_BASE}/article?limit=500`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+      authFetch('/ai/v1/knowledgeGaps').then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    ]);
+    const drafts = arts.filter((a) => a.status !== 'published');
+    return [
+      { label: 'published', value: arts.length - drafts.length, tone: 'ok' },
+      { label: 'drafts', value: drafts.length, tone: drafts.length ? 'warn' : 'ok', ids: drafts.map((a) => a.id) },
+      { label: 'unanswered questions', value: gaps.length, tone: gaps.length ? 'warn' : 'ok' },
+    ];
+  },
+};
+let rowFlagIds = new Set();
+function applyRowFlags() {
+  document.querySelectorAll('#listing-body tr').forEach((tr) => tr.classList.toggle('flag', rowFlagIds.has(tr.dataset.id)));
+}
+async function renderKpis(resource) {
+  let row = document.getElementById('kpis');
+  const fn = PAGE_KPIS[resource.path];
+  if (!fn) { if (row) row.hidden = true; rowFlagIds = new Set(); applyRowFlags(); return; }
+  if (!row) {
+    row = document.createElement('div'); row.id = 'kpis'; row.className = 'kpis'; row.dataset.testid = 'page-kpis';
+    (document.getElementById('tab-intro') || document.querySelector('.panel-head'))?.after(row);
+  }
+  row.hidden = false; row.replaceChildren();
+  const current = resource;
+  let kpis = [];
+  try { kpis = await fn(); } catch { kpis = []; }
+  if (active !== current) return; // the user moved on while we counted
+  row.replaceChildren(...kpis.map((k) => {
+    const c = document.createElement('span'); c.className = `kpi ${k.tone || ''}`; c.dataset.testid = 'kpi';
+    const v = document.createElement('strong'); v.textContent = String(k.value);
+    c.append(v, document.createTextNode(' ' + k.label));
+    return c;
+  }));
+  rowFlagIds = new Set(kpis.flatMap((k) => (k.ids || []).map(String)));
+  applyRowFlags();
+}
+
+/* ---------------- Ivan's top row: the sibling pages of the current department ---------------- */
+function renderPageRow(resource) {
+  let row = document.getElementById('pagerow');
+  const ws = WORKSPACES.find((w) => w.tabs.includes(resource.path));
+  if (!row) {
+    row = document.createElement('div'); row.id = 'pagerow'; row.className = 'pagerow'; row.dataset.testid = 'page-row';
+    document.getElementById('crumb')?.after(row);
+  }
+  row.replaceChildren();
+  if (!ws) { row.hidden = true; return; }
+  const pages = ws.tabs.map((p) => visible.find((r) => r.path === p)).filter(Boolean);
+  row.hidden = pages.length < 2;
+  for (const r of pages) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pagetab' + (r === resource ? ' on' : ''); b.textContent = r.title;
+    b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
+    row.append(b);
+  }
+}
+
+/* ---------------- The form as a drawer: off to the right until asked for ----------------
+ * Opens on "+ New", on Edit, or the moment any of its fields gets focus (so a script or
+ * a keyboard user filling it never finds it closed). Closes on Cancel, Save, Escape, backdrop. */
+function openDrawer() {
+  const ed = el('editor'); if (!ed || ed.hidden) return;
+  ed.classList.add('open');
+  let bd = document.getElementById('drawer-backdrop');
+  if (!bd) { bd = document.createElement('div'); bd.id = 'drawer-backdrop'; bd.className = 'drawer-backdrop'; bd.addEventListener('click', () => { stopEditing(); closeDrawer(); }); document.body.append(bd); }
+  bd.hidden = false;
+}
+function closeDrawer() {
+  el('editor')?.classList.remove('open');
+  const bd = document.getElementById('drawer-backdrop'); if (bd) bd.hidden = true;
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && el('editor')?.classList.contains('open')) { stopEditing(); closeDrawer(); } });
+document.addEventListener('DOMContentLoaded', () => {
+  // rows render after their fetch — whenever the table changes, re-apply the KPI flags
+  const body = el('listing-body');
+  if (body) new MutationObserver(() => applyRowFlags()).observe(body, { childList: true });
+  const ed = el('editor'); if (!ed) return;
+  ed.addEventListener('focusin', () => { if (!ed.classList.contains('open')) openDrawer(); });
+  el('cancel-edit')?.addEventListener('click', closeDrawer);
+});
