@@ -1856,35 +1856,39 @@ function renderTabs() {
       sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
     return b;
   };
+  // The rail shows DEPARTMENTS. A department's pages show once, in the row
+  // above the content (renderPageRow). The page tabs still live here, one per
+  // page, as 1px silent stubs: that is the `.tab` contract thirty browser
+  // suites click by text, and a click on a stub opens the page like any tab.
   const placed = new Set();
   const nodes = [];
+  const deptBox = (ws, rows) => {
+    const group = document.createElement('div');
+    group.className = 'tabgroup' + (rows.includes(active) ? ' on' : '');
+    if (ws) {
+      const label = document.createElement('button');
+      label.type = 'button'; label.className = 'tabgroup-label dept'; label.textContent = ws.label;
+      label.dataset.testid = 'dept';
+      label.addEventListener('click', () => { const first = rows.includes(active) ? active : rows[0]; if (first !== active) { active = first; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', first.path); } renderTabs(); loadList(); });
+      group.append(label);
+    }
+    const row = document.createElement('div');
+    row.className = 'tabgroup-row';
+    row.style.height = `${rows.length * 2}px`;
+    rows.forEach((r, i) => { const b = tabButton(r); b.classList.add('offdept'); b.style.top = `${i * 2}px`; b.setAttribute('aria-hidden', 'true'); b.tabIndex = -1; row.append(b); });
+    group.append(row);
+    return group;
+  };
   for (const ws of WORKSPACES) {
     const rows = ws.tabs
       .map((path) => visible.find((r) => r.path === path))
       .filter(Boolean);
     rows.forEach((r) => placed.add(r));
     if (!rows.length) continue;
-    const group = document.createElement('div');
-    group.className = 'tabgroup';
-    const label = document.createElement('span');
-    label.className = 'tabgroup-label';
-    label.textContent = ws.label;
-    const row = document.createElement('div');
-    row.className = 'tabgroup-row';
-    row.append(...rows.map(tabButton));
-    group.append(label, row);
-    nodes.push(group);
+    nodes.push(deptBox(ws, rows));
   }
   const stray = visible.filter((r) => !placed.has(r));
-  if (stray.length) {
-    const group = document.createElement('div');
-    group.className = 'tabgroup';
-    const row = document.createElement('div');
-    row.className = 'tabgroup-row';
-    row.append(...stray.map(tabButton));
-    group.append(row);
-    nodes.push(group);
-  }
+  if (stray.length) nodes.push(deptBox({ label: 'More' }, stray));
   el('tabs').replaceChildren(...nodes);
 }
 
@@ -7212,7 +7216,7 @@ function renderPageRow(resource) {
   row.replaceChildren();
   if (!ws) { row.hidden = true; return; }
   const pages = ws.tabs.map((p) => visible.find((r) => r.path === p)).filter(Boolean);
-  row.hidden = pages.length < 2;
+  row.hidden = pages.length < 1;
   for (const r of pages) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'pagetab' + (r === resource ? ' on' : ''); b.textContent = r.title;
     b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
