@@ -1490,6 +1490,7 @@ const RESOURCES = [
   {
     path: 'decisions',
     title: 'Decisions',
+    intro: 'Why did we do that? Every automatic choice, in one sentence each; open one for the receipt.',
     decisions: true, // continuous learning: the decision log and its receipts
     readOnly: true,
     fields: [],
@@ -1498,6 +1499,7 @@ const RESOURCES = [
   {
     path: 'learning-contracts',
     title: 'Learning contracts',
+    intro: 'What the system may decide on its own — one written contract per kind of decision.',
     learningContracts: true, // continuous learning: intent per decision point, as configuration
     readOnly: true,
     fields: [],
@@ -4100,202 +4102,434 @@ async function renderAiFlows() {
   panel.append(intro, totals, table);
 }
 
-/* ---------------- Decisions: the decision log and its receipts (continuous learning, phase 3) ---------------- */
+/* ---------------- a second drawer for reading things (receipts, contracts) — the form drawer stays the form's ---------------- */
+function sideDrawer() {
+  let d = document.getElementById('side-drawer');
+  if (!d) {
+    d = document.createElement('aside'); d.id = 'side-drawer'; d.className = 'side-drawer'; d.dataset.testid = 'side-drawer';
+    document.body.append(d);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSideDrawer(); });
+  }
+  return d;
+}
+function openSideDrawer(title, ...nodes) {
+  const d = sideDrawer(); d.replaceChildren();
+  const head = document.createElement('div'); head.className = 'side-head';
+  const h = document.createElement('h2'); h.textContent = title;
+  const close = document.createElement('button'); close.className = 'ghost'; close.textContent = 'Close'; close.dataset.testid = 'side-close';
+  close.addEventListener('click', closeSideDrawer);
+  head.append(h, close);
+  d.append(head, ...nodes);
+  d.classList.add('open');
+  return d;
+}
+function closeSideDrawer() { document.getElementById('side-drawer')?.classList.remove('open'); }
+
+/* ---------------- Decisions: "why did we do that?" (continuous learning, phase 3) ---------------- */
 const DECISIONS_BASE = '/insight/v1/decisions';
-const POINT_LABELS = {
-  'journey.enrolment': 'Journey enrolment', 'campaign.treatment': 'Campaign treatment',
-  'journey.nextBestAction': 'Next-best-action', 'journey.armWeights': 'Arm weights (tuner)',
-  'catalog.advisorProposal': 'Advisor proposal', 'desk.suggestion': 'Desk suggestion',
+const POINTS = [
+  { key: 'journey.enrolment', label: 'Journey enrolments', one: 'journey enrolment' },
+  { key: 'campaign.treatment', label: 'Campaigns', one: 'campaign send' },
+  { key: 'journey.nextBestAction', label: 'Next best action', one: 'next-best-action' },
+  { key: 'journey.armWeights', label: 'Traffic shifts', one: 'traffic shift' },
+  { key: 'catalog.advisorProposal', label: 'Advisor', one: 'advisor proposal' },
+  { key: 'desk.suggestion', label: 'Desk', one: 'desk suggestion' },
+];
+const pointOf = (k) => POINTS.find((p) => p.key === k) || { key: k, label: k, one: k };
+const AUTONOMY_WORDS = {
+  high: 'the system on its own — a reversible choice',
+  medium: 'the system, with a person able to override',
+  low: 'a person has to confirm this kind of choice',
 };
-const pointLabel = (p) => POINT_LABELS[p] || p;
-const fmtWhen = (s) => { if (!s) return ''; const d = new Date(s); return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleString(); };
-const fmtProp = (p) => (p === null || p === undefined ? 'deterministic' : `${Math.round(Number(p) * 1000) / 10} %`);
+const money = (v) => {
+  if (v === null || v === undefined || v === '') return '';
+  const cur = (window.BSS_CONSOLE_CONFIG || {}).currency || 'NOK';
+  const n = Number(v); return Number.isNaN(n) ? String(v) : `${n.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${cur}`;
+};
+const when = (s) => {
+  if (!s) return ''; const d = new Date(s); if (Number.isNaN(d.getTime())) return String(s);
+  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  if (mins < 1) return 'just now'; if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60); if (hrs < 24) return `${hrs} h ago`;
+  const days = Math.round(hrs / 24); if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
+  return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
+const clock = (s) => { const d = new Date(s); return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); };
+const pct = (p) => `${Math.round(Number(p) * 1000) / 10} %`;
+const shortId = (s) => (s && String(s).length > 18 ? String(s).slice(0, 8) + '…' : String(s || ''));
+
+/* names for the ids a decision talks about — journeys and campaigns from the campaign service */
+let decisionNames = null;
+async function loadDecisionNames() {
+  if (decisionNames) return decisionNames;
+  const [journeys, campaigns] = await Promise.all([
+    authFetch(`${CAMPAIGN_BASE}/journey`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    authFetch(`${CAMPAIGN_BASE}/campaign?limit=200`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+  decisionNames = { journey: {}, campaign: {}, journeys: Array.isArray(journeys) ? journeys : [], campaigns: Array.isArray(campaigns) ? campaigns : [] };
+  for (const j of decisionNames.journeys) decisionNames.journey[j.id] = j.name;
+  for (const c of decisionNames.campaigns) decisionNames.campaign[c.id] = c.name;
+  return decisionNames;
+}
+const journeyName = (names, id) => names.journey[id] || (id ? `journey ${shortId(id)}` : 'a journey');
+const campaignName = (names, id) => names.campaign[id] || (id ? `campaign ${shortId(id)}` : 'a campaign');
+
+/* one choice, in words: the action for THIS decision point */
+function actionWords(d) {
+  const a = d.action;
+  switch (d.decisionPoint) {
+    case 'journey.enrolment':
+    case 'campaign.treatment':
+      if (a === 'holdout') return 'no message (control group)';
+      if (a === 'message') return 'the message';
+      return `message variant ${a}`;
+    case 'journey.armWeights':
+      if (a === 'shift') { const after = (d.evidence || {}).after || {}; const best = Object.keys(after).sort((x, y) => after[y] - after[x])[0]; return `moved traffic to variant ${best}`; }
+      if (a === 'waiting') return 'waited for more evidence';
+      return 'kept the split as it is';
+    case 'journey.nextBestAction': return 'let one journey speak';
+    case 'catalog.advisorProposal': return a === 'TOPUP_ATTACH' ? 'a bigger tier for a plan customers keep topping up' : a === 'MARKET_PRICE' ? 'a counter to a market price' : `a ${a} proposal`;
+    case 'desk.suggestion': return `a ${a} suggestion`;
+    default: return String(a);
+  }
+}
+/* who or what the decision was about */
+function subjectWords(d, names) {
+  const ctx = d.context || {};
+  switch (d.decisionPoint) {
+    case 'journey.enrolment': return `customer ${shortId(d.subjectId)} in ${journeyName(names, ctx.journeyId)}`;
+    case 'campaign.treatment': return `customer ${shortId(d.subjectId)} in ${campaignName(names, ctx.campaignId)}`;
+    case 'journey.nextBestAction': return `customer ${shortId(d.subjectId)}`;
+    case 'journey.armWeights': return journeyName(names, d.subjectId);
+    case 'catalog.advisorProposal': return `offer ${d.subjectId}`;
+    case 'desk.suggestion': return `the ${d.subjectId} form`;
+    default: return String(d.subjectId || '');
+  }
+}
+/* the row as one sentence */
+function rowWords(d, names) {
+  const ctx = d.context || {}; const ev = d.evidence || {};
+  switch (d.decisionPoint) {
+    case 'journey.enrolment':
+    case 'campaign.treatment': return `${subjectWords(d, names)} got ${actionWords(d)}`;
+    case 'journey.nextBestAction': {
+      const pr = ctx.priorities || {}; const held = Object.keys(pr).find((k) => k !== d.action);
+      return `${journeyName(names, d.action)} spoke to customer ${shortId(d.subjectId)}; ${journeyName(names, held)} waited an hour`;
+    }
+    case 'journey.armWeights': return `${journeyName(names, d.subjectId)}: ${actionWords(d)}${ev.z !== undefined ? ` (evidence z ${ev.z})` : ''}`;
+    case 'catalog.advisorProposal': return `the advisor proposed ${actionWords(d)} for ${d.subjectId}`;
+    case 'desk.suggestion': return `the desk suggested “${ev.title || d.reason || d.action}”`;
+    default: return `${subjectWords(d, names)}: ${d.action}`;
+  }
+}
+function outcomeWords(d) {
+  if (!d.outcome) return null;
+  const v = d.outcomeValue ? `, ${money(d.outcomeValue)}` : '';
+  const map = { conversion: `bought${v}`, adopted: 'adopted as a draft offer', accepted: 'accepted by the desk', dismissed: 'dismissed by the desk' };
+  return map[d.outcome] || d.outcome;
+}
+function eligibleWords(d) {
+  return (d.eligibleActions || []).map((a) => actionWords({ ...d, action: a })).join(', ');
+}
+function constraintWords(c) {
+  const m = String(c).match(/^([^:]+): (.+?) — (.+)$/);
+  if (!m) return String(c).replace(/^learning-contract: /, 'the learning contract: ');
+  const rule = { 'learning-contract': 'the learning contract', consent: 'consent', 'channel-availability': 'channel availability' }[m[1]] || m[1];
+  return `${m[2]} was not allowed by ${rule} (${m[3]})`;
+}
+/* the receipt: six sentences a person can read */
+function receiptLines(d, names) {
+  const ctx = d.context || {}; const ev = d.evidence || {}; const lines = [];
+  const split = ctx.weights ? Object.entries(ctx.weights).map(([k, v]) => `${k} ${v}`).join(' / ') : null;
+  switch (d.decisionPoint) {
+    case 'journey.enrolment':
+    case 'campaign.treatment':
+      lines.push(`We looked at: ${split ? `the current split of variants (${split}), ` : ''}a control group of ${ctx.holdoutPercent ?? 0} %, and the customer's id — nothing else about the customer.`);
+      break;
+    case 'journey.armWeights': {
+      const rows = (ctx.rows || []).map((r) => `${r.name}: ${r.converted} of ${r.enrolled} converted`).join('; ');
+      lines.push(`We looked at: each variant's results (${rows}), the current split, and whether the difference is evidence yet (needs z ≥ ${ctx.threshold}, at least ${ctx.minPerArm} customers per variant).`);
+      break;
+    }
+    case 'journey.nextBestAction': {
+      const pr = ctx.priorities || {};
+      lines.push(`We looked at: two journeys wanting the same customer this moment, with priorities ${Object.entries(pr).map(([k, v]) => `${journeyName(names, k)} ${v}`).join(' and ')}.`);
+      break;
+    }
+    default:
+      lines.push(`We looked at: ${Object.keys(ctx).length ? Object.entries(ctx).map(([k, v]) => `${k} ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(', ') : 'nothing beyond the rule itself'}.`);
+  }
+  const removed = (d.constraints || []).filter((c) => !/capped at/.test(c)).map(constraintWords);
+  const capped = (d.constraints || []).find((c) => /capped at/.test(c));
+  lines.push(`It could have chosen: ${eligibleWords(d) || 'nothing'}.${removed.length ? ' Not this time: ' + removed.join('; ') + '.' : ''}${capped ? ' The control group was ' + capped.replace(/^learning-contract: holdout /, '') + '.' : ''}`);
+  lines.push(`It chose: ${actionWords(d)}${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance under the current split` : ' — no chance involved, this rule is fixed'}${d.fallback ? '. The rule could not decide, so the fallback answered' : ''}.`);
+  lines.push(`Because: ${d.reason || 'no reason was recorded'}${d.reason && !/[.)]$/.test(d.reason) ? '.' : ''}`);
+  lines.push(`Who was allowed to decide: ${AUTONOMY_WORDS[d.autonomy] || 'unclassified'}, ${d.contract ? `under learning contract version ${String(d.contract).split('@')[1] || '?'}` : 'under the default rules'} (rule “${d.policy}”, version ${d.policyVersion}).`);
+  const o = outcomeWords(d);
+  lines.push(o ? `What happened next: the customer ${o}, ${when(d.outcomeAt)}.` : 'What happened next: nothing yet.');
+  return lines;
+}
+
+async function showReceipt(id, names) {
+  const r = await authFetch(`${DECISIONS_BASE}/${encodeURIComponent(id)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  const body = document.createElement('div'); body.dataset.testid = 'decision-receipt';
+  if (!r) { body.textContent = 'This decision is not in the log any more.'; openSideDrawer('Receipt', body); return; }
+  const lead = document.createElement('p'); lead.className = 'dim'; lead.style.margin = '0 0 10px';
+  lead.textContent = `${rowWords(r, names)} · ${clock(r.decidedAt)}`;
+  const ol = document.createElement('ol'); ol.className = 'receipt';
+  for (const line of receiptLines(r, names)) { const li = document.createElement('li'); li.textContent = line; ol.append(li); }
+  const details = document.createElement('details'); details.className = 'record';
+  const sum = document.createElement('summary'); sum.textContent = 'Show the record (for engineers)'; details.append(sum);
+  const pre = document.createElement('pre'); pre.textContent = JSON.stringify(r, null, 2); details.append(pre);
+  body.append(lead, ol, details);
+  openSideDrawer(`Why ${r.decisionPoint === 'journey.armWeights' ? 'the traffic changed' : r.decisionPoint === 'journey.nextBestAction' ? 'one journey waited' : 'this customer got that'}`, body);
+}
 
 async function renderDecisions() {
   document.getElementById('list-search')?.setAttribute('hidden', '');
   document.querySelector('.pager')?.setAttribute('hidden', '');
+  closeSideDrawer();
   const panel = copilotPanel();
   panel.replaceChildren();
   panel.dataset.testid = 'decisions-pane';
-  const intro = document.createElement('p');
-  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
-  intro.textContent = 'Every adaptive choice the BSS made: what it saw, what it could choose, what it chose, by which '
-    + 'policy and with what probability — and what followed. Open a row for the receipt.';
-
-  const bar = document.createElement('div'); bar.className = 'staffbar';
-  const pointSel = document.createElement('select'); pointSel.dataset.testid = 'decisions-point';
-  const subject = document.createElement('input'); subject.placeholder = 'subject id (a customer, a journey, an offering)';
-  subject.dataset.testid = 'decisions-subject';
-  const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Show'; go.dataset.testid = 'decisions-show';
-  bar.append(pointSel, subject, go);
-
-  const receipt = document.createElement('div'); receipt.className = 'panel'; receipt.dataset.testid = 'decision-receipt';
-  receipt.hidden = true; receipt.style.cssText = 'padding:12px 16px;margin:0 0 14px;border-left:3px solid var(--teal)';
-  const list = document.createElement('div'); list.dataset.testid = 'decisions-list';
-
+  const names = await loadDecisionNames();
   const summary = await authFetch(`${DECISIONS_BASE}/summary`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  const points = [...new Set((summary?.points || []).map((p) => p.decisionPoint))];
-  const all = document.createElement('option'); all.value = ''; all.textContent = 'every decision point'; pointSel.append(all);
-  for (const p of points) { const o = document.createElement('option'); o.value = p; o.textContent = pointLabel(p); pointSel.append(o); }
+  const counts = {}; for (const p of (summary?.points || [])) counts[p.decisionPoint] = (counts[p.decisionPoint] || 0) + (p.decisions || 0);
 
-  const showReceipt = async (id) => {
-    receipt.replaceChildren(); receipt.hidden = false;
-    const r = await authFetch(`${DECISIONS_BASE}/${encodeURIComponent(id)}`).then((x) => (x.ok ? x.json() : null)).catch(() => null);
-    if (!r) { receipt.textContent = 'This decision is not in the log any more.'; return; }
-    const head = document.createElement('div'); head.style.cssText = 'display:flex;justify-content:space-between;align-items:baseline;gap:12px';
-    const title = document.createElement('strong'); title.textContent = `Receipt · ${pointLabel(r.decisionPoint)} · ${r.subjectId || ''}`;
-    const close = document.createElement('button'); close.className = 'ghost'; close.textContent = 'Close';
-    close.addEventListener('click', () => { receipt.hidden = true; });
-    head.append(title, close);
-    const ol = document.createElement('ol'); ol.style.cssText = 'margin:8px 0 6px 18px;padding:0;line-height:1.5';
-    for (const line of (r.receipt || [])) { const li = document.createElement('li'); li.textContent = line; ol.append(li); }
-    const details = document.createElement('details'); details.style.fontSize = '12px';
-    const sum = document.createElement('summary'); sum.textContent = 'context · eligible · constraints · evidence'; details.append(sum);
-    const pre = document.createElement('pre'); pre.style.cssText = 'white-space:pre-wrap;margin:6px 0 0;font-size:12px';
-    pre.textContent = JSON.stringify({ context: r.context, eligibleActions: r.eligibleActions, constraints: r.constraints,
-      evidence: r.evidence, contract: r.contract, decisionId: r.decisionId }, null, 2);
-    details.append(pre);
-    receipt.append(head, ol, details);
-    receipt.scrollIntoView({ block: 'nearest' });
+  const chips = document.createElement('div'); chips.className = 'chips'; chips.dataset.testid = 'decisions-chips';
+  let point = ''; let onlyFallbacks = false;
+  const chip = (label, key, n) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.testid = 'decisions-chip'; b.dataset.point = key;
+    b.textContent = n === undefined ? label : `${label} · ${n}`;
+    b.addEventListener('click', () => { point = key; onlyFallbacks = false; [...chips.children].forEach((c) => c.classList.toggle('on', c === b)); load(); });
+    return b;
   };
+  chips.append(chip('All', '', summary?.decisions));
+  for (const p of POINTS) if (counts[p.key]) chips.append(chip(p.label, p.key, counts[p.key]));
+  const fb = (summary?.points || []).reduce((n, p) => n + (p.fallbacks || 0), 0);
+  if (fb) { const b = chip(`Fell back to the default`, '__fallback', fb); b.addEventListener('click', () => { onlyFallbacks = true; }); chips.append(b); }
+  chips.children[0].classList.add('on');
+
+  const bar = document.createElement('div'); bar.className = 'staffbar'; bar.style.margin = '10px 0 12px';
+  const subject = document.createElement('input'); subject.placeholder = 'find a customer or a journey by id'; subject.dataset.testid = 'decisions-subject';
+  const go = document.createElement('button'); go.className = 'ghost'; go.textContent = 'Find'; go.dataset.testid = 'decisions-show';
+  bar.append(subject, go);
+  const list = document.createElement('div'); list.dataset.testid = 'decisions-list'; list.className = 'decision-list';
 
   const load = async () => {
     list.replaceChildren();
     const q = new URLSearchParams({ limit: '100' });
-    if (pointSel.value) q.set('decisionPoint', pointSel.value);
+    if (point && point !== '__fallback') q.set('decisionPoint', point);
     if (subject.value.trim()) q.set('subjectId', subject.value.trim());
-    const rows = await authFetch(`${DECISIONS_BASE}?${q}`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
-    if (!Array.isArray(rows) || !rows.length) {
+    let rows = await authFetch(`${DECISIONS_BASE}?${q}`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!Array.isArray(rows)) rows = [];
+    if (onlyFallbacks) rows = rows.filter((d) => d.fallback);
+    if (!rows.length) {
       const p = document.createElement('p'); p.className = 'dim';
-      p.textContent = 'No decisions on the log for this filter. Decisions arrive as journeys enrol, campaigns reach, the tuner judges and the advisor proposes.';
+      p.textContent = subject.value.trim() ? 'Nothing on the log for that id.' : 'Nothing here yet. Decisions arrive as journeys enrol customers, campaigns send, the tuner judges and the advisor proposes.';
       list.append(p); return;
     }
-    const head = document.createElement('div'); head.className = 'dim';
-    head.style.cssText = 'display:grid;grid-template-columns:150px 150px 1fr 130px 170px 90px 130px;gap:10px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:0 12px 4px';
-    for (const t of ['when', 'decision point', 'subject', 'chosen', 'policy', 'propensity', 'outcome']) { const s = document.createElement('span'); s.textContent = t; head.append(s); }
-    list.append(head);
     for (const d of rows) {
-      const row = document.createElement('div'); row.className = 'panel'; row.dataset.testid = 'decision-row'; row.dataset.id = d.decisionId;
-      row.style.cssText = 'padding:8px 12px;margin:4px 0;display:grid;grid-template-columns:150px 150px 1fr 130px 170px 90px 130px;gap:10px;align-items:baseline;cursor:pointer;font-size:13px';
-      const cells = [fmtWhen(d.decidedAt), pointLabel(d.decisionPoint), d.subjectId || '', d.action || '',
-        `${d.policy} v${d.policyVersion}`, fmtProp(d.propensity), d.outcome ? `${d.outcome}${d.outcomeValue ? ' · ' + d.outcomeValue : ''}` : '—'];
-      cells.forEach((c, i) => { const s = document.createElement('span'); s.textContent = c; if (i === 3) s.style.fontWeight = '600'; if (i === 6 && d.outcome) s.style.color = '#2e7d32'; row.append(s); });
-      if (d.fallback) { row.style.borderLeft = '3px solid #f59e0b'; row.title = 'fallback — the policy did not answer'; }
-      row.addEventListener('click', () => showReceipt(d.decisionId));
+      const row = document.createElement('button'); row.type = 'button'; row.className = 'decision-row'; row.dataset.testid = 'decision-row'; row.dataset.id = d.decisionId;
+      const t = document.createElement('span'); t.className = 'dim when'; t.textContent = when(d.decidedAt); t.title = clock(d.decidedAt);
+      const s = document.createElement('span'); s.className = 'what'; s.textContent = rowWords(d, names);
+      const pill = document.createElement('span'); pill.className = 'pill';
+      const o = outcomeWords(d);
+      if (d.fallback) { pill.classList.add('warn'); pill.textContent = 'fell back'; }
+      else if (o) { pill.classList.add('ok'); pill.textContent = o; }
+      else if (d.propensity !== null && d.propensity !== undefined) { pill.textContent = `${pct(d.propensity)} chance`; }
+      else { pill.textContent = pointOf(d.decisionPoint).one; }
+      row.append(t, s, pill);
+      row.addEventListener('click', () => showReceipt(d.decisionId, names));
       list.append(row);
     }
   };
   go.addEventListener('click', load);
-  pointSel.addEventListener('change', load);
-  panel.append(intro, bar, receipt, list);
+  subject.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); load(); } });
+  panel.append(chips, bar, list);
   await load();
 }
 
-/* ---------------- Learning contracts: intent per DecisionPoint, as configuration (phase 4) ---------------- */
+/* ---------------- Learning contracts: "what the system may decide" (phase 4) ---------------- */
+const OBJECTIVES = [['conversion', 'purchases (conversions)'], ['adopted', 'proposals adopted'], ['accepted', 'suggestions accepted'], ['', 'nothing in particular — just record']];
+const AUTONOMY_CARDS = [
+  ['', 'Point default', ''],
+  ['high', 'Runs on its own', 'reversible choices, like which message to send'],
+  ['medium', 'Recommends, a person can override', 'traffic shifts, proposals'],
+  ['low', 'Never without a person', 'money, rights, statute'],
+];
+function contractSentence(row) {
+  const c = row.contract || {}; const parts = [];
+  const obj = OBJECTIVES.find((o) => o[0] === (c.objective || ''));
+  parts.push(c.objective ? `optimises for ${obj ? obj[1] : c.objective}` : 'records, does not optimise');
+  if (c.allowedActions) parts.push(`only ${c.allowedActions.map((a) => (a === 'holdout' ? 'the control group' : a === 'message' ? 'the message' : `variant ${a}`)).join(', ')}`);
+  else if (row.name === 'journey.enrolment' || row.name === 'campaign.treatment') parts.push('any variant');
+  if (c.explorationMaxPercent !== null && c.explorationMaxPercent !== undefined) parts.push(`at most ${c.explorationMaxPercent} % of customers held out`);
+  const auto = c.autonomy || row.autonomy; const card = AUTONOMY_CARDS.find((a) => a[0] === auto);
+  parts.push(card ? card[1].toLowerCase() : auto);
+  if (c.fallbackAction) parts.push(`falls back to ${c.fallbackAction}`);
+  return parts.join(' · ');
+}
+
 async function renderLearningContracts() {
   document.getElementById('list-search')?.setAttribute('hidden', '');
   document.querySelector('.pager')?.setAttribute('hidden', '');
+  closeSideDrawer();
   const panel = copilotPanel();
   panel.replaceChildren();
   panel.dataset.testid = 'contracts-pane';
-  const intro = document.createElement('p');
-  intro.className = 'dim'; intro.style.cssText = 'font-size:13px;margin:6px 0 12px';
-  intro.textContent = 'One contract per decision point: what to optimise, what must hold, which actions are allowed, how much '
-    + 'may be explored, how much autonomy the point has, and what answers when the policy cannot. The seam reads it on every '
-    + 'decision and every receipt cites the version it ran under.';
-  const editor = document.createElement('div'); editor.className = 'panel'; editor.dataset.testid = 'contract-editor';
-  editor.hidden = true; editor.style.cssText = 'padding:12px 16px;margin:0 0 14px;border-left:3px solid var(--teal)';
-  const list = document.createElement('div'); list.dataset.testid = 'contract-list';
+  const names = await loadDecisionNames();
+  const list = document.createElement('div'); list.dataset.testid = 'contract-list'; list.className = 'contract-list';
 
-  const field = (label, control, hint) => {
-    const w = document.createElement('label'); w.style.cssText = 'display:flex;flex-direction:column;gap:4px;font-size:12px';
-    const t = document.createElement('span'); t.textContent = label; t.style.fontWeight = '600';
+  const q = (question, control, hint) => {
+    const w = document.createElement('div'); w.className = 'q';
+    const t = document.createElement('div'); t.className = 'q-title'; t.textContent = question;
     w.append(t, control);
-    if (hint) { const h = document.createElement('span'); h.className = 'dim'; h.style.fontSize = '11px'; h.textContent = hint; w.append(h); }
+    if (hint) { const h = document.createElement('div'); h.className = 'dim q-hint'; h.textContent = hint; w.append(h); }
     return w;
   };
-  const input = (val, ph, testid) => { const i = document.createElement('input'); i.value = val ?? ''; i.placeholder = ph || ''; if (testid) i.dataset.testid = testid; return i; };
-  const area = (val, ph, testid) => { const a = document.createElement('textarea'); a.rows = 3; a.value = val ?? ''; a.placeholder = ph || ''; if (testid) a.dataset.testid = testid; return a; };
-  const sel = (opts, val, testid) => { const s = document.createElement('select'); if (testid) s.dataset.testid = testid;
-    for (const [v, l] of opts) { const o = document.createElement('option'); o.value = v; o.textContent = l; if (v === (val ?? '')) o.selected = true; s.append(o); } return s; };
-  const lines = (v) => (Array.isArray(v) ? v.join('\n') : '');
-  const split = (s) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+  const radios = (name, opts, val, testidPrefix) => {
+    const w = document.createElement('div'); w.className = 'radios';
+    for (const [v, label, hint] of opts) {
+      const l = document.createElement('label'); l.className = 'radio-card';
+      const i = document.createElement('input'); i.type = 'radio'; i.name = name; i.value = v; i.checked = (val ?? '') === v; if (testidPrefix) i.dataset.testid = `${testidPrefix}-${v || 'default'}`;
+      const s = document.createElement('span'); s.textContent = label;
+      l.append(i, s);
+      if (hint) { const h = document.createElement('small'); h.className = 'dim'; h.textContent = hint; l.append(h); }
+      w.append(l);
+    }
+    w.value = () => (w.querySelector('input:checked') || {}).value ?? '';
+    return w;
+  };
 
   const openEditor = (row) => {
-    editor.replaceChildren(); editor.hidden = false;
     const c = row.contract || {};
-    const title = document.createElement('strong');
-    title.textContent = `${pointLabel(row.name)} — ${row.description} · policy ${row.policy} v${row.policyVersion}`;
-    const grid = document.createElement('div'); grid.style.cssText = 'display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:10px 0';
-    const objective = sel([['', 'none'], ['conversion', 'conversion'], ['adopted', 'adopted'], ['accepted', 'accepted']], c.objective, 'contract-objective');
-    const secondary = input((c.secondaryMetrics || []).join(', '), 'revenue, activation, care-contacts', 'contract-secondary');
-    const guardrails = area(lines(c.guardrails), 'one rule per line — consent, statute, brand', 'contract-guardrails');
-    const allowed = input(c.allowedActions ? c.allowedActions.join(', ') : '', 'empty = every candidate', 'contract-allowed');
-    const cap = input(c.explorationMaxPercent ?? '', 'empty = no cap', 'contract-cap'); cap.type = 'number'; cap.min = 0; cap.max = 90;
-    const autonomy = sel([['', `point default (${row.autonomy})`], ['high', 'high — reversible, runs alone'], ['medium', 'medium — recommendations, traffic shifts'], ['low', 'low — money, rights, statute']], c.autonomy, 'contract-autonomy');
-    const fallback = input(c.fallbackAction ?? '', 'empty = the caller\'s default', 'contract-fallback');
+    const body = document.createElement('div'); body.dataset.testid = 'contract-editor'; body.className = 'contract-editor';
+    const lead = document.createElement('p'); lead.className = 'dim'; lead.style.margin = '0 0 4px';
+    lead.textContent = `${row.description}. Today: ${contractSentence(row)}.`;
+
+    const objective = radios('objective', OBJECTIVES, c.objective, 'contract-objective');
+    const guardrails = document.createElement('textarea'); guardrails.rows = 3; guardrails.dataset.testid = 'contract-guardrails';
+    guardrails.placeholder = 'One rule per line, e.g. "never message a customer without marketing consent"';
+    guardrails.value = (c.guardrails || []).join('\n');
+
+    const allowedWrap = document.createElement('div');
+    const allowedMode = radios('allowed', [['any', 'Any variant the journey offers'], ['only', 'Only these']], c.allowedActions ? 'only' : 'any', 'contract-allowed');
+    const allowed = document.createElement('input'); allowed.dataset.testid = 'contract-allowed'; allowed.placeholder = 'e.g. holdout, A';
+    allowed.value = c.allowedActions ? c.allowedActions.join(', ') : ''; allowed.style.marginTop = '6px';
+    const syncAllowed = () => { allowed.hidden = allowedMode.value() !== 'only'; };
+    allowedMode.addEventListener('change', syncAllowed); syncAllowed();
+    allowedWrap.append(allowedMode, allowed);
+
+    const capWrap = document.createElement('div'); capWrap.className = 'cap';
+    const slider = document.createElement('input'); slider.type = 'range'; slider.min = 0; slider.max = 90; slider.step = 1;
+    const cap = document.createElement('input'); cap.type = 'number'; cap.min = 0; cap.max = 90; cap.dataset.testid = 'contract-cap'; cap.style.width = '80px';
+    const capOff = document.createElement('label'); capOff.className = 'inline';
+    const capOffBox = document.createElement('input'); capOffBox.type = 'checkbox'; capOffBox.dataset.testid = 'contract-cap-off';
+    capOff.append(capOffBox, document.createTextNode(' no limit'));
+    const setCap = (v) => { slider.value = v; cap.value = v; };
+    if (c.explorationMaxPercent === null || c.explorationMaxPercent === undefined) { capOffBox.checked = true; setCap(20); } else setCap(c.explorationMaxPercent);
+    const syncCap = () => { slider.disabled = capOffBox.checked; cap.disabled = capOffBox.checked; };
+    capOffBox.addEventListener('change', syncCap); syncCap();
+    slider.addEventListener('input', () => { cap.value = slider.value; });
+    cap.addEventListener('input', () => { slider.value = cap.value; capOffBox.checked = false; syncCap(); });
+    capWrap.append(slider, cap, document.createTextNode(' %'), capOff);
+
+    const autonomy = radios('autonomy', AUTONOMY_CARDS.map(([v, l, h]) => [v, v ? l : `${l} (${row.autonomy})`, h]), c.autonomy, 'contract-autonomy');
+
+    const fbOpts = row.name === 'journey.enrolment' || row.name === 'campaign.treatment'
+      ? [['', 'Hold the customer out (no message)'], ['message', 'Send the plain message'], ['__named', 'A named variant:']]
+      : [['', 'The point\'s own default'], ['__named', 'A named action:']];
+    const fbCurrent = !c.fallbackAction ? '' : fbOpts.some((o) => o[0] === c.fallbackAction) ? c.fallbackAction : '__named';
+    const fallback = radios('fallback', fbOpts, fbCurrent, 'contract-fallback');
+    const fbName = document.createElement('input'); fbName.dataset.testid = 'contract-fallback-name'; fbName.placeholder = 'e.g. A'; fbName.style.marginTop = '6px';
+    fbName.value = fbCurrent === '__named' ? c.fallbackAction : '';
+    const syncFb = () => { fbName.hidden = fallback.value() !== '__named'; };
+    fallback.addEventListener('change', syncFb); syncFb();
+    const fbWrap = document.createElement('div'); fbWrap.append(fallback, fbName);
+
+    const pauseWrap = document.createElement('label'); pauseWrap.className = 'switch';
     const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = c.enabled !== false; enabled.dataset.testid = 'contract-enabled';
-    const notes = area(c.notes ?? '', 'why this contract is shaped this way', 'contract-notes');
-    grid.append(field('Objective', objective, 'the outcome this point is optimised for'),
-      field('Secondary metrics', secondary, 'must not degrade; comma-separated'),
-      field('Allowed actions', allowed, 'comma-separated; a candidate outside the list is removed before the policy'),
-      field('Exploration cap %', cap, 'the most customers a holdout may leave silent'),
-      field('Autonomy', autonomy), field('Fallback action', fallback, 'answers when the policy cannot, or when paused'),
-      field('Policy enabled', enabled, 'off = paused: the fallback answers every decision'));
-    const wide = document.createElement('div'); wide.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 10px';
-    wide.append(field('Guardrails', guardrails, 'hard rules in words — evaluated by the constraints, shown on the receipt'), field('Notes', notes));
-    const actions = document.createElement('div'); actions.className = 'actions'; actions.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
-    const save = document.createElement('button'); save.className = 'primary'; save.textContent = 'Save contract'; save.dataset.testid = 'contract-save';
+    const pauseText = document.createElement('span');
+    const syncPause = () => { pauseText.textContent = enabled.checked ? 'Running — the rule decides' : 'PAUSED — the fallback answers every decision, in every journey of this tenant'; pauseWrap.classList.toggle('warn', !enabled.checked); };
+    enabled.addEventListener('change', syncPause); syncPause();
+    pauseWrap.append(enabled, pauseText);
+
+    const notes = document.createElement('textarea'); notes.rows = 2; notes.dataset.testid = 'contract-notes'; notes.placeholder = 'Why this contract is shaped this way'; notes.value = c.notes || '';
+
+    const actions = document.createElement('div'); actions.className = 'actions'; actions.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:14px';
+    const save = document.createElement('button'); save.className = 'primary'; save.textContent = 'Save'; save.dataset.testid = 'contract-save';
     const reset = document.createElement('button'); reset.className = 'ghost'; reset.textContent = 'Back to defaults'; reset.dataset.testid = 'contract-reset';
-    const cancel = document.createElement('button'); cancel.className = 'ghost'; cancel.textContent = 'Close';
     const msg = document.createElement('span'); msg.className = 'dim'; msg.dataset.testid = 'contract-msg';
-    actions.append(save, reset, cancel, msg);
-    const body = () => ({ objective: objective.value || null, secondaryMetrics: split(secondary.value), guardrails: split(guardrails.value),
-      allowedActions: allowed.value.trim() ? split(allowed.value) : null, explorationMaxPercent: cap.value === '' ? null : Number(cap.value),
-      autonomy: autonomy.value || null, fallbackAction: fallback.value.trim() || null, enabled: enabled.checked, notes: notes.value.trim() || null });
+    actions.append(save, reset, msg);
+    const split = (s) => s.split(/[\n,]/).map((x) => x.trim()).filter(Boolean);
+    const body_ = () => ({
+      objective: objective.value() || null, guardrails: split(guardrails.value),
+      allowedActions: allowedMode.value() === 'only' && allowed.value.trim() ? split(allowed.value) : null,
+      explorationMaxPercent: capOffBox.checked ? null : Number(cap.value),
+      autonomy: autonomy.value() || null,
+      fallbackAction: fallback.value() === '__named' ? (fbName.value.trim() || null) : (fallback.value() || null),
+      enabled: enabled.checked, notes: notes.value.trim() || null, secondaryMetrics: c.secondaryMetrics || [],
+    });
     save.addEventListener('click', async () => {
       msg.textContent = 'saving…';
       const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}`, { method: 'PUT',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body()) });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body_()) });
       if (!r.ok) { msg.textContent = (await r.json().catch(() => ({}))).message || 'save failed'; return; }
       const saved = await r.json();
       msg.textContent = `saved as version ${saved.contract.version}`;
+      row.contract = saved.contract; lead.textContent = `${row.description}. Today: ${contractSentence(row)}.`;
       await load();
     });
     reset.addEventListener('click', async () => {
       const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}`, { method: 'DELETE' });
-      msg.textContent = r.ok ? 'back to the point\'s defaults' : 'reset failed';
-      await load(); editor.hidden = true;
+      msg.textContent = r.ok ? 'back to the defaults' : 'reset failed';
+      await load(); closeSideDrawer();
     });
-    cancel.addEventListener('click', () => { editor.hidden = true; });
 
-    /* dry run: what the point WOULD decide for a sample context under this contract */
-    const dry = document.createElement('div'); dry.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px solid var(--line)';
-    const dryTitle = document.createElement('div'); dryTitle.style.cssText = 'font-weight:600;font-size:12px;margin-bottom:6px';
-    dryTitle.textContent = 'Dry run — nothing is recorded';
-    const dryBar = document.createElement('div'); dryBar.className = 'staffbar'; dryBar.style.margin = '0 0 8px';
-    const cands = input('holdout, A, B', 'candidates, comma-separated', 'dryrun-candidates');
-    const party = input(`party-${Date.now() % 1000}`, 'subject id', 'dryrun-subject');
-    const hold = input('10', 'holdout %', 'dryrun-holdout'); hold.type = 'number'; hold.style.maxWidth = '90px';
+    /* try it on a real customer: the journey brings its own variants and control group */
+    const dry = document.createElement('div'); dry.className = 'dry';
+    const dryTitle = document.createElement('div'); dryTitle.className = 'q-title'; dryTitle.textContent = 'Try it — what would a customer get? Nothing is recorded.';
+    const dryBar = document.createElement('div'); dryBar.className = 'staffbar'; dryBar.style.margin = '6px 0 8px';
+    const journeySel = document.createElement('select'); journeySel.dataset.testid = 'dryrun-journey';
+    const pool = row.name === 'campaign.treatment' ? names.campaigns : names.journeys;
+    for (const j of pool) { const o = document.createElement('option'); o.value = j.id; o.textContent = j.name; journeySel.append(o); }
+    const party = document.createElement('input'); party.placeholder = 'customer id'; party.value = `customer-${Date.now() % 1000}`; party.dataset.testid = 'dryrun-subject';
     const run = document.createElement('button'); run.className = 'ghost'; run.textContent = 'Try it'; run.dataset.testid = 'dryrun-run';
-    dryBar.append(cands, party, hold, run);
-    const out = document.createElement('div'); out.dataset.testid = 'dryrun-result'; out.style.fontSize = '13px';
+    dryBar.append(journeySel, party, run);
+    const out = document.createElement('div'); out.dataset.testid = 'dryrun-result'; out.className = 'dry-out';
     run.addEventListener('click', async () => {
       out.textContent = 'deciding…';
+      const j = pool.find((x) => x.id === journeySel.value) || {};
+      const arms = Array.isArray(j.arms) ? j.arms.map((a) => a.name) : (Array.isArray(j.messageVariants) ? j.messageVariants.map((a) => a.name) : []);
+      const candidates = ['holdout', ...(arms.length ? arms : ['message'])];
+      const ctx = { partyId: party.value.trim(), holdoutPercent: Number(j.holdoutPercent || 0), seed: j.id || 'dry-run' };
+      if (row.name === 'campaign.treatment') ctx.campaignId = j.id; else { ctx.journeyId = j.id; if (arms.length && j.armWeights) ctx.weights = j.armWeights; }
       const r = await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}/dryRun`, { method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subjectId: party.value.trim(), candidates: split(cands.value),
-          context: { partyId: party.value.trim(), holdoutPercent: Number(hold.value || 0), seed: 'dry-run' } }) });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subjectId: party.value.trim(), candidates, context: ctx }) });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) { out.textContent = d.message || 'dry run failed'; return; }
-      out.replaceChildren();
-      const s1 = document.createElement('div'); s1.innerHTML = `Would choose <strong>${d.action}</strong> of [${(d.eligibleActions || []).join(', ')}] by ${d.policy} v${d.policyVersion}, propensity ${fmtProp(d.propensity)}${d.fallback ? ' — FALLBACK' : ''}.`;
-      const s2 = document.createElement('div'); s2.className = 'dim'; s2.textContent = `${d.reason}${(d.constraints || []).length ? ' · constraints: ' + d.constraints.join('; ') : ''} · autonomy ${d.autonomy}${d.contract ? ' · contract ' + d.contract : ' · no contract (defaults)'}`;
-      out.append(s1, s2);
+      if (!r.ok) { out.textContent = d.message || 'the dry run failed'; return; }
+      const capped = (d.constraints || []).find((x) => /capped at/.test(x));
+      const removed = (d.constraints || []).filter((x) => !/capped at/.test(x)).map(constraintWords);
+      const s1 = document.createElement('div'); s1.innerHTML = `This customer would get <strong>${actionWords(d)}</strong>${d.propensity !== null && d.propensity !== undefined ? ` — a ${pct(d.propensity)} chance` : ''}${d.fallback ? ' (the fallback answered)' : ''}.`;
+      const s2 = document.createElement('div'); s2.className = 'dim';
+      s2.textContent = `${capped ? 'The control group was ' + capped.replace(/^learning-contract: holdout /, '') + '. ' : ''}${removed.length ? 'Not allowed: ' + removed.join('; ') + '. ' : ''}${d.contract ? `Under learning contract version ${String(d.contract).split('@')[1]}.` : 'Under the default rules.'}`;
+      out.replaceChildren(s1, s2);
     });
     dry.append(dryTitle, dryBar, out);
-    editor.append(title, grid, wide, actions, dry);
-    editor.scrollIntoView({ block: 'nearest' });
+    if (!pool.length) dry.hidden = true;
+
+    body.append(lead,
+      q('What should this decision optimise?', objective),
+      q('What must never happen?', guardrails, 'Plain rules. The constraints enforce them and the receipt names them.'),
+      q('Which choices are allowed?', allowedWrap, 'A variant outside the list is removed before the rule looks.'),
+      q('At most how many customers may be held out?', capWrap, 'A journey asking for more is capped, and the receipt says so.'),
+      q('How much may it do on its own?', autonomy),
+      q('If the rule cannot decide, what happens?', fbWrap),
+      q('Is it running?', pauseWrap),
+      q('Notes', notes),
+      actions, dry);
+    openSideDrawer(pointOf(row.name).label === row.name ? row.name : `Learning contract · ${pointOf(row.name).label}`, body);
   };
 
   const load = async () => {
@@ -4304,22 +4538,35 @@ async function renderLearningContracts() {
     if (!Array.isArray(rows) || !rows.length) { const p = document.createElement('p'); p.className = 'dim'; p.textContent = 'The campaign service is not reachable — no decision points to show.'; list.append(p); return; }
     for (const row of rows) {
       const c = row.contract || {};
-      const r = document.createElement('div'); r.className = 'panel'; r.dataset.testid = 'contract-row'; r.dataset.point = row.name;
-      r.style.cssText = 'padding:10px 12px;margin:6px 0;display:grid;grid-template-columns:190px 1fr 190px 120px 90px auto;gap:12px;align-items:baseline;font-size:13px';
-      const name = document.createElement('span'); name.style.fontWeight = '600'; name.textContent = pointLabel(row.name);
-      const desc = document.createElement('span'); desc.className = 'dim'; desc.textContent = `${row.description} · ${row.policy} v${row.policyVersion}`;
-      const state = document.createElement('span'); state.dataset.testid = 'contract-state';
-      state.textContent = c.defaults ? 'defaults — no contract yet' : `v${c.version}${c.updatedBy ? ' · ' + c.updatedBy : ''}${c.objective ? ' · optimises ' + c.objective : ''}`;
-      const auto = document.createElement('span'); auto.textContent = `autonomy ${c.autonomy || row.autonomy}`;
-      const on = document.createElement('span'); on.textContent = c.enabled === false ? 'PAUSED' : 'on';
-      if (c.enabled === false) { on.style.cssText = 'color:#b45309;font-weight:700'; r.style.borderLeft = '3px solid #f59e0b'; }
-      const edit = document.createElement('button'); edit.className = 'ghost'; edit.textContent = c.defaults ? 'Write contract' : 'Edit'; edit.dataset.testid = 'contract-edit';
+      const card = document.createElement('div'); card.className = 'contract-card'; card.dataset.testid = 'contract-row'; card.dataset.point = row.name;
+      if (c.enabled === false) card.classList.add('paused');
+      const head = document.createElement('div'); head.className = 'contract-head';
+      const name = document.createElement('strong'); name.textContent = pointOf(row.name).label === row.name ? row.name : pointOf(row.name).label;
+      const desc = document.createElement('span'); desc.className = 'dim'; desc.textContent = row.description;
+      head.append(name, desc);
+      const sentence = document.createElement('p'); sentence.className = 'contract-sentence'; sentence.textContent = contractSentence(row) + '.';
+      const foot = document.createElement('div'); foot.className = 'contract-foot';
+      const state = document.createElement('span'); state.className = 'dim'; state.dataset.testid = 'contract-state';
+      state.textContent = c.defaults ? 'No contract yet — running on the defaults' : `Version ${c.version}${c.updatedBy ? ` by ${c.updatedBy}` : ''}${c.lastUpdate ? `, ${when(c.lastUpdate)}` : ''}${c.enabled === false ? ' · PAUSED' : ''}`;
+      const btns = document.createElement('span'); btns.style.cssText = 'display:flex;gap:8px';
+      const edit = document.createElement('button'); edit.className = 'ghost'; edit.textContent = c.defaults ? 'Write the contract' : 'Change'; edit.dataset.testid = 'contract-edit';
       edit.addEventListener('click', () => openEditor(row));
-      r.append(name, desc, state, auto, on, edit);
-      list.append(r);
+      const pause = document.createElement('button'); pause.className = 'ghost'; pause.dataset.testid = 'contract-pause';
+      pause.textContent = c.enabled === false ? 'Resume' : 'Pause';
+      pause.addEventListener('click', async () => {
+        const body = { ...c, enabled: c.enabled === false, allowedActions: c.allowedActions || null };
+        delete body.defaults; delete body.version; delete body.ref; delete body.id; delete body.updatedBy; delete body.lastUpdate;
+        if (c.enabled !== false && !window.confirm('Pause this rule? Every journey of this tenant will use the fallback until it is resumed.')) return;
+        await authFetch(`${CAMPAIGN_BASE}/learningContract/${encodeURIComponent(row.name)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        await load();
+      });
+      btns.append(edit, pause);
+      foot.append(state, btns);
+      card.append(head, sentence, foot);
+      list.append(card);
     }
   };
-  panel.append(intro, editor, list);
+  panel.append(list);
   await load();
 }
 
@@ -7312,8 +7559,8 @@ const PAGE_GOALS = {
   policyRule: 'Goal: business rules as data — pricing, eligibility, launch envelopes — readable by the people they affect.',
   appointment: 'Goal: installations booked into real capacity, never overbooked, never idle.',
   processFlow: 'Goal: see where an order or a launch is, and how long each step took against its allowance.',
-  decisions: 'Goal: any choice the BSS made can be explained to a customer or an auditor in five sentences. Watch: fallbacks, decisions with no outcome.',
-  'learning-contracts': 'Goal: every decision point runs under a written intent — objective, guardrails, allowed actions, exploration cap, autonomy. Watch: points on defaults, paused points.',
+  decisions: 'Goal: any choice the system made can be explained to a customer or an auditor in six sentences. Watch: choices that fell back to the default.',
+  'learning-contracts': 'Goal: every kind of automatic decision runs under a written intent — what to optimise, what must never happen, what it may choose, how much it may do alone. Watch: paused rules.',
 };
 function renderIntro(resource) {
   let p = document.getElementById('tab-intro');
@@ -7433,10 +7680,9 @@ const PAGE_KPIS = {
     if (!s) return [];
     const fallbacks = (s.points || []).reduce((n, p) => n + (p.fallbacks || 0), 0);
     return [
-      { label: 'decisions', value: s.decisions, tone: 'ok' },
-      { label: 'with outcome', value: s.decisions ? `${Math.round(1000 * s.withOutcome / s.decisions) / 10} %` : '0 %', tone: 'ok' },
-      { label: 'with propensity', value: s.decisions ? `${Math.round(1000 * s.withPropensity / s.decisions) / 10} %` : '0 %', tone: 'ok' },
-      { label: 'fallbacks', value: fallbacks, tone: fallbacks ? 'warn' : 'ok' },
+      { label: 'decisions on the log', value: s.decisions, tone: 'ok' },
+      { label: 'led to a purchase or an adoption', value: s.decisions ? `${Math.round(1000 * s.withOutcome / s.decisions) / 10} %` : '0 %', tone: 'ok' },
+      { label: 'fell back to the default', value: fallbacks, tone: fallbacks ? 'warn' : 'ok' },
     ];
   },
   'learning-contracts': async () => {
@@ -7444,8 +7690,8 @@ const PAGE_KPIS = {
     const written = rows.filter((r) => r.contract && !r.contract.defaults).length;
     const paused = rows.filter((r) => r.contract && r.contract.enabled === false).length;
     return [
-      { label: 'decision points', value: rows.length, tone: 'ok' },
-      { label: 'on defaults', value: rows.length - written, tone: rows.length - written ? 'warn' : 'ok' },
+      { label: 'kinds of decision', value: rows.length, tone: 'ok' },
+      { label: 'without a written contract', value: rows.length - written, tone: rows.length - written ? 'warn' : 'ok' },
       { label: 'paused', value: paused, tone: paused ? 'warn' : 'ok' },
     ];
   },
