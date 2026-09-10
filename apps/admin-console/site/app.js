@@ -29,6 +29,7 @@ const BILLING_BASE = '/tmf-api/customerBillManagement/v4';
 const QUALIFICATION_BASE = '/tmf-api/productOfferingQualification/v4';
 const APPOINTMENT_BASE = '/tmf-api/appointment/v4';
 const CAMPAIGN_BASE = '/tmf-api/campaignManagement/v4';
+const tenantCurrency = () => (window.BSS_CONSOLE_CONFIG || {}).currency || 'EUR';
 const PROMOTION_BASE = '/tmf-api/promotionManagement/v4';
 const POLICY_BASE = '/tmf-api/policyManagement/v4';
 const REVENUE_BASE = '/revenue/v1';
@@ -2938,7 +2939,7 @@ function testerRow() {
     } catch (e) { result.textContent = 'dry run failed: ' + e.message; }
   });
 
-  row.append(labelled('Offering id', offering), labelled('Qty', qty), labelled('Subtotal €', subtotal), verified, orderBtn, priceBtn);
+  row.append(labelled('Offering id', offering), labelled('Qty', qty), labelled(`Subtotal ${tenantCurrency()}`, subtotal), verified, orderBtn, priceBtn);
   wrap.append(caption, row, result);
   return wrap;
 }
@@ -3078,7 +3079,7 @@ async function copilotCatalogContext() {
     authFetch(`${API_BASE}/productOfferingPrice?limit=5`).then((r) => r.json()).catch(() => []),
   ]);
   const categories = [...new Set(offerings.flatMap((o) => (o.category || []).map((c) => c.name)).filter(Boolean))];
-  const currency = prices.find((p) => p.price?.unit)?.price?.unit || 'EUR';
+  const currency = prices.find((p) => p.price?.unit)?.price?.unit || tenantCurrency();
   return {
     categories,
     currency,
@@ -5502,7 +5503,7 @@ async function renderWorkforce() {
     card('Reopen rate', kpis.reopen ? Math.round(kpis.reopen.rate * 100) + '%' : '—',
       kpis.reopen && kpis.reopen.definition, 'wf-kpi-reopen'),
     card('Minutes saved (est.)', mins.minutes, mins.definition, 'wf-kpi-saved'),
-    card('Self-reported cost', ((kpis.selfReportedCostMicros || 0) / 1e6).toFixed(4) + ' €',
+    card('Self-reported cost', ((kpis.selfReportedCostMicros || 0) / 1e6).toFixed(4) + ' ' + tenantCurrency(),
       kpis.selfReportedCostLabel),
     card('Approvals pending', kpis.approvals ? kpis.approvals.pending : 0, null, 'wf-kpi-pending'),
   );
@@ -5704,7 +5705,7 @@ async function renderWorkforce() {
     nums.style.cssText = 'color:var(--dim,#777)';
     nums.textContent = `${w.completed} done · ${w.escalated} esc`
       + (w.avgHandleSeconds != null ? ` · ${w.avgHandleSeconds}s avg` : '')
-      + ` · ${((w.selfReportedCostMicros || 0) / 1e6).toFixed(4)} € (self-rep.)`
+      + ` · ${((w.selfReportedCostMicros || 0) / 1e6).toFixed(4)} ${tenantCurrency()} (self-rep.)`
       + (w.lastActiveAt ? ` · last ${new Date(w.lastActiveAt).toLocaleTimeString()}` : '');
     row.append(dot, who, nums);
     crewBox.append(row);
@@ -6033,7 +6034,7 @@ async function renderAccessProduct() {
     + '<label class="field"><span>Access layer *</span><select id="wp-layer">'
     + '<option value="L3-activated">L3-activated</option><option value="L2-VULA">L2-VULA</option></select></label>'
     + '<label class="field"><span>Bandwidth (Mbit/s) *</span><input id="wp-bw" type="number" placeholder="1000"></label>'
-    + '<label class="field"><span>Wholesale price / line / month (EUR) *</span><input id="wp-price" type="number" placeholder="24"></label>'
+    + `<label class="field"><span>Wholesale price / line / month (${tenantCurrency()}) *</span><input id="wp-price" type="number" placeholder="24"></label>`
     + `<label class="field"><span>Realised by CFS (TMF633, optional)</span><select id="wp-cfs"><option value="">— none —</option>${cfsOptions}</select></label>`
     + '</div><div class="actions"><button class="primary" id="wp-create">Publish access product</button>'
     + '<span id="wp-msg" class="dim"></span></div>'
@@ -6067,7 +6068,7 @@ async function renderAccessProduct() {
       const priceObj = await authFetch(`${API_BASE}/productOfferingPrice`, { method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: `${name} monthly`, priceType: 'recurring', recurringChargePeriodType: 'month',
-          price: { unit: 'EUR', value: price }, lifecycleStatus: 'Active' }) }).then((r) => r.json());
+          price: { unit: tenantCurrency(), value: price }, lifecycleStatus: 'Active' }) }).then((r) => r.json());
       const specBody = { name: `${name} spec`, lifecycleStatus: 'Active', productSpecCharacteristic: [
         { name: 'accessOwner', productSpecCharacteristicValue: [{ value: owner }] },
         { name: 'accessLayer', productSpecCharacteristicValue: [{ value: layer }] },
