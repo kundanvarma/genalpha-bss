@@ -294,16 +294,37 @@ def ensure_variant_spec(name, brand, variants):
     return made
 
 
-def ensure_handset(name, brand, description, monthly, variants):
+def ensure_conditioned_price(name, monthly, char, value):
+    """A price component that applies only when a picker has this value (TMF620 prodSpecCharValueUse)."""
+    if name in prices:
+        return prices[name]
+    prices[name] = req("POST", "productOfferingPrice", {
+        "name": name, "priceType": "recurring", "recurringChargePeriodType": "month", "recurringChargePeriodLength": 1,
+        "price": {"unit": CUR, "value": monthly}, "lifecycleStatus": "Active", "version": "1.0",
+        "prodSpecCharValueUse": [{"name": char, "productSpecCharacteristicValue": [{"value": value}]}]})
+    print(f"price: {name} = +{monthly} {CUR}/month when {char}={value}")
+    return prices[name]
+
+
+def ensure_handset(name, brand, description, monthly, variants, premiums=None):
+    """A handset: one offering, one spec with pickers, a base instalment and a premium per bigger storage."""
     spec = ensure_variant_spec(name, brand, variants)
     price = ensure_price(f"{name} instalment (24 months)", monthly)
+    refs = [{"id": price["id"], "name": price["name"], "@referredType": "ProductOfferingPrice"}]
+    for storage, extra in (premiums or {}).items():
+        p = ensure_conditioned_price(f"{name} {storage} premium", extra, "storage", storage)
+        refs.append({"id": p["id"], "name": p["name"], "@referredType": "ProductOfferingPrice"})
     if name in offerings:
+        have = {r.get("id") for r in (offerings[name].get("productOfferingPrice") or [])}
+        if {r["id"] for r in refs} - have:
+            offerings[name] = req("PATCH", f"productOffering/{offerings[name]['id']}", {"productOfferingPrice": refs})
+            print(f"handset: {name} — storage premiums linked")
         return offerings[name]
     offerings[name] = req("POST", "productOffering", {
         "name": name, "description": description, "lifecycleStatus": "Active", "isBundle": False, "isSellable": True,
         "category": [cat_ref("Devices")],
         "productSpecification": {"id": spec["id"], "name": spec["name"], "@referredType": "ProductSpecification"},
-        "productOfferingPrice": [{"id": price["id"], "name": price["name"], "@referredType": "ProductOfferingPrice"}],
+        "productOfferingPrice": refs,
         "productOfferingTerm": [{"name": "24 months", "description": "24 monthly instalments, no interest",
                                  "duration": {"amount": 24, "units": "month"}}]})
     print(f"handset: {name} ({monthly} {CUR}/month × 24)")
@@ -311,11 +332,11 @@ def ensure_handset(name, brand, description, monthly, variants):
 
 
 ensure_handset("Apple iPhone 17 Pro", "Apple", "Apple's flagship: ProMotion display, titanium body. 24 monthly instalments, no interest.", 549,
-               [("color", ["Deep Blue", "Silver"]), ("storage", ["256GB", "512GB", "1TB"])])
+               [("color", ["Deep Blue", "Silver"]), ("storage", ["256GB", "512GB", "1TB"])], {"512GB": 50, "1TB": 150})
 ensure_handset("Apple iPhone 17", "Apple", "The iPhone for everyone, on 24 monthly instalments.", 399,
-               [("color", ["Lavender", "Green"]), ("storage", ["128GB", "256GB"])])
+               [("color", ["Lavender", "Green"]), ("storage", ["128GB", "256GB"])], {"256GB": 50})
 ensure_handset("Samsung Galaxy S26", "Samsung", "Samsung's flagship with Galaxy AI, on 24 monthly instalments.", 449,
-               [("color", ["Phantom Black", "Cream", "Icy Blue"]), ("storage", ["256GB", "512GB"])])
+               [("color", ["Phantom Black", "Cream", "Icy Blue"]), ("storage", ["256GB", "512GB"])], {"512GB": 50})
 
 # ---- a device so the Devices tab has stock ----------------------------------------------
 ensure_offering("Wi-Fi 6 Router (spare)", "Devices", 1490,

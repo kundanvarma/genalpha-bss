@@ -306,6 +306,16 @@ for o in active:
                 if hero_url is None:
                     hero_url, hero_mime = a["url"], mime  # first real colour = fallback grid hero
             atts.append(a)
+        # colours with a real photo but no generated variant slot yet: add the slot,
+        # so the picture follows the colour pick on tenants that never had a gallery
+        have = {str(a.get("name") or "") for a in atts}
+        for c, (b64c, mimec, _) in per_color.items():
+            if f"variant-{c}" not in have:
+                a = {"name": f"variant-{c}", "mimeType": mimec,
+                     "url": upload(f"photo-{name}-{c}", mimec, b64c), "@type": "Attachment"}
+                if hero_url is None:
+                    hero_url, hero_mime = a["url"], mimec
+                atts.append(a)
         if default:  # a whole-device shot always wins the grid hero
             b64, mime, _ = default
             hero_url, hero_mime = upload(f"photo-{name}", mime, b64), mime
