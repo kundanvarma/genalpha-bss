@@ -30,3 +30,9 @@ done
 echo "id.$D {
 	reverse_proxy localhost:8085
 }"
+# the demo PSPs' hosted approve pages (the browser lands here, then returns to the shop)
+for psp in klarna:8135 vipps:8144 paypal:8136 mmg:8152; do
+  echo "pay-${psp%%:*}.$D {
+	reverse_proxy localhost:${psp##*:}
+}"
+done

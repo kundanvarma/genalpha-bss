@@ -65,6 +65,8 @@ Public doors when done:
 | `shop-enet.taranga.no` … `console-enet.taranga.no` | ENet tenant | see `docs/demo-script.md` personas |
 | `id.taranga.no` | Keycloak | master admin password is in `/opt/taranga/bss/.env` |
 
+Redirect payments (Klarna, Vipps, PayPal, MMG) use the demo PSP mocks; their hosted approve pages are served on `pay-klarna.<domain>`, `pay-vipps.<domain>`, `pay-paypal.<domain>`, `pay-mmg.<domain>` (the wildcard DNS record covers them; Caddy fetches the certificates).
+
 ## 5. Run only when demoing
 
 Compute is the whole bill. Stop the instance when nobody is presenting; disk and

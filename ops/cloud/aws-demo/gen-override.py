@@ -25,8 +25,16 @@ def wants_issuer(svc):
     keys = " ".join(env.keys())
     return "OIDC_ISSUER_URI" in keys or "SPRING_CONFIG_IMPORT" in keys
 
+# The demo PSPs (Klarna, Vipps, PayPal, MMG stand-ins) send the customer's BROWSER to
+# their hosted approve page: that address must be public, so each one gets a host
+# behind Caddy (pay-<psp>.<domain>) instead of the laptop's localhost port.
+PSP_MOCKS = ("mock-klarna", "mock-vipps", "mock-paypal", "mock-mmg")
+
 out = {"services": {}}
 for name, svc in base["services"].items():
+    if name in PSP_MOCKS:
+        out["services"][name] = {"environment": {"PUBLIC_BASE": f"https://pay-{name[len('mock-'):]}.{domain}"}}
+        continue
     if name == "keycloak":
         out["services"][name] = {"environment": {
             "KC_HOSTNAME": f"https://id.{domain}",
