@@ -405,12 +405,18 @@ def sub_of(username, password):
 
 
 OLAV_ID = sub_of("olav@fjordbygg.example", "olav")
-orgs = req("GET", f"{PARTY}/organization?limit=100", quiet=True) or []
+try:
+    orgs = req("GET", f"{PARTY}/organization?limit=100", quiet=True) or []
+except urllib.error.HTTPError:
+    orgs = []
 org = next((o for o in orgs if isinstance(o, dict) and str(o.get("tradingName", "")).startswith("Fjordbygg")), None)
 if not org:
     org = req("POST", f"{PARTY}/organization", {"tradingName": "Fjordbygg AS", "name": "Fjordbygg AS", "isLegalEntity": True})
     print("organization: Fjordbygg AS")
-me = req("GET", f"{PARTY}/individual/{OLAV_ID}", quiet=True)
+try:
+    me = req("GET", f"{PARTY}/individual/{OLAV_ID}", quiet=True)
+except urllib.error.HTTPError as e:   # a fresh fleet: Olav has no party yet
+    me = None if e.code == 404 else (_ for _ in ()).throw(e)
 if org and not me:
     req("POST", f"{PARTY}/individual", {"id": OLAV_ID, "givenName": "Olav", "familyName": "Fjordbygg", "organization": {"id": org["id"]},
                                          "contactMedium": [{"mediumType": "email", "characteristic": {"emailAddress": "olav@fjordbygg.example"}}]})
