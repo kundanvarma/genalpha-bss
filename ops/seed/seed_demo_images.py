@@ -113,35 +113,39 @@ def txt(x, y, s, size, weight=700, fill="#fff", anchor="middle", opacity=1):
 PAPER1, PAPER2, TILE_INK, TILE_DIM = "#FBFBFD", "#EEF0F6", "#1A1A20", "#6B6F7B"
 
 
+QUIET_H = 260
+
+
 def quiet(inner):
-    """The tile frame every generated image shares: paper, a thin brand rule, dark type."""
-    return svg(f'<rect x="0" y="0" width="640" height="440" fill="url(#g)"/>'
-               f'<rect x="48" y="52" width="46" height="4" rx="2" fill="{BRAND}"/>' + inner, PAPER1, PAPER2)
+    """The tile frame every generated image shares: a short paper strip, a thin brand rule, dark type."""
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="{QUIET_H}" viewBox="0 0 640 {QUIET_H}">'
+            f'<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{PAPER1}"/>'
+            f'<stop offset="1" stop-color="{PAPER2}"/></linearGradient></defs>'
+            f'<rect width="640" height="{QUIET_H}" fill="url(#g)"/>'
+            f'<rect x="40" y="40" width="46" height="4" rx="2" fill="{BRAND}"/>' + inner + '</svg>')
 
 
 def plan_tile(name, hero):
-    # the allowance is the hero — in ink, not a shout
-    big = 116 if len(hero) <= 5 else 72
+    big = 96 if len(hero) <= 5 else 60
     signal = ('<g>'
-              f'<rect x="500" y="318" width="14" height="22" rx="3" fill="{BRAND}" opacity="0.35"/>'
-              f'<rect x="522" y="304" width="14" height="36" rx="3" fill="{BRAND}" opacity="0.55"/>'
-              f'<rect x="544" y="288" width="14" height="52" rx="3" fill="{BRAND}" opacity="0.75"/>'
-              f'<rect x="566" y="270" width="14" height="70" rx="3" fill="{BRAND}"/></g>')
-    return quiet(txt(48, 104, "Mobile plan", 20, 600, TILE_DIM, "start")
-                 + txt(48, 250, hero, big, 700, TILE_INK, "start")
-                 + txt(48, 300, "unlimited calls & texts", 22, 500, TILE_DIM, "start")
+              f'<rect x="512" y="168" width="14" height="22" rx="3" fill="{BRAND}" opacity="0.35"/>'
+              f'<rect x="534" y="154" width="14" height="36" rx="3" fill="{BRAND}" opacity="0.55"/>'
+              f'<rect x="556" y="138" width="14" height="52" rx="3" fill="{BRAND}" opacity="0.75"/>'
+              f'<rect x="578" y="120" width="14" height="70" rx="3" fill="{BRAND}"/></g>')
+    return quiet(txt(40, 84, "Mobile plan", 18, 600, TILE_DIM, "start")
+                 + txt(40, 168, hero, big, 700, TILE_INK, "start")
+                 + txt(40, 208, "unlimited calls & texts", 19, 500, TILE_DIM, "start")
                  + signal)
 
 
 def accessory_tile(name):
-    # a router / mesh point / hub, drawn in one line weight on the same quiet paper
     g = BRAND
     inner = (
-        f'<line x1="440" y1="92" x2="440" y2="150" stroke="{g}" stroke-width="5" stroke-linecap="round"/>'
-        f'<line x1="560" y1="92" x2="560" y2="150" stroke="{g}" stroke-width="5" stroke-linecap="round"/>'
-        f'<rect x="404" y="148" width="192" height="64" rx="16" fill="none" stroke="{g}" stroke-width="5"/>'
-        f'<circle cx="436" cy="180" r="5" fill="{g}"/><circle cx="458" cy="180" r="5" fill="{g}" opacity="0.6"/><circle cx="480" cy="180" r="5" fill="{g}" opacity="0.3"/>'
-        + txt(48, 104, "Device", 20, 600, TILE_DIM, "start"))
+        f'<line x1="392" y1="64" x2="392" y2="126" stroke="{g}" stroke-width="6" stroke-linecap="round"/>'
+        f'<line x1="520" y1="64" x2="520" y2="126" stroke="{g}" stroke-width="6" stroke-linecap="round"/>'
+        f'<rect x="352" y="124" width="208" height="70" rx="18" fill="none" stroke="{g}" stroke-width="6"/>'
+        f'<circle cx="388" cy="159" r="6" fill="{g}"/><circle cx="412" cy="159" r="6" fill="{g}" opacity="0.6"/><circle cx="436" cy="159" r="6" fill="{g}" opacity="0.3"/>'
+        + txt(40, 84, "Device", 18, 600, TILE_DIM, "start"))
     return quiet(inner)
 
 
@@ -171,21 +175,19 @@ def device_tile(name):
 
 
 def simple_tile(name, glyph, bg=None):
-    # a single-line glyph in the brand colour, the name in ink, lots of air
     g = BRAND
     glyphs = {
-        "bundle": f'<rect x="470" y="96" width="70" height="70" rx="14" fill="none" stroke="{g}" stroke-width="5"/>'
-                  f'<rect x="504" y="130" width="70" height="70" rx="14" fill="none" stroke="{g}" stroke-width="5"/>',
-        "fiber": f'<path d="M462 178 l34-52 26 30 46-64" stroke="{g}" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
-                 f'<circle cx="568" cy="92" r="6" fill="{g}"/>',
-        "tv": f'<rect x="466" y="96" width="112" height="72" rx="10" fill="none" stroke="{g}" stroke-width="5"/>'
-              f'<path d="M500 188h44" stroke="{g}" stroke-width="5" stroke-linecap="round"/>',
-        "addon": f'<circle cx="522" cy="132" r="40" fill="none" stroke="{g}" stroke-width="5"/>'
-                 f'<path d="M522 110v44M500 132h44" stroke="{g}" stroke-width="5" stroke-linecap="round"/>',
+        "bundle": f'<rect x="380" y="70" width="86" height="86" rx="18" fill="none" stroke="{g}" stroke-width="6"/>'
+                  f'<rect x="424" y="114" width="86" height="86" rx="18" fill="none" stroke="{g}" stroke-width="6"/>',
+        "fiber": f'<path d="M372 190 l44-64 32 36 58-80" stroke="{g}" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+                 f'<circle cx="506" cy="82" r="7" fill="{g}"/>',
+        "tv": f'<rect x="372" y="72" width="150" height="96" rx="12" fill="none" stroke="{g}" stroke-width="6"/>'
+              f'<path d="M420 194h54" stroke="{g}" stroke-width="6" stroke-linecap="round"/>',
+        "addon": f'<circle cx="450" cy="130" r="54" fill="none" stroke="{g}" stroke-width="6"/>'
+                 f'<path d="M450 100v60M420 130h60" stroke="{g}" stroke-width="6" stroke-linecap="round"/>',
     }.get(glyph, "")
     label = {"bundle": "Bundle", "fiber": "Broadband", "tv": "TV", "addon": "Add-on"}.get(glyph, "")
-    # the card under the tile carries the name — the tile stays a quiet mark
-    return quiet(glyphs + txt(48, 104, label, 20, 600, TILE_DIM, "start"))
+    return quiet(glyphs + txt(40, 84, label, 18, 600, TILE_DIM, "start"))
 
 
 def color_slug(c):
