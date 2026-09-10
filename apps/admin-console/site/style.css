@@ -44,8 +44,11 @@ body {
 .who { display: flex; align-items: center; gap: 12px; }
 .user { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; color: var(--dim); }
 
-main { max-width: 1000px; margin: 0 auto; padding: 26px; }
-.tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+main { max-width: 1400px; margin: 0 auto; padding: 22px 26px; display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+/* the rail: departments, each listing its pages — the interaction hierarchy is
+   department (left) → page (left, under it) → content (centre) */
+.tabs { display: flex; flex-direction: column; flex-wrap: nowrap; width: 250px; gap: 10px; position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow-y: auto; padding-right: 4px; }
 .tab {
   border: 1px solid var(--line); background: var(--card); color: var(--ink);
   padding: 7px 14px; cursor: pointer; font: inherit; font-size: 13.5px;
@@ -208,20 +211,32 @@ th { border-bottom-color: var(--line); }
    any TEXT in the tab area reads as a tab, and unclickable text reads as
    a BROKEN tab — so the department name lives on the BOX (a legend on a
    bordered container), never loose in the row. */
-#tabs { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: stretch; }
+#tabs { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 10px; align-items: stretch; }
 .tabgroup {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 0.45rem;
+  display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem;
   border: 1px solid var(--line); border-radius: 12px;
-  padding: 0.55rem 0.7rem 0.7rem;
+  padding: 0.6rem 0.6rem 0.65rem;
   background: color-mix(in srgb, var(--card) 55%, transparent);
 }
-.tabgroup-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+.tabgroup-row { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
+/* department buttons in the rail; the page tabs beneath are 1px silent stubs (see renderTabs) */
+.tabgroup { padding: 0; overflow: visible; position: relative; }
+.tabgroup-row { position: absolute; top: 2px; left: 0; height: 0; }
+.tabs .tab.offdept { position: absolute; top: 0; width: 1px; height: 1px; padding: 0; margin: 0; border: 0; opacity: 0; overflow: hidden; font-size: 1px; line-height: 1px; z-index: 2; }
+.tabgroup-label.dept { display: block; width: 100%; text-align: left; background: transparent; border: none; cursor: pointer;
+  font: inherit; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 800; color: var(--ink); padding: 12px 14px; border-radius: 12px; }
+.tabgroup-label.dept:hover { background: var(--card); }
+.tabgroup.on { border-color: var(--teal); background: var(--teal-soft); }
+.tabgroup.on .tabgroup-label.dept { color: var(--teal-text); }
+.crumb { margin: 0 0 4px; font-size: 12px; color: var(--dim); letter-spacing: 0.02em; }
+.newbtn { margin-left: auto; }
+.panel-head .help-button { margin-left: 8px; }
+.editor { margin: 22px 0 0; }
+.panel { min-height: 60vh; }
 .tabgroup-label {
   font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em;
   font-weight: 800; color: var(--ink); user-select: none;
 }
-.tabgroup:has(.tab.on) { border-color: var(--teal); }
-.tabgroup:has(.tab.on) .tabgroup-label { color: var(--teal); }
 
 /* BB1 — journey canvas: a vertical node-flow with live per-node counts */
 .jcanvas { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 0; }
@@ -339,3 +354,25 @@ th { border-bottom-color: var(--line); }
 .help-drawer[hidden] { display: none; }
 .pager[hidden] { display: none !important; }
 #list-search[hidden] { display: none !important; }
+
+/* the form is a drawer: parked off the right edge until "+ New", Edit, or a field takes focus */
+#editor { position: fixed; top: 0; right: 0; height: 100vh; width: min(760px, 96vw); overflow-y: auto; margin: 0;
+  background: var(--card); border: none; border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0,0,0,.12);
+  padding: 22px 26px 40px; z-index: 60; transform: translateX(102%); transition: transform .22s ease; border-radius: 0; }
+#editor.open { transform: none; }
+.drawer-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, .18); z-index: 55; pointer-events: none; }
+.drawer-backdrop[hidden] { display: none; }
+/* live KPIs beside the goal, and the rows they point at */
+.kpis { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.kpi { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 12.5px;
+  border: 1px solid var(--line); color: var(--dim); background: var(--card); }
+.kpi strong { font-size: 15px; color: var(--ink); }
+.kpi.warn { border-color: #f59e0b; } .kpi.warn strong { color: #b45309; }
+.kpi.bad { border-color: #dc2626; } .kpi.bad strong { color: #b91c1c; }
+.kpi.ok strong { color: var(--ink); }
+#listing-body tr.flag td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+/* the sibling pages of the department, as a row above the title (Ivan's sketch) */
+.pagerow { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.pagetab { border: none; background: transparent; font: inherit; font-size: 13.5px; color: var(--dim); padding: 5px 10px; cursor: pointer; border-radius: 6px; }
+.pagetab:hover { background: color-mix(in srgb, var(--card) 90%, var(--ink)); color: var(--ink); }
+.pagetab.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--teal); border-radius: 0; }
