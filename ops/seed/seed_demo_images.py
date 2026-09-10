@@ -110,35 +110,39 @@ def txt(x, y, s, size, weight=700, fill="#fff", anchor="middle", opacity=1):
             f'text-anchor="{anchor}" opacity="{opacity}">{xesc(s)}</text>')
 
 
+PAPER1, PAPER2, TILE_INK, TILE_DIM = "#FBFBFD", "#EEF0F6", "#1A1A20", "#6B6F7B"
+
+
+def quiet(inner):
+    """The tile frame every generated image shares: paper, a thin brand rule, dark type."""
+    return svg(f'<rect x="0" y="0" width="640" height="440" fill="url(#g)"/>'
+               f'<rect x="48" y="52" width="46" height="4" rx="2" fill="{BRAND}"/>' + inner, PAPER1, PAPER2)
+
+
 def plan_tile(name, hero):
-    signal = ('<g opacity="0.9">'
-              '<rect x="470" y="300" width="20" height="30" rx="3" fill="#fff"/>'
-              '<rect x="500" y="280" width="20" height="50" rx="3" fill="#fff"/>'
-              '<rect x="530" y="255" width="20" height="75" rx="3" fill="#fff"/>'
-              '<rect x="560" y="225" width="20" height="105" rx="3" fill="#fff"/></g>')
-    big = 150 if len(hero) <= 5 else 92
-    return svg(
-        txt(50, 90, "GenAlpha", 30, 800, "#fff", "start", 0.85)
-        + txt(50, 250, hero, big, 800, "#fff", "start")
-        + txt(52, 300, "per month, unlimited calls & texts", 26, 500, "#fff", "start", 0.85)
-        + signal, BRAND, "#0a5c5b")
+    # the allowance is the hero — in ink, not a shout
+    big = 116 if len(hero) <= 5 else 72
+    signal = ('<g>'
+              f'<rect x="500" y="318" width="14" height="22" rx="3" fill="{BRAND}" opacity="0.35"/>'
+              f'<rect x="522" y="304" width="14" height="36" rx="3" fill="{BRAND}" opacity="0.55"/>'
+              f'<rect x="544" y="288" width="14" height="52" rx="3" fill="{BRAND}" opacity="0.75"/>'
+              f'<rect x="566" y="270" width="14" height="70" rx="3" fill="{BRAND}"/></g>')
+    return quiet(txt(48, 104, "Mobile plan", 20, 600, TILE_DIM, "start")
+                 + txt(48, 250, hero, big, 700, TILE_INK, "start")
+                 + txt(48, 300, "unlimited calls & texts", 22, 500, TILE_DIM, "start")
+                 + signal)
 
 
 def accessory_tile(name):
-    # A router / mesh point / hub: a low box with two antennae and status lights —
-    # generic, no trade dress, tinted with the tenant's brand.
+    # a router / mesh point / hub, drawn in one line weight on the same quiet paper
+    g = BRAND
     inner = (
-        '<line x1="250" y1="130" x2="250" y2="205" stroke="#e6e9ef" stroke-width="10" stroke-linecap="round"/>'
-        '<line x1="390" y1="130" x2="390" y2="205" stroke="#e6e9ef" stroke-width="10" stroke-linecap="round"/>'
-        '<rect x="200" y="200" width="240" height="88" rx="18" fill="#1c2430" stroke="#ffffff33" stroke-width="2"/>'
-        '<rect x="200" y="200" width="240" height="88" rx="18" fill="url(#sheen)"/>'
-        f'<circle cx="236" cy="244" r="7" fill="{BRAND}"/><circle cx="262" cy="244" r="7" fill="{BRAND}" opacity="0.7"/>'
-        '<circle cx="288" cy="244" r="7" fill="#7ee787"/>'
-        '<path d="M320 170 a44 44 0 0 1 88 0" stroke="#ffffff55" stroke-width="8" fill="none" stroke-linecap="round"/>'
-        '<path d="M338 170 a26 26 0 0 1 52 0" stroke="#ffffff88" stroke-width="8" fill="none" stroke-linecap="round"/>'
-        '<defs><linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff22"/><stop offset="1" stop-color="#00000000"/></linearGradient></defs>'
-        + txt(320, 372, name if len(name) <= 22 else name[:21] + "…", 28, 700, "#fff"))
-    return svg(inner, "#0f172a", "#1e2a44")
+        f'<line x1="440" y1="92" x2="440" y2="150" stroke="{g}" stroke-width="5" stroke-linecap="round"/>'
+        f'<line x1="560" y1="92" x2="560" y2="150" stroke="{g}" stroke-width="5" stroke-linecap="round"/>'
+        f'<rect x="404" y="148" width="192" height="64" rx="16" fill="none" stroke="{g}" stroke-width="5"/>'
+        f'<circle cx="436" cy="180" r="5" fill="{g}"/><circle cx="458" cy="180" r="5" fill="{g}" opacity="0.6"/><circle cx="480" cy="180" r="5" fill="{g}" opacity="0.3"/>'
+        + txt(48, 104, "Device", 20, 600, TILE_DIM, "start"))
+    return quiet(inner)
 
 
 def device_tile(name):
@@ -166,14 +170,22 @@ def device_tile(name):
     return svg(inner, bg1, bg2)
 
 
-def simple_tile(name, glyph, bg):
+def simple_tile(name, glyph, bg=None):
+    # a single-line glyph in the brand colour, the name in ink, lots of air
+    g = BRAND
     glyphs = {
-        "bundle": '<path d="M255 210h130M285 170a35 35 0 0 1 70 0" stroke="#fff" stroke-width="10" fill="none"/><circle cx="320" cy="210" r="11" fill="#fff"/>',
-        "fiber": '<path d="M210 300l60-90 40 46 60-104" stroke="#fff" stroke-width="12" fill="none" stroke-linecap="round"/>',
-        "tv": '<rect x="240" y="150" width="160" height="104" rx="12" fill="none" stroke="#fff" stroke-width="9"/><path d="M290 288h60" stroke="#fff" stroke-width="9"/>',
-        "addon": '<circle cx="320" cy="205" r="60" fill="none" stroke="#fff" stroke-width="9"/><path d="M320 175v60M290 205h60" stroke="#fff" stroke-width="9"/>',
+        "bundle": f'<rect x="470" y="96" width="70" height="70" rx="14" fill="none" stroke="{g}" stroke-width="5"/>'
+                  f'<rect x="504" y="130" width="70" height="70" rx="14" fill="none" stroke="{g}" stroke-width="5"/>',
+        "fiber": f'<path d="M462 178 l34-52 26 30 46-64" stroke="{g}" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+                 f'<circle cx="568" cy="92" r="6" fill="{g}"/>',
+        "tv": f'<rect x="466" y="96" width="112" height="72" rx="10" fill="none" stroke="{g}" stroke-width="5"/>'
+              f'<path d="M500 188h44" stroke="{g}" stroke-width="5" stroke-linecap="round"/>',
+        "addon": f'<circle cx="522" cy="132" r="40" fill="none" stroke="{g}" stroke-width="5"/>'
+                 f'<path d="M522 110v44M500 132h44" stroke="{g}" stroke-width="5" stroke-linecap="round"/>',
     }.get(glyph, "")
-    return svg(glyphs + txt(320, 360, name, 30, 700, "#fff"), bg, INK)
+    label = {"bundle": "Bundle", "fiber": "Broadband", "tv": "TV", "addon": "Add-on"}.get(glyph, "")
+    # the card under the tile carries the name — the tile stays a quiet mark
+    return quiet(glyphs + txt(48, 104, label, 20, 600, TILE_DIM, "start"))
 
 
 def color_slug(c):
@@ -314,9 +326,9 @@ for o in active:
     elif k == "device":
         art = device_tile(name.replace("Apple ", ""))
     elif k in ("bundle", "fiber", "tv"):
-        art = simple_tile(name, k, BRAND if k != "fiber" else "#134e4a")
+        art = simple_tile(name, k)
     else:
-        art = simple_tile(name, "addon", "#2a4a52")
+        art = simple_tile(name, "addon")
     b64 = base64.b64encode(art.encode()).decode()
     link(o, upload(f"tile-{name}", "image/svg+xml", b64), "image/svg+xml")
     print(f"  {name}: {k} tile")
