@@ -1,0 +1,32 @@
+action: cancelOrder
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Cancel a product order that has not completed — reserved stock is released and card authorisations voided.
+concept: ProductOrder
+inputs:
+  - { name: orderId, type: ref, concept: ProductOrder, required: true, meaning: the order to cancel }
+preconditions:
+  - id: order-not-final
+    check: state
+    concept: ProductOrder
+    of: orderId
+    in: [acknowledged, held, inProgress, partiallyCompleted]
+    says: a completed or already cancelled order cannot be cancelled
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: ordering:write }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: productOrdering.cancel
+  pathVars: { id: "${orderId}" }
+  template: { state: cancelled }
+effects:
+  - { capability: ordering.releaseStock, when: on execution }
+  - { capability: ordering.voidPayments, when: on execution }
+emits:
+  - { event: ProductOrderStateChangeEvent, component: product-ordering, meaning: state cancelled }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: ProductOrder, settles: ProductOrderStateChangeEvent cancelled }
+pages: [productOrder]

@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
-                                "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                                "/swagger-ui/**", "/swagger-ui.html", "/.well-known/genalpha-component.json").permitAll()
                         // the shop's number picker: anonymous preview, nothing consumed
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
                                 "/tmf-api/resourcePoolManagement/v4/numberOffer").permitAll()

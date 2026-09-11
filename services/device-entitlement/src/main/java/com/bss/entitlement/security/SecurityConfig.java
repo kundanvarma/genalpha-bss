@@ -42,7 +42,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/v3/api-docs/**",
-                                "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                                "/swagger-ui/**", "/swagger-ui.html", "/.well-known/genalpha-component.json").permitAll()
                         // the device door: EAP-AKA / ECS token, not a BSS login
                         .requestMatchers(ApiConstants.TS43_PATH, ApiConstants.TS43_PATH + "/**").permitAll()
                         // the RCS client's configuration door (GSMA RCC.14): the SIM is the credential

@@ -32,8 +32,14 @@ ontology:
   dir: ${ONTOLOGY_DIR:}
   downstream-timeout-ms: ${ONTOLOGY_DOWNSTREAM_TIMEOUT_MS:8000}
   receipt-topic: bss.ontology.events
+  # the declared outcome of an action is measured this long after it (90 days in life; the demo compresses it)
+  outcome-after-days: ${ONTOLOGY_OUTCOME_AFTER_DAYS:90}
+  outcome-sweep-ms: ${ONTOLOGY_OUTCOME_SWEEP_MS:300000}
+  outcome-sweep-initial-ms: ${ONTOLOGY_OUTCOME_SWEEP_INITIAL_MS:60000}
   components:
     gateway: ${GATEWAY_BASE_URL:http://localhost:8080}
+    # the registry's own face, for self-conformance (inside the container it listens on 8080)
+    ontology: ${ONTOLOGY_SELF_URL:http://localhost:8080}
     party-account: ${PARTY_BASE_URL:}
     product-inventory: ${INVENTORY_BASE_URL:}
     product-catalog: ${CATALOG_BASE_URL:}
@@ -45,6 +51,7 @@ ontology:
     device-entitlement: ${ENTITLEMENT_BASE_URL:}
     billing: ${BILLING_BASE_URL:}
     insight: ${INSIGHT_BASE_URL:}
+    intelligence: ${INTELLIGENCE_BASE_URL:}
 
 bss:
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant. The

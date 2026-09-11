@@ -1,0 +1,37 @@
+# A retired definition, kept on record: versioning is a contract. The registry
+# refuses it past its date and names the successor; the MCP tool list omits it;
+# the SDK keeps the successor only.
+action: changeSubscriptionPlan
+version: 1
+introduced: 2026-08-13
+status: deprecated
+deprecated: 2026-09-10
+supersededBy: upgradeSubscription
+meaning: Change a subscription to any other plan in the family, up or down, in place — the first shape of the plan-change action, before upgrades and downgrades were told apart.
+concept: Subscription
+inputs:
+  - { name: subscriptionId, type: ref, concept: Subscription, required: true }
+  - { name: targetOfferingId, type: ref, concept: ProductOffering, required: true }
+preconditions:
+  - id: subscription-active
+    check: state
+    concept: Subscription
+    of: subscriptionId
+    in: [active]
+    says: the subscription must be active
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: ordering:write }
+governance: { autonomy: medium, approval: none, audit: mandatory }
+executes:
+  capability: productOrdering.create
+  template:
+    productOrderItem:
+      - action: modify
+        product: { id: "${subscriptionId}", realizingService: [ { id: "${service.id}" } ] }
+        productOffering: { id: "${targetOfferingId}", name: "${targetOffering.name}" }
+    relatedParty:
+      - { id: "${owner.id}", role: customer }
+emits:
+  - { event: ProductOrderCreateEvent, component: product-ordering }

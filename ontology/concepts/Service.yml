@@ -6,7 +6,7 @@ lineage:
   sid: CustomerFacingService (Service ABE)
   tmf: [TMF638 service, TMF641 serviceOrder]
   oda: TMFC008 Service Order Management
-backedBy: { capability: serviceInventory.services, resource: service }
+backedBy: { capability: serviceInventory.service, resource: service }
 states:
   field: state
   values: [feasibilityChecked, designed, reserved, inactive, active, suspended, terminated]

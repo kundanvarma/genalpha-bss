@@ -1,0 +1,30 @@
+action: disputeBill
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Open a dispute on a bill with a reason — collection never chases contested money while the dispute is open; finance resolves it with a credit or upholds the charge.
+concept: Bill
+inputs:
+  - { name: billId, type: ref, concept: Bill, required: true, meaning: the bill in question }
+  - { name: reason, type: string, required: true, meaning: what looks wrong }
+preconditions:
+  - id: reason-given
+    check: input
+    of: reason
+    says: a dispute needs a reason — what looks wrong
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: billing:write }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: billing.dispute
+  pathVars: { id: "${billId}" }
+  template: { reason: "${reason}" }
+effects:
+  - { capability: collections.pause, when: while the dispute is open }
+emits:
+  - { event: DisputeOpenedEvent, component: billing }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Bill, settles: DisputeResolvedEvent }
+pages: [customerBill, dispute]

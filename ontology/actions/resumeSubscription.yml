@@ -1,0 +1,31 @@
+action: resumeSubscription
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Bring a paused line back — charging on, entitlements active, the same number.
+concept: Service
+inputs:
+  - { name: serviceId, type: ref, concept: Service, required: true, meaning: the line to resume }
+preconditions:
+  - id: line-suspended
+    check: state
+    concept: Service
+    of: serviceId
+    in: [suspended]
+    says: only a paused line can be resumed
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: service:write }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: service.resume
+  pathVars: { id: "${serviceId}" }
+  template: {}
+effects:
+  - { capability: charging.resume, when: on execution }
+emits:
+  - { event: ServiceResumedEvent, component: service-orchestration }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Service, settles: ServiceResumedEvent }
+pages: [productOrder]

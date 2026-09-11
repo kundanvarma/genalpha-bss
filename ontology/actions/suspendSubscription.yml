@@ -1,0 +1,34 @@
+action: suspendSubscription
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Pause a customer's line — charging stops, the phones lose their entitlements, the number is kept — open-ended or for a number of days, after which it resumes by itself.
+intent: A customer travelling, a lost phone, a family rule — pause without losing the number.
+concept: Service
+inputs:
+  - { name: serviceId, type: ref, concept: Service, required: true, meaning: the line to pause }
+  - { name: reason, type: string, required: false, meaning: "why — vacation, lost phone, family rule (free text)" }
+  - { name: days, type: number, required: false, meaning: "how many days (1–90); empty = until resumed" }
+preconditions:
+  - id: line-active
+    check: state
+    concept: Service
+    of: serviceId
+    in: [active]
+    says: only an active line can be paused
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: service:write }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: service.suspend
+  pathVars: { id: "${serviceId}" }
+  template: { reason: "${reason}", days: "${days}" }
+effects:
+  - { capability: charging.suspend, when: on execution }
+emits:
+  - { event: ServiceSuspendedEvent, component: service-orchestration, meaning: "the line is paused; the entitlement server and the customer's notifications follow it" }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Service, settles: ServiceSuspendedEvent }
+pages: [productOrder]

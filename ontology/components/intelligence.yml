@@ -1,0 +1,8 @@
+component: intelligence
+version: 1
+oda: TMFC0xx AI management (house component)
+meaning: The AI plane — copilots, the knowledge assistant, the digital workforce and its approval desk, governed by budget, kill-switch and audit.
+manages: []
+capabilities: [workforce.fileApproval]
+events: []
+topic: bss.intelligence.events

@@ -1,0 +1,50 @@
+action: issueCredit
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Issue a numbered credit note against a bill — what is due goes down, or a settled bill is refunded through the PSP. A care agent may credit small amounts on their own; above the threshold a finance approver decides; above the ceiling nobody may.
+intent: Goodwill and corrections without a ticket to finance for every small amount, and never a large one without a second pair of eyes.
+concept: Bill
+inputs:
+  - { name: billId, type: ref, concept: Bill, required: true, meaning: the bill to credit }
+  - { name: amount, type: money, required: true, meaning: "the credit, in the bill's currency" }
+  - { name: reason, type: string, required: true, meaning: the cause — a reversing document always has one }
+preconditions:
+  - id: reason-given
+    check: input
+    of: reason
+    says: a credit note needs a reason
+  - id: within-due
+    check: function
+    function: creditWithinDue
+    args: [billId, amount]
+    says: the credit must be more than zero and no more than what the bill still owes
+  - id: under-ceiling
+    check: function
+    function: amountAtMost
+    args: [amount, "50"]
+    says: no single credit above 50 — larger corrections are a finance decision, not a desk one
+permissions:
+  anyOf:
+    - { role: billing:admin }
+    - { role: agent }
+policy: { domain: credit, capability: policy.evaluate }
+governance:
+  autonomy: low
+  approval: human
+  approvalAbove: { input: amount, amount: 25 }
+  approverRole: billing:admin
+  limits: { maxAmount: 50 }
+  audit: mandatory
+executes:
+  capability: billing.creditNote
+  as: registry
+  pathVars: { id: "${billId}" }
+  template: { amount: "${amount}", reason: "${reason}" }
+effects:
+  - { capability: billing.distributeCreditNote, when: on execution }
+emits:
+  - { event: CreditNoteIssuedEvent, component: billing }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Bill, settles: CreditNoteIssuedEvent }
+pages: [customerBill]

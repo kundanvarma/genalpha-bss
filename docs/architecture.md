@@ -479,7 +479,13 @@ the ? drawer, and describe the component at `/.well-known/genalpha-component.jso
 Stateless: no database, a machine identity for the policy pre-check only. Suite
 #125 `ontology_test` proves conformance (gateway routes, event sources, realm
 roles, self-description, SDK diff) and the first journey, `upgradeSubscription`,
-end to end with its receipt. Detail: `docs/ontology-seam.md`; rationale:
+end to end with its receipt — and, from the same day's second arc, nine more governed
+actions (pause, resume, SIM, cancel, dispute, credit with a maker-checker ladder that files
+above-threshold requests on the workforce approval desk, and launch request/approve/hold),
+runtime self-description on the six journey components with `GET /ontology/v1/conformance`,
+an outcome sweep that judges receipts (retained / changed / lost), learning contracts on
+`ontology.*` decision points, a customer context resolver, an RDF/Turtle export, and the CSR
+desk running on the generated SDK. Detail: `docs/ontology-seam.md`; rationale:
 `docs/ontology-research.md`.
 
 ## 5. Cloud deployment view — proven on both AWS and Azure

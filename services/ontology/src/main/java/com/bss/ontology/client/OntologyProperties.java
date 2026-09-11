@@ -13,6 +13,8 @@ public class OntologyProperties {
     private long downstreamTimeoutMs = 8000;
     private Map<String, String> components = new LinkedHashMap<>();
     private String receiptTopic = "bss.ontology.events";
+    /** how long after an action its declared outcome is measured (the demo compresses this) */
+    private int outcomeAfterDays = 90;
 
     public String getDir() { return dir; }
     public void setDir(String dir) { this.dir = dir; }
@@ -22,6 +24,8 @@ public class OntologyProperties {
     public void setComponents(Map<String, String> components) { this.components = components; }
     public String getReceiptTopic() { return receiptTopic; }
     public void setReceiptTopic(String receiptTopic) { this.receiptTopic = receiptTopic; }
+    public int getOutcomeAfterDays() { return outcomeAfterDays; }
+    public void setOutcomeAfterDays(int outcomeAfterDays) { this.outcomeAfterDays = outcomeAfterDays; }
 
     /** The base URL of a component; unknown components fall back to the gateway, which routes by path. */
     public String baseOf(String component) {

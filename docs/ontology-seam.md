@@ -4,7 +4,7 @@
 
 ## What it is, in one paragraph
 
-Three layers. TM Forum semantics are cited as **lineage** on every concept and capability (SID entity, TMF Open API resource, ODA component). The GenAlpha **core** is the product's: seven concepts on the first journey (Customer, Subscription, ProductOffering, Service, ProductOrder, Bill, Entitlement), one governed action (`upgradeSubscription`), twenty typed capabilities across twelve components. An **operator overlay** (`ontology/tenants/<tenant>/`) may add concepts and actions and may tighten governance, policy and wording on a core action — it may never remove a core precondition (Taranga's overlay adds a price ceiling). Every document is validated against `ontology/schema/*.schema.json` and every reference resolved at load; a dangling capability, concept, component or event fails startup, and the CI test (`RegistryLoadTest`) proves it.
+Three layers. TM Forum semantics are cited as **lineage** on every concept and capability (SID entity, TMF Open API resource, ODA component). The GenAlpha **core** is the product's: seven concepts on the first journey (Customer, Subscription, ProductOffering, Service, ProductOrder, Bill, Entitlement), eleven governed actions (ten live, one retired), forty-one typed capabilities across thirteen components. An **operator overlay** (`ontology/tenants/<tenant>/`) may add concepts and actions and may tighten governance, policy and wording on a core action — it may never remove a core precondition (Taranga's overlay adds a price ceiling). Every document is validated against `ontology/schema/*.schema.json` and every reference resolved at load; a dangling capability, concept, component or event fails startup, and the CI test (`RegistryLoadTest`) proves it.
 
 ## The rule that governs it
 
@@ -51,10 +51,30 @@ Concepts, actions and capabilities carry `version` and `introduced`; a retired a
 7. Explain: action, page (productOrder known; the simulator page honestly not yet), and the Taranga overlay adds its guardrail while keeping every core condition.
 8. The SDK regenerates identically.
 
+## The second arc — 2026-09-11, later the same day
+
+**Nine governed actions** now: `upgradeSubscription`, `suspendSubscription`, `resumeSubscription`, `replaceSim`, `cancelOrder`, `disputeBill`, `issueCredit`, `requestLaunch`, `approveLaunch`, `holdLaunch` — plus `changeSubscriptionPlan`, kept on record as *retired* (deprecated 2026-09-10, superseded by `upgradeSubscription`): it refuses past its date with the successor named, and is absent from the agents' tools and the SDK. Forty-one capabilities across thirteen components.
+
+**Approval ladder, as Ivan's example.** `issueCredit` is permitted to `billing:admin` and to the `agent` persona; governance says approval is human above 25 (approver role `billing:admin`) and the ceiling is 50. A care agent's credit of 5 executes at once — **as the registry's own identity**, because the action's permission model replaces the API's (`executes.as: registry`), and the receipt names the agent who asked; 30 is **filed** on the workforce approval desk (`POST /ai/v1/workforce/approvals`) with the action, the exact request and the reason, and executes with the approver's own token when they press Approve; 60 is refused by the ceiling before anyone is asked. A finance approver executes directly.
+
+**Runtime self-description.** product-ordering, service-orchestration, product-catalog, product-inventory, billing and device-entitlement each serve `/.well-known/genalpha-component.json` (events declared, routes read from the running application). `GET /ontology/v1/conformance` compares every registry entry with the component's own description; the seven journey components agree, the rest say honestly that they do not describe themselves yet.
+
+**Outcomes measured.** The outcome sweep (`OutcomeSweeper`, every five minutes; `POST /ontology/v1/outcomes/sweep` on demand) reads this tenant's `ontology.*` receipts from the decision log with the machine identity, and for those past the window (90 days in life, `ONTOLOGY_OUTCOME_AFTER_DAYS`; the demo compresses it to 0) reads the subscription and writes the outcome: **retained** (still active on the chosen offering), **changed**, or **lost**.
+
+**Learning contracts on ontology decision points.** The campaign component registers `ontology.<action>` on first contact, so an operator can write the intent — `ops/seed/seed_ontology.py` seeds "retained" for the upgrade and "accepted" for credits, with guardrails. The console's action card shows the contract; the registry executes what the caller chose and never redefines either the ontology or the policy — learning optimises within.
+
+**Context resolver.** `GET /ontology/v1/context/customer/{id}` (and the MCP tool `customer_context`) assembles the person, their subscriptions with what each could become, their lines, bills and decision receipts in one call, walked with the caller's rights; every edge that did not answer is listed, so a customer's own call says "receipts (not allowed to read it)" instead of pretending.
+
+**RDF export.** `GET /ontology/v1/export.ttl` — the registry as Turtle (`ga:` vocabulary: concepts as classes with SID/TMF/ODA lineage, actions with preconditions as blank nodes, capabilities, components, events). Derived; the YAML stays the source of truth.
+
+**The desk on the SDK.** The generator also emits a plain-JS twin (`apps/csr-console/src/sdk/genalpha-sdk.js`); the CSR desk's customer 360 offers *Upgrade options* on an active product, checks the chosen one through the registry (every condition with its verdict, in words) and upgrades through it — the second consumer of "define once, consume everywhere", after the storefront's own change-plan which still posts raw TMF622.
+
+**Machine identity, widened deliberately.** `bss-ontology` holds `policy:evaluate` (pre-check), `insight:read` + `inventory:read` (outcome sweep), `billing:admin` (delegated credits under the threshold) and `workforce:use` (filing approvals). Nothing else runs as the registry.
+
 ## What is not here yet (honest edges)
 
-- One action. The registry's value grows with the second and third (suspend/resume, issueCredit with an approval threshold, requestLaunch); the schema, checks and faces are ready for them.
-- Self-description is served by the registry component; the other components on the journey do not yet expose `/.well-known/genalpha-component.json` of their own — the suite compares the registry against sources, not against their runtime.
-- The Subscription → Service link is by name (the inventory carries no `realizingService`), the same weak seam the shop and the business console use today.
-- Outcomes beyond `completed` (the line still active on the new plan 90 days later) are declared as what learning may measure, not yet measured.
-- No RDF/OWL export; TR326 alignment is by structure and lineage text, and an export can be generated from the same YAML when a consumer needs it.
+- The registry does not consult a learning contract before executing; the contract is the operator's stated intent and the sweep's vocabulary, not yet a gate. Guardrails that should gate belong in the action's preconditions today.
+- Six more components (party-account, agreement, qualification, policy, insight, intelligence) do not self-describe at runtime; conformance for them is against sources.
+- The Subscription → Service link is by name (the inventory carries no `realizingService`), the same weak seam the shop and the business console use today; a `realizingService` column plus a back-fill on service activation is the fix, an inventory change.
+- Qualification is offering-by-place only, so "eligible for this customer" is approximated by serviceability at the customer's postcode.
+- A customer's token cannot see a stranger's objects at all (404 by design), so that refusal reads "could not be read" rather than "not yours".

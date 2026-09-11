@@ -44,9 +44,12 @@ public class McpController {
     private final ExplainService explain;
     private final TenantScope tenantScope;
     private final ObjectMapper json;
+    private final com.bss.ontology.service.ContextService context;
 
     public McpController(Registry registry, ActionCheckService checks, ActionExecuteService executes,
-            UpgradeService upgrades, ExplainService explain, TenantScope tenantScope, ObjectMapper json) {
+            UpgradeService upgrades, ExplainService explain, TenantScope tenantScope, ObjectMapper json,
+            com.bss.ontology.service.ContextService context) {
+        this.context = context;
         this.registry = registry;
         this.checks = checks;
         this.executes = executes;
@@ -136,6 +139,8 @@ public class McpController {
                 List.of("kind", "name")));
         tools.add(tool("available_upgrades", "The offerings a subscription could move up to: same family, on sale on your channel, dearer per month.",
                 Map.of("subscriptionId", Map.of("type", "string", "description", "the subscription (product) id")), List.of("subscriptionId")));
+        tools.add(tool("customer_context", "One call: a customer's subscriptions (with what each could become), lines, bills and the receipts of what the BSS decided about them — walked with your rights; edges that did not answer are listed.",
+                Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
         for (JsonNode a : l.actions().values()) {
             if ("deprecated".equals(a.path("status").asText())) {
                 continue;
@@ -216,6 +221,8 @@ public class McpController {
             }
         } else if ("available_upgrades".equals(name)) {
             result = upgrades.availableUpgrades(args.path("subscriptionId").asText(), caller);
+        } else if ("customer_context".equals(name)) {
+            result = context.customer(args.path("customerId").asText(), caller);
         } else {
             boolean dry = name.startsWith("check_");
             String actionName = camel(dry ? name.substring(6) : name);

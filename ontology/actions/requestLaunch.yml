@@ -1,0 +1,36 @@
+action: requestLaunch
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Ask for a draft offering to be launched. Inside a pre-approved envelope it is approved at once and the trail names the envelope; otherwise it waits for an approver.
+concept: ProductOffering
+inputs:
+  - { name: offeringId, type: ref, concept: ProductOffering, required: true, meaning: the draft offering }
+  - { name: note, type: string, required: false, meaning: a note for the approver }
+preconditions:
+  - id: offering-is-a-draft
+    check: state
+    concept: ProductOffering
+    of: offeringId
+    in: [In study, In design, In test]
+    says: only a draft can be requested for launch — a live offering is already launched
+  - id: not-already-requested
+    check: function
+    function: governanceStateIn
+    args: [offeringId, "none,rejected,expired"]
+    says: the launch must not already be requested, approved, held or launched
+permissions:
+  anyOf:
+    - { role: catalog:write }
+governance: { autonomy: medium, approval: none, audit: mandatory }
+executes:
+  capability: catalog.requestLaunch
+  pathVars: { id: "${offeringId}" }
+  template: { note: "${note}", origin: human }
+effects:
+  - { capability: governance.envelope, when: on execution }
+emits:
+  - { event: ProductOfferingGovernanceEvent, component: product-catalog, meaning: requested — or approved at once by an envelope }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: ProductOffering, settles: ProductOfferingLaunchedEvent }
+pages: [productOffering, approvals]

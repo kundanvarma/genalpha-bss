@@ -15,7 +15,7 @@ KC = os.environ.get("KC_URL", "http://localhost:8085").rstrip("/")
 USER, PASS = os.environ.get("KC_USER", "admin"), os.environ.get("KC_PASS", "admin")
 SECRET = os.environ.get("KC_SECRET", "ontology-secret")
 CLIENT = "bss-ontology"
-ROLES = ["policy:evaluate"]
+ROLES = ["policy:evaluate", "insight:read", "inventory:read", "billing:admin", "workforce:use"]  # policy pre-check; outcome sweep; delegated credit notes; filing approvals
 
 
 def admin_token():

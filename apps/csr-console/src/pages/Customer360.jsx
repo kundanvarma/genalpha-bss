@@ -12,7 +12,11 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   patchSpendPolicy, poolsOf, runRegistrySync, saveDirectorySetting,
   spendPoliciesOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
-import { hasRole } from '../auth.js';
+import { GenAlpha } from '../sdk/genalpha-sdk.js';
+import { hasRole, currentTokenValue } from '../auth.js';
+
+// the desk programs against business actions, not endpoints: the generated ontology SDK, the agent's own token
+const bss = new GenAlpha({ baseUrl: '', token: () => currentTokenValue(), channel: 'care' });
 
 const None = () => <span className="secnone"> — none</span>;
 
@@ -60,6 +64,7 @@ export default function Customer360() {
   const [interactions, setInteractions] = useState([]);
   const [interactionsTotal, setInteractionsTotal] = useState(0);
   const [diagnosis, setDiagnosis] = useState(null); // {serviceId, findings}
+  const [upgrade, setUpgrade] = useState(null); // {productId, name, options, verdicts, said} — the ontology's answer
   const [usage, setUsage] = useState([]);
   const [agreements, setAgreements] = useState([]);
   const [activeServices, setActiveServices] = useState([]);
@@ -321,9 +326,66 @@ export default function Customer360() {
             {products.map((p) => (
               <div className="row" key={p.id}>
                 <span>{p.name}</span>
-                <span className={`state ${p.status}`}>{p.status}</span>
+                <div className="rowend">
+                  <span className={`state ${p.status}`}>{p.status}</span>
+                  {p.status === 'active' && hasRole('ordering:write') && (
+                    <button className="ghost" data-testid={`csr-upgrade-options-${p.id}`}
+                        title="What this line could become — from the operational ontology, with every condition checked before anything changes"
+                        onClick={() => act(async () => {
+                          const options = await bss.availableUpgrades(p.id);
+                          setUpgrade({ productId: p.id, name: p.name, options, verdicts: null, said: null });
+                        })}>
+                      Upgrade options
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
+            {upgrade && (
+              <div className="rows" data-testid="upgrade-card">
+                <p className="dim small">{upgrade.name}: {upgrade.options.length ? 'could become' : 'has no dearer plan in its family on this channel.'}</p>
+                {upgrade.options.map((o) => (
+                  <div className="row" key={o.id}>
+                    <span>{o.name} <span className="dim small">{o.monthly}/month</span></span>
+                    <div className="rowend">
+                      <button className="ghost" data-testid={`csr-upgrade-check-${o.id}`}
+                          onClick={() => act(async () => {
+                            const c = await bss.checkUpgradeSubscription({ subscriptionId: upgrade.productId, targetOfferingId: o.id });
+                            setUpgrade((u) => ({ ...u, verdicts: { target: o, ...c }, said: null }));
+                          })}>
+                        Check
+                      </button>
+                      {upgrade.verdicts?.target?.id === o.id && upgrade.verdicts.allowed && (
+                        <button className="primary" data-testid={`csr-upgrade-do-${o.id}`}
+                            onClick={() => act(async () => {
+                              const done = await bss.upgradeSubscription({ subscriptionId: upgrade.productId, targetOfferingId: o.id });
+                              setUpgrade((u) => ({ ...u, said: done.said, verdicts: null }));
+                              await logInteraction({
+                                description: `Plan upgraded through the ontology: ${done.said}`,
+                                channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                                relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                              });
+                            })}>
+                          Upgrade
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {upgrade.verdicts && (
+                  <div data-testid="upgrade-verdicts">
+                    <p className={upgrade.verdicts.allowed ? 'dim small' : 'error'}>
+                      {upgrade.verdicts.allowed ? `${upgrade.verdicts.target.name}: this could happen.` : `Refused: ${upgrade.verdicts.refusal}`}
+                    </p>
+                    {upgrade.verdicts.preconditions.map((v) => (
+                      <p key={v.id} className="dim small">{v.verdict === 'holds' ? '✓' : v.verdict === 'fails' ? '✗' : '?'} {v.says}{v.detail ? ` — ${v.detail}` : ''}</p>
+                    ))}
+                    <p className="dim small">Permission: {upgrade.verdicts.permission?.says}. Policy: {upgrade.verdicts.policy?.says}.</p>
+                  </div>
+                )}
+                {upgrade.said && <p data-testid="upgrade-said">{upgrade.said}</p>}
+              </div>
+            )}
             {activeServices.filter((sv) => (sv.supportingResource || []).length).map((sv) => (
               <div className="row" key={sv.id} data-testid="service-number">
                 <span className="dim small">{sv.name}</span>

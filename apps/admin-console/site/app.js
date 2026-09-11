@@ -8120,10 +8120,28 @@ async function renderOntology() {
     pcs.append(ul); card.append(pcs);
     const ex = capOf(a.executes?.capability);
     const e = document.createElement('div'); e.className = 'dim';
-    e.textContent = `Executed by ${ex.component} (${ex.tmf || ex.id}). What follows: ${(a.effects || []).map((f) => capOf(f.capability).meaning).join(' ')}`;
+    e.textContent = `Executed by ${ex.component} (${ex.tmf || ex.id}).${(a.effects || []).length ? ` What follows: ${a.effects.map((f) => capOf(f.capability).meaning).join(' ')}` : ''}`;
     card.append(e);
     const ev = document.createElement('div'); ev.className = 'dim'; ev.style.fontSize = '12px';
     ev.textContent = `Emits: ${(a.emits || []).map((x) => x.event).join(', ')}.`; card.append(ev);
+    if (a.governance?.approval === 'human') {
+      const ap = document.createElement('div'); ap.className = 'dim'; ap.style.fontSize = '12px';
+      ap.textContent = `Approval: a human holding ${a.governance.approverRole || 'the approver role'} decides`
+        + (a.governance.approvalAbove ? ` above ${a.governance.approvalAbove.amount} (${a.governance.approvalAbove.input})` : '')
+        + (a.governance.limits ? `; limits ${Object.entries(a.governance.limits).map(([k, v]) => `${k} ${v}`).join(', ')}` : '') + '.';
+      card.append(ap);
+    }
+    if (a.status === 'deprecated') {
+      const dp = document.createElement('div'); dp.className = 'dim'; dp.style.fontSize = '12px';
+      dp.textContent = `Retired ${a.deprecated || ''}${a.supersededBy ? ` — use ${ontoTitle(a.supersededBy)}` : ''}. Refused past its date; absent from the agents' tools and the SDK.`; card.append(dp);
+    }
+    // the learning contract for this action's decision point, when the operator has written one
+    authFetch(`/tmf-api/campaignManagement/v4/learningContract/ontology.${a.action}`).then((r) => (r.ok ? r.json() : null)).then((lc) => {
+      if (!lc || !lc.contract || lc.contract.defaults) return;
+      const l = document.createElement('div'); l.className = 'dim'; l.style.fontSize = '12px'; l.dataset.testid = 'ontology-contract';
+      l.textContent = `Learning contract v${lc.contract.version}: measured by "${lc.contract.objective}"${(lc.contract.guardrails || []).length ? `; guardrails: ${lc.contract.guardrails.join('; ')}` : ''}.`;
+      ev.after(l);
+    }).catch(() => {});
     const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:.5rem;flex-wrap:wrap';
     const explain = document.createElement('button'); explain.className = 'ghost small'; explain.textContent = 'Explain the journey'; explain.dataset.testid = 'ontology-explain';
     explain.addEventListener('click', async () => {

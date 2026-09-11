@@ -166,3 +166,169 @@ capabilities:
     kind: house-api
     meaning: Check, then execute an action through its capability with the caller's own rights, and write the receipt.
     route: { method: POST, path: "/ontology/v1/actions/{name}/execute" }
+
+  - id: serviceInventory.service
+    version: 1
+    component: service-orchestration
+    kind: tmf-api
+    tmf: TMF638 Service Inventory
+    meaning: Read one service — the line, with its state, number and restriction.
+    route: { method: GET, path: "/tmf-api/serviceInventory/v4/service/{id}" }
+    roles: [service:read]
+
+  - id: service.suspend
+    version: 1
+    component: service-orchestration
+    kind: house-api
+    tmf: TMF638 Service Inventory (house verb)
+    meaning: Pause a line — charging off, entitlements suspended, the number kept; open-ended or until a date within 90 days.
+    route: { method: POST, path: "/tmf-api/serviceInventory/v4/service/{id}/suspend" }
+
+  - id: service.resume
+    version: 1
+    component: service-orchestration
+    kind: house-api
+    tmf: TMF638 Service Inventory (house verb)
+    meaning: Bring a paused line back — charging on, entitlements active.
+    route: { method: POST, path: "/tmf-api/serviceInventory/v4/service/{id}/resume" }
+
+  - id: service.replaceSim
+    version: 1
+    component: service-orchestration
+    kind: house-api
+    tmf: TMF638 Service Inventory (house verb)
+    meaning: Block the old card at the network and issue a new one — the number stays; the entitlement server is rebound.
+    route: { method: POST, path: "/tmf-api/serviceInventory/v4/service/{id}/sim/replace" }
+
+  - id: charging.suspend
+    version: 1
+    component: service-orchestration
+    kind: seam
+    seam: ocs
+    meaning: Switch charging off for the line in the online charging system.
+
+  - id: charging.resume
+    version: 1
+    component: service-orchestration
+    kind: seam
+    seam: ocs
+    meaning: Switch charging back on for the line in the online charging system.
+
+  - id: entitlement.rebind
+    version: 1
+    component: device-entitlement
+    kind: tmf-api
+    tmf: TMF-style Device Entitlement (GSMA TS.43 server)
+    meaning: Bind the line to its new SIM so the old card's tokens die and the new card is trusted.
+    route: { method: PUT, path: /tmf-api/deviceEntitlement/v1/subscriber }
+    roles: [entitlement:write]
+
+  - id: productOrdering.cancel
+    version: 1
+    component: product-ordering
+    kind: tmf-api
+    tmf: TMF622 Product Ordering
+    meaning: Cancel an order that has not completed — stock released, card authorisations voided.
+    route: { method: PATCH, path: "/tmf-api/productOrderingManagement/v4/productOrder/{id}" }
+    roles: [ordering:write]
+
+  - id: ordering.releaseStock
+    version: 1
+    component: product-ordering
+    kind: internal
+    meaning: Release the stock reserved for the order.
+
+  - id: ordering.voidPayments
+    version: 1
+    component: product-ordering
+    kind: internal
+    meaning: Void the card authorisations taken for the order.
+
+  - id: billing.bill
+    version: 1
+    component: billing
+    kind: tmf-api
+    tmf: TMF678 Customer Bill
+    meaning: Read one bill — its state, amount due and lines.
+    route: { method: GET, path: "/tmf-api/customerBillManagement/v4/customerBill/{id}" }
+    roles: [billing:read]
+
+  - id: billing.dispute
+    version: 1
+    component: billing
+    kind: house-api
+    tmf: TMF678 Customer Bill (house verb)
+    meaning: Open a dispute on a bill — collection never chases contested money while it is open.
+    route: { method: POST, path: "/tmf-api/customerBillManagement/v4/customerBill/{id}/dispute" }
+    roles: [billing:write]
+
+  - id: billing.creditNote
+    version: 1
+    component: billing
+    kind: house-api
+    tmf: TMF678 Customer Bill (house verb)
+    meaning: Issue a numbered credit note against a bill — reduces what is due, or refunds a settled bill through the PSP.
+    route: { method: POST, path: "/tmf-api/customerBillManagement/v4/customerBill/{id}/creditNote" }
+    roles: [billing:admin]
+
+  - id: collections.pause
+    version: 1
+    component: billing
+    kind: internal
+    meaning: Hold the dunning ladder for the bill while its dispute is open.
+
+  - id: billing.distributeCreditNote
+    version: 1
+    component: billing
+    kind: internal
+    meaning: Send the credit note to the customer on the same channel as the bill (PDF, EHF/Peppol).
+
+  - id: catalog.governanceView
+    version: 1
+    component: product-catalog
+    kind: house-api
+    tmf: TMF620 Product Catalog (launch governance)
+    meaning: Read an offering's launch state — requested, approved, held, launched — with its readiness and trail.
+    route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}/governance" }
+    roles: [catalog:read]
+
+  - id: catalog.requestLaunch
+    version: 1
+    component: product-catalog
+    kind: house-api
+    tmf: TMF620 Product Catalog (launch governance)
+    meaning: Ask for a draft offering to be launched; inside a pre-approved envelope it is approved at once.
+    route: { method: POST, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}/governance/request" }
+    roles: [catalog:write]
+
+  - id: catalog.approveLaunch
+    version: 1
+    component: product-catalog
+    kind: house-api
+    tmf: TMF620 Product Catalog (launch governance)
+    meaning: Approve a requested launch — good for the tenant's expiry window; readiness still gates the launch itself.
+    route: { method: POST, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}/governance/approve" }
+    roles: [catalog:approve]
+
+  - id: catalog.holdLaunch
+    version: 1
+    component: product-catalog
+    kind: house-api
+    tmf: TMF620 Product Catalog (launch governance)
+    meaning: Pull the brake on a launch — dated (lifts by itself) or open-ended (until resumed).
+    route: { method: POST, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}/governance/hold" }
+    roles: [catalog:read]
+
+  - id: governance.envelope
+    version: 1
+    component: product-catalog
+    kind: internal
+    meaning: Evaluate the launch envelopes (policy domain launch); a matching envelope pre-approves the request.
+
+  - id: workforce.fileApproval
+    version: 1
+    component: intelligence
+    kind: house-api
+    meaning: File an action for a human approver, who executes it with their own token from AI & Automation › Workforce.
+    route: { method: POST, path: /ai/v1/workforce/approvals }
+    roles: [workforce:use]

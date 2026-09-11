@@ -3,6 +3,6 @@ version: 1
 oda: TMFC028 Customer Bill Management
 meaning: Rates the month into bills — prorating a plan change at its date — and runs collections and distribution.
 manages: [Bill]
-capabilities: [billing.prorate, billing.bills]
+capabilities: [billing.prorate, billing.bills, billing.bill, billing.dispute, billing.creditNote, collections.pause, billing.distributeCreditNote]
 events: [CustomerBillCreateEvent, CustomerBillStateChangeEvent, CustomerBillAttributeValueChangeEvent, BillDistributedEvent, CreditNoteIssuedEvent, DisputeOpenedEvent, DisputeResolvedEvent]
 topic: bss.billing.events

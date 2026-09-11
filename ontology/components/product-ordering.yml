@@ -3,7 +3,7 @@ version: 1
 oda: TMFC002 Product Order Capture and Validation
 meaning: Validates and captures product orders — the one door through which subscriptions are created, changed and ended; consults policy before it accepts.
 manages: [ProductOrder]
-capabilities: [productOrdering.create, productOrdering.order]
+capabilities: [productOrdering.create, productOrdering.order, productOrdering.cancel, ordering.releaseStock, ordering.voidPayments]
 events: [ProductOrderCreateEvent, ProductOrderStateChangeEvent, ProductOrderAttributeValueChangeEvent, ProductOrderDeleteEvent, CreditDecisionRecordedEvent]
 topic: bss.ordering.events
 consults: [policy.evaluate, productInventory.product, productCatalog.offering, productQualification.check, agreement.list]

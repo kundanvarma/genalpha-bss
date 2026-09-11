@@ -902,6 +902,9 @@ services:
       BILLING_BASE_URL: http://billing:8080
       INSIGHT_BASE_URL: http://insight:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # the demo compresses the outcome window: a receipt is judged on the next sweep, not after 90 days
+      ONTOLOGY_OUTCOME_AFTER_DAYS: "0"
+      INTELLIGENCE_BASE_URL: http://intelligence:8080
       JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=96m"
     volumes:
       - ./infra/tenants:/config:ro

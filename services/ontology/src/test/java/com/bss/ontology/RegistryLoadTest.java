@@ -71,6 +71,37 @@ class RegistryLoadTest {
                 .hasMessageContaining("nothing.here");
     }
 
+    @Test
+    void deprecationIsAVersionedContract() throws IOException {
+        Path tmp = Files.createTempDirectory("ontology-deprecated");
+        copy(Path.of(repoOntology()), tmp);
+        String base = """
+                action: %s
+                version: 2
+                introduced: 2026-09-11
+                status: deprecated
+                %s
+                meaning: A retired way of changing a plan, kept callable until its date and pointing at its successor.
+                concept: Subscription
+                inputs: []
+                preconditions: []
+                permissions: { anyOf: [ { role: ordering:write } ] }
+                governance: { autonomy: low, approval: human, audit: mandatory }
+                executes: { capability: productOrdering.create }
+                emits: []
+                """;
+        // no date: refused at load
+        Files.writeString(tmp.resolve("actions/oldChangePlan.yml"), base.formatted("oldChangePlan", "supersededBy: upgradeSubscription"));
+        assertThatThrownBy(() -> new Registry(tmp.toString())).hasMessageContaining("deprecated date");
+        // a successor nobody knows: refused at load
+        Files.writeString(tmp.resolve("actions/oldChangePlan.yml"), base.formatted("oldChangePlan", "deprecated: 2026-12-31\nsupersededBy: nothingLikeIt"));
+        assertThatThrownBy(() -> new Registry(tmp.toString())).hasMessageContaining("nothingLikeIt");
+        // a proper deprecation loads, and the successor is named
+        Files.writeString(tmp.resolve("actions/oldChangePlan.yml"), base.formatted("oldChangePlan", "deprecated: 2026-12-31\nsupersededBy: upgradeSubscription"));
+        Registry r = new Registry(tmp.toString());
+        assertThat(r.core().actions().get("oldChangePlan").path("supersededBy").asText()).isEqualTo("upgradeSubscription");
+    }
+
     private static void copy(Path from, Path to) throws IOException {
         try (var walk = Files.walk(from)) {
             for (Path p : walk.toList()) {

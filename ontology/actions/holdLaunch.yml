@@ -1,0 +1,29 @@
+action: holdLaunch
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Pull the brake on a launch — a dated hold moves the on-sale date and lifts by itself; an open-ended hold takes a live offer off the shelf until someone resumes it.
+concept: ProductOffering
+inputs:
+  - { name: offeringId, type: ref, concept: ProductOffering, required: true, meaning: the offering to hold }
+  - { name: note, type: string, required: false, meaning: why }
+  - { name: until, type: date, required: false, meaning: "when the hold lifts by itself (ISO date-time); empty = until resumed" }
+preconditions:
+  - id: holdable
+    check: function
+    function: governanceStateIn
+    args: [offeringId, "requested,approved,launched"]
+    says: only a requested, approved or launched offering can be held
+permissions:
+  anyOf:
+    - { role: catalog:read }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: catalog.holdLaunch
+  pathVars: { id: "${offeringId}" }
+  template: { note: "${note}", until: "${until}" }
+emits:
+  - { event: ProductOfferingGovernanceEvent, component: product-catalog, meaning: held }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: ProductOffering, settles: ProductOfferingGovernanceEvent resumed }
+pages: [approvals]

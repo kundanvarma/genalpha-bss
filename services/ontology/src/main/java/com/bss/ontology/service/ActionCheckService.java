@@ -208,6 +208,43 @@ public class ActionCheckService {
             case "noActiveCommitment" -> {
                 return noActiveCommitment(id, says, r, caller);
             }
+            case "oneOf" -> {
+                String v = inputs.getOrDefault(args.get(0), "").trim().toLowerCase();
+                List<String> allowed = List.of(args.get(1).split(","));
+                return new Verdict(id, says, !v.isEmpty() && allowed.contains(v), v.isEmpty() ? "none given" : "\"" + v + "\"");
+            }
+            case "amountAtMost" -> {
+                String raw = inputs.getOrDefault(args.get(0), "");
+                if (raw.isBlank()) {
+                    return new Verdict(id, says, false, "no amount given");
+                }
+                try {
+                    BigDecimal amount = new BigDecimal(raw);
+                    BigDecimal limit = new BigDecimal(args.get(1));
+                    return new Verdict(id, says, amount.compareTo(limit) <= 0, amount.toPlainString() + " against a ceiling of " + limit.toPlainString());
+                } catch (NumberFormatException e) {
+                    return new Verdict(id, says, false, "\"" + raw + "\" is not an amount");
+                }
+            }
+            case "creditWithinDue" -> {
+                JsonNode bill = r.get(a0);
+                String raw = inputs.getOrDefault(args.get(1), "");
+                if (bill == null) {
+                    return new Verdict(id, says, null, "the bill could not be read");
+                }
+                try {
+                    BigDecimal amount = new BigDecimal(raw);
+                    JsonNode dueNode = bill.path("amountDue");
+                    BigDecimal due = new BigDecimal(dueNode.isObject() ? dueNode.path("value").asText("0") : dueNode.asText("0"));
+                    boolean ok = amount.signum() > 0 && amount.compareTo(due) <= 0;
+                    return new Verdict(id, says, ok, amount.toPlainString() + " against " + due.toPlainString() + " still due");
+                } catch (NumberFormatException e) {
+                    return new Verdict(id, says, false, "\"" + raw + "\" is not an amount");
+                }
+            }
+            case "governanceStateIn" -> {
+                return governanceStateIn(id, says, inputs.getOrDefault(args.get(0), ""), args.get(1), caller);
+            }
             default -> {
                 return new Verdict(id, says, null, "unknown function " + fn);
             }
@@ -254,6 +291,22 @@ public class ActionCheckService {
         return new Verdict(id, says, true, null);
     }
 
+    private Verdict governanceStateIn(String id, String says, String offeringId, String allowedCsv, Caller caller) {
+        Registry.Layer layer = registry.forTenant(caller.tenant());
+        JsonNode cap = layer.capabilities().get("catalog.governanceView");
+        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                Map.of("id", offeringId), Map.of(), null, caller.bearer(), Map.of());
+        if (!reply.ok()) {
+            return new Verdict(id, says, null, "the launch state could not be read (" + Resolver.statusWords(reply) + ")");
+        }
+        String state = reply.body().path("governanceState").asText(reply.body().path("state").asText("none"));
+        if (state.isEmpty()) {
+            state = "none";
+        }
+        boolean ok = List.of(allowedCsv.split(",")).contains(state);
+        return new Verdict(id, says, ok, "its launch state is \"" + state + "\"");
+    }
+
     private Verdict capability(String id, String says, JsonNode pc, Map<String, String> inputs, Resolver.Resolved r,
             Caller caller, Registry.Layer layer) {
         String capId = pc.path("capability").asText();
@@ -291,7 +344,11 @@ public class ActionCheckService {
         List<String> tried = new ArrayList<>();
         for (JsonNode clause : action.path("permissions").path("anyOf")) {
             if (clause.has("self")) {
-                JsonNode owner = r.get(clause.path("self").asText());
+                String selfName = clause.path("self").asText();
+                JsonNode owner = r.get(selfName);
+                if (owner == null && ("owner".equals(selfName) || "customer".equals(selfName))) {
+                    owner = r.get("owner");
+                }
                 boolean ok = owner != null && !owner.path("id").asText().isEmpty()
                         && owner.path("id").asText().equals(caller.subject());
                 tried.add("as the " + clause.path("self").asText() + (ok ? " — yes" : " — no"));

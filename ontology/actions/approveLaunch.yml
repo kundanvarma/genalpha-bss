@@ -1,0 +1,28 @@
+action: approveLaunch
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Approve a requested launch — good for the tenant's expiry window. Readiness still gates the launch itself, and a change to price, allowance, category, terms or channels voids the approval.
+concept: ProductOffering
+inputs:
+  - { name: offeringId, type: ref, concept: ProductOffering, required: true, meaning: the requested offering }
+  - { name: note, type: string, required: false, meaning: the approver's note }
+preconditions:
+  - id: launch-requested
+    check: function
+    function: governanceStateIn
+    args: [offeringId, "requested"]
+    says: only a requested launch can be approved — a held one must be resumed first
+permissions:
+  anyOf:
+    - { role: catalog:approve }
+governance: { autonomy: low, approval: none, audit: mandatory }
+executes:
+  capability: catalog.approveLaunch
+  pathVars: { id: "${offeringId}" }
+  template: { note: "${note}" }
+emits:
+  - { event: ProductOfferingGovernanceEvent, component: product-catalog, meaning: approved }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: ProductOffering, settles: ProductOfferingLaunchedEvent }
+pages: [approvals]

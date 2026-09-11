@@ -1,0 +1,38 @@
+action: replaceSim
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Block the old SIM at the network and issue a new one for the same number — the lost card dies first, then the new card is minted and the entitlement server rebound.
+intent: A lost, stolen or damaged card, or a move to a new phone, without losing the number.
+concept: Service
+inputs:
+  - { name: serviceId, type: ref, concept: Service, required: true, meaning: the line whose SIM is replaced }
+  - { name: reason, type: string, required: true, meaning: "lost, stolen, damaged or upgrade" }
+preconditions:
+  - id: line-active
+    check: state
+    concept: Service
+    of: serviceId
+    in: [active]
+    says: only an active line can have its SIM replaced
+  - id: reason-known
+    check: function
+    function: oneOf
+    args: [reason, "lost,stolen,damaged,upgrade"]
+    says: the reason must be lost, stolen, damaged or upgrade
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: service:write }
+governance: { autonomy: low, approval: none, audit: mandatory }
+executes:
+  capability: service.replaceSim
+  pathVars: { id: "${serviceId}" }
+  template: { reason: "${reason}" }
+effects:
+  - { capability: entitlement.rebind, when: on execution }
+emits:
+  - { event: SimReplacedEvent, component: service-orchestration, meaning: "old card blocked, new card active; devices flagged, the customer told" }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Service, settles: SimReplacedEvent }
+pages: [productOrder]

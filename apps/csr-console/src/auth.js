@@ -88,6 +88,11 @@ function currentToken() {
   return sessionStorage.getItem(TOKEN_KEY);
 }
 
+/** The raw bearer for clients that carry it themselves (the ontology SDK); null when signed out. */
+export function currentTokenValue() {
+  return currentToken();
+}
+
 export function tokenClaims() {
   const token = currentToken();
   if (!token) return {};

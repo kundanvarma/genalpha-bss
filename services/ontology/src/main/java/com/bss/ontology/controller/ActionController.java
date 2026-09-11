@@ -33,9 +33,11 @@ public class ActionController {
     private final ActionExecuteService executes;
     private final UpgradeService upgrades;
     private final TenantScope tenantScope;
+    private final com.bss.ontology.service.OutcomeSweeper sweeper;
 
     public ActionController(ActionCheckService checks, ActionExecuteService executes, UpgradeService upgrades,
-            TenantScope tenantScope) {
+            TenantScope tenantScope, com.bss.ontology.service.OutcomeSweeper sweeper) {
+        this.sweeper = sweeper;
         this.checks = checks;
         this.executes = executes;
         this.upgrades = upgrades;
@@ -66,6 +68,13 @@ public class ActionController {
         }
         ActionExecuteService.Outcome o = executes.execute(action, inputs(body), caller);
         return ResponseEntity.status(o.status()).body(o.body());
+    }
+
+    /** Judge the receipts whose outcome window has passed, now (the scheduler does the same on its own clock). */
+    @PostMapping("/outcomes/sweep")
+    public Map<String, Object> sweepOutcomes() {
+        int judged = sweeper.sweepTenant(tenantScope.currentTenantId());
+        return Map.of("judged", judged, "tenant", tenantScope.currentTenantId());
     }
 
     @GetMapping("/subscriptions/{id}/availableUpgrades")

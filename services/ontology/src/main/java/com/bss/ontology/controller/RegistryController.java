@@ -24,11 +24,19 @@ public class RegistryController {
     private final Registry registry;
     private final ExplainService explain;
     private final TenantScope tenantScope;
+    private final com.bss.ontology.service.RdfExportService rdf;
+    private final com.bss.ontology.service.ContextService context;
+    private final com.bss.ontology.service.ConformanceService conformanceService;
 
-    public RegistryController(Registry registry, ExplainService explain, TenantScope tenantScope) {
+    public RegistryController(Registry registry, ExplainService explain, TenantScope tenantScope,
+            com.bss.ontology.service.RdfExportService rdf, com.bss.ontology.service.ContextService context,
+            com.bss.ontology.service.ConformanceService conformanceService) {
+        this.conformanceService = conformanceService;
         this.registry = registry;
         this.explain = explain;
         this.tenantScope = tenantScope;
+        this.rdf = rdf;
+        this.context = context;
     }
 
     @GetMapping
@@ -86,6 +94,17 @@ public class RegistryController {
         return new ArrayList<>(registry.forTenant(tenantScope.currentTenantId()).components().values());
     }
 
+    /** Declaration against reality for one component, or all of them. */
+    @GetMapping("/components/{name}/conformance")
+    public Map<String, Object> conformance(@PathVariable String name) {
+        return conformanceService.component(name, tenantScope.currentTenantId());
+    }
+
+    @GetMapping("/conformance")
+    public List<Map<String, Object>> conformanceAll() {
+        return conformanceService.all(tenantScope.currentTenantId());
+    }
+
     @GetMapping("/schemas")
     public Map<String, JsonNode> schemas() {
         return registry.schemas();
@@ -116,6 +135,18 @@ public class RegistryController {
             throw NotFoundException.forResource("concept", name);
         }
         return m;
+    }
+
+    /** The registry as RDF/Turtle for semantic-web consumers; derived, never the source of truth. */
+    @GetMapping(value = "/export.ttl", produces = "text/turtle;charset=UTF-8")
+    public String turtle() {
+        return rdf.turtle(tenantScope.currentTenantId());
+    }
+
+    /** One call: a customer's sub-graph for an agent, walked with the caller's rights. */
+    @GetMapping("/context/customer/{id}")
+    public Map<String, Object> customerContext(@PathVariable String id, jakarta.servlet.http.HttpServletRequest request) {
+        return context.customer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
     }
 
     /** Console page paths may carry a slash (simulate/priceChange): the rest of the path is the page. */

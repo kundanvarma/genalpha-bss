@@ -79,11 +79,7 @@ public class LearningContractService implements ContractProvider {
 
     @Transactional(readOnly = true)
     public Map<String, Object> get(String decisionPoint) {
-        try {
-            decisions.spec(decisionPoint);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage());
-        }
+        requireKnown(decisionPoint);
         Map<String, Object> point = decisions.registryView().stream()
                 .filter(p -> decisionPoint.equals(p.get("name"))).findFirst().orElseThrow();
         Map<String, Object> m = new LinkedHashMap<>(point);
@@ -96,11 +92,7 @@ public class LearningContractService implements ContractProvider {
     /** Upsert: a new version each time; the previous intent stays attributable through old records' "id@version". */
     @Transactional
     public Map<String, Object> put(String decisionPoint, Map<String, Object> dto) {
-        try {
-            decisions.spec(decisionPoint);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage());
-        }
+        requireKnown(decisionPoint);
         String tenant = tenantScope.currentTenantId();
         LearningContract c = contracts.findByTenantIdAndDecisionPoint(tenant, decisionPoint).orElse(null);
         if (c == null) {
@@ -150,11 +142,7 @@ public class LearningContractService implements ContractProvider {
     /** Dry run: what the point WOULD decide for a sample context under the current contract — nothing recorded. */
     @Transactional(readOnly = true)
     public Map<String, Object> dryRun(String decisionPoint, Map<String, Object> body) {
-        try {
-            decisions.spec(decisionPoint);
-        } catch (IllegalArgumentException e) {
-            throw new BadRequestException(e.getMessage());
-        }
+        requireKnown(decisionPoint);
         Map<String, Object> context = body.get("context") instanceof Map<?, ?> m ? castMap(m) : new LinkedHashMap<>();
         List<String> candidates = body.get("candidates") instanceof List<?> l
                 ? l.stream().map(String::valueOf).toList() : List.of();
@@ -262,6 +250,27 @@ public class LearningContractService implements ContractProvider {
             return auth == null ? null : auth.getName();
         } catch (RuntimeException e) {
             return null;
+        }
+    }
+
+    /**
+     * A decision point must be registered before it can carry a contract. The
+     * campaign's own points are born registered; an action of the operational
+     * ontology (ontology.&lt;action&gt;) registers itself on first contact, so an
+     * operator can write the intent for it — what it is measured by, what must
+     * never happen — under the same vocabulary as every other point.
+     */
+    private void requireKnown(String decisionPoint) {
+        try {
+            decisions.spec(decisionPoint);
+        } catch (IllegalArgumentException unknown) {
+            if (decisionPoint != null && decisionPoint.startsWith("ontology.") && decisionPoint.length() > "ontology.".length()) {
+                decisions.register(new com.bss.campaign.decision.DecisionPointSpec(decisionPoint, "subscription", "medium",
+                        "a governed action of the operational ontology — the registry executes what the caller chose; the contract states what learning may measure and what must never happen",
+                        new com.bss.campaign.decision.OntologyActionPolicy()));
+                return;
+            }
+            throw new BadRequestException(unknown.getMessage());
         }
     }
 }

@@ -6,4 +6,4 @@ manages: []
 capabilities: [ontology.check, ontology.execute, ontology.receipt]
 events: [DecisionRecordedEvent, DecisionOutcomeEvent]
 topic: bss.ontology.events
-consults: [productInventory.product, productCatalog.price, party.individual, productCatalog.offering, productCatalog.offerings, serviceInventory.services, productQualification.check, agreement.list, policy.evaluate, productOrdering.create, productOrdering.order]
+consults: [serviceInventory.service, billing.bill, catalog.governanceView, workforce.fileApproval, productInventory.product, productCatalog.price, party.individual, productCatalog.offering, productCatalog.offerings, serviceInventory.services, productQualification.check, agreement.list, policy.evaluate, productOrdering.create, productOrdering.order]

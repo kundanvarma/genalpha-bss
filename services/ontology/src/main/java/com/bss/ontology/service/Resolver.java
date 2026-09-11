@@ -82,9 +82,27 @@ public class Resolver {
             }
             if ("Subscription".equals(conceptName) && r.has(key)) {
                 enrichSubscription(layer, key, caller, r);
+            } else if (conceptName.equals(action.path("concept").asText()) && r.has(key) && !r.has("owner")) {
+                // the party behind the acted-on object: relatedParty[role=customer], else the first party
+                ObjectNode owner = json.createObjectNode();
+                owner.put("id", ownerOf(r.get(key)));
+                r.objects.put("owner", owner);
             }
         }
         return r;
+    }
+
+    static String ownerOf(JsonNode obj) {
+        String id = "";
+        for (JsonNode p : obj.path("relatedParty")) {
+            if (id.isEmpty() || "customer".equalsIgnoreCase(p.path("role").asText())) {
+                id = p.path("id").asText();
+            }
+        }
+        if (id.isEmpty()) {
+            id = obj.path("ownerPartyId").asText(obj.path("partyId").asText(""));
+        }
+        return id;
     }
 
     private void load(Registry.Layer layer, JsonNode concept, String key, String id, Caller caller,

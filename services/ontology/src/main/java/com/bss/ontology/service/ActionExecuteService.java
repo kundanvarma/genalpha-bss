@@ -47,9 +47,22 @@ public class ActionExecuteService {
 
     public Outcome execute(JsonNode action, Map<String, String> inputs, Caller caller) {
         String name = action.path("action").asText();
-        ActionCheckService.Check check = checks.check(action, inputs, caller);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("action", name);
+        // a retired action refuses past its date and points at its successor; until then it still runs
+        if ("deprecated".equals(action.path("status").asText())) {
+            String until = action.path("deprecated").asText("");
+            boolean past = !until.isEmpty() && java.time.LocalDate.parse(until).isBefore(java.time.LocalDate.now());
+            if (past) {
+                String why = name + " was retired on " + until
+                        + (action.has("supersededBy") ? "; use " + action.path("supersededBy").asText() : "");
+                out.put("done", false);
+                out.put("refusal", why);
+                out.put("said", "Refused: " + why + ".");
+                return new Outcome(false, 410, out);
+            }
+        }
+        ActionCheckService.Check check = checks.check(action, inputs, caller);
         out.put("check", check.toMap());
         if (!check.allowed()) {
             out.put("done", false);
@@ -62,7 +75,7 @@ public class ActionExecuteService {
         JsonNode cap = layer.capabilities().get(action.path("executes").path("capability").asText());
         JsonNode template = action.path("executes").path("template");
         List<String> missing = new ArrayList<>();
-        JsonNode body = fill(template, inputs, check.resolved(), missing);
+        JsonNode body = fill(template, action, inputs, check.resolved(), missing);
         if (!missing.isEmpty()) {
             String why = "the request could not be built: " + String.join(", ", missing);
             out.put("done", false);
@@ -71,9 +84,54 @@ public class ActionExecuteService {
             receipt(action, inputs, caller, check, null, "refused", why);
             return new Outcome(false, 422, out);
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), cap.path("route").path("method").asText(),
-                cap.path("route").path("path").asText(), Map.of(), Map.of(), body, caller.bearer(),
-                Map.of(Caller.CHANNEL_HEADER, caller.channel()));
+        Map<String, String> pathVars = new LinkedHashMap<>();
+        action.path("executes").path("pathVars").fields().forEachRemaining(f -> {
+            String v = lookup(strip(f.getValue().asText()), inputs, check.resolved());
+            if (v == null) {
+                missing.add(f.getValue().asText() + " is not known");
+            } else {
+                pathVars.put(f.getKey(), v);
+            }
+        });
+        Map<String, String> query = new LinkedHashMap<>();
+        action.path("executes").path("query").fields().forEachRemaining(f -> {
+            String v = lookup(strip(f.getValue().asText()), inputs, check.resolved());
+            if (v != null) {
+                query.put(f.getKey(), v);
+            }
+        });
+        if (!missing.isEmpty()) {
+            String why = "the request could not be built: " + String.join(", ", missing);
+            out.put("done", false);
+            out.put("refusal", why);
+            out.put("said", "Refused: " + why + ".");
+            return new Outcome(false, 422, out);
+        }
+        JsonNode governance = action.path("governance");
+        String approverRole = governance.path("approverRole").asText("");
+        boolean isApprover = !approverRole.isEmpty() && caller.has(approverRole);
+        boolean needsHuman = "human".equals(governance.path("approval").asText()) && !isApprover;
+        if (needsHuman && governance.has("approvalAbove")) {
+            String input = governance.path("approvalAbove").path("input").asText();
+            try {
+                java.math.BigDecimal value = new java.math.BigDecimal(inputs.getOrDefault(input, ""));
+                java.math.BigDecimal threshold = new java.math.BigDecimal(governance.path("approvalAbove").path("amount").asText("0"));
+                needsHuman = value.compareTo(threshold) > 0;
+            } catch (NumberFormatException e) {
+                needsHuman = true;
+            }
+        }
+        if (needsHuman) {
+            return fileForApproval(action, cap, pathVars, body, inputs, caller, check, out);
+        }
+        boolean asRegistry = "registry".equals(action.path("executes").path("as").asText("caller")) && !isApprover;
+        Object payload = template.isMissingNode() || template.isNull() ? null : body;
+        ComponentClient.Reply reply = asRegistry
+                ? client.callAsMachine(cap.path("component").asText(), cap.path("route").path("method").asText(),
+                        fillPath(cap.path("route").path("path").asText(), pathVars), query, payload, Map.of(Caller.CHANNEL_HEADER, caller.channel()))
+                : client.call(cap.path("component").asText(), cap.path("route").path("method").asText(),
+                        cap.path("route").path("path").asText(), pathVars, query, payload, caller.bearer(), Map.of(Caller.CHANNEL_HEADER, caller.channel()));
+        out.put("executedAs", asRegistry ? "the registry's own identity — the action's permission model governed this, and the receipt names " + caller.subject() : "the caller");
         out.put("executedBy", Map.of("component", cap.path("component").asText(), "capability", cap.path("id").asText(),
                 "route", cap.path("route").path("method").asText() + " " + cap.path("route").path("path").asText()));
         if (!reply.ok()) {
@@ -96,17 +154,89 @@ public class ActionExecuteService {
         return new Outcome(true, 200, out);
     }
 
+    private static String fillPath(String path, Map<String, String> pathVars) {
+        String p = path;
+        for (Map.Entry<String, String> v : pathVars.entrySet()) {
+            p = p.replace("{" + v.getKey() + "}", v.getValue());
+        }
+        return p;
+    }
+
+    /**
+     * Above the threshold (or when the action always needs a human) the request is filed on the
+     * workforce approval desk: an approver holding the approver role executes it from there with
+     * their own token. The receipt records the ask; the execution gets its own receipt in the desk.
+     */
+    private Outcome fileForApproval(JsonNode action, JsonNode cap, Map<String, String> pathVars, JsonNode body,
+            Map<String, String> inputs, Caller caller, ActionCheckService.Check check, Map<String, Object> out) {
+        String name = action.path("action").asText();
+        Registry.Layer layer = registry.forTenant(caller.tenant());
+        JsonNode filer = layer.capabilities().get("workforce.fileApproval");
+        String path = fillPath(cap.path("route").path("path").asText(), pathVars);
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("action", "ontology." + name);
+        request.put("method", cap.path("route").path("method").asText());
+        request.put("path", path);
+        request.put("body", json.convertValue(body, Map.class));
+        request.put("reason", name + " asked by " + caller.subject() + " (" + (caller.isCustomer() ? "customer" : "staff")
+                + ") with " + inputs + " — above the threshold of " + action.path("governance").path("approvalAbove").path("amount").asText("?")
+                + "; needs " + action.path("governance").path("approverRole").asText("an approver"));
+        ComponentClient.Reply reply = filer == null ? null
+                : client.callAsMachine(filer.path("component").asText(), "POST", filer.path("route").path("path").asText(), Map.of(), request, Map.of());
+        String decisionId = receipt(action, inputs, caller, check, null, "filed-for-approval",
+                "above the threshold — filed for " + action.path("governance").path("approverRole").asText("an approver"));
+        out.put("done", false);
+        out.put("filed", reply != null && reply.ok());
+        out.put("decisionId", decisionId);
+        if (reply != null && reply.ok()) {
+            out.put("approvalId", reply.body().path("id").asText());
+            out.put("said", "Filed for approval: " + name + " is above the threshold this caller may decide alone; someone holding "
+                    + action.path("governance").path("approverRole").asText("the approver role")
+                    + " decides it under AI & Automation › Workforce and it executes with their token.");
+            return new Outcome(false, 202, out);
+        }
+        out.put("refusal", "needs a human approver and the approval desk did not take the request ("
+                + (reply == null ? "no filing capability" : Resolver.statusWords(reply)) + ")");
+        out.put("said", "Refused: " + out.get("refusal") + ".");
+        return new Outcome(false, 503, out);
+    }
+
     /* ------------------------------------------------------------------ the request */
 
-    private JsonNode fill(JsonNode node, Map<String, String> inputs, Resolver.Resolved r, List<String> missing) {
+    /** A placeholder that names an input the caller left out: the key is dropped, not sent empty. */
+    private static final JsonNode OMIT = TextNode.valueOf("\u0000omit");
+
+    private JsonNode fill(JsonNode node, JsonNode action, Map<String, String> inputs, Resolver.Resolved r, List<String> missing) {
         if (node.isTextual()) {
             String s = node.asText();
             if (s.startsWith("${") && s.endsWith("}")) {
                 String path = s.substring(2, s.length() - 1);
                 String v = lookup(path, inputs, r);
-                if (v == null) {
+                JsonNode declared = inputNamed(action, path);
+                if (v == null || (declared != null && v.isBlank())) {
+                    if (declared != null && !declared.path("required").asBoolean(false)) {
+                        return OMIT;
+                    }
                     missing.add(path + " is not known");
                     return TextNode.valueOf("");
+                }
+                if (declared != null) {
+                    switch (declared.path("type").asText()) {
+                        case "number", "money" -> {
+                            try {
+                                return json.getNodeFactory().numberNode(new java.math.BigDecimal(v));
+                            } catch (NumberFormatException e) {
+                                missing.add(path + " is not a number");
+                                return TextNode.valueOf(v);
+                            }
+                        }
+                        case "boolean" -> {
+                            return json.getNodeFactory().booleanNode(Boolean.parseBoolean(v));
+                        }
+                        default -> {
+                            return TextNode.valueOf(v);
+                        }
+                    }
                 }
                 return TextNode.valueOf(v);
             }
@@ -114,15 +244,38 @@ public class ActionExecuteService {
         }
         if (node.isObject()) {
             ObjectNode o = json.createObjectNode();
-            node.fields().forEachRemaining(f -> o.set(f.getKey(), fill(f.getValue(), inputs, r, missing)));
+            node.fields().forEachRemaining(f -> {
+                JsonNode v = fill(f.getValue(), action, inputs, r, missing);
+                if (v != OMIT) {
+                    o.set(f.getKey(), v);
+                }
+            });
             return o;
         }
         if (node.isArray()) {
             ArrayNode a = json.createArrayNode();
-            node.forEach(n -> a.add(fill(n, inputs, r, missing)));
+            node.forEach(n -> {
+                JsonNode v = fill(n, action, inputs, r, missing);
+                if (v != OMIT) {
+                    a.add(v);
+                }
+            });
             return a;
         }
         return node;
+    }
+
+    private static JsonNode inputNamed(JsonNode action, String name) {
+        for (JsonNode in : action.path("inputs")) {
+            if (in.path("name").asText().equals(name)) {
+                return in;
+            }
+        }
+        return null;
+    }
+
+    private static String strip(String placeholder) {
+        return placeholder.startsWith("${") && placeholder.endsWith("}") ? placeholder.substring(2, placeholder.length() - 1) : placeholder;
     }
 
     private static String lookup(String path, Map<String, String> inputs, Resolver.Resolved r) {
@@ -215,7 +368,7 @@ public class ActionExecuteService {
             }
         }
         d.put("constraints", constraints);
-        d.put("action", "executed".equals(outcome) ? chosen : "refused");
+        d.put("action", "executed".equals(outcome) ? (chosen.isEmpty() ? "executed" : chosen) : outcome);
         d.put("propensity", null);
         d.put("policy", "operational-semantic-registry");
         d.put("policyVersion", String.valueOf(action.path("version").asInt(1)));
