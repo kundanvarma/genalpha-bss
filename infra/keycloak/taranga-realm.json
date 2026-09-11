@@ -331,6 +331,10 @@
       },
       {
         "name": "device:write"
+      }, {
+        "name": "entitlement:read"
+      }, {
+        "name": "entitlement:write"
       },
       {
         "name": "migration:read"
@@ -765,6 +769,16 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
+    }, {
+      "clientId": "bss-entitlement",
+      "name": "device-entitlement machine identity (catalog reads, TS.43 ECS)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "entitlement-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
     },
     {
       "clientId": "bss-base-migration",
@@ -902,6 +916,8 @@
         "risk:assess",
         "device:read",
         "device:write",
+        "entitlement:read",
+        "entitlement:write",
         "migration:read",
         "migration:admin",
         "catalog:approve"
@@ -1083,6 +1099,11 @@
         "payment:read",
         "payment:write"
       ]
+    }, {
+      "username": "service-account-bss-entitlement",
+      "enabled": true,
+      "serviceAccountClientId": "bss-entitlement",
+      "realmRoles": ["catalog:read"]
     },
     {
       "username": "service-account-bss-base-migration",

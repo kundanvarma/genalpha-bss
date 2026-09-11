@@ -42,7 +42,7 @@ DC="docker compose"
 # between a calm fleet and page-cache collapse on a 16-21GB machine.
 OPTIONAL="grafana prometheus mock-llm market-provider-claude mock-whisper
           base-migration device-commerce mock-efaktura mock-digipost
-          mock-avtalegiro mock-legacy"
+          mock-avtalegiro mock-legacy device-entitlement mock-hss mock-ts43-device"
 # (worker-controller is profile-gated already; hermes-image-keeper is not
 #  compose-managed — both handled below where relevant.)
 

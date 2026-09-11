@@ -149,6 +149,27 @@ services:
       OCS_ADMIN_PASSWORD: bss-secret
       OCS_DIAMETER_CLIENTS: 127.0.0.1
       OCS_THRESHOLD_BYTES: "2000000000"
+  # GSMA TS.43 entitlement configuration server (VoLTE/VoWiFi/SMSoIP/eSIM ODSA)
+  device-entitlement:
+    db: device_entitlement
+    dbRole: device_entitlement_app
+    machineIdentity: true
+    extraEnv:
+      OIDC_CLIENT_ID: bss-entitlement
+      OIDC_CLIENT_SECRET: entitlement-secret
+      AUC_BASE_URL: http://mock-hss:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      ENTITLEMENT_PUBLIC_BASE_URL: http://gateway:8080
+  # demo stand-ins for the HSS/AUC and a TS.43 phone (dev only)
+  mock-hss:
+    db: ""
+    healthPath: /health
+    extraEnv: {}
+  mock-ts43-device:
+    db: ""
+    healthPath: /health
+    extraEnv:
+      HSS_BASE_URL: http://mock-hss:8080
   # demo stand-in for the operator's web analytics (GA4 seam)
   mock-analytics:
     db: ""

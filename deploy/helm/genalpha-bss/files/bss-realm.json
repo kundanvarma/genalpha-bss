@@ -327,6 +327,45 @@
     "description": "Run and read TMF696 risk assessments \u2014 a risk score is a credit check, back-office only"
    },
    {
+    "name": "finance-staff",
+    "description": "Finance desk: bills, journal, disputes, dunning, deliveries, unapplied cash",
+    "composite": true,
+    "composites": {
+     "realm": [
+      "billing:admin",
+      "billing:read",
+      "party:read"
+     ]
+    }
+   },
+   {
+    "name": "growth-staff",
+    "description": "Growth (marketing + sales) \u2014 composite of marketing-staff + sales-staff",
+    "composite": true,
+    "composites": {
+     "realm": [
+      "marketing-staff",
+      "sales-staff"
+     ]
+    }
+   },
+   {
+    "name": "ops-staff",
+    "description": "Ops desk: process flows, appointments, porting, knowledge, AI workforce queue",
+    "composite": true,
+    "composites": {
+     "realm": [
+      "ordering:read",
+      "ordering:write",
+      "appointment:admin",
+      "porting:write",
+      "knowledge:write",
+      "workforce:use",
+      "ai:use"
+     ]
+    }
+   },
+   {
     "name": "marketing-staff",
     "description": "Marketing desk: campaigns, journeys, audiences, insight, AI copilot",
     "composite": true,
@@ -349,6 +388,28 @@
       "quote:write"
      ]
     }
+   },
+   {
+    "name": "device:read"
+   },
+   {
+    "name": "device:write"
+   }, {
+     "name": "entitlement:read"
+   }, {
+     "name": "entitlement:write"
+   },
+   {
+    "name": "migration:read"
+   },
+   {
+    "name": "migration:admin"
+   },
+   {
+    "name": "catalog:approve",
+    "description": "May approve, reject and force-launch product offerings (launch governance)",
+    "composite": false,
+    "clientRole": false
    }
   ]
  },
@@ -754,6 +815,38 @@
    "serviceAccountsEnabled": true,
    "standardFlowEnabled": false,
    "directAccessGrantsEnabled": false
+  },
+  {
+   "clientId": "bss-device",
+   "name": "loyalty machine identity (client credentials; dev secret)",
+   "enabled": true,
+   "protocol": "openid-connect",
+   "publicClient": false,
+   "secret": "device-secret",
+   "serviceAccountsEnabled": true,
+   "standardFlowEnabled": false,
+   "directAccessGrantsEnabled": false
+  }, {
+   "clientId": "bss-entitlement",
+   "name": "device-entitlement machine identity (catalog reads, TS.43 ECS)",
+   "enabled": true,
+   "protocol": "openid-connect",
+   "publicClient": false,
+   "secret": "entitlement-secret",
+   "serviceAccountsEnabled": true,
+   "standardFlowEnabled": false,
+   "directAccessGrantsEnabled": false
+  },
+  {
+   "clientId": "bss-base-migration",
+   "name": "loyalty machine identity (client credentials; dev secret)",
+   "enabled": true,
+   "protocol": "openid-connect",
+   "publicClient": false,
+   "secret": "base-migration-secret",
+   "serviceAccountsEnabled": true,
+   "standardFlowEnabled": false,
+   "directAccessGrantsEnabled": false
   }
  ],
  "users": [
@@ -797,7 +890,9 @@
     "usage:read",
     "usage:write",
     "promotion:read",
-    "party:read"
+    "party:read",
+    "service:read",
+    "service:write"
    ]
   },
   {
@@ -875,7 +970,14 @@
     "knowledge:write",
     "insight:read",
     "ai:admin",
-    "risk:assess"
+    "risk:assess",
+    "device:read",
+    "device:write",
+    "entitlement:read",
+    "entitlement:write",
+    "migration:read",
+    "migration:admin",
+    "catalog:approve"
    ],
    "id": "9b308a96-8629-4614-bc67-6dc10db87b53"
   },
@@ -962,7 +1064,8 @@
    "enabled": true,
    "serviceAccountClientId": "bss-payment",
    "realmRoles": [
-    "paymentmethod:read"
+    "paymentmethod:read",
+    "paymentmethod:write"
    ],
    "id": "fa25b513-452f-52be-b0e2-2895de047131"
   },
@@ -1231,6 +1334,24 @@
    ]
   },
   {
+   "id": "4a925214-acd4-4988-992b-02b7e499f746",
+   "username": "dag@elektra.example",
+   "email": "dag@elektra.example",
+   "firstName": "Dag",
+   "lastName": "Elektra",
+   "enabled": true,
+   "emailVerified": true,
+   "credentials": [
+    {
+     "type": "password",
+     "value": "dag"
+    }
+   ],
+   "realmRoles": [
+    "customer"
+   ]
+  },
+  {
    "username": "service-account-bss-usage",
    "enabled": true,
    "serviceAccountClientId": "bss-usage",
@@ -1286,6 +1407,66 @@
    ]
   },
   {
+   "username": "finn@bss.local",
+   "enabled": true,
+   "email": "finn@bss.local",
+   "emailVerified": true,
+   "firstName": "Finn",
+   "lastName": "Finance",
+   "requiredActions": [],
+   "credentials": [
+    {
+     "type": "password",
+     "value": "finn",
+     "temporary": false
+    }
+   ],
+   "id": "c3ae79bd-713f-4d6b-a9d1-3b2e2fccdd62",
+   "realmRoles": [
+    "finance-staff"
+   ]
+  },
+  {
+   "username": "gro@bss.local",
+   "enabled": true,
+   "email": "gro@bss.local",
+   "emailVerified": true,
+   "firstName": "Gro",
+   "lastName": "Growth",
+   "requiredActions": [],
+   "credentials": [
+    {
+     "type": "password",
+     "value": "gro",
+     "temporary": false
+    }
+   ],
+   "id": "3dad4270-4912-4804-bfbd-051a5cd6294e",
+   "realmRoles": [
+    "growth-staff"
+   ]
+  },
+  {
+   "username": "omar@bss.local",
+   "enabled": true,
+   "email": "omar@bss.local",
+   "emailVerified": true,
+   "firstName": "Omar",
+   "lastName": "Ops",
+   "requiredActions": [],
+   "credentials": [
+    {
+     "type": "password",
+     "value": "omar",
+     "temporary": false
+    }
+   ],
+   "id": "4839879d-c707-41a4-b557-2b84632bc05a",
+   "realmRoles": [
+    "ops-staff"
+   ]
+  },
+  {
    "username": "mkt@bss.local",
    "enabled": true,
    "email": "mkt@bss.local",
@@ -1323,6 +1504,32 @@
    "id": "4f19ffd2-225c-472d-98b9-1336c4cc10f6",
    "realmRoles": [
     "sales-staff"
+   ]
+  },
+  {
+   "username": "service-account-bss-device",
+   "enabled": true,
+   "serviceAccountClientId": "bss-device",
+   "realmRoles": [
+    "payment:read",
+    "payment:write"
+   ]
+  }, {
+   "username": "service-account-bss-entitlement",
+   "enabled": true,
+   "serviceAccountClientId": "bss-entitlement",
+   "realmRoles": ["catalog:read"]
+  },
+  {
+   "username": "service-account-bss-base-migration",
+   "enabled": true,
+   "serviceAccountClientId": "bss-base-migration",
+   "realmRoles": [
+    "inventory:read",
+    "party:read",
+    "agreement:read",
+    "ordering:write",
+    "catalog:write"
    ]
   }
  ],

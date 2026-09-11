@@ -819,6 +819,71 @@ services:
       kafka:
         condition: service_started
 
+  # GSMA TS.43 Entitlement Configuration Server as an ODA component: phones
+  # ask it (EAP-AKA against the AUC seam) which services their subscription
+  # entitles them to — VoLTE / VoWiFi / SMSoIP / data plan / eSIM ODSA — and
+  # the answer comes from the catalog and the line's state. :8156 (BSS face
+  # under /tmf-api/deviceEntitlement/v1, device door under /ts43).
+  device-entitlement:
+    build: ./services/device-entitlement
+    container_name: bss-device-entitlement
+    restart: unless-stopped
+    environment:
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      DB_URL: jdbc:postgresql://postgres:5432/device_entitlement
+      DB_USERNAME: device_entitlement_app
+      DB_PASSWORD: device_entitlement_app
+      DB_MIGRATION_USERNAME: postgres
+      DB_MIGRATION_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: bss-entitlement
+      OIDC_CLIENT_SECRET: entitlement-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      # the AUC seam: the operator's HSS/UDM (an MVNO: the host's) — mock-hss in dev
+      AUC_BASE_URL: http://mock-hss:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      # what phones reach: the gateway's /ts43 route
+      ENTITLEMENT_PUBLIC_BASE_URL: http://localhost:8080
+      ENTITLEMENT_SMDP_ADDRESS: rsp.genalpha.example
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+      JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8156:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  # Stands in for the operator's HSS/UDM + AUC: IMSI ↔ ICCID ↔ MSISDN and the
+  # USIM secrets (Milenage vectors for EAP-AKA). :8157. DEV ONLY.
+  mock-hss:
+    build: ./integrations/mock-hss
+    container_name: bss-mock-hss
+    restart: unless-stopped
+    ports:
+      - "8157:8080"
+
+  # A phone's TS.43 entitlement client, simulated: runs the real EAP-AKA relay
+  # against the ECS and reports what it was told. :8158. DEV ONLY (the suite
+  # and the demo drive it; OEM devices do the same thing for real).
+  mock-ts43-device:
+    build: ./integrations/mock-ts43-device
+    container_name: bss-mock-ts43-device
+    restart: unless-stopped
+    environment:
+      HSS_BASE_URL: http://mock-hss:8080
+    ports:
+      - "8158:8080"
+
   device-commerce:
     build: ./services/device-commerce
     container_name: bss-device-commerce
@@ -1735,7 +1800,7 @@ services:
       GOOGLE_API_URL: http://mock-social:8080
       GOOGLE_ACCESS_TOKEN: genalpha-google-token
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
-      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events,bss.device.events,bss.migration.events
+      BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events,bss.device.events,bss.migration.events,bss.entitlement.events
       # the decision log: every service that decides adaptively publishes DecisionRecordedEvent on its own topic
       BSS_INSIGHT_DECISION_TOPICS: bss.campaign.events,bss.intelligence.events
       # signal connectors (SI-P2): secret-ref targets — the desk poll token and
@@ -1819,6 +1884,7 @@ services:
       QUOTE_URL: http://quote:8080
       PORTING_URL: http://porting:8080
       DEVICE_COMMERCE_URL: http://device-commerce:8080
+      DEVICE_ENTITLEMENT_URL: http://device-entitlement:8080
       BASE_MIGRATION_URL: http://base-migration:8080
       POLICY_URL: http://policy:8080
       KNOWLEDGE_URL: http://knowledge:8080

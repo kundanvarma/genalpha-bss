@@ -94,6 +94,7 @@ beside it.</p>
 45. <a href="#usagepolicy">Usage policy — pools, caps &amp; the roaming wall</a><br>
 46. <a href="#norwayrails">Norway rails — registry, directory, credit, bill channels</a><br>
 47. <a href="#ocs">Real-time charging — a real OCS behind the seam</a><br>
+48. <a href="#entitlement">Device entitlements — what the phone may use (GSMA TS.43)</a><br>
 </p>
 </div>
 
@@ -1611,5 +1612,35 @@ lib/ocs-*/priv/bin/data_session.escript --msisdn 4741000001 --imsi 0010011234567
 <p><b>Not here</b>: 5G standalone converged charging (Nchf/CHF) waits for a production-grade CHF —
 the seam is the same, the BSS talks TM Forum to whatever charges; voice/SMS tariffs; a CGRateS adapter
 for VoIP-switch estates (one more adapter in the same registry when a prospect asks).</p>
+<h2 id="entitlement">48 · Device entitlements — what the phone may use (GSMA TS.43)</h2>
+<p><b>What</b>: modern phones ask the operator's <i>Entitlement Configuration Server</i> which services the
+subscription includes — Wi-Fi calling, VoLTE and VoNR, SMS over IP, the data plan, an eSIM for the watch,
+moving the eSIM to a new phone. <code>device-entitlement</code> is that server. The phone proves the SIM
+with EAP-AKA over HTTP (the network's own authentication, relayed to the HSS), keeps a token, and gets
+its answers in TS.43's own words. Suite <a href="../../ops/e2e/device_entitlement_test.js">device_entitlement_test.js</a>
+(#124); seam doc <a href="../entitlement-seam.md">docs/entitlement-seam.md</a>.</p>
+<p><b>The plan decides</b>: a mobile plan's specification carries <code>volte</code>, <code>vonr</code>,
+<code>vowifi</code>, <code>smsoip</code>, <code>companionEsim</code>, <code>esimTransfer</code> and
+<code>dataPlanType</code> (Metered/Unmetered). Change the plan, and every phone on it learns the new answer at
+its next check-in — nothing is copied anywhere. The line's state matters too: a suspended line answers
+"off" for everything until it is resumed; Wi-Fi calling shows "emergency address still needed" until the
+customer completes the little websheet the phone opens (<code>/ts43/flow/vowifi</code>).
+<code>python3 ops/seed/seed_entitlement.py</code> stamps the demo plans and binds the personas' lines to demo
+SIMs (<code>REALM=taranga</code> for Taranga).</p>
+<p><b>Binding a SIM to a line</b>: <code>PUT /tmf-api/deviceEntitlement/v1/subscriber</code> with the IMSI,
+the party, the service and the offering — the activation hook in an operator's flow (a SIM swap re-binds,
+a termination unbinds). The console's <b>Device entitlements</b> page shows each line in words: the plan,
+what the phone may use, the phones that checked in, companion devices, and every request a phone made
+("answered", "SIM challenge sent", "refused").</p>
+<p><b>Try it without a phone</b>: the fleet ships a simulated TS.43 client —
+<code>curl -X POST localhost:8158/simulate -H 'Content-Type: application/json' -d
+'{"ecsUrl":"http://gateway:8080/ts43","imsi":"242050000000001","apps":["ap2003","ap2004","ap2005","ap2010"]}'</code>
+— it runs the real EAP-AKA relay (Milenage, RFC 4187) and prints the entitlement JSON the ECS returned. Add
+<code>"apps":["ap2006"],"operation":"ManageSubscription","operationType":0,"companionTerminalId":"…","companionEid":"…"</code>
+to activate a companion eSIM and receive its SGP.22 activation code.</p>
+<p><b>The honest edge</b>: Apple and Google must point their clients at the operator's ECS and certify it —
+that is the operator's (or the host MNO's) relationship and takes its own time. The server is built to
+pass it; the real HSS/UDM goes behind <code>AUC_BASE_URL</code>; the line-side eSIM swap after a transfer is
+announced on the event bus for the orchestrator to execute.</p>
 </body>
 </html>

@@ -451,6 +451,19 @@ charging path; it references charging from the catalog (`chargingSpecId`) and
 provisions it, fail-open. Suite #123 `sigscale_ocs_test` drives a real Gy
 credit-control session. Detail: `docs/ocs-seam.md`.
 
+**The phone asks the BSS what it may use.** `device-entitlement` (`:8156`) is a
+GSMA TS.43 Entitlement Configuration Server as an ODA component. Its device door
+(`/ts43`, through the gateway, anonymous at HTTP level) authenticates the SIM
+with EAP-AKA relayed over HTTP against the **AUC seam** (`AucClient` → the
+operator's HSS/UDM adapter; `mock-hss` in dev) and answers per TS.43 app id —
+VoLTE/VoNR, Wi-Fi calling (with the emergency-address service flow), SMS over
+IP, data plan, and eSIM ODSA for companion and primary devices — from the plan's
+product specification and the line's state (followed from `bss.som.events`).
+Its BSS face (`/tmf-api/deviceEntitlement/v1`) binds IMSIs to lines and explains
+entitlements in words. Events: `bss.entitlement.events`. Suite #124
+`device_entitlement_test` drives a real TS.43 client (`mock-ts43-device`,
+Milenage USIM) through the relay. Detail: `docs/entitlement-seam.md`.
+
 ## 5. Cloud deployment view — proven on both AWS and Azure
 
 The same Helm chart deploys the whole fleet; only the *substrate* differs, and it slots in

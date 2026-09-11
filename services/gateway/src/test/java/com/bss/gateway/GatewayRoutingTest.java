@@ -62,7 +62,7 @@ class GatewayRoutingTest {
                 "trouble-ticket", "party-interaction", "communication", "communication-esp", "shopping-cart",
                 "usage", "loyalty", "agreement", "promotion", "campaign", "intelligence", "revenue",
                 "process", "sla", "incident-face", "event-hub", "fulfilment", "product-advisor", "quote",
-                "sales", "porting", "device-commerce", "base-migration", "policy", "knowledge", "insight",
+                "sales", "porting", "device-commerce", "device-entitlement", "ts43", "base-migration", "policy", "knowledge", "insight",
                 "flow", "user-roles", "operator-onboarding", "geographic-address", "document",
                 "recommendation", "payment-method", "service-orchestration", "som-sonata-provider",
                 "dealer-channel", "telesales-confirm", "privacy", "assurance", "csr-console",

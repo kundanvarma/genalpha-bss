@@ -162,6 +162,14 @@ article("Journeys and campaigns", PO, ["pane:journeys", "pane:campaigns", "marke
 article("Audiences and consent", PO, ["pane:audience-builder", "pane:audiences", "marketing"], "Marketing how-to", """
 Audiences are built from traits the event bus fills (plan, usage, tenure, sentiment). Marketing consent is enforced at send time, not at build time. Prospects (imported) need documented consent before reach. Activation to Meta/Google sends hashed identifiers only.
 """)
+article("Device entitlements: what a phone may use", PO, ["pane:device-entitlements", "operations", "network"], "Operations how-to", """
+Phones ask this server what their subscription includes — Wi-Fi calling, VoLTE, an eSIM for the watch. The plan decides; the SIM proves itself.
+• Lines: one row per mobile line the server knows. Open a line to see what its phone may use, in words: on, off, being set up, "on — emergency address still needed", allowed or not on this plan.
+• Phones that checked in: the model, when it was last seen, and whether it registered for push. A phone without push cannot be nudged — it will only learn of a change the next time it asks.
+• Watches and tablets: companion eSIMs that share the line, with their status.
+• Recent requests from phones: what each phone asked for and how the server answered. "SIM challenge sent" is normal — the phone proves it holds the SIM before it is told anything. "Refused" means the network knows the SIM but the BSS has not bound it to a line — a provisioning gap to close, not a phone fault.
+• Ask the phone to refresh: after a plan change, tell the phones on the line to fetch their entitlements again instead of waiting for the next check-in.
+""")
 
 # =====================================================================================
 # CSRs — the agent desk (audience csr)

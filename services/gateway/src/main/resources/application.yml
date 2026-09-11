@@ -243,6 +243,15 @@ spring:
           uri: ${DEVICE_COMMERCE_URL:http://localhost:8145}
           predicates:
             - Path=/tmf-api/deviceCommerce/**
+        - id: device-entitlement
+          uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
+          predicates:
+            - Path=/tmf-api/deviceEntitlement/**
+        # GSMA TS.43: the door phones knock on (EAP-AKA / ECS token, no BSS login)
+        - id: ts43
+          uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
+          predicates:
+            - Path=/ts43/**
         - id: base-migration
           uri: ${BASE_MIGRATION_URL:http://localhost:8146}
           predicates:
