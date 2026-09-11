@@ -7180,8 +7180,38 @@ async function renderDeskLearning() {
   for (const sg of live) {
     const card = document.createElement('div');
     card.style.cssText = 'border:1px solid var(--line,#e5e5ea);border-radius:8px;padding:.8rem 1rem;display:grid;gap:.4rem;background:#fff';
-    const t = document.createElement('strong'); t.textContent = sg.title; card.append(t);
-    const ev = document.createElement('div'); ev.className = 'dim'; ev.textContent = sg.evidence; card.append(ev);
+    // the server speaks in keys (page paths, field names); this desk knows the words people see
+    const pageOf = (path) => RESOURCES.find((r) => r.path === path);
+    const pageName = (path) => (pageOf(path) || {}).title || path;
+    const fieldName = (path, name) => { const f = ((pageOf(path) || {}).fields || []).find((x) => x.name === name); return f ? f.label.replace(/\s*\(.*$/, '') : name; };
+    let title = sg.title, evidence = sg.evidence;
+    if (sg.form && sg.kind === 'preset') {
+      title = `Save a preset for the ${pageName(sg.form)} form`;
+      evidence = `${sg.count} submissions in 7 days shared the same ${(sg.fields || []).map((f) => fieldName(sg.form, f)).join(', ')} — one click would prefill them.`;
+    } else if (sg.form && sg.kind === 'abandon') {
+      title = `People start the ${pageName(sg.form)} form and leave`;
+      evidence = `${sg.count} abandoned starts; most stop at "${fieldName(sg.form, sg.stopField)}". A default, a hint or a preset there would help.`;
+    } else if (sg.form && sg.kind === 'rewrite') {
+      title = `Copilot drafts for ${pageName(sg.form)} are rewritten before use`;
+    }
+    const t = document.createElement('strong'); t.textContent = title; card.append(t);
+    const ev = document.createElement('div'); ev.className = 'dim'; ev.textContent = evidence; card.append(ev);
+    if (Array.isArray(sg.features) && sg.features.length) {
+      // the server knows pages by their keys; this desk knows their names — say the names,
+      // and let one click open the page (its goal line and ? drawer say what it is for)
+      const named = sg.features.map((p) => RESOURCES.find((r) => r.path === p)).filter(Boolean);
+      const shown = named.slice(0, 8);
+      ev.textContent = `In ${sg.actions} desk actions by ${sg.people === 1 ? 'one person' : sg.people + ' people'} this week, ${sg.opened} pages were used and these ${sg.features.length} never. `
+        + 'Open one to see what it is for — every page has a goal line and a ? help drawer.';
+      const links = document.createElement('div'); links.style.cssText = 'display:flex;flex-wrap:wrap;gap:.3rem';
+      for (const r of shown) {
+        const b = document.createElement('button'); b.className = 'ghost small'; b.textContent = r.title; b.title = `Open ${r.title}`;
+        b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
+        links.append(b);
+      }
+      if (named.length > shown.length) { const more = document.createElement('span'); more.className = 'dim'; more.style.alignSelf = 'center'; more.textContent = `and ${named.length - shown.length} more`; links.append(more); }
+      card.append(links);
+    }
     const who = document.createElement('span'); who.className = 'pill'; who.textContent = sg.audience === 'vendor' ? 'for the product team' : 'for this desk'; who.style.cssText = 'font-size:.75rem;justify-self:start'; card.append(who);
     const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:.5rem';
     if (sg.action) {
@@ -7215,7 +7245,7 @@ async function renderDeskLearning() {
       stat('forms abandoned', (friction.abandonedForms || []).reduce((n, x) => n + (x.count || 0), 0)),
       stat('empty searches', (friction.emptySearches || []).reduce((n, x) => n + (x.count || 0), 0)),
       stat('copilot drafts rewritten', (friction.copilotRewrites || []).reduce((n, x) => n + (x.count || 0), 0)),
-      stat('features never opened', (friction.unusedFeatures || []).length));
+      stat('pages nobody opened', (friction.unusedFeatures || []).length));
     panel.append(grid);
     const exp = document.createElement('button'); exp.className = 'ghost small'; exp.textContent = 'Copy the anonymised report for the product team';
     exp.style.justifySelf = 'start';

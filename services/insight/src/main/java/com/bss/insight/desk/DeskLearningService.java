@@ -184,9 +184,14 @@ public class DeskLearningService {
             if (common == null || common.isEmpty()) {
                 continue;
             }
-            out.add(suggestion("preset", str(r.get("form")), "Save a preset for the " + r.get("form") + " form",
+            Map<String, Object> s = suggestion("preset", str(r.get("form")), "Save a preset for the " + r.get("form") + " form",
                     r.get("count") + " submissions in 7 days shared the same " + common.keySet() + " — one click would prefill them.",
-                    "operator", Map.of("kind", "preset", "desk", str(r.get("desk")), "form", str(r.get("form")), "values", common), quiet));
+                    "operator", Map.of("kind", "preset", "desk", str(r.get("desk")), "form", str(r.get("form")), "values", common), quiet);
+            // structured facts beside the sentence, so a desk can say them in its own words (page titles, field labels)
+            s.put("form", str(r.get("form")));
+            s.put("fields", new ArrayList<>(common.keySet()));
+            s.put("count", r.get("count"));
+            out.add(s);
         }
         for (Map<String, Object> j : a.noHoldout) {
             out.add(suggestion("holdout", str(j.get("journeyId")), "Add a holdout to the journey \"" + j.get("name") + "\"",
@@ -197,9 +202,13 @@ public class DeskLearningService {
         }
         for (Map<String, Object> ab : a.abandoned) {
             if ((int) ab.get("count") >= 2) {
-                out.add(suggestion("abandon", str(ab.get("form")), "People start the " + ab.get("form") + " form and leave",
+                Map<String, Object> s = suggestion("abandon", str(ab.get("form")), "People start the " + ab.get("form") + " form and leave",
                         ab.get("count") + " abandoned starts; most stop at \"" + ab.getOrDefault("stopField", "?") + "\". "
-                                + "A default, a hint or a preset there would help.", "vendor", null, quiet));
+                                + "A default, a hint or a preset there would help.", "vendor", null, quiet);
+                s.put("form", str(ab.get("form")));
+                s.put("stopField", str(ab.getOrDefault("stopField", "")));
+                s.put("count", ab.get("count"));
+                out.add(s);
             }
         }
         for (Map<String, Object> s : a.emptySearches) {
@@ -211,18 +220,35 @@ public class DeskLearningService {
         }
         for (Map<String, Object> rw : a.rewrites) {
             if ((int) rw.get("count") >= 2) {
-                out.add(suggestion("rewrite", str(rw.get("form")), "Copilot drafts for " + rw.get("form") + " are rewritten before use",
+                Map<String, Object> s = suggestion("rewrite", str(rw.get("form")), "Copilot drafts for " + rw.get("form") + " are rewritten before use",
                         rw.get("count") + " drafts changed by more than half. The prompt or its defaults are off for this tenant.",
-                        "vendor", null, quiet));
+                        "vendor", null, quiet);
+                s.put("form", str(rw.get("form")));
+                s.put("count", rw.get("count"));
+                out.add(s);
             }
         }
-        if (!a.unused.isEmpty()) {
-            out.add(suggestion("unused", "features", a.unused.size() + " features were never opened this week",
-                    String.join(", ", a.unused.stream().limit(8).toList()) + (a.unused.size() > 8 ? ", …" : "")
-                            + ". Either hide them for this desk or show what they are for.", "vendor", null, quiet));
+        // "never opened" only means something once the desk has been used: a week of
+        // one person poking at a few tabs says nothing about the other fifty pages
+        int people = all.stream().map(DeskEvent::getActorHash).collect(Collectors.toSet()).size();
+        if (!a.unused.isEmpty() && all.size() >= UNUSED_MIN_ACTIONS && a.opened >= UNUSED_MIN_OPENED) {
+            Map<String, Object> s = suggestion("unused", "features", a.unused.size() + " pages nobody opened this week",
+                    "In " + all.size() + " desk actions by " + people + (people == 1 ? " person" : " people") + ", "
+                            + a.opened + " pages were used and these never: "
+                            + String.join(", ", a.unused.stream().limit(8).toList()) + (a.unused.size() > 8 ? ", …" : "")
+                            + ". Open one to see what it is for, or tell us if this desk never needs it.", "vendor", null, quiet);
+            s.put("features", a.unused);
+            s.put("opened", a.opened);
+            s.put("actions", all.size());
+            s.put("people", people);
+            out.add(s);
         }
         return out;
     }
+
+    /** The desk must have seen this much use before "never opened" is a suggestion rather than an echo of a quiet week. */
+    static final int UNUSED_MIN_ACTIONS = 50;
+    static final int UNUSED_MIN_OPENED = 5;
 
     @Transactional
     public Map<String, Object> decide(String suggestionId, String decision) {
@@ -309,6 +335,7 @@ public class DeskLearningService {
         List<Map<String, Object>> rewrites = new ArrayList<>();
         List<Map<String, Object>> noHoldout = new ArrayList<>();
         List<String> unused = new ArrayList<>();
+        int opened;
     }
 
     @SuppressWarnings("unchecked")
@@ -391,6 +418,7 @@ public class DeskLearningService {
         emptyQueries.forEach((q, c) -> { if (!q.isBlank()) a.emptySearches.add(Map.of("query", q, "count", c)); });
         rewriteByForm.forEach((f, c) -> a.rewrites.add(Map.of("form", f, "count", c)));
         a.unused = tabs.stream().filter(t -> !opened.contains(t)).toList();
+        a.opened = opened.size();
         return a;
     }
 

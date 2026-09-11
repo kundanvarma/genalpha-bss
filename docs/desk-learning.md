@@ -46,7 +46,7 @@ holdout.
 | abandon | 2+ abandoned starts of a form | evidence for the product team, with the stop field |
 | search | the same empty query 2+ times | add an article, an alias or a filter |
 | rewrite | 2+ copilot drafts changed by more than half | the prompt or its defaults are off for this tenant |
-| unused | tabs never opened this week | hide them or explain them |
+| unused | pages nobody opened this week — only once the desk has seen real use (50+ actions, 5+ pages opened), so a quiet demo week is not a suggestion | the card names the pages (the desk maps keys to titles) and opens one on click: its goal line and ? drawer say what it is for |
 
 Accepted and dismissed suggestions are remembered for 30 days.
 
