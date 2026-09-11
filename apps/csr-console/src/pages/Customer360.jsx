@@ -12,6 +12,8 @@ import { aiCustomerSummary, appointmentsOf, billsOf, cartsOf, createTicket, getC
   patchSpendPolicy, poolsOf, runRegistrySync, saveDirectorySetting,
   spendPoliciesOf } from '../api.js';
 import TicketCard from './TicketCard.jsx';
+import Assist from './Assist.jsx';
+import { rememberRecent } from './Customers.jsx';
 import { GenAlpha } from '../sdk/genalpha-sdk.js';
 import { hasRole, currentTokenValue } from '../auth.js';
 
@@ -86,6 +88,8 @@ export default function Customer360() {
   const [dirDraft, setDirDraft] = useState({ serviceRef: '', exposure: 'partial', secretNumber: false });
   const [nbo, setNbo] = useState(null); // null | 'loading' | {summary, nextActions}
   const [puks, setPuks] = useState({}); // serviceId -> revealed PUK
+  const [allOrders, setAllOrders] = useState(false);
+  const [version, setVersion] = useState(0); // bumps after every action so Assist re-reads the customer
 
   async function summarize() {
     setCopilot('loading');
@@ -112,7 +116,7 @@ export default function Customer360() {
   }
 
   const reload = () => {
-    getCustomer(id).then(setCustomer).catch((e) => setError(e.message));
+    getCustomer(id).then((c) => { setCustomer(c); rememberRecent(c); }).catch((e) => setError(e.message));
     ordersOf(id).then(setOrders).catch(() => {});
     productsOf(id).then(setProducts).catch(() => {});
     billsOf(id).then(setBills).catch(() => {});
@@ -163,6 +167,7 @@ export default function Customer360() {
       setError(null);
       await fn();
       reload();
+      setVersion((v) => v + 1);
     } catch (e) {
       setError(e.message);
     }
@@ -172,6 +177,10 @@ export default function Customer360() {
   // rendered or recorded — the notice replaces the field, not just hides it
   const addressProtected = customer.addressProtected === true;
   const showableAddress = !addressProtected && address && address.street1 ? address : null;
+
+
+  const openTickets = tickets.filter((t) => t.status !== 'closed' && t.status !== 'resolved');
+  const liveOrders = orders.filter((o) => !['completed', 'cancelled', 'rejected', 'failed'].includes(o.state));
 
   return (
     <>
@@ -195,7 +204,8 @@ export default function Customer360() {
       <p className="dim small">
         {email || <span title={customer.id}>{customer.id.slice(0, 8)}…</span>}
         {numbers.length > 0 && <> · <span data-testid="cust-numbers">
-          📞 {numbers.map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
+          📞 {numbers.slice(0, 6).map((n) => <span key={n} className="msisdn" style={{ marginRight: 6 }}>{n}</span>)}
+          {numbers.length > 6 && <span className="dim">+{numbers.length - 6} more below</span>}
         </span></>}
         {showableAddress && <> · {showableAddress.street1}, {showableAddress.postCode} {showableAddress.city}</>}
         {!addressProtected && registered && <span className="ok" data-testid="registered-hint"> · ✓ registered address on file</span>}
@@ -216,111 +226,42 @@ export default function Customer360() {
             </span>
           )}</>
         )}</p>
-      {error && <p className="error">{error}</p>}
 
-      <section className="copilot" data-testid="nbo-card">
-        {!nbo && hasRole('ai:use') && (
-          <button className="ghost" data-testid="nbo-ask" onClick={async () => {
-            setNbo('loading');
-            try { setNbo(await aiNextBestOffer(id)); } catch (e) { setNbo({ reason: e.message }); }
-          }}>
-            🎯 Next best offer
-          </button>
-        )}
-        {nbo === 'loading' && <p className="dim small">Weighing the shelf against this customer…</p>}
-        {nbo && nbo !== 'loading' && (
-          <p data-testid="nbo-answer">
-            {nbo.offer ? <strong>{nbo.offer.name}</strong> : null} <span className="dim">{nbo.reason}</span>
-            {nbo.offer && (
-              <>
-                {' '}
-                <button className="ghost" data-testid="nbo-send"
-                        onClick={() => act(() => sendOffer(id, nbo.offer, 'Your agent'))}>
-                  Send offer
-                </button>
-                {hasRole('ordering:write') && (
-                  <button className="ghost" data-testid="nbo-order"
-                          onClick={() => act(() => orderForCustomer(id, nbo.offer))}>
-                    Order now
-                  </button>
-                )}
-              </>
-            )}
-          </p>
-        )}
-      </section>
-
-      <section className="copilot" data-testid="copilot-card">
-        {!copilot && hasRole('ai:use') && (
-          <button className="ghost" data-testid="copilot-summarize" onClick={summarize}>
-            ✨ Summarize this customer
-          </button>
-        )}
-        {copilot === 'loading' && <p className="dim small">Copilot is reading the 360…</p>}
-        {copilot && copilot !== 'loading' && (
-          <>
-            <p data-testid="copilot-summary">{copilot.summary}</p>
-            <ul className="small">
-              {copilot.nextActions.map((a, i) => <li key={i}>{a}</li>)}
-            </ul>
-            <p className="dim small">Drafted by {copilot.provider} ({copilot.model}) — verify before acting.</p>
-          </>
-        )}
-      </section>
-
-      <div className="col2">
-        <section>
-          <h2>Orders{!orders.length && <None />}</h2>
-          <div className="rows">
-            {orders.map((o) => {
-              const leaves = orderLeaves(o.productOrderItem);
-              const multi = leaves.length > 1;
-              const doneCount = leaves.filter((l) => l.state === 'completed').length;
-              return (
-              <div className="row" key={o.id}>
-                <div>
-                  <strong>{o.description || o.id}</strong>
-                  <div className="dim small">{dt(o.orderDate)}
-                    {multi && o.state === 'partiallyCompleted'
-                      && <> · {doneCount}/{leaves.length} components ready</>}</div>
-                  {multi && (
-                    <ul className="ordercomponents" data-testid="order-components">
-                      {leaves.map((l, i) => {
-                        const rel = (l.orderItemRelationship || [])
-                          .find((r) => r.relationshipType === 'reliesOn');
-                        const base = rel && leaves.find((x) => x.id === rel.id);
-                        const waiting = base && base.state !== 'completed' && l.state !== 'completed';
-                        return (
-                          <li key={l.id || i}>
-                            <span className="ocfam">{FAMILY_ICON[familyOf(l)] || '•'}</span>
-                            <span className="ocname">{l.productOffering?.name || 'component'}</span>
-                            <span className={`ocstate ${l.state}`}>{leafGlyph(l.state)} {l.state}
-                              {waiting && <span className="dim"> · waiting on {familyOf(base) === 'internet'
-                                ? 'broadband' : (base.productOffering?.name || 'base')}</span>}</span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
-                <div className="rowend">
-                  <span className={`state ${o.state}`}>{o.state}</span>
-                  {o.state === 'acknowledged' && hasRole('ordering:write') && (
-                    <>
-                      <button className="ghost" onClick={() => act(() => patchOrder(o.id, { state: 'completed' }))}>
-                        Complete
-                      </button>
-                      <button className="ghost danger" onClick={() => act(() => patchOrder(o.id, { state: 'cancelled' }))}>
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                </div>
+      {/* ---- the cockpit: what matters now first, everything else one glance down, never hidden if it warns ---- */}
+      <div className="cockpit" data-testid="cockpit">
+        <div className="cockpit-main">
+          <div className="zone" data-testid="zone-now">
+            <div className="now">
+              <div className="now-card" data-testid="now-tickets">
+                <div className="assist-label">Open tickets</div>
+                {openTickets.length ? openTickets.slice(0, 2).map((t) => (
+                  <p key={t.id} className="small"><strong>{t.name}</strong> <span className={`state ${t.status}`}>{t.status}</span></p>
+                )) : <p className="dim small">None open</p>}
+                {openTickets.length > 2 && <p className="dim small">+{openTickets.length - 2} more below</p>}
               </div>
-              );
-            })}
-                      </div>
+              <div className="now-card" data-testid="now-orders">
+                <div className="assist-label">Orders in flight</div>
+                {liveOrders.length ? liveOrders.slice(0, 2).map((o) => (
+                  <p key={o.id} className="small"><strong>{o.description || o.id.slice(0, 8)}</strong> <span className={`state ${o.state}`}>{o.state}</span></p>
+                )) : <p className="dim small">Nothing in progress</p>}
+              </div>
+              <div className="now-card" data-testid="now-contact">
+                <div className="assist-label">Last contact</div>
+                {interactions[0] ? (
+                  <p className="small">{interactions[0].description || interactions[0].reason}<br />
+                    <span className="dim">{chan(interactions[0].channel)} · {dt(interactions[0].interactionDate)}</span></p>
+                ) : <p className="dim small">No contact logged</p>}
+              </div>
+            </div>
+          </div>
 
+          <div className="zone" data-testid="zone-lines">
+            <p className="zone-note">
+              {activeServices.length} line{activeServices.length === 1 ? '' : 's'}
+              {activeServices.length > 0 && <> · {activeServices.filter((s) => s.state === 'active').length} active</>}
+              {activeServices.some((s) => s.state === 'suspended') && <span className="error"> · {activeServices.filter((s) => s.state === 'suspended').length} paused</span>}
+              {usage.some((b) => b.allowedValue != null && Number(b.usedValue) > Number(b.allowedValue)) && <span className="error"> · over allowance</span>}
+            </p>
           <h2>Services{!products.length && !activeServices.length && <None />}</h2>
           <div className="rows">
             {products.map((p) => (
@@ -434,28 +375,6 @@ export default function Customer360() {
                     Diagnose
                   </button>
                   {sv.state === 'active' && (
-                    <button className="ghost" data-testid="csr-transfer-service"
-                        title="Move this line to another person — number, SIM and usage go with it"
-                        onClick={() => {
-                          const q = window.prompt('Transfer this line to whom? (name or email)');
-                          if (!q) return;
-                          act(async () => {
-                            const hits = await findCustomerByEmail(q.trim());
-                            if (!hits.length) throw new Error(`No customer matches "${q}".`);
-                            const target = hits[0];
-                            if (!window.confirm(`Transfer ${sv.supportingResource[0].value} to ${target.givenName} ${target.familyName}?`)) return;
-                            await transferService(sv.id, target.id);
-                            await logInteraction({
-                              description: `Line ${sv.supportingResource[0].value} transferred to ${target.givenName} ${target.familyName}`,
-                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
-                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
-                            });
-                          });
-                        }}>
-                      Transfer
-                    </button>
-                  )}
-                  {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-pause-service"
                         title="Vacation hold: charging pauses, number and SIM stay — lifts itself after the agreed days"
                         onClick={() => {
@@ -481,23 +400,6 @@ export default function Customer360() {
                     </button>
                   )}
                   {sv.state === 'active' && (
-                    <button className="ghost" data-testid="csr-change-number"
-                        title="New number on the same line — the old one is quarantined; the customer is notified"
-                        onClick={() => {
-                          if (!window.confirm(`Give ${sv.supportingResource[0].value} a NEW number? The old one stops working immediately.`)) return;
-                          act(async () => {
-                            const done = await changeNumber(sv.id);
-                            await logInteraction({
-                              description: `Number changed on request: ${done.oldNumber} → ${done.number}`,
-                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
-                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
-                            });
-                          });
-                        }}>
-                      Change number
-                    </button>
-                  )}
-                  {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-replace-sim"
                         title="Block the old card at the network and issue a new one — the number stays; the customer is notified"
                         onClick={() => {
@@ -519,6 +421,49 @@ export default function Customer360() {
                     </button>
                   )}
                   {sv.state === 'active' && (
+                    <details className="more" data-testid="csr-more-actions">
+                      <summary className="ghost">More…</summary>
+                      <span className="more-actions">
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-transfer-service"
+                        title="Move this line to another person — number, SIM and usage go with it"
+                        onClick={() => {
+                          const q = window.prompt('Transfer this line to whom? (name or email)');
+                          if (!q) return;
+                          act(async () => {
+                            const hits = await findCustomerByEmail(q.trim());
+                            if (!hits.length) throw new Error(`No customer matches "${q}".`);
+                            const target = hits[0];
+                            if (!window.confirm(`Transfer ${sv.supportingResource[0].value} to ${target.givenName} ${target.familyName}?`)) return;
+                            await transferService(sv.id, target.id);
+                            await logInteraction({
+                              description: `Line ${sv.supportingResource[0].value} transferred to ${target.givenName} ${target.familyName}`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Transfer
+                    </button>
+                  )}
+                  {sv.state === 'active' && (
+                    <button className="ghost" data-testid="csr-change-number"
+                        title="New number on the same line — the old one is quarantined; the customer is notified"
+                        onClick={() => {
+                          if (!window.confirm(`Give ${sv.supportingResource[0].value} a NEW number? The old one stops working immediately.`)) return;
+                          act(async () => {
+                            const done = await changeNumber(sv.id);
+                            await logInteraction({
+                              description: `Number changed on request: ${done.oldNumber} → ${done.number}`,
+                              channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Change number
+                    </button>
+                  )}
+                  {sv.state === 'active' && (
                     <button className="ghost" data-testid="csr-reset-pin"
                         title="Push a new PIN to the card over the air — the customer is notified"
                         onClick={() => {
@@ -527,6 +472,9 @@ export default function Customer360() {
                         }}>
                       Reset PIN
                     </button>
+                  )}
+                      </span>
+                    </details>
                   )}
                   {sv.state === 'active' && hasRole('service:write') && (
                     <button className="ghost danger" data-testid="cease-service"
@@ -549,31 +497,9 @@ export default function Customer360() {
               ))}
             </div>
           )}
+          </div>
 
-          <h2>Number porting{!portingOrders.length && <None />}</h2>
-          <div className="rows" data-testid="porting-card">
-            {portingOrders.map((po) => (
-              <div className="row" key={po.id}>
-                <div>
-                  <span className="msisdn">{po.phoneNumber}</span>
-                  <div className="dim small">
-                    {po.direction === 'portOut' ? 'Port-out to' : 'Port-in from'} {po.otherOperator || '—'}
-                    {' · '}{po.country}
-                  </div>
-                </div>
-                <div className="rowend">
-                  <span className={`state ${po.status}`}>{po.status}</span>
-                  {po.status === 'scheduled' && hasRole('porting:write') && (
-                    <button className="ghost" data-testid="complete-cutover"
-                            onClick={() => act(() => completeCutover(po.id))}>
-                      Complete cutover
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-                      </div>
-
+          <div className="zone" data-testid="zone-money">
           <h2>Usage this month{!usage.length && <None />}</h2>
           <div className="rows" data-testid="usage-card">
             {usage.map((b, i) => (
@@ -586,104 +512,6 @@ export default function Customer360() {
               </div>
             ))}
                       </div>
-
-          <h2>Spend &amp; roaming policies{!spendPolicies.length && <None />}</h2>
-          <div className="rows" data-testid="policy-card">
-            {spendPolicies.map((m) => (
-              <div className="row" key={m.meterType} data-testid={`policy-${m.meterType}`}>
-                <div>
-                  <strong>{{ spend: 'Spend cap', content: 'Content services', roaming: 'Roaming limit' }[m.meterType] || m.meterType}</strong>
-                  <div className="dim small">
-                    {m.limit ? `limit ${m.limit.value} ${m.limit.unit}` : 'no limit set'}
-                    {m.accrued ? ` · used ${m.accrued.value} ${m.accrued.unit}` : ''}
-                    {m.notifyAtPct != null ? ` · warns at ${m.notifyAtPct}%` : ''}
-                    {m.blockOnBreach ? ' · blocks on breach' : ''}
-                  </div>
-                </div>
-                <div className="rowend">
-                  {m.barred === true && <span className="state cancelled">barred</span>}
-                  {m.blocked === true && <span className="state cancelled">blocked</span>}
-                  {m.continueElected === true && <span className="state active">continue elected</span>}
-                  <span className={`state ${m.enabled ? 'active' : ''}`}>{m.enabled ? 'on' : 'off'}</span>
-                  {hasRole('usage:read') && ['roaming', 'content', 'spend'].includes(m.meterType) && (
-                    <button className="ghost" data-testid={`policy-limit-${m.meterType}`}
-                        title="Adjust the limit with the customer's say-so on the line (statutory floors apply)"
-                        onClick={() => {
-                          const v = window.prompt(`New ${m.meterType} limit (${m.limit?.unit || 'per cycle'}):`,
-                            m.limit ? String(m.limit.value) : '');
-                          if (!v) return;
-                          act(async () => {
-                            await patchSpendPolicy(id, m.meterType, { limit: Number(v), enabled: true });
-                            await logInteraction({
-                              description: `${m.meterType} limit set to ${v} on request`,
-                              channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
-                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
-                            });
-                          });
-                        }}>
-                      Set limit
-                    </button>
-                  )}
-                  {hasRole('usage:read') && m.meterType === 'content' && (
-                    <button className="ghost" data-testid="policy-bar-toggle"
-                        title="Content-service barring is free and always available; a minor's barring only a guardian or staff lifts"
-                        onClick={() => act(async () => {
-                          await patchSpendPolicy(id, 'content', { barred: !m.barred });
-                          await logInteraction({
-                            description: `Content-services barring ${m.barred ? 'lifted' : 'applied'} on request`,
-                            channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
-                            relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
-                          });
-                        })}>
-                      {m.barred ? 'Lift barring' : 'Bar content'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-                      </div>
-
-          <h2>Household pool{!pools.length && <None />}</h2>
-          <div className="rows" data-testid="pool-card">
-            {pools.map((p) => {
-              const mine = (p.member || []).find((mb) => mb.partyId === id);
-              return (
-                <div className="row" key={p.id} data-testid="pool-row">
-                  <div>
-                    <strong>{p.name}</strong>
-                    <div className="dim small">
-                      {p.ownerPartyId === id ? 'owner' : 'member'}
-                      {p.remainingGB != null ? ` · ${p.remainingGB} of ${p.poolGB} ${p.units || 'GB'} left` : ''}
-                      {mine && mine.consumedGB != null ? ` · this customer used ${mine.consumedGB}` : ''}
-                      {mine && mine.softLimitGB != null ? ` · soft cap ${mine.softLimitGB}` : ''}
-                      {mine && mine.hardLimitGB != null ? ` · hard cap ${mine.hardLimitGB}` : ''}
-                    </div>
-                  </div>
-                  <span className={`state ${p.status}`}>{p.status}</span>
-                </div>
-              );
-            })}
-                      </div>
-
-          <h2>Auto top-up{(!autoTopup || !autoTopup.enabled) && <None />}</h2>
-          <div className="rows" data-testid="autotopup-card">
-            {autoTopup && autoTopup.enabled ? (
-              <div className="row">
-                <div>
-                  <strong>Auto top-up on</strong>
-                  <div className="dim small">
-                    boost {autoTopup.boostOfferingId || '—'} · trigger {autoTopup.trigger || 'depletion'}
-                    {autoTopup.triggerPct != null ? ` at ${autoTopup.triggerPct}%` : ''}
-                    {autoTopup.maxBoostsPerCycle != null ? ` · max ${autoTopup.maxBoostsPerCycle}/cycle` : ''}
-                    {autoTopup.consentAt ? ` · consented ${String(autoTopup.consentAt).slice(0, 10)}` : ''}
-                  </div>
-                </div>
-                <span className="state active">enabled</span>
-              </div>
-            ) : (
-              <p className="dim small">Off — it only ever turns on with the customer's recorded consent.</p>
-            )}
-          </div>
 
           <h2>Agreements{!agreements.length && <None />}</h2>
           <div className="rows" data-testid="agreements-card">
@@ -808,6 +636,243 @@ export default function Customer360() {
             ))}
                       </div>
 
+          <h2>Promotions &amp; payment{!redemptions.length && !methods.length && <None />}</h2>
+          <div className="rows" data-testid="promo-vault-card">
+            {redemptions.map((r) => (
+              <div className="row" key={r.id}>
+                <span>Promo <strong>{r.code}</strong> — {r.name}</span>
+                <span className="dim">−{r.percentage}%</span>
+              </div>
+            ))}
+            {methods.map((m) => (
+              <div className="row" key={m.id}>
+                <span>{m.details.brand} •••• {m.details.lastFourDigits}
+                  <span className="dim small"> exp {m.details.expiry}</span></span>
+                <button className="ghost danger"
+                        onClick={() => act(() => revokePaymentMethod(m.id))}>Revoke</button>
+              </div>
+            ))}
+            {!redemptions.length && !methods.length
+              && <p className="dim small">No promotions or saved cards.</p>}
+          </div>
+
+{spendPolicies.length > 0 && (<>
+          <h2>Spend &amp; roaming policies{!spendPolicies.length && <None />}</h2>
+          <div className="rows" data-testid="policy-card">
+            {spendPolicies.map((m) => (
+              <div className="row" key={m.meterType} data-testid={`policy-${m.meterType}`}>
+                <div>
+                  <strong>{{ spend: 'Spend cap', content: 'Content services', roaming: 'Roaming limit' }[m.meterType] || m.meterType}</strong>
+                  <div className="dim small">
+                    {m.limit ? `limit ${m.limit.value} ${m.limit.unit}` : 'no limit set'}
+                    {m.accrued ? ` · used ${m.accrued.value} ${m.accrued.unit}` : ''}
+                    {m.notifyAtPct != null ? ` · warns at ${m.notifyAtPct}%` : ''}
+                    {m.blockOnBreach ? ' · blocks on breach' : ''}
+                  </div>
+                </div>
+                <div className="rowend">
+                  {m.barred === true && <span className="state cancelled">barred</span>}
+                  {m.blocked === true && <span className="state cancelled">blocked</span>}
+                  {m.continueElected === true && <span className="state active">continue elected</span>}
+                  <span className={`state ${m.enabled ? 'active' : ''}`}>{m.enabled ? 'on' : 'off'}</span>
+                  {hasRole('usage:read') && ['roaming', 'content', 'spend'].includes(m.meterType) && (
+                    <button className="ghost" data-testid={`policy-limit-${m.meterType}`}
+                        title="Adjust the limit with the customer's say-so on the line (statutory floors apply)"
+                        onClick={() => {
+                          const v = window.prompt(`New ${m.meterType} limit (${m.limit?.unit || 'per cycle'}):`,
+                            m.limit ? String(m.limit.value) : '');
+                          if (!v) return;
+                          act(async () => {
+                            await patchSpendPolicy(id, m.meterType, { limit: Number(v), enabled: true });
+                            await logInteraction({
+                              description: `${m.meterType} limit set to ${v} on request`,
+                              channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                              relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                            });
+                          });
+                        }}>
+                      Set limit
+                    </button>
+                  )}
+                  {hasRole('usage:read') && m.meterType === 'content' && (
+                    <button className="ghost" data-testid="policy-bar-toggle"
+                        title="Content-service barring is free and always available; a minor's barring only a guardian or staff lifts"
+                        onClick={() => act(async () => {
+                          await patchSpendPolicy(id, 'content', { barred: !m.barred });
+                          await logInteraction({
+                            description: `Content-services barring ${m.barred ? 'lifted' : 'applied'} on request`,
+                            channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+                            relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+                          });
+                        })}>
+                      {m.barred ? 'Lift barring' : 'Bar content'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+                      </div>
+          </>)}
+
+{pools.length > 0 && (<>
+          <h2>Household pool{!pools.length && <None />}</h2>
+          <div className="rows" data-testid="pool-card">
+            {pools.map((p) => {
+              const mine = (p.member || []).find((mb) => mb.partyId === id);
+              return (
+                <div className="row" key={p.id} data-testid="pool-row">
+                  <div>
+                    <strong>{p.name}</strong>
+                    <div className="dim small">
+                      {p.ownerPartyId === id ? 'owner' : 'member'}
+                      {p.remainingGB != null ? ` · ${p.remainingGB} of ${p.poolGB} ${p.units || 'GB'} left` : ''}
+                      {mine && mine.consumedGB != null ? ` · this customer used ${mine.consumedGB}` : ''}
+                      {mine && mine.softLimitGB != null ? ` · soft cap ${mine.softLimitGB}` : ''}
+                      {mine && mine.hardLimitGB != null ? ` · hard cap ${mine.hardLimitGB}` : ''}
+                    </div>
+                  </div>
+                  <span className={`state ${p.status}`}>{p.status}</span>
+                </div>
+              );
+            })}
+                      </div>
+          </>)}
+
+{autoTopup && autoTopup.enabled && (<>
+          <h2>Auto top-up{(!autoTopup || !autoTopup.enabled) && <None />}</h2>
+          <div className="rows" data-testid="autotopup-card">
+            {autoTopup && autoTopup.enabled ? (
+              <div className="row">
+                <div>
+                  <strong>Auto top-up on</strong>
+                  <div className="dim small">
+                    boost {autoTopup.boostOfferingId || '—'} · trigger {autoTopup.trigger || 'depletion'}
+                    {autoTopup.triggerPct != null ? ` at ${autoTopup.triggerPct}%` : ''}
+                    {autoTopup.maxBoostsPerCycle != null ? ` · max ${autoTopup.maxBoostsPerCycle}/cycle` : ''}
+                    {autoTopup.consentAt ? ` · consented ${String(autoTopup.consentAt).slice(0, 10)}` : ''}
+                  </div>
+                </div>
+                <span className="state active">enabled</span>
+              </div>
+            ) : (
+              <p className="dim small">Off — it only ever turns on with the customer's recorded consent.</p>
+            )}
+          </div>
+          </>)}
+
+{creditDecisions.length > 0 && (<>
+          <h2>Credit decisions{!creditDecisions.length && <None />}</h2>
+          <div className="rows" data-testid="credit-card">
+            {creditDecisions.map((cd) => (
+              <div className="row" key={cd.id} data-testid="credit-decision-row">
+                <div>
+                  <strong className={cd.decision === 'approve' ? 'ok' : cd.decision === 'decline' ? 'error' : undefined}>
+                    {cd.decision}
+                  </strong>
+                  <div className="dim small">
+                    {cd.scoreBand ? `band ${cd.scoreBand}` : 'no score band'}
+                    {cd.purpose ? ` · ${cd.purpose}` : ''}
+                    {cd.remarksPresent === true ? ' · payment remarks on file' : ''}
+                  </div>
+                </div>
+                <span className="dim small">{dt(cd.decidedAt)}</span>
+              </div>
+            ))}
+            {!creditDecisions.length && (
+              <p className="dim small">No stored decisions — only the decision is ever kept, never a report.</p>
+            )}
+          </div>
+          </>)}
+            {(!spendPolicies.length || !pools.length || !(autoTopup && autoTopup.enabled) || !creditDecisions.length) && (
+              <p className="empties" data-testid="empties">
+                Nothing on file:
+                {!spendPolicies.length && <span className="chip" data-testid="policy-card">spend &amp; roaming policies</span>}
+                {!pools.length && <span className="chip" data-testid="pool-card">household pool</span>}
+                {!(autoTopup && autoTopup.enabled) && <span className="chip" data-testid="autotopup-card" title="It only ever turns on with the customer's recorded consent.">auto top-up off</span>}
+                {!creditDecisions.length && <span className="chip" data-testid="credit-card" title="Only the decision is ever kept, never a report.">credit decisions</span>}
+              </p>
+            )}
+          </div>
+
+          <div className="zone" data-testid="zone-orders">
+{orders.length > 0 && (<>
+          <h2>Orders{!orders.length && <None />}{orders.length > 6 && <button className="ghost small" style={{ marginLeft: 10 }} data-testid="orders-all" onClick={() => setAllOrders((x) => !x)}>{allOrders ? 'Newest only' : `Show all ${orders.length}`}</button>}</h2>
+          <div className="rows">
+            {(allOrders ? orders : orders.slice(0, 6)).map((o) => {
+              const leaves = orderLeaves(o.productOrderItem);
+              const multi = leaves.length > 1;
+              const doneCount = leaves.filter((l) => l.state === 'completed').length;
+              return (
+              <div className="row" key={o.id}>
+                <div>
+                  <strong>{o.description || o.id}</strong>
+                  <div className="dim small">{dt(o.orderDate)}
+                    {multi && o.state === 'partiallyCompleted'
+                      && <> · {doneCount}/{leaves.length} components ready</>}</div>
+                  {multi && (
+                    <ul className="ordercomponents" data-testid="order-components">
+                      {leaves.map((l, i) => {
+                        const rel = (l.orderItemRelationship || [])
+                          .find((r) => r.relationshipType === 'reliesOn');
+                        const base = rel && leaves.find((x) => x.id === rel.id);
+                        const waiting = base && base.state !== 'completed' && l.state !== 'completed';
+                        return (
+                          <li key={l.id || i}>
+                            <span className="ocfam">{FAMILY_ICON[familyOf(l)] || '•'}</span>
+                            <span className="ocname">{l.productOffering?.name || 'component'}</span>
+                            <span className={`ocstate ${l.state}`}>{leafGlyph(l.state)} {l.state}
+                              {waiting && <span className="dim"> · waiting on {familyOf(base) === 'internet'
+                                ? 'broadband' : (base.productOffering?.name || 'base')}</span>}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+                <div className="rowend">
+                  <span className={`state ${o.state}`}>{o.state}</span>
+                  {o.state === 'acknowledged' && hasRole('ordering:write') && (
+                    <>
+                      <button className="ghost" onClick={() => act(() => patchOrder(o.id, { state: 'completed' }))}>
+                        Complete
+                      </button>
+                      <button className="ghost danger" onClick={() => act(() => patchOrder(o.id, { state: 'cancelled' }))}>
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              );
+            })}
+                      </div>
+          </>)}
+
+          <h2>Number porting{!portingOrders.length && <None />}</h2>
+          <div className="rows" data-testid="porting-card">
+            {portingOrders.map((po) => (
+              <div className="row" key={po.id}>
+                <div>
+                  <span className="msisdn">{po.phoneNumber}</span>
+                  <div className="dim small">
+                    {po.direction === 'portOut' ? 'Port-out to' : 'Port-in from'} {po.otherOperator || '—'}
+                    {' · '}{po.country}
+                  </div>
+                </div>
+                <div className="rowend">
+                  <span className={`state ${po.status}`}>{po.status}</span>
+                  {po.status === 'scheduled' && hasRole('porting:write') && (
+                    <button className="ghost" data-testid="complete-cutover"
+                            onClick={() => act(() => completeCutover(po.id))}>
+                      Complete cutover
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+                      </div>
+
+{appointments.length > 0 && (<>
           <h2>Appointments{!appointments.length && <None />}</h2>
           <div className="rows">
             {appointments.map((ap) => (
@@ -820,9 +885,8 @@ export default function Customer360() {
               </div>
             ))}
                       </div>
-        </section>
+          </>)}
 
-        <section>
           {carts.length > 0 && (
             <>
               <h2>Active cart</h2>
@@ -845,73 +909,9 @@ export default function Customer360() {
               <p className="dim small">The customer's cart, live — assisted checkout starts here.</p>
             </>
           )}
-
-          <h2>Promotions &amp; payment{!redemptions.length && !methods.length && <None />}</h2>
-          <div className="rows" data-testid="promo-vault-card">
-            {redemptions.map((r) => (
-              <div className="row" key={r.id}>
-                <span>Promo <strong>{r.code}</strong> — {r.name}</span>
-                <span className="dim">−{r.percentage}%</span>
-              </div>
-            ))}
-            {methods.map((m) => (
-              <div className="row" key={m.id}>
-                <span>{m.details.brand} •••• {m.details.lastFourDigits}
-                  <span className="dim small"> exp {m.details.expiry}</span></span>
-                <button className="ghost danger"
-                        onClick={() => act(() => revokePaymentMethod(m.id))}>Revoke</button>
-              </div>
-            ))}
-            {!redemptions.length && !methods.length
-              && <p className="dim small">No promotions or saved cards.</p>}
           </div>
 
-          <h2>Credit decisions{!creditDecisions.length && <None />}</h2>
-          <div className="rows" data-testid="credit-card">
-            {creditDecisions.map((cd) => (
-              <div className="row" key={cd.id} data-testid="credit-decision-row">
-                <div>
-                  <strong className={cd.decision === 'approve' ? 'ok' : cd.decision === 'decline' ? 'error' : undefined}>
-                    {cd.decision}
-                  </strong>
-                  <div className="dim small">
-                    {cd.scoreBand ? `band ${cd.scoreBand}` : 'no score band'}
-                    {cd.purpose ? ` · ${cd.purpose}` : ''}
-                    {cd.remarksPresent === true ? ' · payment remarks on file' : ''}
-                  </div>
-                </div>
-                <span className="dim small">{dt(cd.decidedAt)}</span>
-              </div>
-            ))}
-            {!creditDecisions.length && (
-              <p className="dim small">No stored decisions — only the decision is ever kept, never a report.</p>
-            )}
-          </div>
-
-          <h2>Suggest next</h2>
-          <div className="rows" data-testid="suggest-card">
-            {suggestions.slice(0, 3).map((it) => (
-              <div className="row" key={it.offering.id}>
-                <span>{it.offering.name} <span className="dim small">#{it.priority}</span></span>
-                <div className="rowend">
-                  <button className="ghost" data-testid={`send-offer-${it.offering.id}`}
-                          title="A personal message to their inbox (and email, if the tenant sends email)"
-                          onClick={() => act(() => sendOffer(id, it.offering, 'Your agent'))}>
-                    Send offer
-                  </button>
-                  {hasRole('ordering:write') && (
-                    <button className="ghost" data-testid={`order-now-${it.offering.id}`}
-                            title="Order on the customer's behalf — with their say-so on the line"
-                            onClick={() => act(() => orderForCustomer(id, it.offering))}>
-                      Order now
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {!suggestions.length && <p className="dim small">Nothing to suggest.</p>}
-          </div>
-
+          <div className="zone" data-testid="zone-timeline">
           <h2>Tickets</h2>
           {tickets.map((t) => <TicketCard key={t.id} ticket={t} onChanged={reload} />)}
           {!tickets.length && <p className="dim small">No tickets.</p>}
@@ -974,6 +974,7 @@ export default function Customer360() {
                    value={note} onChange={(e) => setNote(e.target.value)} />
             <button className="ghost" type="submit">Log interaction</button>
           </form>
+          </div>
 
           {hasRole('party:write') && (
             <div data-testid="registry-tools">
@@ -1057,7 +1058,37 @@ export default function Customer360() {
               </form>
             </div>
           )}
-        </section>
+        </div>
+
+        <div className="cockpit-side">
+          <Assist id={id} customer={customer} bss={bss} version={version} act={act}
+            nbo={nbo} setNbo={setNbo} aiNextBestOffer={aiNextBestOffer} sendOffer={sendOffer} orderForCustomer={orderForCustomer}
+            copilot={copilot} summarize={summarize} />
+
+          <h2>Suggest next</h2>
+          <div className="rows" data-testid="suggest-card">
+            {suggestions.slice(0, 3).map((it) => (
+              <div className="row" key={it.offering.id}>
+                <span>{it.offering.name} <span className="dim small">#{it.priority}</span></span>
+                <div className="rowend">
+                  <button className="ghost" data-testid={`send-offer-${it.offering.id}`}
+                          title="A personal message to their inbox (and email, if the tenant sends email)"
+                          onClick={() => act(() => sendOffer(id, it.offering, 'Your agent'))}>
+                    Send offer
+                  </button>
+                  {hasRole('ordering:write') && (
+                    <button className="ghost" data-testid={`order-now-${it.offering.id}`}
+                            title="Order on the customer's behalf — with their say-so on the line"
+                            onClick={() => act(() => orderForCustomer(id, it.offering))}>
+                      Order now
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!suggestions.length && <p className="dim small">Nothing to suggest.</p>}
+          </div>
+        </div>
       </div>
     </>
   );

@@ -10,7 +10,7 @@ capabilities:
     kind: tmf-api
     tmf: TMF632 Party Management
     meaning: Read one individual — the person behind a customer.
-    route: { method: GET, path: "/tmf-api/partyManagement/v4/individual/{id}" }
+    route: { method: GET, path: "/tmf-api/party/v4/individual/{id}" }
     roles: [party:read]
 
   - id: productInventory.product
@@ -332,3 +332,12 @@ capabilities:
     meaning: File an action for a human approver, who executes it with their own token from AI & Automation › Workforce.
     route: { method: POST, path: /ai/v1/workforce/approvals }
     roles: [workforce:use]
+
+  - id: assurance.problems
+    version: 1
+    component: assurance
+    kind: tmf-api
+    tmf: TMF656 Service Problem Management
+    meaning: List service problems — open incidents with the service or area they affect.
+    route: { method: GET, path: /tmf-api/serviceProblemManagement/v4/serviceProblem }
+    roles: [assurance:read]

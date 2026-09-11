@@ -150,8 +150,8 @@
       "porting:read",
       "porting:write",
       "knowledge:read",
-      "communication:write"
-     ]
+      "communication:write",
+     "insight:read"]
     }
    },
    {

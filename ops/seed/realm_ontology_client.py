@@ -60,3 +60,11 @@ for realm in [x["realm"] for x in req("GET", "/realms")[1] if x["realm"] != "mas
     if strip:
         req("DELETE", f"/realms/{realm}/users/{sa['id']}/role-mappings/realm", strip)
     print(f"{realm}: {CLIENT} {'created' if st == 201 else 'present'}, service account holds {[r['name'] for r in roles]}")
+
+# CSR agents read the decision receipts the Assist panel explains from: insight:read on the agent composite
+for realm in [x["realm"] for x in req("GET", "/realms")[1] if x["realm"] != "master"]:
+    _, insight = req("GET", f"/realms/{realm}/roles/{urllib.parse.quote('insight:read', safe='')}")
+    _, agent = req("GET", f"/realms/{realm}/roles/agent")
+    if insight and agent:
+        req("POST", f"/realms/{realm}/roles-by-id/{agent['id']}/composites", [{"id": insight["id"], "name": insight["name"]}])
+        print(f"{realm}: agent composite holds insight:read")

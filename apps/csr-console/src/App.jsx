@@ -9,6 +9,7 @@ import Tickets from './pages/Tickets.jsx';
 import Chats from './pages/Chats.jsx';
 import Knowledge from './pages/Knowledge.jsx';
 import HelpDrawer from './HelpDrawer.jsx';
+import IncidentBar from './IncidentBar.jsx';
 import Stock from './pages/Stock.jsx';
 import Devices from './pages/Devices.jsx';
 import Migrations from './pages/Migrations.jsx';
@@ -64,17 +65,23 @@ export default function App() {
           <span className="area">csr console</span>
           {claims.org && <span className="orgbadge">{claims.org}</span>}
         </div>
-        <nav className="nav" onClick={(e) => { const a = e.target.closest && e.target.closest('a'); if (a) desk('tab.open', a.getAttribute('href') || a.textContent); }}>
+        <nav className="nav" aria-label="Work" onClick={(e) => { const a = e.target.closest && e.target.closest('a'); if (a) desk('tab.open', a.getAttribute('href') || a.textContent); }}>
+        <span className="navgroup">
           <NavLink to="/" end>Customers</NavLink>
           <NavLink to="/tickets">Tickets</NavLink>
           <NavLink to="/chats">Chats</NavLink>
           <NavLink to="/knowledge">Knowledge</NavLink>
-          {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
-          {hasRole('device:read') && <NavLink to="/devices">Devices</NavLink>}
-          {hasRole('migration:read') && <NavLink to="/migrations">Migrations</NavLink>}
-          {hasRole('billing:read') && <NavLink to="/collections">Collections</NavLink>}
-          {hasRole('party:write') && <NavLink to="/registry">Registry</NavLink>}
-        </nav>
+        </span>
+        {(hasRole('stock:read') || hasRole('device:read') || hasRole('migration:read') || hasRole('billing:read') || hasRole('party:write')) && (
+          <span className="navgroup ops" aria-label="Operations">
+            {hasRole('stock:read') && <NavLink to="/stock">Stock</NavLink>}
+            {hasRole('device:read') && <NavLink to="/devices">Devices</NavLink>}
+            {hasRole('migration:read') && <NavLink to="/migrations">Migrations</NavLink>}
+            {hasRole('billing:read') && <NavLink to="/collections">Collections</NavLink>}
+            {hasRole('party:write') && <NavLink to="/registry">Registry</NavLink>}
+          </span>
+        )}
+      </nav>
         <div className="who">
           <HelpDrawer />
           <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
@@ -82,12 +89,7 @@ export default function App() {
           <button className="ghost" onClick={signOut}>Sign out</button>
         </div>
       </header>
-      {problems.length > 0 && (
-        <div className="outagebanner" data-testid="outage-banner">
-          ⚠ {problems.map((p) => p.name).join(' · ')} — customers in the affected
-          area may report degraded service.
-        </div>
-      )}
+      <IncidentBar problems={problems} />
       <main className="wide">
         <Routes>
           <Route path="/" element={<Customers />} />

@@ -192,6 +192,33 @@ customer's timeline:</p>
 </table>
 <p class="dim">Self-care mirrors most of these in the shop and app — customers act on their OWN
 line (ownership-checked; a foreign line answers 404, never 403).</p>
+<h3>The workspace — who is this, what is happening, what next</h3>
+<p>The customer page is a <b>cockpit</b>, not a filing cabinet. Under the identity line come three
+small cards — open tickets, orders in flight, the last contact — then the lines and their health,
+then money (usage, agreements, bills, promotions and cards), then orders and visits, then the
+timeline. Sections with nothing in them fold into one line of chips ("Nothing on file: spend
+policies · household pool · auto top-up off"); a section that holds a warning — a barred line, an
+open dispute, a paused service — is always open. The tertiary line actions (transfer, change
+number, reset PIN) sit behind <i>More…</i>; <b>Cease</b> never hides, because a control you cannot
+see is a control you cannot judge.</p>
+<p>The chrome is one bar under 60 px, and every network incident is <b>one line</b> — count, the
+newest names, services affected, since when — with details on click and a dismiss that lasts the
+session (a new incident brings it back). Whether an incident touches <i>this</i> customer is said on
+the customer's page, not in the banner.</p>
+<p><b>GenAlpha Assist</b> sits beside every customer and is grounded or it is nothing. Its
+<i>situation</i> (an open problem on one of this customer's services, a paused line, an open bill)
+and its <i>recommended action</i> come from the operational ontology
+(<code>GET /ontology/v1/context/customer/{id}/recommendations</code>): a governed action such as
+resuming a paused line or moving a plan up within its family is dry-run first and shows its
+conditions, permission and policy answer under <i>Why</i>; <b>Do it</b> executes it with the agent's own
+rights and logs the interaction; <b>Not relevant</b> is recorded for desk learning. Below it the
+copilot's summary and an <i>offer to consider</i> (on request, never auto-run), and the knowledge the
+situation asks for — preview inline or <b>Send</b> it to the customer's inbox, logged.</p>
+<p>The search box takes anything the caller reads out — a name, an email, a phone number, or an
+order / ticket / customer / product id — and lands on the customer, saying how it got there; the
+six customers opened last are chips above the results. The ticket queue is a dense list
+(severity, issue, customer name, age, time in state, status) with the selected ticket worked in a
+panel beside it. Suite #126; design notes in <code>docs/csr-workspace.md</code>.</p>
 <h3>The knowledge base at the desk</h3>
 <p>Articles are audience-shelved (customer / CSR / sales / product owner) and the CSR's
 ask-with-sources grounds its answers in them. Search is full-text, ranked, and stems in

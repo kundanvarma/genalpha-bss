@@ -45,10 +45,12 @@ public class McpController {
     private final TenantScope tenantScope;
     private final ObjectMapper json;
     private final com.bss.ontology.service.ContextService context;
+    private final com.bss.ontology.service.RecommendationService recommendations;
 
     public McpController(Registry registry, ActionCheckService checks, ActionExecuteService executes,
             UpgradeService upgrades, ExplainService explain, TenantScope tenantScope, ObjectMapper json,
-            com.bss.ontology.service.ContextService context) {
+            com.bss.ontology.service.ContextService context, com.bss.ontology.service.RecommendationService recommendations) {
+        this.recommendations = recommendations;
         this.context = context;
         this.registry = registry;
         this.checks = checks;
@@ -139,6 +141,8 @@ public class McpController {
                 List.of("kind", "name")));
         tools.add(tool("available_upgrades", "The offerings a subscription could move up to: same family, on sale on your channel, dearer per month.",
                 Map.of("subscriptionId", Map.of("type", "string", "description", "the subscription (product) id")), List.of("subscriptionId")));
+        tools.add(tool("recommend", "What should be done next for a customer: governed actions dry-run through the registry (with every condition's verdict) and things to explain — an open incident, a paused line, an open bill, a dearer plan. Grounded; no free text.",
+                Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
         tools.add(tool("customer_context", "One call: a customer's subscriptions (with what each could become), lines, bills and the receipts of what the BSS decided about them — walked with your rights; edges that did not answer are listed.",
                 Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
         for (JsonNode a : l.actions().values()) {
@@ -223,6 +227,8 @@ public class McpController {
             result = upgrades.availableUpgrades(args.path("subscriptionId").asText(), caller);
         } else if ("customer_context".equals(name)) {
             result = context.customer(args.path("customerId").asText(), caller);
+        } else if ("recommend".equals(name)) {
+            result = recommendations.forCustomer(args.path("customerId").asText(), caller);
         } else {
             boolean dry = name.startsWith("check_");
             String actionName = camel(dry ? name.substring(6) : name);

@@ -27,10 +27,13 @@ public class RegistryController {
     private final com.bss.ontology.service.RdfExportService rdf;
     private final com.bss.ontology.service.ContextService context;
     private final com.bss.ontology.service.ConformanceService conformanceService;
+    private final com.bss.ontology.service.RecommendationService recommendationService;
 
     public RegistryController(Registry registry, ExplainService explain, TenantScope tenantScope,
             com.bss.ontology.service.RdfExportService rdf, com.bss.ontology.service.ContextService context,
-            com.bss.ontology.service.ConformanceService conformanceService) {
+            com.bss.ontology.service.ConformanceService conformanceService,
+            com.bss.ontology.service.RecommendationService recommendationService) {
+        this.recommendationService = recommendationService;
         this.conformanceService = conformanceService;
         this.registry = registry;
         this.explain = explain;
@@ -147,6 +150,12 @@ public class RegistryController {
     @GetMapping("/context/customer/{id}")
     public Map<String, Object> customerContext(@PathVariable String id, jakarta.servlet.http.HttpServletRequest request) {
         return context.customer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
+    }
+
+    /** What should I do next for this customer — governed actions dry-run through the registry, and things to explain. */
+    @GetMapping("/context/customer/{id}/recommendations")
+    public Map<String, Object> recommendations(@PathVariable String id, jakarta.servlet.http.HttpServletRequest request) {
+        return recommendationService.forCustomer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
     }
 
     /** Console page paths may carry a slash (simulate/priceChange): the rest of the path is the page. */

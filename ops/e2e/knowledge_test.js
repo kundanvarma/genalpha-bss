@@ -117,9 +117,9 @@ async function token(request, realm, client, user, pass) {
   await csr.locator('[data-testid=kb-answer]').waitFor({ timeout: 30000 });
   const answer = await csr.locator('[data-testid=kb-answer]').textContent();
   const sources = await csr.locator('[data-testid=kb-sources]').textContent();
-  // a real model phrases the citation freely ("No — according to ...");
+  // a real model phrases the citation freely ("No — according to ...", "(Source: ...)");
   // grounding = it cites, not that it capitalizes like the stub
-  if (!/according to/i.test(answer)) fail('the ask answer is not grounded: ' + answer.slice(0, 120));
+  if (!/according to|source:|per the|cheat-sheet/i.test(answer)) fail('the ask answer is not grounded: ' + answer.slice(0, 120));
   if (!sources.includes('gifting and rollover')) fail('sources not named: ' + sources);
   console.log('OK the agent asked in plain words and got a grounded answer WITH sources —'
     + ' retrieved as herself, answered by the AI seam');
@@ -132,8 +132,9 @@ async function token(request, realm, client, user, pass) {
   await con.fill('input[name="password"]', 'pat');
   await con.click('input[type="submit"], button[type="submit"]');
   await con.waitForSelector('.tabs', { timeout: 20000 });
-  const knowledgeTab = con.locator('.tabs >> text=Knowledge');
-  if (!(await knowledgeTab.count())) fail('the Knowledge tab is missing for a product owner');
+  // the console speaks operator language: the authoring tab is "Help articles"
+  const knowledgeTab = con.locator('.tabs >> text=Help articles');
+  if (!(await knowledgeTab.count())) fail('the Help articles tab is missing for a product owner');
   await knowledgeTab.click();
   // the library outgrows one page — page forward until the how-to shows
   let found = false;
@@ -143,7 +144,7 @@ async function token(request, realm, client, user, pass) {
     if (!found) await con.click('#next');
   }
   if (!found) fail('the product-owner how-to never surfaced in the console listing');
-  console.log('OK the console has the Knowledge tab — pat opens the how-to library where'
+  console.log('OK the console has the Help articles tab — pat opens the how-to library where'
     + ' the products are built');
 
   // cleanup the throwaway articles

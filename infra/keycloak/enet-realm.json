@@ -150,8 +150,8 @@
             "ticket:read",
             "ticket:write",
             "usage:read",
-            "usage:write"
-          ]
+            "usage:write",
+     "insight:read"]
         }
       },
       {

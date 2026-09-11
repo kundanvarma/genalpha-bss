@@ -52,6 +52,7 @@ ontology:
     billing: ${BILLING_BASE_URL:}
     insight: ${INSIGHT_BASE_URL:}
     intelligence: ${INTELLIGENCE_BASE_URL:}
+    assurance: ${ASSURANCE_BASE_URL:}
 
 bss:
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant. The

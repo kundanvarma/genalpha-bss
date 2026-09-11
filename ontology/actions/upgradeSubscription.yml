@@ -31,6 +31,11 @@ preconditions:
     function: differentOffering
     args: [subscriptionId, targetOfferingId]
     says: the target must differ from the current offering
+  - id: plan-family
+    check: function
+    function: categoryIn
+    args: [subscriptionId, "Mobile plans,Broadband,Fiber,Fibre,TV"]
+    says: only a plan can be upgraded in place — a device or a pass is bought, not upgraded
   - id: same-family
     check: function
     function: sameCategory

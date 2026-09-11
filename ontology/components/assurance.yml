@@ -1,0 +1,8 @@
+component: assurance
+version: 1
+oda: TMFC030 Service Problem Management / TMFC029 Alarm Management
+meaning: Alarms and service problems — what is wrong on the network and which services it touches; SLA violations for the lines that carry a guarantee.
+manages: []
+capabilities: [assurance.problems]
+events: []
+topic: bss.assurance.events

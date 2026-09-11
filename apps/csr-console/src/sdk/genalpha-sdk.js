@@ -33,6 +33,13 @@ export class GenAlpha {
     return r.json;
   }
 
+  /** What should be done next for a customer: governed actions dry-run through the registry, and things to explain. Grounded. */
+  async recommendations(customerId) {
+    const r = await this.call('GET', `/ontology/v1/context/customer/${encodeURIComponent(customerId)}/recommendations`);
+    if (r.status >= 300) throw new Error(`recommendations: ${r.status}`);
+    return r.json;
+  }
+
   /** The ontology in words: kind is concept | action | page | journey. */
   async explain(kind, name) {
     const r = await this.call('GET', `/ontology/v1/explain/${kind}/${name}`);
@@ -232,6 +239,7 @@ export class GenAlpha {
    *   - the target offering must be on sale
    *   - the target offering must be sold on the channel the request comes from
    *   - the target must differ from the current offering
+   *   - only a plan can be upgraded in place — a device or a pass is bought, not upgraded
    *   - an upgrade stays inside the same family — a mobile plan becomes another mobile plan
    *   - changing a plan into a bundle is not supported
    *   - the target must cost more per month than the current plan — otherwise it is a downgrade

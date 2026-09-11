@@ -128,7 +128,7 @@ public class ContextService {
             }
         }
         out.put("actionsAvailable", actions);
-        out.put("unanswered", unanswered);
+        out.put("unanswered", new ArrayList<>(new java.util.LinkedHashSet<>(unanswered)));
         out.put("@type", "CustomerContext");
         return out;
     }

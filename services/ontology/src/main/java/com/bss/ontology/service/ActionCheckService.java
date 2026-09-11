@@ -208,6 +208,15 @@ public class ActionCheckService {
             case "noActiveCommitment" -> {
                 return noActiveCommitment(id, says, r, caller);
             }
+            case "categoryIn" -> {
+                JsonNode cur = r.get("currentOffering");
+                if (cur == null) {
+                    return new Verdict(id, says, null, "the current offering could not be read");
+                }
+                String family = cur.path("category").path(0).path("name").asText("");
+                boolean ok = List.of(args.get(1).split(",")).stream().anyMatch(f -> f.trim().equalsIgnoreCase(family));
+                return new Verdict(id, says, ok, "its family is \"" + family + "\"");
+            }
             case "oneOf" -> {
                 String v = inputs.getOrDefault(args.get(0), "").trim().toLowerCase();
                 List<String> allowed = List.of(args.get(1).split(","));

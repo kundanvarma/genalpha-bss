@@ -37,6 +37,22 @@ public class UpgradeService {
         return availableUpgrades(r, caller);
     }
 
+    /** The families an in-place upgrade applies to, as the action itself declares them (precondition plan-family). */
+    List<String> planFamilies(Caller caller) {
+        JsonNode action = registry.forTenant(caller.tenant()).actions().get("upgradeSubscription");
+        List<String> out = new ArrayList<>();
+        if (action != null) {
+            for (JsonNode pc : action.path("preconditions")) {
+                if ("plan-family".equals(pc.path("id").asText())) {
+                    for (String f : pc.path("args").path(1).asText("").split(",")) {
+                        out.add(f.trim());
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
     public List<Map<String, Object>> availableUpgrades(Resolver.Resolved r, Caller caller) {
         JsonNode current = r.get("currentOffering");
         List<Map<String, Object>> out = new ArrayList<>();
@@ -44,6 +60,9 @@ public class UpgradeService {
             return out;
         }
         String family = current.path("category").path(0).path("name").asText();
+        if (!planFamilies(caller).stream().anyMatch(f -> f.equalsIgnoreCase(family))) {
+            return out; // a device, a pass, a top-up: bought, not upgraded in place
+        }
         BigDecimal currentMonthly = resolver.monthlyOf("currentOffering", r, caller);
         Registry.Layer layer = registry.forTenant(caller.tenant());
         JsonNode cap = layer.capabilities().get("productCatalog.offerings");

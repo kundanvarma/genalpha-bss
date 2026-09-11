@@ -82,7 +82,8 @@ const grepSources = (dir, needle) => {
   /* ---------------- 2. conformance against the platform */
   const gatewayYml = fs.readFileSync(path.join(REPO, 'services/gateway/src/main/resources/application.yml'), 'utf8');
   const prefixes = [...gatewayYml.matchAll(/Path=([^\n]+)/g)].flatMap((m) => m[1].split(',')).map((p) => p.trim().replace(/\/\*\*$/, '').replace(/\{[^}]*\}/g, ''));
-  const unserved = capabilities.filter((c) => c.route).filter((c) => !prefixes.some((p) => c.route.path.startsWith(p)));
+  const servedBy = (routePath) => prefixes.some((p) => routePath === p || routePath.startsWith(p.endsWith('/') ? p : p + '/'));
+  const unserved = capabilities.filter((c) => c.route).filter((c) => !servedBy(c.route.path));
   if (unserved.length) fail('capability routes the gateway does not serve: ' + unserved.map((c) => c.id + ' ' + c.route.path).join(', '));
   const eventsMissing = [];
   for (const a of actions) for (const e of a.emits || []) if (!grepSources(e.component, e.event)) eventsMissing.push(`${e.component}:${e.event}`);
