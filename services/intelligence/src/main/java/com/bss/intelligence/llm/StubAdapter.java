@@ -85,6 +85,33 @@ public class StubAdapter implements LlmAdapter {
             }
             return "CAPTION: A shelf picked for you.";
         }
+        if (system.contains("chat intent classifier")) {
+            // deterministic: the customer's last words decide, the way a keyword router would
+            String text = user.toLowerCase();
+            String intent = text.matches("(?s).*(slow|outage|no internet|not working|down|drop|connection|wifi|router).*") ? "connectivity"
+                    : text.matches("(?s).*(bill|invoice|charge|pay|price|expensive|refund).*") ? "billing"
+                    : text.matches("(?s).*(sim|pin|puk|esim).*") ? "sim"
+                    : text.matches("(?s).*(cancel|leave|terminate|quit|switch to).*") ? "cancellation"
+                    : text.matches("(?s).*(port|keep my number|move my number).*") ? "porting"
+                    : text.matches("(?s).*(deliver|shipping|parcel|package).*") ? "delivery"
+                    : text.matches("(?s).*(upgrade|downgrade|change (my )?plan|more data).*") ? "plan-change" : "other";
+            String reply = switch (intent) {
+                case "connectivity" -> "Sorry about the connection trouble — I am checking your line right now and will tell you what I see.";
+                case "billing" -> "I understand, let me open your bill and go through the lines with you.";
+                case "sim" -> "Let us sort the SIM out together — I can see the card on your line from here.";
+                case "cancellation" -> "I hear you. Before anything changes, may I check what is behind this so we get it right?";
+                default -> "Thanks for the details — I am looking at your account now.";
+            };
+            return "INTENT: " + intent + "\nCONFIDENCE: 0.7\nSUMMARY: The customer's messages read as a " + intent
+                    + " matter (stub classifier).\nREPLY: " + reply;
+        }
+        if (system.contains("after-call note")) {
+            int actions = user.split("\"description\"").length - 1;
+            String note = "The customer contacted us about the situation on their account; the desk "
+                    + (actions > 0 ? "logged " + actions + " action" + (actions == 1 ? "" : "s") + " during the call" : "recorded no action")
+                    + ". Nothing else remains open in the record. (Stub provider.)";
+            return "NOTE: " + note + "\nDISPOSITION: " + (actions > 0 ? "resolved" : "informational") + "\nFOLLOWUP: none";
+        }
         if (system.contains("knowledge assistant")) {
             // grounded even in the stub: quote the top retrieved article back
             String title = "the knowledge base";

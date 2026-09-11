@@ -26,12 +26,18 @@ public class RecommendationService {
     private final ActionCheckService checks;
     private final Registry registry;
     private final ComponentClient client;
+    private final ReceiptPublisher publisher;
 
-    public RecommendationService(ContextService contextService, ActionCheckService checks, Registry registry, ComponentClient client) {
+    /** What became of a recommendation — the only words the loop accepts. */
+    public static final List<String> OUTCOMES = List.of("accepted", "dismissed", "helpful", "unhelpful");
+    static final String DECISION_POINT = "ontology.recommend";
+
+    public RecommendationService(ContextService contextService, ActionCheckService checks, Registry registry, ComponentClient client, ReceiptPublisher publisher) {
         this.contextService = contextService;
         this.checks = checks;
         this.registry = registry;
         this.client = client;
+        this.publisher = publisher;
     }
 
     public Map<String, Object> forCustomer(String customerId, Caller caller) {
@@ -121,9 +127,67 @@ public class RecommendationService {
             unique.putIfAbsent(key, rec);
         }
         out = new ArrayList<>(unique.values());
-        out.sort((a, b) -> Integer.compare((int) a.get("priority"), (int) b.get("priority")));
+        // the loop: what this desk did with the same recommendation before moves it up or down —
+        // the ontology's own decision log is the memory, read with the caller's rights
+        Map<String, int[]> history = history(caller);
+        for (Map<String, Object> rec : out) {
+            int[] h = history.getOrDefault(String.valueOf(rec.get("action")), new int[3]);
+            int shown = h[0];
+            int good = h[1];
+            int bad = h[2];
+            int adjustment = 0;
+            String says;
+            if (shown < 5) {
+                says = shown == 0 ? "no history on this desk yet — ranked by the situation alone"
+                        : "too little history yet (" + shown + " shown) — ranked by the situation alone";
+            } else {
+                double rate = (good - bad) / (double) shown;
+                adjustment = rate <= -0.5 ? 2 : rate <= -0.2 ? 1 : rate >= 0.5 ? -1 : 0;
+                says = "shown " + shown + " times on this desk; taken or found helpful " + good + ", dismissed or found unhelpful " + bad
+                        + (adjustment > 0 ? " — ranked down" : adjustment < 0 ? " — ranked up" : " — rank unchanged");
+            }
+            Map<String, Object> ranking = new LinkedHashMap<>();
+            ranking.put("priority", rec.get("priority"));
+            ranking.put("shown", shown);
+            ranking.put("accepted", good);
+            ranking.put("dismissed", bad);
+            ranking.put("adjustment", adjustment);
+            ranking.put("says", says);
+            rec.put("ranking", ranking);
+            rec.put("rank", (int) rec.get("priority") + adjustment);
+        }
+        out.sort((a, b) -> Integer.compare((int) a.get("rank"), (int) b.get("rank")));
         if (out.size() > 6) {
             out = new ArrayList<>(out.subList(0, 6));
+        }
+        // every recommendation shown is a decision of the BSS, so its outcome can be learned from
+        List<String> candidates = out.stream().map(r -> String.valueOf(r.get("action"))).toList();
+        List<String> eligible = out.stream().filter(r -> Boolean.TRUE.equals(r.get("allowed"))).map(r -> String.valueOf(r.get("action"))).toList();
+        for (Map<String, Object> rec : out) {
+            String decisionId = "rec-" + java.util.UUID.randomUUID();
+            rec.put("decisionId", decisionId);
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("decisionId", decisionId);
+            d.put("decisionPoint", DECISION_POINT);
+            d.put("subjectType", "customer");
+            d.put("subjectId", customerId);
+            d.put("candidates", candidates);
+            d.put("eligibleActions", eligible);
+            d.put("constraints", List.of("dry-run through the registry before it is shown", "the agent decides; the desk only recommends"));
+            d.put("action", rec.get("action"));
+            d.put("propensity", null);
+            d.put("policy", "assist-ranking");
+            d.put("policyVersion", "1");
+            d.put("reason", rec.get("why"));
+            d.put("context", Map.of("kind", rec.get("kind"), "rank", rec.get("rank"), "ranking", rec.get("ranking")));
+            d.put("evidence", Map.of("situation", situation.stream().map(x -> String.valueOf(x.get("says"))).toList()));
+            d.put("autonomy", "assist");
+            d.put("fallback", false);
+            d.put("source", "ontology");
+            d.put("contract", null);
+            d.put("decidedAt", OffsetDateTime.now().toString());
+            d.put("@type", "Decision");
+            publisher.decision(caller.tenant(), d);
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("customerId", customerId);
@@ -135,6 +199,53 @@ public class RecommendationService {
                 : "Top recommendation: " + out.get(0).get("title") + " — " + out.get(0).get("why"));
         result.put("@type", "CustomerRecommendations");
         return result;
+    }
+
+    /** The agent's verdict on a recommendation, back into the decision log where the ranking reads it. */
+    public Map<String, Object> outcome(String decisionId, String outcome, String reason, Caller caller) {
+        if (decisionId == null || !decisionId.startsWith("rec-")) {
+            throw new IllegalArgumentException("not a recommendation decision id: " + decisionId);
+        }
+        if (outcome == null || !OUTCOMES.contains(outcome)) {
+            throw new IllegalArgumentException("outcome must be one of " + OUTCOMES);
+        }
+        publisher.outcome(caller.tenant(), decisionId, outcome, reason == null || reason.isBlank() ? null : reason);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("decisionId", decisionId);
+        m.put("outcome", outcome);
+        m.put("said", "Noted: the recommendation was " + outcome + (reason == null || reason.isBlank() ? "" : " (" + reason + ")") + ". The ranking on this desk learns from it.");
+        m.put("@type", "RecommendationOutcome");
+        return m;
+    }
+
+    /** action → {shown, taken-or-helpful, dismissed-or-unhelpful} from this tenant's recent recommendation decisions. */
+    private Map<String, int[]> history(Caller caller) {
+        Map<String, int[]> out = new LinkedHashMap<>();
+        Registry.Layer layer = registry.forTenant(caller.tenant());
+        JsonNode cap = layer.capabilities().get("decisionLog.read");
+        if (cap == null) {
+            return out;
+        }
+        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                Map.of(), Map.of("decisionPoint", DECISION_POINT, "limit", "500"), null, caller.bearer(), Map.of());
+        if (!reply.ok() || !reply.body().isArray()) {
+            return out;
+        }
+        for (JsonNode d : reply.body()) {
+            String action = d.path("action").asText("");
+            if (action.isEmpty()) {
+                continue;
+            }
+            int[] h = out.computeIfAbsent(action, k -> new int[3]);
+            h[0]++;
+            String o = d.path("outcome").asText("");
+            if ("accepted".equals(o) || "helpful".equals(o)) {
+                h[1]++;
+            } else if ("dismissed".equals(o) || "unhelpful".equals(o)) {
+                h[2]++;
+            }
+        }
+        return out;
     }
 
     private Map<String, Object> action(Registry.Layer layer, String name, Map<String, String> inputs, String because, Caller caller, int priority) {

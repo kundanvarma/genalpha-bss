@@ -89,7 +89,8 @@ export default function Customer360() {
   const [nbo, setNbo] = useState(null); // null | 'loading' | {summary, nextActions}
   const [puks, setPuks] = useState({}); // serviceId -> revealed PUK
   const [allOrders, setAllOrders] = useState(false);
-  const [version, setVersion] = useState(0); // bumps after every action so Assist re-reads the customer
+  const [version, setVersion] = useState(0);
+  const [openedAt] = useState(() => new Date().toISOString()); // the call starts when the page opens — wrap-up covers what happened since // bumps after every action so Assist re-reads the customer
 
   async function summarize() {
     setCopilot('loading');
@@ -1063,7 +1064,8 @@ export default function Customer360() {
         <div className="cockpit-side">
           <Assist id={id} customer={customer} bss={bss} version={version} act={act}
             nbo={nbo} setNbo={setNbo} aiNextBestOffer={aiNextBestOffer} sendOffer={sendOffer} orderForCustomer={orderForCustomer}
-            copilot={copilot} summarize={summarize} />
+            copilot={copilot} summarize={summarize}
+            interactions={interactions} openTickets={openTickets} openedAt={openedAt} />
 
           <h2>Suggest next</h2>
           <div className="rows" data-testid="suggest-card">

@@ -158,6 +158,21 @@ public class RegistryController {
         return recommendationService.forCustomer(id, com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
     }
 
+    /** What the agent did with a recommendation — accepted, dismissed, helpful, unhelpful — so the ranking learns. */
+    @org.springframework.web.bind.annotation.PostMapping("/context/recommendations/{decisionId}/outcome")
+    public Map<String, Object> recommendationOutcome(@PathVariable String decisionId,
+            @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body,
+            jakarta.servlet.http.HttpServletRequest request) {
+        Map<String, Object> b = body == null ? Map.of() : body;
+        try {
+            return recommendationService.outcome(decisionId, String.valueOf(b.getOrDefault("outcome", "")),
+                    b.get("reason") == null ? null : String.valueOf(b.get("reason")),
+                    com.bss.ontology.service.Caller.current(request, tenantScope.currentTenantId()));
+        } catch (IllegalArgumentException e) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+    }
+
     /** Console page paths may carry a slash (simulate/priceChange): the rest of the path is the page. */
     @GetMapping("/explain/page/**")
     public Map<String, Object> explainPage(jakarta.servlet.http.HttpServletRequest request) {

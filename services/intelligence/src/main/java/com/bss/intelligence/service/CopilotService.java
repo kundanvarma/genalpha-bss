@@ -163,6 +163,73 @@ public class CopilotService {
         return result;
     }
 
+    /** Live intent on a care chat: what the customer is really asking, from the
+     * transcript so far. FAST tier, strict labeled lines; the desk shows the
+     * intent as a chip and the suggested reply as a draft the agent may use. */
+    @Transactional
+    public Map<String, Object> chatIntent(Map<String, Object> request) {
+        if (!(request.get("messages") instanceof List<?> messages) || messages.isEmpty()) {
+            throw new BadRequestException("messages [{author, body}] are required");
+        }
+        String system = "You are a chat intent classifier for a telecom care desk. Read the"
+                + " conversation and say what the CUSTOMER wants right now. Respond with ONLY"
+                + " these labeled lines and nothing else:\n"
+                + "INTENT: <one of: connectivity, billing, sim, plan-change, cancellation, delivery, porting, other>\n"
+                + "CONFIDENCE: <0.0-1.0>\n"
+                + "SUMMARY: <one sentence, what they want, in the agent's words>\n"
+                + "REPLY: <a short, empathetic next message the agent could send, max 300 characters, no promises>";
+        String user = "Conversation (JSON, oldest first):\n" + contextOf(request);
+        String raw = completeWithRetry(system, user, "chat-intent");
+        String intent = lineAfter(raw, "INTENT:");
+        String summary = lineAfter(raw, "SUMMARY:");
+        String reply = lineAfter(raw, "REPLY:");
+        if (intent == null || summary == null) {
+            throw new BadRequestException("the model did not follow the INTENT/SUMMARY contract");
+        }
+        double confidence;
+        try {
+            confidence = Math.max(0, Math.min(1, Double.parseDouble(String.valueOf(lineAfter(raw, "CONFIDENCE:")).trim())));
+        } catch (Exception e) {
+            confidence = 0.5;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("intent", intent.trim().toLowerCase().replaceAll("[^a-z-]", ""));
+        result.put("confidence", confidence);
+        result.put("summary", summary);
+        result.put("reply", reply);
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
+    /** After-call work drafted from what actually happened: the situation the
+     * desk saw, the actions logged during the call, the notes. The agent edits
+     * and logs it; nothing is written by the model. */
+    @Transactional
+    public Map<String, Object> wrapUp(Map<String, Object> request) {
+        String system = "You are a telecom customer-service copilot writing the after-call note."
+                + " From the call record, write what the customer contacted us about, what was"
+                + " done, and what is still open. Only state what the record shows. Respond with"
+                + " ONLY these labeled lines and nothing else:\n"
+                + "NOTE: <2-4 sentences, past tense, the contact reason, what was done, what remains>\n"
+                + "DISPOSITION: <one of: resolved, follow-up, escalated, informational>\n"
+                + "FOLLOWUP: <one concrete follow-up or 'none'>";
+        String user = "Call record (JSON):\n" + contextOf(request);
+        String raw = completeWithRetry(system, user, "wrap-up");
+        String note = lineAfter(raw, "NOTE:");
+        if (note == null) {
+            throw new BadRequestException("the model did not follow the NOTE contract");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("note", note);
+        result.put("disposition", String.valueOf(lineAfter(raw, "DISPOSITION:") == null ? "informational" : lineAfter(raw, "DISPOSITION:")).trim().toLowerCase());
+        String follow = lineAfter(raw, "FOLLOWUP:");
+        result.put("followUp", follow == null || follow.trim().equalsIgnoreCase("none") ? null : follow.trim());
+        result.put("provider", llm.provider());
+        result.put("model", llm.model());
+        return result;
+    }
+
     /** Serialize, cap and redact whatever slice of the 360 the console sent. */
     private String contextOf(Map<String, Object> request) {
         if (request == null || request.isEmpty()) {

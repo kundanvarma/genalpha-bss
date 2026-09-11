@@ -408,3 +408,27 @@ details.more .more-actions { display: inline-flex; gap: 6px; margin-left: 6px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .linkbtn { text-decoration: none; border: 1px solid var(--line); padding: 4px 9px; border-radius: var(--radius-s); color: var(--dim); }
 .state.acknowledged { color: var(--teal-text); border-color: var(--teal); }
+
+/* ---------- keyboard: 40–44 px targets, the palette, the key sheet ---------- */
+button, .tab, a.linkbtn, select { min-height: 40px; }
+button.small, .ghost.small, .linkish, .linkish.small { min-height: 32px; }
+input:not([type="checkbox"]):not([type="radio"]) { min-height: 40px; }
+.who .keyhint { gap: 2px; padding: 4px 8px; }
+kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--paper); color: var(--dim); }
+.palette-overlay { position: fixed; inset: 0; background: rgba(20, 24, 28, 0.35); z-index: 60; display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh; }
+.palette { width: min(640px, 92vw); background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 18px 50px rgba(0,0,0,0.25); overflow: hidden; }
+.palette input { width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 16px; font-size: 16px; background: transparent; color: var(--ink); }
+.palette input:focus { outline: none; box-shadow: inset 0 -2px 0 var(--teal); }
+.palette-list { list-style: none; margin: 0; padding: 6px 0; max-height: 46vh; overflow-y: auto; }
+.palette-item { display: grid; grid-template-columns: 130px 1fr; gap: 12px; padding: 9px 16px; cursor: pointer; min-height: 40px; align-items: center; }
+.palette-item.on { background: var(--teal-soft); color: var(--teal-text); }
+.palette-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+
+/* ---------- the loop: live intent on chat, feedback on a recommendation, the after-call note ---------- */
+.chat-intent { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--teal-soft); }
+.chat-intent .chip { margin: 0; background: var(--card); color: var(--teal-text); border-color: var(--teal); }
+.chat-intent .chip.intent-cancellation { color: var(--danger); border-color: var(--danger); }
+.assist-feedback { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.assist-feedback .dim { margin-right: 4px; }
+.assist-ranking { font-size: 12px; color: var(--dim); margin: 2px 0 0; }
+.wrapup textarea { width: 100%; box-sizing: border-box; min-height: 96px; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--paper); color: var(--ink); }

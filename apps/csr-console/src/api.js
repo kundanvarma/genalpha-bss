@@ -733,3 +733,26 @@ export async function customerByIdentifier(idLike) {
   }
   return null;
 }
+
+/* ---- the loop: recommendation outcomes, live intent on chat, the after-call note ---- */
+
+/** Tell the ontology what became of a recommendation it made (accepted, dismissed, helpful, unhelpful). */
+export async function recommendationOutcome(decisionId, outcome, reason) {
+  return json(await authFetch(`/ontology/v1/context/recommendations/${encodeURIComponent(decisionId)}/outcome`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ outcome, ...(reason ? { reason } : {}) }),
+  }));
+}
+
+export async function aiChatIntent(messages) {
+  return json(await authFetch('/ai/v1/chatIntent', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages: messages.slice(-12).map((m) => ({ author: m.author, body: m.body })) }),
+  }));
+}
+
+export async function aiWrapUp(record) {
+  return json(await authFetch('/ai/v1/wrapUp', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record),
+  }));
+}

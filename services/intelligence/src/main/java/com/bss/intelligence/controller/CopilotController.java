@@ -54,6 +54,18 @@ public class CopilotController {
         return ResponseEntity.ok(service.draftQuoteNarrative(request));
     }
 
+    /** Live intent on a care chat: what the customer wants right now, with a reply to consider. */
+    @PostMapping("/chatIntent")
+    public ResponseEntity<Map<String, Object>> chatIntent(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(service.chatIntent(request));
+    }
+
+    /** After-call work: the interaction note drafted from what the call record shows. */
+    @PostMapping("/wrapUp")
+    public ResponseEntity<Map<String, Object>> wrapUp(@RequestBody Map<String, Object> request) {
+        return ResponseEntity.ok(service.wrapUp(request));
+    }
+
     @PostMapping("/ticketReply")
     public ResponseEntity<Map<String, Object>> reply(@RequestBody Map<String, Object> request) {
         return ResponseEntity.ok(service.draftTicketReply(request));

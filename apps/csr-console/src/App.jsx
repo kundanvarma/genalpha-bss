@@ -10,11 +10,14 @@ import Chats from './pages/Chats.jsx';
 import Knowledge from './pages/Knowledge.jsx';
 import HelpDrawer from './HelpDrawer.jsx';
 import IncidentBar from './IncidentBar.jsx';
+import Palette, { MOD } from './Palette.jsx';
 import Stock from './pages/Stock.jsx';
 import Devices from './pages/Devices.jsx';
 import Migrations from './pages/Migrations.jsx';
 import Registry from './pages/Registry.jsx';
 import Collections from './pages/Collections.jsx';
+
+const isMacLike = /Mac|iPhone|iPad/.test(navigator.platform);
 
 export default function App() {
   const [state, setState] = useState('signing-in');
@@ -84,12 +87,17 @@ export default function App() {
       </nav>
         <div className="who">
           <HelpDrawer />
+          <button className="ghost small keyhint" title={`Command palette (${MOD} K) — pages, recent customers, every action on this page`} data-testid="palette-button"
+            onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: isMacLike, ctrlKey: !isMacLike, bubbles: true }))}>
+            <kbd>{MOD}</kbd><kbd>K</kbd>
+          </button>
           <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
           <span className="user">{claims.name || claims.preferred_username || ''}</span>
           <button className="ghost" onClick={signOut}>Sign out</button>
         </div>
       </header>
       <IncidentBar problems={problems} />
+      <Palette />
       <main className="wide">
         <Routes>
           <Route path="/" element={<Customers />} />

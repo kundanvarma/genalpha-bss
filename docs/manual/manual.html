@@ -218,7 +218,19 @@ situation asks for — preview inline or <b>Send</b> it to the customer's inbox,
 order / ticket / customer / product id — and lands on the customer, saying how it got there; the
 six customers opened last are chips above the results. The ticket queue is a dense list
 (severity, issue, customer name, age, time in state, status) with the selected ticket worked in a
-panel beside it. Suite #126; design notes in <code>docs/csr-workspace.md</code>.</p>
+panel beside it.</p>
+<p><b>The loop.</b> Every recommendation Assist shows is a logged decision of the BSS
+(<code>ontology.recommend</code> in the decision log). Do it, Not relevant and the thumbs go back as
+its outcome, and the next ranking reads that history for the desk: a recommendation agents keep
+rejecting is ranked down, one they keep taking is ranked up — and Assist says so under the
+recommendation ("shown 43 times on this desk; taken 1, dismissed 21 — ranked down"). On
+<b>Chats</b>, every new customer message is read for <b>intent</b> (a chip with its confidence, a
+one-line summary, a reply to consider that the agent sends or rewrites). At the end of a call,
+<b>Draft the after-call note</b> writes the wrap-up from what the record shows since the page
+opened; the agent edits it and logs it. Keyboard: <kbd>⌘K</kbd> opens the command palette (pages,
+recent customers, every action on the page); <kbd>/</kbd> <kbd>t</kbd> <kbd>c</kbd> <kbd>k</kbd>
+<kbd>n</kbd> <kbd>r</kbd> <kbd>?</kbd> when the caret is not in a field. Suites #126 and #127
+(scenario KPIs); design notes in <code>docs/csr-workspace.md</code>.</p>
 <h3>The knowledge base at the desk</h3>
 <p>Articles are audience-shelved (customer / CSR / sales / product owner) and the CSR's
 ask-with-sources grounds its answers in them. Search is full-text, ranked, and stems in

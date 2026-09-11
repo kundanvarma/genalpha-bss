@@ -90,14 +90,80 @@ ticket worked in a panel beside it (note, drafted reply, state moves) and one li
 to the customer. What a ticket does not carry (an owner, an SLA clock) is not
 invented.
 
+## The loop — a recommendation is a decision, and its outcome is learned from
+
+Every recommendation Assist shows is recorded as a decision of the BSS
+(`decisionPoint: ontology.recommend`, source `ontology`, autonomy `assist`) in the
+insight decision log, the same log the campaign and intelligence deciders write
+to. What the agent does with it goes back as the decision's outcome:
+
+| The agent… | Outcome | How |
+|---|---|---|
+| clicks **Do it** / **What to say** | `accepted` | `POST /ontology/v1/context/recommendations/{decisionId}/outcome` |
+| clicks **Not relevant** | `dismissed` | same door |
+| answers "Was this the right call?" | `helpful` / `unhelpful` | same door |
+
+Next time the ontology ranks, it reads its own history for the desk (the tenant's
+last 500 recommendation decisions, with the caller's rights) and moves a
+recommendation up or down: fewer than five showings changes nothing; a
+recommendation this desk keeps rejecting is ranked down (one or two steps), one
+it keeps taking is ranked up. Assist says so in words under the recommendation:
+*"Ranked here because: shown 43 times on this desk; taken or found helpful 1,
+dismissed or found unhelpful 21 — ranked down."* The vocabulary is closed; any
+other outcome is refused with a 400.
+
+## Live intent on chat
+
+On the Chats page, every new customer message sends the transcript through the AI
+seam (`POST /ai/v1/chatIntent`, FAST tier, metered like every other call) and the
+desk shows a chip — *Connection trouble · 95%* — a one-line summary, and a reply
+to consider. **Use reply** puts it in the box; the agent sends it, rewrites it, or
+ignores it. The intent vocabulary is closed (connectivity, billing, sim,
+plan-change, cancellation, delivery, porting, other). On the stub provider a
+keyword router answers deterministically, so the suite runs offline.
+
+## Wrap-up
+
+After-call work drafts itself: **Draft the after-call note** sends what the record
+shows since the page opened — the situation Assist saw, the interactions logged
+during the call, the open tickets, the recommendation taken — to
+`POST /ai/v1/wrapUp` and gets back a note, a disposition (resolved, follow-up,
+escalated, informational) and a follow-up. The agent edits the text and **Log the
+note** writes it to the timeline as an interaction. The model only ever sees the
+record; it writes nothing itself.
+
+## Keyboard
+
+Single keys when the caret is not in a field: `/` search customers, `t` ticket
+queue, `c` chats, `k` knowledge, `n` note on this customer or ticket, `r` resolve
+the ticket in front of you, `?` the sheet. Anywhere: `⌘K` (`Ctrl+K`) opens the
+command palette — pages, the customers opened last, and every action visible on
+the current page, typed instead of clicked — and `⌘↵` submits the field you are
+in. Buttons and inputs are at least 40 px tall.
+
+## Scenario KPIs
+
+`ops/e2e/csr_scenarios_test.js` (#127) plays calls the way they arrive and
+measures what the review asked for: time from the page opening to the first
+*correct* action being on screen, and how many pages the agent had to visit.
+
+| Scenario | First correct action | Navigations | The correct action |
+|---|---|---|---|
+| fibre outage on the line | ~0.8 s | 0 | explain the incident before troubleshooting |
+| paused line | ~0.2 s | 0 | resume the line, then the after-call note |
+| chat: "my internet is so slow" | ~1.4 s | 0 | intent = connectivity, a reply to consider |
+| bill question | ~0.3 s | 0 | walk through the open bill |
+
+The suite also proves the loop (seven rejections of one recommendation → it is
+ranked down and says so) and that an outcome outside the vocabulary is refused.
+
 ## What was deliberately left for later
 
-- **Live intent** while the customer is typing in chat, and **explainable
-  feedback** on why an offer ranked where it did. Both need the Assist panel to
-  exist first; they are P2 in the review.
-- **AI wrap-up** (draft the interaction note from the call). The copilot can
-  already draft a ticket reply; wrap-up waits for the timeline to carry chat
-  transcripts.
+- **Tuning the loop's thresholds** (five showings, the ±0.2/±0.5 rates) against
+  real agents. The mechanism is built and proven on seeded history; the numbers
+  are a first guess.
+- **Intent on voice** — the chat classifier reads a transcript; a call needs
+  speech-to-text first.
 - **Grouping duplicate products** on a debris-heavy demo customer. Real customers
   have three lines, not twenty-seven.
 
@@ -113,4 +179,5 @@ timeline, a dismissal, an article sent to the customer's inbox, the master-detai
 queue with the customer's name, and the recent-customers chips.
 
 Regression: `csr_test`, `a11y_test` (zero axe violations), `console_sso_guard_test`,
-`knowledge_test`, `porting_test`, `ontology_test`.
+`knowledge_test`, `porting_test`, `ontology_test`, `care_chat_test`, `copilot_test`,
+`decision_log_test`.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { hasRole } from '../auth.js';
-import { shelfKnowledge, searchKnowledge, sendMessage, logInteraction } from '../api.js';
+import { shelfKnowledge, searchKnowledge, sendMessage, logInteraction, recommendationOutcome, aiWrapUp } from '../api.js';
 import { desk } from '../desk.js';
 
 /* GenAlpha Assist — the persistent panel beside the customer. Grounded, never
@@ -9,15 +9,17 @@ import { desk } from '../desk.js';
  * ontology (every action dry-run through the registry, its conditions as the
  * "why"); the summary comes from the copilot over the same 360 data; the
  * knowledge comes from the shelf. Accept executes with the agent's own token;
- * dismiss tells the desk-learning loop. Refreshes when the customer changes or
- * an action ran — never on a keystroke. */
+ * dismiss and the thumbs go back to the ontology's decision log, where the
+ * ranking reads them next time (the loop). Refreshes when the customer changes
+ * or an action ran — never on a keystroke. The wrap-up drafts the after-call
+ * note from what the timeline shows happened since the page opened. */
 
 const VERDICT = { holds: '✓', fails: '✗', unknown: '?' };
 
-const INTENT_WORDS = { incident: 'outage', bill: 'bill' };
+const INTENT_WORDS = { incident: 'outage', bill: 'bill', paused: 'paused line' };
 
 export default function Assist({ id, customer, bss, version, act, nbo, setNbo, aiNextBestOffer, sendOffer, orderForCustomer,
-  copilot, summarize, onKnowledgeSearch }) {
+  copilot, summarize, onKnowledgeSearch, interactions = [], openTickets = [], openedAt }) {
   const [recs, setRecs] = useState(null);      // null = loading, {…} = answer
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(() => { try { return sessionStorage.getItem('bss.csr.assist') !== 'closed'; } catch { return true; } });
@@ -26,10 +28,15 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
   const [knowledge, setKnowledge] = useState([]);
   const [sent, setSent] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [verdicts, setVerdicts] = useState({}); // decisionId -> helpful | unhelpful
+  const [wrap, setWrap] = useState(null); // null | 'loading' | {note, disposition, followUp, provider, model} | 'logged'
+  const [wrapText, setWrapText] = useState('');
 
+  // a new customer resets the panel; a refresh after an action keeps what was just done on screen
+  useEffect(() => { setDone(null); setDismissed({}); setVerdicts({}); setWrap(null); setWrapText(''); }, [id]);
   useEffect(() => {
     let alive = true;
-    setRecs(null); setError(null); setDone(null);
+    setRecs(null); setError(null);
     bss.recommendations(id).then((r) => { if (alive) setRecs(r); }).catch((e) => { if (alive) { setRecs({ recommendations: [], situation: [], said: '' }); setError(e.message); } });
     return () => { alive = false; };
   }, [id, version]);
@@ -48,14 +55,17 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
   }, [recs]);
 
   const toggle = () => { const next = !open; setOpen(next); try { sessionStorage.setItem('bss.csr.assist', next ? 'open' : 'closed'); } catch { /* fine */ } };
-  const live = (recs?.recommendations || []).filter((r) => !dismissed[r.action + (r.inputs ? JSON.stringify(r.inputs) : '')]);
+  const keyOf = (r) => r.action + (r.inputs ? JSON.stringify(r.inputs) : '');
+  const live = (recs?.recommendations || []).filter((r) => !dismissed[keyOf(r)]);
   const top = live[0];
   const rest = live.slice(1, 4);
+  const tell = (r, outcome, reason) => { if (r.decisionId) recommendationOutcome(r.decisionId, outcome, reason).catch(() => {}); };
 
   const run = (r) => act(async () => {
     const result = await bss[r.action](r.inputs);
     setDone(result.said);
     desk('suggestion.accept', 'assist:' + r.action, { customer: id });
+    tell(r, 'accepted');
     await logInteraction({
       description: `Assist: ${result.said}`,
       channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
@@ -63,14 +73,60 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
     });
   });
   const dismiss = (r) => {
-    setDismissed((d) => ({ ...d, [r.action + (r.inputs ? JSON.stringify(r.inputs) : '')]: true }));
+    setDismissed((d) => ({ ...d, [keyOf(r)]: true }));
     desk('suggestion.dismiss', 'assist:' + r.action, { customer: id });
+    tell(r, 'dismissed');
+  };
+  const verdict = (r, v) => {
+    setVerdicts((x) => ({ ...x, [r.decisionId]: v }));
+    desk('suggestion.feedback', 'assist:' + r.action, { customer: id, verdict: v });
+    tell(r, v);
   };
   const explainIt = (r) => {
     const word = r.action === 'explainIncident' ? 'outage' : r.action === 'explainBill' ? 'bill' : r.title;
     onKnowledgeSearch?.(word);
+    desk('suggestion.accept', 'assist:' + r.action, { customer: id });
+    tell(r, 'accepted');
     searchKnowledge(word).then((hits) => setKnowledge((k) => { const seen = new Set(k.map((a) => a.id)); return [...hits.filter((a) => !seen.has(a.id)).slice(0, 2), ...k].slice(0, 5); })).catch(() => {});
   };
+
+  // the after-call note: only what the record shows since the page opened
+  const sinceOpen = interactions.filter((ix) => !openedAt || !ix.interactionDate || ix.interactionDate >= openedAt);
+  const wrapUp = async () => {
+    setWrap('loading');
+    try {
+      const r = await aiWrapUp({
+        customerName: customer ? `${customer.givenName} ${customer.familyName}` : '',
+        situation: (recs?.situation || []).map((s) => s.says),
+        actions: sinceOpen.map((ix) => ({ description: ix.description, direction: ix.direction, at: ix.interactionDate })),
+        openTickets: openTickets.map((t) => ({ name: t.name, status: t.status })),
+        recommendationTaken: done,
+      });
+      setWrap(r); setWrapText(r.note + (r.followUp ? ` Follow-up: ${r.followUp}` : ''));
+      desk('wrapup.drafted', 'assist:wrapup', { actions: sinceOpen.length });
+    } catch (e) { setWrap(null); setError(e.message); }
+  };
+  const logWrap = () => act(async () => {
+    await logInteraction({
+      description: `Wrap-up (${wrap?.disposition || 'note'}): ${wrapText.trim()}`,
+      channel: 'phone', direction: 'inbound', sourceSystem: 'csr-console',
+      relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }],
+    });
+    desk('wrapup.logged', 'assist:wrapup', { disposition: wrap?.disposition });
+    setWrap('logged');
+  });
+
+  const feedback = (r) => (
+    <div className="assist-feedback" data-testid="assist-feedback">
+      <span className="dim small">Was this the right call?</span>
+      {verdicts[r.decisionId] ? <span className="ok small" data-testid="assist-feedback-done">Thanks — noted as {verdicts[r.decisionId]}.</span> : (
+        <>
+          <button className="ghost small" data-testid="assist-helpful" onClick={() => verdict(r, 'helpful')}>👍 Yes</button>
+          <button className="ghost small" data-testid="assist-unhelpful" onClick={() => verdict(r, 'unhelpful')}>👎 No</button>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <aside className={`assist ${open ? 'open' : 'closed'}`} data-testid="assist-panel" aria-label="GenAlpha Assist">
@@ -87,7 +143,7 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
             {recs && !(recs.situation || []).length && <p className="dim small">Nothing open on this customer: no incident on their lines, no paused line, no open bill.</p>}
             {(recs?.situation || []).map((s) => (
               <p key={s.kind + s.id} className={s.kind === 'incident' ? 'error' : 'small'} data-testid={`assist-situation-${s.kind}`}>
-                {s.kind === 'incident' ? '⚠ ' : s.kind === 'bill' ? '💳 ' : ''}{s.says}
+                {s.kind === 'incident' ? '⚠ ' : s.kind === 'bill' ? '💳 ' : s.kind === 'paused' ? '⏸ ' : ''}{s.says}
               </p>
             ))}
             {error && <p className="dim small">Assist could not read the ontology ({error}).</p>}
@@ -102,6 +158,7 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
               <div className="assist-rec" data-testid={`assist-rec-${top.action}`}>
                 <strong>{top.title}</strong>
                 <p className="small">{top.why}</p>
+                {top.ranking && <p className="assist-ranking" data-testid="assist-ranking">Ranked here because: {top.ranking.says}.</p>}
                 {top.check && (
                   <details className="small">
                     <summary className="dim">Why: {top.check.preconditions.filter((v) => v.verdict === 'holds').length} of {top.check.preconditions.length} conditions hold</summary>
@@ -119,11 +176,12 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
                   )}
                   <button className="ghost" data-testid="assist-dismiss" onClick={() => dismiss(top)}>Not relevant</button>
                 </div>
+                {feedback(top)}
               </div>
             )}
             {rest.length > 0 && (
               <ul className="small assist-more">
-                {rest.map((r) => <li key={r.action + JSON.stringify(r.inputs || {})}>{r.title} <span className="dim">— {r.why}</span></li>)}
+                {rest.map((r) => <li key={keyOf(r)}>{r.title} <span className="dim">— {r.why}</span></li>)}
               </ul>
             )}
           </div>
@@ -200,6 +258,31 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
             ))}
             <Link className="dim small" to="/knowledge">Open the knowledge base →</Link>
           </div>
+
+          {/* after-call work: the note drafted from what the record shows, logged by the agent */}
+          {hasRole('ai:use') && (
+            <div className="assist-block wrapup" data-testid="assist-wrapup">
+              <div className="assist-label">Wrap up</div>
+              {!wrap && (
+                <>
+                  <p className="dim small">{sinceOpen.length ? `${sinceOpen.length} thing${sinceOpen.length === 1 ? '' : 's'} logged since this page opened.` : 'Nothing logged since this page opened yet.'}</p>
+                  <button className="ghost" data-testid="assist-wrapup-draft" onClick={wrapUp}>📝 Draft the after-call note</button>
+                </>
+              )}
+              {wrap === 'loading' && <p className="dim small">Writing the note from the record…</p>}
+              {wrap && wrap !== 'loading' && wrap !== 'logged' && (
+                <>
+                  <textarea data-testid="assist-wrapup-text" aria-label="After-call note" value={wrapText} onChange={(e) => setWrapText(e.target.value)} />
+                  <p className="dim small">Disposition: {wrap.disposition}. Drafted by {wrap.provider} ({wrap.model}) — edit before logging.</p>
+                  <div className="stack">
+                    <button className="primary" data-testid="assist-wrapup-log" onClick={logWrap} disabled={!wrapText.trim()}>Log the note</button>
+                    <button className="ghost" onClick={() => setWrap(null)}>Discard</button>
+                  </div>
+                </>
+              )}
+              {wrap === 'logged' && <p className="ok small" data-testid="assist-wrapup-done">Wrap-up logged on the timeline.</p>}
+            </div>
+          )}
           {customer?.id && <p className="dim small assist-foot">Grounded on the ontology's reading of this customer with your own rights; unanswered: {(recs?.unanswered || []).length ? recs.unanswered.join(', ') : 'nothing'}.</p>}
         </>
       )}
