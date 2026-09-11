@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>genalpha-bss · back office</title>
-<link rel="stylesheet" href="style.css?v=97">
+<link rel="stylesheet" href="style.css?v=98">
 </head>
 <body>
 <header class="top">
@@ -43,11 +43,14 @@
     </div>
 
     <form id="editor" class="editor" autocomplete="off">
-      <h2 id="editor-title">New</h2>
+      <div class="editor-head" style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+        <h2 id="editor-title" style="margin:0">New</h2>
+        <button type="button" id="editor-close" class="ghost" title="Close without saving (Esc)" aria-label="Close" data-testid="editor-close">&times;</button>
+      </div>
       <div id="fields" class="fields"></div>
       <div class="actions">
         <button type="submit" id="save" class="primary">Create</button>
-        <button type="button" id="cancel-edit" class="ghost" hidden>Cancel</button>
+        <button type="button" id="cancel-edit" class="ghost">Cancel</button>
       </div>
       <p id="editor-error" class="error" hidden></p>
     </form>
@@ -60,7 +63,7 @@
 
 <!-- Which tenant's IdP this host logs in against; served by the gateway. -->
 <script src="/console/tenant-config.js"></script>
-<script src="auth.js?v=97"></script>
-<script src="app.js?v=97"></script>
+<script src="auth.js?v=98"></script>
+<script src="app.js?v=98"></script>
 </body>
 </html>

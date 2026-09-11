@@ -1002,18 +1002,19 @@ const RESOURCES = [
     path: 'scoringRule',
     base: '/tmf-api/salesManagement/v4/salesLead',
     title: 'Lead scoring',
+    intro: 'Every new lead gets a score from the signals that predict a sale. Each rule here says: when a lead shows this signal, add these points. The total decides which sales band the lead lands in (Lead routing, next tab). A rule is a row — add one, or remove one; there is nothing else to configure.',
     noEdit: true,
     noDelete: true,
     fields: [
-      { name: 'field', label: 'Signal', kind: 'select', options: [
-        { label: 'Source equals', value: 'source' },
-        { label: 'Company present', value: 'companyPresent' },
-        { label: 'Company size ≥', value: 'companySizeMin' },
-        { label: 'Keyword in lead', value: 'keyword' },
-        { label: 'CDP engagement', value: 'engagement' },
+      { name: 'field', label: 'When the lead…', kind: 'select', options: [
+        { label: 'came from a source (web, store, partner, campaign…)', value: 'source' },
+        { label: 'names a company', value: 'companyPresent' },
+        { label: 'is a company of at least this many employees', value: 'companySizeMin' },
+        { label: 'mentions a keyword', value: 'keyword' },
+        { label: 'has engaged with us before (from the customer data platform)', value: 'engagement' },
       ] },
-      { name: 'value', label: 'Value (source / size / keyword / opened·clicked·engaged·knownProspect)' },
-      { name: 'points', label: 'Points', kind: 'number', required: true },
+      { name: 'value', label: 'What to match — the source name, the employee count, the keyword, or one of: opened, clicked, engaged, knownProspect (leave empty for "names a company")' },
+      { name: 'points', label: 'Points to add to the lead\'s score', kind: 'number', required: true },
     ],
     columns: ['field', 'value', 'points'],
   },
@@ -1022,11 +1023,12 @@ const RESOURCES = [
     path: 'routingRule',
     base: '/tmf-api/salesManagement/v4/salesLead',
     title: 'Lead routing',
+    intro: 'Who works a lead, by its score. Each band says: from this score upwards, hand the lead to this person or team. The highest band the lead clears wins; a lead below every band stays unassigned until someone picks it up.',
     noEdit: true,
     noDelete: true,
     fields: [
-      { name: 'minScore', label: 'Minimum score', kind: 'number', required: true },
-      { name: 'assignee', label: 'Assign to', required: true },
+      { name: 'minScore', label: 'From this score upwards', kind: 'number', required: true },
+      { name: 'assignee', label: 'Hand the lead to (a name or a team)', required: true },
     ],
     columns: ['minScore', 'assignee'],
   },
@@ -1612,6 +1614,7 @@ const RESOURCES = [
 
 // Presentation names for raw TMF field keys (fallback: the key itself).
 const COLUMN_LABELS = {
+  field: 'When the lead…', value: 'Matches', points: 'Points', minScore: 'From score', assignee: 'Handed to',
   lifecycleStatus: 'Status', isBundle: 'Bundle', lastUpdate: 'Updated',
   productOffering: 'Offering', stockedQuantity: 'Stocked', reservedQuantity: 'Reserved',
   availableQuantity: 'Available', billNo: 'Bill no', relatedParty: 'Customer',
@@ -6121,7 +6124,6 @@ function stopEditing() {
   editingId = null;
   el('editor-title').textContent = 'New';
   el('save').textContent = 'Create';
-  el('cancel-edit').hidden = true;
   el('editor').reset();
   if (active && active.noCreate) el('editor').hidden = true; // stays edit-only
   el('editor-error').hidden = true;
@@ -6134,7 +6136,6 @@ function startEditing(item) {
   editingId = item.id;
   el('editor-title').textContent = 'Edit ' + (item.name || item.id);
   el('save').textContent = 'Save changes';
-  el('cancel-edit').hidden = false;
   el('editor').hidden = false; // reveal for noCreate tabs
   openDrawer();
   for (const f of active.fields) {
@@ -6878,8 +6879,21 @@ async function loadList() {
   renderEditor();
   const q = active.serverSearch && listFilter ? `&q=${encodeURIComponent(listFilter)}` : '';
   const res = await authFetch(`${active.base || API_BASE}/${active.path}?offset=${offset}&limit=${PAGE_SIZE}${q}`);
-  const items = await res.json();
   if (active !== current) return;   // the user switched tabs while this was loading — drop the stale paint
+  if (!res.ok) {
+    // say so, in words — never "NaN total" and an empty table that looks like "nothing here"
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = Math.max(1, (active.columns || []).length);
+    td.className = 'dim'; td.dataset.testid = 'list-unavailable';
+    td.textContent = res.status === 403 ? 'You do not have the role to see this page.'
+      : res.status >= 500 || res.status === 404 ? 'This page could not be loaded — the component behind it did not answer. Try again in a moment; if it stays like this, the component is down.'
+      : `This page could not be loaded (${res.status}).`;
+    tr.append(td); el('listing-body').replaceChildren(tr);
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    return;
+  }
+  const items = await res.json();
   const total = Number(res.headers.get('X-Total-Count') || items.length);
 
   // #200: search filters + header sorting over the loaded page (honest hint —
@@ -7859,6 +7873,8 @@ const PAGE_GOALS = {
   decisions: 'Goal: any choice the system made can be explained to a customer or an auditor in six sentences. Watch: choices that fell back to the default.',
   'learning-contracts': 'Goal: every kind of automatic decision runs under a written intent — what to optimise, what must never happen, what it may choose, how much it may do alone. Watch: paused rules.',
   'device-entitlements': 'Goal: every line\'s phone knows exactly what it may use — nothing more, nothing less. Watch: refusals in the request list — a SIM the network knows but the BSS has not bound is a provisioning gap.',
+  scoringRule: 'Goal: the leads worth a call float to the top. Watch: a rule nobody remembers why — points without a reason drift the score.',
+  routingRule: 'Goal: every scored lead lands with someone who will call it. Watch: leads below every band — they wait for nobody.',
   ontology: 'Goal: every business action the BSS can perform is written down once — meaning, conditions, who may, what follows — and that one definition is what the console, the SDK and the AI agents run against. Watch: an action whose conditions you cannot say in words.',
 };
 function renderIntro(resource) {
@@ -8077,6 +8093,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const ed = el('editor'); if (!ed) return;
   ed.addEventListener('focusin', () => { if (!ed.classList.contains('open')) openDrawer(); });
   el('cancel-edit')?.addEventListener('click', closeDrawer);
+  el('editor-close')?.addEventListener('click', () => { stopEditing(); closeDrawer(); });
 });
 
 

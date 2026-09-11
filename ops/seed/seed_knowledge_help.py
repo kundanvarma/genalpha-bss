@@ -180,6 +180,25 @@ article("Journeys and campaigns", PO, ["pane:journey", "pane:campaign", "marketi
 article("Audiences and consent", PO, ["pane:audienceBuilder", "pane:audience", "marketing"], "Marketing how-to", """
 Audiences are built from traits the event bus fills (plan, usage, tenure, sentiment). Marketing consent is enforced at send time, not at build time. Prospects (imported) need documented consent before reach. Activation to Meta/Google sends hashed identifiers only.
 """)
+article("Lead scoring: which leads are worth a call", PO, ["pane:scoringRule", "sales", "how-to"], "Sales how-to", """
+A lead arrives from the web form, a store, a partner or a campaign. Scoring turns what we know about it into a number, so the best leads reach a person first.
+1. Each row is one rule: "when the lead … add … points". Pick the signal, say what to match, give it points.
+   • came from a source: match the source name (web, store, partner, the campaign's name).
+   • names a company: no value needed — any company name counts.
+   • a company of at least N employees: match the number.
+   • mentions a keyword: match the word, e.g. "fiber" or "5G".
+   • has engaged with us before: match opened, clicked, engaged or knownProspect — what the customer data platform saw.
+2. Points add up. A web lead from a 50-person company that mentions fiber might score 1 + 5 + 10 = 16.
+3. The total decides the sales band (next tab, Lead routing): from a score upwards, the lead lands with a named person or team.
+4. Close the form with Cancel, the × or Esc — nothing is saved until you press Create. Remove a rule by deleting its row.
+Keep the list short and say why each rule exists; points without a reason drift the score.
+""")
+article("Lead routing: who works a lead", PO, ["pane:routingRule", "sales", "how-to"], "Sales how-to", """
+Bands by score. Each row says: from this score upwards, hand the lead to this person or team. The highest band the lead clears wins.
+• Example: 0 → "inbound desk", 15 → "Kari (SMB)", 40 → "enterprise team".
+• A lead below every band stays unassigned until someone picks it up on the Sales › Leads page.
+• Change a band and only new leads follow it; leads already assigned keep their owner.
+""")
 article("What the BSS can do: the operational ontology", PO, ["pane:ontology", "ontology", "platform"], "Platform how-to", """
 This page is the business model of the BSS, written down once and read by machines: the concepts (Customer, Subscription, Product offering, Service, Order, Bill, Entitlement), the governed actions that may be performed on them, and the capabilities of the components that execute them.
 • An action card says what the action means, who may perform it, every condition that must hold first, which component executes it, what follows, and which events it emits. The same definition drives the SDK and the tools AI agents see — it is not documentation, it is the contract.
