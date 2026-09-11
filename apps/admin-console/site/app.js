@@ -7670,6 +7670,9 @@ async function openHelpDrawer(resource) {
       const p = document.createElement('p'); p.className = 'dim'; p.dataset.testid = 'help-empty';
       p.textContent = search.value.trim() ? 'Nothing found. Try other words' + (roles.includes('ai:use') ? ', or ask.' : '.') : 'No help written for this page yet.';
       list.append(p);
+      // The page can still say what it is for: its own goal line stands in for the missing article.
+      const goal = search.value.trim() ? null : (resource.intro || PAGE_GOALS[resource.path]);
+      if (goal) { const g = document.createElement('p'); g.dataset.testid = 'help-goal'; g.textContent = goal; list.append(g); }
     }
     for (const a of articles) {
       const d = document.createElement('details'); d.dataset.testid = 'help-article';
@@ -7694,19 +7697,50 @@ async function openHelpDrawer(resource) {
   });
   if (roles.includes('ai:use')) {
     const ask = document.createElement('button'); ask.className = 'primary'; ask.textContent = '✨ Ask'; ask.dataset.testid = 'help-ask';
+    // The BSS explains itself: one press asks, in the page's own context, what the page is
+    // for and how to use it — answered from its help articles and its manual section.
+    const explain = document.createElement('button'); explain.className = 'ghost'; explain.textContent = 'Explain this page'; explain.dataset.testid = 'help-explain';
     const out = document.createElement('div'); out.dataset.testid = 'help-answer'; out.className = 'help-answer';
-    ask.addEventListener('click', async () => {
-      const q = search.value.trim(); if (!q) { out.textContent = 'Type a question first.'; return; }
-      ask.disabled = true; out.textContent = 'Asking…';
+    const askIt = async (q) => {
+      ask.disabled = true; explain.disabled = true; out.textContent = 'Asking…';
       const r = await authFetch('/ai/v1/knowledgeAsk', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: q, context: 'pane:' + resource.path }) });
       const a = await r.json().catch(() => ({}));
       out.replaceChildren();
-      const p = document.createElement('p'); p.textContent = a.answer || a.message || 'no answer'; out.append(p);
+      if (!r.ok) {
+        // an honest face for the governor's answers: the AI kill-switch (403) and the budget ceiling (429)
+        const p = document.createElement('p');
+        p.textContent = r.status === 403 ? 'Ask is switched off for this tenant (AI kill-switch). The articles above still apply.'
+          : r.status === 429 ? 'The AI budget for this period is used up. Search still works; Ask returns next period.'
+          : `Ask did not answer (${r.status}${a.message ? ': ' + a.message : ''}).`;
+        out.append(p);
+      } else {
+        // the model is asked for plain text; whatever markdown slips through is shown as words
+        const lines = String(a.answer || 'The assistant returned no answer.')
+          .replace(/```[a-z]*\n?/g, '').replace(/\*\*/g, '').replace(/`/g, '').split('\n');
+        let para = [];
+        const flush = () => { if (para.length) { const q = document.createElement('p'); q.textContent = para.join(' '); out.append(q); para = []; } };
+        for (const raw of lines) {
+          const line = raw.replace(/^#+\s*/, '').trim();
+          if (!line) { flush(); continue; }
+          if (/^(\d+[.)]|[-•*])\s+/.test(line)) { flush(); const q = document.createElement('p'); q.className = 'help-step'; q.textContent = line.replace(/^[-•*]\s+/, '• '); out.append(q); continue; }
+          para.push(line);
+        }
+        flush();
+      }
       if ((a.sources || []).length) { const s = document.createElement('p'); s.className = 'dim'; s.textContent = 'Sources: ' + a.sources.map((x) => x.title).join(' · ') + (a.cached ? ' · cached answer' : ''); out.append(s); }
-      ask.disabled = false;
+      ask.disabled = false; explain.disabled = false;
+    };
+    ask.addEventListener('click', () => {
+      const q = search.value.trim(); if (!q) { out.textContent = 'Type a question first.'; return; }
+      askIt(q);
     });
-    askRow.append(ask); drawer.append(askRow, out);
+    explain.addEventListener('click', () => {
+      const q = `What is the "${resource.title}" page for, and how do I use it step by step?`;
+      search.value = q;
+      askIt(q);
+    });
+    askRow.append(ask, explain); drawer.append(askRow, out);
   }
   await shelf();
 }

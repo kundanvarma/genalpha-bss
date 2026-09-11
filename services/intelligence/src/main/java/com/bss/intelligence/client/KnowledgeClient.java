@@ -32,10 +32,28 @@ public class KnowledgeClient {
     }
 
     public List<Map<String, Object>> searchAs(String bearerToken, String q) {
+        return fetch(bearerToken, q, null);
+    }
+
+    /** The shelf of one screen: every article the asker may read that carries the tag
+     *  (e.g. "pane:simulate/priceChange") — no keyword needed, the page itself is the query. */
+    public List<Map<String, Object>> shelfAs(String bearerToken, String tag) {
+        return fetch(bearerToken, null, tag);
+    }
+
+    private List<Map<String, Object>> fetch(String bearerToken, String q, String tag) {
         try {
             String body = restClient.get()
-                    .uri(uri -> uri.path("/tmf-api/knowledgeManagement/v4/article")
-                            .queryParam("q", q).build())
+                    .uri(uri -> {
+                        uri.path("/tmf-api/knowledgeManagement/v4/article");
+                        if (q != null) {
+                            uri.queryParam("q", q);
+                        }
+                        if (tag != null) {
+                            uri.queryParam("tag", tag);
+                        }
+                        return uri.build();
+                    })
                     .header("Authorization", "Bearer " + bearerToken)
                     .retrieve().body(String.class);
             return body == null ? List.of() : objectMapper.readValue(body, JSON_LIST);

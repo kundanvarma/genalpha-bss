@@ -62,7 +62,8 @@ public class KnowledgeAskService {
     /** @param screen the screen the question came from (e.g. "pane:approvals") — recorded with a gap. */
     @org.springframework.transaction.annotation.Transactional
     public Map<String, Object> ask(String bearerToken, String question, String screen) {
-        List<Map<String, Object>> hits = knowledge.searchAs(bearerToken, question);
+        Retrieval retrieval = retrieve(bearerToken, question, screen);
+        List<Map<String, Object>> hits = retrieval.hits();
         Map<String, Object> out = new LinkedHashMap<>();
         if (hits.isEmpty()) {
             recordGap(question, screen);
@@ -71,6 +72,12 @@ public class KnowledgeAskService {
             out.put("sources", List.of());
             out.put("gap", true);
             return out;
+        }
+        if (!retrieval.questionMatched()) {
+            // the screen's own shelf will still try to answer, but nothing matched the
+            // question's words — that is a gap for the content team whatever the model says
+            recordGap(question, screen);
+            out.put("gap", true);
         }
         List<Map<String, Object>> top = hits.subList(0, Math.min(TOP, hits.size()));
         // the cache key is the asker's shelf (what they could read) + the question; the
@@ -96,9 +103,17 @@ public class KnowledgeAskService {
             sources.add(Map.of("id", String.valueOf(a.get("id")),
                     "title", String.valueOf(a.get("title"))));
         }
-        String system = "You are the knowledge assistant of a telecom operator. Answer the"
-                + " question using ONLY the articles below. Be concise and practical; name the"
-                + " article title you drew from. If the articles do not cover it, say so"
+        String where = screen == null || screen.isBlank() ? ""
+                : " The person is asking from the screen \"" + screenName(screen) + "\" of this BSS;"
+                + " articles tagged for that screen describe it — when they ask what the page is for"
+                + " or how to use it, explain from those first.";
+        String system = "You are the knowledge assistant of a telecom operator, and this BSS explains"
+                + " itself: the articles below include its own Operator's Manual and screen help." + where
+                + " Answer the question using ONLY the articles below. Be concise and practical;"
+                + " give numbered steps when the question is how to do something; name the"
+                + " article title you drew from. Write plain text for a small side panel: short"
+                + " paragraphs and numbered lines, no markdown headings, no bold markers, no code"
+                + " fences. If the articles do not cover it, say so"
                 + " plainly and suggest raising a ticket. Never invent policies or prices.\n\n"
                 + "ARTICLES:\n" + context;
         String answer = governor.complete("knowledge-ask",
@@ -110,6 +125,99 @@ public class KnowledgeAskService {
         out.put("cached", false);
         cache.put(key, new Cached(fp.toString(), new LinkedHashMap<>(out), System.currentTimeMillis()));
         return out;
+    }
+
+    /**
+     * Page-aware retrieval: the keyword hits that carry the screen's tag come first, then
+     * the other keyword hits, then the rest of the screen's own shelf — so "how do I use
+     * this?" asked from a page is answered from that page's help and manual section even
+     * when the words of the question match nothing. Only when both are empty is it a gap.
+     */
+    record Retrieval(List<Map<String, Object>> hits, boolean questionMatched) { }
+
+    Retrieval retrieve(String bearerToken, String question, String screen) {
+        List<Map<String, Object>> byWords = new ArrayList<>(knowledge.searchAs(bearerToken, question));
+        // keyword search is AND-shaped: "how do I use the simulator" must contain every word.
+        // A second pass with only the content words catches the article that says "simulator"
+        // but never "use".
+        String gist = gistOf(question);
+        List<Map<String, Object>> byGist = !gist.isEmpty() && !gist.equalsIgnoreCase(question.trim())
+                ? knowledge.searchAs(bearerToken, gist) : List.of();
+        boolean paged = screen != null && !screen.isBlank();
+        List<Map<String, Object>> shelf = paged ? knowledge.shelfAs(bearerToken, screen.trim()) : List.of();
+        Map<String, Map<String, Object>> ordered = new LinkedHashMap<>();
+        // 1. keyword hits that belong to this screen
+        if (paged) {
+            for (Map<String, Object> a : byWords) {
+                if (hasTag(a, screen)) {
+                    ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+                }
+            }
+        }
+        // 2. the screen's own shelf — guaranteed slots, so a page's help is never crowded out
+        //    by loose keyword matches ("sim" finding eSIM articles for the prospect simulator)
+        int reserved = 0;
+        for (Map<String, Object> a : shelf) {
+            if (reserved >= SHELF_SLOTS) {
+                break;
+            }
+            if (ordered.putIfAbsent(String.valueOf(a.get("id")), a) == null) {
+                reserved++;
+            }
+        }
+        // 3. the rest of the keyword hits, then the content-word hits, then the rest of the shelf
+        for (Map<String, Object> a : byWords) {
+            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+        }
+        for (Map<String, Object> a : byGist) {
+            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+        }
+        for (Map<String, Object> a : shelf) {
+            ordered.putIfAbsent(String.valueOf(a.get("id")), a);
+        }
+        return new Retrieval(new ArrayList<>(ordered.values()), !byWords.isEmpty() || !byGist.isEmpty());
+    }
+
+    /** How many of the TOP articles the asker's own screen may claim before keyword hits fill the rest. */
+    private static final int SHELF_SLOTS = 3;
+
+    private static final java.util.Set<String> STOPWORDS = java.util.Set.of(
+            "how", "do", "does", "i", "we", "you", "to", "use", "using", "the", "a", "an", "this", "that",
+            "what", "is", "are", "for", "and", "or", "of", "in", "on", "it", "its", "my", "me", "can",
+            "should", "would", "page", "tab", "screen", "step", "by", "steps", "with", "where", "when",
+            "which", "why", "who", "please", "help", "want", "need", "there", "here", "get", "make");
+
+    /** The content words of a question: "how do I use the simulator?" → "simulator". */
+    static String gistOf(String question) {
+        if (question == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String w : question.toLowerCase(java.util.Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+            if (w.length() > 1 && !STOPWORDS.contains(w)) {
+                sb.append(sb.length() == 0 ? "" : " ").append(w);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static boolean hasTag(Map<String, Object> article, String tag) {
+        Object tags = article.get("tags");
+        if (tags == null) {
+            return false;
+        }
+        for (String t : String.valueOf(tags).split(",")) {
+            if (t.trim().equalsIgnoreCase(tag.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** "pane:simulate/priceChange" → "simulate/priceChange": the screen in the console's own words. */
+    private static String screenName(String screen) {
+        int i = screen.indexOf(':');
+        return i < 0 ? screen : screen.substring(i + 1);
     }
 
     private void recordGap(String question, String context) {

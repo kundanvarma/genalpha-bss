@@ -350,7 +350,9 @@ th { border-bottom-color: var(--line); }
 .help-drawer details { border: 1px solid var(--line, #e5e5e5); border-radius: 8px; padding: 6px 10px; margin: 0 0 6px; }
 .help-drawer summary { cursor: pointer; font-weight: 600; font-size: 13px; }
 .help-drawer .help-body { white-space: pre-wrap; font-size: 13px; margin-top: 6px; line-height: 1.45; }
-.help-drawer .help-answer { font-size: 13px; }
+.help-drawer .help-answer { font-size: 13px; line-height: 1.45; }
+.help-drawer .help-answer p { margin: 0 0 8px; }
+.help-drawer .help-answer .help-step { margin: 0 0 6px 10px; }
 .help-drawer[hidden] { display: none; }
 .pager[hidden] { display: none !important; }
 #list-search[hidden] { display: none !important; }

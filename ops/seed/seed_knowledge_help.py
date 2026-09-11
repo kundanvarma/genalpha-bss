@@ -153,13 +153,31 @@ Help articles are the shelf behind the ? on every screen — this tab is where t
 • Status: only published articles show. Drafts stay here.
 • Unanswered questions at the top of this tab are what people asked that no article answered — Write it prefills a new article; once published, Ask is no longer needed for that question.
 """)
-article("Journeys and campaigns", PO, ["pane:journeys", "pane:campaigns", "marketing"], "Marketing how-to", """
+article("Simulator: what a price change would do before you make it", PO, ["pane:simulate/priceChange", "simulator", "how-to"], "Simulator how-to", """
+The simulator replays a proposed price against the REAL base, catalog and wholesale rate card. Nothing in production moves — the report is the only thing written.
+1. Offering: the exact catalog name of the offer you want to reprice (copy it from Product Offerings).
+2. Proposed monthly price: the new recurring price in {cur}.
+3. Assumed churn %: leave blank for the mechanical answer (everyone stays). Fill it to see the revenue change if that share of the raised base leaves. The default prior is measured from this tenant's own ceased products — the report labels it a floor, not a prediction.
+4. Save. The row shows the annual revenue delta and how many subscribers are churn-flagged; open it for one line per offering — subscribers, old → new price, margin per subscriber before and after, and an ASSUMPTIONS line that names everything the number rests on.
+Read the ASSUMPTIONS line first. A report without a churn assumption is arithmetic, not a forecast.
+Related answers off the same engines: the prospect simulator (next tab), the chaos twin (a PSP outage priced in {cur}), the price-rise rehearsal (the right-to-exit cohort counted before any letter exists) and the cross-tenant elasticity benchmark — see the Operator's Manual, "The commercial simulator, complete".
+""")
+article("Prospect simulator: a business on this BSS from a public price list", PO, ["pane:simulate/prospect", "simulator", "how-to"], "Simulator how-to", """
+The only simulator with NO real data behind it — its report says so on the first line. Use it in a first meeting: a prospect's public price list plus an assumed base mix become annual revenue, a cost ceiling and a gross-margin floor.
+1. Scenario name: e.g. "Prospect X, published prices Q3".
+2. Currency: theirs (blank = {cur}).
+3. Wholesale data rate per GB: what they pay upstream, if known — blank means no cost side and no margin floor.
+4. Offerings as JSON: one entry per plan — name, monthlyPrice, subscribers and optionally allowanceGb. Example: [{"name":"Mobile 20 GB","monthlyPrice":299,"subscribers":12000,"allowanceGb":20}].
+5. Save. The row shows total subscribers, annual revenue and the margin floor; open it for one line per plan and the ASSUMPTIONS line.
+The full prospect simulation (a walled sandbox with their shelf, a twin base and a billed compressed quarter) runs from the onboarding API; this tab is the arithmetic front of it.
+""")
+article("Journeys and campaigns", PO, ["pane:journey", "pane:campaign", "marketing"], "Marketing how-to", """
 • A campaign is the umbrella; a journey is the sequence (welcome, winback, running-low, launch day).
 • Journeys start on business events (order placed, usage threshold, offer launched) or on an audience.
 • Holdout keeps a control group so lift is measurable; auto-tuning shifts traffic between message arms only on evidence.
 • Channels: email, SMS, in-app, WhatsApp (where the tenant has it). Quiet hours are per tenant.
 """)
-article("Audiences and consent", PO, ["pane:audience-builder", "pane:audiences", "marketing"], "Marketing how-to", """
+article("Audiences and consent", PO, ["pane:audienceBuilder", "pane:audience", "marketing"], "Marketing how-to", """
 Audiences are built from traits the event bus fills (plan, usage, tenure, sentiment). Marketing consent is enforced at send time, not at build time. Prospects (imported) need documented consent before reach. Activation to Meta/Google sends hashed identifiers only.
 """)
 article("Device entitlements: what a phone may use", PO, ["pane:device-entitlements", "operations", "network"], "Operations how-to", """
