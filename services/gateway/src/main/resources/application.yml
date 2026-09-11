@@ -252,6 +252,11 @@ spring:
           uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
           predicates:
             - Path=/ts43/**
+        # GSMA RCC.14: the RCS client's auto-configuration door (same server, same SIM credential)
+        - id: rcs
+          uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
+          predicates:
+            - Path=/rcs/**
         - id: base-migration
           uri: ${BASE_MIGRATION_URL:http://localhost:8146}
           predicates:

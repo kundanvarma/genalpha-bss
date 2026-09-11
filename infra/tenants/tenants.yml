@@ -804,6 +804,15 @@ bss:
         # mock in dev, the host's adapter in production.
         auc-base-url: ${AUC_BASE_URL_TARANGA:http://mock-hss:8080}
         auc-token: ${AUC_TOKEN_TARANGA:}
+        # The SM-DP+ this operator buys its eSIM profiles from (SGP.22 ES2+),
+        # and its own RCS network for the RCC.14 configuration door. Absent
+        # fields fall back to the deployment defaults (SMDP_BASE_URL, RCS_*).
+        smdp-base-url: ${SMDP_BASE_URL_TARANGA:http://mock-smdp:8080}
+        smdp-requester-id: ${SMDP_REQUESTER_ID_TARANGA:taranga}
+        smdp-address: ${SMDP_ADDRESS_TARANGA:rsp.mock-smdp.example}
+        rcs-ims-realm: ${RCS_IMS_REALM_TARANGA:ims.mnc006.mcc242.3gppnetwork.org}
+        rcs-pcscf: ${RCS_PCSCF_TARANGA:pcscf.ims.taranga.no}
+        rcs-apn: ${RCS_APN_TARANGA:ims}
         brand-name: Taranga
         brand-color: "#4A4AC3"
         locale: "en"

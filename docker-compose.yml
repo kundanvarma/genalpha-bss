@@ -847,11 +847,13 @@ services:
       CATALOG_BASE_URL: http://product-catalog:8080
       # what phones reach: the gateway's /ts43 route
       ENTITLEMENT_PUBLIC_BASE_URL: http://localhost:8080
-      ENTITLEMENT_SMDP_ADDRESS: rsp.genalpha.example
       # TS.43 §2.6 refresh notices ride communication (push / SMS)
       COMMUNICATION_BASE_URL: http://communication:8080
       # TS.43 §2.8.2 OIDC path: the realms' confidential bss-ecs client
       ENTITLEMENT_OIDC_CLIENT_SECRET: ecs-secret
+      # the SM-DP+ seam (SGP.22 ES2+): eSIM profiles come from here
+      SMDP_BASE_URL: http://mock-smdp:8080
+      ENTITLEMENT_SMDP_ADDRESS: rsp.mock-smdp.example
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
       JAVA_OPTS: "-Xmx200m -XX:MaxMetaspaceSize=112m"
@@ -885,8 +887,22 @@ services:
     restart: unless-stopped
     environment:
       HSS_BASE_URL: http://mock-hss:8080
+      SMDP_BASE_URL: http://mock-smdp:8080
     ports:
       - "8158:8080"
+
+  # Stands in for the certified SM-DP+ (eSIM profile server) an operator buys:
+  # SGP.22 ES2+ orders/confirms/releases, download-progress notifications back
+  # to the entitlement server. :8159. DEV ONLY.
+  mock-smdp:
+    build: ./integrations/mock-smdp
+    container_name: bss-mock-smdp
+    restart: unless-stopped
+    environment:
+      SMDP_ADDRESS: rsp.mock-smdp.example
+      ES2PLUS_NOTIFY_URL: http://device-entitlement:8080/ts43/es2plus
+    ports:
+      - "8159:8080"
 
   device-commerce:
     build: ./services/device-commerce

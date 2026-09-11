@@ -172,17 +172,22 @@ async function until(what, fn, tries = 30, ms = 2000) {
   const watch = { companionTerminalId: `35${String(run).slice(-13)}`, companionEid: '89049032' + String(run).slice(-24).padStart(24, '0'), companionVendor: 'GenAlphaSim', companionModel: 'SimWatch' };
   const elig = await phone({ imsi, terminalId, apps: ['ap2006'], operation: 'CheckEligibility', token: first.token, ...watch });
   if (elig.entitlements.ap2006.CompanionAppEligibility !== '1') fail('companion not eligible: ' + JSON.stringify(elig.entitlements.ap2006));
-  const sub = await phone({ imsi, terminalId, apps: ['ap2006'], operation: 'ManageSubscription', operationType: 0, token: first.token, ...watch });
+  const sub = await phone({ imsi, terminalId, apps: ['ap2006'], operation: 'ManageSubscription', operationType: 0, token: first.token, installProfile: true, ...watch });
   const info = sub.entitlements.ap2006;
   if (info.SubscriptionResult !== '2' || !info.DownloadInfo || !info.DownloadInfo.ProfileActivationCode) fail('companion subscription wrong: ' + JSON.stringify(info));
   const code = Buffer.from(info.DownloadInfo.ProfileActivationCode, 'base64').toString();
-  if (!code.startsWith('LPA:1$')) fail('activation code is not SGP.22: ' + code);
+  if (!code.startsWith('LPA:1$rsp.mock-smdp.example$') || info.DownloadInfo.ProfileSmdpAddress !== 'rsp.mock-smdp.example') fail('the profile did not come from the SM-DP+ (ES2+): ' + code + ' ' + JSON.stringify(info.DownloadInfo));
+  const lpa = sub.steps.find((s) => s.step === 'LPA downloaded the profile from the SM-DP+');
+  if (!lpa || lpa.status !== 200) fail('the LPA could not download the profile: ' + JSON.stringify(sub.steps));
   const cfg = await phone({ imsi, terminalId, apps: ['ap2006'], operation: 'AcquireConfiguration', token: first.token, ...watch });
   const companions = cfg.entitlements.ap2006.CompanionConfigurations || [];
   if (!companions.some((c) => c.CompanionConfiguration.ICCID === info.DownloadInfo.ProfileIccid)) fail('companion configuration missing: ' + JSON.stringify(cfg.entitlements.ap2006));
-  const listed = (await call('GET', `${ENT}/companionDevice`, staff)).body || [];
-  if (!listed.some((c) => c.imsi === imsi && c.status === 'subscribed')) fail('companion not on the BSS face');
-  console.log(`OK ODSA companion (ap2006): eligible → subscribed → eSIM profile ${info.DownloadInfo.ProfileIccid} with activation code ${code.slice(0, 20)}… → configuration lists it`);
+  const installed = await until('the SM-DP+ download notification to reach the ECS', async () => {
+    const listed = (await call('GET', `${ENT}/companionDevice`, staff)).body || [];
+    return listed.find((c) => c.imsi === imsi && c.profileState === 'installed' && c.status === 'active') || null;
+  }, 10);
+  if (!installed.matchingId || code.indexOf(installed.matchingId) < 0) fail('matching id not the SM-DP+\'s: ' + JSON.stringify(installed));
+  console.log(`OK ODSA companion (ap2006) through the SM-DP+ (ES2+ downloadOrder + confirmOrder): profile ${info.DownloadInfo.ProfileIccid}, matching id ${installed.matchingId}, LPA downloaded it, the SM-DP+'s handleDownloadProgressInfo made the watch ACTIVE`);
 
   /* 9. a suspended line loses its entitlements; the BSS face explains; refresh reaches the customer */
   await call('PUT', `${ENT}/subscriber`, staff, { imsi, status: 'suspended' });
@@ -236,19 +241,31 @@ async function until(what, fn, tries = 30, ms = 2000) {
   /* 12. ODSA primary: the subscription moves to a new eSIM phone — and the orchestrator completes it */
   const newPhone = { targetTerminalId: `35${String(run + 1).slice(-13)}`, targetEid: '89049032' + String(run + 1).slice(-24).padStart(24, '0'), oldTerminalId: `35${autoImsi.slice(-13)}` };
   await call('PUT', `${ENT}/subscriber`, staff, { imsi: autoImsi, offeringId: full.id });
-  const transfer = await phone({ imsi: autoImsi, terminalId: newPhone.targetTerminalId, apps: ['ap2009'], operation: 'ManageSubscription', operationType: 3, token: autoPhone.token, ...newPhone });
+  const transfer = await phone({ imsi: autoImsi, terminalId: newPhone.targetTerminalId, apps: ['ap2009'], operation: 'ManageSubscription', operationType: 3, token: autoPhone.token, installProfile: true, ...newPhone });
   const t = transfer.entitlements.ap2009;
   if (t.SubscriptionResult !== '2' || !t.DownloadInfo || !t.DownloadInfo.ProfileIccid) fail('transfer not granted: ' + JSON.stringify(t));
-  const completed = await until('the orchestrator to complete the eSIM transfer', async () => {
+  if (t.DownloadInfo.ProfileSmdpAddress !== 'rsp.mock-smdp.example') fail('the transferred profile did not come from the SM-DP+: ' + JSON.stringify(t.DownloadInfo));
+  const completed = await until('the orchestrator to complete the eSIM transfer and the SM-DP+ to report it installed', async () => {
     const d = (await call('GET', `${ENT}/subscriber/${autoImsi}`, staff)).body;
     const tr = (d.transfers || []).find((x) => x.newIccid === t.DownloadInfo.ProfileIccid);
-    return tr && tr.status === 'completed' && d.iccid === t.DownloadInfo.ProfileIccid ? d : null;
+    return tr && tr.status === 'completed' && tr.profileState === 'installed' && d.iccid === t.DownloadInfo.ProfileIccid ? d : null;
   });
   const sim = (await call('GET', `${API}/tmf-api/serviceInventory/v4/service/${autoBound.serviceId}/sim`, staff)).body;
   if (!sim || !String(sim.iccid).endsWith(t.DownloadInfo.ProfileIccid.slice(-5))) fail('the line is not on the new eSIM profile: ' + JSON.stringify(sim));
   const oldTokenStill = await phone({ imsi: autoImsi, terminalId: newPhone.oldTerminalId, apps: ['ap2004'], token: autoPhone.token });
   if (!oldTokenStill.steps.some((s) => s.step === 'GET with EAP_ID')) fail('the old phone\'s token survived the transfer');
   console.log(`OK ODSA primary (ap2009) transfer: new eSIM profile ${t.DownloadInfo.ProfileIccid} — the orchestrator blocked the old SIM, activated the profile on the line, the binding moved, the old phone\'s token is dead`);
+
+  /* 12b. RCS (GSMA RCC.14): the RCS client's configuration door — the plan decides, XML answers */
+  const rcsOn = (await call('POST', `${PHONE}/simulate-rcs`, null, { rcsUrl: 'http://gateway:8080/rcs/autoconfig', imsi })).body;
+  if (!rcsOn || rcsOn.status !== 200 || rcsOn.version !== '1' || !String(rcsOn.contentType).includes('text/vnd.wap.connectivity-xml')
+    || !rcsOn.document.includes('<parm name="AppID" value="ap2001"/>') || !rcsOn.document.includes('<parm name="ChatAuth" value="1"/>')
+    || !rcsOn.document.includes('Home_network_domain_name')) fail('RCS configuration wrong: ' + JSON.stringify(rcsOn).slice(0, 500));
+  await call('PUT', `${ENT}/subscriber`, staff, { imsi, offeringId: noWifi.id });
+  const rcsOff = (await call('POST', `${PHONE}/simulate-rcs`, null, { rcsUrl: 'http://gateway:8080/rcs/autoconfig', imsi })).body;
+  if (!rcsOff || rcsOff.version !== '0' || rcsOff.document.includes('ChatAuth')) fail('RCS not disabled on the plan without it: ' + JSON.stringify(rcsOff).slice(0, 300));
+  await call('PUT', `${ENT}/subscriber`, staff, { imsi, offeringId: full.id });
+  console.log('OK RCS auto-configuration (RCC.14): EAP-AKA on the same door, RCC.07 XML with the IMS access and services on the RCS plan; version 0 (disabled) on the plan without it');
 
   /* 13. OIDC (TS.43 §2.8.2): a client without SIM access is sent to sign in, in a real browser */
   const oidcQ = new URLSearchParams({ terminal_id: `tablet-${run}`, terminal_vendor: 'GenAlphaSim', terminal_model: 'SimTablet', terminal_sw_version: '1', entitlement_version: '12.0', vers: '1', app: 'ap2004' });

@@ -6,6 +6,7 @@ import com.bss.entitlement.entity.SubscriptionTransfer;
 import com.bss.entitlement.events.DomainEventPublisher;
 import com.bss.entitlement.repository.CompanionDeviceRepository;
 import com.bss.entitlement.repository.SubscriptionTransferRepository;
+import com.bss.entitlement.client.SmdpClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,17 +43,19 @@ public class OdsaService {
     private final SubscriptionTransferRepository transfers;
     private final EntitlementDecisionService decisions;
     private final DomainEventPublisher events;
+    private final SmdpClient smdpClient;
     private final String smdp;
     private final String publicBaseUrl;
 
     public OdsaService(CompanionDeviceRepository companions, SubscriptionTransferRepository transfers,
-            EntitlementDecisionService decisions, DomainEventPublisher events,
+            EntitlementDecisionService decisions, DomainEventPublisher events, SmdpClient smdpClient,
             @Value("${bss.entitlement.smdp-address:rsp.example.net}") String smdp,
             @Value("${bss.entitlement.public-base-url:http://localhost:8080}") String publicBaseUrl) {
         this.companions = companions;
         this.transfers = transfers;
         this.decisions = decisions;
         this.events = events;
+        this.smdpClient = smdpClient;
         this.smdp = smdp;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
     }
@@ -133,8 +136,20 @@ public class OdsaService {
                             t.setOldTerminalId(p.get("old_terminal_id"));
                             t.setTargetTerminalId(p.getOrDefault("target_terminal_id", p.get("terminal_id")));
                             t.setTargetEid(p.getOrDefault("target_terminal_eid", p.get("terminal_eid")));
-                            t.setNewIccid(mintIccid());
-                            t.setActivationCode(activationCode(t.getNewIccid()));
+                            // the profile comes from the SM-DP+ (ES2+ order + confirm); without one bound, a dev stand-in
+                            SmdpClient.Profile profile = smdpClient.order(s.getTenantId(), t.getTargetEid(), null, "ecs-primary").orElse(null);
+                            if (profile != null) {
+                                t.setNewIccid(profile.iccid());
+                                t.setMatchingId(profile.matchingId());
+                                t.setSmdpAddress(profile.smdpAddress());
+                                t.setActivationCode(profile.activationCode());
+                                t.setProfileState("ordered");
+                            } else {
+                                t.setNewIccid(mintIccid());
+                                t.setActivationCode(activationCode(t.getNewIccid()));
+                                t.setSmdpAddress(smdp);
+                                t.setProfileState(smdpClient.enabled(s.getTenantId()) ? "order-failed" : "minted-locally");
+                            }
                             t.setStatus("profile-ready");
                             t.setCreatedAt(OffsetDateTime.now());
                             t.setLastUpdate(t.getCreatedAt());
@@ -143,7 +158,7 @@ public class OdsaService {
                             out.put("SubscriptionResult", "2"); // DOWNLOAD PROFILE
                             out.put("DownloadInfo", Map.of("ProfileIccid", t.getNewIccid(),
                                     "ProfileActivationCode", Base64.getEncoder().encodeToString(t.getActivationCode().getBytes()),
-                                    "ProfileSmdpAddress", smdp));
+                                    "ProfileSmdpAddress", t.getSmdpAddress()));
                             out.put("OperationResult", "1");
                         }
                     } else if ("0".equals(type)) { // SUBSCRIBE: a new primary eSIM needs a sale — websheet
@@ -181,6 +196,10 @@ public class OdsaService {
         if ("1".equals(type)) { // UNSUBSCRIBE
             CompanionDevice c = companion(s, terminalId);
             if (c != null) {
+                if (c.getIccid() != null && smdpClient.enabled(s.getTenantId())) {
+                    smdpClient.release(s.getTenantId(), c.getIccid());
+                    c.setProfileState("released");
+                }
                 c.setStatus(CompanionDevice.UNSUBSCRIBED);
                 c.setLastUpdate(OffsetDateTime.now());
                 companions.save(c);
@@ -209,8 +228,19 @@ public class OdsaService {
         c.setVendor(p.getOrDefault("companion_terminal_vendor", c.getVendor()));
         c.setModel(p.getOrDefault("companion_terminal_model", c.getModel()));
         if (c.getIccid() == null) {
-            c.setIccid(mintIccid());
-            c.setActivationCode(activationCode(c.getIccid()));
+            SmdpClient.Profile profile = smdpClient.order(s.getTenantId(), c.getEid(), null, "ecs-companion").orElse(null);
+            if (profile != null) {
+                c.setIccid(profile.iccid());
+                c.setMatchingId(profile.matchingId());
+                c.setSmdpAddress(profile.smdpAddress());
+                c.setActivationCode(profile.activationCode());
+                c.setProfileState("ordered");
+            } else {
+                c.setIccid(mintIccid());
+                c.setActivationCode(activationCode(c.getIccid()));
+                c.setSmdpAddress(smdp);
+                c.setProfileState(smdpClient.enabled(s.getTenantId()) ? "order-failed" : "minted-locally");
+            }
         }
         c.setStatus(CompanionDevice.SUBSCRIBED);
         c.setLastUpdate(OffsetDateTime.now());
@@ -219,7 +249,7 @@ public class OdsaService {
         out.put("SubscriptionResult", "2"); // DOWNLOAD PROFILE
         out.put("DownloadInfo", Map.of("ProfileIccid", c.getIccid(),
                 "ProfileActivationCode", Base64.getEncoder().encodeToString(c.getActivationCode().getBytes()),
-                "ProfileSmdpAddress", smdp));
+                "ProfileSmdpAddress", c.getSmdpAddress() == null ? smdp : c.getSmdpAddress()));
         out.put("OperationResult", "1");
     }
 
@@ -265,6 +295,9 @@ public class OdsaService {
         m.put("model", c.getModel());
         m.put("status", c.getStatus());
         m.put("activationCode", c.getActivationCode());
+        m.put("matchingId", c.getMatchingId());
+        m.put("smdpAddress", c.getSmdpAddress());
+        m.put("profileState", c.getProfileState());
         m.put("createdAt", c.getCreatedAt() == null ? null : c.getCreatedAt().toString());
         m.put("lastUpdate", c.getLastUpdate() == null ? null : c.getLastUpdate().toString());
         return m;
@@ -283,6 +316,9 @@ public class OdsaService {
         m.put("newIccid", t.getNewIccid());
         m.put("status", t.getStatus());
         m.put("activationCode", t.getActivationCode());
+        m.put("matchingId", t.getMatchingId());
+        m.put("smdpAddress", t.getSmdpAddress());
+        m.put("profileState", t.getProfileState());
         m.put("createdAt", t.getCreatedAt() == null ? null : t.getCreatedAt().toString());
         return m;
     }

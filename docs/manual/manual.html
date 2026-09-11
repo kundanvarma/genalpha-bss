@@ -1643,8 +1643,14 @@ authenticating — nothing for care to do. <b>Clients without a SIM</b> (a table
 operator's sign-in (OIDC) and come back entitled. Phones that speak the older XML dialect get the same
 answer as XML. Beyond VoLTE, Wi-Fi calling and SMS: carrier billing (<code>carrierBilling</code>), satellite
 messaging (<code>satellite</code>), a private Wi-Fi identity (<code>privateIdentity</code>) and the phone's own
-number are answered from the same plan; RCS shows on the page but is configured by the RCS server (GSMA RCC.14),
-a separate door.</p>
+number are answered from the same plan. <b>RCS</b> has its own door: RCS clients fetch their configuration
+from <code>/rcs/autoconfig</code> (GSMA RCC.14) with the same SIM proof — on a plan with RCS they get the
+operator's IMS access and chat/file-transfer services, on a plan without it they get "version 0" and switch
+RCS off. <b>eSIM profiles</b> come from the operator's SM-DP+ (the certified profile server the operator buys):
+the entitlement server orders and confirms them over SGP.22 ES2+ (<code>smdp-base-url</code> per tenant), the
+SM-DP+'s matching id is what the activation code carries, and its download notifications turn a watch
+active and mark a transfer installed. The fleet ships <code>mock-smdp</code> for this; with no SM-DP+ bound the
+server mints a stand-in code and labels it so.</p>
 <p><b>Try it without a phone</b>: the fleet ships a simulated TS.43 client —
 <code>curl -X POST localhost:8158/simulate -H 'Content-Type: application/json' -d
 '{"ecsUrl":"http://gateway:8080/ts43","imsi":"242050000000001","apps":["ap2003","ap2004","ap2005","ap2010"]}'</code>

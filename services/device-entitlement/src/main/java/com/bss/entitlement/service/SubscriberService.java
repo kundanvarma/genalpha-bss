@@ -279,6 +279,51 @@ public class SubscriberService {
         }
     }
 
+    /**
+     * The SM-DP+ reports a profile download (SGP.22 ES2+ handleDownloadProgressInfo):
+     * notification point 3 = download started/completed, 4 = installed on the
+     * eUICC. The companion or transfer it belongs to follows; an installed
+     * profile makes a companion ACTIVE and completes what the transfer began.
+     */
+    @Transactional
+    public Map<String, Object> profileProgress(String tenantId, String iccid, String eid, int point, String status) {
+        boolean ok = status == null || status.equalsIgnoreCase("Executed-Success");
+        String state = !ok ? "failed" : point >= 4 ? "installed" : point == 3 ? "downloading" : "confirmed";
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("iccid", iccid);
+        out.put("profileState", state);
+        for (CompanionDevice c : companions.findTop200ByTenantIdOrderByLastUpdateDesc(tenantId)) {
+            if (iccid != null && iccid.equals(c.getIccid())) {
+                c.setProfileState(state);
+                if ("installed".equals(state)) {
+                    c.setStatus(CompanionDevice.ACTIVE);
+                }
+                c.setLastUpdate(OffsetDateTime.now());
+                companions.save(c);
+                out.put("companion", c.getId());
+                EntitlementSubscriber s = subscribers.findByTenantIdAndImsi(tenantId, c.getImsi()).orElse(placeholder(c.getImsi()));
+                events.publish("installed".equals(state) ? "EsimProfileInstalledEvent" : "EsimProfileProgressEvent",
+                        "companionDevice", OdsaService.companionMap(c, s), tenantId);
+                log(tenantId, c.getCompanionTerminalId(), c.getImsi(), "companion eSIM", "ProfileDownload",
+                        ok ? "served" : "notify-failed", "SM-DP+ reports the profile " + state);
+            }
+        }
+        for (SubscriptionTransfer t : transfers.findTop200ByTenantIdOrderByCreatedAtDesc(tenantId)) {
+            if (iccid != null && iccid.equals(t.getNewIccid())) {
+                t.setProfileState(state);
+                t.setLastUpdate(OffsetDateTime.now());
+                transfers.save(t);
+                out.put("transfer", t.getId());
+                EntitlementSubscriber s = subscribers.findByTenantIdAndImsi(tenantId, t.getImsi()).orElse(placeholder(t.getImsi()));
+                events.publish("installed".equals(state) ? "EsimProfileInstalledEvent" : "EsimProfileProgressEvent",
+                        "subscriptionTransfer", OdsaService.transferMap(t, s), tenantId);
+                log(tenantId, t.getTargetTerminalId(), t.getImsi(), "eSIM for this phone", "ProfileDownload",
+                        ok ? "served" : "notify-failed", "SM-DP+ reports the profile " + state);
+            }
+        }
+        return out;
+    }
+
     /** Unbind an IMSI (a SIM retired for good): its tokens die with it. */
     @Transactional
     public void delete(String imsi) {

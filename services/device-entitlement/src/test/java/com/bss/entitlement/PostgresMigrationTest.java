@@ -31,7 +31,7 @@ class PostgresMigrationTest {
         assertThat(postgres.isRunning()).isTrue();
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(4);
+        assertThat(applied).isEqualTo(5);
         assertThat(repository.count()).isZero();
     }
 }

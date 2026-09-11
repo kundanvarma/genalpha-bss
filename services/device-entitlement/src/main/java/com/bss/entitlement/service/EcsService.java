@@ -83,64 +83,13 @@ public class EcsService {
         }
         rememberDevice(tenantId, terminalId, p, apps);
 
-        // --- authentication: a token we issued, or the EAP-AKA relay ---
-        String imsi = null;
-        String token = p.get("token");
-        boolean fresh = false;
-        if (token != null && !token.isBlank()) {
-            Optional<EntitlementToken> t = tokens.resolve(tenantId, token);
-            if (t.isPresent()) {
-                imsi = t.get().getImsi();
-            }
+        Auth auth = authenticate(tenantId, p, relayPacket, session, appNames(apps), operation);
+        if (auth.reply() != null) {
+            return auth.reply();
         }
-        if (imsi == null) {
-            String eapId = p.get("EAP_ID");
-            if (eapId == null || eapId.isBlank()) {
-                if (oidc.available(tenantId)) {
-                    // TS.43 §2.8.2: no SIM access on this client — authenticate the end-user through OIDC
-                    subscriberService.log(tenantId, terminalId, null, appNames(apps), operation, "oidc-redirect",
-                            "no token and no EAP_ID: sent to the operator's sign-in");
-                    return new Reply(302, "text/plain", "", null, oidc.authorizeUrl(tenantId, originalQuery(p)));
-                }
-                subscriberService.log(tenantId, terminalId, null, appNames(apps), operation, "unauthenticated",
-                        "no token and no EAP_ID");
-                // TS.43: 511 Network Authentication Required when the client must authenticate
-                return new Reply(511, "application/json", Map.of("error", "authentication required: present a token or EAP_ID"), null);
-            }
-            if (relayPacket == null) {
-                Optional<Map<String, String>> start = eap.start(tenantId, eapId);
-                if (start.isEmpty()) {
-                    subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
-                            appNames(apps), operation, "forbidden", "AUC does not know this identity");
-                    return new Reply(403, "application/json", Map.of("error", "unknown identity"), null);
-                }
-                subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
-                        appNames(apps), operation, "eap-challenge", "EAP-Request/AKA-Challenge issued");
-                return new Reply(200, RELAY_TYPE, Map.of("eap-relay-packet", start.get().get("packet")),
-                        SESSION_COOKIE + "=" + start.get().get("session") + "; Path=/; HttpOnly");
-            }
-            EapAkaService.Outcome outcome = eap.complete(tenantId, session, relayPacket);
-            if (!outcome.ok()) {
-                subscriberService.log(tenantId, terminalId, outcome.imsi(), appNames(apps), operation,
-                        "eap-failed", outcome.reason());
-                return new Reply(403, "application/json", Map.of("error", "EAP-AKA failed: " + outcome.reason()), null);
-            }
-            imsi = outcome.imsi();
-            fresh = true;
-        }
-
-        // --- the line ---
-        Optional<EntitlementSubscriber> sub = subscribers.findByTenantIdAndImsi(tenantId, imsi);
-        if (sub.isEmpty()) {
-            subscriberService.log(tenantId, terminalId, imsi, appNames(apps), operation, "forbidden",
-                    "SIM authenticated but no line is bound to this IMSI");
-            return new Reply(403, "application/json", Map.of("error", "no subscription for this identity"), null);
-        }
-        EntitlementSubscriber s = sub.get();
-        if (fresh) {
-            token = tokens.issue(tenantId, imsi, terminalId).getToken();
-        }
-        linkDevice(tenantId, terminalId, imsi);
+        EntitlementSubscriber s = auth.subscriber();
+        String token = auth.token();
+        boolean fresh = auth.fresh();
 
         // --- the answer ---
         Map<String, Object> body = new LinkedHashMap<>();
@@ -161,9 +110,85 @@ public class EcsService {
                 served.add(app);
             }
         }
-        subscriberService.log(tenantId, terminalId, imsi, appNames(apps), operation, "served",
+        subscriberService.log(tenantId, terminalId, s.getImsi(), appNames(apps), operation, "served",
                 summary(body, served));
         return new Reply(200, "application/json", body, null);
+    }
+
+    /** The outcome of authenticating a device request: a reply to send as is
+     * (challenge, redirect, refusal), or the line it belongs to. */
+    public record Auth(Reply reply, EntitlementSubscriber subscriber, String token, boolean fresh) { }
+
+    /**
+     * Who is asking — shared by the TS.43 door and the RCC.14 RCS door: a token
+     * we issued, else the EAP-AKA relay, else the OIDC sign-in (or 511). Then
+     * the line the IMSI is bound to; a fresh authentication mints a token.
+     */
+    @Transactional
+    public Auth authenticate(String tenantId, Map<String, String> p, String relayPacket, String session,
+            String appLabel, String operation) {
+        String terminalId = p.get("terminal_id");
+        String imsi = null;
+        String token = p.get("token");
+        boolean fresh = false;
+        if (token != null && !token.isBlank()) {
+            Optional<EntitlementToken> t = tokens.resolve(tenantId, token);
+            if (t.isPresent()) {
+                imsi = t.get().getImsi();
+            }
+        }
+        if (imsi == null) {
+            String eapId = p.get("EAP_ID");
+            if (eapId == null || eapId.isBlank()) {
+                if (oidc.available(tenantId)) {
+                    // TS.43 §2.8.2: no SIM access on this client — authenticate the end-user through OIDC
+                    subscriberService.log(tenantId, terminalId, null, appLabel, operation, "oidc-redirect",
+                            "no token and no EAP_ID: sent to the operator's sign-in");
+                    return new Auth(new Reply(302, "text/plain", "", null, oidc.authorizeUrl(tenantId, originalQuery(p))), null, null, false);
+                }
+                subscriberService.log(tenantId, terminalId, null, appLabel, operation, "unauthenticated", "no token and no EAP_ID");
+                // TS.43: 511 Network Authentication Required when the client must authenticate
+                return new Auth(new Reply(511, "application/json", Map.of("error", "authentication required: present a token or EAP_ID"), null), null, null, false);
+            }
+            if (relayPacket == null) {
+                Optional<Map<String, String>> start = eap.start(tenantId, eapId);
+                if (start.isEmpty()) {
+                    subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
+                            appLabel, operation, "forbidden", "AUC does not know this identity");
+                    return new Auth(new Reply(403, "application/json", Map.of("error", "unknown identity"), null), null, null, false);
+                }
+                subscriberService.log(tenantId, terminalId, EapAkaService.imsiOf(eapId).orElse(null),
+                        appLabel, operation, "eap-challenge", "EAP-Request/AKA-Challenge issued");
+                return new Auth(new Reply(200, RELAY_TYPE, Map.of("eap-relay-packet", start.get().get("packet")),
+                        SESSION_COOKIE + "=" + start.get().get("session") + "; Path=/; HttpOnly"), null, null, false);
+            }
+            EapAkaService.Outcome outcome = eap.complete(tenantId, session, relayPacket);
+            if (!outcome.ok()) {
+                subscriberService.log(tenantId, terminalId, outcome.imsi(), appLabel, operation, "eap-failed", outcome.reason());
+                return new Auth(new Reply(403, "application/json", Map.of("error", "EAP-AKA failed: " + outcome.reason()), null), null, null, false);
+            }
+            imsi = outcome.imsi();
+            fresh = true;
+        }
+        Optional<EntitlementSubscriber> sub = subscribers.findByTenantIdAndImsi(tenantId, imsi);
+        if (sub.isEmpty()) {
+            subscriberService.log(tenantId, terminalId, imsi, appLabel, operation, "forbidden",
+                    "SIM authenticated but no line is bound to this IMSI");
+            return new Auth(new Reply(403, "application/json", Map.of("error", "no subscription for this identity"), null), null, null, false);
+        }
+        if (fresh) {
+            token = tokens.issue(tenantId, imsi, terminalId).getToken();
+        }
+        linkDevice(tenantId, terminalId, imsi);
+        return new Auth(null, sub.get(), token, fresh);
+    }
+
+    public String entitlementVersion() {
+        return entitlementVersion;
+    }
+
+    public long versValidity() {
+        return versValidity;
     }
 
     private Reply error(int status, String message, String tenantId, String terminalId, String imsi, List<String> apps, String operation) {

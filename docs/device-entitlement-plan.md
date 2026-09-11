@@ -77,8 +77,18 @@ rests on; nothing here is guessed.
    through a real browser; the whole SOM-bound path (order → phone) in the
    suite.
 
+9. **SM-DP+ seam (shipped)** — SGP.22 ES2+ client per tenant
+   (`SmdpClient` / `RestSmdpClient`), `mock-smdp` speaking the same shape;
+   companion and transfer profiles ordered and confirmed there, the matching
+   id in the activation code, `handleDownloadProgressInfo` back to
+   `/ts43/es2plus/{requester}/…` driving companion ACTIVE and transfer
+   `profileState: installed`; release on unsubscribe.
+10. **RCS configuration door (shipped)** — GSMA RCC.14 `/rcs/autoconfig` on
+    the shared authentication, RCC.07 XML: version 0 (disabled) without the
+    plan's `rcs`, else the tenant's IMS access (ap2001) and services (ap2002).
+
 ## Out of scope, still
 
-Apple/Google certification; RCC.14 RCS configuration server; SM-DP+ (the
-activation code is minted, the profile download itself is the SM-DP+'s);
+Apple/Google certification; hosting an SM-DP+ (bought and integrated over
+ES2+, never built); Google Jibe / Apple partner integrations for hosted RCS;
 SMS-OTP second factor on the OIDC path.

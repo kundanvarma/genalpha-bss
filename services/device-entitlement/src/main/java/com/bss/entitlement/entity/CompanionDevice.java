@@ -50,6 +50,23 @@ public class CompanionDevice {
     @Column(name = "activation_code", length = 256)
     private String activationCode;
 
+    @Column(name = "matching_id", length = 64)
+    private String matchingId;
+
+    @Column(name = "smdp_address", length = 128)
+    private String smdpAddress;
+
+    /** ordered → downloading → installed | released | cancelled (from the SM-DP+'s notifications). */
+    @Column(name = "profile_state", length = 16)
+    private String profileState;
+
+    public String getMatchingId() { return matchingId; }
+    public void setMatchingId(String v) { this.matchingId = v; }
+    public String getSmdpAddress() { return smdpAddress; }
+    public void setSmdpAddress(String v) { this.smdpAddress = v; }
+    public String getProfileState() { return profileState; }
+    public void setProfileState(String v) { this.profileState = v; }
+
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
 

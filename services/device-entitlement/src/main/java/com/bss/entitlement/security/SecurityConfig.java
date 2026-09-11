@@ -45,6 +45,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // the device door: EAP-AKA / ECS token, not a BSS login
                         .requestMatchers(ApiConstants.TS43_PATH, ApiConstants.TS43_PATH + "/**").permitAll()
+                        // the RCS client's configuration door (GSMA RCC.14): the SIM is the credential
+                        .requestMatchers("/rcs/**").permitAll()
                         .requestMatchers(HttpMethod.GET, BASE + "/**")
                                 .hasAnyAuthority("entitlement:read", "entitlement:write")
                         .requestMatchers(HttpMethod.POST, BASE + "/**").hasAuthority("entitlement:write")

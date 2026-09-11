@@ -22,6 +22,7 @@ const mil = require('./milenage');
 
 const PORT = process.env.PORT || 8080;
 const HSS = process.env.HSS_BASE_URL || 'http://mock-hss:8080';
+const SMDP = process.env.SMDP_BASE_URL || 'http://mock-smdp:8080';
 const RELAY = 'application/vnd.gsma.eap-relay.v1.0+json';
 
 async function json(url, opts = {}) {
@@ -94,7 +95,50 @@ async function simulate(p) {
     config = r2.body;
     token = config && config.Token ? config.Token.token : null;
   }
+  // the LPA installs the profile the ECS handed out (ODSA DownloadInfo) — through the SM-DP+
+  if (p.installProfile && config) {
+    const block = config.ap2006 || config.ap2009;
+    const info = block && block.DownloadInfo;
+    if (info && info.ProfileActivationCode) {
+      const activationCode = Buffer.from(info.ProfileActivationCode, 'base64').toString();
+      const r = await json(`${SMDP}/simulate/install`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activationCode }) });
+      steps.push({ step: 'LPA downloaded the profile from the SM-DP+', status: r.status, result: r.body });
+    }
+  }
   return { token, entitlements: config, steps };
+}
+
+/** RCC.14: the RCS client's configuration request — same EAP-AKA relay, XML answer. */
+async function simulateRcs(p) {
+  const steps = [];
+  const imsi = String(p.imsi);
+  const mcc = imsi.slice(0, 3); const mnc = imsi.slice(3, 5).padStart(3, '0');
+  const eapId = `0${imsi}@nai.epc.mnc${mnc}.mcc${mcc}.3gppnetwork.org`;
+  const secrets = (await json(`${HSS}/subscribers/${imsi}/secrets`)).body;
+  const k = Buffer.from(secrets.k, 'hex'); const opc = Buffer.from(secrets.opc, 'hex');
+  const q = new URLSearchParams({ vers: p.vers || '0', rcs_version: '11.0', rcs_profile: 'UP_2.4', client_vendor: 'GenAlphaSim', client_version: '1.0',
+    terminal_id: p.terminalId || '35' + imsi.slice(-13), terminal_vendor: 'GenAlphaSim', terminal_model: 'SimPhone 1', terminal_sw_version: '1.0',
+    IMSI: imsi, EAP_ID: eapId, app: 'ap2001' });
+  if (p.token) { q.set('token', p.token); q.delete('EAP_ID'); }
+  const accept = (p.json ? 'application/json, ' : '') + RELAY + ', text/vnd.wap.connectivity-xml';
+  const r1 = await json(`${p.rcsUrl}?${q}`, { headers: { Accept: accept } });
+  steps.push({ step: 'GET autoconfig', status: r1.status, contentType: r1.headers.get('content-type') });
+  let final = r1;
+  if (r1.status === 200 && r1.body && r1.body['eap-relay-packet']) {
+    const cookie = (r1.headers.get('set-cookie') || '').split(';')[0];
+    const challenge = mil.parseAka(Buffer.from(r1.body['eap-relay-packet'], 'base64'));
+    const usim = mil.answer(k, opc, challenge.attrs[mil.EAP.AT_RAND].subarray(2), challenge.attrs[mil.EAP.AT_AUTN].subarray(2));
+    if (!usim) throw new Error('AUTN rejected by the USIM');
+    const keys = mil.deriveKeys(eapId, usim.ik, usim.ck);
+    const response = mil.buildAka(mil.EAP.RESPONSE, challenge.identifier, mil.EAP.AKA_CHALLENGE, [{ type: mil.EAP.AT_RES, value: Buffer.concat([Buffer.from([0, 64]), usim.res]) }], keys.kAut);
+    final = await json(`${p.rcsUrl}?${q}`, { method: 'POST', headers: { 'Content-Type': RELAY, Accept: accept, Cookie: cookie },
+      body: JSON.stringify({ 'eap-relay-packet': response.toString('base64') }) });
+    steps.push({ step: 'POST EAP-Response/AKA-Challenge', status: final.status, contentType: final.headers.get('content-type') });
+  }
+  const text = typeof final.body === 'string' ? final.body : JSON.stringify(final.body);
+  const version = (text.match(/<parm name="version" value="([^"]*)"\/>/) || [])[1] || (final.body && final.body.Vers && final.body.Vers.version);
+  return { status: final.status, contentType: final.headers.get('content-type'), version, document: text, steps };
 }
 
 const server = http.createServer((req, res) => {
@@ -104,6 +148,12 @@ const server = http.createServer((req, res) => {
   req.on('data', (c) => { raw += c; });
   req.on('end', async () => {
     if (req.method === 'GET' && url.pathname === '/health') return send(200, { status: 'UP' });
+    if (req.method === 'POST' && url.pathname === '/simulate-rcs') {
+      let body;
+      try { body = JSON.parse(raw || '{}'); } catch { return send(400, { error: 'bad json' }); }
+      if (!body.rcsUrl || !body.imsi) return send(400, { error: 'rcsUrl and imsi required' });
+      try { return send(200, await simulateRcs(body)); } catch (e) { return send(502, { error: e.message }); }
+    }
     if (req.method === 'POST' && url.pathname === '/simulate') {
       let body;
       try { body = JSON.parse(raw || '{}'); } catch { return send(400, { error: 'bad json' }); }

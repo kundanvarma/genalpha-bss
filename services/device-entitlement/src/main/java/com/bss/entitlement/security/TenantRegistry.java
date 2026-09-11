@@ -77,6 +77,36 @@ public class TenantRegistry {
         public String getAucToken() { return aucToken; }
         public void setAucToken(String v) { this.aucToken = v; }
 
+        /** The tenant's SM-DP+ (tenants.yml `smdp-*`): the certified eSIM
+         * profile server it buys, spoken to over SGP.22 ES2+. Absent = the
+         * deployment default (SMDP_BASE_URL). */
+        private String smdpBaseUrl;
+        private String smdpRequesterId;
+        private String smdpToken;
+        private String smdpAddress;
+
+        public String getSmdpBaseUrl() { return smdpBaseUrl; }
+        public void setSmdpBaseUrl(String v) { this.smdpBaseUrl = v; }
+        public String getSmdpRequesterId() { return smdpRequesterId; }
+        public void setSmdpRequesterId(String v) { this.smdpRequesterId = v; }
+        public String getSmdpToken() { return smdpToken; }
+        public void setSmdpToken(String v) { this.smdpToken = v; }
+        public String getSmdpAddress() { return smdpAddress; }
+        public void setSmdpAddress(String v) { this.smdpAddress = v; }
+
+        /** The tenant's RCS network (tenants.yml `rcs-*`), handed to RCS
+         * clients by the RCC.14 configuration door. */
+        private String rcsImsRealm;
+        private String rcsPcscf;
+        private String rcsApn;
+
+        public String getRcsImsRealm() { return rcsImsRealm; }
+        public void setRcsImsRealm(String v) { this.rcsImsRealm = v; }
+        public String getRcsPcscf() { return rcsPcscf; }
+        public void setRcsPcscf(String v) { this.rcsPcscf = v; }
+        public String getRcsApn() { return rcsApn; }
+        public void setRcsApn(String v) { this.rcsApn = v; }
+
         public String getId() {
             return id;
         }

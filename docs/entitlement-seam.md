@@ -116,12 +116,49 @@ the code comes back to `/ts43/oidc/callback`, is exchanged over the
 backchannel, the subscription is found by the authenticated party, an ECS
 token is minted and the original request resumes.
 
+**eSIM profiles come from the SM-DP+.** The profile server is bought, not
+built — a GSMA SAS-certified SM-DP+ (Thales, IDEMIA, G+D, Kigen…). What the
+operator owns is SGP.22 **ES2+**: `SmdpClient` → `RestSmdpClient` speaks it
+(`POST <base>/gsma/rsp2/es2plus/downloadOrder | confirmOrder | cancelOrder |
+releaseProfile`, the mandatory `header.functionRequesterIdentifier /
+functionCallIdentifier`, `Executed-Success` on the way back), per tenant
+(`smdp-base-url`, `smdp-requester-id`, `smdp-token`, `smdp-address`). A
+companion subscription or a primary transfer orders and confirms a profile;
+the SM-DP+'s **matching id** becomes the activation code
+(`LPA:1$<SM-DP+ address>$<matching id>`); the SM-DP+ reports download
+progress to `/ts43/es2plus/{requester}/handleDownloadProgressInfo`
+(notification point 3 downloading, 4 installed), which makes the companion
+ACTIVE and marks the transfer's profile installed; unsubscribe releases the
+profile. `integrations/mock-smdp` speaks the same ES2+ shape and lets the
+simulated phone "install" a profile so the notifications flow. Without an
+SM-DP+ bound the server mints a local stand-in code and says so
+(`profileState: minted-locally`).
+
+**RCS, on its own door.** RCS is configured by GSMA **RCC.14**, not TS.43:
+`/rcs/autoconfig` (gateway route `rcs`) takes the RCS client's request
+(`vers`, `rcs_version`, `rcs_profile`, `client_vendor`, `terminal_*`, `IMSI`,
+`token` / `EAP_ID`), authenticates it exactly like the TS.43 door
+(`EcsService.authenticate` is shared: token, EAP-AKA relay, OIDC), and
+answers an **RCC.07 client configuration** as XML: `VERS.version = 0` when
+the plan has no `rcs` or the line is not active (the client resets and RCS
+stays off), otherwise the tenant's IMS access (`rcs-ims-realm`,
+`rcs-pcscf`, `rcs-apn` in tenants.yml, defaults in config) under `ap2001`
+and the authorised services (chat, group chat, file transfer, standalone
+messaging, geolocation push; voice/video follow `volte`) under `ap2002`.
+Where an operator's Android RCS runs on a hosted hub (Google Jibe) or
+Apple's carrier bundle carries it, the same entitlement decision feeds that
+partner integration — that integration needs the partner contract.
+
 **Per tenant, cluster-ready.** The AUC binding is per tenant
 (`auc-base-url` / `auc-token` in tenants.yml — an MVNO's SIMs authenticate
 against its host MNO's); the EAP relay session lives in `eap_session`, so
 any instance can finish a challenge another started.
 
-**Proof.** `ops/e2e/device_entitlement_test.js` (#124, 15 legs): two plans →
+**Proof.** `ops/e2e/device_entitlement_test.js` (#124, 17 legs — including
+the companion profile ordered through the SM-DP+ mock over ES2+, downloaded
+by the simulated LPA and reported installed by the SM-DP+'s notification, the
+transferred primary profile likewise, and the RCS door answering version 1
+with the IMS access on the RCS plan and version 0 on the plan without it): two plans →
 a subscriber bound → the simulated phone (`integrations/mock-ts43-device`, a
 TS.43 client that reads its USIM secrets from the HSS mock) runs the EAP-AKA
 relay and reads every application (ap2003/4/5/10/12/13/14/16) → the token is
@@ -155,12 +192,12 @@ request log, "ask the phone to refresh".
   binds each tenant's `auc-base-url` to an adapter in front of the HSS/UDM
   (SWx/S6a/Nudm), which already knows the SIM ↔ IMSI pairing. The ECS never
   holds K.
-- **RCS configuration.** RCS is not a TS.43 application: its auto-configuration
-  is GSMA RCC.14, a separate configuration server on the same HTTP/EAP-AKA
-  framework. The plan's `rcs` shows on the BSS face; the RCC.14 door is a
-  follow-up, not a fake app id.
-- **The SM-DP+.** Activation codes are minted here; the profile download
-  itself is the SM-DP+'s (SGP.22), out of scope.
+- **Hosted RCS hubs and the SM-DP+ itself.** The RCC.14 door serves an
+  operator's own RCS core; Google Jibe and Apple's carrier bundle take the
+  same entitlement decision through partner integrations that need their
+  contracts. The SM-DP+ is bought and spoken to over ES2+ — nobody here hosts
+  profiles, and the LPA-to-SM-DP+ download (ES9+) is between the phone and
+  the profile server.
 - **SMS-OTP as a second factor** on the OIDC path (TS.43 §2.8.2.1), and push
   delivery beyond what the communication component's forwarders do with the
   registered token.
