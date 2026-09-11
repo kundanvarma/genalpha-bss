@@ -1,0 +1,22 @@
+concept: Bill
+version: 1
+introduced: 2026-09-11
+meaning: A customer's bill for a period — the month rated into lines, prorated where a plan changed mid-month.
+lineage:
+  sid: CustomerBill (Customer Bill ABE)
+  tmf: [TMF678 customerBill]
+  oda: TMFC028 Customer Bill Management
+backedBy: { capability: billing.bills, resource: customerBill }
+states:
+  field: state
+  values: [new, onHold, validated, sent, settled, partiallyPaid]
+  live: [new, validated, sent, partiallyPaid]
+properties:
+  - { name: amountDue, path: amountDue.value, type: money }
+  - { name: billDate, path: billDate, type: date }
+links:
+  - { name: customer, to: Customer, via: "relatedParty[0].id", cardinality: one }
+events:
+  - { event: CustomerBillCreateEvent, component: billing }
+  - { event: CustomerBillStateChangeEvent, component: billing }
+pages: [customerBill]

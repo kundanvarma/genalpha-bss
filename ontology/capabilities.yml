@@ -1,0 +1,168 @@
+# Typed capabilities: the verbs a component can execute. Actions execute through
+# one, effects and preconditions reference them, the conformance suite (#125)
+# proves every route is served by the gateway. Routes are relative to the
+# component (the registry reaches the component directly, with the caller's
+# own token; the gateway serves the same path to the outside).
+capabilities:
+  - id: party.individual
+    version: 1
+    component: party-account
+    kind: tmf-api
+    tmf: TMF632 Party Management
+    meaning: Read one individual — the person behind a customer.
+    route: { method: GET, path: "/tmf-api/partyManagement/v4/individual/{id}" }
+    roles: [party:read]
+
+  - id: productInventory.product
+    version: 1
+    component: product-inventory
+    kind: tmf-api
+    tmf: TMF637 Product Inventory
+    meaning: Read one product instance — a customer's subscription as the inventory holds it.
+    route: { method: GET, path: "/tmf-api/productInventory/v4/product/{id}" }
+    roles: [inventory:read]
+
+  - id: productInventory.products
+    version: 1
+    component: product-inventory
+    kind: tmf-api
+    tmf: TMF637 Product Inventory
+    meaning: List a customer's products.
+    route: { method: GET, path: "/tmf-api/productInventory/v4/product" }
+    roles: [inventory:read]
+
+  - id: serviceInventory.services
+    version: 1
+    component: service-orchestration
+    kind: tmf-api
+    tmf: TMF638 Service Inventory
+    meaning: List the live services of a customer — the line itself, with its number.
+    route: { method: GET, path: "/tmf-api/serviceInventory/v4/service" }
+    roles: [service:read]
+
+  - id: productCatalog.offering
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF620 Product Catalog
+    meaning: Read one product offering as the caller's sales channel sees it (X-Channel decides visibility).
+    route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOffering/{id}" }
+
+  - id: productCatalog.offerings
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF620 Product Catalog
+    meaning: List the offerings on the shelf for the caller's channel.
+    route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOffering" }
+
+  - id: productCatalog.price
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF620 Product Catalog
+    meaning: Read one price — an offering names its prices by reference; the monthly one is the recurring price.
+    route: { method: GET, path: "/tmf-api/productCatalogManagement/v4/productOfferingPrice/{id}" }
+
+  - id: productOrdering.create
+    version: 1
+    component: product-ordering
+    kind: tmf-api
+    tmf: TMF622 Product Ordering
+    meaning: Place a product order — the only way a subscription is created or changed.
+    route: { method: POST, path: "/tmf-api/productOrderingManagement/v4/productOrder" }
+    roles: [ordering:write]
+
+  - id: productOrdering.order
+    version: 1
+    component: product-ordering
+    kind: tmf-api
+    tmf: TMF622 Product Ordering
+    meaning: Read one product order and its state.
+    route: { method: GET, path: "/tmf-api/productOrderingManagement/v4/productOrder/{id}" }
+    roles: [ordering:read]
+
+  - id: productQualification.check
+    version: 1
+    component: qualification
+    kind: tmf-api
+    tmf: TMF679 Product Offering Qualification
+    meaning: Ask whether an offering can be delivered at a place (serviceability by postcode).
+    route: { method: POST, path: "/tmf-api/productOfferingQualification/v4/checkProductOfferingQualification" }
+
+  - id: agreement.list
+    version: 1
+    component: agreement
+    kind: tmf-api
+    tmf: TMF651 Agreement Management
+    meaning: List a customer's agreements — commitments that may bind a subscription to its offering.
+    route: { method: GET, path: "/tmf-api/agreementManagement/v4/agreement" }
+    roles: [agreement:read]
+
+  - id: policy.evaluate
+    version: 1
+    component: policy
+    kind: house-api
+    tmf: TMF policy pattern (JSON-logic rules as data)
+    meaning: Evaluate the enabled rules of a domain against a context; first matching deny wins.
+    route: { method: POST, path: "/tmf-api/policyManagement/v4/evaluate" }
+    roles: [policy:evaluate]
+
+  - id: charging.changeRatePlan
+    version: 1
+    component: service-orchestration
+    kind: seam
+    seam: ocs
+    meaning: Move the line to the rate plan of its new offering in the online charging system (SigScale, or the tenant's own OCS).
+
+  - id: entitlement.changeOffering
+    version: 1
+    component: device-entitlement
+    kind: tmf-api
+    tmf: TMF-style Device Entitlement (GSMA TS.43 server)
+    meaning: Tell the entitlement server the line's plan changed, so phones learn what they may use now.
+    route: { method: PUT, path: "/tmf-api/deviceEntitlement/v1/subscriber" }
+    roles: [entitlement:write]
+
+  - id: billing.prorate
+    version: 1
+    component: billing
+    kind: internal
+    meaning: On the next bill run, split the month at the change date — the old plan until then, the new plan after.
+
+  - id: billing.bills
+    version: 1
+    component: billing
+    kind: tmf-api
+    tmf: TMF678 Customer Bill
+    meaning: List a customer's bills.
+    route: { method: GET, path: "/tmf-api/customerBillManagement/v4/customerBill" }
+    roles: [billing:read]
+
+  - id: decisionLog.read
+    version: 1
+    component: insight
+    kind: house-api
+    meaning: Read decision receipts — what was chosen, by which policy, why, and what followed.
+    route: { method: GET, path: "/insight/v1/decisions" }
+    roles: [insight:read]
+
+  - id: ontology.receipt
+    version: 1
+    component: ontology
+    kind: internal
+    meaning: Write a decision receipt for an executed action (DecisionRecordedEvent on bss.ontology.events, ingested by insight).
+
+  - id: ontology.check
+    version: 1
+    component: ontology
+    kind: house-api
+    meaning: Answer whether an action may happen for these inputs, naming every condition and its verdict — without doing it.
+    route: { method: POST, path: "/ontology/v1/actions/{name}/check" }
+
+  - id: ontology.execute
+    version: 1
+    component: ontology
+    kind: house-api
+    meaning: Check, then execute an action through its capability with the caller's own rights, and write the receipt.
+    route: { method: POST, path: "/ontology/v1/actions/{name}/execute" }

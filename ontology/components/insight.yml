@@ -1,0 +1,8 @@
+component: insight
+version: 1
+oda: TMFC0xx Insight (house component)
+meaning: Reads the event bus into traits, friction, signals and the decision log — every adaptive choice as a receipt with its outcome.
+manages: []
+capabilities: [decisionLog.read]
+events: [SignalClassifiedEvent, VocDeviationEvent, StreakMilestoneEvent]
+topic: bss.insight.events

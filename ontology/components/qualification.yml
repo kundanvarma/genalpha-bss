@@ -1,0 +1,7 @@
+component: qualification
+version: 1
+oda: TMFC011 Product Offering Qualification
+meaning: Answers whether an offering can be delivered at a place.
+manages: []
+capabilities: [productQualification.check]
+events: []

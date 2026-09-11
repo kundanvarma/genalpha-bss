@@ -1,0 +1,66 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: ontology
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# The registry: packaged from the repo's ontology/ directory; ONTOLOGY_DIR points
+# at a checkout for development (edit a YAML, restart, see it). Every capability's
+# route is relative to its component's base below; a component without an entry
+# is reached through the gateway, which routes by path.
+ontology:
+  dir: ${ONTOLOGY_DIR:}
+  downstream-timeout-ms: ${ONTOLOGY_DOWNSTREAM_TIMEOUT_MS:8000}
+  receipt-topic: bss.ontology.events
+  components:
+    gateway: ${GATEWAY_BASE_URL:http://localhost:8080}
+    party-account: ${PARTY_BASE_URL:}
+    product-inventory: ${INVENTORY_BASE_URL:}
+    product-catalog: ${CATALOG_BASE_URL:}
+    product-ordering: ${ORDERING_BASE_URL:}
+    service-orchestration: ${SOM_BASE_URL:}
+    qualification: ${QUALIFICATION_BASE_URL:}
+    agreement: ${AGREEMENT_BASE_URL:}
+    policy: ${POLICY_BASE_URL:}
+    device-entitlement: ${ENTITLEMENT_BASE_URL:}
+    billing: ${BILLING_BASE_URL:}
+    insight: ${INSIGHT_BASE_URL:}
+
+bss:
+  # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant. The
+  # machine identity is used for ONE thing: the policy pre-check (policy:evaluate).
+  tenants:
+    default-tenant: genalpha
+    registry:
+      - id: genalpha
+        issuer: ${OIDC_ISSUER_URI:http://localhost:8085/realms/bss}
+        jwks-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:}
+        token-uri: ${OIDC_TOKEN_URI:http://localhost:8085/realms/bss/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-ontology}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:ontology-secret}
+      - id: nova
+        issuer: ${OIDC_ISSUER_URI_NOVA:http://localhost:8085/realms/nova}
+        jwks-uri: ${OIDC_JWKS_URI_NOVA:}
+        token-uri: ${OIDC_TOKEN_URI_NOVA:http://localhost:8085/realms/nova/protocol/openid-connect/token}
+        machine-client-id: ${OIDC_CLIENT_ID:bss-ontology}
+        machine-client-secret: ${OIDC_CLIENT_SECRET:ontology-secret}

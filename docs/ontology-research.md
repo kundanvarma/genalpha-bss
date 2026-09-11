@@ -110,6 +110,10 @@ What changed: the manual is now loaded into the knowledge base per tenant as 85 
 
 That is the ontology principle at prose scale: description lives beside the thing described, is retrieved by where the person is, and is verified by a suite. Slice 4 above turns the prose into structure.
 
+## Built — 2026-09-11
+
+Ivan reviewed this note the same day (approve, with additions: registry named apart from the ontology, versioning, a core-plus-tenant extension model, typed action semantics, a future-safe graph rule, the ontology/policy/learning boundary, and one journey proved end to end instead of twelve actions). All of it went into the build: the `ontology` component, the `ontology/` registry, suite #125 and the generated SDK — see `docs/ontology-seam.md`.
+
 ## Sources
 
 - Palantir, Foundry Ontology overview, Ontology SDK, Ontology MCP and AIP architecture pages (palantir.com/docs/foundry/ontology/overview, palantir.com/docs/foundry/ontology-sdk, AIP documentation), read 2026-09-10.

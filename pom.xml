@@ -42,6 +42,7 @@
         <module>services/porting</module>
         <module>services/device-commerce</module>
         <module>services/device-entitlement</module>
+        <module>services/ontology</module>
         <module>services/base-migration</module>
         <module>services/policy</module>
         <module>services/knowledge</module>

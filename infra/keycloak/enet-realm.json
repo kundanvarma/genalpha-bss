@@ -838,6 +838,16 @@
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
     }, {
+   "clientId": "bss-ontology",
+   "name": "ontology machine identity (policy pre-check only)",
+   "enabled": true,
+   "protocol": "openid-connect",
+   "publicClient": false,
+   "secret": "ontology-secret",
+   "serviceAccountsEnabled": true,
+   "standardFlowEnabled": false,
+   "directAccessGrantsEnabled": false
+  }, {
       "clientId": "bss-entitlement",
       "name": "device-entitlement machine identity (catalog reads, TS.43 ECS)",
       "enabled": true,
@@ -1180,6 +1190,11 @@
         "payment:write"
       ]
     }, {
+   "username": "service-account-bss-ontology",
+   "enabled": true,
+   "serviceAccountClientId": "bss-ontology",
+   "realmRoles": ["policy:evaluate"]
+  }, {
       "username": "service-account-bss-entitlement",
       "enabled": true,
       "serviceAccountClientId": "bss-entitlement",

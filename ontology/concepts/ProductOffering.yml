@@ -1,0 +1,25 @@
+concept: ProductOffering
+version: 1
+introduced: 2026-09-11
+meaning: Something the operator sells — a plan, a pass, a device, a bundle — with its prices, its facts (specification) and the channels it is sold on.
+lineage:
+  sid: ProductOffering (Product Offering ABE)
+  tmf: [TMF620 productOffering]
+  oda: TMFC001 Product Catalog Management
+backedBy: { capability: productCatalog.offering, resource: productOffering }
+states:
+  field: lifecycleStatus
+  values: [In study, In design, In test, Active, Launched, Retired, Obsolete]
+  live: [Active, Launched]
+properties:
+  - { name: name, path: name, type: string }
+  - { name: category, path: "category[0].name", type: string, meaning: "the family — Mobile plans, Broadband, Top-ups; a plan change stays inside one family" }
+  - { name: isBundle, path: isBundle, type: boolean }
+  - { name: monthlyPrice, path: "productOfferingPrice[priceType=recurring].price.value", type: money }
+  - { name: chargingSpecId, path: "productSpecification.productSpecCharacteristic[name=chargingSpecId]", type: string, meaning: the OCS rate plan provisioned at activation }
+links:
+  - { name: specification, to: ProductOffering, via: productSpecification.id, cardinality: one, meaning: the facts behind the offer }
+events:
+  - { event: ProductOfferingStateChangeEvent, component: product-catalog }
+  - { event: ProductOfferingLaunchedEvent, component: product-catalog }
+pages: [productOffering, productSpecification, productOfferingPrice, approvals]

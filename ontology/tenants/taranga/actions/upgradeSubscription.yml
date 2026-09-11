@@ -1,0 +1,14 @@
+# Taranga's overlay on the core action: the operator tightens governance and
+# adds a guardrail of its own. Core preconditions cannot be removed here.
+action: upgradeSubscription
+governance:
+  autonomy: medium
+  approval: none
+  audit: mandatory
+  limits: { maxMonthlyPriceNok: 999 }
+preconditions:
+  - id: taranga-price-ceiling
+    check: function
+    function: monthlyPriceAtMost
+    args: [targetOfferingId, "999"]
+    says: Taranga does not upgrade a consumer line above 999 kr a month without a human — that is a business decision, not a self-service one

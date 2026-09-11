@@ -1,0 +1,21 @@
+concept: Entitlement
+version: 1
+introduced: 2026-09-11
+meaning: What a line's phone may use — VoLTE, Wi-Fi calling, SMS over IP, companion eSIM — as the entitlement server derives it from the plan and tells the phone (GSMA TS.43).
+lineage:
+  sid: ServiceCharacteristic / Entitlement (extension)
+  tmf: [deviceEntitlement subscriber (house), TMF638 service]
+  oda: GSMA TS.43 ECS as an ODA component
+backedBy: { capability: entitlement.changeOffering, resource: subscriber }
+states:
+  field: status
+  values: [bound, unbound]
+  live: [bound]
+properties:
+  - { name: offeringId, path: offeringId, type: string }
+  - { name: features, path: features, type: list, meaning: the features the plan grants }
+links:
+  - { name: service, to: Service, via: serviceId, cardinality: one }
+events:
+  - { event: EntitlementChangedEvent, component: device-entitlement, meaning: the phones on the line are told to fetch their entitlements again }
+pages: [device-entitlements]

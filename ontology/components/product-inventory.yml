@@ -1,0 +1,8 @@
+component: product-inventory
+version: 1
+oda: TMFC005 Product Inventory
+meaning: Holds every customer's products — what they have, from which offering, since when, and what it was before a change.
+manages: [Subscription]
+capabilities: [productInventory.product, productInventory.products]
+events: [ProductAttributeValueChangeEvent]
+topic: bss.inventory.events

@@ -1,0 +1,25 @@
+concept: Service
+version: 1
+introduced: 2026-09-11
+meaning: The line itself as the network knows it — a mobile number, a fibre access — with its state and the resources under it.
+lineage:
+  sid: CustomerFacingService (Service ABE)
+  tmf: [TMF638 service, TMF641 serviceOrder]
+  oda: TMFC008 Service Order Management
+backedBy: { capability: serviceInventory.services, resource: service }
+states:
+  field: state
+  values: [feasibilityChecked, designed, reserved, inactive, active, suspended, terminated]
+  live: [active]
+properties:
+  - { name: name, path: name, type: string }
+  - { name: msisdn, path: "supportingResource[0].value", type: string, meaning: the number on the line }
+  - { name: category, path: category, type: string }
+links:
+  - { name: owner, to: Customer, via: "relatedParty[0].id", cardinality: one }
+events:
+  - { event: ServiceAttributeValueChangeEvent, component: service-orchestration, meaning: the line was renamed to its new plan — the OCS and the entitlement server were told }
+  - { event: ServiceSuspendedEvent, component: service-orchestration }
+  - { event: ServiceResumedEvent, component: service-orchestration }
+  - { event: ServiceTerminatedEvent, component: service-orchestration }
+pages: []

@@ -1,0 +1,32 @@
+concept: Subscription
+version: 1
+introduced: 2026-09-11
+canonical: true
+meaning: A customer's live instance of a product offering — "my 20 GB plan on this line". Canonical, because it spans the inventory's product (what was bought), the service (the line itself) and the charging and entitlement state behind it.
+lineage:
+  sid: ProductInstance (Product ABE); realized by CustomerFacingService (Service ABE)
+  tmf: [TMF637 product, TMF638 service, TMF622 productOrderItem]
+  oda: TMFC005 Product Inventory
+backedBy: { capability: productInventory.product, resource: product }
+states:
+  field: status
+  values: [created, pendingActive, active, suspended, pendingTerminate, terminated, aborted, cancelled]
+  live: [active]
+  meaning:
+    active: in service — the line works and is billed
+    suspended: paused by the customer or for non-payment; nothing new may be ordered on it
+    terminated: ended; kept for the record
+properties:
+  - { name: name, path: name, type: string, meaning: the offering's name at the time of the last change }
+  - { name: startDate, path: startDate, type: date }
+  - { name: previousOffering, path: previousOffering, type: string, meaning: what it was before the last plan change — the bill prorates from offeringChangedAt }
+  - { name: offeringChangedAt, path: offeringChangedAt, type: date }
+links:
+  - { name: owner, to: Customer, via: "relatedParty[role=customer].id", cardinality: one }
+  - { name: offering, to: ProductOffering, via: productOffering.id, cardinality: one }
+  - { name: service, to: Service, via: "service[relatedParty.id=owner].name == name", cardinality: one, meaning: "the line realising this product — matched by name today, a known weak seam" }
+  - { name: orders, to: ProductOrder, via: "productOrder[productOrderItem.product.id]", cardinality: many }
+  - { name: entitlement, to: Entitlement, via: "subscriber[serviceId=service.id]", cardinality: one }
+events:
+  - { event: ProductAttributeValueChangeEvent, component: product-inventory, meaning: the product changed — after a plan change it carries the new offering }
+pages: [productOrder]

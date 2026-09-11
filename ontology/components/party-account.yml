@@ -1,0 +1,8 @@
+component: party-account
+version: 1
+oda: TMFC020 Party Management
+meaning: Holds individuals and organisations — the people and companies behind customers, staff and partners.
+manages: [Customer]
+capabilities: [party.individual]
+events: []
+topic: bss.party.events

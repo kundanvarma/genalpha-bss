@@ -180,6 +180,14 @@ article("Journeys and campaigns", PO, ["pane:journey", "pane:campaign", "marketi
 article("Audiences and consent", PO, ["pane:audienceBuilder", "pane:audience", "marketing"], "Marketing how-to", """
 Audiences are built from traits the event bus fills (plan, usage, tenure, sentiment). Marketing consent is enforced at send time, not at build time. Prospects (imported) need documented consent before reach. Activation to Meta/Google sends hashed identifiers only.
 """)
+article("What the BSS can do: the operational ontology", PO, ["pane:ontology", "ontology", "platform"], "Platform how-to", """
+This page is the business model of the BSS, written down once and read by machines: the concepts (Customer, Subscription, Product offering, Service, Order, Bill, Entitlement), the governed actions that may be performed on them, and the capabilities of the components that execute them.
+• An action card says what the action means, who may perform it, every condition that must hold first, which component executes it, what follows, and which events it emits. The same definition drives the SDK and the tools AI agents see — it is not documentation, it is the contract.
+• Explain the journey: the whole path of an action in steps — concept, conditions, permission, policy, execution, effects, events, receipt.
+• Try a dry run: enter the inputs (for an upgrade: a subscription id and the target offering id) and the registry says whether it could happen, with a verdict per condition in words. Nothing changes.
+• "Extended by this operator" on a card means this tenant added guardrails of its own on top of the core action; core conditions can never be removed.
+Every executed action leaves a receipt under AI & Automation › Decisions (decision point ontology.<action>).
+""")
 article("Device entitlements: what a phone may use", PO, ["pane:device-entitlements", "operations", "network"], "Operations how-to", """
 Phones ask this server what their subscription includes — Wi-Fi calling, VoLTE, an eSIM for the watch. The plan decides; the SIM proves itself.
 • Lines: one row per mobile line the server knows. Open a line to see what its phone may use, in words: on, off, being set up, "on — emergency address still needed", allowed or not on this plan.

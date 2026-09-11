@@ -44,10 +44,14 @@ public class KnowledgeAskService {
 
     private record Cached(String fingerprint, Map<String, Object> answer, long at) { }
 
+    private final com.bss.intelligence.client.OntologyClient ontology;
+
     public KnowledgeAskService(KnowledgeClient knowledge, LlmAdapter llm,
             com.bss.intelligence.llm.AiGovernor governor,
             com.bss.intelligence.knowledge.KnowledgeGapRepository gaps,
-            com.bss.intelligence.security.TenantScope tenantScope) {
+            com.bss.intelligence.security.TenantScope tenantScope,
+            com.bss.intelligence.client.OntologyClient ontology) {
+        this.ontology = ontology;
         this.knowledge = knowledge;
         this.llm = llm;
         this.governor = governor;
@@ -146,6 +150,14 @@ public class KnowledgeAskService {
         boolean paged = screen != null && !screen.isBlank();
         List<Map<String, Object>> shelf = paged ? knowledge.shelfAs(bearerToken, screen.trim()) : List.of();
         Map<String, Map<String, Object>> ordered = new LinkedHashMap<>();
+        // 0. the ontology's own words for this screen, when it has an entry: what the page
+        //    manages and which governed actions it offers — generated from the registry
+        if (paged && screen.startsWith("pane:")) {
+            Map<String, Object> structural = ontology.pageArticle(bearerToken, screen.substring("pane:".length()));
+            if (structural != null) {
+                ordered.put(String.valueOf(structural.get("id")), structural);
+            }
+        }
         // 1. keyword hits that belong to this screen
         if (paged) {
             for (Map<String, Object> a : byWords) {

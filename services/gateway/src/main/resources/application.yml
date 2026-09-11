@@ -257,6 +257,11 @@ spring:
           uri: ${DEVICE_ENTITLEMENT_URL:http://localhost:8156}
           predicates:
             - Path=/rcs/**
+        # the Operational Semantic Registry: concepts, governed actions, check/execute, explain, MCP
+        - id: ontology
+          uri: ${ONTOLOGY_URL:http://localhost:8160}
+          predicates:
+            - Path=/ontology/v1/**
         - id: base-migration
           uri: ${BASE_MIGRATION_URL:http://localhost:8146}
           predicates:

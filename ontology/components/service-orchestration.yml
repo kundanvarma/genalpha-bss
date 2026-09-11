@@ -1,0 +1,9 @@
+component: service-orchestration
+version: 1
+oda: TMFC008 Service Order Management
+meaning: Turns product orders into live services — activates lines, drives the OCS and the entitlement server, and records the service inventory.
+manages: [Service]
+capabilities: [serviceInventory.services, charging.changeRatePlan]
+events: [ServiceOrderStateChangeEvent, ServiceAttributeValueChangeEvent, ServiceSuspendedEvent, ServiceResumedEvent, ServiceTerminatedEvent, SimReplacedEvent, ServiceSliceChangeEvent]
+topic: bss.som.events
+consults: [entitlement.changeOffering, productCatalog.offering]

@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genalpha.example/ontology/action.schema.json",
+  "title": "Business action",
+  "description": "A governed verb: the only kind of write the ontology offers to agents and applications.",
+  "type": "object",
+  "required": ["action", "version", "introduced", "status", "meaning", "concept", "inputs", "preconditions", "permissions", "governance", "executes", "emits"],
+  "additionalProperties": false,
+  "properties": {
+    "action": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "introduced": { "type": "string", "format": "date" },
+    "status": { "enum": ["active", "deprecated"] },
+    "deprecated": { "type": "string", "format": "date" },
+    "supersededBy": { "type": "string" },
+    "meaning": { "type": "string", "minLength": 20 },
+    "intent": { "type": "string", "description": "the business intent this action serves, in the operator's words" },
+    "concept": { "type": "string", "description": "the concept this action acts on" },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "enum": ["ref", "string", "number", "boolean", "money", "date"] },
+          "concept": { "type": "string", "description": "for type ref: the concept the id points at" },
+          "required": { "type": "boolean" },
+          "meaning": { "type": "string" }
+        }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "check", "says"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "check": { "enum": ["state", "link", "capability", "function", "input"] },
+          "says": { "type": "string", "description": "the condition in words — what a refusal names" },
+          "concept": { "type": "string" },
+          "of": { "type": "string", "description": "the input whose object is inspected" },
+          "in": { "type": "array", "items": { "type": "string" }, "description": "for check state: allowed state values" },
+          "capability": { "type": "string", "description": "for check capability: the capability that answers" },
+          "function": { "type": "string", "description": "for check function: a registered function id" },
+          "args": { "type": "array", "items": { "type": "string" } },
+          "expect": { "description": "for capability/function checks: the expected answer" }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "required": ["anyOf"],
+      "additionalProperties": false,
+      "properties": {
+        "anyOf": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "role": { "type": "string", "pattern": "^[a-z-]+:[a-z-]+$" },
+              "self": { "type": "string", "description": "a link name on the concept: the caller must be that party (e.g. owner)" }
+            }
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["domain", "capability"],
+      "additionalProperties": false,
+      "properties": {
+        "domain": { "type": "string" },
+        "capability": { "type": "string" }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "required": ["autonomy", "approval", "audit"],
+      "additionalProperties": false,
+      "properties": {
+        "autonomy": { "enum": ["high", "medium", "low"], "description": "learning-contract vocabulary: how much an agent may do alone" },
+        "approval": { "enum": ["none", "human"] },
+        "approvalAbove": { "type": "object", "additionalProperties": false, "properties": { "input": { "type": "string" }, "amount": { "type": "number" } } },
+        "audit": { "enum": ["mandatory", "optional"] },
+        "limits": { "type": "object", "additionalProperties": { "type": "number" } }
+      }
+    },
+    "executes": {
+      "type": "object",
+      "required": ["capability"],
+      "additionalProperties": false,
+      "properties": {
+        "capability": { "type": "string" },
+        "template": { "type": "object", "description": "how the inputs become the capability's request; ${input} placeholders" }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "description": "typed side effects: each resolves to a capability, never prose",
+      "items": {
+        "type": "object",
+        "required": ["capability"],
+        "additionalProperties": false,
+        "properties": {
+          "capability": { "type": "string" },
+          "when": { "type": "string", "description": "the state or event after which the effect happens" }
+        }
+      }
+    },
+    "emits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event", "component"],
+        "additionalProperties": false,
+        "properties": {
+          "event": { "type": "string", "pattern": "^[A-Z][A-Za-z]*Event$" },
+          "component": { "type": "string" },
+          "meaning": { "type": "string" }
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "concept": { "type": "string" },
+        "settles": { "type": "string", "description": "the event or state that marks the action complete" },
+        "measured": { "type": "string", "description": "what a learning contract may optimise on this action" }
+      }
+    },
+    "pages": { "type": "array", "items": { "type": "string" }, "description": "console pages where this action is offered (resource paths)" }
+  }
+}

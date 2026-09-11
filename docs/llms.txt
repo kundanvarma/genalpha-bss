@@ -2,7 +2,7 @@
 
 > Open-source, TM Forum ODA-aligned, multi-tenant telecom BSS (Business Support System)
 > for MVNOs, fiber service providers, open-access network owners and host operators.
-> Built AI-assisted; verified by 25 official TM Forum CTKs at zero failures and 137
+> Built AI-assisted; verified by 25 official TM Forum CTKs at zero failures and 140
 > end-to-end browser test suites. Runs anywhere: any cloud (EKS/AKS/k3s via one Helm
 > chart), bare metal, national datacenter, or air-gapped — sovereignty-grade by
 > construction. Ships with SEVEN white-labeled channels (storefront, customer portal,
@@ -18,7 +18,7 @@
 
 ## Key differentiators
 - Open source: inspectable, forkable, no vendor lock-in, escrow by construction
-- Published verification record: 25 TMF CTKs at zero failures; 137 E2E browser suites
+- Published verification record: 25 TMF CTKs at zero failures; 140 E2E browser suites
 - Growth/martech stack inside the BSS (no separate CDP/campaign SaaS needed)
 - Sovereign deployment: any cloud, any country, on-prem, air-gapped
 - Wholesale both ways: mobile MVNO/MVNE and fiber open-access seeker+owner

@@ -95,6 +95,7 @@ beside it.</p>
 46. <a href="#norwayrails">Norway rails — registry, directory, credit, bill channels</a><br>
 47. <a href="#ocs">Real-time charging — a real OCS behind the seam</a><br>
 48. <a href="#entitlement">Device entitlements — what the phone may use (GSMA TS.43)</a><br>
+49. <a href="#ontology">The ontology — what the BSS can do, written once</a><br>
 </p>
 </div>
 
@@ -1661,5 +1662,29 @@ to activate a companion eSIM and receive its SGP.22 activation code.</p>
 that is the operator's (or the host MNO's) relationship and takes its own time. The server is built to
 pass it; the real HSS/UDM goes behind each tenant's <code>auc-base-url</code>; the eSIM profile download itself
 belongs to the SM-DP+.</p>
+<h2 id="ontology">49 · The ontology — what the BSS can do, written once</h2>
+<p><b>What</b>: the business model of the BSS as a machine-readable registry — the concepts it knows
+(Customer, Subscription, Product offering, Service, Order, Bill, Entitlement), the governed actions that
+may be performed on them, the capabilities of the components that execute them — served by the
+<code>ontology</code> component and read by people (Platform › What the BSS can do), by applications
+(the generated SDK) and by AI agents (the Ontology MCP). Suite <a href="../../ops/e2e/ontology_test.js">ontology_test.js</a>
+(#125); seam doc <a href="../ontology-seam.md">docs/ontology-seam.md</a>; the research and the review it
+answers in <a href="../ontology-research.md">docs/ontology-research.md</a>.</p>
+<p><b>An action is a contract</b>: its meaning, its inputs, every condition that must hold first (in words
+a refusal can quote), who may perform it (the owner themselves, or a role — a customer's token acts on its
+own line only), the policy domain consulted, its governance (autonomy, approval, audit), the TM Forum
+capability that executes it, what follows, and the events it emits. <i>Try a dry run</i> on the page: enter
+a subscription id and a target offering id and read a verdict per condition; nothing changes. <i>Explain the
+journey</i> lists the whole path in steps.</p>
+<p><b>Execution stays where it was</b>: the registry places the same TMF622 order the shop would, with the
+caller's own token and channel; product-ordering validates and consults policy again; SOM moves the OCS
+rate plan and tells the entitlement server; billing prorates the month on the next run. What the registry
+adds is the answer before and the receipt after — under AI &amp; Automation › Decisions, decision point
+<code>ontology.upgradeSubscription</code>, with every verdict as evidence.</p>
+<p><b>Your own rules</b>: an operator overlay (<code>ontology/tenants/&lt;tenant&gt;/</code>) may add concepts
+and actions and may tighten governance and wording on a core action; it can never remove a core condition.
+The Taranga demo adds a monthly price ceiling; the card says "extended by this operator".</p>
+<p><b>The honest edge</b>: one action so far (upgradeSubscription); the other components on the journey do
+not yet describe themselves at runtime; the subscription-to-line link is by name, as everywhere else today.</p>
 </body>
 </html>

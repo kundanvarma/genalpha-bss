@@ -1,0 +1,7 @@
+component: policy
+version: 1
+oda: TMFC0xx Policy Management (house pattern)
+meaning: Business rules as data — pricing, eligibility, launch envelopes, order limits — evaluated at decision points; a rule change is a row, not a release.
+manages: []
+capabilities: [policy.evaluate]
+events: []

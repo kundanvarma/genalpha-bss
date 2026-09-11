@@ -1,0 +1,9 @@
+component: ontology
+version: 1
+oda: Operational Semantic Registry (house component)
+meaning: Serves the ontology — concepts, actions, capabilities, components — checks and executes governed actions with the caller's rights, writes receipts, and explains it all in words to people, applications and agents.
+manages: []
+capabilities: [ontology.check, ontology.execute, ontology.receipt]
+events: [DecisionRecordedEvent, DecisionOutcomeEvent]
+topic: bss.ontology.events
+consults: [productInventory.product, productCatalog.price, party.individual, productCatalog.offering, productCatalog.offerings, serviceInventory.services, productQualification.check, agreement.list, policy.evaluate, productOrdering.create, productOrdering.order]

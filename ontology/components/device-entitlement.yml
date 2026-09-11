@@ -1,0 +1,8 @@
+component: device-entitlement
+version: 1
+oda: GSMA TS.43 Entitlement Configuration Server as an ODA component
+meaning: Tells phones what their subscription lets them use — VoLTE, Wi-Fi calling, companion eSIMs — from the plan and the line's state.
+manages: [Entitlement]
+capabilities: [entitlement.changeOffering]
+events: [EntitlementChangedEvent, EntitlementReconfigureRequestedEvent, SubscriptionTransferRequestedEvent, SubscriptionTransferCompletedEvent, CompanionDeviceSubscribedEvent, CompanionDeviceUnsubscribedEvent]
+topic: bss.entitlement.events

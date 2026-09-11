@@ -1,0 +1,8 @@
+component: product-catalog
+version: 1
+oda: TMFC001 Product Catalog Management
+meaning: The shelf — offerings, specifications, prices, categories, channels and launch governance.
+manages: [ProductOffering]
+capabilities: [productCatalog.offering, productCatalog.offerings, productCatalog.price]
+events: [ProductOfferingCreateEvent, ProductOfferingStateChangeEvent, ProductOfferingAttributeValueChangeEvent, ProductOfferingLaunchedEvent, ProductOfferingGovernanceEvent]
+topic: bss.catalog.events

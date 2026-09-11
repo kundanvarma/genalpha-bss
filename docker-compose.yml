@@ -712,6 +712,7 @@ services:
       TICKET_BASE_URL: http://trouble-ticket:8080
       ASSURANCE_BASE_URL: http://assurance:8080
       KNOWLEDGE_BASE_URL: http://knowledge:8080
+      ONTOLOGY_BASE_URL: http://ontology:8080
       RECOMMENDATION_BASE_URL: http://recommendation:8080
       INSIGHT_BASE_URL: http://insight:8080
       INVENTORY_BASE_URL: http://product-inventory:8080
@@ -871,6 +872,47 @@ services:
 
   # Stands in for the operator's HSS/UDM + AUC: IMSI ↔ ICCID ↔ MSISDN and the
   # USIM secrets (Milenage vectors for EAP-AKA). :8157. DEV ONLY.
+  # The Operational Semantic Registry — the machine-readable GenAlpha ontology:
+  # concepts, governed actions, capabilities, components; check/execute with the
+  # caller's own token; explain in words; MCP for agents. Stateless: the registry
+  # rides in the jar (repo ontology/), receipts go to Kafka. :8160
+  ontology:
+    build: ./services/ontology
+    container_name: bss-ontology
+    restart: unless-stopped
+    environment:
+      SPRING_CONFIG_IMPORT: optional:file:/config/tenants.yml
+      OIDC_ISSUER_URI: http://localhost:8085/realms/bss
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/certs
+      OIDC_JWKS_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/certs
+      OIDC_CLIENT_ID: bss-ontology
+      OIDC_CLIENT_SECRET: ontology-secret
+      OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token
+      OIDC_TOKEN_URI_NOVA: http://keycloak:8080/realms/nova/protocol/openid-connect/token
+      GATEWAY_BASE_URL: http://gateway:8080
+      PARTY_BASE_URL: http://party-account:8080
+      INVENTORY_BASE_URL: http://product-inventory:8080
+      CATALOG_BASE_URL: http://product-catalog:8080
+      ORDERING_BASE_URL: http://product-ordering:8080
+      SOM_BASE_URL: http://service-orchestration:8080
+      QUALIFICATION_BASE_URL: http://qualification:8080
+      AGREEMENT_BASE_URL: http://agreement:8080
+      POLICY_BASE_URL: http://policy:8080
+      ENTITLEMENT_BASE_URL: http://device-entitlement:8080
+      BILLING_BASE_URL: http://billing:8080
+      INSIGHT_BASE_URL: http://insight:8080
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JAVA_OPTS: "-Xmx160m -XX:MaxMetaspaceSize=96m"
+    volumes:
+      - ./infra/tenants:/config:ro
+    ports:
+      - "8160:8080"
+    depends_on:
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+
   mock-hss:
     build: ./integrations/mock-hss
     container_name: bss-mock-hss
@@ -1824,7 +1866,7 @@ services:
       # also ingest foreign-BSS events normalized by the bridge (add-on mode)
       BSS_INSIGHT_TRAIT_TOPICS: bss.ordering.events,bss.party.events,bss.loyalty.events,bss.intelligence.events,bss.billing.events,bss.communication.events,bss.bridge.events,bss.inventory.events,bss.usage.events,bss.address.events,bss.device.events,bss.migration.events,bss.entitlement.events
       # the decision log: every service that decides adaptively publishes DecisionRecordedEvent on its own topic
-      BSS_INSIGHT_DECISION_TOPICS: bss.campaign.events,bss.intelligence.events
+      BSS_INSIGHT_DECISION_TOPICS: bss.campaign.events,bss.intelligence.events,bss.ontology.events
       # signal connectors (SI-P2): secret-ref targets — the desk poll token and
       # the generic webhook's shared secret; the mocks accept any token
       SERVICEDESK_API_TOKEN: dev-desk-token
@@ -1907,6 +1949,7 @@ services:
       PORTING_URL: http://porting:8080
       DEVICE_COMMERCE_URL: http://device-commerce:8080
       DEVICE_ENTITLEMENT_URL: http://device-entitlement:8080
+      ONTOLOGY_URL: http://ontology:8080
       BASE_MIGRATION_URL: http://base-migration:8080
       POLICY_URL: http://policy:8080
       KNOWLEDGE_URL: http://knowledge:8080

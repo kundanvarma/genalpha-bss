@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genalpha.example/ontology/component.schema.json",
+  "title": "ODA component",
+  "description": "What a component manages, executes and emits — and where it describes itself at runtime.",
+  "type": "object",
+  "required": ["component", "version", "meaning", "manages", "capabilities", "events"],
+  "additionalProperties": false,
+  "properties": {
+    "component": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "oda": { "type": "string", "description": "the ODA component id/name it realises, e.g. TMFC002" },
+    "meaning": { "type": "string" },
+    "manages": { "type": "array", "items": { "type": "string" }, "description": "concepts whose backing resources live here" },
+    "capabilities": { "type": "array", "items": { "type": "string" } },
+    "events": { "type": "array", "items": { "type": "string" } },
+    "topic": { "type": "string", "description": "the Kafka topic the events ride on" },
+    "describes": { "type": "string", "description": "runtime self-description, relative to the component", "default": "/.well-known/genalpha-component.json" },
+    "consults": { "type": "array", "items": { "type": "string" }, "description": "capabilities of other components it calls" }
+  }
+}

@@ -1,0 +1,8 @@
+component: agreement
+version: 1
+oda: TMFC022 Agreement Management
+meaning: Holds agreements and commitments — the contract terms that may bind a subscription to its offering for a period.
+manages: []
+capabilities: [agreement.list]
+events: []
+topic: bss.agreement.events

@@ -1,0 +1,94 @@
+action: upgradeSubscription
+version: 1
+introduced: 2026-09-11
+status: active
+meaning: Move a customer's active subscription to a higher offering in the same family, in place — the line keeps its number, the bill prorates the month, the charging system and the phones learn the new plan.
+intent: Give the customer more on the line they already have, without a new contract or a new SIM.
+concept: Subscription
+inputs:
+  - { name: subscriptionId, type: ref, concept: Subscription, required: true, meaning: the product instance to upgrade }
+  - { name: targetOfferingId, type: ref, concept: ProductOffering, required: true, meaning: the offering to move to }
+preconditions:
+  - id: subscription-active
+    check: state
+    concept: Subscription
+    of: subscriptionId
+    in: [active]
+    says: the subscription must be active — a suspended or ended line cannot be upgraded
+  - id: offering-on-sale
+    check: state
+    concept: ProductOffering
+    of: targetOfferingId
+    in: [Active, Launched]
+    says: the target offering must be on sale
+  - id: offering-visible-in-channel
+    check: function
+    function: sellableInChannel
+    args: [targetOfferingId]
+    says: the target offering must be sold on the channel the request comes from
+  - id: not-the-same-offering
+    check: function
+    function: differentOffering
+    args: [subscriptionId, targetOfferingId]
+    says: the target must differ from the current offering
+  - id: same-family
+    check: function
+    function: sameCategory
+    args: [subscriptionId, targetOfferingId]
+    says: an upgrade stays inside the same family — a mobile plan becomes another mobile plan
+  - id: not-a-bundle
+    check: function
+    function: notBundle
+    args: [targetOfferingId]
+    says: changing a plan into a bundle is not supported
+  - id: is-an-upgrade
+    check: function
+    function: higherMonthlyPrice
+    args: [subscriptionId, targetOfferingId]
+    says: the target must cost more per month than the current plan — otherwise it is a downgrade
+  - id: no-commitment
+    check: function
+    function: noActiveCommitment
+    args: [subscriptionId]
+    says: the current plan must not be under an unexpired commitment
+  - id: serviceable
+    check: capability
+    capability: productQualification.check
+    of: targetOfferingId
+    expect: qualified
+    says: the offering must be deliverable where the customer lives, when it is place-gated
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: ordering:write }
+policy: { domain: order, capability: policy.evaluate }
+governance:
+  autonomy: medium
+  approval: none
+  audit: mandatory
+executes:
+  capability: productOrdering.create
+  template:
+    productOrderItem:
+      - action: modify
+        product: { id: "${subscriptionId}", realizingService: [ { id: "${service.id}" } ] }
+        productOffering: { id: "${targetOfferingId}", name: "${targetOffering.name}" }
+    relatedParty:
+      - { id: "${owner.id}", role: customer }
+effects:
+  - { capability: charging.changeRatePlan, when: ProductOrderStateChangeEvent completed }
+  - { capability: entitlement.changeOffering, when: ProductOrderStateChangeEvent completed }
+  - { capability: billing.prorate, when: next bill run }
+  - { capability: ontology.receipt, when: executed }
+emits:
+  - { event: ProductOrderCreateEvent, component: product-ordering, meaning: the order was accepted }
+  - { event: ProductAttributeValueChangeEvent, component: product-inventory, meaning: the product now points at the new offering; the old one is remembered for proration }
+  - { event: ProductOrderStateChangeEvent, component: product-ordering, meaning: completed — a plan change finishes in the same breath }
+  - { event: ServiceAttributeValueChangeEvent, component: service-orchestration, meaning: the line carries the new plan; OCS and entitlement server told }
+  - { event: EntitlementChangedEvent, component: device-entitlement, meaning: phones on the line are nudged to refresh }
+  - { event: DecisionRecordedEvent, component: ontology, meaning: "the receipt — inputs, verdicts, policy, who, when" }
+outcome:
+  concept: ProductOrder
+  settles: ProductOrderStateChangeEvent completed
+  measured: the line still active on the new plan 90 days later
+pages: [productOrder]

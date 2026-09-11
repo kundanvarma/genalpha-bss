@@ -464,6 +464,24 @@ entitlements in words. Events: `bss.entitlement.events`. Suite #124
 `device_entitlement_test` drives a real TS.43 client (`mock-ts43-device`,
 Milenage USIM) through the relay. Detail: `docs/entitlement-seam.md`.
 
+**ontology** (`:8160`, `/ontology/v1`) — the Operational Semantic Registry: the
+GenAlpha Operational Ontology as a component. A YAML registry in the repo
+(`ontology/`: concepts with SID/TMF/ODA lineage, governed actions, typed
+capabilities, component descriptors, per-tenant overlays) is schema-validated
+and reference-checked at startup and served merged for the caller's tenant.
+`check` evaluates an action's typed preconditions, permissions and policy domain
+and names every verdict in words; `execute` runs the mapped TM Forum capability
+**with the caller's own token and channel** and writes a decision receipt
+(`DecisionRecordedEvent` on `bss.ontology.events`, ingested by insight's decision
+log). The same definitions generate the Ontology MCP tools (`POST /ontology/v1/mcp`)
+and the TypeScript SDK (`packages/genalpha-sdk`), explain every console page to
+the ? drawer, and describe the component at `/.well-known/genalpha-component.json`.
+Stateless: no database, a machine identity for the policy pre-check only. Suite
+#125 `ontology_test` proves conformance (gateway routes, event sources, realm
+roles, self-description, SDK diff) and the first journey, `upgradeSubscription`,
+end to end with its receipt. Detail: `docs/ontology-seam.md`; rationale:
+`docs/ontology-research.md`.
+
 ## 5. Cloud deployment view — proven on both AWS and Azure
 
 The same Helm chart deploys the whole fleet; only the *substrate* differs, and it slots in

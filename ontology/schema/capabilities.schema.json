@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genalpha.example/ontology/capabilities.schema.json",
+  "title": "Typed capabilities",
+  "description": "The verbs a component can execute. Actions, effects and preconditions reference these by id — never prose.",
+  "type": "object",
+  "required": ["capabilities"],
+  "additionalProperties": false,
+  "properties": {
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "version", "component", "kind", "meaning"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-z][a-zA-Z0-9]*)*$" },
+          "version": { "type": "integer", "minimum": 1 },
+          "component": { "type": "string" },
+          "kind": { "enum": ["tmf-api", "house-api", "seam", "function", "internal"] },
+          "meaning": { "type": "string" },
+          "tmf": { "type": "string", "description": "the TM Forum API, e.g. TMF622 Product Ordering" },
+          "route": {
+            "type": "object",
+            "required": ["method", "path"],
+            "additionalProperties": false,
+            "properties": { "method": { "enum": ["GET", "POST", "PATCH", "PUT", "DELETE"] }, "path": { "type": "string" } }
+          },
+          "seam": { "type": "string", "description": "for kind seam: the provider seam behind it (ocs, entitlement, psp, …)" },
+          "roles": { "type": "array", "items": { "type": "string" }, "description": "roles the route accepts" },
+          "deprecated": { "type": "string", "format": "date" }
+        }
+      }
+    }
+  }
+}

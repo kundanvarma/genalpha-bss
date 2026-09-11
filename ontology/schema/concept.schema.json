@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genalpha.example/ontology/concept.schema.json",
+  "title": "Business concept",
+  "description": "A noun of the business, backed by an executed TM Forum resource, with explicit lineage.",
+  "type": "object",
+  "required": ["concept", "version", "introduced", "meaning", "lineage", "backedBy", "states", "links"],
+  "additionalProperties": false,
+  "properties": {
+    "concept": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+    "version": { "type": "integer", "minimum": 1 },
+    "introduced": { "type": "string", "format": "date" },
+    "deprecated": { "type": "string", "format": "date" },
+    "supersededBy": { "type": "string" },
+    "meaning": { "type": "string", "minLength": 20 },
+    "canonical": { "type": "boolean", "description": "true when the concept spans several TM Forum resources; each must be named in lineage.tmf" },
+    "lineage": {
+      "type": "object",
+      "required": ["sid", "tmf"],
+      "additionalProperties": false,
+      "properties": {
+        "sid": { "type": "string", "description": "the SID entity (ABE) this concept descends from" },
+        "tmf": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "TMF Open API resources that carry it, e.g. TMF637 product" },
+        "oda": { "type": "string", "description": "the ODA functional block, when one applies" }
+      }
+    },
+    "backedBy": {
+      "type": "object",
+      "required": ["capability", "resource"],
+      "additionalProperties": false,
+      "properties": {
+        "capability": { "type": "string", "description": "the read capability that serves instances" },
+        "resource": { "type": "string" },
+        "idField": { "type": "string", "default": "id" }
+      }
+    },
+    "states": {
+      "type": "object",
+      "required": ["field", "values"],
+      "additionalProperties": false,
+      "properties": {
+        "field": { "type": "string" },
+        "values": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "live": { "type": "array", "items": { "type": "string" }, "description": "the values that count as in service" },
+        "meaning": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    },
+    "properties": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string", "description": "JSON path on the backing resource" },
+          "meaning": { "type": "string" },
+          "type": { "enum": ["string", "number", "boolean", "money", "date", "list"] }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "to", "via"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string" },
+          "to": { "type": "string" },
+          "via": { "type": "string", "description": "how the backing resource references the other: a JSON path, optionally with a [role=…] filter" },
+          "cardinality": { "enum": ["one", "many"] },
+          "meaning": { "type": "string" }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": { "type": "object", "required": ["event", "component"], "additionalProperties": false,
+        "properties": { "event": { "type": "string" }, "component": { "type": "string" }, "meaning": { "type": "string" } } }
+    },
+    "pages": { "type": "array", "items": { "type": "string" }, "description": "console pages that manage this concept (resource paths)" }
+  }
+}

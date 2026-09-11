@@ -1,0 +1,21 @@
+concept: Customer
+version: 1
+introduced: 2026-09-11
+meaning: A person who holds subscriptions with the operator and pays for them — the party behind every line, order and bill.
+lineage:
+  sid: Customer (Customer ABE) / Individual (Party ABE)
+  tmf: [TMF632 individual, TMF629 customer]
+  oda: TMFC020 Party Management
+backedBy: { capability: party.individual, resource: individual }
+states:
+  field: status
+  values: [initialized, validated, deceased]
+  live: [initialized, validated]
+properties:
+  - { name: givenName, path: givenName, type: string }
+  - { name: familyName, path: familyName, type: string }
+links:
+  - { name: subscriptions, to: Subscription, via: "product[relatedParty.role=customer].id", cardinality: many, meaning: the products this customer holds }
+  - { name: services, to: Service, via: "service[relatedParty.id]", cardinality: many }
+  - { name: bills, to: Bill, via: "customerBill[relatedParty.id]", cardinality: many }
+pages: []

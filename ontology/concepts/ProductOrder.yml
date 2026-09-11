@@ -1,0 +1,26 @@
+concept: ProductOrder
+version: 1
+introduced: 2026-09-11
+meaning: A request to create, change or end products for a customer — the transactional record of every commercial action.
+lineage:
+  sid: ProductOrder (Product Order ABE)
+  tmf: [TMF622 productOrder]
+  oda: TMFC002 Product Order Capture and Validation
+backedBy: { capability: productOrdering.order, resource: productOrder }
+states:
+  field: state
+  values: [acknowledged, held, inProgress, partiallyCompleted, completed, failed, cancelled]
+  live: [acknowledged, inProgress, partiallyCompleted]
+  meaning:
+    acknowledged: accepted and validated; policy consulted
+    completed: every item done — for a plan change this happens in the same breath as acceptance
+properties:
+  - { name: category, path: category, type: string }
+  - { name: orderDate, path: orderDate, type: date }
+links:
+  - { name: customer, to: Customer, via: "relatedParty[role=customer].id", cardinality: one }
+  - { name: subscriptions, to: Subscription, via: "productOrderItem[].product.id", cardinality: many }
+events:
+  - { event: ProductOrderCreateEvent, component: product-ordering }
+  - { event: ProductOrderStateChangeEvent, component: product-ordering }
+pages: [productOrder, processFlow]
