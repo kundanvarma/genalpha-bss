@@ -61,6 +61,20 @@ const server = http.createServer((req, res) => {
       return send(200, { imsi: s.imsi, rand: hex(v.rand), autn: hex(v.autn), xres: hex(v.xres), ck: hex(v.ck), ik: hex(v.ik) });
     }
 
+    // a SIM the HSS has not seen: allocate an IMSI for it (a real HSS already
+    // knows which IMSI a card carries — this is the dev stand-in's shortcut)
+    if (req.method === 'POST' && url.pathname === '/subscribers/allocate') {
+      if (!body.iccid) return send(400, { error: 'iccid required' });
+      const known = [...subs.values()].find((s) => s.iccid === body.iccid);
+      if (known) return send(200, pub(known));
+      const digits = String(body.iccid).replace(/\D/g, '');
+      const imsi = (process.env.HSS_MCC_MNC || '24205') + digits.slice(-10).padStart(10, '0');
+      const s = subscriber(imsi);
+      s.iccid = body.iccid;
+      if (body.msisdn) s.msisdn = body.msisdn;
+      return send(201, pub(s));
+    }
+
     const m = url.pathname.match(/^\/subscribers\/(\d+)(?:\/(secrets))?$/);
     if (m) {
       const imsi = m[1];

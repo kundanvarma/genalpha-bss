@@ -66,6 +66,17 @@ public class TenantRegistry {
         private String machineClientId;
         private String machineClientSecret;
 
+        /** The tenant's AUC (tenants.yml `auc-base-url` / `auc-token`): the
+         * HSS/UDM adapter that answers authentication vectors — an MVNO's is
+         * its host MNO's. Absent = the deployment default (AUC_BASE_URL). */
+        private String aucBaseUrl;
+        private String aucToken;
+
+        public String getAucBaseUrl() { return aucBaseUrl; }
+        public void setAucBaseUrl(String v) { this.aucBaseUrl = v; }
+        public String getAucToken() { return aucToken; }
+        public void setAucToken(String v) { this.aucToken = v; }
+
         public String getId() {
             return id;
         }

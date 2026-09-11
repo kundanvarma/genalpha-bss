@@ -31,6 +31,10 @@ bss:
         esp-url: ${ESP_URL:}
         esp-api-key: ${ESP_API_KEY:}
         esp-from: ${ESP_FROM:}
+        # The AUC the device-entitlement server authenticates SIMs against
+        # (EAP-AKA vectors): this operator's HSS/UDM adapter — mock-hss in dev.
+        auc-base-url: ${AUC_BASE_URL:http://mock-hss:8080}
+        auc-token: ${AUC_TOKEN:}
         brand-name: MyGenAlpha
         brand-color: "#0E7C7B"
         locale: en
@@ -796,6 +800,10 @@ bss:
         ocs-base-url: ${OCS_BASE_URL_TARANGA:http://sigscale-ocs:8080}
         ocs-username: ${OCS_USERNAME_TARANGA:bss}
         ocs-password: ${OCS_PASSWORD_TARANGA:bss-secret}
+        # An MVNO's SIMs authenticate against its HOST MNO's AUC — the same
+        # mock in dev, the host's adapter in production.
+        auc-base-url: ${AUC_BASE_URL_TARANGA:http://mock-hss:8080}
+        auc-token: ${AUC_TOKEN_TARANGA:}
         brand-name: Taranga
         brand-color: "#4A4AC3"
         locale: "en"

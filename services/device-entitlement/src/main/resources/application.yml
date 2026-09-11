@@ -64,12 +64,21 @@ bss:
     # the SM-DP+ this operator's eSIM profiles download from (activation codes)
     smdp-address: ${ENTITLEMENT_SMDP_ADDRESS:rsp.example.net}
     som-topic: ${ENTITLEMENT_SOM_TOPIC:bss.som.events}
+    # TS.43 §2.8.2: OIDC authentication for clients without SIM access — the
+    # confidential client each realm carries; blank secret = OIDC path off
+    oidc-client-id: ${ENTITLEMENT_OIDC_CLIENT_ID:bss-ecs}
+    oidc-client-secret: ${ENTITLEMENT_OIDC_CLIENT_SECRET:}
+    # keys the Private User Identity pseudonym (ap2013); rotate to re-issue all
+    private-id-secret: ${ENTITLEMENT_PRIVATE_ID_SECRET:dev-private-id-secret}
   downstream:
     # the AUC seam: who answers "give me an authentication vector for this IMSI"
     # — the operator's HSS/UDM (or, for an MVNO, the host MNO's) behind an
     # adapter; mock-hss in dev. Blank = EAP-AKA unavailable (token-only).
     auc-base-url: ${AUC_BASE_URL:http://localhost:8157}
+    auc-token: ${AUC_TOKEN:}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
+    # server-initiated refresh rides communication (push / SMS); blank = recorded only
+    communication-base-url: ${COMMUNICATION_BASE_URL:}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   tenants:
     default-tenant: genalpha

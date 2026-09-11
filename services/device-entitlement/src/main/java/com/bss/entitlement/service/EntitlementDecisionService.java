@@ -37,18 +37,22 @@ public class EntitlementDecisionService {
     private final CatalogClient catalog;
     private final ObjectMapper mapper = new ObjectMapper();
     private final String publicBaseUrl;
+    private final String privateIdSecret;
 
     public EntitlementDecisionService(CatalogClient catalog,
-            @Value("${bss.entitlement.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+            @Value("${bss.entitlement.public-base-url:http://localhost:8080}") String publicBaseUrl,
+            @Value("${bss.entitlement.private-id-secret:dev-private-id-secret}") String privateIdSecret) {
         this.catalog = catalog;
         this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
+        this.privateIdSecret = privateIdSecret;
     }
 
     /** The effective feature switches for a subscriber: plan, then line overrides. */
     public Map<String, Boolean> features(EntitlementSubscriber s) {
         Map<String, String> plan = catalog.planCharacteristics(s.getTenantId(), s.getOfferingId());
         Map<String, Boolean> f = new LinkedHashMap<>();
-        for (String key : List.of("volte", "vonr", "vowifi", "smsoip", "rcs", "companionesim", "esimtransfer")) {
+        for (String key : List.of("volte", "vonr", "vowifi", "smsoip", "rcs", "companionesim", "esimtransfer",
+                "carrierbilling", "satellite", "privateidentity")) {
             f.put(key, truthy(plan.get(key)));
         }
         Map<String, Object> overrides = overrides(s);
@@ -113,8 +117,57 @@ public class EntitlementDecisionService {
                 out.put("DataPlanInfo", details);
                 return out;
             }
+            case "ap2012": { // Direct Carrier Billing (TS.43 §13)
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("EntitlementStatus", status(f.get("carrierbilling"), live, s));
+                out.put("TC_Status", s.isTermsAccepted() ? "1" : "0");
+                out.put("ServiceFlow_URL", publicBaseUrl + "/ts43/flow/carrier-billing");
+                out.put("ServiceFlow_UserData", "imsi=" + s.getImsi());
+                return out;
+            }
+            case "ap2013": { // Private User Identity (TS.43 §12): an encoded identity for Wi-Fi gateways
+                Map<String, Object> out = new LinkedHashMap<>();
+                String st = status(f.get("privateidentity"), live, s);
+                out.put("EntitlementStatus", st);
+                if (ENABLED.equals(st)) {
+                    out.put("PrivateUserID", privateUserId(s));
+                    out.put("PrivateUserIDType", "1");
+                    out.put("PrivateUserIDExpiry", java.time.OffsetDateTime.now().plusDays(30).toString());
+                }
+                return out;
+            }
+            case "ap2014": { // Phone number (TS.43 §13.1, GetPhoneNumber)
+                Map<String, Object> out = new LinkedHashMap<>();
+                out.put("MSISDN", s.getMsisdn() == null ? "" : "+" + s.getMsisdn().replaceAll("[^0-9]", ""));
+                out.put("OperationResult", s.getMsisdn() == null ? "100" : "1");
+                return out;
+            }
+            case "ap2016": { // SatMode (TS.43 §15)
+                Map<String, Object> out = new LinkedHashMap<>();
+                String st = status(f.get("satellite"), live, s);
+                out.put("EntitlementStatus", st);
+                out.put("ServiceFlow_URL", publicBaseUrl + "/ts43/flow/satellite");
+                out.put("ServiceFlow_UserData", "imsi=" + s.getImsi());
+                if (!f.get("satellite")) {
+                    out.put("MessageForIncompatible", "Satellite messaging is not part of this plan.");
+                }
+                return out;
+            }
             default:
                 return null;
+        }
+    }
+
+    /** A per-tenant pseudonym of the IMSI (HMAC-SHA256, base64url) — the Wi-Fi
+     * gateway learns a stable identity, never the IMSI itself. */
+    String privateUserId(EntitlementSubscriber s) {
+        try {
+            javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
+            mac.init(new javax.crypto.spec.SecretKeySpec((privateIdSecret + ":" + s.getTenantId()).getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256"));
+            byte[] h = mac.doFinal(s.getImsi().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(h);
+        } catch (Exception e) {
+            throw new IllegalStateException("private identity unavailable", e);
         }
     }
 
@@ -134,6 +187,10 @@ public class EntitlementDecisionService {
         services.put("Companion eSIM (watch, tablet)", f.get("companionesim") && live ? "allowed" : "not on this plan");
         services.put("eSIM transfer to a new phone", f.get("esimtransfer") && live ? "allowed" : "not on this plan");
         services.put("Data plan", dataPlanType(s).toLowerCase(Locale.ROOT));
+        services.put("RCS messaging", f.get("rcs") && live ? "on (configured by the RCS server)" : "off");
+        services.put("Carrier billing (app stores)", word(status(f.get("carrierbilling"), live, s)));
+        services.put("Satellite messaging", word(status(f.get("satellite"), live, s)));
+        services.put("Private Wi-Fi identity", word(status(f.get("privateidentity"), live, s)));
         out.put("services", services);
         return out;
     }

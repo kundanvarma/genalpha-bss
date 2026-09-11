@@ -1627,11 +1627,24 @@ its next check-in — nothing is copied anywhere. The line's state matters too: 
 customer completes the little websheet the phone opens (<code>/ts43/flow/vowifi</code>).
 <code>python3 ops/seed/seed_entitlement.py</code> stamps the demo plans and binds the personas' lines to demo
 SIMs (<code>REALM=taranga</code> for Taranga).</p>
-<p><b>Binding a SIM to a line</b>: <code>PUT /tmf-api/deviceEntitlement/v1/subscriber</code> with the IMSI,
-the party, the service and the offering — the activation hook in an operator's flow (a SIM swap re-binds,
-a termination unbinds). The console's <b>Device entitlements</b> page shows each line in words: the plan,
-what the phone may use, the phones that checked in, companion devices, and every request a phone made
-("answered", "SIM challenge sent", "refused").</p>
+<p><b>Binding a SIM to a line</b> happens by itself: when a mobile line activates, the orchestrator tells the
+entitlement server which SIM, number, party and plan belong together; a plan change and a SIM replacement
+follow the same way, and a suspended or terminated line loses its entitlements through the event bus. The
+entitlement server asks the HSS which IMSI the SIM carries (an MVNO's SIMs are answered by its host MNO's HSS
+— <code>auc-base-url</code> per tenant in <code>tenants.yml</code>). <code>PUT /tmf-api/deviceEntitlement/v1/subscriber</code>
+remains the hook for lines that predate the server or come from another system. The console's
+<b>Device entitlements</b> page (Care &amp; Ops) shows each line in words: the plan, what the phone may use,
+the phones that checked in, companion devices, and every request a phone made ("answered", "SIM challenge
+sent", "refused"). "Ask the phone to refresh" sends the TS.43 refresh notice — a push to the phone that
+registered one, else an SMS — through the communication component.</p>
+<p><b>Moving to a new phone</b>: when a customer transfers the eSIM through the phone's own flow (ODSA), the
+orchestrator blocks the old SIM, activates the new eSIM profile on the line and the old phone stops
+authenticating — nothing for care to do. <b>Clients without a SIM</b> (a tablet, a web sheet) are sent to the
+operator's sign-in (OIDC) and come back entitled. Phones that speak the older XML dialect get the same
+answer as XML. Beyond VoLTE, Wi-Fi calling and SMS: carrier billing (<code>carrierBilling</code>), satellite
+messaging (<code>satellite</code>), a private Wi-Fi identity (<code>privateIdentity</code>) and the phone's own
+number are answered from the same plan; RCS shows on the page but is configured by the RCS server (GSMA RCC.14),
+a separate door.</p>
 <p><b>Try it without a phone</b>: the fleet ships a simulated TS.43 client —
 <code>curl -X POST localhost:8158/simulate -H 'Content-Type: application/json' -d
 '{"ecsUrl":"http://gateway:8080/ts43","imsi":"242050000000001","apps":["ap2003","ap2004","ap2005","ap2010"]}'</code>
@@ -1640,7 +1653,7 @@ what the phone may use, the phones that checked in, companion devices, and every
 to activate a companion eSIM and receive its SGP.22 activation code.</p>
 <p><b>The honest edge</b>: Apple and Google must point their clients at the operator's ECS and certify it —
 that is the operator's (or the host MNO's) relationship and takes its own time. The server is built to
-pass it; the real HSS/UDM goes behind <code>AUC_BASE_URL</code>; the line-side eSIM swap after a transfer is
-announced on the event bus for the orchestrator to execute.</p>
+pass it; the real HSS/UDM goes behind each tenant's <code>auc-base-url</code>; the eSIM profile download itself
+belongs to the SM-DP+.</p>
 </body>
 </html>

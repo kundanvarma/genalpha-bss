@@ -34,6 +34,19 @@ public class SimCard {
     @Column(name = "replaced_reason", length = 32)
     private String replacedReason;
 
+    /** physical card or eSIM profile. */
+    @Column(name = "form", length = 16)
+    private String form = "physical";
+
+    /** The eUICC an eSIM profile was downloaded to. */
+    @Column(name = "eid", length = 40)
+    private String eid;
+
+    public String getForm() { return form == null ? "physical" : form; }
+    public void setForm(String v) { this.form = v; }
+    public String getEid() { return eid; }
+    public void setEid(String v) { this.eid = v; }
+
     @Column(name = "created_at")
     private OffsetDateTime createdAt;
 

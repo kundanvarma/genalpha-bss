@@ -25,7 +25,8 @@ const HSS = process.env.HSS_BASE_URL || 'http://mock-hss:8080';
 const RELAY = 'application/vnd.gsma.eap-relay.v1.0+json';
 
 async function json(url, opts = {}) {
-  const res = await fetch(url, opts);
+  // never follow a 302: an OIDC sign-in is for browsers; a phone with a SIM falls back to EAP-AKA
+  const res = await fetch(url, { redirect: 'manual', ...opts });
   const text = await res.text();
   let body = null; try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   return { status: res.status, headers: res.headers, body };

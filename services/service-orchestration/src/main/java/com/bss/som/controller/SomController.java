@@ -42,6 +42,7 @@ public class SomController {
     private final com.bss.som.repository.NumberQuarantineRepository quarantine;
     private final com.bss.som.client.PartyOrgClient partyOrg;
     private final com.bss.som.client.OcsProvisioningClient ocs;
+    private final com.bss.som.client.EntitlementClient entitlement;
     private final com.bss.som.client.DiagnosticsClients diagnostics;
 
     public SomController(ServiceOrderRepository serviceOrders, ServiceInstanceRepository services,
@@ -55,9 +56,11 @@ public class SomController {
             com.bss.som.repository.NumberQuarantineRepository quarantine,
             com.bss.som.client.PartyOrgClient partyOrg,
             com.bss.som.client.OcsProvisioningClient ocs,
+            com.bss.som.client.EntitlementClient entitlement,
             com.bss.som.client.DiagnosticsClients diagnostics) {
         this.serviceOrders = serviceOrders;
         this.services = services;
+        this.entitlement = entitlement;
         this.pools = pools;
         this.assignments = assignments;
         this.tenantScope = tenantScope;
@@ -156,6 +159,8 @@ public class SomController {
         sims.save(old);
         String tenant = tenantScope.currentTenantId();
         com.bss.som.entity.SimCard fresh = orchestration.mintSim(tenant, id);
+        // the phone's entitlements follow the new card
+        entitlement.rebind(tenant, id, fresh.getIccid());
         String owner = services.findByIdAndTenantId(id, tenant)
                 .map(ServiceInstance::getOwnerPartyId).orElse(null);
         Map<String, Object> event = new LinkedHashMap<>();

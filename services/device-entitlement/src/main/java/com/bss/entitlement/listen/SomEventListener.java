@@ -38,6 +38,24 @@ public class SomEventListener {
         try {
             Map<?, ?> envelope = objectMapper.readValue(message, Map.class);
             String type = String.valueOf(envelope.get("eventType"));
+            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
+            Object payload = envelope.get("event") != null ? envelope.get("event") : envelope.get("payload");
+            if (tenantId == null || !(payload instanceof Map<?, ?> p)) {
+                return;
+            }
+            if ("SimReplacedEvent".equals(type)) {
+                // the orchestrator swapped the line's SIM: an eSIM transfer we asked for
+                // completes; any other replacement was re-bound by the orchestrator itself
+                Object sim = p.get("sim") instanceof Map<?, ?> m ? m : p;
+                if (sim instanceof Map<?, ?> s && s.get("serviceId") != null) {
+                    try (TenantContext ignored = TenantContext.actAs(tenantId)) {
+                        subscribers.simReplaced(tenantId, String.valueOf(s.get("serviceId")),
+                                s.get("reason") == null ? null : String.valueOf(s.get("reason")),
+                                s.get("transferId") == null ? null : String.valueOf(s.get("transferId")));
+                    }
+                }
+                return;
+            }
             String status = switch (type) {
                 case "ServiceSuspendedEvent" -> EntitlementSubscriber.SUSPENDED;
                 case "ServiceResumedEvent" -> EntitlementSubscriber.ACTIVE;
@@ -47,16 +65,12 @@ public class SomEventListener {
             if (status == null) {
                 return;
             }
-            String tenantId = envelope.get("tenantId") == null ? null : String.valueOf(envelope.get("tenantId"));
-            Object payload = envelope.get("event") != null ? envelope.get("event") : envelope.get("payload");
             String serviceId = null;
-            if (payload instanceof Map<?, ?> p) {
-                Object service = p.get("service") != null ? p.get("service") : p;
-                if (service instanceof Map<?, ?> s && s.get("id") != null) {
-                    serviceId = String.valueOf(s.get("id"));
-                }
+            Object service = p.get("service") != null ? p.get("service") : p;
+            if (service instanceof Map<?, ?> s && s.get("id") != null) {
+                serviceId = String.valueOf(s.get("id"));
             }
-            if (tenantId == null || serviceId == null) {
+            if (serviceId == null) {
                 return;
             }
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {

@@ -62,6 +62,10 @@ bss:
     # sigscale (SigScale OCS over its TM Forum APIs). A tenant may override
     # all four in tenants.yml (ocs-provider / ocs-base-url / ocs-username /
     # ocs-password) — one fleet, one OCS per operator.
+    # the device-entitlement server (GSMA TS.43): told at activation, plan
+    # change and SIM replacement which SIM belongs to which line and plan.
+    # Blank = no entitlement server in this deployment.
+    entitlement-base-url: ${ENTITLEMENT_BASE_URL:}
     ocs-provider: ${OCS_PROVIDER:http}
     ocs-username: ${OCS_USERNAME:}
     ocs-password: ${OCS_PASSWORD:}
@@ -87,6 +91,8 @@ bss:
     order-topic: ${ORDER_TOPIC:bss.ordering.events}
   events:
     topic: bss.som.events
+    # eSIM transfers requested through the entitlement server land here
+    entitlement-topic: ${SOM_ENTITLEMENT_TOPIC:bss.entitlement.events}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

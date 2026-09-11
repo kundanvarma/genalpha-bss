@@ -55,6 +55,7 @@ public class OrchestrationService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final com.bss.som.client.OcsProvisioningClient ocs;
+    private final com.bss.som.client.EntitlementClient entitlement;
     private final com.bss.som.client.SliceProvisioningClient slices;
     private final com.bss.som.client.AssuranceClient assurance;
     private final com.bss.som.security.TenantRegistry tenants;
@@ -78,6 +79,7 @@ public class OrchestrationService {
             com.bss.som.client.PartnerEntitlementClient partners,
             OrderingClient ordering, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.som.client.OcsProvisioningClient ocs,
+            com.bss.som.client.EntitlementClient entitlement,
             com.bss.som.client.SliceProvisioningClient slices,
             com.bss.som.client.AssuranceClient assurance,
             com.bss.som.security.TenantRegistry tenants,
@@ -99,6 +101,7 @@ public class OrchestrationService {
         this.sims = sims;
         this.catalog = catalog;
         this.ocs = ocs;
+        this.entitlement = entitlement;
         this.slices = slices;
         this.assurance = assurance;
         this.tenants = tenants;
@@ -387,6 +390,11 @@ public class OrchestrationService {
                     // zero-rated apps ride along: the OCS, not the BSS, makes them free
                     ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
                 }
+                // the entitlement server learns which SIM (and number) now belongs to
+                // this party and plan — the phone's next TS.43 check-in tells the truth
+                entitlement.bind(tenant, owner, serviceId, so.getOfferingId(), msisdnOf(tenant, serviceId),
+                        sims.findFirstByTenantIdAndServiceId(tenant, serviceId)
+                                .map(com.bss.som.entity.SimCard::getIccid).orElse(null));
                 // a PRIORITY TIER: the plan itself names a slice profile, so the
                 // line rides it for as long as the plan does (no expiry)
                 catalog.sliceIntentOf(so.getOfferingId()).ifPresent(intent -> {
@@ -465,6 +473,17 @@ public class OrchestrationService {
     }
 
     /** ITU E.118-shaped ICCID (89 = telecom, 46 = country) + an 8-digit PUK. */
+    /** The line's number as digits (its MSISDN assignment), or null when it has none yet. */
+    public String msisdnOf(String tenant, String serviceId) {
+        for (ResourceAssignment a : assignments.findByTenantIdAndServiceId(tenant, serviceId)) {
+            String digits = a.getValue() == null ? "" : a.getValue().replaceAll("[^0-9]", "");
+            if (digits.length() >= 8) {
+                return digits;
+            }
+        }
+        return null;
+    }
+
     public com.bss.som.entity.SimCard mintSim(String tenant, String serviceId) {
         java.security.SecureRandom random = new java.security.SecureRandom();
         StringBuilder iccid = new StringBuilder("8946");
@@ -645,6 +664,8 @@ public class OrchestrationService {
                     // carried by the OCS's own policy)
                     catalog.chargingSpecOf(modifyOfferingId).ifPresent(chargingSpec ->
                             ocs.changeRatePlan(tenant, instance.getId(), chargingSpec));
+                    // and the phone's entitlements follow the new plan
+                    entitlement.changeOffering(tenant, instance.getId(), modifyOfferingId);
                 }
                 // an in-place upgrade/downgrade re-provisions the line to the new
                 // characteristic (broadband speed, TV screens/points) — same

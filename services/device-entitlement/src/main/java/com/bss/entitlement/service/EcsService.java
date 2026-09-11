@@ -33,7 +33,11 @@ public class EcsService {
     public static final String SESSION_COOKIE = "ECS_SESSION";
 
     /** What the controller sends back. */
-    public record Reply(int status, String contentType, Object body, String setCookie) { }
+    public record Reply(int status, String contentType, Object body, String setCookie, String location) {
+        public Reply(int status, String contentType, Object body, String setCookie) {
+            this(status, contentType, body, setCookie, null);
+        }
+    }
 
     private final EntitlementSubscriberRepository subscribers;
     private final EntitlementDeviceRepository devices;
@@ -42,12 +46,13 @@ public class EcsService {
     private final EntitlementDecisionService decisions;
     private final OdsaService odsa;
     private final SubscriberService subscriberService;
+    private final OidcService oidc;
     private final String entitlementVersion;
     private final long versValidity;
 
     public EcsService(EntitlementSubscriberRepository subscribers, EntitlementDeviceRepository devices,
             EapAkaService eap, TokenService tokens, EntitlementDecisionService decisions, OdsaService odsa,
-            SubscriberService subscriberService,
+            SubscriberService subscriberService, OidcService oidc,
             @Value("${bss.entitlement.entitlement-version:12.0}") String entitlementVersion,
             @Value("${bss.entitlement.vers-validity-seconds:172800}") long versValidity) {
         this.subscribers = subscribers;
@@ -57,6 +62,7 @@ public class EcsService {
         this.decisions = decisions;
         this.odsa = odsa;
         this.subscriberService = subscriberService;
+        this.oidc = oidc;
         this.entitlementVersion = entitlementVersion;
         this.versValidity = versValidity;
     }
@@ -90,6 +96,12 @@ public class EcsService {
         if (imsi == null) {
             String eapId = p.get("EAP_ID");
             if (eapId == null || eapId.isBlank()) {
+                if (oidc.available(tenantId)) {
+                    // TS.43 §2.8.2: no SIM access on this client — authenticate the end-user through OIDC
+                    subscriberService.log(tenantId, terminalId, null, appNames(apps), operation, "oidc-redirect",
+                            "no token and no EAP_ID: sent to the operator's sign-in");
+                    return new Reply(302, "text/plain", "", null, oidc.authorizeUrl(tenantId, originalQuery(p)));
+                }
                 subscriberService.log(tenantId, terminalId, null, appNames(apps), operation, "unauthenticated",
                         "no token and no EAP_ID");
                 // TS.43: 511 Network Authentication Required when the client must authenticate
@@ -159,7 +171,23 @@ public class EcsService {
         return new Reply(status, "application/json", Map.of("error", message), null);
     }
 
-    private static String appNames(List<String> apps) {
+    /** The request's own parameters as a query string (what OIDC resumes after sign-in). */
+    private static String originalQuery(Map<String, String> p) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> e : p.entrySet()) {
+            if (e.getValue() == null || "token".equals(e.getKey()) || "EAP_ID".equals(e.getKey())) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append('&');
+            }
+            sb.append(java.net.URLEncoder.encode(e.getKey(), java.nio.charset.StandardCharsets.UTF_8)).append('=')
+                    .append(java.net.URLEncoder.encode(e.getValue(), java.nio.charset.StandardCharsets.UTF_8));
+        }
+        return sb.toString();
+    }
+
+    public static String appNames(List<String> apps) {
         List<String> names = new ArrayList<>();
         for (String a : apps) {
             names.add(appName(a));

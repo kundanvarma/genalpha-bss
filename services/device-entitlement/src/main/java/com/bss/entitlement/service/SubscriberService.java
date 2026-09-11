@@ -1,7 +1,10 @@
 package com.bss.entitlement.service;
 
 import com.bss.entitlement.client.AucClient;
+import com.bss.entitlement.client.CommunicationClient;
 import com.bss.entitlement.entity.CompanionDevice;
+import com.bss.entitlement.entity.SubscriptionTransfer;
+import com.bss.entitlement.repository.SubscriptionTransferRepository;
 import com.bss.entitlement.entity.EcsRequest;
 import com.bss.entitlement.entity.EntitlementDevice;
 import com.bss.entitlement.entity.EntitlementSubscriber;
@@ -41,12 +44,15 @@ public class SubscriberService {
     private final AucClient auc;
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
+    private final SubscriptionTransferRepository transfers;
+    private final CommunicationClient communication;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public SubscriberService(EntitlementSubscriberRepository subscribers, EntitlementDeviceRepository devices,
             CompanionDeviceRepository companions, EcsRequestRepository requests,
             EntitlementDecisionService decisions, TokenService tokens, AucClient auc,
-            DomainEventPublisher events, TenantScope tenantScope) {
+            DomainEventPublisher events, TenantScope tenantScope, SubscriptionTransferRepository transfers,
+            CommunicationClient communication) {
         this.subscribers = subscribers;
         this.devices = devices;
         this.companions = companions;
@@ -56,21 +62,63 @@ public class SubscriberService {
         this.auc = auc;
         this.events = events;
         this.tenantScope = tenantScope;
+        this.transfers = transfers;
+        this.communication = communication;
     }
 
-    /** Create or update the binding for an IMSI (the BSS's activation / SIM-swap / plan-change hook). */
+    /**
+     * Create or update the binding — the BSS's activation / SIM-swap / plan-change
+     * hook. Keyed by IMSI when the caller has one; otherwise by the LINE
+     * ({@code serviceId}) with the SIM's ICCID, and the IMSI comes from the AUC
+     * seam (a real HSS knows which IMSI a card carries; the dev AUC allocates
+     * one). A new ICCID on a known line is a SIM swap: the binding moves to the
+     * new IMSI and every device token of the old one dies.
+     */
     @Transactional
     public Map<String, Object> upsert(Map<String, Object> dto) {
         String tenant = tenantScope.currentTenantId();
         String imsi = str(dto.get("imsi"));
-        if (imsi == null || !imsi.matches("\\d{6,15}")) {
-            throw new BadRequestException("imsi (6-15 digits) is required");
+        String serviceId = str(dto.get("serviceId"));
+        String iccid = str(dto.get("iccid"));
+        EntitlementSubscriber existing = null;
+        if (imsi != null) {
+            existing = subscribers.findByTenantIdAndImsi(tenant, imsi).orElse(null);
         }
-        EntitlementSubscriber s = subscribers.findByTenantIdAndImsi(tenant, imsi).orElseGet(() -> {
+        if (existing == null && serviceId != null) {
+            existing = subscribers.findByTenantIdAndServiceId(tenant, serviceId).stream().findFirst().orElse(null);
+        }
+        if (imsi == null) {
+            if (iccid != null && (existing == null || !iccid.equals(existing.getIccid()))) {
+                // a (new) SIM on the line: ask the AUC which IMSI it carries
+                imsi = auc.identityByIccid(tenant, iccid, str(dto.get("msisdn")) != null ? str(dto.get("msisdn")) : existing == null ? null : existing.getMsisdn())
+                        .map(AucClient.Identity::imsi).orElse(null);
+                if (imsi == null) {
+                    throw new BadRequestException("the AUC does not know SIM " + iccid + " and no imsi was given");
+                }
+            } else if (existing != null) {
+                imsi = existing.getImsi();
+            }
+        }
+        if (imsi == null || !imsi.matches("\\d{6,15}")) {
+            throw new BadRequestException("imsi (6-15 digits), or a serviceId with an iccid the AUC knows, is required");
+        }
+        if (existing != null && !imsi.equals(existing.getImsi())) {
+            // SIM swap: the line keeps its binding, the identity changes, old devices must re-authenticate
+            tokens.revokeAll(tenant, existing.getImsi());
+            final String keepId = existing.getId();
+            subscribers.findByTenantIdAndImsi(tenant, imsi).ifPresent(dup -> {
+                if (!dup.getId().equals(keepId)) {
+                    subscribers.delete(dup);
+                }
+            });
+            existing.setImsi(imsi);
+        }
+        final String resolvedImsi = imsi;
+        EntitlementSubscriber s = existing != null ? existing : subscribers.findByTenantIdAndImsi(tenant, imsi).orElseGet(() -> {
             EntitlementSubscriber fresh = new EntitlementSubscriber();
             fresh.setId(UUID.randomUUID().toString());
             fresh.setTenantId(tenant);
-            fresh.setImsi(imsi);
+            fresh.setImsi(resolvedImsi);
             fresh.setCreatedAt(OffsetDateTime.now());
             return fresh;
         });
@@ -87,7 +135,7 @@ public class SubscriberService {
         if (dto.containsKey("featureOverrides")) s.setFeatureOverrides(json(dto.get("featureOverrides")));
         // the AUC may know the identity better than the caller
         if (s.getIccid() == null || s.getMsisdn() == null) {
-            auc.identity(imsi).ifPresent(id -> {
+            auc.identity(tenant, imsi).ifPresent(id -> {
                 if (s.getIccid() == null) s.setIccid(id.iccid());
                 if (s.getMsisdn() == null) s.setMsisdn(id.msisdn());
             });
@@ -147,6 +195,11 @@ public class SubscriberService {
             deviceList.add(deviceMap(d));
         }
         out.put("devices", deviceList);
+        List<Map<String, Object>> transferList = new ArrayList<>();
+        for (SubscriptionTransfer t : transfers.findByTenantIdAndImsiOrderByCreatedAtDesc(s.getTenantId(), s.getImsi())) {
+            transferList.add(OdsaService.transferMap(t, s));
+        }
+        out.put("transfers", transferList);
         return out;
     }
 
@@ -157,20 +210,73 @@ public class SubscriberService {
     @Transactional
     public Map<String, Object> reconfigure(String imsi, List<String> apps) {
         EntitlementSubscriber s = get(imsi);
+        String payload;
+        try {
+            payload = mapper.writeValueAsString(Map.of("app", apps, "timestamp", OffsetDateTime.now().toString()));
+        } catch (Exception e) {
+            payload = "{\"app\":[],\"timestamp\":\"" + OffsetDateTime.now() + "\"}";
+        }
         List<Map<String, Object>> targets = new ArrayList<>();
-        for (EntitlementDevice d : devices.findByTenantIdAndImsi(s.getTenantId(), s.getImsi())) {
+        List<EntitlementDevice> phones = devices.findByTenantIdAndImsi(s.getTenantId(), s.getImsi());
+        if (phones.isEmpty() && s.getPartyId() != null) {
+            // no phone has checked in yet: the line still gets the SMS
+            Map<String, Object> t = new LinkedHashMap<>();
+            t.put("channel", "sms");
+            t.put("messageId", communication.notifyRefresh(s.getPartyId(), "sms", payload, apps.stream().map(EcsService::appName).toList()));
+            targets.add(t);
+            log(s.getTenantId(), null, s.getImsi(), EcsService.appNames(apps), "Reconfigure",
+                    t.get("messageId") == null ? "notify-failed" : "notified", "refresh notice by SMS to the line");
+        }
+        for (EntitlementDevice d : phones) {
+            boolean push = d.getNotifToken() != null && d.getNotifAction() != null && d.getNotifAction() > 0;
+            String channel = push ? "push" : "sms";
+            String messageId = communication.notifyRefresh(s.getPartyId(), channel, payload, apps.stream().map(EcsService::appName).toList());
             Map<String, Object> t = new LinkedHashMap<>();
             t.put("terminalId", d.getTerminalId());
-            t.put("channel", d.getNotifToken() != null && d.getNotifAction() != null && d.getNotifAction() > 0 ? "push" : "sms");
+            t.put("channel", channel);
+            t.put("messageId", messageId);
             targets.add(t);
-            log(s.getTenantId(), d.getTerminalId(), s.getImsi(), String.join(",", apps), "Reconfigure", "notified",
-                    "server-initiated entitlement refresh over " + t.get("channel"));
+            log(s.getTenantId(), d.getTerminalId(), s.getImsi(), EcsService.appNames(apps), "Reconfigure",
+                    messageId == null && communication.enabled() ? "notify-failed" : "notified",
+                    "refresh notice by " + channel + (messageId == null ? (communication.enabled() ? " — not sent" : " — recorded, no notification seam here") : ""));
         }
         Map<String, Object> resource = new LinkedHashMap<>(toMap(s, false));
         resource.put("apps", apps);
+        resource.put("payload", payload);
         resource.put("targets", targets);
         events.publish("EntitlementReconfigureRequestedEvent", "entitlementSubscriber", resource);
         return resource;
+    }
+
+    /**
+     * The orchestrator replaced the line's SIM. For an eSIM transfer we asked
+     * for, the transfer completes: the binding moves to the new profile's
+     * ICCID and the old phone's tokens die. Other replacements are re-bound
+     * by the orchestrator through {@link #upsert}.
+     */
+    @Transactional
+    public void simReplaced(String tenantId, String serviceId, String reason, String transferId) {
+        if (!"esim-transfer".equals(reason)) {
+            return;
+        }
+        for (EntitlementSubscriber s : subscribers.findByTenantIdAndServiceId(tenantId, serviceId)) {
+            for (SubscriptionTransfer t : transfers.findByTenantIdAndImsiOrderByCreatedAtDesc(tenantId, s.getImsi())) {
+                if (!"profile-ready".equals(t.getStatus()) || (transferId != null && !transferId.equals(t.getId()))) {
+                    continue;
+                }
+                t.setStatus("completed");
+                t.setLastUpdate(OffsetDateTime.now());
+                transfers.save(t);
+                s.setIccid(t.getNewIccid());
+                s.setLastUpdate(OffsetDateTime.now());
+                subscribers.save(s);
+                tokens.revokeAll(tenantId, s.getImsi()); // the old phone is out; the new one authenticates afresh
+                events.publish("SubscriptionTransferCompletedEvent", "subscriptionTransfer", OdsaService.transferMap(t, s), tenantId);
+                log(tenantId, t.getTargetTerminalId(), s.getImsi(), "eSIM for this phone", "TransferCompleted", "served",
+                        "the line now runs on the new eSIM profile; the old phone's tokens were revoked");
+                break;
+            }
+        }
     }
 
     /** Unbind an IMSI (a SIM retired for good): its tokens die with it. */

@@ -836,7 +836,19 @@
    "serviceAccountsEnabled": true,
    "standardFlowEnabled": false,
    "directAccessGrantsEnabled": false
-  },
+  }, {
+      "clientId": "bss-ecs",
+      "name": "TS.43 entitlement server OIDC client (web sheets, clients without SIM access)",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "ecs-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:8080/ts43/oidc/callback", "http://gateway:8080/ts43/oidc/callback", "https://*.taranga.no/ts43/oidc/callback"],
+      "webOrigins": ["+"],
+      "protocol": "openid-connect"
+    },
   {
    "clientId": "bss-base-migration",
    "name": "loyalty machine identity (client credentials; dev secret)",
@@ -1073,7 +1085,7 @@
    "username": "service-account-bss-som",
    "enabled": true,
    "serviceAccountClientId": "bss-som",
-   "realmRoles": [
+   "realmRoles": ["entitlement:write", 
     "ordering:read",
     "ordering:write",
     "porting:read",
@@ -1518,7 +1530,7 @@
    "username": "service-account-bss-entitlement",
    "enabled": true,
    "serviceAccountClientId": "bss-entitlement",
-   "realmRoles": ["catalog:read"]
+   "realmRoles": ["communication:write", "catalog:read"]
   },
   {
    "username": "service-account-bss-base-migration",
