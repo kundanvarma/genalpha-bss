@@ -135,6 +135,20 @@ services:
     db: ""
     healthPath: /health
     extraEnv: {}
+  # a REAL OCS behind the same seam: SigScale OCS (Apache-2.0), 3GPP Diameter
+  # Ro/Gy with TM Forum APIs; tenants opt in via tenants.yml ocs-provider.
+  # Image built from integrations/sigscale-ocs. Its mnesia database lives in
+  # /home/otp/db — give the pod a PersistentVolume in production (this chart's
+  # generic app template has none), and keep the pod's hostname stable: the
+  # Erlang node is named after it and the database is bound to that name.
+  sigscale-ocs:
+    db: ""
+    healthPath: /health
+    extraEnv:
+      OCS_ADMIN_USER: bss
+      OCS_ADMIN_PASSWORD: bss-secret
+      OCS_DIAMETER_CLIENTS: 127.0.0.1
+      OCS_THRESHOLD_BYTES: "2000000000"
   # demo stand-in for the operator's web analytics (GA4 seam)
   mock-analytics:
     db: ""
@@ -248,6 +262,10 @@ services:
     machineIdentity: true
     extraEnv:
       OCS_BASE_URL: http://mock-ocs:8080
+      # SigScale-bound tenants: where its balance hub calls back, and the
+      # OCS's running-low line (same number the sigscale-ocs pod runs with)
+      OCS_NOTIFY_BASE_URL: http://usage:8080
+      OCS_THRESHOLD_BYTES: "2000000000"
       PARTY_BASE_URL: http://party-account:8080
       CATALOG_BASE_URL: http://product-catalog:8080
       POLICY_BASE_URL: http://policy:8080

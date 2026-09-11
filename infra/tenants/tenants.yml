@@ -788,6 +788,14 @@ bss:
         esp-url: ${ESP_URL_TARANGA:}
         esp-api-key: ${ESP_API_KEY_TARANGA:}
         esp-from: ${ESP_FROM_TARANGA:}
+        # This operator charges on a REAL OCS: SigScale OCS over its TM Forum
+        # APIs (the bundled one in the fleet, or the operator's own — change the
+        # URL + credential, no code). Tenants without these fields use the
+        # deployment default (OCS_PROVIDER/OCS_BASE_URL — the mock in dev).
+        ocs-provider: ${OCS_PROVIDER_TARANGA:sigscale}
+        ocs-base-url: ${OCS_BASE_URL_TARANGA:http://sigscale-ocs:8080}
+        ocs-username: ${OCS_USERNAME_TARANGA:bss}
+        ocs-password: ${OCS_PASSWORD_TARANGA:bss-secret}
         brand-name: Taranga
         brand-color: "#4A4AC3"
         locale: "en"

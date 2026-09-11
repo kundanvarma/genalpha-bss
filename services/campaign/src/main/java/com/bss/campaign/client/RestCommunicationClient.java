@@ -28,6 +28,11 @@ public class RestCommunicationClient implements CommunicationClient {
         if (context != null && !context.isEmpty()) {
             body.put("context", context);
             if (context.get("source") != null) body.put("source", context.get("source"));
+            // a service notice: TMF681 characteristic {category: transactional} —
+            // communication skips the marketing footer and the marketing cap
+            if ("transactional".equals(context.get("category"))) {
+                body.put("characteristic", List.of(Map.of("name", "category", "value", "transactional")));
+            }
         }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {
@@ -51,6 +56,11 @@ public class RestCommunicationClient implements CommunicationClient {
         if (context != null && !context.isEmpty()) {
             body.put("context", context);
             if (context.get("source") != null) body.put("source", context.get("source"));
+            // a service notice: TMF681 characteristic {category: transactional} —
+            // communication skips the marketing footer and the marketing cap
+            if ("transactional".equals(context.get("category"))) {
+                body.put("characteristic", List.of(Map.of("name", "category", "value", "transactional")));
+            }
         }
         body.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
         try {

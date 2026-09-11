@@ -93,6 +93,7 @@ beside it.</p>
 44. <a href="#basemigration">Base migration — moving the installed base</a><br>
 45. <a href="#usagepolicy">Usage policy — pools, caps &amp; the roaming wall</a><br>
 46. <a href="#norwayrails">Norway rails — registry, directory, credit, bill channels</a><br>
+47. <a href="#ocs">Real-time charging — a real OCS behind the seam</a><br>
 </p>
 </div>
 
@@ -1570,5 +1571,45 @@ failures · the build story is <em>The Honest Machine</em> (docs/book) · the TM
 docs/book/tmf-reference.md</p>
 
 </div>
+<h2 id="ocs">47 · Real-time charging — a real OCS behind the seam</h2>
+<p><b>What</b>: the Online Charging System is the network's real-time balance master — the packet
+core asks it for quota over Diameter Gy before traffic flows. This BSS never sits in that path: the
+catalog <i>references</i> a rate plan that lives in the OCS (<code>chargingSpecId</code> on the plan's
+spec), activation <i>provisions</i> the subscriber there, TMF654 <i>projects</i> the balance and forwards
+top-ups, and the OCS tells the BSS when a line is running low. Suite
+<a href="../../ops/e2e/sigscale_ocs_test.js">sigscale_ocs_test.js</a> (#123); seam doc
+<a href="../ocs-seam.md">docs/ocs-seam.md</a>.</p>
+<p><b>Which OCS, per operator</b>: each tenant block in <code>infra/tenants/tenants.yml</code> may name
+its own — <code>ocs-provider</code> (<code>http</code> = the generic subscriber/rate-plan REST shape of the
+bundled mock and vendor gateways; <code>sigscale</code> = SigScale OCS over its TM Forum APIs),
+<code>ocs-base-url</code>, <code>ocs-username</code>, <code>ocs-password</code>. Tenants without these use
+the deployment defaults (<code>OCS_PROVIDER</code>, <code>OCS_BASE_URL</code>). One fleet can charge one
+operator on the mock and another on a real OCS; the demo tenant Taranga runs on SigScale, the default
+tenant on the mock.</p>
+<p><b>The bundled real OCS</b>: SigScale OCS (open source, Apache-2.0, 3GPP Diameter Ro/Gy/Gx, RADIUS)
+runs as <code>sigscale-ocs</code> in the fleet — REST and GUI on <code>:8155</code> (HTTP Basic
+<code>bss</code>/<code>bss-secret</code>), Diameter on <code>:3868</code>. Its rate plans are TMF620
+offerings created in its own tooling: <code>python3 ops/seed/seed_sigscale_ocs.py</code> seeds the
+plans the demo catalog references (RG-DATA-2 … RG-UNL and the priority-slice twins), each a monthly
+recurring price whose allowance grants the data bucket and a usage price that rates overage. Change a
+plan there, not in the BSS.</p>
+<p><b>What you will see</b>: order a mobile plan on Taranga → in SigScale a product appears on the
+plan's offering with its allowance bucket, and a service whose id is the line's MSISDN; the shop's
+balance page shows the OCS's remaining data; a top-up in the shop lands as a bucket in the OCS; a plan
+change moves the line to the new offering; a vacation hold disables the identity so the network refuses
+data. The OCS's balance hub posts "running low" to the BSS below its configured line
+(<code>OCS_THRESHOLD_BYTES</code>, 2 GB by default) and the tenant's running-low journey speaks —
+as a <b>transactional</b> journey (a service notice), so marketing quiet hours never park it and it never
+spends the marketing frequency budget.</p>
+<p><b>Journey category</b>: journeys now carry <code>category</code> = <code>marketing</code> (default)
+or <code>transactional</code>. Use transactional for the notices a customer expects as a customer
+("running low", "line suspended", "installer on the way"); marketing for everything that sells.</p>
+<p><b>Running a real Gy session yourself</b>: SigScale ships a Diameter test client —
+<code>docker exec bss-sigscale-ocs sh -c 'cd /home/otp &amp;&amp; ERL_LIBS=/home/otp/lib escript
+lib/ocs-*/priv/bin/data_session.escript --msisdn 4741000001 --imsi 001001123456789 --raddr 127.0.0.1
+--updates 2'</code> — and the balance falls in both SigScale and the shop.</p>
+<p><b>Not here</b>: 5G standalone converged charging (Nchf/CHF) waits for a production-grade CHF —
+the seam is the same, the BSS talks TM Forum to whatever charges; voice/SMS tariffs; a CGRateS adapter
+for VoIP-switch estates (one more adapter in the same registry when a prospect asks).</p>
 </body>
 </html>

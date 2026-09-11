@@ -1,7 +1,9 @@
 package com.bss.usage.controller;
 
+import com.bss.usage.service.SigscaleNotificationService;
 import com.bss.usage.service.UsageService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -22,15 +24,27 @@ import java.util.Map;
 public class OcsNotificationController {
 
     private final UsageService service;
+    private final SigscaleNotificationService sigscale;
 
-    public OcsNotificationController(UsageService service) {
+    public OcsNotificationController(UsageService service, SigscaleNotificationService sigscale) {
         this.service = service;
+        this.sigscale = sigscale;
     }
 
     @PostMapping("/usageThreshold")
     public ResponseEntity<Map<String, Object>> usageThreshold(@RequestBody Map<String, Object> body) {
         service.notifyUsageThreshold(body);
         return ResponseEntity.accepted().body(Map.of("status", "accepted"));
+    }
+
+    /** SigScale OCS's TMF654 balance hub: the same "running low" truth in
+     * SigScale's own event shape, one door per tenant (the hub subscription
+     * carries the tenant in its callback). Translated, then relayed like any
+     * usage-threshold notification. */
+    @PostMapping("/sigscale/{tenantId}")
+    public ResponseEntity<Map<String, Object>> sigscaleBalance(@PathVariable("tenantId") String tenantId,
+            @RequestBody Map<String, Object> body) {
+        return ResponseEntity.accepted().body(sigscale.accept(tenantId, body));
     }
 
     /** Slice-aware charging: the OCS reports GB that rode the PRIORITY slice; the

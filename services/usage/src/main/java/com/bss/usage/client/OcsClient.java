@@ -1,62 +1,28 @@
 package com.bss.usage.client;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-
 import java.util.List;
 import java.util.Map;
 
 /**
  * The usage component's read/credit window onto the Online Charging System.
- * The OCS owns the real-time truth (counters, rollover); this client
- * PROJECTS it for the TMF654 facade and forwards top-up credits. Blank
- * base-url = no OCS in this deployment: balances answer empty and the
- * facade says so honestly.
+ * The OCS owns the real-time truth (counters, rollover); this seam PROJECTS
+ * it for the TMF654 facade and forwards top-up credits. Routed per tenant
+ * ({@link TenantOcsRouter}): each operator's tenants.yml names the adapter
+ * ({@code http} = the generic subscriber/bucket shape, {@code sigscale} =
+ * SigScale OCS over TM Forum APIs). No OCS for a tenant = balances answer
+ * empty and the facade says so honestly.
+ *
+ * Subscriber projection shape (what every adapter returns):
+ * {@code {id, tenantId, partyId, serviceId, ratePlanId, status,
+ *   buckets:[{id, name, ratePlanId, totalGB, usedGB, rolloverGB, rollover}]}}
  */
-@Component
-public class OcsClient {
+public interface OcsClient {
 
-    private final RestClient restClient;
-    private final boolean enabled;
+    /** Whether this tenant has any OCS behind the seam. */
+    boolean enabled(String tenantId);
 
-    public OcsClient(RestClient.Builder builder,
-            @Value("${bss.downstream.ocs-base-url:}") String baseUrl) {
-        this.enabled = baseUrl != null && !baseUrl.isBlank();
-        this.restClient = enabled ? builder.baseUrl(baseUrl).build() : null;
-    }
+    List<Map<String, Object>> subscribersOf(String tenantId, String partyId);
 
-    public boolean enabled() {
-        return enabled;
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> subscribersOf(String tenantId, String partyId) {
-        if (!enabled) {
-            return List.of();
-        }
-        try {
-            List<Map<String, Object>> subs = restClient.get()
-                    .uri("/subscribers?tenantId={t}&partyId={p}", tenantId, partyId)
-                    .retrieve().body(List.class);
-            return subs == null ? List.of() : subs;
-        } catch (RuntimeException e) {
-            return List.of(); // fail open: no balances beats no page
-        }
-    }
-
-    public boolean credit(String subscriberId, double gb) {
-        if (!enabled) {
-            return false;
-        }
-        try {
-            restClient.post().uri("/subscribers/{id}/credit", subscriberId)
-                    .header("Content-Type", "application/json")
-                    .body(Map.of("gb", gb))
-                    .retrieve().toBodilessEntity();
-            return true;
-        } catch (RuntimeException e) {
-            return false;
-        }
-    }
+    /** Credit a top-up onto a subscriber's data counter. */
+    boolean credit(String tenantId, String subscriberId, double gb);
 }

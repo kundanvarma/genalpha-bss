@@ -109,6 +109,9 @@ public class JourneyService {
         if (dto.get("holdoutPercent") != null) {
             entity.setHoldoutPercent(requireHoldout(dto.get("holdoutPercent")));
         }
+        if (dto.get("category") != null) {
+            entity.setCategory(requireCategory(dto.get("category")));
+        }
         applyArms(entity, dto.containsKey("arms") ? dto.get("arms") : dto.get("messageVariants"), true);
         if (dto.get("autoTune") != null) {
             entity.setAutoTune(Boolean.parseBoolean(String.valueOf(dto.get("autoTune"))));
@@ -177,6 +180,14 @@ public class JourneyService {
                         + "'waitForEvent' or 'exit'");
             }
         }
+    }
+
+    private String requireCategory(Object value) {
+        String v = String.valueOf(value).trim().toLowerCase();
+        if (!Journey.MARKETING.equals(v) && !Journey.TRANSACTIONAL.equals(v)) {
+            throw new BadRequestException("category must be 'marketing' or 'transactional'");
+        }
+        return v;
     }
 
     private int requireHoldout(Object value) {
@@ -249,6 +260,9 @@ public class JourneyService {
         }
         if (patch.get("holdoutPercent") != null) {
             entity.setHoldoutPercent(requireHoldout(patch.get("holdoutPercent")));
+        }
+        if (patch.get("category") != null) {
+            entity.setCategory(requireCategory(patch.get("category")));
         }
         if (patch.get("steps") != null) {
             List<Map<String, Object>> steps = parseSteps(patch.get("steps"));
@@ -458,6 +472,13 @@ public class JourneyService {
                     id -> journeys.findByIdAndTenantId(id, tenantId).orElse(null));
             if (j != null && Journey.ACTIVE.equals(j.getStatus())) {
                 live.add(e);
+            } else {
+                // a paused/deleted journey's enrollments must leave the due set,
+                // or they fill every batch forever and starve fresh enrollments
+                // (the 200-row batch was 998 dead rows deep on a long-lived dev
+                // tenant). Re-checked hourly, so a resumed journey picks them up.
+                e.setNextActionAt(OffsetDateTime.now().plusHours(1));
+                enrollments.save(e);
             }
         }
         // NBA arbitration: process highest-priority journeys first, so the best
@@ -665,7 +686,10 @@ public class JourneyService {
      * @return false when parked (the enrollment was saved with a new time). */
     private boolean sendGuarded(Journey journey, JourneyEnrollment enrollment,
             Map<String, Object> message) {
-        java.util.Optional<OffsetDateTime> quiet = frequency.quietUntil();
+        // a TRANSACTIONAL journey is a service notice ("running low", "line
+        // suspended"): quiet hours and the marketing budget are for marketing
+        boolean serviceNotice = journey.isTransactional();
+        java.util.Optional<OffsetDateTime> quiet = serviceNotice ? java.util.Optional.empty() : frequency.quietUntil();
         if (quiet.isPresent()) {
             enrollment.setNextActionAt(quiet.get());
             enrollments.save(enrollment);
@@ -673,7 +697,7 @@ public class JourneyService {
                     journey.getName(), enrollment.getPartyId(), quiet.get());
             return false;
         }
-        if (!frequency.canSend(enrollment.getPartyId())) {
+        if (!serviceNotice && !frequency.canSend(enrollment.getPartyId())) {
             enrollment.setNextActionAt(OffsetDateTime.now().plusSeconds(3600));
             enrollments.save(enrollment);
             log.info("journey '{}' postponed for party {} — marketing budget spent",
@@ -691,6 +715,7 @@ public class JourneyService {
         }
         if (message.get("promotionCode") != null) context.put("promotion.code", message.get("promotionCode"));
         if (journey.getName() != null) context.put("source", journey.getName());
+        if (serviceNotice) context.put("category", Journey.TRANSACTIONAL);
         com.bss.campaign.client.CommunicationClient.SendOutcome outcome;
         if (message.get("templateRef") != null) {
             outcome = communication.sendTemplated(enrollment.getPartyId(),
@@ -724,7 +749,9 @@ public class JourneyService {
                     journey.getName(), enrollment.getPartyId());
             return true;
         }
-        frequency.record(enrollment.getPartyId(), "journey");
+        if (!serviceNotice) {
+            frequency.record(enrollment.getPartyId(), "journey");
+        }
         return true;
     }
 
@@ -880,6 +907,7 @@ public class JourneyService {
         if (j.getSegmentName() != null) map.put("segmentName", j.getSegmentName());
         if (j.getConversionEvent() != null) map.put("conversionEvent", j.getConversionEvent());
         map.put("holdoutPercent", j.getHoldoutPercent());
+        map.put("category", j.getCategory());
         map.put("priority", j.getPriority());
         List<Map<String, Object>> arms = armsOf(j);
         if (!arms.isEmpty()) {

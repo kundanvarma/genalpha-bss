@@ -26,6 +26,8 @@
 #   T2 experience   storefront + consoles -- static UIs, cheap; always on
 #   T3 domains      wholesale, migration, device-commerce, martech, loyalty...
 #                   -- run what you sell; each is independently stoppable
+#   T3+ real seams  sigscale-ocs -- a REAL open-source OCS (Erlang node, ~150MB);
+#                   tenants opt in via tenants.yml ocs-provider
 #   T4 dev mocks    mock-* -- DEV ONLY; production replaces each with a real
 #                      adapter behind the same seam (see docs: seams)
 #   T5 ops extras   grafana/prometheus (prod: MUST; dev: optional),

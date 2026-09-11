@@ -80,6 +80,19 @@ public class Journey {
     @Column(name = "tuning_log", length = 8000)
     private String tuningLog;
 
+    /** {@code marketing} (default) or {@code transactional}: a service
+     * notice the customer expects — never parked by quiet hours, never
+     * counted against the marketing frequency budget. */
+    @Column(name = "category", length = 32)
+    private String category = MARKETING;
+
+    public static final String MARKETING = "marketing";
+    public static final String TRANSACTIONAL = "transactional";
+
+    public String getCategory() { return category == null ? MARKETING : category; }
+    public void setCategory(String v) { this.category = v == null || v.isBlank() ? MARKETING : v; }
+    public boolean isTransactional() { return TRANSACTIONAL.equals(getCategory()); }
+
     public String getArms() { return arms; }
     public void setArms(String v) { this.arms = v; }
     public boolean isAutoTune() { return autoTune; }

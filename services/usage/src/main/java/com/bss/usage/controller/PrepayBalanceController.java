@@ -138,10 +138,11 @@ public class PrepayBalanceController {
         String bucketId = request.get("bucket") instanceof Map<?, ?> b && b.get("id") != null
                 ? String.valueOf(b.get("id")) : null;
         // the party boundary IS the authorization: only own subscribers reachable
-        for (Map<String, Object> sub : ocs.subscribersOf(tenantScope.currentTenantId(), party)) {
+        String tenant = tenantScope.currentTenantId();
+        for (Map<String, Object> sub : ocs.subscribersOf(tenant, party)) {
             boolean match = bucketId == null || asList(sub.get("buckets")).stream()
                     .anyMatch(o -> o instanceof Map<?, ?> raw && bucketId.equals(String.valueOf(raw.get("id"))));
-            if (match && ocs.credit(String.valueOf(sub.get("id")), amount)) {
+            if (match && ocs.credit(tenant, String.valueOf(sub.get("id")), amount)) {
                 Map<String, Object> extra = new LinkedHashMap<>();
                 extra.put("amount", Map.of("amount", amount, "units", "GB"));
                 extra.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
@@ -149,7 +150,7 @@ public class PrepayBalanceController {
             }
         }
         throw new BadRequestException("no charging subscriber found for this party"
-                + (ocs.enabled() ? "" : " (no OCS configured in this deployment)"));
+                + (ocs.enabled(tenant) ? "" : " (no OCS configured for this tenant)"));
     }
 
     @GetMapping("/topupBalance")

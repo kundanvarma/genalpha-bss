@@ -65,8 +65,22 @@ bss:
       zone-entry-window-days: ${ZONE_ENTRY_WINDOW_DAYS:30}
   events:
     topic: bss.usage.events
+  ocs:
+    # where a SigScale OCS balance hub reaches THIS service (its callback door)
+    notify-base-url: ${OCS_NOTIFY_BASE_URL:http://localhost:8080}
+    # the OCS's own "running low" line in bytes — the same number the
+    # SigScale container runs with (OCS_THRESHOLD_BYTES); default 2 GB
+    sigscale-threshold-bytes: ${OCS_THRESHOLD_BYTES:2000000000}
   downstream:
     ocs-base-url: ${OCS_BASE_URL:}
+    # which adapter speaks to that OCS: http (the generic subscriber/bucket
+    # REST shape — mock-ocs in dev, a vendor gateway in production) or
+    # sigscale (SigScale OCS over its TM Forum APIs). A tenant may override
+    # all four in tenants.yml (ocs-provider / ocs-base-url / ocs-username /
+    # ocs-password) — one fleet, one OCS per operator.
+    ocs-provider: ${OCS_PROVIDER:http}
+    ocs-username: ${OCS_USERNAME:}
+    ocs-password: ${OCS_PASSWORD:}
     # The gift boundary — household links are verified here live.
     party-base-url: ${PARTY_BASE_URL:http://localhost:8084}
     # Product levers (giftable/giftScope/rollover*) live on the plan's spec.

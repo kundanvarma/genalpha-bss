@@ -435,6 +435,22 @@ the acting tenant's machine identity.
   fallbacks, channels hide features whose component is absent, and Helm skips disabled modules
   entirely — see the [composer](composer.html).
 
+**The charging seam is a real OCS, routed per tenant.** `service-orchestration`
+(lifecycle: provision / plan change / hold / transfer) and `usage` (the TMF654
+balance face + the running-low door) each resolve the tenant's Online Charging
+System from `tenants.yml` (`ocs-provider`, `ocs-base-url`, credentials) through
+a registry of named adapters behind one router — the same shape as the CMS
+seam. `http` speaks the subscriber/rate-plan REST shape of `mock-ocs` (a vendor
+gateway in production); `sigscale` drives **SigScale OCS**, an open-source
+(Apache-2.0) 3GPP Diameter Ro/Gy OCS bundled in the fleet
+(`integrations/sigscale-ocs`, port 8155 REST / 3868 Diameter) over its native
+TM Forum APIs — offerings are rate plans, products are subscriptions, services
+carry the MSISDN the packet core charges against, its TMF654 balance hub posts
+the OCS-owned "running low" line back to `usage`. The BSS is never in the
+charging path; it references charging from the catalog (`chargingSpecId`) and
+provisions it, fail-open. Suite #123 `sigscale_ocs_test` drives a real Gy
+credit-control session. Detail: `docs/ocs-seam.md`.
+
 ## 5. Cloud deployment view — proven on both AWS and Azure
 
 The same Helm chart deploys the whole fleet; only the *substrate* differs, and it slots in

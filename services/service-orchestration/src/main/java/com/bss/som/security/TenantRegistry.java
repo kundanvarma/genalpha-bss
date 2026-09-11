@@ -71,6 +71,25 @@ public class TenantRegistry {
         private String dncUrl;
         private String dncToken;
 
+        /** The tenant's Online Charging System (tenants.yml `ocs-*`): which
+         * adapter speaks to it ({@code http} = the generic REST shape the
+         * bundled mock and vendor gateways expose, {@code sigscale} = SigScale
+         * OCS over its TM Forum APIs), where it lives, and the HTTP Basic
+         * credential it takes. Absent = the deployment-wide default. */
+        private String ocsProvider;
+        private String ocsBaseUrl;
+        private String ocsUsername;
+        private String ocsPassword;
+
+        public String getOcsProvider() { return ocsProvider; }
+        public void setOcsProvider(String v) { this.ocsProvider = v; }
+        public String getOcsBaseUrl() { return ocsBaseUrl; }
+        public void setOcsBaseUrl(String v) { this.ocsBaseUrl = v; }
+        public String getOcsUsername() { return ocsUsername; }
+        public void setOcsUsername(String v) { this.ocsUsername = v; }
+        public String getOcsPassword() { return ocsPassword; }
+        public void setOcsPassword(String v) { this.ocsPassword = v; }
+
         public String getId() {
             return id;
         }

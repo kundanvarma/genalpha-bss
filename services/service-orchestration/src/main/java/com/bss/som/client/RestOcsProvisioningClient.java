@@ -2,46 +2,66 @@ package com.bss.som.client;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Talks to whatever OCS the deployment points at (OCS_BASE_URL — the
- * bundled mock-ocs in dev, the operator's Ericsson/Huawei/Matrixx adapter in
- * production). Blank base-url = no online charging in this deployment; every
- * call is a logged no-op and activation proceeds untouched.
+ * The generic {@code http} OCS adapter: the plain subscriber/rate-plan REST
+ * shape the bundled mock-ocs exposes in dev and a vendor's integration
+ * gateway (Ericsson/Huawei/Matrixx front doors) exposes in production. Which
+ * OCS a tenant points at comes from {@link OcsSettings}; a blank base URL =
+ * no online charging in this deployment, every call a logged no-op.
  */
 @Component
-public class RestOcsProvisioningClient implements OcsProvisioningClient {
+public class RestOcsProvisioningClient implements OcsProviderAdapter {
 
     private static final Logger log = LoggerFactory.getLogger(RestOcsProvisioningClient.class);
 
-    private final RestClient restClient;
-    private final boolean enabled;
+    private final RestClient.Builder builder;
+    private final OcsSettings settings;
+    private final Map<String, RestClient> clients = new ConcurrentHashMap<>();
 
-    public RestOcsProvisioningClient(RestClient.Builder builder,
-            @Value("${bss.downstream.ocs-base-url:}") String baseUrl) {
-        this.enabled = baseUrl != null && !baseUrl.isBlank();
-        this.restClient = enabled ? builder.baseUrl(baseUrl).build() : null;
+    public RestOcsProvisioningClient(RestClient.Builder builder, OcsSettings settings) {
+        this.builder = builder;
+        this.settings = settings;
+    }
+
+    @Override
+    public String name() {
+        return "http";
+    }
+
+    @Override
+    public boolean enabledFor(String tenantId) {
+        return settings.forTenant(tenantId).enabled();
+    }
+
+    private RestClient client(String tenantId) {
+        OcsSettings.Binding b = settings.forTenant(tenantId);
+        if (!b.enabled()) {
+            return null;
+        }
+        return clients.computeIfAbsent(b.baseUrl(), url -> builder.clone().baseUrl(url).build());
     }
 
     @Override
     public void provision(String tenantId, String partyId, String serviceId, String chargingSpecId) {
-        provision(tenantId, partyId, serviceId, chargingSpecId, java.util.List.of());
+        provision(tenantId, partyId, serviceId, chargingSpecId, List.of());
     }
 
     @Override
     public void provision(String tenantId, String partyId, String serviceId, String chargingSpecId,
-            java.util.List<String> zeroRatedApps) {
-        if (!enabled) {
+            List<String> zeroRatedApps) {
+        RestClient restClient = client(tenantId);
+        if (restClient == null) {
             return;
         }
         try {
-            java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("tenantId", tenantId);
             body.put("partyId", partyId);
             body.put("serviceId", serviceId);
@@ -65,16 +85,12 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
     @Override
     @SuppressWarnings("unchecked")
     public void changeRatePlan(String tenantId, String serviceId, String chargingSpecId) {
-        if (!enabled) {
+        RestClient restClient = client(tenantId);
+        if (restClient == null) {
             return;
         }
         try {
-            List<Map<String, Object>> subs = restClient.get()
-                    .uri("/subscribers?tenantId={t}", tenantId)
-                    .retrieve().body(List.class);
-            Map<String, Object> sub = subs == null ? null : subs.stream()
-                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
-                    .findFirst().orElse(null);
+            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
             if (sub == null) {
                 log.warn("OCS: no subscriber for service {} — plan change not mirrored", serviceId);
                 return;
@@ -101,18 +117,13 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void transfer(String tenantId, String serviceId, String newPartyId) {
-        if (!enabled) {
+        RestClient restClient = client(tenantId);
+        if (restClient == null) {
             return;
         }
         try {
-            List<Map<String, Object>> subs = restClient.get()
-                    .uri("/subscribers?tenantId={t}", tenantId)
-                    .retrieve().body(List.class);
-            Map<String, Object> sub = subs == null ? null : subs.stream()
-                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
-                    .findFirst().orElse(null);
+            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
             if (sub == null) {
                 log.warn("OCS: no subscriber for service {} — transfer not mirrored", serviceId);
                 return;
@@ -128,18 +139,13 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void setChargingState(String tenantId, String serviceId, String action) {
-        if (!enabled) {
+        RestClient restClient = client(tenantId);
+        if (restClient == null) {
             return;
         }
         try {
-            List<Map<String, Object>> subs = restClient.get()
-                    .uri("/subscribers?tenantId={t}", tenantId)
-                    .retrieve().body(List.class);
-            Map<String, Object> sub = subs == null ? null : subs.stream()
-                    .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
-                    .findFirst().orElse(null);
+            Map<String, Object> sub = subscriber(restClient, tenantId, serviceId);
             if (sub == null) {
                 log.warn("OCS: no subscriber for service {} — {} not mirrored", serviceId, action);
                 return;
@@ -151,5 +157,15 @@ public class RestOcsProvisioningClient implements OcsProvisioningClient {
             log.warn("OCS {} failed for service {} ({}) — reconcile later",
                     action, serviceId, e.getMessage());
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> subscriber(RestClient restClient, String tenantId, String serviceId) {
+        List<Map<String, Object>> subs = restClient.get()
+                .uri("/subscribers?tenantId={t}", tenantId)
+                .retrieve().body(List.class);
+        return subs == null ? null : subs.stream()
+                .filter(s -> serviceId.equals(String.valueOf(s.get("serviceId"))))
+                .findFirst().orElse(null);
     }
 }

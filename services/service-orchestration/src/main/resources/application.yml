@@ -57,6 +57,14 @@ bss:
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     ocs-base-url: ${OCS_BASE_URL:}
+    # which adapter speaks to that OCS: http (the generic subscriber/rate-plan
+    # REST shape — mock-ocs in dev, a vendor gateway in production) or
+    # sigscale (SigScale OCS over its TM Forum APIs). A tenant may override
+    # all four in tenants.yml (ocs-provider / ocs-base-url / ocs-username /
+    # ocs-password) — one fleet, one OCS per operator.
+    ocs-provider: ${OCS_PROVIDER:http}
+    ocs-username: ${OCS_USERNAME:}
+    ocs-password: ${OCS_PASSWORD:}
     # 5G SA slice control (PCF/NSSF or a vendor slice manager); blank = no slicing here
     slice-base-url: ${SLICE_BASE_URL:}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8080}

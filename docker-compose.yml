@@ -333,6 +333,9 @@ services:
       OIDC_CLIENT_ID: bss-usage
       OIDC_CLIENT_SECRET: usage-secret
       OCS_BASE_URL: http://mock-ocs:8080
+      # where a SigScale OCS balance hub calls back (tenants on ocs-provider: sigscale)
+      OCS_NOTIFY_BASE_URL: http://usage:8080
+      OCS_THRESHOLD_BYTES: "2000000000"
       SLICE_BASE_URL: http://mock-5gc:8080
       PARTY_BASE_URL: http://party-account:8080
       CATALOG_BASE_URL: http://product-catalog:8080
@@ -1913,6 +1916,34 @@ services:
     ports:
       - "8115:8080"
 
+  # A REAL Online Charging System behind the same seam: SigScale OCS (open
+  # source, Apache-2.0) — 3GPP Diameter Ro/Gy charging with TM Forum APIs
+  # (TMF620/637/638/654) as its face. Tenants opt in per operator in
+  # tenants.yml (ocs-provider: sigscale); the default tenant stays on the
+  # mock so both shapes are demoable side by side. Built from
+  # integrations/sigscale-ocs (arm64 + amd64 — upstream ships amd64 only).
+  # Port 8155 = its REST/GUI (HTTP Basic bss/bss-secret), 3868 = DIAMETER.
+  sigscale-ocs:
+    build: ./integrations/sigscale-ocs
+    container_name: bss-sigscale-ocs
+    # the Erlang node is NAMED after the hostname and mnesia binds to that
+    # name — keep it fixed, or a recreate can't open its own database
+    hostname: sigscale-ocs
+    restart: unless-stopped
+    environment:
+      OCS_ADMIN_USER: bss
+      OCS_ADMIN_PASSWORD: bss-secret
+      # DIAMETER peers allowed to charge here: the in-container test client
+      # (ops/e2e drives real Gy sessions through it) — add the P-GW/SMF in prod
+      OCS_DIAMETER_CLIENTS: 127.0.0.1
+      # the OCS's own "running low" line (bytes); usage subscribes its hub on it
+      OCS_THRESHOLD_BYTES: "2000000000"
+    volumes:
+      - sigscale-ocs-db:/home/otp/db
+    ports:
+      - "8155:8080"
+      - "3868:3868"
+
   # The 5G standalone core's SLICE control, mocked (PCF/NSSF or a vendor slice
   # manager — Mavenir/Ericsson/Nokia). The SOM applies a slice profile to a
   # line for a boost pass or a priority tier; the core reverts on its own clock.
@@ -2281,6 +2312,7 @@ services:
 volumes:
   ollama-models:
   postgres-data:
+  sigscale-ocs-db:
 
 # Each service owns a private database, created by infra/postgres/init-databases.sql,
 # and manages its own schema through Flyway migrations. Schema is applied at startup
