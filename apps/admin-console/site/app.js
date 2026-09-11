@@ -6965,8 +6965,12 @@ async function loadList() {
         td.textContent = '…';
         active.augmentRow(item, td, c).catch(() => { td.textContent = '—'; });
       } else {
+        // a column that is a select field on this page shows the option's words, not its key
+        const selectField = (active.fields || []).find((f) => f.name === c && f.kind === 'select' && Array.isArray(f.options));
+        const optionLabel = selectField ? (selectField.options.find((o) => (typeof o === 'object' ? o.value : o) === item[c]) || {}).label : undefined;
         const raw = c === 'triggerEventType' ? (EVENT_LABELS[item[c]] || item[c])
           : (c === 'analyticsConsent' || c === 'personalizationConsent') ? (item[c] ? 'Granted' : 'Declined')
+          : optionLabel !== undefined ? optionLabel
           : item[c];
         const text = fmtCell(raw);
         // Long machine values (JSON-logic conditions) get truncated with the
