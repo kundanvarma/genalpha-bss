@@ -231,7 +231,7 @@ public class DeskLearningService {
         // "never opened" only means something once the desk has been used: a week of
         // one person poking at a few tabs says nothing about the other fifty pages
         int people = all.stream().map(DeskEvent::getActorHash).collect(Collectors.toSet()).size();
-        if (!a.unused.isEmpty() && all.size() >= UNUSED_MIN_ACTIONS && a.opened >= UNUSED_MIN_OPENED) {
+        if (!a.unused.isEmpty() && all.size() >= UNUSED_MIN_ACTIONS && a.opened >= UNUSED_MIN_OPENED && people >= UNUSED_MIN_PEOPLE) {
             Map<String, Object> s = suggestion("unused", "features", a.unused.size() + " pages nobody opened this week",
                     "In " + all.size() + " desk actions by " + people + (people == 1 ? " person" : " people") + ", "
                             + a.opened + " pages were used and these never: "
@@ -249,6 +249,8 @@ public class DeskLearningService {
     /** The desk must have seen this much use before "never opened" is a suggestion rather than an echo of a quiet week. */
     static final int UNUSED_MIN_ACTIONS = 50;
     static final int UNUSED_MIN_OPENED = 5;
+    /** "nobody" needs more than one body: one person's week says what they did, not what the desk needs. */
+    static final int UNUSED_MIN_PEOPLE = 2;
 
     @Transactional
     public Map<String, Object> decide(String suggestionId, String decision) {
