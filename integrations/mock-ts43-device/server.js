@@ -25,9 +25,16 @@ const HSS = process.env.HSS_BASE_URL || 'http://mock-hss:8080';
 const SMDP = process.env.SMDP_BASE_URL || 'http://mock-smdp:8080';
 const RELAY = 'application/vnd.gsma.eap-relay.v1.0+json';
 
+/* Which operator a phone is talking to is the ECS HOSTNAME it dials (the
+ * gateway maps public hosts to tenants). Inside the fleet there is no such
+ * host, so a simulated phone names the tenant and the request carries it as
+ * X-Tenant-Id — the same thing the gateway would stamp. */
+let currentTenant = null;
 async function json(url, opts = {}) {
   // never follow a 302: an OIDC sign-in is for browsers; a phone with a SIM falls back to EAP-AKA
-  const res = await fetch(url, { redirect: 'manual', ...opts });
+  const headers = { ...(opts.headers || {}) };
+  if (currentTenant && !headers['X-Tenant-Id']) headers['X-Tenant-Id'] = currentTenant;
+  const res = await fetch(url, { redirect: 'manual', ...opts, headers });
   const text = await res.text();
   let body = null; try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   return { status: res.status, headers: res.headers, body };
@@ -152,12 +159,14 @@ const server = http.createServer((req, res) => {
       let body;
       try { body = JSON.parse(raw || '{}'); } catch { return send(400, { error: 'bad json' }); }
       if (!body.rcsUrl || !body.imsi) return send(400, { error: 'rcsUrl and imsi required' });
+      currentTenant = body.tenant || null;
       try { return send(200, await simulateRcs(body)); } catch (e) { return send(502, { error: e.message }); }
     }
     if (req.method === 'POST' && url.pathname === '/simulate') {
       let body;
       try { body = JSON.parse(raw || '{}'); } catch { return send(400, { error: 'bad json' }); }
       if (!body.ecsUrl || !body.imsi) return send(400, { error: 'ecsUrl and imsi required' });
+      currentTenant = body.tenant || null;
       try { return send(200, await simulate(body)); } catch (e) { return send(502, { error: e.message }); }
     }
     send(404, { error: 'not found' });
