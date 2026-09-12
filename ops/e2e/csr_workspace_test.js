@@ -124,19 +124,47 @@ async function agentLogin(page, username) {
   console.log('OK a ticket id resolves to its customer and opens the 360');
 
   // --- 2. the cockpit
-  for (const z of ['zone-now', 'zone-lines', 'zone-money', 'zone-orders', 'zone-timeline']) {
+  for (const z of ['zone-now', 'zone-lines', 'zone-orders', 'zone-timeline']) {
     await a.locator(`[data-testid="${z}"]`).waitFor({ timeout: 15000 });
   }
-  await a.locator('[data-testid="now-tickets"]', { hasText: `Slow data ${run}` }).waitFor({ timeout: 15000 });
-  for (const card of ['usage-card', 'agreements-card', 'promo-vault-card', 'suggest-card', 'porting-card']) {
+  await a.locator('[data-testid="now-work"]', { hasText: `Slow data ${run}` }).waitFor({ timeout: 15000 });
+  for (const card of ['usage-card', 'agreements-card', 'promo-vault-card', 'suggest-card']) {
     await a.locator(`[data-testid="${card}"]`).waitFor({ timeout: 10000 });
   }
-  await a.locator('[data-testid="empties"]').waitFor({ timeout: 10000 });
+  // exception-first: the open ticket is open work, the empty modules are one quiet line
+  await a.locator('[data-testid="zone-orders"] .ticket', { hasText: `Slow data ${run}` }).waitFor({ timeout: 10000 });
+  if ((await a.locator('[data-testid="porting-card"]').count()) !== 0) fail('no port, no porting module on the overview');
   if (await a.locator('[data-testid="csr-transfer-service"]').isVisible()) fail('tertiary line actions must fold away');
-  await a.locator('[data-testid="cease-service"]').first().waitFor({ state: 'visible', timeout: 10000 });
+  if ((await a.locator('[data-testid="cease-service"]').count()) !== 0) fail('Cease must not sit on the overview beside Diagnose');
+  if (await a.locator('[data-testid="csr-replace-sim"]').isVisible()) fail('the overview shows at most two direct actions');
   await a.locator('[data-testid="csr-more-actions"] summary').first().click();
   await a.locator('[data-testid="csr-transfer-service"]').first().waitFor({ state: 'visible', timeout: 5000 });
-  console.log('OK cockpit zones, always-there cards, empties collapsed, tertiary actions fold, Cease stays');
+  // the Services area: full actions, and the danger zone with the consequence in words
+  await a.locator('[data-testid="area-services"]').click();
+  await a.locator('[data-testid="area-view-services"]').waitFor({ timeout: 10000 });
+  await a.locator('[data-testid="csr-replace-sim"]').first().waitFor({ state: 'visible', timeout: 5000 });
+  await a.locator('[data-testid="danger-zone"] summary').click();
+  const zone = await a.locator('[data-testid="danger-zone"]').textContent();
+  if (!/released|quarantin/.test(zone)) fail('the danger zone does not spell out the consequence: ' + zone.slice(0, 200));
+  await a.locator('[data-testid="cease-service"]').first().waitFor({ state: 'visible', timeout: 5000 });
+  // "+ New": a ticket raised on THIS customer without typing a name
+  await a.locator('[data-testid="area-overview"]').click();
+  await a.locator('[data-testid="new-ticket"]').click();
+  await a.fill('input[name="newTicket"]', `Raised from the card ${run}`);
+  await a.locator('[data-testid="new-ticket-form"] button', { hasText: 'Raise ticket' }).click();
+  await a.locator('[data-testid="new-done"]', { hasText: `Workspace${run}` }).waitFor({ timeout: 20000 });
+  await a.locator('[data-testid="zone-orders"] .ticket', { hasText: `Raised from the card ${run}` }).waitFor({ timeout: 20000 });
+  // the directory listing saves with a confirmation, under More
+  await a.locator('[data-testid="area-more"]').click();
+  if (await a.locator('[data-testid="directory-form"]').count()) {
+    await a.locator('[data-testid="directory-exposure"]').selectOption('reserved');
+    await a.locator('[data-testid="directory-save"]').click();
+    await a.locator('[data-testid="directory-saved"]', { hasText: 'reserved' }).waitFor({ timeout: 15000 });
+    await a.locator('[data-testid="directory-setting-row"] .state', { hasText: 'reserved' }).waitFor({ timeout: 15000 });
+    console.log('OK directory listing saved with a confirmation');
+  }
+  await a.locator('[data-testid="area-overview"]').click();
+  console.log('OK five areas: exception-first overview, ≤2 direct actions, Cease in the danger zone with consequences, + New ticket on the customer');
 
   // --- 3. Assist: nothing open yet
   await a.locator('[data-testid="assist-panel"]').waitFor({ timeout: 10000 });

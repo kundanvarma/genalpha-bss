@@ -292,6 +292,10 @@ async function staffToken(request) {
   await portRow.waitFor({ timeout: 15000 });
   console.log('OK CSR 360 shows the porting order:', (await portRow.textContent()).trim().slice(0, 60));
 
+  // ceasing lives in the Services area's danger zone, with the consequence in words
+  await agent.locator('[data-testid="area-services"]').click();
+  await agent.locator('[data-testid="danger-zone"] summary').click();
+
   const ceaseBtn = agent.locator('[data-testid="cease-service"]').first();
   await ceaseBtn.waitFor({ timeout: 15000 });
   await ceaseBtn.click();

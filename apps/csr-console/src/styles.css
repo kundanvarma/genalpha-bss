@@ -380,7 +380,7 @@ button.small, .ghost.small { padding: 4px 9px; font-size: 12px; }
 .health-card { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 12px; background: var(--card); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .health-glyph { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex: none; }
 .health-glyph.ok { background: var(--ok); } .health-glyph.warn { background: #d99a1c; } .health-glyph.bad { background: var(--danger); } .health-glyph.off { background: var(--dim); }
-.now { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.now { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; align-items: stretch; }
 .now-card { border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 12px; background: var(--card); }
 .now-card .assist-label { margin-top: 0; }
 .empties { margin: 14px 0 6px; font-size: 12.5px; color: var(--dim); }
@@ -432,3 +432,41 @@ kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11
 .assist-feedback .dim { margin-right: 4px; }
 .assist-ranking { font-size: 12px; color: var(--dim); margin: 2px 0 0; }
 .wrapup textarea { width: 100%; box-sizing: border-box; min-height: 96px; font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--paper); color: var(--ink); }
+
+/* ---------- the customer workspace: five areas, exception-first overview, errors where they happen ---------- */
+.identity-line { margin: -6px 0 8px; }
+.areas { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 12px 0 16px; overflow-x: auto; }
+.areas .area { background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 14px; color: var(--dim); font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.areas .area:hover { color: var(--ink); }
+.areas .area.on { color: var(--teal-text); border-bottom-color: var(--teal); font-weight: 600; }
+.badge { display: inline-block; min-width: 18px; padding: 0 6px; border-radius: 999px; font-size: 11px; line-height: 18px; text-align: center; background: var(--line); color: var(--ink); }
+.badge.warn { background: var(--danger); color: #fff; }
+.now-card.clickable { text-align: left; font: inherit; cursor: pointer; color: inherit; min-height: 0; }
+.now-card.clickable:hover { border-color: var(--teal); }
+.now-card p { margin: 3px 0; }
+.zone h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 14px 0 4px; }
+.zone > h2 .linkish { margin-left: auto; }
+.error.inline { margin: 6px 0; padding: 8px 10px; border: 1px solid var(--danger); border-radius: var(--radius-s); background: color-mix(in srgb, var(--danger) 8%, var(--card)); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.toast { position: fixed; top: 14px; right: 16px; z-index: 70; max-width: 460px; padding: 12px 14px; border-radius: var(--radius-s); box-shadow: 0 10px 30px rgba(0,0,0,0.25); display: flex; gap: 10px; align-items: center; background: color-mix(in srgb, var(--danger) 12%, var(--card)); border: 1px solid var(--danger); }
+.toast.error { color: var(--ink); }
+.svc-facts { display: inline-flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 2px; }
+.svc-facts .chip.kind { margin: 0; padding: 0 7px; font-size: 11px; }
+.svc-actions { flex-wrap: wrap; justify-content: flex-end; }
+.chip.kind { text-transform: capitalize; }
+.chip.kind.ticket { color: var(--danger); border-color: var(--danger); }
+.chip.kind.order { color: var(--teal-text); border-color: var(--teal); }
+.danger-zone { margin-top: 22px; border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--line)); border-radius: var(--radius-s); padding: 8px 12px; background: color-mix(in srgb, var(--danger) 5%, var(--card)); }
+.danger-zone > summary { cursor: pointer; color: var(--danger); font-weight: 600; }
+.diagnosis { margin-top: 8px; }
+.newmenu { margin: 4px 0 6px; }
+.newmenu-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.newmenu-bar .ghost.on { border-color: var(--teal); color: var(--teal-text); }
+.newmenu-form { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-s); background: var(--card); align-items: center; flex-wrap: wrap; }
+.newmenu-form input, .newmenu-form select { flex: 1; min-width: 180px; }
+.field { display: inline-flex; flex-direction: column; gap: 2px; }
+.timeline .row > div:first-child { min-width: 0; }
+.tabs.small .tab { padding: 4px 10px; font-size: 12.5px; min-height: 32px; }
+.more-orders { margin-top: 14px; }
+
+.now-card p.small { overflow: hidden; text-overflow: ellipsis; }
+.svc-facts span:empty { display: none; }

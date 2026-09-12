@@ -52,28 +52,69 @@ open bill 3 → upgrade 4), de-duplicated, capped at six. The plan upgrade only 
 proposes the next plan in the *same family* (a smartwatch line never "becomes" an
 iPhone); that is the `plan-family` precondition on `upgradeSubscription`.
 
-## The cockpit
+## The customer workspace — five areas, one context
+
+Ivan's second review (12 September) said the cockpit was still one long page:
+high-frequency context, low-frequency settings and history in a single scroll.
+The page is now five stable areas under the identity bar, with GenAlpha Assist
+beside every one of them:
+
+| Area | Answers | Holds |
+|---|---|---|
+| **Overview** | who is this, what do they have, is anything wrong, what is in progress, what happened, what next | four summary cards (Work · Account · Service health · Last contact), the services with two direct actions each, open work, recent activity, the note line |
+| **Services** | what runs and what it can do | every product with its service beneath it, all actions, upgrade options, the diagnosis, the danger zone |
+| **Activity** | the customer's story | one chronological timeline across interactions, orders, tickets and ports, with filters |
+| **Billing & account** | configuration and commercial state | bills and delivery, usage, cards and promotions, spend and roaming caps, agreements, pool, auto top-up, credit decisions |
+| **More** | specialist, low-frequency | directory listing (with a confirmation), registry link and sync, appointments, identifiers |
 
 ```
-identity ─ name · email · numbers (6, +N more) · address · registry stamp
-┌ Right now ───────────────┐
-│ open tickets │ orders in flight │ last contact │
-└──────────────────────────┘
-Lines & health   n lines · active · paused · over allowance
-  Services ...  [Upgrade options] [Reveal PUK] [Diagnose] [Pause] [More…] [Cease]
-Products & money   usage · agreements · bills · promotions & payment
-  (policies / pool / auto top-up / credit — open when they hold something, chips when not)
-Orders & visits    orders (newest 6, "Show all") · number porting · appointments · cart
-Timeline           tickets · interactions (5 at a time)
-Registry tools     (party:write)
-                                                      ┃ GenAlpha Assist
-                                                      ┃ Suggest next
+identity ─ name · email · numbers · address · registry stamp
++ New   Ticket | Message | Order | Note          ← actions on the customer, prefilled
+Overview ● | Services 3 | Activity | Billing & account | More
+┌ Work ─────┐ ┌ Account ──┐ ┌ Service health ┐ ┌ Last contact ┐
+│ open ticket│ │ Account OK│ │ all healthy    │ │ Line check   │
+Services (≤6, two direct actions, More…)           ┃ GenAlpha Assist
+Open work: tickets · orders in progress · ports · visits · cart
+Recent activity (5) · View all activity →          ┃ Suggest next
+[Log a contact…]
 ```
+
+**Exception-first.** Normal is quiet: "No open work", "Account OK", "All 3 services
+healthy". A problem is loud and carries its next step: "Paused: Mobile 20 GB —
+resume under Services", "2 open bills — 799 NOK due", "Roaming: 45 of 50 EUR —
+near the limit". Empty modules do not appear on the Overview at all; the Account
+card says "no usage this month · 2 agreements · no cards or promos" in one line.
+
+**Capability-driven service rows.** What a service *is* decides what it can do.
+A mobile line offers Diagnose and Replace SIM directly, with Reveal PUK, Pause,
+Change number, Reset PIN and Transfer under More…; a broadband line offers
+Diagnose, with Pause and Transfer under More… and no SIM actions at all. A paused
+line shows its actions disabled with the reason. Each row states its facts —
+kind, number, data left, address — so services can be told apart without opening
+anything. Twenty identical top-ups read as one row ×20. Products are the
+commercial rows; the running service sits beneath the product it realises.
+
+**The danger zone.** Cease lives at the end of the Services area, folded, with
+the consequence in words before the click: what stops, which number is released
+to quarantine, which agreement ends. It never sits beside Diagnose.
+
+**Errors where they happen.** Every action carries a scope; a refusal lands next
+to the block that raised it and in a toast at the top-right that cannot scroll
+out of view. Cancelling an order asks the ontology first: a completed order is
+refused in words on the order row, and the list refreshes. Orders, tickets,
+services, ports and the cart refresh every 20 seconds while the page is open, so
+a Cancel is never offered on an order that completed a minute ago.
+
+**+ New.** Ticket, Message, Order and Note are actions on the customer, raised
+from the identity bar with the customer already filled in. The note keeps its
+always-visible line under Recent activity because it is the one thing agents do
+on every call.
 
 Everything a test or a colleague's bookmark pointed at is still there under the
-same name: the always-rendered cards (`usage-card`, `agreements-card`,
-`promo-vault-card`, `suggest-card`, `porting-card`), the copilot and offer blocks
-(now inside Assist), and every line action. Only the arrangement changed.
+same name; the four always-there cards (`usage-card`, `agreements-card`,
+`promo-vault-card`, `suggest-card`) live in the Account card and the aside, the
+line actions keep their ids, and each area is deep-linkable by hash
+(`/csr/customer/{id}#services`).
 
 ## Search and the queue
 
