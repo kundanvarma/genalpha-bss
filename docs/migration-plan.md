@@ -90,6 +90,18 @@ same kit run backwards as the exit.
    Salesforce Industries, Odoo from public schema knowledge (starting
    points, not verified mappings). The kit refuses to arm until every
    census category has a named rule.
+   **Model tiers, recorded in the audit trail:** (a) hosted model on the
+   schema profile only; (b) **a local model inside the operator's
+   network** (Ollama or vLLM behind the intelligence service's provider
+   seam) that may read real rows and the vendor's NDA data dictionary,
+   proposes column mappings with confidence and evidence, infers value
+   maps from real distributions, drafts transforms and census rules, and
+   explains rejects; (c) no model. In every tier the model proposes, the
+   analyst confirms, the deterministic runner loads; the model never
+   executes, never produces financial figures, and never replaces the
+   validator's key checks. A 30B-class open model at 4-bit on one 24 GB
+   GPU is enough; mapping accuracy is scored on the synthetic twin (known
+   ground truth) before the model is trusted on the real extract.
 9. **Staging, validation, levels.** Staging tables in the tenant's own
    database; type, referential and ontology checks (a mobile product
    needs a realizing service with number and SIM; a paused line needs a
