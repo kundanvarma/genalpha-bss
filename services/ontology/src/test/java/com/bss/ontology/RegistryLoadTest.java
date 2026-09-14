@@ -29,6 +29,12 @@ class RegistryLoadTest {
         Registry.Layer core = r.core();
         assertThat(core.actions()).containsKey("upgradeSubscription");
         assertThat(core.concepts()).containsKeys("Subscription", "ProductOffering", "Customer", "Service", "ProductOrder", "Bill", "Entitlement");
+        assertThat(core.agents()).containsKeys("care-assist", "external-mcp", "hermes-worker");
+        for (JsonNode ag : core.agents().values()) {
+            for (JsonNode x : ag.path("actions").path("execute")) {
+                assertThat(core.actions()).as("agent " + ag.path("agent").asText() + " executes a known action").containsKey(x.asText());
+            }
+        }
         JsonNode a = core.actions().get("upgradeSubscription");
         assertThat(core.capabilities()).containsKey(a.path("executes").path("capability").asText());
         for (JsonNode e : a.path("emits")) {

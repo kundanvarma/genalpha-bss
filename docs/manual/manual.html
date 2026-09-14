@@ -1717,6 +1717,12 @@ may be performed on them, the capabilities of the components that execute them �
 (the generated SDK) and by AI agents (the Ontology MCP). Suite <a href="../../ops/e2e/ontology_test.js">ontology_test.js</a>
 (#125); seam doc <a href="../ontology-seam.md">docs/ontology-seam.md</a>; the research and the review it
 answers in <a href="../ontology-research.md">docs/ontology-research.md</a>.</p>
+<p><b>The agents are in the registry too.</b> Every AI actor of the BSS — Assist beside the care agent, the
+product copilot, the chat bot, the classifiers, the hired digital worker, any external agent at the MCP door —
+is declared in <code>ontology/agents/</code>: whose rights it runs with (the signed-in person's own, or a
+machine account), what it may read, which governed actions it may check and execute, which model calls it
+makes, how autonomous it is and what bounds it. The registry refuses an agent that names an unknown action, and
+every receipt names the agent that acted (<code>GET /ontology/v1/agents</code>, <code>/explain/agent/{name}</code>).</p>
 <p><b>An action is a contract</b>: its meaning, its inputs, every condition that must hold first (in words
 a refusal can quote), who may perform it (the owner themselves, or a role — a customer's token acts on its
 own line only), the policy domain consulted, its governance (autonomy, approval, audit), the TM Forum

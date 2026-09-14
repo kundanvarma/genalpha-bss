@@ -14,7 +14,8 @@ ontology/
   capabilities.yml        typed capabilities: the verbs a component can execute (TMF API, seam, function)
   concepts/*.yml          nouns: business concepts, their states, properties, links, lineage
   actions/*.yml           verbs: governed business actions, the only writes offered to agents
-  components/*.yml        the ODA components: what each manages, executes, emits, and how it describes itself
+  components/*.yml
+agents/*.yml         # every AI actor: whose rights it runs with, what it may read, check and execute, how autonomous        the ODA components: what each manages, executes, emits, and how it describes itself
   tenants/<tenant>/…      operator extensions, merged over the core at read time (same file shapes)
   schema/*.schema.json    the shapes above, enforced on load and in CI
 ```
@@ -35,6 +36,10 @@ Three layers, as agreed with the review of 2026-09-11:
 4. **Versioned contracts.** Every concept, action and capability carries `version`, `introduced`, and when retired `deprecated` + `supersededBy`. Generated surfaces (MCP tools, the SDK) are regenerated in CI and diffed; a breaking change bumps the major version and keeps the old action callable until its `deprecated` date.
 5. **Tested against the running system.** Suite #125 asserts: every route in `capabilities.yml` is served by the gateway; every event in `emits` exists in the publishing service's code; every role in `permissions` exists in the realm; every effect resolves to a capability; every component's `/.well-known/genalpha-component.json` agrees with its registry entry.
 6. **Ontology, policy, learning stay apart.** The registry says what things are and what actions mean. The policy service says what is permitted now. Learning contracts choose within the allowed space and never redefine either.
+
+## Agents
+
+An agent file names an AI actor of the BSS — an assistant beside a person, a copilot that proposes, a classifier, an autonomous worker, or an external agent at the MCP door. It says whose rights the agent runs with (`runsAs: caller` = the signed-in person, never more; `machine:<client>` = a machine account), which capabilities it may read, which governed actions it may check and execute (an agent may not execute what it may not check), which model use cases it makes (each governed and metered), how autonomous it is, and what bounds it. The registry refuses an agent that names an unknown capability or action. A call that carries `X-GenAlpha-Agent: <agent>` is receipted under that name; the MCP door names `external-mcp` by default; a name the registry does not know is receipted as "<name> (unregistered)", never dropped. `GET /ontology/v1/agents`, `/agents/{name}`, `/explain/agent/{name}`, the RDF export and the MCP tool `list_agents` read it.
 
 ## Reading it
 

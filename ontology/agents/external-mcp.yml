@@ -1,0 +1,20 @@
+agent: external-mcp
+version: 1
+introduced: "2026-09-11"
+status: live
+kind: external
+meaning: Any agent outside the BSS that connects through the MCP door — it gets the ontology's tools and nothing else, and every call runs with the bearer of the person it acts for.
+intent: Open the BSS to third-party agents without a second permission model.
+runsAs: caller
+autonomy: supervised
+reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, productCatalog.offerings]
+actions:
+  check: [disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
+  execute: [disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
+uses: []
+tools: [list_actions, list_agents, explain, recommend, customer_context, available_upgrades]
+component: ontology
+contract: "the caller's rights and the action's governance — the door adds no rights and removes none"
+memory: "none on this side"
+pages: []
+tests: [ops/e2e/ontology_test.js]

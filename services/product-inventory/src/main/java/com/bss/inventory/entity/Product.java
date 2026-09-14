@@ -61,6 +61,24 @@ public class Product {
     @Column(name = "owner_party_id", length = 36)
     private String ownerPartyId;
 
+    /** TMF637 productOrderItem: the order (and item) this product came from. */
+    @Column(name = "product_order_item", length = 2000)
+    private String productOrderItemJson;
+
+    /** TMF637 realizingService: the service that runs this product — the lineage the desk reads. */
+    @Column(name = "realizing_service", length = 2000)
+    private String realizingServiceJson;
+
+    @Column(name = "realizing_service_id", length = 36)
+    private String realizingServiceId;
+
+    public String getProductOrderItemJson() { return productOrderItemJson; }
+    public void setProductOrderItemJson(String v) { this.productOrderItemJson = v; }
+    public String getRealizingServiceJson() { return realizingServiceJson; }
+    public void setRealizingServiceJson(String v) { this.realizingServiceJson = v; }
+    public String getRealizingServiceId() { return realizingServiceId; }
+    public void setRealizingServiceId(String v) { this.realizingServiceId = v; }
+
     /** The tenant this row belongs to; never exposed in API responses. */
     @Column(name = "tenant_id", nullable = false, length = 64)
     private String tenantId;

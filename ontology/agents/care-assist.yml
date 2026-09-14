@@ -1,0 +1,19 @@
+agent: care-assist
+version: 1
+introduced: "2026-09-11"
+status: live
+kind: assistant
+meaning: GenAlpha Assist beside every customer on the care desk — the situation, a recommended governed action with its conditions, the copilot's summary, an offer to consider, knowledge for the call, the after-call note.
+intent: Make the agent's next correct action obvious without leaving the customer page; never act on its own.
+runsAs: caller
+autonomy: supervised
+reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, agreement.list, assurance.problems, decisionLog.read, productCatalog.offerings]
+actions:
+  check: [disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
+  execute: [resumeSubscription, suspendSubscription, upgradeSubscription, changeSubscriptionPlan, replaceSim, cancelOrder, disputeBill, issueCredit]
+uses: [customer-summary, next-best-offer, knowledge-ask, chat-intent, wrap-up, ticket-reply]
+component: intelligence
+contract: "ontology.recommend — every recommendation shown is a logged decision; accepted / dismissed / helpful / unhelpful are its outcomes and the ranking reads them"
+memory: "none between calls; the decision log is the memory"
+pages: [csr:customers, csr:chats]
+tests: [ops/e2e/csr_workspace_test.js, ops/e2e/csr_scenarios_test.js]

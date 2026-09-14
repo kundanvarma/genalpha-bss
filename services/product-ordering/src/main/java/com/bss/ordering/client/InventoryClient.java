@@ -24,6 +24,8 @@ public interface InventoryClient {
             Map<String, Object> productOffering,
             Map<String, Object> billingAccount,
             List<Map<String, Object>> relatedParty,
-            List<Map<String, Object>> productCharacteristic) {
+            List<Map<String, Object>> productCharacteristic,
+            List<Map<String, Object>> productOrderItem,
+            List<Map<String, Object>> realizingService) {
     }
 }

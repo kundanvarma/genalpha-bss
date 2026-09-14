@@ -54,6 +54,7 @@ public class RegistryController {
         out.put("actions", l.actions().size());
         out.put("capabilities", l.capabilities().size());
         out.put("components", l.components().size());
+        out.put("agents", l.agents().size());
         out.put("layers", List.of("TM Forum semantics (lineage)", "GenAlpha core", "operator extensions"));
         out.put("rule", "AI reasons and proposes. Policies govern. Deterministic components execute.");
         return out;
@@ -90,6 +91,30 @@ public class RegistryController {
     @GetMapping("/capabilities")
     public List<JsonNode> capabilities() {
         return new ArrayList<>(registry.forTenant(tenantScope.currentTenantId()).capabilities().values());
+    }
+
+    /** The agents: every named AI actor, whose rights it runs with, what it may read, check and execute. */
+    @GetMapping("/agents")
+    public List<JsonNode> agents() {
+        return new ArrayList<>(registry.forTenant(tenantScope.currentTenantId()).agents().values());
+    }
+
+    @GetMapping("/agents/{name}")
+    public JsonNode agent(@PathVariable String name) {
+        JsonNode a = registry.forTenant(tenantScope.currentTenantId()).agents().get(name);
+        if (a == null) {
+            throw new NotFoundException("no agent named " + name);
+        }
+        return a;
+    }
+
+    @GetMapping("/explain/agent/{name}")
+    public Map<String, Object> explainAgent(@PathVariable String name) {
+        Map<String, Object> e = explain.agent(name, tenantScope.currentTenantId());
+        if (e == null) {
+            throw new NotFoundException("no agent named " + name);
+        }
+        return e;
     }
 
     @GetMapping("/components")

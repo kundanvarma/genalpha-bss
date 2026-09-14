@@ -1,0 +1,19 @@
+agent: sales-advisor
+version: 1
+introduced: "2026-08-22"
+status: live
+kind: assistant
+meaning: The advisor behind "For you" and the offer captions — ranks the shelf from the customer's own data and phrases why; every claim carries a receipt.
+intent: Personalisation that a customer can read the reason for; consent first.
+runsAs: caller
+autonomy: advisory
+reads: [productCatalog.offerings, party.individual]
+actions:
+  check: []
+  execute: []
+uses: [for-you-caption, next-best-offer]
+component: intelligence
+contract: "consent-gated inputs; aggregate exposure by default; never sees a bill line"
+memory: "none"
+pages: [shop:for-you]
+tests: [ops/e2e/personalization_test.js]

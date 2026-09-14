@@ -80,6 +80,27 @@ public class RdfExportService {
             }
             t.append('\n');
         }
+        for (JsonNode ag : l.agents().values()) {
+            t.append("ga:").append(safe(ag.path("agent").asText())).append(" a ga:Agent ;\n");
+            t.append("  rdfs:label ").append(lit(ag.path("agent").asText())).append(" ;\n");
+            t.append("  rdfs:comment ").append(lit(ag.path("meaning").asText())).append(" ;\n");
+            t.append("  ga:agentKind ").append(lit(ag.path("kind").asText())).append(" ;\n");
+            t.append("  ga:runsAs ").append(lit(ag.path("runsAs").asText())).append(" ;\n");
+            t.append("  ga:autonomy ").append(lit(ag.path("autonomy").asText())).append(" ;\n");
+            for (JsonNode r : ag.path("reads")) {
+                t.append("  ga:mayRead ga:").append(safe(r.asText())).append(" ;\n");
+            }
+            for (JsonNode x : ag.path("actions").path("check")) {
+                t.append("  ga:mayCheck ga:").append(safe(x.asText())).append(" ;\n");
+            }
+            for (JsonNode x : ag.path("actions").path("execute")) {
+                t.append("  ga:mayExecute ga:").append(safe(x.asText())).append(" ;\n");
+            }
+            for (JsonNode u : ag.path("uses")) {
+                t.append("  ga:usesModelFor ").append(lit(u.asText())).append(" ;\n");
+            }
+            trimEnd(t).append(" .\n\n");
+        }
         for (JsonNode cap : l.capabilities().values()) {
             t.append("ga:").append(safe(cap.path("id").asText())).append(" a ga:Capability ;\n");
             t.append("  rdfs:label ").append(lit(cap.path("id").asText())).append(" ;\n");

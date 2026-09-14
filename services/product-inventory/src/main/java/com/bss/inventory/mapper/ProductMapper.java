@@ -48,6 +48,12 @@ public class ProductMapper {
         if (entity.getTerminationDate() != null) {
             dto.setTerminationDate(entity.getTerminationDate().toString());
         }
+        if (entity.getProductOrderItemJson() != null) {
+            dto.setProductOrderItem(readArray(entity.getProductOrderItemJson()));
+        }
+        if (entity.getRealizingServiceJson() != null) {
+            dto.setRealizingService(readArray(entity.getRealizingServiceJson()));
+        }
         dto.setType("Product");
         return dto;
     }
@@ -63,7 +69,20 @@ public class ProductMapper {
         entity.setProductCharacteristicJson(writeJson(dto.getProductCharacteristic()));
         entity.setProductPriceJson(writeJson(dto.getProductPrice()));
         entity.setRelatedPartyJson(writeJson(dto.getRelatedParty()));
+        if (dto.getProductOrderItem() != null) {
+            entity.setProductOrderItemJson(writeJson(dto.getProductOrderItem()));
+        }
+        if (dto.getRealizingService() != null) {
+            setRealizing(entity, dto.getRealizingService());
+        }
         return entity;
+    }
+
+    /** The realizing service ref and its indexed id, kept together. */
+    public void setRealizing(Product entity, java.util.List<java.util.Map<String, Object>> refs) {
+        entity.setRealizingServiceJson(writeJson(refs));
+        entity.setRealizingServiceId(refs == null || refs.isEmpty() || refs.get(0).get("id") == null
+                ? null : String.valueOf(refs.get(0).get("id")));
     }
 
     /**
@@ -72,6 +91,12 @@ public class ProductMapper {
     public void applyPatch(ProductDto patch, Product entity) {
         if (patch.getName() != null) {
             entity.setName(patch.getName());
+        }
+        if (patch.getRealizingService() != null) {
+            setRealizing(entity, patch.getRealizingService());
+        }
+        if (patch.getProductOrderItem() != null) {
+            entity.setProductOrderItemJson(writeJson(patch.getProductOrderItem()));
         }
         if (patch.getStatus() != null) {
             entity.setStatus(patch.getStatus());

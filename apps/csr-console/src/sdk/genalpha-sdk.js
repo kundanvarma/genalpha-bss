@@ -7,13 +7,13 @@ export class Refused extends Error {
 }
 
 export class GenAlpha {
-  /** @param {{ baseUrl: string, token: string | (() => string), channel?: string, fetch?: typeof fetch }} o */
+  /** @param {{ baseUrl: string, token: string | (() => string), channel?: string, agent?: string, fetch?: typeof fetch }} o */
   constructor(o) { this.o = o; }
 
   async call(method, path, body) {
     const f = this.o.fetch ?? fetch;
     const token = typeof this.o.token === 'function' ? this.o.token() : this.o.token;
-    const r = await f(`${this.o.baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await f(`${this.o.baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web', ...(this.o.agent ? { 'X-GenAlpha-Agent': this.o.agent } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const text = await r.text();
     let json = null; try { json = JSON.parse(text); } catch { json = { message: text }; }
     return { status: r.status, json };

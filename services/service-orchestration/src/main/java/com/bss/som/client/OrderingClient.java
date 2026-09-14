@@ -17,6 +17,11 @@ public interface OrderingClient {
      */
     void updateItemState(String productOrderId, String itemId, String state);
 
+    /** Same callback, naming the service that now realises the item (TMF637 realizingService lineage). */
+    default void updateItemState(String productOrderId, String itemId, String state, java.util.Map<String, Object> realizingService) {
+        updateItemState(productOrderId, itemId, state);
+    }
+
     /** Returns the created product order id. Fail-closed. */
     String create(Map<String, Object> productOrder);
 }

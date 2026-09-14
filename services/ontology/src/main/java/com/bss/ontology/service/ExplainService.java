@@ -79,6 +79,57 @@ public class ExplainService {
         return out;
     }
 
+    /** An agent in words: who it acts as, what it may read, check and do, how free it is, what bounds it. */
+    public Map<String, Object> agent(String name, String tenant) {
+        Registry.Layer l = registry.forTenant(tenant);
+        JsonNode a = l.agents().get(name);
+        if (a == null) {
+            return null;
+        }
+        List<String> lines = new ArrayList<>();
+        lines.add(a.path("meaning").asText());
+        String runs = a.path("runsAs").asText();
+        lines.add("Runs as " + ("caller".equals(runs) ? "the signed-in person, with their own rights and nothing more" : "the machine account " + runs.replace("machine:", ""))
+                + "; autonomy: " + a.path("autonomy").asText() + " (" + switch (a.path("autonomy").asText()) {
+                    case "advisory" -> "it only proposes";
+                    case "supervised" -> "a person confirms before anything changes";
+                    default -> "it acts within its contract without asking";
+                } + ").");
+        List<String> reads = new ArrayList<>();
+        for (JsonNode r : a.path("reads")) {
+            reads.add(r.asText());
+        }
+        lines.add(reads.isEmpty() ? "Reads nothing from the registry's capabilities." : "May read: " + String.join(", ", reads) + ".");
+        List<String> checks = new ArrayList<>();
+        for (JsonNode x : a.path("actions").path("check")) {
+            checks.add(title(x.asText()));
+        }
+        List<String> execs = new ArrayList<>();
+        for (JsonNode x : a.path("actions").path("execute")) {
+            execs.add(title(x.asText()));
+        }
+        lines.add(execs.isEmpty() ? (checks.isEmpty() ? "Performs no governed action." : "May check but never execute: " + String.join(", ", checks) + ".")
+                : "May execute: " + String.join(", ", execs) + (checks.size() > execs.size() ? "; may also check: " + String.join(", ", checks) : "") + ".");
+        List<String> uses = new ArrayList<>();
+        for (JsonNode u : a.path("uses")) {
+            uses.add(u.asText());
+        }
+        lines.add(uses.isEmpty() ? "Makes no model call of its own." : "Model calls it makes (each governed, metered, audited): " + String.join(", ", uses) + ".");
+        if (a.has("contract")) {
+            lines.add("Bounded by: " + a.path("contract").asText());
+        }
+        if (a.has("memory")) {
+            lines.add("Remembers: " + a.path("memory").asText() + ".");
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("kind", "agent");
+        out.put("name", name);
+        out.put("title", title(name.replace('-', ' ')));
+        out.put("text", String.join(" ", lines));
+        out.put("lines", lines);
+        return out;
+    }
+
     public Map<String, Object> concept(String name, String tenant) {
         Registry.Layer l = registry.forTenant(tenant);
         JsonNode c = l.concepts().get(name);

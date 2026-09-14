@@ -44,6 +44,8 @@ export interface ClientOptions {
   token: string;
   /** the sales channel the request comes through (web, app, care, agent-mcp …) */
   channel?: string;
+  /** the registered agent acting for the person (see /ontology/v1/agents) — named in every receipt */
+  agent?: string;
   fetch?: typeof fetch;
 }
 
@@ -84,7 +86,7 @@ for (const a of actions.filter((x) => x.status !== 'deprecated')) {
   out += `}\n\n`;
 }
 
-out += `export class GenAlpha {\n  constructor(private readonly o: ClientOptions) {}\n\n  private async call(method: string, path: string, body?: unknown): Promise<{ status: number; json: any }> {\n    const f = this.o.fetch ?? fetch;\n    const r = await f(\`\${this.o.baseUrl}\${path}\`, { method, headers: { Authorization: \`Bearer \${this.o.token}\`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web' }, body: body === undefined ? undefined : JSON.stringify(body) });\n    const text = await r.text();\n    let json: any = null; try { json = JSON.parse(text); } catch { json = { message: text }; }\n    return { status: r.status, json };\n  }\n\n`;
+out += `export class GenAlpha {\n  constructor(private readonly o: ClientOptions) {}\n\n  private async call(method: string, path: string, body?: unknown): Promise<{ status: number; json: any }> {\n    const f = this.o.fetch ?? fetch;\n    const r = await f(\`\${this.o.baseUrl}\${path}\`, { method, headers: { Authorization: \`Bearer \${this.o.token}\`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web', ...(this.o.agent ? { 'X-GenAlpha-Agent': this.o.agent } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });\n    const text = await r.text();\n    let json: any = null; try { json = JSON.parse(text); } catch { json = { message: text }; }\n    return { status: r.status, json };\n  }\n\n`;
 
 for (const c of concepts) {
   const cap = capabilities.find((x) => x.id === c.backedBy?.capability);
@@ -123,13 +125,13 @@ export class Refused extends Error {
 }
 
 export class GenAlpha {
-  /** @param {{ baseUrl: string, token: string | (() => string), channel?: string, fetch?: typeof fetch }} o */
+  /** @param {{ baseUrl: string, token: string | (() => string), channel?: string, agent?: string, fetch?: typeof fetch }} o */
   constructor(o) { this.o = o; }
 
   async call(method, path, body) {
     const f = this.o.fetch ?? fetch;
     const token = typeof this.o.token === 'function' ? this.o.token() : this.o.token;
-    const r = await f(\`\${this.o.baseUrl}\${path}\`, { method, headers: { Authorization: \`Bearer \${token}\`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await f(\`\${this.o.baseUrl}\${path}\`, { method, headers: { Authorization: \`Bearer \${token}\`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web', ...(this.o.agent ? { 'X-GenAlpha-Agent': this.o.agent } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const text = await r.text();
     let json = null; try { json = JSON.parse(text); } catch { json = { message: text }; }
     return { status: r.status, json };

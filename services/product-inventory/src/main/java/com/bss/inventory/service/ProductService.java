@@ -185,8 +185,16 @@ public class ProductService {
      */
     @Transactional
     public void closeForTerminatedService(String tenantId, String ownerPartyId, String serviceName) {
-        repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
-                tenantId, ownerPartyId, serviceName, "active").ifPresent(entity -> {
+        closeForTerminatedService(tenantId, ownerPartyId, serviceName, null);
+    }
+
+    /** Lineage first (the service id the product carries), owner + name only as the fallback. */
+    @Transactional
+    public void closeForTerminatedService(String tenantId, String ownerPartyId, String serviceName, String serviceId) {
+        java.util.Optional<Product> byLineage = serviceId == null ? java.util.Optional.empty()
+                : repository.findFirstByTenantIdAndRealizingServiceIdAndStatus(tenantId, serviceId, "active");
+        byLineage.or(() -> repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+                tenantId, ownerPartyId, serviceName, "active")).ifPresent(entity -> {
             entity.setStatus("cancelled");
             entity.setTerminationDate(java.time.OffsetDateTime.now());
             ProductDto closed = mapper.toDto(repository.save(entity));
@@ -203,8 +211,17 @@ public class ProductService {
     @SuppressWarnings("unchecked")
     public void transferForService(String tenantId, String fromPartyId, String toPartyId,
             String serviceName) {
-        repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
-                tenantId, fromPartyId, serviceName, "active").ifPresent(entity -> {
+        transferForService(tenantId, fromPartyId, toPartyId, serviceName, null);
+    }
+
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public void transferForService(String tenantId, String fromPartyId, String toPartyId,
+            String serviceName, String serviceId) {
+        java.util.Optional<Product> byLineage = serviceId == null ? java.util.Optional.empty()
+                : repository.findFirstByTenantIdAndRealizingServiceIdAndStatus(tenantId, serviceId, "active");
+        byLineage.or(() -> repository.findFirstByTenantIdAndOwnerPartyIdAndNameAndStatus(
+                tenantId, fromPartyId, serviceName, "active")).ifPresent(entity -> {
             entity.setOwnerPartyId(toPartyId);
             Object parties = readJson(entity.getRelatedPartyJson());
             java.util.List<java.util.Map<String, Object>> updated = new java.util.ArrayList<>();

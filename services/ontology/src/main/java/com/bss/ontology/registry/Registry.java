@@ -46,9 +46,9 @@ public class Registry {
     private static final Set<String> OVERLAY_MAY_REPLACE = Set.of("meaning", "intent", "governance", "policy", "pages", "version", "introduced");
 
     public record Layer(Map<String, JsonNode> concepts, Map<String, JsonNode> actions,
-            Map<String, JsonNode> capabilities, Map<String, JsonNode> components) {
+            Map<String, JsonNode> capabilities, Map<String, JsonNode> components, Map<String, JsonNode> agents) {
         static Layer empty() {
-            return new Layer(new TreeMap<>(), new TreeMap<>(), new TreeMap<>(), new TreeMap<>());
+            return new Layer(new TreeMap<>(), new TreeMap<>(), new TreeMap<>(), new TreeMap<>(), new TreeMap<>());
         }
     }
 
@@ -83,7 +83,7 @@ public class Registry {
         core = readLayer("", "core");
         // tenants are the directories under tenants/ that hold at least one document
         java.util.TreeSet<String> tenants = new java.util.TreeSet<>();
-        for (String pattern : List.of("tenants/*/actions/*.yml", "tenants/*/concepts/*.yml", "tenants/*/components/*.yml", "tenants/*/capabilities.yml")) {
+        for (String pattern : List.of("tenants/*/actions/*.yml", "tenants/*/concepts/*.yml", "tenants/*/components/*.yml", "tenants/*/agents/*.yml", "tenants/*/capabilities.yml")) {
             for (Resource r : find(pattern)) {
                 String uri = r.getURI().toString();
                 int i = uri.indexOf("/tenants/");
@@ -112,6 +112,9 @@ public class Registry {
         }
         for (Resource r : find(prefix + "components/*.yml")) {
             put(layer.components(), "component", read(r), r.getFilename(), label);
+        }
+        for (Resource r : find(prefix + "agents/*.yml")) {
+            put(layer.agents(), "agent", read(r), r.getFilename(), label);
         }
         for (Resource r : find(prefix + "capabilities.yml")) {
             JsonNode doc = read(r);
@@ -172,10 +175,11 @@ public class Registry {
 
     private Layer merge(Layer base, Layer overlay, String tenant) {
         Layer out = new Layer(new TreeMap<>(base.concepts()), new TreeMap<>(base.actions()),
-                new TreeMap<>(base.capabilities()), new TreeMap<>(base.components()));
+                new TreeMap<>(base.capabilities()), new TreeMap<>(base.components()), new TreeMap<>(base.agents()));
         out.concepts().putAll(overlay.concepts());
         out.capabilities().putAll(overlay.capabilities());
         out.components().putAll(overlay.components());
+        out.agents().putAll(overlay.agents());
         for (Map.Entry<String, JsonNode> en : overlay.actions().entrySet()) {
             JsonNode coreAction = base.actions().get(en.getKey());
             if (coreAction == null) {
@@ -207,6 +211,29 @@ public class Registry {
     /* ------------------------------------------------------------------ referential integrity */
 
     private void crossCheck(Layer l, String label) {
+        // an agent may only read capabilities and check/execute actions the registry knows — no rights by omission
+        for (JsonNode a : l.agents().values()) {
+            String n = a.path("agent").asText();
+            for (JsonNode cap : a.path("reads")) {
+                requireCapability(l, cap.asText(), label + " agent " + n + ".reads");
+            }
+            for (String kind : List.of("check", "execute")) {
+                for (JsonNode act : a.path("actions").path(kind)) {
+                    if (!l.actions().containsKey(act.asText())) {
+                        problems.add(label + " agent " + n + ".actions." + kind + ": unknown action \"" + act.asText() + "\"");
+                    }
+                }
+            }
+            for (JsonNode act : a.path("actions").path("execute")) {
+                boolean mayCheck = false;
+                for (JsonNode c : a.path("actions").path("check")) {
+                    mayCheck |= c.asText().equals(act.asText());
+                }
+                if (!mayCheck) {
+                    problems.add(label + " agent " + n + ": executes " + act.asText() + " without being allowed to check it first");
+                }
+            }
+        }
         for (JsonNode c : l.concepts().values()) {
             String n = c.path("concept").asText();
             requireCapability(l, c.path("backedBy").path("capability").asText(), label + " concept " + n + ".backedBy");

@@ -55,7 +55,8 @@ public class ServiceStreamListener {
                 }
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     products.closeForTerminatedService(tenantId, owner,
-                            String.valueOf(service.get("name")));
+                            String.valueOf(service.get("name")),
+                            service.get("id") == null ? null : String.valueOf(service.get("id")));
                 }
             } else if ("ServiceTransferredEvent".equals(type)) {
                 Map<String, Object> transfer = event.get("serviceTransfer") instanceof Map<?, ?> m
@@ -67,7 +68,8 @@ public class ServiceStreamListener {
                 }
                 try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                     products.transferForService(tenantId, from, to,
-                            String.valueOf(transfer.get("name")));
+                            String.valueOf(transfer.get("name")),
+                            transfer.get("id") == null ? null : String.valueOf(transfer.get("id")));
                 }
             }
         } catch (Exception e) {

@@ -9,6 +9,8 @@ export interface ClientOptions {
   token: string;
   /** the sales channel the request comes through (web, app, care, agent-mcp …) */
   channel?: string;
+  /** the registered agent acting for the person (see /ontology/v1/agents) — named in every receipt */
+  agent?: string;
   fetch?: typeof fetch;
 }
 
@@ -256,7 +258,7 @@ export class GenAlpha {
 
   private async call(method: string, path: string, body?: unknown): Promise<{ status: number; json: any }> {
     const f = this.o.fetch ?? fetch;
-    const r = await f(`${this.o.baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${this.o.token}`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const r = await f(`${this.o.baseUrl}${path}`, { method, headers: { Authorization: `Bearer ${this.o.token}`, 'Content-Type': 'application/json', 'X-Channel': this.o.channel ?? 'web', ...(this.o.agent ? { 'X-GenAlpha-Agent': this.o.agent } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
     const text = await r.text();
     let json: any = null; try { json = JSON.parse(text); } catch { json = { message: text }; }
     return { status: r.status, json };

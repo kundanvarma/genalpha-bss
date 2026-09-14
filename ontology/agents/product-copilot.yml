@@ -1,0 +1,19 @@
+agent: product-copilot
+version: 1
+introduced: "2026-07-20"
+status: live
+kind: copilot
+meaning: The product copilot in the operator console — a product owner describes an offer in a sentence; it proposes a specification, a price and an offering; the person confirms and the executor writes with their own token.
+intent: Turn commercial intent into governed catalog objects; the model never writes.
+runsAs: caller
+autonomy: supervised
+reads: [productCatalog.offerings, productCatalog.offering, productCatalog.price, catalog.governanceView]
+actions:
+  check: [requestLaunch]
+  execute: [requestLaunch]
+uses: [product-copilot, product-copilot-retry, advisor-narrative]
+component: intelligence
+contract: "proposal → confirmation → execution with the caller's rights; launch governance applies to what it creates"
+memory: "the conversation only"
+pages: [console:product-copilot]
+tests: [ops/e2e/copilot_test.js]

@@ -433,7 +433,13 @@ public class OrchestrationService {
             // track lands (parcel delivered / install done); a digital service
             // is done now. The parent order rolls up from these per-item states.
             if (itemId != null) {
-                ordering.updateItemState(productOrderId, itemId, deferred ? "inProgress" : "completed");
+                // lineage: the item is told which service realises it, so the product minted at completion carries it
+                Map<String, Object> realizing = new java.util.LinkedHashMap<>();
+                realizing.put("id", serviceId);
+                realizing.put("href", ApiConstants.INVENTORY_BASE + "/service/" + serviceId);
+                realizing.put("name", name);
+                realizing.put("@referredType", "Service");
+                ordering.updateItemState(productOrderId, itemId, deferred ? "inProgress" : "completed", realizing);
             } else {
                 anyUnreported = true;
             }

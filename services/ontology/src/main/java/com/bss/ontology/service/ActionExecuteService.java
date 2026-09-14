@@ -379,6 +379,7 @@ public class ActionExecuteService {
         Map<String, Object> context = new LinkedHashMap<>(inputs);
         context.put("channel", caller.channel());
         context.put("callerKind", caller.isCustomer() ? "customer" : "staff");
+        context.put("agent", agentLabel(caller));
         d.put("context", context);
         Map<String, Object> evidence = new LinkedHashMap<>();
         evidence.put("preconditions", check.preconditions().stream().map(ActionCheckService.Verdict::toMap).toList());
@@ -396,5 +397,16 @@ public class ActionExecuteService {
             receipts.outcome(caller.tenant(), decisionId, "completed", result.path("id").asText());
         }
         return decisionId;
+    }
+    /** The agent in the receipt: a registered name, "<name> (unregistered)" when the header names one the registry does not know, "none" for a person at a screen. */
+    static String agentLabel(Registry registry, Caller caller) {
+        if (caller.agent() == null) {
+            return "none";
+        }
+        return registry.forTenant(caller.tenant()).agents().containsKey(caller.agent()) ? caller.agent() : caller.agent() + " (unregistered)";
+    }
+
+    private String agentLabel(Caller caller) {
+        return agentLabel(registry, caller);
     }
 }

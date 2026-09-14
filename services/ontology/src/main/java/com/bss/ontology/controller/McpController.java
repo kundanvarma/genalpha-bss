@@ -143,6 +143,7 @@ public class McpController {
                 Map.of("subscriptionId", Map.of("type", "string", "description", "the subscription (product) id")), List.of("subscriptionId")));
         tools.add(tool("recommend", "What should be done next for a customer: governed actions dry-run through the registry (with every condition's verdict) and things to explain — an open incident, a paused line, an open bill, a dearer plan. Grounded; no free text.",
                 Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
+        tools.add(tool("list_agents", "The registered AI agents of this BSS: whose rights each runs with, what it may read, check and execute, and how autonomous it is.", Map.of()));
         tools.add(tool("customer_context", "One call: a customer's subscriptions (with what each could become), lines, bills and the receipts of what the BSS decided about them — walked with your rights; edges that did not answer are listed.",
                 Map.of("customerId", Map.of("type", "string", "description", "the customer (party) id")), List.of("customerId")));
         for (JsonNode a : l.actions().values()) {
@@ -192,6 +193,9 @@ public class McpController {
         JsonNode args = params.path("arguments");
         String tenant = tenantScope.currentTenantId();
         Caller caller = Caller.current(request, tenant);
+        if (caller.agent() == null) {
+            caller = caller.withAgent("external-mcp");
+        }
         Registry.Layer l = registry.forTenant(tenant);
         Object result;
         boolean isError = false;
@@ -225,6 +229,19 @@ public class McpController {
             }
         } else if ("available_upgrades".equals(name)) {
             result = upgrades.availableUpgrades(args.path("subscriptionId").asText(), caller);
+        } else if ("list_agents".equals(name)) {
+            List<Map<String, Object>> rows = new ArrayList<>();
+            for (JsonNode a : l.agents().values()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("agent", a.path("agent").asText());
+                row.put("kind", a.path("kind").asText());
+                row.put("meaning", a.path("meaning").asText());
+                row.put("runsAs", a.path("runsAs").asText());
+                row.put("autonomy", a.path("autonomy").asText());
+                row.put("executes", a.path("actions").path("execute"));
+                rows.add(row);
+            }
+            result = rows;
         } else if ("customer_context".equals(name)) {
             result = context.customer(args.path("customerId").asText(), caller);
         } else if ("recommend".equals(name)) {

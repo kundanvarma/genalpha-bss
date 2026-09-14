@@ -15,9 +15,15 @@ import java.util.stream.Collectors;
  * carries the {@code customer} role is a customer — it may act on its own things
  * only, whatever else it holds.
  */
-public record Caller(String bearer, String subject, Set<String> roles, String channel, String tenant) {
+public record Caller(String bearer, String subject, Set<String> roles, String channel, String tenant, String agent) {
 
     public static final String CHANNEL_HEADER = "X-Channel";
+    /** Which registered agent is acting for the person — named in every receipt. Absent = a person at a screen. */
+    public static final String AGENT_HEADER = "X-GenAlpha-Agent";
+
+    public Caller withAgent(String name) {
+        return new Caller(bearer, subject, roles, channel, tenant, name);
+    }
 
     public boolean isCustomer() {
         return roles.contains("customer");
@@ -38,6 +44,8 @@ public record Caller(String bearer, String subject, Set<String> roles, String ch
             subject = jwt.getToken().getSubject();
         }
         String channel = request == null ? null : request.getHeader(CHANNEL_HEADER);
-        return new Caller(bearer, subject, roles, channel == null || channel.isBlank() ? "web" : channel.trim(), tenant);
+        String agent = request == null ? null : request.getHeader(AGENT_HEADER);
+        return new Caller(bearer, subject, roles, channel == null || channel.isBlank() ? "web" : channel.trim(), tenant,
+                agent == null || agent.isBlank() ? null : agent.trim());
     }
 }

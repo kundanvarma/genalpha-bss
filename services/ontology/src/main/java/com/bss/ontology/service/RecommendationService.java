@@ -179,7 +179,7 @@ public class RecommendationService {
             d.put("policy", "assist-ranking");
             d.put("policyVersion", "1");
             d.put("reason", rec.get("why"));
-            d.put("context", Map.of("kind", rec.get("kind"), "rank", rec.get("rank"), "ranking", rec.get("ranking")));
+            d.put("context", Map.of("kind", rec.get("kind"), "rank", rec.get("rank"), "ranking", rec.get("ranking"), "agent", ActionExecuteService.agentLabel(registry, caller)));
             d.put("evidence", Map.of("situation", situation.stream().map(x -> String.valueOf(x.get("says"))).toList()));
             d.put("autonomy", "assist");
             d.put("fallback", false);

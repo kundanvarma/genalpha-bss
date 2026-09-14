@@ -1,0 +1,19 @@
+agent: journey-copilot
+version: 1
+introduced: "2026-08-10"
+status: live
+kind: copilot
+meaning: Drafts growth journeys and campaign copy in the console from a brief; a marketer edits and publishes; holdouts and the learning contract stay in force.
+intent: Faster campaign authoring without loosening the guardrails.
+runsAs: caller
+autonomy: supervised
+reads: [productCatalog.offerings]
+actions:
+  check: []
+  execute: []
+uses: [journey-copilot, journey-copilot-retry, journey-draft, journey-draft-retry, campaign-copy, campaign-copy-retry]
+component: intelligence
+contract: "a journey it drafts carries a holdout and the campaign learning contract like any other"
+memory: "the conversation only"
+pages: [console:journeys]
+tests: [ops/e2e/journey_copilot_test.js]

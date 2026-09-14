@@ -54,6 +54,12 @@ public class ProductDto {
     @JsonProperty("relatedParty")
     private List<Map<String, Object>> relatedParty;
 
+    @JsonProperty("productOrderItem")
+    private List<Map<String, Object>> productOrderItem;
+
+    @JsonProperty("realizingService")
+    private List<Map<String, Object>> realizingService;
+
     @JsonProperty("@type")
     private String type = "Product";
 
@@ -139,6 +145,11 @@ public class ProductDto {
     public void setType(String type) {
         this.type = type;
     }
+
+    public List<Map<String, Object>> getProductOrderItem() { return productOrderItem; }
+    public void setProductOrderItem(List<Map<String, Object>> v) { this.productOrderItem = v; }
+    public List<Map<String, Object>> getRealizingService() { return realizingService; }
+    public void setRealizingService(List<Map<String, Object>> v) { this.realizingService = v; }
 
     public java.util.Map<String, Object> getPreviousOffering() { return previousOffering; }
     public void setPreviousOffering(java.util.Map<String, Object> v) { this.previousOffering = v; }

@@ -1,0 +1,19 @@
+agent: knowledge-ask
+version: 1
+introduced: "2026-08-05"
+status: live
+kind: assistant
+meaning: Ask-with-sources over the knowledge base — retrieves with the asker's own token (their shelf, their answer) and synthesises a grounded reply that cites its articles; unanswered questions become knowledge gaps.
+intent: Never an answer without a source.
+runsAs: caller
+autonomy: advisory
+reads: []
+actions:
+  check: []
+  execute: []
+uses: [knowledge-ask, voc-ask]
+component: intelligence
+contract: "answers cite; a question no article answers is filed as a gap, not improvised"
+memory: "a cache of answers per question and shelf"
+pages: [csr:knowledge, console:help]
+tests: [ops/e2e/knowledge_test.js, ops/e2e/knowledge_help_test.js]

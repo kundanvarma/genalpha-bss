@@ -1,0 +1,19 @@
+agent: incident-agent
+version: 1
+introduced: "2026-08-18"
+status: live
+kind: autonomous
+meaning: Diagnoses a service problem from alarms and inventory and drafts the runbook step; a person runs it. Its diagnosis lands on the ticket as a note marked as the agent's.
+intent: Shorten time-to-cause; leave the change to a human.
+runsAs: machine:bss-intelligence
+autonomy: supervised
+reads: [assurance.problems, serviceInventory.services]
+actions:
+  check: []
+  execute: []
+uses: [incident-diagnosis, incident-runbook-draft]
+component: intelligence
+contract: "read-only diagnosis with a confidence; proposed actions are text until a person executes them"
+memory: "none"
+pages: [csr:tickets]
+tests: [ops/e2e/incident_agent_test.js]

@@ -127,7 +127,10 @@ public class ProductOrderController {
                                                      @PathVariable("itemId") String itemId,
                                                      @RequestBody java.util.Map<String, Object> body) {
         String state = String.valueOf(body.get("state"));
-        return ResponseEntity.ok(service.updateItemState(id, itemId, state));
+        @SuppressWarnings("unchecked")
+        java.util.List<java.util.Map<String, Object>> realizing = body.get("realizingService") instanceof java.util.List<?> l
+                ? (java.util.List<java.util.Map<String, Object>>) l : null;
+        return ResponseEntity.ok(service.updateItemState(id, itemId, state, realizing));
     }
 
     @DeleteMapping("/{id}")

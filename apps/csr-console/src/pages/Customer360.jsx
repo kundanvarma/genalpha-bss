@@ -29,7 +29,7 @@ import { hasRole, currentTokenValue, authFetch } from '../auth.js';
  * the block that raised them and in a toast the eye cannot miss. */
 
 // the desk programs against business actions, not endpoints: the generated ontology SDK, the agent's own token
-const bss = new GenAlpha({ baseUrl: '', token: () => currentTokenValue(), channel: 'care' });
+const bss = new GenAlpha({ baseUrl: '', token: () => currentTokenValue(), channel: 'care', agent: 'care-assist' });
 
 const None = () => <span className="secnone"> — none</span>;
 const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
@@ -65,7 +65,10 @@ function mergeProductsAndServices(products, services) {
   const rows = [];
   const seen = new Map(); // name -> row, so twenty identical top-ups read as one row ×20
   for (const p of products) {
-    const i = free.findIndex((sv) => (sv.name || '').toLowerCase() === (p.name || '').toLowerCase());
+    // the product says which service realises it (TMF637 realizingService); the name match is only the fallback
+    const realized = new Set((p.realizingService || []).map((r) => r.id).filter(Boolean));
+    let i = realized.size ? free.findIndex((sv) => realized.has(sv.id)) : -1;
+    if (i < 0) i = free.findIndex((sv) => (sv.name || '').toLowerCase() === (p.name || '').toLowerCase());
     const sv = i >= 0 ? free.splice(i, 1)[0] : null;
     const key = p.name + '|' + (sv ? numberOf(sv) || sv.id : '') + '|' + p.status;
     if (!sv && seen.has(key)) { seen.get(key).count++; continue; }

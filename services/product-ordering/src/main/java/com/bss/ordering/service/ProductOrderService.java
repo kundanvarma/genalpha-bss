@@ -461,6 +461,12 @@ public class ProductOrderService {
      */
     @Transactional
     public ProductOrderDto updateItemState(String orderId, String itemId, String newState) {
+        return updateItemState(orderId, itemId, newState, null);
+    }
+
+    /** The fulfilment callback: the item's state, and the service that now realises it (kept on item.product.realizingService, TMF622). */
+    public ProductOrderDto updateItemState(String orderId, String itemId, String newState,
+            List<Map<String, Object>> realizingService) {
         ProductOrder entity = repository.findByIdAndTenantId(orderId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, orderId));
         requireOwn(entity);
@@ -469,7 +475,7 @@ public class ProductOrderService {
             return mapper.toDto(entity);
         }
         List<Map<String, Object>> items = mapper.readItems(entity.getProductOrderItemJson());
-        if (items == null || !setItemState(items, itemId, newState)) {
+        if (items == null || !setItemState(items, itemId, newState, realizingService)) {
             throw NotFoundException.forResource("ProductOrderItem", itemId);
         }
         entity.setProductOrderItemJson(mapper.writeItems(items));
@@ -527,16 +533,28 @@ public class ProductOrderService {
     /** Set the state of the item with this id, anywhere in the tree; true if found. */
     @SuppressWarnings("unchecked")
     private boolean setItemState(List<Map<String, Object>> items, String itemId, String newState) {
+        return setItemState(items, itemId, newState, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean setItemState(List<Map<String, Object>> items, String itemId, String newState,
+            List<Map<String, Object>> realizingService) {
         if (items == null) {
             return false;
         }
         for (Map<String, Object> item : items) {
             if (itemId.equals(String.valueOf(item.get("id")))) {
                 item.put("state", newState);
+                if (realizingService != null && !realizingService.isEmpty()) {
+                    Map<String, Object> product = item.get("product") instanceof Map<?, ?> p
+                            ? new java.util.LinkedHashMap<>((Map<String, Object>) p) : new java.util.LinkedHashMap<>();
+                    product.put("realizingService", realizingService);
+                    item.put("product", product);
+                }
                 return true;
             }
             if (item.get("productOrderItem") instanceof List<?> children
-                    && setItemState((List<Map<String, Object>>) children, itemId, newState)) {
+                    && setItemState((List<Map<String, Object>>) children, itemId, newState, realizingService)) {
                 return true;
             }
         }
@@ -1553,10 +1571,15 @@ public class ProductOrderService {
             // naming only the id gets the name from the catalog
             String name = offering.get("name") != null ? String.valueOf(offering.get("name"))
                     : nameFromCatalog(String.valueOf(offering.get("id")));
+            // TMF637 lineage: the order item that made the product, and the service the SOM said realises it
+            List<Map<String, Object>> orderItemRef = List.of(lineageRef(order.getId(), String.valueOf(item.get("id"))));
+            List<Map<String, Object>> realizing = item.get("product") instanceof Map<?, ?> ip
+                    && ip.get("realizingService") instanceof List<?> rs
+                    ? (List<Map<String, Object>>) rs : null;
             for (int unit = 0; unit < quantity; unit++) {
                 inventoryClient.createProduct(new InventoryClient.NewProduct(
                         name, "active", (Map<String, Object>) offering, billingAccount,
-                        dto.getRelatedParty(), characteristics));
+                        dto.getRelatedParty(), characteristics, orderItemRef, realizing));
                 provisioned = true;
             }
         }
@@ -1568,8 +1591,21 @@ public class ProductOrderService {
                     ? Map.of("id", order.getProductOfferingId())
                     : null;
             inventoryClient.createProduct(new InventoryClient.NewProduct(
-                    name, "active", offering, billingAccount, dto.getRelatedParty(), null));
+                    name, "active", offering, billingAccount, dto.getRelatedParty(), null,
+                    List.of(lineageRef(order.getId(), null)), null));
         }
+    }
+
+    /** TMF637 RelatedProductOrderItem: which order (and item) this product came from. */
+    private static Map<String, Object> lineageRef(String productOrderId, String orderItemId) {
+        Map<String, Object> ref = new java.util.LinkedHashMap<>();
+        ref.put("productOrderId", productOrderId);
+        ref.put("productOrderHref", "/tmf-api/productOrderingManagement/v4/productOrder/" + productOrderId);
+        if (orderItemId != null && !"null".equals(orderItemId)) {
+            ref.put("orderItemId", orderItemId);
+        }
+        ref.put("role", "productOrderItem");
+        return ref;
     }
 
     /** Fail-open naming: an unreachable catalog never blocks provisioning —

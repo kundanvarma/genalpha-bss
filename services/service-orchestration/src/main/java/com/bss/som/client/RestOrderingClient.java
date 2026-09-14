@@ -52,14 +52,25 @@ public class RestOrderingClient implements OrderingClient {
 
     @Override
     public void updateItemState(String productOrderId, String itemId, String state) {
+        updateItemState(productOrderId, itemId, state, null);
+    }
+
+    @Override
+    public void updateItemState(String productOrderId, String itemId, String state, Map<String, Object> realizingService) {
         // Fail-soft: the service IS activated; a failed status callback is a
         // reconcile-later event, never a reason to unwind provisioning.
         try {
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("state", state);
+            if (realizingService != null) {
+                // the order item learns which service realises it; the product minted at completion inherits it
+                body.put("realizingService", java.util.List.of(realizingService));
+            }
             restClient.patch()
                     .uri("/tmf-api/productOrderingManagement/v4/productOrder/{id}/productOrderItem/{itemId}",
                             productOrderId, itemId)
                     .header("Content-Type", "application/json")
-                    .body(Map.of("state", state))
+                    .body(body)
                     .retrieve().toBodilessEntity();
         } catch (RestClientException e) {
             log.warn("ordering rejected item-state callback for order {} item {} -> {} (reconcile later): {}",

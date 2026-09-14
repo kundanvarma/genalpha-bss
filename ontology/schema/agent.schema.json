@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://genalpha.example/ontology/agent.schema.json",
+  "title": "Agent",
+  "description": "A named AI actor of the BSS: whose rights it runs with, what it may read, which governed actions it may check and execute, which model calls it makes, and how autonomous it is.",
+  "type": "object",
+  "required": [
+    "agent",
+    "version",
+    "kind",
+    "meaning",
+    "runsAs",
+    "autonomy",
+    "reads",
+    "actions",
+    "uses"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "introduced": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "live",
+        "deprecated",
+        "planned"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "assistant",
+        "copilot",
+        "classifier",
+        "autonomous",
+        "external"
+      ],
+      "description": "assistant = answers a person; copilot = proposes and a person applies; classifier = reads and labels; autonomous = acts on its own within a contract; external = an agent outside the BSS using the MCP door"
+    },
+    "meaning": {
+      "type": "string"
+    },
+    "intent": {
+      "type": "string"
+    },
+    "runsAs": {
+      "type": "string",
+      "description": "caller = the signed-in person's own token and rights; machine:<client> = a machine account"
+    },
+    "autonomy": {
+      "type": "string",
+      "enum": [
+        "advisory",
+        "supervised",
+        "policy-autonomous"
+      ]
+    },
+    "reads": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "capabilities it may read"
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "execute": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "uses": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "AI use cases it makes \u2014 every one governed, metered and audited by the intelligence component"
+    },
+    "tools": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "MCP tools it is given"
+    },
+    "component": {
+      "type": "string",
+      "description": "the component whose code it lives in"
+    },
+    "contract": {
+      "type": "string",
+      "description": "the learning contract or policy that bounds it"
+    },
+    "memory": {
+      "type": "string",
+      "description": "what it remembers between calls, and where"
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

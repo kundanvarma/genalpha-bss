@@ -75,6 +75,16 @@ const grepSources = (dir, needle) => {
   if (!upgrade) fail('upgradeSubscription missing');
   if (!upgrade.executes?.capability || !capabilities.find((c) => c.id === upgrade.executes.capability)) fail('executes must be a typed capability');
   for (const e of upgrade.effects || []) if (!capabilities.find((c) => c.id === e.capability)) fail(`effect ${e.capability} is not a capability`);
+  // the agents: every AI actor declared, its model calls found in the intelligence code, its rights inside the registry
+  const agents = (await call('GET', `${ONT}/agents`, staff)).body;
+  if (!Array.isArray(agents) || agents.length < 8) fail('agent registry too small: ' + JSON.stringify(agents).slice(0, 200));
+  for (const ag of agents) {
+    for (const u of ag.uses || []) if (!grepSources('intelligence', u)) fail(`agent ${ag.agent} declares a model use case not found in code: ${u}`);
+    for (const x of (ag.actions && ag.actions.execute) || []) if (!actions.find((a) => a.action === x)) fail(`agent ${ag.agent} executes an unknown action ${x}`);
+  }
+  const agentWords = (await call('GET', `${ONT}/explain/agent/care-assist`, staff)).body;
+  if (!agentWords || !/Runs as the signed-in person/.test(agentWords.text)) fail('agent explanation: ' + JSON.stringify(agentWords).slice(0, 200));
+  console.log(`  agents: ${agents.length} registered (${agents.map((a) => a.agent).join(', ')}); every model use case found in code; rights resolve`);
   const anon = await call('GET', `${ONT}/actions`, null);
   if (anon.status !== 401) fail('registry must need a signed-in caller: ' + anon.status);
   console.log(`  registry: ${overview.concepts} concepts, ${overview.actions} actions, ${overview.capabilities} capabilities, ${overview.components} components; typed refs resolve; anonymous refused (${anon.status})`);
@@ -163,7 +173,7 @@ const grepSources = (dir, needle) => {
   if (check.permission.by !== 'self:owner') fail('a customer acts as the owner: ' + JSON.stringify(check.permission));
   const failed = check.preconditions.filter((p) => p.verdict === 'fails');
   if (failed.length) fail('no precondition should fail: ' + JSON.stringify(failed));
-  const exec = await call('POST', `${ONT}/actions/upgradeSubscription/execute`, carl, { subscriptionId: product.id, targetOfferingId: target.id }, { 'X-Channel': 'web' });
+  const exec = await call('POST', `${ONT}/actions/upgradeSubscription/execute`, carl, { subscriptionId: product.id, targetOfferingId: target.id }, { 'X-Channel': 'web', 'X-GenAlpha-Agent': 'external-mcp' });
   if (exec.status !== 200 || !exec.body.done) fail(`execute failed: ${exec.status} — ${exec.body?.refusal || exec.body?.said || exec.text.slice(0, 300)} (component status ${exec.body?.componentStatus})`);
   if (!exec.body.decisionId || !exec.body.result?.id) fail('execute must return the order and the receipt id');
   const after = (await call('GET', `${API}/tmf-api/productInventory/v4/product/${product.id}`, carl)).body;
@@ -188,6 +198,7 @@ const grepSources = (dir, needle) => {
   }
   if (!receipt) fail('the decision receipt never reached insight');
   if (receipt.decisionPoint !== 'ontology.upgradeSubscription' || receipt.action !== target.id) fail('receipt content: ' + JSON.stringify(receipt).slice(0, 300));
+  if (receipt.context?.agent !== 'external-mcp') fail('the receipt must name the agent that acted: ' + JSON.stringify(receipt.context));
   if (!(receipt.candidates || []).includes(target.id)) fail('receipt candidates must include the chosen upgrade');
   if (!receipt.evidence?.preconditions?.length) fail('receipt must carry the verdicts as evidence');
   console.log(`  receipt: ${receipt.decisionPoint} by ${receipt.policy} v${receipt.policyVersion}, ${receipt.candidates.length} candidates, outcome ${receipt.outcome || '(pending)'}`);

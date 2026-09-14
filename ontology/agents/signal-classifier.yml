@@ -1,0 +1,19 @@
+agent: signal-classifier
+version: 1
+introduced: "2026-08-19"
+status: live
+kind: classifier
+meaning: Reads inbound signals (social mentions, messages, voice-of-customer) behind the PII firewall and labels sentiment, aspect, churn signal — with verbatim evidence, or nothing.
+intent: Structured signals for growth and care without a human reading every message.
+runsAs: machine:bss-intelligence
+autonomy: policy-autonomous
+reads: []
+actions:
+  check: []
+  execute: []
+uses: [signal-classification, canary-probe]
+component: intelligence
+contract: "labels only; evidence must be verbatim; the canary probe checks the model retains nothing"
+memory: "none"
+pages: [console:signals]
+tests: [ops/e2e/signal_intelligence_test.js]

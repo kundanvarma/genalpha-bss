@@ -1,0 +1,19 @@
+agent: care-chat
+version: 1
+introduced: "2026-08-28"
+status: live
+kind: assistant
+meaning: The care chat bot on the shop and app — answers a guest or a signed-in customer from the public knowledge shelf, escalates to a ticket, and goes silent the moment a human agent replies.
+intent: First-line answers that are always grounded on published articles; never a promise, never an account change.
+runsAs: caller
+autonomy: policy-autonomous
+reads: []
+actions:
+  check: []
+  execute: []
+uses: [careChat]
+component: intelligence
+contract: "answers only from the customer shelf; escalation opens a TMF621 ticket; an agent reply flips the session to human"
+memory: "the session transcript only"
+pages: [shop:support]
+tests: [ops/e2e/care_chat_test.js]

@@ -78,3 +78,10 @@ Concepts, actions and capabilities carry `version` and `introduced`; a retired a
 - The Subscription → Service link is by name (the inventory carries no `realizingService`), the same weak seam the shop and the business console use today; a `realizingService` column plus a back-fill on service activation is the fix, an inventory change.
 - Qualification is offering-by-place only, so "eligible for this customer" is approximated by serviceability at the customer's postcode.
 - A customer's token cannot see a stranger's objects at all (404 by design), so that refusal reads "could not be read" rather than "not yours".
+
+
+## Agents — the registry of AI actors
+
+Every AI actor of the BSS is declared in `ontology/agents/*.yml` and served by the same registry as the concepts and actions: `GET /ontology/v1/agents`, `/agents/{name}`, `/explain/agent/{name}`, the Turtle export (`ga:Agent`) and the MCP tool `list_agents`. An agent declares its kind (assistant, copilot, classifier, autonomous, external), whose rights it runs with (`caller` = the signed-in person's own token and nothing more, or a machine account), the capabilities it may read, the governed actions it may check and execute, the model use cases it makes (each one governed, metered and audited by the intelligence component), its autonomy (advisory, supervised, policy-autonomous), the contract that bounds it, and what it remembers. The registry refuses an agent that names an unknown capability or action, or that executes what it may not check; the ontology suite checks that every declared model use case exists in the intelligence code.
+
+The name travels: a call carrying `X-GenAlpha-Agent: care-assist` (the generated SDK's `agent` option; the CSR desk sets it) is receipted with `context.agent = care-assist`, the MCP door receipts `external-mcp` unless the client says who it is, and an unknown name is receipted as `<name> (unregistered)` rather than dropped. Ten agents are registered today: care-assist, care-chat, product-copilot, sales-advisor, journey-copilot, knowledge-ask, incident-agent, signal-classifier, hermes-worker, external-mcp.

@@ -1,0 +1,20 @@
+agent: hermes-worker
+version: 1
+introduced: "2026-09-02"
+status: live
+kind: autonomous
+meaning: The digital workforce — a worker the operator hires for a shift (care deflection, order chasing) that acts through the ontology's actions with its own machine account, files approvals when the ladder says so, and reports deflection, handle time and reopen rate honestly.
+intent: An AI colleague that is metered, audited and revocable like a contractor.
+runsAs: machine:bss-worker
+autonomy: policy-autonomous
+reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read]
+actions:
+  check: [resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
+  execute: [resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
+uses: []
+tools: [list_actions, explain, recommend, customer_context, available_upgrades]
+component: workforce
+contract: "the approval ladder per action; the tenant's worker budget; every action a receipt"
+memory: "its shift log, kept by the worker controller"
+pages: [console:workforce]
+tests: [ops/e2e/workforce_test.js]
