@@ -158,19 +158,23 @@ export default function Shop() {
       {picks.length > 0 && (
         <>
           <h1>{t('Recommended for you')}</h1>
-          {personal?.caption && (
-            <p className="dim" data-testid="foryou-caption" style={{ margin: '4px 0' }}>
-              ✨ {personal.caption}
-            </p>
-          )}
-          {personal?.retentionFlag && (
-            <p className="dim" data-testid="retention-banner" style={{ margin: '4px 0' }}>
-              💙 {t('Thanks for being with us — this shelf includes our best loyalty picks.')}
-            </p>
-          )}
-          <div className="cards" data-testid="recommended">
-            {picks.map((o) => <OfferingCard key={'rec-' + o.id} offering={o} prices={prices} />)}
+          {/* one lead pick with its reason in the open; the rest of the shelf follows */}
+          <div className="lead-pick" data-testid="recommended">
+            <OfferingCard offering={picks[0]} prices={prices} />
+            <div className="lead-why">
+              <div className="assist-label">{t('Why this?')}</div>
+              <p data-testid="foryou-caption">✨ {personal?.caption || t('Picked from what you have and what you looked at — nothing you already own, nothing that needs an identity check first.')}</p>
+              {personal?.retentionFlag && (
+                <p className="dim small" data-testid="retention-banner">💙 {t('Thanks for being with us — this shelf includes our best loyalty picks.')}</p>
+              )}
+              {personal?.interests?.length > 0 && <p className="dim small">{t('Based on')}: {personal.interests.slice(0, 3).join(', ')}</p>}
+            </div>
           </div>
+          {picks.length > 1 && (
+            <div className="cards" data-testid="recommended-more">
+              {picks.slice(1).map((o) => <OfferingCard key={'rec-' + o.id} offering={o} prices={prices} />)}
+            </div>
+          )}
         </>
       )}
       {(() => {

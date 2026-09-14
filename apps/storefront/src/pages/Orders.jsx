@@ -113,7 +113,7 @@ export default function Orders() {
 
   if (error) return <p className="error">{error}</p>;
   if (!orders) return <p className="dim">Loading your orders…</p>;
-  if (!orders.length) return <p className="dim">No orders yet — pick an offer to get started.</p>;
+  if (!orders.length) return <p className="dim">No orders yet. When you order, it shows up here with its progress, and on Home under Open work until it is done.</p>;
 
   async function cancel(id) {
     if (!confirm('Cancel this order?')) return;

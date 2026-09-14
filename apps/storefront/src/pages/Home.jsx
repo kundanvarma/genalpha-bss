@@ -4,7 +4,7 @@ import { t } from '../i18n.js';
 import { tokenClaims } from '../auth.js';
 import { myProducts, myActiveServices, myUsage, myBills, myOrders, myTickets, myAppointments, myNotifications,
   myCollectionCase, forYou, myRecommendations, listOfferings, loyaltyProgram, myLoyalty, mySpendPolicy,
-  myHomeContext, resumeMyService } from '../api.js';
+  myHomeContext, resumeMyService, mySim, myAgreements } from '../api.js';
 import { LineDoctor } from './Services.jsx';
 
 /* Home — the customer's first screen answers two questions: is everything
@@ -45,9 +45,10 @@ function Meter({ label, used, allowed, units, warn }) {
 export default function Home() {
   const claims = tokenClaims();
   const me = claims.sub;
-  const [d, setD] = useState({ products: [], services: [], usage: [], bills: [], orders: [], tickets: [], appointments: [], notifications: [], ccase: null, offerings: {}, personal: null, recIds: [], program: null, loyalty: null, spend: [] });
+  const [d, setD] = useState({ products: [], services: [], usage: [], agreements: [], bills: [], orders: [], tickets: [], appointments: [], notifications: [], ccase: null, offerings: {}, personal: null, recIds: [], program: null, loyalty: null, spend: [] });
   const [ctx, setCtx] = useState(null); // the ontology's reading; null = reading, {} = unavailable
   const [busy, setBusy] = useState(false);
+  const [sims, setSims] = useState({}); // serviceId -> masked ICCID, one read per mobile card
   const [error, setError] = useState(null);
 
   const load = () => {
@@ -55,11 +56,13 @@ export default function Home() {
     Promise.all([
       soft(myProducts(), []), soft(myActiveServices(), []), soft(myUsage(), []), soft(myBills(), []), soft(myOrders(), []),
       soft(myTickets(), []), soft(myAppointments(), []), soft(myNotifications(), []), soft(myCollectionCase(), null),
-      soft(listOfferings(), []), soft(forYou(), null), soft(myRecommendations(), []), soft(loyaltyProgram(), null), soft(myLoyalty(), null), soft(mySpendPolicy(), []),
-    ]).then(([products, services, usage, bills, orders, tickets, appointments, notifications, ccase, offerings, personal, recs, program, loyalty, spend]) => {
+      soft(listOfferings(), []), soft(forYou(), null), soft(myRecommendations(), []), soft(loyaltyProgram(), null), soft(myLoyalty(), null), soft(mySpendPolicy(), []), soft(myAgreements(), []),
+    ]).then(([products, services, usage, bills, orders, tickets, appointments, notifications, ccase, offerings, personal, recs, program, loyalty, spend, agreements]) => {
       const index = Object.fromEntries((Array.isArray(offerings) ? offerings : []).map((o) => [o.id, o]));
       const recIds = personal && personal.items?.length ? personal.items.map((i) => i.id) : (recs[0]?.recommendationItem?.map((i) => i.offering.id) || []);
-      setD({ products, services: Array.isArray(services) ? services : [], usage: Array.isArray(usage) ? usage : [], bills, orders, tickets: Array.isArray(tickets) ? tickets : [], appointments: Array.isArray(appointments) ? appointments : [], notifications: Array.isArray(notifications) ? notifications : [], ccase, offerings: index, personal, recIds, program, loyalty, spend: Array.isArray(spend) ? spend : [] });
+      // the usage report wraps its meters in `bucket`
+      const buckets = Array.isArray(usage) ? usage : (usage && Array.isArray(usage.bucket) ? usage.bucket : []);
+      setD({ products, services: Array.isArray(services) ? services : [], usage: buckets, agreements: Array.isArray(agreements) ? agreements : [], bills, orders, tickets: Array.isArray(tickets) ? tickets : [], appointments: Array.isArray(appointments) ? appointments : [], notifications: Array.isArray(notifications) ? notifications : [], ccase, offerings: index, personal, recIds, program, loyalty, spend: Array.isArray(spend) ? spend : [] });
     });
     setCtx(null);
     myHomeContext(me).then((c) => setCtx(c || {})).catch(() => setCtx({}));
@@ -104,6 +107,16 @@ export default function Home() {
 
   const picks = d.recIds.map((id) => d.offerings[id]).filter(Boolean).slice(0, 3);
   const cards = active.slice(0, 6); // a household has a handful; the full list lives under Services
+  useEffect(() => {
+    for (const sv of cards) {
+      if (kindOf(sv) === 'mobile' && sims[sv.id] === undefined) {
+        setSims((m) => ({ ...m, [sv.id]: null }));
+        mySim(sv.id).then((sim) => setSims((m) => ({ ...m, [sv.id]: sim?.iccid || null }))).catch(() => {});
+      }
+    }
+  }, [cards.map((s) => s.id).join(',')]);
+  const commitmentOf = (name) => d.agreements.find((g) => g.status === 'active' && g.agreementPeriod?.endDateTime && (g.name || '').toLowerCase().startsWith(String(name || '').toLowerCase().split(' ').slice(0, 2).join(' ')));
+  const speedOf = (name) => { const m = String(name || '').match(/(\d{2,4})\s*(mbit|mb|gbit|gb)?/i); return m ? `${m[1]} Mbit/s` : null; };
   const given = claims.given_name || claims.name || '';
 
   const resume = async (sv) => {
@@ -156,7 +169,10 @@ export default function Home() {
                 <div className="dim small facts">
                   {number && <span className="msisdn">{number}</span>}
                   {kind === 'broadband' && placeOf(sv) && <span>{placeOf(sv)}</span>}
+                  {kind === 'broadband' && speedOf((product || sv).name) && <span>{speedOf((product || sv).name)}</span>}
                   {kind === 'mobile' && dataBucket && <span className={nearLimit ? 'error' : ''}>{Math.max(0, dataAllowed - dataUsed)} {dataBucket.units} {t('data left')}</span>}
+                  {kind === 'mobile' && sims[sv.id] && <span>SIM {sims[sv.id]}</span>}
+                  {commitmentOf((product || sv).name) && <span>{t('commitment until')} {String(commitmentOf((product || sv).name).agreementPeriod.endDateTime).slice(0, 10)}</span>}
                 </div>
                 <div className="svc-actions">
                   {kind === 'mobile' && <Link className="ghost linkbtn" to="/services">{t('Usage & SIM')}</Link>}

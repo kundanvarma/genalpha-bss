@@ -502,3 +502,9 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .bannerstrip .banner.lead img, .bannercarousel .banner.lead img { aspect-ratio: 21 / 6; }
 .bannerstrip .tile img { aspect-ratio: 16 / 5; }
 @media (max-width: 720px) { .bannerstrip .banner.lead img, .bannercarousel .banner.lead img { aspect-ratio: 16 / 7; } }
+
+.lead-pick { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 0.9fr); gap: 16px; align-items: stretch; margin: 6px 0 14px; }
+@media (max-width: 720px) { .lead-pick { grid-template-columns: 1fr; } }
+.lead-why { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--teal-soft); }
+.lead-why .assist-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-text); margin-bottom: 4px; }
+.lead-why p { margin: 4px 0; }

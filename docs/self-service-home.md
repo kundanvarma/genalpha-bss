@@ -55,8 +55,14 @@ The first screen answers "is everything okay, and what should I do next?"
 ## The shop sells in context
 
 Offers became Shop. The hero is a third of its former height. An existing
-broadband customer is not asked for a postcode. The personalised recommendation
-with its "why" caption sits ahead of the rotating campaigns.
+broadband customer is not asked for a postcode. Recommended for you leads with
+one pick and its reason in the open ("Why this?" — the caption from the
+individualised rail, or the plain rule: nothing you already own, nothing that
+needs an identity check first), and the rest of the shelf follows. Service
+cards on Home carry the facts a customer needs to tell lines apart: number, data
+left, the masked SIM, the commitment end date, the broadband speed and address.
+Empty states say what happens next (orders, devices, inbox, bills); the inbox
+count refreshes on every page.
 
 ## Support is guided
 

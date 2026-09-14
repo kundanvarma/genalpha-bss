@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import ChatWidget from './ChatWidget.jsx';
 import HelpDrawer from './HelpDrawer.jsx';
 import { t } from './i18n.js';
@@ -28,6 +28,7 @@ export default function App() {
   const [count, setCount] = useState(0);
   const [unread, setUnread] = useState(0);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const refresh = () => { cartCount().then(setCount).catch(() => {}); };
@@ -35,6 +36,12 @@ export default function App() {
     window.addEventListener(CART_EVENT, refresh);
     return () => window.removeEventListener(CART_EVENT, refresh);
   }, []);
+
+  // the bell is honest: re-count unread on every page change, not once at sign-in
+  useEffect(() => {
+    if (state !== 'ready' || !isCustomer()) return;
+    myNotifications().then((ms) => setUnread(ms.filter((m) => m.status !== 'read').length)).catch(() => {});
+  }, [location.pathname, state]);
 
   useEffect(() => {
     (async () => {

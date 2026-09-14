@@ -194,7 +194,7 @@ export default function Devices() {
       <h1>{t('My devices')}</h1>
       {!agreements.length && (
         <p className="dim" data-testid="no-devices">
-          {t('No device agreements yet — buy a phone on instalments or pay-later and it appears here.')}{' '}
+          {t('No device agreements yet. Buy a phone on instalments or pay-later in the Shop and it appears here with what is paid, what is left and when you can upgrade.')}{' '}
           <Link to="/">{t('Browse phones')} →</Link>
         </p>
       )}

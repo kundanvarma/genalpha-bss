@@ -10,7 +10,7 @@ export default function Notifications() {
 
   if (error) return <p className="error">{error}</p>;
   if (!messages) return <p className="dim">Loading notifications…</p>;
-  if (!messages.length) return <p className="dim">Nothing yet — we'll let you know when something happens.</p>;
+  if (!messages.length) return <p className="dim">Nothing yet. Order confirmations, bills, network notices and replies from us land here — and the bell in the header shows what is unread.</p>;
 
   async function read(id) {
     try {
