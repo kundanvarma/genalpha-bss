@@ -327,7 +327,75 @@ At no step does anyone outside the operator read a customer row.
 
 ---
 
-## 7. Sources
+## 7. Beyond current practice
+
+Section 6 stays inside what the industry already does. These are the
+things nobody does and we should; each rests on something GenAlpha has and
+the incumbents do not.
+
+1. **Migrate on touch, not in waves.** Migration everywhere is an IT
+   project with waves on a schedule. With the event bridge and
+   coexistence already built, the customer's own event can trigger the
+   move: the next bill cycle, a renewal, a care call, a login to the new
+   self-service. The account is pulled across and reconciled at that
+   moment; the legacy stays authoritative for everyone untouched. Waves
+   become the sweep for the never-touched. The strangler pattern applied
+   to customers instead of systems.
+2. **Show the customer their migration.** A "your account moved" page:
+   the old bill and the new bill for the same period side by side, the
+   old customer number next to the new one with both still working, and a
+   "something looks wrong" button that opens a case tagged migration and
+   feeds the scorecard. Regulators fined slow detection harder than the
+   defect. This turns the base into the reconciliation engine and
+   satisfies the written-notice duty the base-migration engine already
+   enforces.
+3. **Both customer numbers work forever.** Legacy ids as searchable
+   aliases on every door: care search, IVR, the bill, self-service
+   login. Identity and bill-archive continuity are where consumer
+   migrations hurt (BT to EE). Cheap, and nobody does it well.
+4. **Ontology-checked mapping and receipted migration.** Import tools
+   check types and foreign keys. The ontology checks meaning before load:
+   a mobile product needs a realizing service with a number and a SIM, a
+   paused line needs a reason, an in-binding agreement needs an end date.
+   Every migrated customer is a logged decision with a receipt; the
+   outcome sweep asks what matters 30 days later (did they call, did the
+   bill match, did they churn); a learning contract flags which mapping
+   rules produce complaints. Auditable per customer, not per batch.
+5. **A synthetic twin of the operator's base.** From the schema profile
+   alone, generate a Test-Norge-style synthetic population with the
+   operator's shape (plan mix, status mix, hierarchy depth, balance
+   distributions) and run the whole migration end to end in our fleet
+   with zero real rows. The commercial simulator's prospect twins are the
+   seed of this. The operator gets a rehearsed kit, we test the mapping,
+   nobody breaches secrecy.
+6. **The edge-case census as the mandatory first artefact.** Every
+   failure in §2 was an edge category: dormant prepaid with a balance,
+   closed accounts still billable, in-binding, mid-cycle, backdated. The
+   profiler counts these from aggregates before anyone maps a field, and
+   the kit refuses to arm until each category has a named rule.
+7. **Read-through history instead of migrated history.** Do not migrate
+   bill history. The bridge reads the legacy archive on demand behind our
+   bill door for two years, then it ages out. Customers never lose bill
+   access, the legal artefact stays where it was made, nothing leaves the
+   operator's walls.
+8. **Circuit breaker on the voice of the customer.** The base-migration
+   breaker pauses waves on billing deltas. Wire it also to signal
+   intelligence: complaint classification from care, chat and social.
+   Vodafone's damage was 17 months of unnoticed complaints.
+9. **The exit kit is the same kit run backwards.** Vendor-neutral is the
+   thesis. The crosswalk plus the canonical export means any customer, or
+   the whole base, can leave in the format they arrived in. No vendor
+   offers "leave as easily as you came", and it removes the strongest
+   objection in the sale.
+
+Considered and not led with: no-freeze dual-write through change data
+capture (real, but expensive to prove per source), and AI-authored
+mapping specs from the legacy system's own documentation (useful, not
+distinctive).
+
+---
+
+## 8. Sources
 
 Industry practice: CSG data migration strategy; PhixFlow T-Mobile UK/DE
 case; Ravus parallel bill runs; A1QA back-to-back testing; Cygnet parallel
