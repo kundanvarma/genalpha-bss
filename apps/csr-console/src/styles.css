@@ -470,3 +470,5 @@ kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11
 
 .now-card p.small { overflow: hidden; text-overflow: ellipsis; }
 .svc-facts span:empty { display: none; }
+
+.assist-script { margin: 8px 0 4px; padding: 8px 12px; border-left: 3px solid var(--teal); background: var(--teal-soft); font-style: italic; }

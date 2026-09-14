@@ -16,7 +16,17 @@ import { desk } from '../desk.js';
 
 const VERDICT = { holds: '✓', fails: '✗', unknown: '?' };
 
-const INTENT_WORDS = { incident: 'outage', bill: 'bill', paused: 'paused line' };
+// what the situation asks the shelf for — the customer-facing article first, the search only as the net
+const SITUATION_QUERIES = { incident: ['outage', 'no internet'], bill: ['understanding your bill', 'bill'], paused: ['paused line', 'pause'] };
+// what to say, in the agent's own voice, per situation — the article is what the customer gets
+const SCRIPTS = {
+  explainIncident: "There is a known problem on your line right now. Our network team is already on it and you do not need to do anything at your end. I can send you a note the moment it is cleared.",
+  explainBill: "Let me go through your bill line by line: your plan, any one-off charges, and anything outside the plan. If something looks wrong I can open a dispute for you, and collection pauses while we check it.",
+};
+const isManual = (a) => /operator'?s manual/i.test(a.category || '') || /^Manual · \d+ · /.test(a.title || '');
+const sendable = (a) => ['customer', 'all'].includes(a.audience) && !isManual(a);
+const readable = (a) => a.audience === 'csr' && !isManual(a);
+const cleanTitle = (t) => String(t || '').replace(/^Manual · \d+ · /, '');
 
 export default function Assist({ id, customer, bss, version, act, nbo, setNbo, aiNextBestOffer, sendOffer, orderForCustomer,
   copilot, summarize, onKnowledgeSearch, interactions = [], openTickets = [], openedAt }) {
@@ -25,7 +35,8 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
   const [open, setOpen] = useState(() => { try { return sessionStorage.getItem('bss.csr.assist') !== 'closed'; } catch { return true; } });
   const [dismissed, setDismissed] = useState({});
   const [done, setDone] = useState(null);
-  const [knowledge, setKnowledge] = useState([]);
+  const [knowledge, setKnowledge] = useState({ send: [], read: [] });
+  const [script, setScript] = useState(null);
   const [sent, setSent] = useState(null);
   const [preview, setPreview] = useState(null);
   const [verdicts, setVerdicts] = useState({}); // decisionId -> helpful | unhelpful
@@ -33,7 +44,7 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
   const [wrapText, setWrapText] = useState('');
 
   // a new customer resets the panel; a refresh after an action keeps what was just done on screen
-  useEffect(() => { setDone(null); setDismissed({}); setVerdicts({}); setWrap(null); setWrapText(''); }, [id]);
+  useEffect(() => { setDone(null); setDismissed({}); setVerdicts({}); setWrap(null); setWrapText(''); setScript(null); }, [id]);
   useEffect(() => {
     let alive = true;
     setRecs(null); setError(null);
@@ -45,12 +56,17 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
   useEffect(() => {
     if (!recs) return;
     const kinds = [...new Set((recs.situation || []).map((s) => s.kind))];
-    const queries = kinds.map((k) => INTENT_WORDS[k]).filter(Boolean);
-    Promise.all([shelfKnowledge('csr:customers').catch(() => []), ...queries.map((q) => searchKnowledge(q).catch(() => []))])
+    const queries = kinds.flatMap((k) => SITUATION_QUERIES[k] || []);
+    Promise.all([...queries.map((q) => searchKnowledge(q).catch(() => [])), shelfKnowledge('csr:customers').catch(() => [])])
       .then((lists) => {
-        const seen = new Set(); const out = [];
-        for (const a of lists.flat()) { if (a && !seen.has(a.id)) { seen.add(a.id); out.push(a); } }
-        setKnowledge(out.slice(0, 4));
+        const seen = new Set(); const send = []; const read = [];
+        for (const a of lists.flat()) {
+          if (!a || seen.has(a.id)) continue;
+          seen.add(a.id);
+          if (sendable(a) && send.length < 2) send.push(a);
+          else if (readable(a) && read.length < 2) read.push(a);
+        }
+        setKnowledge({ send, read });
       });
   }, [recs]);
 
@@ -83,11 +99,10 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
     tell(r, v);
   };
   const explainIt = (r) => {
-    const word = r.action === 'explainIncident' ? 'outage' : r.action === 'explainBill' ? 'bill' : r.title;
-    onKnowledgeSearch?.(word);
+    setScript(SCRIPTS[r.action] || r.why);
+    onKnowledgeSearch?.(r.action === 'explainIncident' ? 'outage' : 'bill');
     desk('suggestion.accept', 'assist:' + r.action, { customer: id });
     tell(r, 'accepted');
-    searchKnowledge(word).then((hits) => setKnowledge((k) => { const seen = new Set(k.map((a) => a.id)); return [...hits.filter((a) => !seen.has(a.id)).slice(0, 2), ...k].slice(0, 5); })).catch(() => {});
   };
 
   // the after-call note: only what the record shows since the page opened
@@ -174,6 +189,7 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
                   {top.kind === 'explain' && (
                     <button className="primary" data-testid="assist-explain" onClick={() => explainIt(top)}>What to say</button>
                   )}
+                  {script && <blockquote className="assist-script small" data-testid="assist-script">"{script}"</blockquote>}
                   <button className="ghost" data-testid="assist-dismiss" onClick={() => dismiss(top)}>Not relevant</button>
                 </div>
                 {feedback(top)}
@@ -236,19 +252,19 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
 
           {/* contextual knowledge: the shelf, pulled by the situation */}
           <div className="assist-block" data-testid="assist-knowledge">
-            <div className="assist-label">Knowledge for this call</div>
-            {!knowledge.length && <p className="dim small">Nothing on the shelf for this situation yet.</p>}
-            {knowledge.map((a) => (
+            <div className="assist-label">Send the customer</div>
+            {!knowledge.send.length && <p className="dim small">No customer article for this situation yet — write one under Knowledge and it appears here.</p>}
+            {knowledge.send.map((a) => (
               <div key={a.id} className="assist-article" data-testid={`assist-article-${a.id}`}>
                 <div className="row" style={{ padding: '6px 0' }}>
-                  <span>{a.title}</span>
+                  <span>{cleanTitle(a.title)}</span>
                   <div className="rowend">
                     <button className="ghost small" onClick={() => setPreview(preview === a.id ? null : a.id)}>{preview === a.id ? 'Close' : 'Preview'}</button>
                     <button className="ghost small" data-testid={`assist-send-${a.id}`} title="Send this article to the customer's inbox"
                       onClick={() => act(async () => {
-                        await sendMessage(id, a.title, a.body);
+                        await sendMessage(id, cleanTitle(a.title), a.body);
                         setSent(a.id);
-                        await logInteraction({ description: `Article sent to the customer: ${a.title}`, channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
+                        await logInteraction({ description: `Article sent to the customer: ${cleanTitle(a.title)}`, channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console',
                           relatedParty: [{ id, role: 'customer', '@referredType': 'Individual' }] });
                       })}>{sent === a.id ? 'Sent ✓' : 'Send'}</button>
                   </div>
@@ -256,6 +272,20 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
                 {preview === a.id && <p className="small assist-preview">{a.body}</p>}
               </div>
             ))}
+            {knowledge.read.length > 0 && (
+              <>
+                <div className="assist-label">For you to read</div>
+                {knowledge.read.map((a) => (
+                  <div key={a.id} className="assist-article" data-testid={`assist-read-${a.id}`}>
+                    <div className="row" style={{ padding: '6px 0' }}>
+                      <span>{cleanTitle(a.title)}</span>
+                      <button className="ghost small" onClick={() => setPreview(preview === a.id ? null : a.id)}>{preview === a.id ? 'Close' : 'Read'}</button>
+                    </div>
+                    {preview === a.id && <p className="small assist-preview">{a.body}</p>}
+                  </div>
+                ))}
+              </>
+            )}
             <Link className="dim small" to="/knowledge">Open the knowledge base →</Link>
           </div>
 
