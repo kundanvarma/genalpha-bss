@@ -82,6 +82,7 @@ async function apiGet(page, path, token) {
 
   // .first(): a fresh customer gets the bundle in Recommended-for-you TOO
   const bundleCard = a.locator('.card.bundle', { hasText: 'GenAlpha One Home & Mobile' }).first();
+  await a.click('.nav >> text=Shop'); // signed in, the landing is Home — the shelf is under Shop
   await bundleCard.waitFor({ timeout: 15000 });
   const cardText = await bundleCard.textContent();
   if (!/\d+\.\d{2} EUR\/month/.test(cardText)) fail(`bundle card shows no monthly price: ${cardText}`);
@@ -144,7 +145,7 @@ async function apiGet(page, path, token) {
   console.log('OK cart line quantity 2, badge follows');
 
   // Add a standalone phone as a second line (devices live under the Devices tab)
-  await a.click('.nav >> text=Offers');
+  await a.click('.nav >> text=Shop');
   await a.locator('.shoptab', { hasText: 'Devices' }).first().click();
   await a.locator('.card:has(h2:text-is("Apple iPhone 17"))').first().click();
   await a.waitForSelector('.pricetable');
@@ -241,7 +242,7 @@ async function apiGet(page, path, token) {
   console.log('OK cart checked out into history, linked to order', closedCarts[0].relatedEntity[0].id.slice(0, 8));
 
   // Account page shows the provisioned party (wait for the fetch to land)
-  await a.click('.nav >> text=Account');
+  await a.click('[data-testid=\"profile-menu\"] summary'); await a.click('[data-testid=\"profile-menu\"] >> text=\"Account\"');
   try {
     await a.locator('.rows', { hasText: 'Alice' }).waitFor({ timeout: 10000 });
   } catch {
@@ -253,7 +254,7 @@ async function apiGet(page, path, token) {
   const ctxB = await browser.newContext();
   const b = await ctxB.newPage();
   await register(b, `bob-${run}@example.com`, 'Bob', 'Berg');
-  await b.click('.nav >> text=My orders');
+  await b.click('[data-testid=\"profile-menu\"] summary'); await b.click('[data-testid=\"profile-menu\"] >> text=\"My orders\"');
   await b.locator('main .dim', { hasText: 'No orders yet' }).waitFor({ timeout: 10000 })
     .catch(async () => fail('customer B order list not empty: ' + await b.locator('main').textContent()));
   console.log('OK customer B sees no foreign orders in UI');
@@ -316,7 +317,7 @@ async function apiGet(page, path, token) {
   if (!appt || appt.status !== 'confirmed' || appt.place?.postCode !== '11122') {
     fail('appointment missing or wrong: ' + JSON.stringify(appts).slice(0, 300));
   }
-  await a.click('.nav >> text=My orders');
+  await a.click('[data-testid=\"profile-menu\"] summary'); await a.click('[data-testid=\"profile-menu\"] >> text=\"My orders\"');
   const installNote = await a.locator('.installnote').first().textContent();
   if (!installNote.includes('Install:')) fail('orders page missing install note');
   console.log('OK install appointment confirmed for the order:', appt.validFor.startDateTime, '|', installNote.trim());
@@ -384,7 +385,7 @@ async function apiGet(page, path, token) {
   }
   // …and My page renders the provisioned items (the Samsung appears only here —
   // the order description has no Samsung — so anchor the async route on it).
-  await a.click('.nav >> text=My page');
+  await a.click('.nav >> text=Services');
   await a.locator('.row', { hasText: 'Samsung Galaxy S26' }).first().waitFor({ timeout: 15000 });
   await a.locator('.card >> text=My bundle').first().waitFor({ timeout: 15000 });
   console.log('OK completion provisioned 5 per-item products into customer A inventory,'
@@ -439,7 +440,7 @@ async function apiGet(page, path, token) {
   console.log('OK completion minted the commitment agreement:', commitment.name,
     '| until', commitment.agreementPeriod.endDateTime.slice(0, 10));
 
-  await a.click('.nav >> text=Account');
+  await a.click('[data-testid=\"profile-menu\"] summary'); await a.click('[data-testid=\"profile-menu\"] >> text=\"Account\"');
   await a.locator('[data-testid="agreement-row"]', { hasText: '12-month' }).first().waitFor({ timeout: 15000 });
   console.log('OK Account page lists the agreement');
 
@@ -466,7 +467,7 @@ async function apiGet(page, path, token) {
   if (usageRes.status() !== 201) fail(`usage ingest failed: ${usageRes.status()} ${await usageRes.text()}`);
   console.log('OK mediation posted 12.3 GB EU roaming data for Alice');
 
-  await a.click('.nav >> text=My page');
+  await a.click('.nav >> text=Services');
   const meter = a.locator('[data-testid="usage-meter"]', { hasText: 'EU roaming data' });
   await meter.waitFor({ timeout: 15000 });
   const meterText = await meter.textContent();
@@ -496,7 +497,7 @@ async function apiGet(page, path, token) {
   if (runRes.status() !== 200) fail(`billing run failed: ${runRes.status()} ${await runRes.text()}`);
   console.log('OK billing run:', JSON.stringify(await runRes.json()));
 
-  await a.click('.nav >> text=My bills');
+  await a.click('.nav >> text=Billing');
   const billRow = a.locator('.row', { hasText: 'BILL-' }).first();
   await billRow.waitFor({ timeout: 15000 });
   const billTotal = (await billRow.locator('.linetotal').textContent()).trim();
@@ -592,7 +593,7 @@ async function apiGet(page, path, token) {
   }
   console.log('OK event stream minted all 4 notifications:', wantSubjects.join(' | '));
 
-  await a.click('.nav >> text=Inbox');
+  await a.click('.who >> text=Inbox');
   const note = a.locator('.row', { hasText: 'Order received' }).first();
   await note.waitFor({ timeout: 15000 });
   await note.locator('button', { hasText: 'Mark read' }).click();
@@ -618,7 +619,7 @@ async function apiGet(page, path, token) {
   if (bBills.length !== 0) fail('customer B sees bills: ' + JSON.stringify(bBills).slice(0, 200));
   console.log('OK billing rerun idempotent; customer B has no bills');
 
-  await b.click('.nav >> text=My page');
+  await b.click('.nav >> text=Services');
   await b.locator('main .dim', { hasText: 'Nothing active yet' }).waitFor({ timeout: 10000 })
     .catch(async () => fail('customer B service list not empty: ' + await b.locator('main').textContent()));
   console.log('OK customer B sees no foreign services');

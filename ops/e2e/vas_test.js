@@ -100,7 +100,7 @@ async function apiCall(page, method, path, token, body) {
   console.log('OK the mixed VAS order completed autonomously');
 
   // My page: the subscriptions & protection card
-  await page.click('.nav >> text=My page');
+  await page.click('.nav >> text=Services');
   await page.waitForSelector('[data-testid=vas-card]', { timeout: 15000 });
   const codeShown = await page.locator('[data-testid=activation-code]').first().textContent();
   if (codeShown !== code) fail(`UI shows wrong code: ${codeShown} vs ${code}`);

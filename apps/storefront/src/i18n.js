@@ -184,6 +184,15 @@ const NO = {
   'Redeemed! The GB lands on this month\u2019s meter.': 'Innløst! GB legges på denne månedens måler.',
   // nav + identity
   'Offers': 'Tilbud',
+  'Home': 'Hjem',
+  'Services': 'Tjenester',
+  'Billing': 'Fakturaer',
+  'Shop': 'Butikk',
+  'Good morning': 'God morgen',
+  'Good afternoon': 'God ettermiddag',
+  'Good evening': 'God kveld',
+  'Everything looks good': 'Alt ser bra ut',
+  'needs your attention': 'trenger din oppmerksomhet',
   'Cart': 'Handlekurv',
   'My orders': 'Mine bestillinger',
   'My bills': 'Mine fakturaer',
@@ -291,6 +300,10 @@ const NO = {
 /* Nynorsk (nn): built OVER bokmål — strings identical in both standards are
  * inherited; only the forms that differ are overridden. Vestlandet-ready. */
 const NN = {
+  'Home': 'Heim',
+  'Services': 'Tenester',
+  'Billing': 'Fakturaar',
+  'Shop': 'Butikk',
   ...NO,
   'Invite a friend': 'Verv ein ven',
   'You each get': 'De får begge',

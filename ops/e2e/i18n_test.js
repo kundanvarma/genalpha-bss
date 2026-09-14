@@ -16,7 +16,7 @@ const GENALPHA_SHOP = 'http://localhost:8080/shop/';
   await nova.goto(NOVA_SHOP);
   await nova.waitForSelector('.nav', { timeout: 20000 });
   const nav = await nova.locator('.nav').textContent();
-  for (const label of ['Tilbud', 'Handlekurv', 'Kundeservice']) {
+  for (const label of ['Butikk', 'Kundeservice']) {
     if (!nav.includes(label)) fail(`Norwegian nav missing "${label}": ${nav}`);
   }
   console.log('OK Nova storefront chrome is Norwegian:', nav.trim().replace(/\s+/g, ' · '));
@@ -39,7 +39,7 @@ const GENALPHA_SHOP = 'http://localhost:8080/shop/';
   await gen.goto(GENALPHA_SHOP);
   await gen.waitForSelector('.nav', { timeout: 20000 });
   const genNav = await gen.locator('.nav').textContent();
-  if (!genNav.includes('Offers') || genNav.includes('Tilbud')) {
+  if (!genNav.includes('Shop') || genNav.includes('Butikk')) {
     fail('GenAlpha nav should stay English: ' + genNav);
   }
   await gen.locator('.card', { hasText: 'Unlimited 5G' }).first().waitFor({ timeout: 20000 });

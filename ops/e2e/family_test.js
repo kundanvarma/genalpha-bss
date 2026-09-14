@@ -77,7 +77,7 @@ async function token(request, client, user, pass) {
   await petraPage.fill('input[name="password"]', petra.password);
   await petraPage.click('input[type="submit"], button[type="submit"]');
   await petraPage.waitForSelector('.nav', { timeout: 20000 });
-  await petraPage.locator('.nav >> text=Family').click();
+  await petraPage.click('[data-testid=\"profile-menu\"] summary'); await petraPage.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   await petraPage.locator(`[data-testid=fam-member-${wanda.id}]`).waitFor({ timeout: 20000 });
   const chipBefore = await petraPage
     .locator(`[data-testid=fam-member-${wanda.id}] [data-testid=role-chip]`).textContent();
@@ -108,7 +108,7 @@ async function token(request, client, user, pass) {
   await wandaPage.fill('input[name="password"]', wanda.password);
   await wandaPage.click('input[type="submit"], button[type="submit"]');
   await wandaPage.waitForSelector('.nav', { timeout: 20000 });
-  await wandaPage.locator('.nav >> text=Family').click();
+  await wandaPage.click('[data-testid=\"profile-menu\"] summary'); await wandaPage.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   await wandaPage.locator(`[data-testid=fam-member-${sam.id}]`).waitFor({ timeout: 20000 });
   // admin authority stops at roles: no promote/demote, no stop-paying
   if (await wandaPage.locator(`[data-testid=fam-promote-${sam.id}]`).count()) {

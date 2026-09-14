@@ -1,0 +1,19 @@
+agent: shop-home
+version: 1
+introduced: "2026-09-14"
+status: live
+kind: assistant
+meaning: The customer's own Home in the shop and app — is everything okay, and what should I do next. Reads the same customer context the care desk's Assist reads, with the customer's own token, so agent and customer see one truth about an incident, a paused line, a bill or a plan that could grow.
+intent: Exception-first self-service — attention items only when relevant, one commercial suggestion below the customer's needs, never a sale before the situation.
+runsAs: caller
+autonomy: advisory
+reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, productCatalog.offerings]
+actions:
+  check: [upgradeSubscription]
+  execute: []
+uses: [for-you-caption]
+component: storefront
+contract: "the customer acts through the shop's own flows (order, top-up, pay); Home only recommends; incidents shown are limited to the customer's own services"
+memory: "none — the customer context is read on every visit"
+pages: [shop:home]
+tests: [ops/e2e/shop_home_test.js]

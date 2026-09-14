@@ -60,7 +60,7 @@ clock, physical goods ship through a carrier, and the customer watches it happen
 
 **1a — eSIM: instant, no human.** Register a throwaway account. Open a **mobile
 plan** → in the cart pick **⚡ eSIM**. Pay with `4242 4242 4242 4242`.
-- **"Watch it activate on its own."** Open **My orders / My page**: the line is
+- **"Watch it activate on its own."** Open **Home** (the signed-in landing) — Open work shows the order, then the line appears as a service card; **Services** has the detail: the line is
   active with a number and meters, in seconds. **"No human touched that — an
   eSIM provisions instantly."**
 

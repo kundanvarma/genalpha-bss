@@ -57,7 +57,7 @@ const MENU = [
     await page.waitForSelector('.nav', { timeout: 20000 });
 
     // a device ships (physical) with no serviceability gate → clean carrier-picker path
-    await page.click('.nav >> text=Offers');
+    await page.click('.nav >> text=Shop');
     await page.locator('.shoptab', { hasText: 'Devices' }).first().click();
     await page.locator('.card:has(h2:text-is("Apple iPhone 17"))').first().click();
     await page.waitForSelector('.pricetable');

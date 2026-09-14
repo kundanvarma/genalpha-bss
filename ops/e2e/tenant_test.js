@@ -57,11 +57,12 @@ async function staffToken(request, realm) {
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('OK Nova customer self-registered through the nova realm');
 
+  await page.click('.nav >> text=Butikk'); // a signed-in customer lands on Hjem; the shelf is one click away
   await toMobile();
   await page.locator('.card', { hasText: 'Nova Unlimited 5G' }).first().click();
   await page.locator('button', { hasText: 'Legg i handlekurven' }).first().waitFor({ timeout: 15000 });
   await page.locator('button', { hasText: 'Legg i handlekurven' }).first().click();
-  await page.click('.nav >> text=Handlekurv'); // the Norwegian tenant, in Norwegian
+  await page.click('.who >> text=Handlekurv'); // the Norwegian tenant, in Norwegian
   await page.locator('.row', { hasText: 'Nova Unlimited 5G' }).first().waitFor({ timeout: 15000 });
   // Plan-only line: no shipping, no install, nothing due now — plain Checkout.
   const checkoutButton = page.locator('button.primary.big');

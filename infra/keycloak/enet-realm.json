@@ -1193,7 +1193,7 @@
    "username": "service-account-bss-ontology",
    "enabled": true,
    "serviceAccountClientId": "bss-ontology",
-   "realmRoles": ["policy:evaluate", "insight:read", "inventory:read", "billing:admin", "workforce:use"]
+   "realmRoles": ["policy:evaluate", "insight:read", "inventory:read", "billing:admin", "workforce:use", "assurance:read"]
   }, {
       "username": "service-account-bss-entitlement",
       "enabled": true,

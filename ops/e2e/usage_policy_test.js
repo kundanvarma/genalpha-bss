@@ -198,7 +198,7 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000);
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 30000 });
 
-  await page.click('.nav >> text=Family');
+  await page.click('[data-testid=\"profile-menu\"] summary'); await page.click('[data-testid=\"profile-menu\"] >> text=\"Family\"');
   const poolCard = page.locator('[data-testid^="data-pool-"]', { hasText: 'Family data pool' }).first();
   await poolCard.waitFor({ timeout: 20000 }).catch(() =>
     fail('the seeded "Family data pool" card is not on /family — is seed_usage_policy.py applied?'));
@@ -212,7 +212,7 @@ const daysAgo = (n) => new Date(Date.now() - n * 86400000);
   }
   ok('UI: /family shows the seeded "Family data pool" with remaining-of-total and per-member caps');
 
-  await page.click('.nav >> text=My page');
+  await page.click('.nav >> text=Services');
   await page.locator('[data-testid="usage-controls"]').waitFor({ timeout: 30000 }).catch(() =>
     fail('the usage-controls card is not on My page (it hides only when the usage-policy component is absent)'));
   const roaming = page.locator('[data-testid="roaming-controls"]');

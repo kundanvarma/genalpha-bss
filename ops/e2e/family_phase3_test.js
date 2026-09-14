@@ -93,7 +93,7 @@ async function token(request, client, user, pass) {
   await page.fill('input[name="password"]', pia.password);
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
-  await page.locator('.nav >> text=Family').click();
+  await page.click('[data-testid=\"profile-menu\"] summary'); await page.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   const kidCard = page.locator(`[data-testid=fam-member-${kid.id}]`);
   await kidCard.waitFor({ timeout: 20000 });
   await kidCard.locator('[data-testid=fam-usage]').waitFor({ timeout: 15000 });

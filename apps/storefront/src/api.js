@@ -1156,3 +1156,13 @@ export function stitchVisitor() {
     body: JSON.stringify({ visitorId: visitorId() }),
   }).catch(() => {});
 }
+
+
+/** The customer's own reading of their situation from the operational ontology — the same context the care
+ * desk's Assist reads, with the customer's token, signed as the registered shop-home agent. Fail-soft. */
+export async function myHomeContext(partyId) {
+  const res = await authFetch(`/ontology/v1/context/customer/${encodeURIComponent(partyId)}/recommendations`, {
+    headers: { 'X-GenAlpha-Agent': 'shop-home' },
+  });
+  return res.ok ? res.json() : null;
+}

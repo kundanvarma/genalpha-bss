@@ -108,7 +108,7 @@ async function token(request, client, user, pass) {
   await ginaPage.fill('input[name="password"]', gina.password);
   await ginaPage.click('input[type="submit"], button[type="submit"]');
   await ginaPage.waitForSelector('.nav', { timeout: 20000 });
-  await ginaPage.locator('.nav >> text=Family').click();
+  await ginaPage.click('[data-testid=\"profile-menu\"] summary'); await ginaPage.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   const kidCard = ginaPage.locator(`[data-testid=fam-member-${kiddo.id}]`);
   await kidCard.waitFor({ timeout: 20000 });
   await kidCard.locator('[data-testid=fam-allowance-input]').fill('6');
@@ -203,7 +203,7 @@ async function token(request, client, user, pass) {
   if (await allowedOf(vera.id) !== 15) fail('Vera\'s self-paid boost never landed');
   const ginaAllowedBefore = await allowedOf(gina.id);
   const veraAllowedBefore = await allowedOf(vera.id);
-  await veraPage.click('.nav >> text=My page');
+  await veraPage.click('.nav >> text=Services');
   await veraPage.locator('[data-testid=gift-select]').waitFor({ timeout: 20000 });
   await veraPage.selectOption('[data-testid=gift-select]', { label: 'Gina Payer' + run });
   await veraPage.fill('[data-testid=gift-amount]', '3');

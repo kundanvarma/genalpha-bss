@@ -351,7 +351,8 @@ export default function Services() {
 
   return (
     <>
-      <h1>{t('My page')}</h1>
+      <h1>{t('Services')}</h1>
+      <p className="dim small quicklinks"><Link to="/devices">{t('My devices')} →</Link> · <Link to="/family">{t('Family')} →</Link></p>
       {changed && (
         <p className="dim" data-testid="plan-changed">
           ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.
@@ -699,7 +700,7 @@ function GiftData({ hh, onDone }) {
 
 /** Triage before ticket: one button answers "why is it slow?" with the
  * three usual suspects checked server-side — outage, out of data, paused. */
-function LineDoctor({ serviceId }) {
+export function LineDoctor({ serviceId }) {
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   return (

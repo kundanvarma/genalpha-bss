@@ -253,7 +253,8 @@ export default function Orders() {
           return (
             <div className="row orderrow" key={o.id}>
               <div className="ordermain">
-                <strong>{o.description || o.id}</strong>
+                <strong>{o.description || leaves.map((l) => l.productOffering?.name).filter(Boolean).join(', ') || 'Order'}</strong>
+                <span className="dim small mono" title={o.id}> · ref {o.id.slice(0, 8)}</span>
                 <div className="dim small">
                   {o.orderDate ? new Date(o.orderDate).toLocaleString() : ''}
                   {isMulti && !TERMINAL.includes(es) && leaves.length > 0

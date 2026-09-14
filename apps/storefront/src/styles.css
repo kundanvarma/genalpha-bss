@@ -455,3 +455,50 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .carousel-dots button { width: 8px; height: 8px; border-radius: 50%; border: none; padding: 0; background: var(--line); cursor: pointer; }
 .carousel-dots button.on { background: var(--teal); width: 18px; border-radius: 4px; }
 @media (max-width: 640px) { .bannercarousel .banner img { aspect-ratio: 16 / 9; } .carousel-arrow { width: 34px; height: 34px; line-height: 34px; font-size: 22px; } }
+
+
+/* ---------- Home and the five destinations (2026-09-14) ---------- */
+.who { display: flex; align-items: center; gap: 8px; }
+.who .utility { display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; text-decoration: none; color: var(--ink); position: relative; }
+.who .utility.active { background: var(--teal-soft); color: var(--teal-text); }
+.who .utility .glyph { font-size: 15px; }
+@media (max-width: 720px) { .who .utility .utext { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); } }
+.profile { position: relative; }
+.profile > summary { list-style: none; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 999px; }
+.profile > summary::-webkit-details-marker { display: none; }
+.profile > summary:hover, .profile[open] > summary { background: var(--teal-soft); }
+.profile .menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 200px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-s); box-shadow: var(--shadow-lift); padding: 6px; z-index: 30; display: flex; flex-direction: column; }
+.profile .menu a, .profile .menu button { text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--ink); text-decoration: none; border: none; background: none; font: inherit; cursor: pointer; }
+.profile .menu a:hover, .profile .menu button:hover { background: var(--teal-soft); color: var(--teal-text); }
+.home section { margin: 0 0 22px; }
+.home h2 { display: flex; align-items: baseline; gap: 12px; font-size: 18px; margin: 0 0 8px; }
+.home h2 a { font-weight: 400; margin-left: auto; }
+.home-hero { padding: 16px 20px; margin-bottom: 14px; }
+.home-hero h1 { margin: 0 0 4px; font-size: 26px; }
+.home-hero p { margin: 0; font-weight: 500; }
+.home-hero p.ok { color: var(--ok); } .home-hero p.warn { color: var(--danger); }
+.home-attention:empty { display: none; }
+.callout { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: var(--radius-s); margin-bottom: 8px; border: 1px solid var(--line); background: var(--card); }
+.callout.warn, .callout.danger { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--card)); }
+.callout.info { border-color: var(--teal); background: var(--teal-soft); }
+.callout .linkbtn, .callout button { white-space: nowrap; }
+.linkbtn { display: inline-block; text-decoration: none; padding: 7px 12px; border-radius: var(--radius-s); border: 1px solid var(--line); color: var(--ink); font-size: 13px; }
+.linkbtn.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+.linkbtn.ghost:hover { color: var(--teal); border-color: var(--teal); }
+.cards.services, .cards.money { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.card.svc { display: flex; flex-direction: column; gap: 6px; }
+.card.svc h3 { margin: 2px 0; font-size: 16px; }
+.svc-head { display: flex; justify-content: space-between; align-items: center; }
+.chip.kind { font-size: 11px; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--dim); }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.svc-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+.svc-actions > div { margin: 0 !important; }
+.cards.money .card h3 { margin: 0 0 6px; font-size: 14px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; }
+.quicklinks { margin: -6px 0 10px; }
+.support-guide { display: grid; gap: 14px; margin-bottom: 18px; }
+.support-guide .step h2 { margin: 0 0 8px; font-size: 16px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* the shop window sells in context, not before it: a third to a half less hero */
+.bannerstrip .banner.lead img, .bannercarousel .banner.lead img { aspect-ratio: 21 / 6; }
+.bannerstrip .tile img { aspect-ratio: 16 / 5; }
+@media (max-width: 720px) { .bannerstrip .banner.lead img, .bannercarousel .banner.lead img { aspect-ratio: 16 / 7; } }

@@ -539,7 +539,7 @@ async function shopTab(page, labelRe) {
   await page.fill('input[name="password"]', 'nils');
   await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
   await page.waitForSelector('.nav', { timeout: 20000 });
-  await glideClick(page, page.locator('.nav >> text=Min side'));
+  await glideClick(page, page.locator('.nav >> text=Tjenester'));
   await page.waitForSelector('[data-testid=mobile-card]', { timeout: 15000 });
   await page.waitForTimeout(1500);
   await caption(page, '💠  Min side: kroner, Norwegian SIM care, a Norwegian bill — the tenant manifest did this, not a fork.', 3800);
@@ -603,14 +603,14 @@ async function shopTab(page, labelRe) {
   await glideClick(page, page.locator('input[type="submit"], button[type="submit"]').first());
   await page.waitForSelector('.nav', { timeout: 20000 });
   console.log('· SCENE5.5-family');
-  await glideClick(page, page.locator('.nav >> text=Family'));
+  await page.click('[data-testid=\"profile-menu\"] summary'); await glideClick(page, page.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"'));
   await page.locator('[data-testid=role-chip]').first().waitFor({ timeout: 20000 });
   await caption(page, '👪  The FAMILY HUB: Paula pays, Wilma co-admins, Sonny\'s plan is family-funded — roles from Verizon, consent from Jio, one bill with per-person lines.', 4600);
   await caption(page, '💶  Each member can carry a top-up ALLOWANCE: inside it the kid buys instantly on the family bill; above it, the order HOLDS and Paula gets the ask — Google Family Link, telco edition.', 4600);
   await captionOff(page);
   await page.locator(`[data-testid=fam-member-841856ed-4732-4276-879c-9e3a7f5b4b04] .row`).first()
     .waitFor({ timeout: 15000 }).catch(() => {});
-  await glideClick(page, page.locator('.nav >> text=My page'));
+  await glideClick(page, page.locator('.nav >> text=Services'));
   await page.locator('[data-testid=gift-select]').waitFor({ timeout: 20000 });
   await page.locator('[data-testid=gift-select]').scrollIntoViewIfNeeded();
   await page.selectOption('[data-testid=gift-select]', { index: 1 });

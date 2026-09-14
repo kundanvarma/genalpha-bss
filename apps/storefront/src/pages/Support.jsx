@@ -1,3 +1,6 @@
+import { Link } from 'react-router-dom';
+import { LineDoctor } from './Services.jsx';
+import { myActiveServices } from '../api.js';
 import { useEffect, useState } from 'react';
 import { closeTicket, myTickets, raiseTicket, searchFaq } from '../api.js';
 import { t } from '../i18n.js';
@@ -42,9 +45,11 @@ export default function Support() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [error, setError] = useState(null);
+  const [services, setServices] = useState(null);
 
   const load = () => myTickets().then(setTickets).catch((e) => setError(e.message));
   useEffect(() => { load(); }, []);
+  useEffect(() => { myActiveServices().then((svcs) => setServices((Array.isArray(svcs) ? svcs : []).filter((sv) => sv.state === 'active'))).catch(() => setServices([])); }, []);
 
   async function submit(e) {
     e.preventDefault();
@@ -71,10 +76,33 @@ export default function Support() {
 
   return (
     <>
-      <h1>Support</h1>
+      <h1>{t('Support')}</h1>
       {error && <p className="error">{error}</p>}
 
-      <Faq />
+      {/* guided: the line first, because most calls are "it does not work" */}
+      <div className="support-guide" data-testid="support-guide">
+        <section className="card step" data-testid="support-step">
+          <h2>1 · {t('Check your line')}</h2>
+          {services === null && <p className="dim small">{t('Reading your services…')}</p>}
+          {services && !services.length && <p className="dim small">{t('No active service on this account yet.')}</p>}
+          {(services || []).slice(0, 6).map((sv) => (
+            <div key={sv.id} className="row" style={{ border: 'none', padding: '4px 0' }}>
+              <span>{sv.name}{(sv.supportingResource || []).find((r) => r.value) ? <span className="msisdn"> {(sv.supportingResource || []).find((r) => r.value).value}</span> : null}</span>
+              <LineDoctor serviceId={sv.id} />
+            </div>
+          ))}
+          {services && services.length > 6 && <p className="dim small">{t('More lines under')} <Link to="/services">{t('Services')}</Link>.</p>}
+          <p className="dim small">{t('Outage, out of data or paused — the check says which, so you know what to do next.')}</p>
+        </section>
+        <section className="card step" data-testid="support-step">
+          <h2>2 · {t('Find the answer')}</h2>
+          <Faq />
+        </section>
+        <section className="card step" data-testid="support-step">
+          <h2>3 · {t('Talk to us')}</h2>
+          <p className="dim small">{t('Chat with us from the bubble at the bottom right, or raise a case below and we come back to you.')}</p>
+        </section>
+      </div>
 
       <form className="supportform" onSubmit={submit}>
         <input name="name" placeholder="What's wrong? (short summary)" value={name}

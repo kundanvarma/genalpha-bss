@@ -56,7 +56,7 @@ async function token(request, client, user, pass) {
   await sonnyPage.fill('input[name="password"]', sonny.password);
   await sonnyPage.click('input[type="submit"], button[type="submit"]');
   await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
-  await sonnyPage.locator('.nav >> text=Family').click();
+  await sonnyPage.click('[data-testid=\"profile-menu\"] summary'); await sonnyPage.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
   await sonnyPage.fill('[data-testid=hh-request-email]', paula.email);
   await sonnyPage.click('[data-testid=hh-request]');
@@ -83,7 +83,7 @@ async function token(request, client, user, pass) {
   await paulaPage.fill('input[name="password"]', paula.password);
   await paulaPage.click('input[type="submit"], button[type="submit"]');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
-  await paulaPage.locator('.nav >> text=Family').click();
+  await paulaPage.click('[data-testid=\"profile-menu\"] summary'); await paulaPage.locator('[data-testid=\"profile-menu\"] >> text=\"Family\"').click();
   await paulaPage.locator('[data-testid=hh-accept]').waitFor({ timeout: 15000 });
   await paulaPage.click('[data-testid=hh-accept]');
   await paulaPage.locator('[data-testid=hh-order-select]').waitFor({ timeout: 15000 });
@@ -158,7 +158,7 @@ async function token(request, client, user, pass) {
   /* ---------- whose sub is whose: labels + the guardian's family view ---------- */
   await sonnyPage.goto('http://localhost:8080/shop/');
   await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
-  await sonnyPage.click('.nav >> text=My page');
+  await sonnyPage.click('.nav >> text=Services');
   try {
     await sonnyPage.locator('[data-testid=paid-by]').first().waitFor({ timeout: 20000 });
   } catch (e) {
@@ -170,7 +170,7 @@ async function token(request, client, user, pass) {
   if (!tag.includes('household payer')) fail('Sonny\'s plan not labelled with its payer: ' + tag);
   await paulaPage.goto('http://localhost:8080/shop/');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
-  await paulaPage.click('.nav >> text=My page');
+  await paulaPage.click('.nav >> text=Services');
   // the card names the dependent once the household fetch lands
   await paulaPage.locator('[data-testid=family-paid-card]', { hasText: 'Sonny' })
     .waitFor({ timeout: 20000 });
@@ -222,7 +222,7 @@ async function token(request, client, user, pass) {
   /* ---------- either side can leave ---------- */
   await sonnyPage.goto('http://localhost:8080/shop/');
   await sonnyPage.waitForSelector('.nav', { timeout: 20000 });
-  await sonnyPage.click('.nav >> text=Family');
+  await sonnyPage.click('[data-testid=\"profile-menu\"] summary'); await sonnyPage.click('[data-testid=\"profile-menu\"] >> text=\"Family\"');
   await sonnyPage.locator('[data-testid=hh-leave]').waitFor({ timeout: 20000 });
   await sonnyPage.click('[data-testid=hh-leave]');
   await sonnyPage.locator('[data-testid=hh-request-email]').waitFor({ timeout: 15000 });
@@ -231,7 +231,7 @@ async function token(request, client, user, pass) {
   /* ---------- v2: Paula CREATES a child account; the kid gets the APP ---------- */
   await paulaPage.goto('http://localhost:8080/shop/');
   await paulaPage.waitForSelector('.nav', { timeout: 20000 });
-  await paulaPage.click('.nav >> text=Family');
+  await paulaPage.click('[data-testid=\"profile-menu\"] summary'); await paulaPage.click('[data-testid=\"profile-menu\"] >> text=\"Family\"');
   await paulaPage.locator('summary', { hasText: 'Add a family member' }).click();
   await paulaPage.fill('[data-testid=hh-add-given]', 'Kidd');
   await paulaPage.fill('[data-testid=hh-add-family]', `Kid${run}`);

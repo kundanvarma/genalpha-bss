@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { beacon, checkQualification, consentChoice, forYou, getOffering, getSpec, listBanners, listOfferings, myExperience, myRecommendations, priceIndex, queryServiceQualification, saveConsent, submitSalesLead } from '../api.js';
 import { CART_EVENT, cartLines } from '../cart.js';
 import { isSignedIn } from '../auth.js';
+import { myActiveServices } from '../api.js';
 import { fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 
@@ -16,6 +17,7 @@ export default function Shop() {
   const [params] = useSearchParams();
   const [tab, setTab] = useState(params.get('tab') || 'Bundles'); // line-of-business shop tab (deep-linkable: /?tab=Mobile)
   const [banners, setBanners] = useState([]);
+  const [hasBroadband, setHasBroadband] = useState(false); // an existing fibre customer is never asked for a postcode
   useEffect(() => { listBanners().then(setBanners); }, []);
   const [planSort, setPlanSort] = useState('data');   // Mobile: compare by data|price
   const [planView, setPlanView] = useState('cards');  // Mobile: 'cards' | 'table' (compare is opt-in)
@@ -45,6 +47,7 @@ export default function Shop() {
     // the individualized rail is additive: without it (or without the
     // intelligence component) the raw TMF680 picks still render
     if (isSignedIn()) {
+      myActiveServices().then((svcs) => setHasBroadband((Array.isArray(svcs) ? svcs : []).some((sv) => sv.state === 'active' && /broadband|fib|dsl|internet/i.test(`${sv.category || ''} ${sv.name || ''}`)))).catch(() => {});
       forYou().then((fy) => {
         if (fy && fy.items?.length) {
           setPersonal(fy);
@@ -119,7 +122,7 @@ export default function Shop() {
           <p>{brand.tagline || t('Mobile, broadband and TV that just work together. Pick a bundle, keep your number, and be live in minutes.')}</p>
         </section>
       )}
-      <CoverageCheck offerings={offerings} onSeePlans={() => setTab('Internet')} />
+      {!hasBroadband && <CoverageCheck offerings={offerings} onSeePlans={() => setTab('Internet')} />}
       <ConsentBanner onDecided={() => myExperience().then(setExperience).catch(() => {})} />
       {hero && (
         <p className="dim" data-testid="personal-banner" style={{ margin: '4px 0' }}>

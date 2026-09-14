@@ -200,7 +200,7 @@ const seqOf = (no) => Number(String(no).replace('CN-', ''));
   await page.fill('input[name="password"]', 'kai');
   await page.click('input[type="submit"], button[type="submit"]');
   await page.waitForSelector('.nav', { timeout: 20000 });
-  await page.locator('.nav >> text=My bills').click();
+  await page.locator('.nav >> text=Billing').click();
   await page.locator('[data-testid="credit-note-chip"]').first().waitFor({ timeout: 15000 });
   const chip = (await page.locator('[data-testid="credit-note-chip"]').first().innerText()).trim();
   await browser.close();

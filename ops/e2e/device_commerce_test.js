@@ -294,7 +294,7 @@ const lineOn = (entry, code) => (entry.lines || []).find((l) => l.accountCode ==
   await shop.fill('input[name="password"]', 'paula');
   await shop.click('input[type="submit"], button[type="submit"]');
   await shop.waitForSelector('.nav', { timeout: 30000 });
-  await shop.click('.nav >> text=My devices');
+  await shop.click('[data-testid=\"profile-menu\"] summary'); await shop.click('[data-testid=\"profile-menu\"] >> text=\"My devices\"');
   const card = shop.locator('[data-testid^="device-agreement-"]').first();
   await card.waitFor({ timeout: 20000 }).catch(() =>
     fail('shop /devices shows no agreement card for paula — is seed_device_commerce.py applied?'));

@@ -9,6 +9,7 @@ import { CART_EVENT, cartCount, cartLines, claimCart, markCartCheckedOut } from 
 import { PAYMENT_REQUIRED, performCheckout } from './checkout.js';
 import { takePendingCheckout } from './pending.js';
 import Shop from './pages/Shop.jsx';
+import Home from './pages/Home.jsx';
 import Offering from './pages/Offering.jsx';
 import FamilyMember from './pages/FamilyMember.jsx';
 import Family from './pages/Family.jsx';
@@ -110,33 +111,42 @@ export default function App() {
           <img className="brandlogo" src={window.BSS_STOREFRONT_CONFIG?.logoUrl || '/tmf-api/documentManagement/v4/document/brand-logo'} alt="" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="area">shop</span>
         </div>
-        <nav className="nav">
-          <NavLink to="/" end>{t('Offers')}</NavLink>
-          <NavLink to="/cart" className="cartlink">
-            {t('Cart')}{count > 0 && <span className="badge">{count}</span>}
-          </NavLink>
-          {customer && (
+        {/* five recurring customer jobs; session mechanics (cart, inbox, profile) live in the header utilities */}
+        <nav className="nav" aria-label="Main">
+          {customer ? (
             <>
-              <NavLink to="/orders">{t('My orders')}</NavLink>
-              <NavLink to="/bills">{t('My bills')}</NavLink>
-              <NavLink to="/services">{t('My page')}</NavLink>
-              <NavLink to="/devices">{t('My devices')}</NavLink>
-              <NavLink to="/family">{t('Family')}</NavLink>
-              <NavLink to="/notifications" className="cartlink">
-                {t('Inbox')}{unread > 0 && <span className="badge">{unread}</span>}
-              </NavLink>
+              <NavLink to="/" end>{t('Home')}</NavLink>
+              <NavLink to="/services">{t('Services')}</NavLink>
+              <NavLink to="/bills">{t('Billing')}</NavLink>
+              <NavLink to="/shop">{t('Shop')}</NavLink>
             </>
+          ) : (
+            <NavLink to="/" end>{t('Shop')}</NavLink>
           )}
           <NavLink to="/support">{t('Support')}</NavLink>
-          {customer && <NavLink to="/account">{t('Account')}</NavLink>}
         </nav>
         <div className="who">
           <HelpDrawer />
+          <NavLink to="/cart" className="cartlink utility" aria-label={t('Cart')} title={t('Cart')}>
+            <span className="glyph" aria-hidden="true">🛍</span><span className="utext">{t('Cart')}</span>{count > 0 && <span className="badge">{count}</span>}
+          </NavLink>
           {customer ? (
             <>
-              <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
-              <span className="user">{claims.name || claims.preferred_username || ''}</span>
-              <button className="ghost" onClick={signOut}>{t('Sign out')}</button>
+              <NavLink to="/notifications" className="cartlink utility" aria-label={t('Inbox')} title={t('Inbox')}>
+                <span className="glyph" aria-hidden="true">🔔</span><span className="utext">{t('Inbox')}</span>{unread > 0 && <span className="badge">{unread}</span>}
+              </NavLink>
+              <details className="profile" data-testid="profile-menu">
+                <summary aria-label={t('Account')}>
+                  <span className="avatar" data-testid="avatar">{(claims.given_name?.[0] || claims.preferred_username?.[0] || '?').toUpperCase()}{(claims.family_name?.[0] || '').toUpperCase()}</span>
+                  <span className="user">{claims.name || claims.preferred_username || ''}</span>
+                </summary>
+                <div className="menu" role="menu">
+                  {[['/account', t('Account')], ['/orders', t('My orders')], ['/devices', t('My devices')], ['/family', t('Family')]].map(([to, label]) => (
+                    <button key={to} className="ghost" role="menuitem" onClick={(e) => { e.currentTarget.closest('details')?.removeAttribute('open'); navigate(to); }}>{label}</button>
+                  ))}
+                  <button className="ghost" role="menuitem" onClick={signOut}>{t('Sign out')}</button>
+                </div>
+              </details>
             </>
           ) : staffInShop ? (
             <button className="primary" data-testid="switch-account" onClick={switchAccount}>Switch to a customer account</button>
@@ -151,9 +161,10 @@ export default function App() {
           shopping account. Browse freely, but to buy or manage a subscription, switch to a customer account.
         </div>
       )}
-      <main>
+      <main onClick={() => { document.querySelectorAll('details.profile[open]').forEach((d) => d.removeAttribute('open')); }}>
         <Routes>
-          <Route path="/" element={<Shop />} />
+          <Route path="/" element={customer ? <Home /> : <Shop />} />
+          <Route path="/shop" element={<Shop />} />
           <Route path="/offering/:id" element={<Offering />} />
           <Route path="/family" element={<Family />} />
           <Route path="/family/:id" element={<FamilyMember />} />

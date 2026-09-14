@@ -43,7 +43,7 @@ export default function Bills() {
 
   if (error && !bills) return <p className="error">{error}</p>;
   if (!bills) return <p className="dim">Loading your bills…</p>;
-  if (!bills.length) return <p className="dim">No bills yet — they appear after each billing period.</p>;
+  if (!bills.length) return <p className="dim" data-testid="bills-empty">No bills yet. Your first bill comes at the end of your first billing period and covers only the days since your service started — nothing is charged before then.</p>;
 
   async function toggleRates(bill) {
     if (rates[bill.id]) {
@@ -171,7 +171,7 @@ export default function Bills() {
           {promiseErr && <p className="error small" data-testid="promise-error" style={{ margin: '6px 0 0' }}>{promiseErr}</p>}
         </div>
       )}
-      <h1>My bills
+      <h1>{t('Billing')}
         <button className="ghost" data-testid="change-billing-day" style={{ marginLeft: 12, fontSize: 13 }}
           onClick={async () => {
             const day = window.prompt('Which day of the month should your billing cycle start? (1-28)');

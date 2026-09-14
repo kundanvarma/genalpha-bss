@@ -288,8 +288,14 @@ public class RecommendationService {
         if (cap == null) {
             return out;
         }
-        ComponentClient.Reply reply = client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
-                Map.of(), Map.of("limit", "100"), null, caller.bearer(), Map.of());
+        // a customer may not read the network's problem list, but may be told about an incident on their OWN
+        // line: the registry reads with its own account and the caller only ever sees problems matched to
+        // their services (the match happens in forCustomer, on the customer's own service ids)
+        ComponentClient.Reply reply = caller.isCustomer()
+                ? client.callAsMachine(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                        Map.of("limit", "100"), null, Map.of())
+                : client.call(cap.path("component").asText(), "GET", cap.path("route").path("path").asText(),
+                        Map.of(), Map.of("limit", "100"), null, caller.bearer(), Map.of());
         if (!reply.ok() || !reply.body().isArray()) {
             return out;
         }

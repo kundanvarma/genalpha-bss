@@ -34,7 +34,7 @@ async function shopLogin(page, user, pass) {
     const s = await sp.evaluate(() => ({
       banner: !!document.querySelector('[data-testid=staff-in-shop]'),
       sw: !!document.querySelector('[data-testid=switch-account]'),
-      myOrders: document.body.innerText.includes('My orders'),
+      myOrders: document.body.innerText.includes('Billing'),
       avatar: !!document.querySelector('[data-testid=avatar]'),
     }));
     if (!s.banner) fail('no staff-in-shop banner for a staff session');
@@ -49,7 +49,7 @@ async function shopLogin(page, user, pass) {
     await shopLogin(cp, 'kai@bss.local', 'kai');
     const c = await cp.evaluate(() => ({
       banner: !!document.querySelector('[data-testid=staff-in-shop]'),
-      myOrders: document.body.innerText.includes('My orders'),
+      myOrders: document.body.innerText.includes('Billing'),
       avatar: !!document.querySelector('[data-testid=avatar]'),
     }));
     if (c.banner) fail('a real customer wrongly saw the staff banner');
