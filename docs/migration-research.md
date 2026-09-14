@@ -31,7 +31,11 @@ value patterns, code lists) and **aggregate reports** (counts, sums,
 reason-code histograms), never a row. That keeps us outside the data, out
 of the GDPR processor role for the migration, and outside the Norwegian
 telecom secrecy perimeter, and it means the operator can run it whether or
-not we are on the phone.
+not we are on the phone. In addition, the kit carries a **local mapping
+assistant**: a model running inside the operator's own network that may
+read the real rows and the vendor's data dictionary, proposes the mapping
+with evidence, and never executes anything. The operator gets model help
+on their data; the vendor still sees none of it.
 
 ---
 
@@ -269,6 +273,20 @@ A container the operator runs inside their tenancy. Nothing calls home.
   confirms it in the console; the kit executes it. Vendor starter
   packs for the sources in §3 ship as mapping specs, so BSCS or Kenan
   extracts need edits, not authoring.
+- **Local mapping assistant, in addition.** A model inside the
+  operator's network (Ollama or vLLM behind the intelligence service's
+  provider seam, chosen per tenant) reads the staged rows and the
+  vendor's dictionary under the operator's own NDA, which the vendor
+  cannot. It proposes column mappings with confidence and the sample
+  values as evidence, infers value maps from real distributions, drafts
+  transforms and edge-case rules, and explains rejects in plain
+  language. It has no tool that writes: it cannot load, cannot call a
+  door, cannot produce a balance or a term date. The analyst confirms,
+  the runner applies. Its accuracy is scored on the synthetic twin, where
+  ground truth is known, before it is trusted on the real extract. The
+  audit trail records the tier used: hosted on profile only, local on
+  rows, or none. A 30B-class open model at 4-bit on one 24 GB GPU is
+  enough for a few hundred columns.
 - **Manifest with control totals.** Per file: row count, SHA-256, sums
   (open receivables, monthly recurring, prepaid balances), hash total
   over legacy ids, as-of date, cutover date. The loader refuses on any

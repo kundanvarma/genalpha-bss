@@ -14,7 +14,11 @@ tenant's own database, dependency-ordered loading through the existing
 front doors, row-level rejects with a closed reason enum, an exportable
 legacy-id crosswalk, a reconciliation desk with gates and named sign-off,
 and the billing rehearsal and base-migration waves reused as the simulate
-and cut-over steps. Then the pieces nobody else has: the customer sees
+and cut-over steps. In addition, a **local mapping assistant**: a model
+inside the operator's network that reads the real rows and the vendor's
+dictionary and proposes the mapping with evidence, while the hosted
+assistant only ever sees the schema profile. Then the pieces nobody else
+has: the customer sees
 their own migration, legacy numbers work forever, migration on touch
 through the bridge, a synthetic twin of the base for rehearsal, and the
 same kit run backwards as the exit.
@@ -124,6 +128,33 @@ same kit run backwards as the exit.
     from base-migration reused; breaker also listens to signal
     intelligence (complaint classification).
 
+### The local mapping assistant (part of the kit, shipped with it)
+
+11b. **Local mapping assistant.** In addition to the profile-only hosted
+    path, the kit ships with a model runner configuration for a model
+    inside the operator's network (Ollama or vLLM, any OpenAI-compatible
+    endpoint, wired through the intelligence service's provider seam and
+    selected per tenant). It gets the canonical dictionary, the starter
+    pack for the source, the operator's own vendor dictionary if they
+    have it, and the real staged rows. It produces: the mapping proposal
+    with confidence and the sample values that led to each line; value
+    maps from real distributions (status codes, plan codes, reason
+    codes); transform drafts (dates, E.164, name and address splitting);
+    census rules; and plain-language explanations of rejects in the desk.
+    The desk shows the evidence next to every proposed line and the
+    analyst accepts, edits or rejects it; nothing is applied until
+    confirmed. The model has no tool that writes: it cannot load, cannot
+    call a door, cannot produce a balance or a term date (those are
+    copied and checked by control totals). Its accuracy is scored on the
+    synthetic twin, where ground truth is known, before it is trusted on
+    the real extract, and the score is kept with the run. The audit trail
+    records which tier was used (hosted on profile, local on rows, none)
+    and that nothing was retained for training. Sizing: a 30B-class open
+    model at 4-bit on one 24 GB GPU; a 7B to 14B model is enough for the
+    header-to-field step when the dictionary and few-shot examples are
+    good. The hosted assistant can still review the finished spec for
+    structural sanity against the ontology without seeing a row.
+
 ### Phase 3 — beyond current practice
 
 12. **"Your account moved"** page in the shop: old and new bill for the
@@ -177,7 +208,7 @@ export round-trips. Existing suites unchanged and green.
 | Phase | Items | Effort | Demo impact |
 |---|---|---|---|
 | 1 doors | 1–4 | one evening | none: nullable columns, flag off |
-| 2 kit | 5–11 | two evenings | none: new service and desk |
+| 2 kit | 5–11, 11b | two to three evenings | none: new service and desk; the local model is a per-tenant provider setting |
 | 3 beyond | 12–17 | two to three evenings | none: shop page and bridge seam only appear for migrated tenants |
 
 Order of build: 1 → 2 → 10 → 5–9 → 11 → 12 → 14 → 13 → 15 → 16 → 17.
@@ -203,6 +234,7 @@ Order of build: 1 → 2 → 10 → 5–9 → 11 → 12 → 14 → 13 → 15 → 
 | M15 | Read-through bill history | 3 | planned |
 | M16 | Exit kit (export direction) | 3 | planned |
 | M17 | Identity re-link on first login | 3 | planned |
+| M20 | Local mapping assistant: per-tenant local model config, dictionary + starter-pack prompting, evidence panel in the desk, accuracy scoring on the synthetic twin, tier recorded in the audit trail | 2 | planned |
 | M18 | Suite #130, docs/migration-kit.md, manual chapter, README, capability map | all | planned |
 | M19 | Deploy to the demo box after the demo; re-seed Taranga unchanged | ops | after demo |
 
