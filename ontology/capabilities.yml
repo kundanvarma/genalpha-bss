@@ -341,3 +341,20 @@ capabilities:
     meaning: List service problems — open incidents with the service or area they affect.
     route: { method: GET, path: /tmf-api/serviceProblemManagement/v4/serviceProblem }
     roles: [assurance:read]
+
+  # the equipment seam: what the ACS knows about the router on a broadband line, and the restart
+  - id: cpe.status
+    version: 1
+    component: service-orchestration
+    kind: tmf-api
+    tmf: TMF638 Service Inventory (house extension — the equipment on the line)
+    meaning: the router or ONT on this line as the ACS sees it — online, uptime, firmware, Wi-Fi clients
+    route: { method: GET, path: "/tmf-api/serviceInventory/v4/service/{id}/cpe" }
+    roles: [service:read]
+  - id: cpe.restart
+    version: 1
+    component: service-orchestration
+    kind: house-api
+    tmf: TMF638 Service Inventory (house verb)
+    meaning: restart the router on this line — the customer on their own line, or care
+    route: { method: POST, path: "/tmf-api/serviceInventory/v4/service/{id}/cpe/restart" }

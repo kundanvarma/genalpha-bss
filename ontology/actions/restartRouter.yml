@@ -1,0 +1,31 @@
+action: restartRouter
+version: 1
+introduced: 2026-09-14
+status: active
+meaning: Restart the router or ONT on a broadband line through the operator's equipment system — the first thing to try when the network is fine and the customer's box is not.
+intent: A slow or dead home connection with no outage on the path; a customer or an agent restarts the box without a truck roll.
+concept: Service
+inputs:
+  - { name: serviceId, type: ref, concept: Service, required: true, meaning: the broadband line whose router is restarted }
+preconditions:
+  - id: line-active
+    check: state
+    concept: Service
+    of: serviceId
+    in: [active]
+    says: only an active line's router can be restarted — a paused line has nothing to restart
+permissions:
+  anyOf:
+    - { self: owner }
+    - { role: service:write }
+governance: { autonomy: low, approval: none, audit: mandatory }
+executes:
+  capability: cpe.restart
+  pathVars: { id: "${serviceId}" }
+  template: {}
+effects: []
+emits:
+  - { event: CpeRestartedEvent, component: service-orchestration, meaning: "the restart was sent to the equipment system; the box is back within a minute" }
+  - { event: DecisionRecordedEvent, component: ontology }
+outcome: { concept: Service, settles: CpeRestartedEvent }
+pages: [csr:customers, shop:services]

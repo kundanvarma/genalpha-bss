@@ -461,7 +461,13 @@ export default function Services() {
         <section className="card" data-testid="broadband-card" style={{ padding: '14px 18px', marginBottom: 14 }}>
           <h2 style={{ marginTop: 0 }}>{t('Broadband')}</h2>
           {rowsOf(broadband)}
-        </section>
+                  {services.filter((sv) => sv.state === 'active' && /broadband|fib|dsl|internet/i.test(`${sv.category || ''} ${sv.name || ''}`)).map((sv) => (
+            <div key={sv.id} className="row" data-testid="broadband-line">
+              <span>{sv.name}<span className="dim small" style={{ display: 'block' }}><RouterPanel serviceId={sv.id} /></span></span>
+              <LineDoctor serviceId={sv.id} />
+            </div>
+          ))}
+</section>
       )}
 
       {entertainment.length > 0 && (
@@ -719,6 +725,7 @@ export function LineDoctor({ serviceId }) {
             <li key={i} className={f.severity === 'cause' ? 'error' : 'dim'}
                 data-testid={`finding-${f.code}`}>
               {f.message}
+              {f.code === 'routerOffline' && <> <RouterPanel serviceId={serviceId} compact /></>}
             </li>
           ))}
         </ul>

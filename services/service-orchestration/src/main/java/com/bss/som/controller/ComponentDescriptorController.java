@@ -23,7 +23,7 @@ import java.util.TreeSet;
 public class ComponentDescriptorController {
 
     public static final String WELL_KNOWN = "/.well-known/genalpha-component.json";
-    private static final List<String> EVENTS = List.of("IntentCreateEvent", "NumberChangedEvent", "ProviderAccessOrderStateChangeEvent", "ServiceAttributeValueChangeEvent", "ServiceOrderStateChangeEvent", "ServiceRestrictedEvent", "ServiceResumedEvent", "ServiceSliceChangeEvent", "ServiceSliceRefusedEvent", "ServiceSuspendedEvent", "ServiceTerminatedEvent", "ServiceTransferredEvent", "ServiceUnrestrictedEvent", "SimPinResetEvent", "SimReplacedEvent", "TelesalesOfferEvent", "WholesaleAccessOrderStateChangeEvent");
+    private static final List<String> EVENTS = List.of("IntentCreateEvent", "NumberChangedEvent", "ProviderAccessOrderStateChangeEvent", "ServiceAttributeValueChangeEvent", "ServiceOrderStateChangeEvent", "ServiceRestrictedEvent", "ServiceResumedEvent", "ServiceSliceChangeEvent", "CpeRestartedEvent", "ServiceSliceRefusedEvent", "ServiceSuspendedEvent", "ServiceTerminatedEvent", "ServiceTransferredEvent", "ServiceUnrestrictedEvent", "SimPinResetEvent", "SimReplacedEvent", "TelesalesOfferEvent", "WholesaleAccessOrderStateChangeEvent");
 
     private final RequestMappingHandlerMapping mappings;
 

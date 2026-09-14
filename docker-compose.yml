@@ -1301,6 +1301,7 @@ services:
       # the device-entitlement server: SIM ↔ line ↔ plan bindings at activation
       ENTITLEMENT_BASE_URL: http://device-entitlement:8080
       SLICE_BASE_URL: http://mock-5gc:8080
+      CPE_BASE_URL: http://mock-acs:8080
       PARTY_BASE_URL: http://party-account:8080
       ASSURANCE_BASE_URL: http://assurance:8080
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -2153,6 +2154,17 @@ services:
   # that points its schedule provider here (console → Installers → provider
   # tmf646) gets ITS calendar, not the BSS roster. Real: ServiceNow FSM,
   # Oracle Field Service, Salesforce Field Service behind the same seam.
+  # The operator's auto-configuration server (TR-069 / USP), mocked: what the
+  # ACS knows about the router or ONT on a broadband line — reachable, uptime,
+  # firmware, Wi-Fi clients — and the reboot care asks for. The equipment seam
+  # target; real: Axiros, Friendly, Calix, Nokia Altiplano. :8162
+  mock-acs:
+    build: ./integrations/mock-acs
+    container_name: bss-mock-acs
+    restart: unless-stopped
+    ports:
+      - "8162:8080"
+
   mock-fsm:
     build: ./integrations/mock-fsm
     container_name: bss-mock-fsm

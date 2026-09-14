@@ -7,9 +7,9 @@ meaning: The customer's own Home in the shop and app — is everything okay, and
 intent: Exception-first self-service — attention items only when relevant, one commercial suggestion below the customer's needs, never a sale before the situation.
 runsAs: caller
 autonomy: advisory
-reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, productCatalog.offerings]
+reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, productCatalog.offerings]
 actions:
-  check: [upgradeSubscription]
+  check: [restartRouter, upgradeSubscription]
   execute: []
 uses: [for-you-caption]
 component: storefront

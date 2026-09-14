@@ -508,3 +508,7 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .lead-why { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--teal-soft); }
 .lead-why .assist-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--teal-text); margin-bottom: 4px; }
 .lead-why p { margin: 4px 0; }
+
+.router { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.router .ok { color: var(--ok); font-weight: 600; } .router .error { font-weight: 600; }
+.router button { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }

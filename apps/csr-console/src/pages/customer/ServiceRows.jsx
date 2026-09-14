@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hasRole } from '../../auth.js';
 import { simOf, resetSimPin, replaceSim, changeNumber, suspendService, resumeService, transferService,
-  findCustomerByEmail, diagnoseService, ceaseService, logInteraction } from '../../api.js';
+  findCustomerByEmail, diagnoseService, ceaseService, logInteraction, routerOf, restartRouter } from '../../api.js';
 
 /* Capability-driven service rows. What a service IS decides which actions exist
  * on it: a PUK belongs to a SIM, a Wi-Fi check to a broadband line, a channel
@@ -32,6 +32,11 @@ const party = (id) => [{ id, role: 'customer', '@referredType': 'Individual' }];
 /** The row's own facts: what the agent needs to tell services apart without opening anything. */
 export function ServiceFacts({ sv, usage = [] }) {
   const kind = serviceKind(sv);
+  const [box, setBox] = useState(undefined); // the router on a broadband line, from the equipment seam
+  useEffect(() => {
+    if (kind !== 'broadband' || sv.state !== 'active') { setBox(null); return; }
+    routerOf(sv.id).then(setBox).catch(() => setBox(null));
+  }, [sv.id, sv.state]);
   const ch = charsOf(sv);
   const number = numberOf(sv);
   const place = placeOf(sv);
@@ -52,6 +57,11 @@ export function ServiceFacts({ sv, usage = [] }) {
         </span>
       )}
       {sv.state === 'suspended' && <span className="error">paused</span>}
+      {box && (
+        <span className={box.state === 'online' ? 'ok' : box.state === 'rebooting' ? 'dim' : 'error'} data-testid={`csr-router-${box.state}`} title={`${box.model} · firmware ${box.firmware}${box.firmwareOutdated ? ' (update pending)' : ''}`}>
+          {box.state === 'online' ? `● router online · ${Math.floor((box.uptimeSeconds || 0) / 86400)} d · ${box.wifiClients} on Wi-Fi` : box.state === 'rebooting' ? '◌ router restarting' : `○ router OFFLINE since ${box.lastSeen ? new Date(box.lastSeen).toLocaleTimeString() : '?'}`}
+        </span>
+      )}
     </span>
   );
 }
@@ -93,6 +103,18 @@ export function ServiceActions({ sv, id, act, puks, setPuks, onDiagnosis, compac
           }, 'services');
         }}>
       Replace SIM
+    </button>
+  );
+  const restartBox = kind === 'broadband' && (
+    <button className="ghost" data-testid="csr-restart-router" key="router" disabled={!active} title={why || 'Restart the router through the equipment system — the first thing to try when the network is fine and the box is not'}
+        onClick={() => {
+          if (!window.confirm(`Restart the router on ${sv.name}? The customer's connection drops for about a minute.`)) return;
+          act(async () => {
+            const r = await restartRouter(sv.id);
+            await logInteraction({ description: `Router restarted on ${sv.name}: ${r.said || 'sent'}`, channel: 'phone', direction: 'outbound', sourceSystem: 'csr-console', relatedParty: party(id) });
+          }, 'services');
+        }}>
+      Restart router
     </button>
   );
   const resume = paused && (
@@ -151,13 +173,15 @@ export function ServiceActions({ sv, id, act, puks, setPuks, onDiagnosis, compac
 
   // compact (Overview): two direct actions — Diagnose and the commercial one (upgrade); SIM work waits under More…
   if (compact && replaceSimBtn) more.unshift(replaceSimBtn);
+  if (compact && restartBox) more.unshift(restartBox);
   return (
     <div className="rowend svc-actions">
       <span className={`state ${sv.state}`}>{sv.state}</span>
       {resume}
       {diagnose}
-      {compact ? extra : replaceSimBtn}
+      {compact ? extra : (replaceSimBtn || restartBox)}
       {!compact && extra}
+      {!compact && replaceSimBtn && restartBox}
       {!compact || more.length ? (
         <details className="more" data-testid="csr-more-actions">
           <summary className="ghost">More…</summary>

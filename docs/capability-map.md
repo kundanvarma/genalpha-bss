@@ -93,6 +93,7 @@ by a numbered suite** · ◐ partial / shaped seam (honest note attached)
 | Qualify serviceability (commercial) | TMF679 | `qualification` | ✅ |
 | Qualify service delivery (technical: technology, bandwidth, alternative) | TMF645 Service Qualification | `qualification` coverage map | ✅ #79/#80 (never a bare no — the best available technology proposed on refusal; ordering gates every placed item at create; the cart names technology + speed) |
 | Schedule installations | TMF646 | `appointment` | ✅ per-tenant calendar (timezone, working days, windows, horizon) + technician roster from which window capacity is DERIVED (`scheduleConfig`, `technician`, console Installers pane) + the FIELD-SERVICE SEAM: `provider: tmf646` delegates search/book/cancel to the operator's Workforce Management (TMFC046) over TMF646, dev stand-in `mock-fsm` (❌ vendor-native adapters, slot holds, dispatch/routing — see docs/field-service-seam.md) |
+| Customer premises equipment (router/ONT state, restart) | service-orchestration → ACS seam (`CPE_BASE_URL`; mock-acs) | ✅ #129 `cpe_test` — [equipment seam](equipment-seam.md) |
 | Ship & install what was sold | TMF700 Shipping Order + TMF697 Work Order | `fulfilment` (#37) | ✅ #73 (parcel + visit as resources, warehouse/installer API, machine completion when both gates pass, milestones on the process timeline; customers track deliveries) |
 | Network inventory (physical/logical), mediation (CDR pipelines) | — | — | ❌ real OSS estate — or wrap it (suite #67 pattern) |
 

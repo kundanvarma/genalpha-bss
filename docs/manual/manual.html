@@ -190,6 +190,13 @@ customer's timeline:</p>
 <tr><td>"my internet is slow"</td><td>Diagnose (triage across usage/assurance/network facts)</td></tr>
 <tr><td>"give my number to my colleague"</td><td>Transfer (three-way authorization; B2B handover keeps the company paying)</td></tr>
 </table>
+<p><b>The box at the customer's end (2026-09-14).</b> Most "my internet is dead" calls are the router, not
+the network. Through the <b>equipment seam</b> (the operator's ACS — TR-069/USP; <code>mock-acs</code> in the
+fleet) the BSS sees the router or ONT on a broadband line: online or offline, uptime, firmware, Wi-Fi clients.
+The line check names an offline router as the cause and says the network side is fine; <b>Restart router</b>
+is on the customer's Home card, in the line check, and on the care desk's service row, and it is a governed
+action (<code>restartRouter</code>: the owner or <code>service:write</code>, only on an active line, receipted).
+Suite #129; <code>docs/equipment-seam.md</code>.</p>
 <p class="dim">Self-care mirrors most of these in the shop and app — customers act on their OWN
 line (ownership-checked; a foreign line answers 404, never 403).</p>
 <h3>The workspace — who is this, what is happening, what next</h3>

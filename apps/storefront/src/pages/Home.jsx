@@ -6,6 +6,7 @@ import { myProducts, myActiveServices, myUsage, myBills, myOrders, myTickets, my
   myCollectionCase, forYou, myRecommendations, listOfferings, loyaltyProgram, myLoyalty, mySpendPolicy,
   myHomeContext, resumeMyService, mySim, myAgreements } from '../api.js';
 import { LineDoctor } from './Services.jsx';
+import RouterPanel from './RouterPanel.jsx';
 
 /* Home — the customer's first screen answers two questions: is everything
  * okay, and what should I do next. Exception-first: the attention zone is empty
@@ -45,6 +46,7 @@ function Meter({ label, used, allowed, units, warn }) {
 export default function Home() {
   const claims = tokenClaims();
   const me = claims.sub;
+  const [loaded, setLoaded] = useState(false); // the record has answered at least once — no 'nothing active' before then
   const [d, setD] = useState({ products: [], services: [], usage: [], agreements: [], bills: [], orders: [], tickets: [], appointments: [], notifications: [], ccase: null, offerings: {}, personal: null, recIds: [], program: null, loyalty: null, spend: [] });
   const [ctx, setCtx] = useState(null); // the ontology's reading; null = reading, {} = unavailable
   const [busy, setBusy] = useState(false);
@@ -62,6 +64,7 @@ export default function Home() {
       const recIds = personal && personal.items?.length ? personal.items.map((i) => i.id) : (recs[0]?.recommendationItem?.map((i) => i.offering.id) || []);
       // the usage report wraps its meters in `bucket`
       const buckets = Array.isArray(usage) ? usage : (usage && Array.isArray(usage.bucket) ? usage.bucket : []);
+      setLoaded(true);
       setD({ products, services: Array.isArray(services) ? services : [], usage: buckets, agreements: Array.isArray(agreements) ? agreements : [], bills, orders, tickets: Array.isArray(tickets) ? tickets : [], appointments: Array.isArray(appointments) ? appointments : [], notifications: Array.isArray(notifications) ? notifications : [], ccase, offerings: index, personal, recIds, program, loyalty, spend: Array.isArray(spend) ? spend : [] });
     });
     setCtx(null);
@@ -153,7 +156,8 @@ export default function Home() {
       {/* my services */}
       <section data-testid="home-services">
         <h2>{t('My services')} <Link className="dim small" to="/services">{active.length > 6 ? `${t('All')} ${active.length} →` : `${t('Manage')} →`}</Link></h2>
-        {!cards.length && <p className="dim">{t('Nothing active yet — your plan appears here once an order completes.')} <Link to="/shop">{t('Shop')} →</Link></p>}
+        {!loaded && !cards.length && <p className="dim small">{t('Reading your services…')}</p>}
+        {loaded && !cards.length && <p className="dim">{t('Nothing active yet — your plan appears here once an order completes.')} <Link to="/shop">{t('Shop')} →</Link></p>}
         <div className="cards services">
           {cards.map((sv) => {
             const kind = kindOf(sv);
@@ -170,6 +174,7 @@ export default function Home() {
                   {number && <span className="msisdn">{number}</span>}
                   {kind === 'broadband' && placeOf(sv) && <span>{placeOf(sv)}</span>}
                   {kind === 'broadband' && speedOf((product || sv).name) && <span>{speedOf((product || sv).name)}</span>}
+                  {kind === 'broadband' && sv.state === 'active' && <RouterPanel serviceId={sv.id} compact />}
                   {kind === 'mobile' && dataBucket && <span className={nearLimit ? 'error' : ''}>{Math.max(0, dataAllowed - dataUsed)} {dataBucket.units} {t('data left')}</span>}
                   {kind === 'mobile' && sims[sv.id] && <span>SIM {sims[sv.id]}</span>}
                   {commitmentOf((product || sv).name) && <span>{t('commitment until')} {String(commitmentOf((product || sv).name).agreementPeriod.endDateTime).slice(0, 10)}</span>}

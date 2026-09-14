@@ -15,6 +15,7 @@ import com.bss.som.security.TenantScope;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -35,6 +36,9 @@ public class SomController {
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
     private final com.bss.som.events.DomainEventPublisher events;
+    /** the equipment seam — field-injected so the wide constructor stays as it is */
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bss.som.client.CpeClient cpe;
     private final com.bss.som.service.OrchestrationService orchestration;
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.SimPlatformClient simPlatform;
@@ -487,6 +491,29 @@ public class SomController {
             }
         }
 
+        // the box at the customer's end: a broadband line whose router is offline is not a network fault
+        if ("broadband".equals(categoryOf(instance.getName())) && cpe != null && cpe.enabled()) {
+            var box = cpe.state(tenant, id);
+            if (box.isEmpty()) {
+                findings.add(Map.of("code", "routerUnreachable", "severity", "caution",
+                        "message", "Could not reach the equipment system to check your router right now."));
+            } else if ("offline".equals(box.get().state())) {
+                findings.add(Map.of("code", "routerOffline", "severity", "cause",
+                        "message", "Your router (" + box.get().model() + ") is OFFLINE — the network side is fine."
+                                + " Check its power and cable, or restart it from here; last seen " + box.get().lastSeen() + "."));
+                if ("allClear".equals(verdict)) {
+                    verdict = "routerOffline";
+                }
+            } else if ("rebooting".equals(box.get().state())) {
+                findings.add(Map.of("code", "routerRebooting", "severity", "caution",
+                        "message", "Your router is restarting — give it a minute."));
+            } else {
+                findings.add(Map.of("code", "routerOnline", "severity", "info",
+                        "message", "Router " + box.get().model() + " online, up " + (box.get().uptimeSeconds() / 86400) + " day(s), "
+                                + box.get().wifiClients() + " device(s) on Wi-Fi" + (box.get().firmwareOutdated() ? " — a firmware update is pending" : "") + "."));
+            }
+        }
+
         diagnostics.bucketOf(tenant, id).ifPresent(bucket -> {
             double used = asDouble(bucket.get("usedGB"));
             double total = asDouble(bucket.get("totalGB")) + asDouble(bucket.get("rolloverGB"));
@@ -527,6 +554,52 @@ public class SomController {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** The router or ONT on this line, as the ACS sees it — the customer's own, or any line for staff. */
+    @GetMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/cpe")
+    public ResponseEntity<Map<String, Object>> cpeState(@PathVariable String id) {
+        ServiceInstance instance = requireOwnService(id);
+        if (cpe == null || !cpe.enabled()) {
+            return ResponseEntity.notFound().build();
+        }
+        var box = cpe.state(tenantScope.currentTenantId(), instance.getId());
+        if (box.isEmpty()) {
+            return ResponseEntity.status(503).body(Map.of("code", "503", "reason", "equipment system unreachable", "@type", "Error"));
+        }
+        var b = box.get();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("serviceId", instance.getId());
+        out.put("state", b.state());
+        out.put("uptimeSeconds", b.uptimeSeconds());
+        out.put("firmware", b.firmware());
+        out.put("firmwareOutdated", b.firmwareOutdated());
+        out.put("wifiClients", b.wifiClients());
+        out.put("model", b.model());
+        out.put("serial", b.serial());
+        out.put("lastSeen", b.lastSeen());
+        out.put("@type", "CustomerPremisesEquipment");
+        return ResponseEntity.ok(out);
+    }
+
+    /** Restart the router on this line — the customer on their own line, or care; logged as an event. */
+    @PostMapping(ApiConstants.INVENTORY_BASE + "/service/{id}/cpe/restart")
+    public ResponseEntity<Map<String, Object>> cpeRestart(@PathVariable String id) {
+        ServiceInstance instance = requireOwnService(id);
+        if (cpe == null || !cpe.enabled()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!"active".equalsIgnoreCase(instance.getState())) {
+            return ResponseEntity.status(409).body(Map.of("code", "409", "reason", "the line is not active", "@type", "Error"));
+        }
+        boolean accepted = cpe.reboot(tenantScope.currentTenantId(), instance.getId());
+        if (!accepted) {
+            return ResponseEntity.status(503).body(Map.of("code", "503", "reason", "the equipment system did not accept the restart", "@type", "Error"));
+        }
+        events.publish("CpeRestartedEvent", "service", Map.of("id", instance.getId(), "name", instance.getName(),
+                "relatedParty", java.util.List.of(Map.of("id", String.valueOf(instance.getOwnerPartyId()), "role", "customer"))));
+        return ResponseEntity.accepted().body(Map.of("serviceId", instance.getId(), "state", "rebooting",
+                "said", "Restart sent to the router — it is back in about a minute.", "@type", "CpeRestart"));
     }
 
     private ServiceInstance requireOwnService(String serviceId) {
@@ -1023,7 +1096,7 @@ public class SomController {
         String n = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
         if (n.contains("mobile") || n.contains("phone") || n.contains("sim")) return "mobile";
         if (n.contains("broadband") || n.contains("fiber") || n.contains("fibre")
-                || n.contains("internet")) return "broadband";
+                || n.contains("internet") || n.contains("dsl")) return "broadband";
         if (n.contains("tv") || n.contains("netflix") || n.contains("stream")) return "tv";
         return "service";
     }

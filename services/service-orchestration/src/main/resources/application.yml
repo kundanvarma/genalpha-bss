@@ -71,6 +71,8 @@ bss:
     ocs-password: ${OCS_PASSWORD:}
     # 5G SA slice control (PCF/NSSF or a vendor slice manager); blank = no slicing here
     slice-base-url: ${SLICE_BASE_URL:}
+    # the equipment seam (ACS / TR-069): blank = no router state, no restarts
+    cpe-base-url: ${CPE_BASE_URL:}
     qualification-base-url: ${QUALIFICATION_BASE_URL:http://localhost:8080}
   wholesale:
     # open access: which owner-OSS integration to use — 'mock' activates instantly

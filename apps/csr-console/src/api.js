@@ -312,6 +312,18 @@ export async function changeNumber(serviceId) {
 
 /** Vacation hold: pause the line (charging pauses, number and SIM stay);
  * the hold lifts itself at the agreed date, or on request. */
+/** The router on a broadband line, as the ACS sees it (null = none / not answering). */
+export async function routerOf(serviceId) {
+  const res = await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/cpe`);
+  return res.ok ? res.json() : null;
+}
+
+export async function restartRouter(serviceId) {
+  return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/cpe/restart`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 export async function suspendService(serviceId, days) {
   return json(await authFetch(`/tmf-api/serviceInventory/v4/service/${serviceId}/suspend`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -7,10 +7,10 @@ meaning: The digital workforce — a worker the operator hires for a shift (care
 intent: An AI colleague that is metered, audited and revocable like a contractor.
 runsAs: machine:bss-worker
 autonomy: policy-autonomous
-reads: [party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read]
+reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read]
 actions:
-  check: [resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
-  execute: [resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
+  check: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
+  execute: [restartRouter, resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
 uses: []
 tools: [list_actions, explain, recommend, customer_context, available_upgrades]
 component: workforce

@@ -391,6 +391,18 @@ export async function diagnoseMyService(serviceId) {
 
 /** Cancel the subscription — the number is released. Keeping it means
  * your NEW operator ports it first; cancel after, never before. */
+/** The router on my broadband line, as the operator's equipment system sees it (null = none / not answering). */
+export async function myRouter(serviceId) {
+  const res = await authFetch(`${SERVICE_INV}/service/${serviceId}/cpe`);
+  return res.ok ? res.json() : null;
+}
+
+export async function restartMyRouter(serviceId) {
+  return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/cpe/restart`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  }));
+}
+
 export async function cancelMyService(serviceId) {
   return json(await authFetch(`${SERVICE_INV}/service/${serviceId}/terminate`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
