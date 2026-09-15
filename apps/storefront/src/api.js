@@ -1172,6 +1172,17 @@ export function stitchVisitor() {
 
 /** The customer's own reading of their situation from the operational ontology — the same context the care
  * desk's Assist reads, with the customer's token, signed as the registered shop-home agent. Fail-soft. */
+/** The customer's own verdict on a recommendation — accepted, deferred ("maybe later") or rejected ("not
+ * interested") — into the decision log the ranking learns from. Back/close is never sent: it is not a verdict. */
+export async function recommendationOutcome(decisionId, outcome, reason) {
+  if (!decisionId) return null;
+  const res = await authFetch(`/ontology/v1/context/recommendations/${encodeURIComponent(decisionId)}/outcome`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-GenAlpha-Agent': 'shop-home' },
+    body: JSON.stringify(reason ? { outcome, reason } : { outcome }),
+  });
+  return res.ok ? res.json() : null;
+}
+
 export async function myHomeContext(partyId) {
   const res = await authFetch(`/ontology/v1/context/customer/${encodeURIComponent(partyId)}/recommendations`, {
     headers: { 'X-GenAlpha-Agent': 'shop-home' },

@@ -25,8 +25,9 @@ family, sign out). A guest sees Shop and Support with the cart.
 
 The first screen answers "is everything okay, and what should I do next?"
 
-1. **Greeting and health.** "Good evening, Paula — Everything looks good" or
-   "2 things need your attention".
+1. **Greeting and health.** "Good evening, Paula — Everything looks good",
+   "Everything is working · 2 updates", or "1 thing needs your attention" —
+   counting *situations*, not events.
 2. **Attention**, only when relevant, each with its next step:
    - a known problem on *the customer's own line*: "We know about a problem on
      your line +47… Our network team is on it — you do not need to do anything."
@@ -36,8 +37,17 @@ The first screen answers "is everything okay, and what should I do next?"
      customer's Home say the same thing at the same moment. The registry reads
      the network's problem list with its own account and the customer only ever
      sees problems matched to their services.
-   - a paused line, with **Resume** right there;
-   - an overdue amount (the collections case) with **Pay now**, or an open bill;
+   - one paused line, with **Resume** right there; several paused lines as
+     *one* card — "2 services are paused — no charges apply while they are
+     paused" — with **Review services**, which opens the Services page on its
+     paused section (every paused service, Resume now, Resume all);
+   - the **effective money state**, read from the collection case rather than
+     the bill flag: overdue → "Payment overdue: 1 110.66 NOK. Settle it, or
+     agree a payment plan" with **Pay now**; a promise to pay → "Payment plan
+     agreed: 1 110.66 NOK by 2026-09-25. Nothing else is due until then" with
+     **Pay early** and *No action needed*; a broken promise → act now again,
+     with no page logic (the ladder cleared the promise); a dispute → "collection
+     waits while we look at it"; otherwise the open bill;
    - data nearly used up, with **Buy extra data**;
    - an order in progress; an open support case.
 3. **My services** as cards: kind, number, data left or address, state, and the
@@ -50,7 +60,46 @@ The first screen answers "is everything okay, and what should I do next?"
 5. **Open work**: orders in progress with a progress line, open cases, upcoming
    visits — or "No open work".
 6. **Recent activity**: the last five orders, messages and cases.
-7. **Recommended for you**: one to three, with the "why" caption. Always last.
+7. **Recommended for you**: placed by health. With a healthy account it sits
+   right under the services; with something open it drops below the
+   customer's needs; while something critical is open it is not shown at all.
+   One **best match** with its own reason, up to two alternatives with theirs.
+
+Three attention cards at most, the most serious first (critical → warning →
+info); the rest is "and 2 more — see all". Informational items are compact and
+say "No action needed".
+
+## Situations, not events
+
+The ontology's customer context now answers with a `summary` beside the
+per-line `situation`: one entry per kind with `severity` (critical, warning,
+info), `actionRequired`, `count`, `members` and words that fit the count. The
+care desk's Assist renders the same summary, so agent and customer read the
+same sentence. New situation kinds: `overdue`, `arranged`, `disputed` (from
+`billing.collectionCases`), beside `incident`, `paused`, `bill`. The response
+also carries `severity` (the worst) and `healthy`.
+
+## The offer page is a decision
+
+A recommendation on Home is a recommendation of the ontology (kind `offer`,
+action `considerOffer`, built from `recommendation.list`), so it carries a
+decision id and a reason. Opening it lands on the offer page with a decision
+block: why it was recommended, **Now** (what the customer holds in that
+category and its monthly price) versus **With this**, the commitment (from the
+offering's terms, or "No binding period"), when it takes effect (today; the
+next bill is split at the change date). Three honest outcomes: **Add to cart**
+(accepted), **Maybe later** (deferred — off Home for 30 days), **Not
+interested** (rejected — not suggested again). **Back** is not a verdict and
+logs nothing. Outcomes go through `POST /ontology/v1/context/recommendations/
+{decisionId}/outcome` into the decision log the desk's ranking reads, so the
+loop now learns from customers as well as agents. Offers are never shown while
+something critical is open.
+
+Proof: `ops/e2e/home_attention_test.js` (#130) — two paused lines become one
+card; Review services → Resume all; the suggestion lifts when the account is
+healthy; the lead pick opens a decision; Maybe later and Not interested land in
+the decision log and both offers leave Home. The effective money state is
+asserted in `collections_test.js` on a real promise to pay and its breaking.
 
 ## The shop sells in context
 

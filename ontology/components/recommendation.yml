@@ -1,0 +1,8 @@
+component: recommendation
+version: 1
+oda: TMFC0xx Recommendation (TMF680)
+meaning: Ranks offers per customer from what they hold, what they looked at and what households like theirs took — the engine behind "Recommended for you". It proposes; the ontology decides whether the moment is right.
+manages: []
+capabilities: [recommendation.list]
+events: []
+topic: bss.recommendation.events

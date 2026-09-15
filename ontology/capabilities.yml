@@ -139,6 +139,24 @@ capabilities:
     route: { method: GET, path: "/tmf-api/customerBillManagement/v4/customerBill" }
     roles: [billing:read]
 
+  - id: billing.collectionCases
+    version: 1
+    component: billing
+    kind: house-api
+    tmf: TMF678 Customer Bill (collections ladder)
+    meaning: The customer's collection case, if any — what is overdue, the ladder step, and the holds that pause it (a promise to pay, a dispute, hardship). The effective money state is read from here, never from the bill flag alone.
+    route: { method: GET, path: "/tmf-api/customerBillManagement/v4/collectionCase" }
+    roles: [billing:read]
+
+  - id: recommendation.list
+    version: 1
+    component: recommendation
+    kind: tmf-api
+    tmf: TMF680 Recommendation
+    meaning: The offers the recommendation engine ranks for this customer — the raw material of "Recommended for you", before the ontology decides whether the moment is right.
+    route: { method: GET, path: "/tmf-api/recommendationManagement/v4/recommendation" }
+    roles: [recommendation:read]
+
   - id: decisionLog.read
     version: 1
     component: insight

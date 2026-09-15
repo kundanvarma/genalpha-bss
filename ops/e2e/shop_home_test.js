@@ -117,7 +117,8 @@ async function register(page, email, first, last) {
   await page.locator('[data-testid="home-recommended"]').waitFor({ timeout: 5000 });
   const order1 = await page.evaluate(() => [...document.querySelectorAll('[data-testid^="home-"]')].map((e) => e.getAttribute('data-testid')));
   const idx = (k) => order1.indexOf(k);
-  if (!(idx('home-services') < idx('home-money') && idx('home-money') < idx('home-work') && idx('home-work') < idx('home-activity') && idx('home-activity') < idx('home-recommended'))) fail('zone order: ' + order1.join(','));
+  // healthy account: the suggestion is lifted to sit right under the services (it drops below the customer's needs when something is open)
+  if (!(idx('home-services') < idx('home-recommended') && idx('home-recommended') < idx('home-money') && idx('home-money') < idx('home-work') && idx('home-work') < idx('home-activity'))) fail('zone order (healthy): ' + order1.join(','));
   const fold = await page.evaluate(() => ({ money: document.querySelector('[data-testid="home-money"]').getBoundingClientRect().top, work: document.querySelector('[data-testid="home-work"]').getBoundingClientRect().top }));
   if (fold.money > 860 || fold.work > 900) console.log(`-- note: money at ${Math.round(fold.money)}px, open work at ${Math.round(fold.work)}px (viewport 860)`);
   console.log('OK Home zones in order (services → money → open work → activity → recommendation); the recommendation sits last');

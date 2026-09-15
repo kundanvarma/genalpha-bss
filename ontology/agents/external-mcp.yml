@@ -7,7 +7,7 @@ meaning: Any agent outside the BSS that connects through the MCP door — it get
 intent: Open the BSS to third-party agents without a second permission model.
 runsAs: caller
 autonomy: supervised
-reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, productCatalog.offerings]
+reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, productCatalog.offerings, billing.collectionCases, recommendation.list]
 actions:
   check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
   execute: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]

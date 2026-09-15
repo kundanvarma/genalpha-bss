@@ -453,7 +453,7 @@ function ConsentBanner({ onDecided }) {
   );
 }
 
-function OfferingCard({ offering, prices }) {
+export function OfferingCard({ offering, prices, href }) {
   const own = pricesOf(offering, prices);
   const monthly = monthlyTotal(own);
   const bundled = offering.bundledProductOffering || [];
@@ -475,7 +475,7 @@ function OfferingCard({ offering, prices }) {
   }, [offering.id, prices]);
 
   return (
-    <Link className={offering.isBundle ? 'card bundle' : 'card'} to={`/offering/${offering.id}`}>
+    <Link className={offering.isBundle ? 'card bundle' : 'card'} to={href || `/offering/${offering.id}`}>
       {offering.attachment?.[0]?.url && (
         <img className="offerart" src={offering.attachment[0].url} alt=""
              onError={(e) => { e.currentTarget.style.display = 'none'; }} />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { cancelMyService, changePlan, diagnoseMyService, enrollLoyalty, giftData, loyaltyProgram, myLoyalty, myReferral, redeemLoyaltyData, redeemLoyaltyVoucher, listOfferings, myActiveServices, myBills, myNotifications, myOrders, myProducts, myRecommendations, mySim, myUsage, pauseMyService, priceIndex, quickOrder, replaceMySim, resetSimPin, resumeMyService, myHousehold, redeemReferral } from '../api.js';
 import UsageControls from './UsageControls.jsx';
 import { tokenClaims } from '../auth.js';
@@ -219,6 +219,12 @@ export default function Services() {
   const [error, setError] = useState(null);
 
   const [hh, setHh] = useState(null);
+  // "Review services" lands on the paused section: scroll there once the list is in
+  const hash = useLocation().hash;
+  const pausedCount = services.filter((sv) => sv.state === 'suspended').length;
+  useEffect(() => {
+    if (hash === '#paused') setTimeout(() => document.getElementById('paused')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+  }, [hash, pausedCount]);
   function refresh() {
     myProducts().then(setProducts).catch((e) => setError(e.message));
     myActiveServices().then(setServices).catch(() => {});
@@ -349,10 +355,27 @@ export default function Services() {
     !entertainment.length && !bundleGroups.length && { label: t('Add TV & streaming'), cat: 'TV & Add-ons' },
   ].filter(Boolean);
 
+  const pausedAll = services.filter((sv) => sv.state === 'suspended');
+  const numberOrNull = (sv) => ((sv.supportingResource || []).find((r) => r.value) || {}).value || null;
   return (
     <>
       <h1>{t('Services')}</h1>
       <p className="dim small quicklinks"><Link to="/devices">{t('My devices')} →</Link> · <Link to="/family">{t('Family')} →</Link></p>
+      {pausedAll.length > 0 && (
+        <section className="card" id="paused" data-testid="paused-card" style={{ padding: '14px 18px', marginBottom: 14, borderColor: 'var(--danger)' }}>
+          <h2 style={{ marginTop: 0 }}>⏸ {pausedAll.length === 1 ? t('One service is paused') : `${pausedAll.length} ${t('services are paused')}`}</h2>
+          <p className="dim small">{t('Nothing is charged and nothing connects while a service is paused. Resume the ones you want back.')}</p>
+          {pausedAll.map((sv) => (
+            <div key={sv.id} className="row" data-testid="paused-row">
+              <span>{sv.name}{numberOrNull(sv) ? <span className="dim"> · {numberOrNull(sv)}</span> : null}</span>
+              <button className="primary" data-testid="resume-paused" onClick={async () => { try { await resumeMyService(sv.id); refresh(); } catch { /* stays paused */ } }}>{t('Resume now')}</button>
+            </div>
+          ))}
+          {pausedAll.length > 1 && (
+            <button className="ghost" data-testid="resume-all" style={{ marginTop: 8 }} onClick={async () => { for (const sv of pausedAll) { try { await resumeMyService(sv.id); } catch { /* next */ } } refresh(); }}>{t('Resume all')}</button>
+          )}
+        </section>
+      )}
       {changed && (
         <p className="dim" data-testid="plan-changed">
           ✓ Plan changed to <strong style={{ color: 'var(--teal)' }}>{changed}</strong> — you keep your number.

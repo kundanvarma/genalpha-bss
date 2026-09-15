@@ -156,9 +156,10 @@ export default function Assist({ id, customer, bss, version, act, nbo, setNbo, a
             <div className="assist-label">Situation</div>
             {recs === null && <p className="dim small">Reading the customer…</p>}
             {recs && !(recs.situation || []).length && <p className="dim small">Nothing open on this customer: no incident on their lines, no paused line, no open bill.</p>}
-            {(recs?.situation || []).map((s) => (
-              <p key={s.kind + s.id} className={s.kind === 'incident' ? 'error' : 'small'} data-testid={`assist-situation-${s.kind}`}>
-                {s.kind === 'incident' ? '⚠ ' : s.kind === 'bill' ? '💳 ' : s.kind === 'paused' ? '⏸ ' : ''}{s.says}
+            {(recs?.summary || recs?.situation || []).map((s, i) => (
+              <p key={s.kind + (s.id || i)} className={s.severity === 'critical' ? 'error' : s.kind === 'incident' ? 'error' : 'small'} data-testid={`assist-situation-${s.kind}`}>
+                {s.kind === 'incident' ? '⚠ ' : s.kind === 'overdue' ? '🔴 ' : s.kind === 'arranged' ? '🤝 ' : s.kind === 'bill' || s.kind === 'disputed' ? '💳 ' : s.kind === 'paused' ? '⏸ ' : ''}{s.says}
+                {s.actionRequired === false && s.severity === 'info' ? <span className="dim"> — no action needed</span> : null}
               </p>
             ))}
             {error && <p className="dim small">Assist could not read the ontology ({error}).</p>}

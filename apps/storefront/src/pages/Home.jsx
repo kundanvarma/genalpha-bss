@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { t } from '../i18n.js';
 import { tokenClaims } from '../auth.js';
-import { myProducts, myActiveServices, myUsage, myBills, myOrders, myTickets, myAppointments, myNotifications,
+import { priceIndex, myProducts, myActiveServices, myUsage, myBills, myOrders, myTickets, myAppointments, myNotifications,
   myCollectionCase, forYou, myRecommendations, listOfferings, loyaltyProgram, myLoyalty, mySpendPolicy,
   myHomeContext, resumeMyService, mySim, myAgreements } from '../api.js';
 import { LineDoctor } from './Services.jsx';
+import { OfferingCard } from './Shop.jsx';
 import RouterPanel from './RouterPanel.jsx';
 
 /* Home — the customer's first screen answers two questions: is everything
@@ -51,6 +52,7 @@ export default function Home() {
   const [ctx, setCtx] = useState(null); // the ontology's reading; null = reading, {} = unavailable
   const [busy, setBusy] = useState(false);
   const [sims, setSims] = useState({}); // serviceId -> masked ICCID, one read per mobile card
+  const [prices, setPrices] = useState({}); // for the lead pick's price line
   const [error, setError] = useState(null);
 
   const load = () => {
@@ -69,6 +71,7 @@ export default function Home() {
     });
     setCtx(null);
     myHomeContext(me).then((c) => setCtx(c || {})).catch(() => setCtx({}));
+    priceIndex().then(setPrices).catch(() => {});
   };
   useEffect(load, [me]);
 
@@ -87,18 +90,40 @@ export default function Home() {
   const roaming = d.spend.find((m) => m.meterType === 'roaming');
   const incidents = (ctx?.situation || []).filter((s) => s.kind === 'incident');
 
-  // the attention list: only what needs the customer, each with its next step
+  // the attention list: the ontology's SUMMARY of the situation — one entry per kind with a severity and
+  // whether the customer must act ("5 services are paused", not five rows; "payment plan agreed", not the
+  // raw overdue flag) — plus the facts only this page knows (data, an order, a case). Three cards at most,
+  // the most serious first; the rest is a count with a way in.
+  const LEVEL = { critical: 'danger', warning: 'warn', info: 'info' };
+  const RANK = { danger: 0, warn: 1, info: 2 };
+  const money = (a, c) => `${Number(a || 0).toFixed(2)}${c ? ' ' + c : ''}`;
   const attention = [];
-  for (const inc of incidents) {
-    const sv = active.find((s) => (inc.says || '').includes(s.id));
-    attention.push({ kind: 'incident', level: 'warn', text: `${t('We know about a problem on your line')}${sv && numberOf(sv) ? ' ' + numberOf(sv) : ''}. ${t('Our network team is on it — you do not need to do anything.')}`, to: '/support', cta: t('Check my line') });
+  const summary = Array.isArray(ctx?.summary) ? ctx.summary : null;
+  if (summary) {
+    for (const s of summary) {
+      const level = LEVEL[s.severity] || 'info';
+      if (s.kind === 'incident') attention.push({ kind: 'incident', level, text: `${s.count > 1 ? t('We know about problems on your lines') : t('We know about a problem on your line')}. ${t('Our network team is on it — you do not need to do anything.')}`, to: '/support', cta: t('Check my line'), noAction: true });
+      else if (s.kind === 'paused' && s.count === 1) { const sv = active.find((x) => x.id === s.members[0]); if (sv) attention.push({ kind: 'paused', level, text: `${sv.name}${numberOf(sv) ? ' ' + numberOf(sv) : ''} ${t('is paused — nothing is charged and nothing connects until you resume it.')}`, action: 'resume', service: sv, cta: t('Resume') }); }
+      else if (s.kind === 'paused') attention.push({ kind: 'paused', level, text: `${s.count} ${t('services are paused — no charges apply while they are paused.')}`, to: '/services#paused', cta: t('Review services') });
+      else if (s.kind === 'overdue') attention.push({ kind: 'overdue', level: 'danger', text: `${t('Payment overdue')}: ${money(s.amount, s.currency)}. ${t('Settle it, or agree a payment plan, to keep your services running.')}`, to: '/bills', cta: t('Pay now') });
+      else if (s.kind === 'arranged') attention.push({ kind: 'arranged', level: 'info', text: `${t('Payment plan agreed')}: ${money(s.amount, s.currency)} ${t('by')} ${String(s.dueAt || '').slice(0, 10)}. ${t('Nothing else is due until then.')}`, to: '/bills', cta: t('Pay early'), ghost: true, noAction: true });
+      else if (s.kind === 'disputed') attention.push({ kind: 'disputed', level: 'info', text: `${t('Part of your bill is under dispute — collection waits while we look at it.')}`, to: '/bills', cta: t('See the bill'), ghost: true, noAction: true });
+      else if (s.kind === 'bill') attention.push({ kind: 'bill', level: 'info', text: `${t('A bill is open')}: ${money(s.amount, openBills[0]?.amountDue?.unit)}.`, to: '/bills', cta: t('See the bill'), ghost: true });
+    }
+  } else if (ctx && Object.keys(ctx).length === 0) {
+    // the ontology did not answer: the page's own reading, so Home is never blank on a bad day
+    for (const sv of paused) attention.push({ kind: 'paused', level: 'warn', text: `${sv.name}${numberOf(sv) ? ' ' + numberOf(sv) : ''} ${t('is paused — nothing is charged and nothing connects until you resume it.')}`, action: 'resume', service: sv, cta: t('Resume') });
+    if (caseOpen && !(d.ccase.holds && d.ccase.holds.promiseToPay)) attention.push({ kind: 'overdue', level: 'danger', text: `${t('Payment overdue')}: ${money(d.ccase.overdueBalance?.value, d.ccase.overdueBalance?.unit)}. ${t('Settle it, or agree a payment plan, to keep your services running.')}`, to: '/bills', cta: t('Pay now') });
+    else if (openBills.length) attention.push({ kind: 'bill', level: 'info', text: `${t('A bill is open')}: ${openBills[0].billNo} — ${money(openBills[0].amountDue.value, openBills[0].amountDue.unit)}.`, to: '/bills', cta: t('See the bill'), ghost: true });
   }
-  for (const sv of paused) attention.push({ kind: 'paused', level: 'warn', text: `${sv.name}${numberOf(sv) ? ' ' + numberOf(sv) : ''} ${t('is paused — nothing is charged and nothing connects until you resume it.')}`, action: 'resume', service: sv, cta: t('Resume') });
-  if (caseOpen) attention.push({ kind: 'overdue', level: 'danger', text: `${t('An amount is overdue')}: ${Number(d.ccase.overdueBalance?.value || 0).toFixed(2)} ${d.ccase.overdueBalance?.unit || ''}. ${t('Please settle it to keep your services running.')}`, to: '/bills', cta: t('Pay now') });
-  else if (openBills.length) attention.push({ kind: 'bill', level: 'info', text: `${t('A bill is open')}: ${openBills[0].billNo} — ${Number(openBills[0].amountDue.value).toFixed(2)} ${openBills[0].amountDue.unit}.`, to: '/bills', cta: t('See the bill') });
   if (nearLimit) attention.push({ kind: 'data', level: 'info', text: `${t('Your data is nearly used up')}: ${Math.max(0, dataAllowed - dataUsed)} ${dataBucket.units} ${t('left of')} ${dataAllowed}.`, to: '/shop?tab=Top-ups', cta: t('Buy extra data') });
-  for (const o of liveOrders.slice(0, 1)) attention.push({ kind: 'order', level: 'info', text: `${t('Your order is in progress')}: ${o.description || leaves(o.productOrderItem).map((l) => l.productOffering?.name).filter(Boolean).join(', ')}.`, href: '#open-work', cta: t('Track it') });
-  for (const x of openTickets.slice(0, 1)) attention.push({ kind: 'case', level: 'info', text: `${t('Your support case is')} ${x.status}: ${x.name}.`, to: '/support', cta: t('View case') });
+  for (const o of liveOrders.slice(0, 1)) attention.push({ kind: 'order', level: 'info', text: `${t('Your order is in progress')}: ${o.description || leaves(o.productOrderItem).map((l) => l.productOffering?.name).filter(Boolean).join(', ')}.`, href: '#open-work', cta: t('Track it'), noAction: true });
+  for (const x of openTickets.slice(0, 1)) attention.push({ kind: 'case', level: 'info', text: `${t('Your support case is')} ${x.status}: ${x.name}.`, to: '/support', cta: t('View case'), ghost: true, noAction: true });
+  attention.sort((a, b) => RANK[a.level] - RANK[b.level]);
+  const shown = attention.slice(0, 3);
+  const more = attention.slice(3);
+  const healthy = !attention.some((a) => a.level !== 'info');
+  const critical = attention.some((a) => a.level === 'danger');
 
   const activity = useMemo(() => {
     const ev = [];
@@ -108,7 +133,8 @@ export default function Home() {
     return ev.filter((e) => e.at).sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, 5);
   }, [d.orders, d.notifications, d.tickets]);
 
-  const picks = d.recIds.map((id) => d.offerings[id]).filter(Boolean).slice(0, 3);
+  const offers = (ctx?.recommendations || []).filter((r) => r.kind === 'offer' && d.offerings[r.offeringId]).map((r) => ({ ...r, offering: d.offerings[r.offeringId] }));
+  const picks = offers.length ? offers.map((r) => r.offering) : d.recIds.map((id) => d.offerings[id]).filter(Boolean).slice(0, 3);
   const cards = active.slice(0, 6); // a household has a handful; the full list lives under Services
   useEffect(() => {
     for (const sv of cards) {
@@ -128,29 +154,66 @@ export default function Home() {
     setBusy(false);
   };
 
+  const lead = offers[0] || null;
+  const alternatives = offers.slice(1, 3);
+  const recLink = (r) => `/offering/${r.offeringId}?rec=${encodeURIComponent(r.decisionId || '')}&why=${encodeURIComponent(r.why || '')}`;
+  const recommended = (
+    <section data-testid="home-recommended" className={healthy ? 'lifted' : ''}>
+      <h2>{t('Recommended for you')} <Link className="dim small" to="/shop">{t('Shop')} →</Link></h2>
+      {!picks.length && <p className="dim small">{t('Nothing to suggest right now.')}</p>}
+      {lead && (
+        <div className="lead-pick" data-testid="recommended">
+          <OfferingCard offering={lead.offering} prices={prices} href={recLink(lead)} />
+          <div className="lead-why">
+            <div className="assist-label">{t('Best match')} · {t('Why this?')}</div>
+            <p data-testid="foryou-caption">✨ {lead.why}</p>
+            <p className="dim small">{t('You decide: choose it, save it for later, or tell us it is not for you — we remember.')}</p>
+          </div>
+        </div>
+      )}
+      {lead && alternatives.length > 0 && (
+        <div className="cards" data-testid="recommended-more">
+          {alternatives.map((r) => (
+            <div key={'alt-' + r.offeringId} className="alt-pick">
+              <OfferingCard offering={r.offering} prices={prices} href={recLink(r)} />
+              <p className="dim small alt-why">{r.why}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {!lead && picks.length > 0 && (
+        <div className="cards" data-testid="recommended">
+          {picks.map((o) => <OfferingCard key={o.id} offering={o} prices={prices} />)}
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <div className="home" data-testid="home">
       <section className="hero home-hero" data-testid="home-greeting">
         <h1>{t(partOfDay())}{given ? `, ${given}` : ''}</h1>
-        <p data-testid="home-health" className={attention.length ? 'warn' : 'ok'}>
+        <p data-testid="home-health" className={critical ? 'error' : !healthy ? 'warn' : 'ok'}>
           {ctx === null && !attention.length ? t('Reading your services…')
-            : attention.length ? `${attention.length} ${attention.length === 1 ? t('thing needs your attention') : t('things need your attention')}`
+            : !healthy ? `${attention.filter((a) => a.level !== 'info').length} ${attention.filter((a) => a.level !== 'info').length === 1 ? t('thing needs your attention') : t('things need your attention')}`
+            : attention.length ? `${t('Everything is working')} · ${attention.length} ${attention.length === 1 ? t('update') : t('updates')}`
             : t('Everything looks good')}
         </p>
       </section>
       {error && <p className="error">{error}</p>}
 
-      {/* attention: only when relevant */}
+      {/* attention: only when relevant — three at most, the most serious first */}
       <section className="home-attention" data-testid="home-attention" aria-live="polite">
         {ctx === null && <p className="dim small">{t('Reading your services…')}</p>}
-        {attention.map((a) => (
-          <div key={a.kind + (a.service?.id || '')} className={`callout ${a.level}`} data-testid={`attention-${a.kind}`}>
-            <span>{a.text}</span>
+        {shown.map((a) => (
+          <div key={a.kind + (a.service?.id || '')} className={`callout ${a.level}${a.level === 'info' ? ' compact' : ''}`} data-testid={`attention-${a.kind}`}>
+            <span>{a.text}{a.noAction && a.level === 'info' ? <span className="chip kind noaction"> {t('No action needed')}</span> : null}</span>
             {a.action === 'resume' && <button className="primary" disabled={busy} onClick={() => resume(a.service)}>{a.cta}</button>}
-            {a.to && <Link className="primary linkbtn" to={a.to}>{a.cta}</Link>}
+            {a.to && <Link className={`${a.ghost ? 'ghost' : 'primary'} linkbtn`} to={a.to}>{a.cta}</Link>}
             {a.href && <a className="ghost linkbtn" href={a.href}>{a.cta}</a>}
           </div>
         ))}
+        {more.length > 0 && <p className="dim small" data-testid="attention-more">{t('and')} {more.length} {t('more')} — <Link to={more.some((a) => ['overdue', 'bill', 'arranged'].includes(a.kind)) ? '/bills' : '/services'}>{t('see all')}</Link></p>}
       </section>
 
       {/* my services */}
@@ -191,6 +254,8 @@ export default function Home() {
           })}
         </div>
       </section>
+
+      {healthy && recommended}
 
       {/* money & usage */}
       <section data-testid="home-money">
@@ -247,20 +312,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* one suggestion, below the customer's needs */}
-      <section data-testid="home-recommended">
-        <h2>{t('Recommended for you')} <Link className="dim small" to="/shop">{t('Shop')} →</Link></h2>
-        {d.personal?.caption && <p className="dim small" data-testid="foryou-caption">✨ {d.personal.caption} <span className="dim">({t('why this')})</span></p>}
-        {!picks.length && <p className="dim small">{t('Nothing to suggest right now.')}</p>}
-        <div className="cards" data-testid="recommended">
-          {picks.map((o) => (
-            <Link className="card" key={o.id} to={`/offering/${o.id}`}>
-              <h2>{o.name}</h2>
-              {o.description && <p className="dim small">{o.description}</p>}
-            </Link>
-          ))}
-        </div>
-      </section>
+      {/* one suggestion — placed by the situation: right under the services when all is well, below the
+          customer's needs when something is open, absent while something critical is open */}
+      {!critical && !healthy && recommended}
     </div>
   );
 }

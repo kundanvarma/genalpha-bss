@@ -222,3 +222,13 @@ queue with the customer's name, and the recent-customers chips.
 Regression: `csr_test`, `a11y_test` (zero axe violations), `console_sso_guard_test`,
 `knowledge_test`, `porting_test`, `ontology_test`, `care_chat_test`, `copilot_test`,
 `decision_log_test`.
+
+## Situation, summarised (2026-09-15)
+
+Assist's Situation block renders the ontology's `summary` — one line per kind
+with a severity — so five paused lines read "5 services are paused", an agreed
+promise to pay reads "a payment plan is agreed — 1110.66 NOK by 2026-09-25;
+nothing else is due until then" instead of "overdue", and info lines say "no
+action needed". The customer's Home reads the same summary with their own
+token. Customers' verdicts on offers (maybe later, not interested) land in the
+same decision log the desk's ranking learns from.

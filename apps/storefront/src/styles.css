@@ -512,3 +512,17 @@ button.ghost { border-radius: var(--radius-s); transition: color 120ms, border-c
 .router { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .router .ok { color: var(--ok); font-weight: 600; } .router .error { font-weight: 600; }
 .router button { min-height: 30px; padding: 3px 9px; font-size: 12.5px; }
+
+/* Home attention: severity reads in form, not only colour; info items are small updates */
+.callout.danger { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--card)); border-left-width: 5px; }
+.callout.warn { border-left-width: 5px; }
+.callout.compact { padding: 8px 12px; font-size: 0.93em; }
+.chip.noaction { background: var(--teal-soft); color: var(--teal-text); margin-left: 6px; font-size: 0.8em; }
+.alt-pick { display: flex; flex-direction: column; gap: 4px; }
+.alt-pick .alt-why { margin: 0 4px; }
+section.lifted { border-top: 1px dashed var(--line); padding-top: 8px; }
+.decision { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--teal-soft); margin: 8px 0 14px; }
+.decision table { border-collapse: collapse; margin: 6px 0; }
+.decision td { padding: 3px 12px 3px 0; vertical-align: top; }
+.decision .stack { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.chip.noaction { white-space: nowrap; display: inline-block; }

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { alsoBought, availabilityFor, beacon, getOffering, getSpec, priceIndex } from '../api.js';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { alsoBought, availabilityFor, beacon, getOffering, getSpec, myProducts, priceIndex, recommendationOutcome } from '../api.js';
 import { CART_EVENT, addToCart, cartLines, ensureInCart } from '../cart.js';
-import { fmtAmount, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
+import { fmtAmount, fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
 
 const isChoice = (entry) => Array.isArray(entry.options);
@@ -10,6 +10,12 @@ const isChoice = (entry) => Array.isArray(entry.options);
 export default function Offering() {
   const { id } = useParams();
   const navigate = useNavigate();
+  // arrived from a recommendation? then this page is a DECISION, not a funnel: the why, the before and
+  // after, and three honest outcomes — choose it, maybe later, not interested. Back is not a verdict.
+  const query = new URLSearchParams(useLocation().search);
+  const rec = query.get('rec') ? { decisionId: query.get('rec'), why: query.get('why') || '' } : null;
+  const [current, setCurrent] = useState(null); // { name, monthly } — what the customer holds in this category today
+  const [verdict, setVerdict] = useState(null); // deferred | rejected, once told
   const [offering, setOffering] = useState(null);
   const [prices, setPrices] = useState({});
   const [optionOfferings, setOptionOfferings] = useState({}); // option id -> full offering
@@ -49,6 +55,19 @@ export default function Offering() {
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
+        if (rec) {
+          // what the customer holds today in this category — the "now" side of the decision
+          const cat = ((o.category || [])[0] || {}).name || '';
+          myProducts().then(async (mine) => {
+            for (const prod of (mine || []).filter((x) => x.status === 'active' && x.productOffering?.id && x.productOffering.id !== o.id).slice(0, 8)) {
+              try {
+                const held = await getOffering(prod.productOffering.id);
+                const heldCat = ((held.category || [])[0] || {}).name || '';
+                if (!cat || heldCat === cat) { setCurrent({ name: held.name, monthly: monthlyTotal(pricesOf(held, p)) }); return; }
+              } catch { /* next */ }
+            }
+          }).catch(() => {});
+        }
         // a consented breadcrumb: this visitor looked at this category
         beacon('view', ((o.category || [])[0] || {}).name || null, o.id);
         // "customers who bought this also bought" — aggregate, fail-soft
@@ -210,6 +229,7 @@ export default function Offering() {
         ? Object.fromEntries(Object.entries(chars).filter(([, v]) => v != null))
         : null;
       await addToCart(offering, selections, 1, ownChars);
+      if (rec) recommendationOutcome(rec.decisionId, 'accepted').catch(() => {});
       navigate('/cart');
     } catch (e) {
       setError(e.message);
@@ -221,6 +241,38 @@ export default function Offering() {
       {offering.isBundle && <span className="tag">Bundle</span>}
       <h1>{offering.name}</h1>
       <p>{offering.description}</p>
+      {rec && (() => {
+        const term = (offering.productOfferingTerm || [])[0];
+        const termWords = term ? `${term.name || t('Commitment')}${term.duration?.amount ? ` · ${term.duration.amount} ${term.duration.units || t('months')}` : ''}` : t('No binding period — cancel any month');
+        const newMonthly = monthlyTotal(pricesOf(offering, prices, chars));
+        const tell = async (outcome) => {
+          try { await recommendationOutcome(rec.decisionId, outcome); } catch { /* the verdict is best-effort */ }
+          setVerdict(outcome);
+        };
+        return (
+          <section className="decision" data-testid="offer-decision">
+            <div className="assist-label">{t('Why this was recommended')}</div>
+            <p data-testid="offer-why">✨ {rec.why || t('Picked from what you have and what you looked at.')}</p>
+            <table data-testid="offer-before-after">
+              <tbody>
+                {current && <tr><td className="dim">{t('Now')}</td><td>{current.name}{current.monthly ? ` · ${fmtMonthly(current.monthly)}` : ''}</td></tr>}
+                <tr><td className="dim">{t('With this')}</td><td>{offering.name}{newMonthly ? ` · ${fmtMonthly(newMonthly)}` : ''}</td></tr>
+                <tr><td className="dim">{t('Commitment')}</td><td>{termWords}</td></tr>
+                <tr><td className="dim">{t('Takes effect')}</td><td>{t('Today. Your number, SIM and discounts carry over; the next bill is split at the change date, so you pay each plan only for its days.')}</td></tr>
+              </tbody>
+            </table>
+            {verdict === 'deferred' && <p className="ok small" data-testid="offer-deferred">{t('Saved for later — we will not show it again for a month.')} <Link to="/">{t('Back to Home')}</Link></p>}
+            {verdict === 'rejected' && <p className="ok small" data-testid="offer-rejected">{t('Understood — we will not suggest this again.')} <Link to="/">{t('Back to Home')}</Link></p>}
+            {!verdict && (
+              <div className="stack">
+                <button className="ghost" data-testid="offer-defer" onClick={() => tell('deferred')}>{t('Maybe later')}</button>
+                <button className="ghost" data-testid="offer-reject" onClick={() => tell('rejected')}>{t('Not interested')}</button>
+                <button className="ghost" data-testid="offer-back" onClick={() => navigate(-1)}>{t('Back')}</button>
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {teasers.length > 0 && (
         <div className="promos" data-testid="offer-promos">

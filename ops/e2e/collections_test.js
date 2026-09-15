@@ -51,6 +51,12 @@ async function call(method, path, tok, body) {
   return { status: r.status, body: json, text };
 }
 
+/** The ontology's reading of the customer's money state — what Home and the desk render. */
+async function moneyState(tok, partyId) {
+  const r = await call('GET', `/ontology/v1/context/customer/${partyId}/recommendations`, tok, undefined, { 'X-GenAlpha-Agent': 'shop-home' });
+  return (r.body && r.body.summary) || [];
+}
+
 (async () => {
   const staff = await token('demo', 'demo');
   let policyId = null;
@@ -251,6 +257,13 @@ async function call(method, path, tok, body) {
       `${BILLS}/collectionCase/${c.id}/promiseToPay`, kolla, { days: 6 });
     if (promised.status !== 200) fail(`promiseToPay: ${promised.status} ${promised.text.slice(0, 200)}`);
     if (!promised.body.holds.promiseToPay) fail('no promise hold on the case');
+    {
+      // the EFFECTIVE state: a kept promise is "arranged", not "overdue" — Home and the desk read this
+      const st = await moneyState(kolla, kollaId);
+      if (!st.some((x) => x.kind === 'arranged' && x.severity === 'info' && x.actionRequired === false)) fail('a promise to pay must read as "arranged": ' + JSON.stringify(st));
+      if (st.some((x) => x.kind === 'overdue')) fail('an arranged case must not still read as overdue: ' + JSON.stringify(st));
+      console.log('OK EFFECTIVE STATE: the ontology reads "' + st.find((x) => x.kind === 'arranged').says + '"');
+    }
     await sweep(); await sweep();
     if ((await caseOf(kollaId)).state !== 'reminded') fail('the promise did not pause the ladder');
     console.log('OK PROMISE: the customer promised from their own case; two sweeps later'
@@ -258,6 +271,11 @@ async function call(method, path, tok, body) {
     await sleep(7000); // the promise (6s compressed) passes unpaid
     c = await sweepUntil(kollaId, 'warned', 20); // broken -> the demand fires
     if (c.holds.promiseToPay) fail('a broken promise must clear the hold');
+    {
+      const st = await moneyState(kolla, kollaId);
+      if (!st.some((x) => x.kind === 'overdue' && x.severity === 'critical' && x.actionRequired === true)) fail('a broken promise must read as overdue again: ' + JSON.stringify(st));
+      console.log('OK EFFECTIVE STATE: the broken promise returns the customer to "action required" without any UI logic');
+    }
     console.log('OK BROKEN: the promise lapsed, the ladder resumed and the'
       + ' demand + advance warning (warn) went out.');
 
