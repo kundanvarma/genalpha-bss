@@ -3372,7 +3372,14 @@ function copilotProposalCard(reply, context, log) {
   card.className = 'copilot-proposal';
   card.dataset.testid = 'copilot-proposal';
   const rows = [];
-  for (const spec of proposal.specs || []) rows.push(`spec · ${spec.name}`);
+  for (const spec of proposal.specs || []) {
+    rows.push(`spec · ${spec.name}`);
+    // the customer's choices, in the open: a configurable characteristic and its allowed values
+    for (const c of spec.productSpecCharacteristic || []) {
+      const vals = (c.productSpecCharacteristicValue || c.values || []).map((v) => (v && typeof v === 'object' ? v.value : v)).filter(Boolean);
+      if (c.configurable !== false && vals.length > 1) rows.push(`choice · ${c.name}: ${vals.join(' / ')}`);
+    }
+  }
   for (const price of proposal.prices || []) {
     const cond = (price.prodSpecCharValueUse || []).length ? ' (conditioned)' : '';
     rows.push(`price · ${price.name} — ${price.price?.value} ${price.price?.unit}`

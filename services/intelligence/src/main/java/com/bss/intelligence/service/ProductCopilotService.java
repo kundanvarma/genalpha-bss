@@ -93,7 +93,8 @@ public class ProductCopilotService {
                 adjustmentValue is negative for a discount.
                 Respond with ONLY a JSON object, no markdown fences, shaped:
                 {"kind": "question"|"advice"|"proposal", "message": "<what you say to the owner>", \
-                "proposal": null or {"specs": [{"ref": "s1", "name", "brand"?, "productSpecCharacteristic": []}], \
+                "proposal": null or {"specs": [{"ref": "s1", "name", "brand"?, "productSpecCharacteristic": \
+                [{"name": "homeLocations", "configurable": true, "productSpecCharacteristicValue": [{"value": "1-2"}, {"value": "3-4"}]}]}], \
                 "prices": [{"ref": "p1", "name", "priceType", "recurringChargePeriodType"?, \
                 "price": {"unit", "value"}, "prodSpecCharValueUse"?}], \
                 "offerings": [{"ref": "o1", "name", "description", "category": [{"name"}], \
@@ -133,6 +134,11 @@ public class ProductCopilotService {
                 [{"name": "color", "productSpecCharacteristicValue": [{"value": "Titanium"}]}] \
                 — OMIT it entirely unless the price depends on a configured characteristic; \
                 never use it for bundle membership or descriptions.
+                A CONFIGURABLE PRODUCT ("the customer picks the number of screens / locations / \
+                devices") is ONE offering whose spec has one configurable characteristic per choice \
+                with its allowed values as productSpecCharacteristicValue [{"value": ...}] (never a \
+                "values" array), a base price, and one conditioned price per surcharge whose \
+                prodSpecCharValueUse names that characteristic and value. The included tier has no price.
                 Ask a question when the ask is ambiguous; give advice when they want to \
                 understand; produce a proposal when they ask you to create or they have \
                 answered your questions. Use the tenant's existing categories and currency. \
@@ -166,6 +172,7 @@ public class ProductCopilotService {
         }
         parsed.put("provider", llm.provider());
         parsed.put("model", llm.model());
+        normalize(parsed);
         attachForecast(parsed);
         return parsed;
     }
@@ -198,16 +205,28 @@ public class ProductCopilotService {
                 if (!existing.contains(name)) {
                     continue;   // a NEW offering has no base to move — nothing to simulate
                 }
+                // the offering's new monthly = its UNCONDITIONED recurring prices summed; surcharges that only
+                // apply to a configuration are not what every subscriber pays, so they never enter the forecast
+                double monthly = 0;
+                boolean any = false;
                 for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
                     String ref = String.valueOf(refObj);
                     for (Map<String, Object> price : prices) {
                         if (ref.equals(String.valueOf(price.get("ref")))
                                 && "recurring".equals(String.valueOf(price.get("priceType")))
+                                && !(price.get("prodSpecCharValueUse") instanceof List<?> c && !c.isEmpty())
                                 && price.get("price") instanceof Map<?, ?> p && p.get("value") != null) {
-                            changes.add(Map.of("offeringName", name,
-                                    "newMonthlyPrice", p.get("value")));
+                            try {
+                                monthly += Double.parseDouble(String.valueOf(p.get("value")));
+                                any = true;
+                            } catch (NumberFormatException ignored) {
+                                // a price the model wrote as prose — the validator reports it
+                            }
                         }
                     }
+                }
+                if (any) {
+                    changes.add(Map.of("offeringName", name, "newMonthlyPrice", monthly));
                 }
             }
             if (changes.isEmpty()) {
@@ -216,10 +235,167 @@ public class ProductCopilotService {
             Map<String, Object> report = priceSim.simulate(Map.of(
                     "name", "copilot proposal forecast",
                     "changes", changes));
+            // a forecast over nobody is noise, not a receipt: keep only lines with subscribers
+            if (report != null && report.get("lines") instanceof List<?> lines) {
+                List<Object> kept = new java.util.ArrayList<>();
+                for (Object l : lines) {
+                    if (l instanceof Map<?, ?> m) {
+                        try {
+                            if (Double.parseDouble(String.valueOf(m.get("subscribers"))) > 0) {
+                                kept.add(l);
+                            }
+                        } catch (NumberFormatException ignored) {
+                            // no subscriber count — not a line worth showing
+                        }
+                    }
+                }
+                if (kept.isEmpty()) {
+                    return;
+                }
+                Map<String, Object> trimmed = new java.util.LinkedHashMap<>(report);
+                trimmed.put("lines", kept);
+                report = trimmed;
+            }
             parsed.put("forecast", report);
         } catch (RuntimeException e) {
             // the forecast is a receipt, not a gate — its absence is visible, not fatal
         }
+    }
+
+    /**
+     * Deterministic repair of the model's known habits BEFORE anything reads the proposal: a
+     * characteristic's allowed values arrive as "values": ["1-2", ...] or as bare strings rather
+     * than TMF's productSpecCharacteristicValue [{value}], a condition arrives as one object
+     * instead of a list, and the choices a price conditions on are missing from the spec. The
+     * shop can only offer a choice the spec declares, so the spec is completed from the prices.
+     */
+    @SuppressWarnings("unchecked")
+    static void normalize(Map<String, Object> parsed) {
+        if (!(parsed.get("proposal") instanceof Map<?, ?> pm)) {
+            return;
+        }
+        Map<String, Object> proposal = (Map<String, Object>) pm;
+        List<Map<String, Object>> specs = listOf(proposal.get("specs"));
+        List<Map<String, Object>> prices = listOf(proposal.get("prices"));
+        List<Map<String, Object>> offerings = listOf(proposal.get("offerings"));
+        for (Map<String, Object> spec : specs) {
+            List<Map<String, Object>> chars = listOf(spec.get("productSpecCharacteristic"));
+            for (Map<String, Object> c : chars) {
+                Object rawValues = c.containsKey("productSpecCharacteristicValue") ? c.get("productSpecCharacteristicValue")
+                        : c.containsKey("values") ? c.get("values")
+                        : c.containsKey("allowedValues") ? c.get("allowedValues")
+                        : c.get("value");
+                List<Map<String, Object>> values = valuesOf(rawValues);
+                c.remove("values");
+                c.remove("allowedValues");
+                c.remove("value");
+                c.put("productSpecCharacteristicValue", values);
+                if (c.get("configurable") == null) {
+                    c.put("configurable", values.size() > 1);
+                }
+            }
+            spec.put("productSpecCharacteristic", chars);
+        }
+        for (Map<String, Object> price : prices) {
+            Object cond = price.get("prodSpecCharValueUse");
+            if (cond instanceof Map<?, ?> one) {
+                price.put("prodSpecCharValueUse", new java.util.ArrayList<>(List.of(one)));
+            }
+            for (Map<String, Object> c : listOf(price.get("prodSpecCharValueUse"))) {
+                Object rawValues = c.containsKey("productSpecCharacteristicValue") ? c.get("productSpecCharacteristicValue")
+                        : c.containsKey("values") ? c.get("values") : c.get("value");
+                c.remove("values");
+                c.remove("value");
+                c.put("productSpecCharacteristicValue", valuesOf(rawValues));
+            }
+        }
+        // every choice a price conditions on must exist on the offering's spec, with that value
+        for (Map<String, Object> offering : offerings) {
+            Map<String, Object> spec = null;
+            for (Map<String, Object> s : specs) {
+                if (String.valueOf(s.get("ref")).equals(String.valueOf(offering.get("specRef")))) {
+                    spec = s;
+                }
+            }
+            if (spec == null) {
+                continue;
+            }
+            List<Map<String, Object>> chars = listOf(spec.get("productSpecCharacteristic"));
+            for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
+                for (Map<String, Object> price : prices) {
+                    if (!String.valueOf(refObj).equals(String.valueOf(price.get("ref")))) {
+                        continue;
+                    }
+                    for (Map<String, Object> cond : listOf(price.get("prodSpecCharValueUse"))) {
+                        String name = String.valueOf(cond.get("name"));
+                        Map<String, Object> target = null;
+                        for (Map<String, Object> c : chars) {
+                            if (name.equals(String.valueOf(c.get("name")))) {
+                                target = c;
+                            }
+                        }
+                        if (target == null) {
+                            target = new java.util.LinkedHashMap<>();
+                            target.put("name", name);
+                            target.put("configurable", true);
+                            target.put("productSpecCharacteristicValue", new java.util.ArrayList<>());
+                            chars.add(target);
+                        }
+                        target.put("configurable", true);
+                        List<Map<String, Object>> have = listOf(target.get("productSpecCharacteristicValue"));
+                        for (Map<String, Object> v : listOf(cond.get("productSpecCharacteristicValue"))) {
+                            String val = String.valueOf(v.get("value"));
+                            if (have.stream().noneMatch(h -> val.equals(String.valueOf(h.get("value"))))) {
+                                Map<String, Object> nv = new java.util.LinkedHashMap<>();
+                                nv.put("value", val);
+                                have.add(nv);
+                            }
+                        }
+                        target.put("productSpecCharacteristicValue", have);
+                    }
+                }
+            }
+            spec.put("productSpecCharacteristic", chars);
+        }
+        proposal.put("specs", specs);
+        proposal.put("prices", prices);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> listOf(Object o) {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        if (o instanceof List<?> l) {
+            for (Object x : l) {
+                if (x instanceof Map<?, ?> m) {
+                    out.add(new java.util.LinkedHashMap<>((Map<String, Object>) m));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Allowed values in TMF shape from whatever the model wrote: a list of {value}, a list of strings, one string. */
+    private static List<Map<String, Object>> valuesOf(Object raw) {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        if (raw == null) {
+            return out;
+        }
+        List<?> items = raw instanceof List<?> l ? l : List.of(raw);
+        for (Object x : items) {
+            Map<String, Object> v = new java.util.LinkedHashMap<>();
+            if (x instanceof Map<?, ?> m) {
+                Object val = m.get("value") != null ? m.get("value") : m.get("name");
+                if (val == null) {
+                    continue;
+                }
+                v.putAll((Map<String, Object>) m);
+                v.put("value", String.valueOf(val));
+            } else {
+                v.put("value", String.valueOf(x));
+            }
+            out.add(v);
+        }
+        return out;
     }
 
     /** Markdown-tolerant JSON parse: strip fences, find the outermost object. */

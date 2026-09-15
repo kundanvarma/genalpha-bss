@@ -128,8 +128,12 @@ export default function Offering() {
 
   // A standalone device configures its own spec (colour, storage) the same
   // way a bundle configures its chosen phone's.
-  const ownConfigurable = offering && !offering.isBundle
-    && ((offering.category || [])[0] || {}).name === 'Devices';
+  // ... and so does ANY non-bundle offering whose spec declares a choice (TV screens, home
+  // locations, streams): a configurable characteristic with more than one allowed value.
+  const ownSpec = offering ? specs[offering.productSpecification?.id] : null;
+  const ownConfigurable = Boolean(offering && !offering.isBundle
+    && (((offering.category || [])[0] || {}).name === 'Devices'
+      || (ownSpec?.productSpecCharacteristic || []).some((c) => c.configurable !== false && (c.productSpecCharacteristicValue || []).length > 1)));
 
   const activeCharacteristics = useMemo(() => {
     const sources = [...(ownConfigurable ? [offering] : []), ...selectedOptions];
