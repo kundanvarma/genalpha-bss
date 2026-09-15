@@ -125,7 +125,9 @@ public class RecommendationService {
         }
         JsonNode ccase = collectionCase(customerId, caller);
         String caseState = ccase == null ? "" : ccase.path("state").asText("").toLowerCase();
-        boolean caseOpen = ccase != null && !caseState.isEmpty() && !List.of("closed", "settled", "cured", "none", "writtenoff", "written-off").contains(caseState);
+        double overdueNow = ccase == null ? 0 : ccase.path("overdueBalance").path("value").asDouble(0);
+        // a case is "open" only while money is actually overdue: a cured case stays on file as "current" with a zero balance
+        boolean caseOpen = ccase != null && overdueNow > 0 && !List.of("closed", "settled", "cured", "current", "none", "writtenoff", "written-off").contains(caseState);
         JsonNode promise = ccase == null ? null : ccase.path("holds").path("promiseToPay");
         boolean promised = promise != null && promise.isObject() && !isPast(promise.path("dueAt").asText(""));
         String currency = ccase == null ? "" : ccase.path("overdueBalance").path("unit").asText("");
