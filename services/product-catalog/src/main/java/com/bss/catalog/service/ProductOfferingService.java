@@ -38,12 +38,14 @@ public class ProductOfferingService {
 
     private final Channels channels;
     private final LaunchGovernanceService governance;
+    private final ConfigurationIntegrity integrity;
 
     public ProductOfferingService(ProductOfferingRepository repository, ProductOfferingMapper mapper, DomainEventPublisher events, TenantScope tenantScope,
             com.bss.catalog.pim.ProductContentSource content, LegacyFederation legacy,
             com.bss.catalog.security.TenantRegistry tenants,
             LifecyclePolicy lifecycle,
-            Channels channels, LaunchGovernanceService governance) {
+            Channels channels, LaunchGovernanceService governance, ConfigurationIntegrity integrity) {
+        this.integrity = integrity;
         this.governance = governance;
         this.channels = channels;
         this.lifecycle = lifecycle;
@@ -169,6 +171,8 @@ public class ProductOfferingService {
             dto.setLifecycleStatus("Active");
         }
         governance.beforeCreate(dto); // with governance on, only an approver's write lands live
+        // a configurable product must be whole: every price condition names a choice the specification declares
+        integrity.check(dto.getName(), dto.getProductSpecification(), dto.getProductOfferingPrice());
         ProductOffering entity = mapper.toEntity(dto);
         // fixture-stable ids: a caller MAY supply the id (the demo seeds pin
         // well-known ids the suites share — same doctrine as persona ids in
@@ -200,6 +204,10 @@ public class ProductOfferingService {
         boolean launchingNow = governance.beforePatch(entity, patch);
         String hashBefore = governance.substanceHash(entity);
         mapper.applyPatch(patch, entity);
+        if (patch.getProductSpecification() != null || patch.getProductOfferingPrice() != null) {
+            ProductOfferingDto merged = mapper.toDto(entity);
+            integrity.check(merged.getName(), merged.getProductSpecification(), merged.getProductOfferingPrice());
+        }
         entity.setLastUpdate(OffsetDateTime.now());
         governance.afterPatch(entity, hashBefore, launchingNow);
         ProductOfferingDto updated = mapper.toDto(repository.save(entity));
