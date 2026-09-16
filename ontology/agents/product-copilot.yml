@@ -7,7 +7,7 @@ meaning: The product copilot in the operator console — a product owner describ
 intent: Turn commercial intent into governed catalog objects; the model never writes.
 runsAs: caller
 autonomy: supervised
-reads: [productCatalog.offerings, productCatalog.offering, productCatalog.price, catalog.governanceView]
+reads: [productCatalog.offerings, productCatalog.offering, productCatalog.price, catalog.governanceView, catalog.configure, catalog.configurationSpace]
 actions:
   check: [requestLaunch]
   execute: [requestLaunch]

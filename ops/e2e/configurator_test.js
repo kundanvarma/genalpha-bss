@@ -79,7 +79,7 @@ const near = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
       { name: 'storage', value: '512GB' }] } });
   const titanium = await post(`${CFG}/checkProductConfiguration`,
     { checkProductConfigurationItem: [config('Titanium Edition')] });
-  if (titanium.status !== 200 || titanium.body.result !== 'approved') {
+  if (titanium.status !== 200 || titanium.body.result !== 'accepted') {
     fail(`titanium check: ${titanium.status} ${titanium.text.slice(0, 300)}`);
   }
   const tPrice = titanium.body.checkProductConfigurationItem[0].configurationPrice;
@@ -99,7 +99,7 @@ const near = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
   /* ---------- 3. any other colour: the premium stays off the bill ---------- */
   const icyBlue = await post(`${CFG}/checkProductConfiguration`,
     { checkProductConfigurationItem: [config('Icy Blue')] });
-  if (icyBlue.body.result !== 'approved') fail('Icy Blue should approve');
+  if (icyBlue.body.result !== 'accepted') fail('Icy Blue should approve');
   const bPrice = icyBlue.body.checkProductConfigurationItem[0].configurationPrice;
   if (bPrice.priceLine.some((l) => l.name === 'Titanium Edition premium')) {
     fail('the premium applied without its condition');

@@ -52,6 +52,8 @@ bss:
     # the configurator consults policy: block rules (machine seam) and
     # the public deal engine's indicative price — both fail open
     policy-base-url: ${POLICY_BASE_URL:http://localhost:8113}
+    # availability per configuration for the TMF760 oracle (GET is public on product-stock)
+    stock-base-url: ${STOCK_BASE_URL:http://localhost:8114}
   # Issuer-per-tenant: each entry is a trusted OIDC issuer that IS a tenant.
   # jwks-uri is the backchannel key endpoint (dev: keycloak's split hostname);
   # leave it empty when the issuer is directly reachable for discovery.

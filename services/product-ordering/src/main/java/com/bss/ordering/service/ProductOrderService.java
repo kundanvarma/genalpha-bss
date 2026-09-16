@@ -980,7 +980,7 @@ public class ProductOrderService {
     private void reserveStock(ProductOrderDto dto, String orderId) {
         for (ItemRef item : flattenItems(dto.getProductOrderItem())) {
             StockClient.ReserveOutcome outcome =
-                    stockClient.reserve(item.offeringId(), item.name(), item.quantity(), orderId);
+                    stockClient.reserve(item.offeringId(), item.name(), item.quantity(), orderId, item.characteristics());
             if (!outcome.ok()) {
                 stockClient.release(orderId);
                 throw new OrderValidationException(outcome.message());
@@ -988,7 +988,10 @@ public class ProductOrderService {
         }
     }
 
-    private record ItemRef(String offeringId, String name, int quantity) {
+    private record ItemRef(String offeringId, String name, int quantity, List<Map<String, Object>> characteristics) {
+        ItemRef(String offeringId, String name, int quantity) {
+            this(offeringId, name, quantity, null);
+        }
     }
 
     private List<ItemRef> flattenItems(List<Map<String, Object>> items) {
@@ -1046,7 +1049,10 @@ public class ProductOrderService {
             if (offering instanceof Map<?, ?> ref && ref.get("id") != null) {
                 int quantity = item.get("quantity") instanceof Number n ? n.intValue() : 1;
                 Object name = ref.get("name") != null ? ref.get("name") : ref.get("id");
-                into.add(new ItemRef(String.valueOf(ref.get("id")), String.valueOf(name), quantity));
+                List<Map<String, Object>> chars = item.get("product") instanceof Map<?, ?> product
+                        && product.get("productCharacteristic") instanceof List<?> pcs
+                        ? (List<Map<String, Object>>) pcs : null;
+                into.add(new ItemRef(String.valueOf(ref.get("id")), String.valueOf(name), quantity, chars));
             }
             if (item.get("productOrderItem") instanceof List<?> children) {
                 collectItems((List<Map<String, Object>>) children, into);
@@ -1576,11 +1582,24 @@ public class ProductOrderService {
             List<Map<String, Object>> realizing = item.get("product") instanceof Map<?, ?> ip
                     && ip.get("realizingService") instanceof List<?> rs
                     ? (List<Map<String, Object>>) rs : null;
-            for (int unit = 0; unit < quantity; unit++) {
+            if (quantity > 1 && isFungible(String.valueOf(offering.get("id")))) {
+                // seats and licences are interchangeable: ONE product carrying the quantity as a
+                // characteristic (TMF637 has no quantity of its own); billing multiplies per-unit prices
+                List<Map<String, Object>> withQuantity = new ArrayList<>(characteristics == null ? List.of() : characteristics);
+                withQuantity.removeIf(c -> "quantity".equals(c.get("name")));
+                withQuantity.add(Map.of("name", "quantity", "value", String.valueOf(quantity)));
                 inventoryClient.createProduct(new InventoryClient.NewProduct(
                         name, "active", (Map<String, Object>) offering, billingAccount,
-                        dto.getRelatedParty(), characteristics, orderItemRef, realizing));
+                        dto.getRelatedParty(), withQuantity, orderItemRef, realizing));
                 provisioned = true;
+            } else {
+                // each unit has its own identity (a number, a SIM, a box): one product per unit, as always
+                for (int unit = 0; unit < quantity; unit++) {
+                    inventoryClient.createProduct(new InventoryClient.NewProduct(
+                            name, "active", (Map<String, Object>) offering, billingAccount,
+                            dto.getRelatedParty(), characteristics, orderItemRef, realizing));
+                    provisioned = true;
+                }
             }
         }
         if (!provisioned) {
@@ -1594,6 +1613,31 @@ public class ProductOrderService {
                     name, "active", offering, billingAccount, dto.getRelatedParty(), null,
                     List.of(lineageRef(order.getId(), null)), null));
         }
+    }
+
+    /** A spec fact `fungible: true` on the offering's specification: units are interchangeable (seats, licences). */
+    @SuppressWarnings("unchecked")
+    private boolean isFungible(String offeringId) {
+        try {
+            Map<String, Object> detail = catalogClient.findOfferingDetail(offeringId).orElse(null);
+            if (detail == null || !(detail.get("productSpecification") instanceof Map<?, ?> specRef) || specRef.get("id") == null) {
+                return false;
+            }
+            Map<String, Object> spec = catalogClient.findSpecification(String.valueOf(specRef.get("id"))).orElse(null);
+            if (spec == null || !(spec.get("productSpecCharacteristic") instanceof List<?> chars)) {
+                return false;
+            }
+            for (Object c : chars) {
+                if (c instanceof Map<?, ?> m && "fungible".equals(m.get("name"))
+                        && m.get("productSpecCharacteristicValue") instanceof List<?> vals && !vals.isEmpty()
+                        && vals.get(0) instanceof Map<?, ?> v0) {
+                    return "true".equalsIgnoreCase(String.valueOf(v0.get("value")));
+                }
+            }
+        } catch (RuntimeException e) {
+            // the catalog did not answer: the safe default is one product per unit
+        }
+        return false;
     }
 
     /** TMF637 RelatedProductOrderItem: which order (and item) this product came from. */

@@ -74,6 +74,10 @@ public class ProductOffering {
     @Column(name = "product_offering_term", length = 4000)
     private String productOfferingTermJson;
 
+    /** TMF620 productOfferingRelationship[]: requires (role auto-add | prompt | block), excludes, exchangableTo. */
+    @Column(name = "product_offering_relationship", length = 8000)
+    private String productOfferingRelationshipJson;
+
     @Column(name = "is_bundle")
     private Boolean isBundle;
 
@@ -241,4 +245,12 @@ public class ProductOffering {
     public void setLaunchHoldUntil(OffsetDateTime launchHoldUntil) { this.launchHoldUntil = launchHoldUntil; }
     public OffsetDateTime getApprovalExpiresAt() { return approvalExpiresAt; }
     public void setApprovalExpiresAt(OffsetDateTime approvalExpiresAt) { this.approvalExpiresAt = approvalExpiresAt; }
+
+    public String getProductOfferingRelationshipJson() {
+        return productOfferingRelationshipJson;
+    }
+
+    public void setProductOfferingRelationshipJson(String productOfferingRelationshipJson) {
+        this.productOfferingRelationshipJson = productOfferingRelationshipJson;
+    }
 }

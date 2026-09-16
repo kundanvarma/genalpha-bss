@@ -57,6 +57,32 @@ export async function getSpec(id) {
  * Units available for an offering, or null when it is not stock-managed
  * (services and subscriptions have no shelf).
  */
+/** TMF760 — the ONE oracle for a configurable product: the choices with allowed values, ranges,
+ * defaults and what is in stock; whether these picks are orderable; and the exact price. Channels
+ * render this, they never price or validate on their own. */
+export async function queryConfiguration(offeringId) {
+  const res = await publicFetch('/tmf-api/productConfigurationManagement/v5/queryProductConfiguration', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productConfiguration: { productOffering: { id: offeringId } } }),
+  });
+  if (!res.ok) throw new Error('configuration unavailable (HTTP ' + res.status + ')');
+  const out = await res.json();
+  return (out.computedProductConfigurationItem || [])[0] || null;
+}
+export async function checkConfiguration(offeringId, characteristics = {}, quantity = 1, selectedOptionIds = []) {
+  const res = await publicFetch('/tmf-api/productConfigurationManagement/v5/checkProductConfiguration', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checkProductConfigurationItem: [{ id: '1', productConfiguration: {
+      productOffering: { id: offeringId }, quantity,
+      selectedOption: selectedOptionIds.map((oid) => ({ id: oid })),
+      configurationCharacteristic: Object.entries(characteristics).filter(([, v]) => v != null && v !== '').map(([name, value]) => ({ name, value: String(value) })),
+    } }] }),
+  });
+  if (!res.ok) throw new Error('configuration check failed (HTTP ' + res.status + ')');
+  const out = await res.json();
+  return (out.checkProductConfigurationItem || [])[0] || null;
+}
+
 export async function availabilityFor(offeringId) {
   // Composable deployment: no stock component means nothing is
   // stock-managed — same as an offering without a stock row.

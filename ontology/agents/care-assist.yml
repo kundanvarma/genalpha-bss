@@ -7,7 +7,7 @@ meaning: GenAlpha Assist beside every customer on the care desk — the situatio
 intent: Make the agent's next correct action obvious without leaving the customer page; never act on its own.
 runsAs: caller
 autonomy: supervised
-reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, agreement.list, assurance.problems, decisionLog.read, productCatalog.offerings, billing.collectionCases, recommendation.list]
+reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, agreement.list, assurance.problems, decisionLog.read, productCatalog.offerings, billing.collectionCases, recommendation.list, catalog.configure, catalog.configurationSpace]
 actions:
   check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
   execute: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, changeSubscriptionPlan, replaceSim, cancelOrder, disputeBill, issueCredit]

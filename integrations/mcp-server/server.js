@@ -313,7 +313,7 @@ const TOOLS = [
         { checkProductConfigurationItem: [{ productConfiguration: {
           productOffering: { id: a.offeringId }, ...configuration } }] });
       const item = (out.checkProductConfigurationItem || [])[0] || {};
-      if (item.state !== 'approved') {
+      if (item.state !== 'approved' && item.state !== 'accepted') { // TMF760 v5 says accepted; the tool keeps its word
         return { result: 'rejected', messages: item.message || [] };
       }
       return {

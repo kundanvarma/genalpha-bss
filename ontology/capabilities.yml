@@ -139,6 +139,22 @@ capabilities:
     route: { method: GET, path: "/tmf-api/customerBillManagement/v4/customerBill" }
     roles: [billing:read]
 
+  - id: catalog.configure
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF760 Product Configuration
+    meaning: The one configuration oracle — given an offering and the customer's picks, which values may be chosen, whether the picks are orderable, and the exact price. Every channel and every agent asks it; none of them price or validate on their own.
+    route: { method: POST, path: "/tmf-api/productConfigurationManagement/v5/checkProductConfiguration" }
+
+  - id: catalog.configurationSpace
+    version: 1
+    component: product-catalog
+    kind: tmf-api
+    tmf: TMF760 Product Configuration
+    meaning: The configuration space of an offering — choices, allowed values and ranges, defaults, what is in stock, relationships and prices with their conditions.
+    route: { method: POST, path: "/tmf-api/productConfigurationManagement/v5/queryProductConfiguration" }
+
   - id: billing.collectionCases
     version: 1
     component: billing

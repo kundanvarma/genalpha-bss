@@ -44,6 +44,21 @@ public class ProductOfferingPrice {
     @Column(name = "tax", length = 1000)
     private String taxJson;
 
+    /** TMF620 validFor: the price's own window — an effective-dated segment, never an edit of a live price. */
+    @Column(name = "valid_from")
+    private OffsetDateTime validFrom;
+
+    @Column(name = "valid_to")
+    private OffsetDateTime validTo;
+
+    /** TMF620 unitOfMeasure {amount, units}: "per 1 seat", "per 5 GB" — the price applies per that many. */
+    @Column(name = "unit_of_measure", length = 400)
+    private String unitOfMeasureJson;
+
+    /** TMF620 pricingLogicAlgorithm[] — a NAMED algorithm from the documented set (plaSpecId), parameters inline. */
+    @Column(name = "pricing_logic_algorithm", length = 4000)
+    private String pricingLogicAlgorithmJson;
+
     @Column(name = "recurring_charge_period_type")
     private String recurringChargePeriodType;
 
@@ -168,4 +183,36 @@ public class ProductOfferingPrice {
 
     public String getTaxJson() { return taxJson; }
     public void setTaxJson(String v) { this.taxJson = v; }
+
+    public OffsetDateTime getValidFrom() {
+        return validFrom;
+    }
+
+    public void setValidFrom(OffsetDateTime validFrom) {
+        this.validFrom = validFrom;
+    }
+
+    public OffsetDateTime getValidTo() {
+        return validTo;
+    }
+
+    public void setValidTo(OffsetDateTime validTo) {
+        this.validTo = validTo;
+    }
+
+    public String getUnitOfMeasureJson() {
+        return unitOfMeasureJson;
+    }
+
+    public void setUnitOfMeasureJson(String unitOfMeasureJson) {
+        this.unitOfMeasureJson = unitOfMeasureJson;
+    }
+
+    public String getPricingLogicAlgorithmJson() {
+        return pricingLogicAlgorithmJson;
+    }
+
+    public void setPricingLogicAlgorithmJson(String pricingLogicAlgorithmJson) {
+        this.pricingLogicAlgorithmJson = pricingLogicAlgorithmJson;
+    }
 }

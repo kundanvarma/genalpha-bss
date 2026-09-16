@@ -9,6 +9,12 @@ public interface StockClient {
 
     ReserveOutcome reserve(String productOfferingId, String offeringName, int quantity, String orderId);
 
+    /** The same, naming the configured variant (colour, storage) so a per-variant stock row is the one reserved. */
+    default ReserveOutcome reserve(String productOfferingId, String offeringName, int quantity, String orderId,
+            java.util.List<java.util.Map<String, Object>> characteristics) {
+        return reserve(productOfferingId, offeringName, quantity, orderId);
+    }
+
     void release(String orderId);
 
     void consume(String orderId);

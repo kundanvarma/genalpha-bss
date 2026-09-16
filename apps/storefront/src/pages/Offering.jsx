@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { alsoBought, availabilityFor, beacon, getOffering, getSpec, myProducts, priceIndex, recommendationOutcome } from '../api.js';
+import { alsoBought, availabilityFor, beacon, checkConfiguration, getOffering, getSpec, myProducts, priceIndex, queryConfiguration, recommendationOutcome } from '../api.js';
 import { CART_EVENT, addToCart, cartLines, ensureInCart } from '../cart.js';
 import { fmtAmount, fmtMonthly, fmtPrice, monthlyTotal, pricesOf } from '../money.js';
 import { t } from '../i18n.js';
@@ -15,6 +15,11 @@ export default function Offering() {
   const query = new URLSearchParams(useLocation().search);
   const rec = query.get('rec') ? { decisionId: query.get('rec'), why: query.get('why') || '' } : null;
   const [current, setCurrent] = useState(null); // { name, monthly } — what the customer holds in this category today
+  // THE ORACLE (TMF760): for a standalone configurable or per-seat product the server says which values can be
+  // picked, whether the picks are orderable, and what they cost. The page renders its answer; it never prices.
+  const [space, setSpace] = useState(null);     // queryProductConfiguration: characteristics with isSelectable, fungible
+  const [oracleVerdict, setOracleVerdict] = useState(null); // checkProductConfiguration for the current picks + quantity
+  const [quantity, setQuantity] = useState(1);
   const [verdict, setVerdict] = useState(null); // deferred | rejected, once told
   const [offering, setOffering] = useState(null);
   const [prices, setPrices] = useState({});
@@ -55,6 +60,7 @@ export default function Offering() {
       .then(async ([o, p]) => {
         setOffering(o);
         setPrices(p);
+        if (!o.isBundle) queryConfiguration(o.id).then(setSpace).catch(() => setSpace(null));
         if (rec) {
           // what the customer holds today in this category — the "now" side of the decision
           const cat = ((o.category || [])[0] || {}).name || '';
@@ -179,6 +185,13 @@ export default function Offering() {
     });
   }, [activeCharacteristics]);
 
+  // every change of a pick or the quantity asks the oracle for the verdict and the price
+  useEffect(() => {
+    if (!offering || offering.isBundle || !space) return;
+    let live = true;
+    checkConfiguration(offering.id, chars, quantity).then((v) => { if (live) setOracleVerdict(v); }).catch(() => { if (live) setOracleVerdict(null); });
+    return () => { live = false; };
+  }, [offering?.id, space, JSON.stringify(chars), quantity]);
   if (error) return <p className="error">{error}</p>;
   if (!offering) return <p className="dim">Loading…</p>;
 
@@ -216,6 +229,15 @@ export default function Offering() {
     ...addedExtras.map((o) => ({ offeringId: o.id, name: o.name, characteristics: {} })),
   ];
 
+  const oracle = Boolean(space) && !offering?.isBundle;
+  const fungible = Boolean(space?.fungible);
+  const oracleRejected = oracle && oracleVerdict && oracleVerdict.state === 'rejected';
+  const selectableOf = (name, value) => {
+    const ch = (space?.configurationCharacteristic || []).find((c) => c.name === name);
+    const v = (ch?.productSpecCharacteristicValue || []).find((x) => String(x.value) === String(value));
+    return v ? v.isSelectable !== false : true;
+  };
+
   // A group under its minimum blocks ordering — same rule TMF622 enforces.
   const unmetChoice = choices.find((c) =>
     (chosen[c.name] || []).length < (c.numberRelOfferLowerLimit ?? 1));
@@ -232,7 +254,7 @@ export default function Offering() {
       const ownChars = ownConfigurable
         ? Object.fromEntries(Object.entries(chars).filter(([, v]) => v != null))
         : null;
-      await addToCart(offering, selections, 1, ownChars);
+      await addToCart(offering, selections, fungible ? quantity : 1, ownChars);
       if (rec) recommendationOutcome(rec.decisionId, 'accepted').catch(() => {});
       navigate('/cart');
     } catch (e) {
@@ -419,16 +441,36 @@ export default function Offering() {
           {activeCharacteristics.map(({ characteristic }) => (
             <label key={characteristic.name} className="charfield">
               <span>{characteristic.name}</span>
-              <select
-                value={chars[characteristic.name] || ''}
-                onChange={(e) => setChars((c) => ({ ...c, [characteristic.name]: e.target.value }))}
-              >
-                {(characteristic.productSpecCharacteristicValue || []).map((v) => (
-                  <option key={v.value} value={v.value}>{v.value}</option>
-                ))}
-              </select>
+              {(characteristic.productSpecCharacteristicValue || []).some((v) => v.value == null && (v.valueFrom != null || v.valueTo != null)) ? (
+                (() => { const r = (characteristic.productSpecCharacteristicValue || []).find((v) => v.valueFrom != null || v.valueTo != null); return (
+                  <input type="number" data-testid={`range-${characteristic.name}`} min={r.valueFrom ?? undefined} max={r.valueTo ?? undefined} step="1"
+                    value={chars[characteristic.name] ?? (r.valueFrom ?? 0)}
+                    onChange={(e) => setChars((c) => ({ ...c, [characteristic.name]: e.target.value }))} />
+                ); })()
+              ) : (
+                <select
+                  value={chars[characteristic.name] || ''}
+                  onChange={(e) => setChars((c) => ({ ...c, [characteristic.name]: e.target.value }))}
+                >
+                  {(characteristic.productSpecCharacteristicValue || []).map((v) => (
+                    <option key={v.value} value={v.value} disabled={!selectableOf(characteristic.name, v.value)}>
+                      {v.value}{selectableOf(characteristic.name, v.value) ? '' : ` — ${t('sold out')}`}
+                    </option>
+                  ))}
+                </select>
+              )}
             </label>
           ))}
+        </div>
+      )}
+
+      {fungible && (
+        <div className="chars" data-testid="quantity-field">
+          <label className="charfield">
+            <span>{t('How many')} ({(space?.price || []).find((p) => p.unitOfMeasure)?.unitOfMeasure?.units || t('units')})</span>
+            <input type="number" min="1" max="500" step="1" value={quantity} data-testid="quantity"
+              onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value || '1', 10)))} />
+          </label>
         </div>
       )}
 
@@ -448,7 +490,35 @@ export default function Offering() {
         </>
       )}
 
-      {allPrices.length > 0 && (
+      {oracle && oracleVerdict && oracleVerdict.state === 'accepted' && (
+        <>
+          <h2>Pricing</h2>
+          <table className="pricetable" data-testid="oracle-pricing">
+            <tbody>
+              {(oracleVerdict.configurationPrice?.priceLine || []).map((l, i) => (
+                <tr key={i}>
+                  <td>{l.name}{l.how ? <span className="dim small"> · {l.how}</span> : null}</td>
+                  <td className="num">{fmtAmount(Number(l.amount), l.price?.unit)}{l.priceType === 'recurring' ? '/month' : l.priceType === 'oneTime' ? ` ${t('once')}` : ''}</td>
+                </tr>
+              ))}
+              <tr className="total">
+                <td>Total per month</td>
+                <td className="num" data-testid="oracle-monthly">{fmtAmount(Number(oracleVerdict.configurationPrice?.monthlyTotal?.value || 0), oracleVerdict.configurationPrice?.monthlyTotal?.unit)}</td>
+              </tr>
+              {Number(oracleVerdict.configurationPrice?.oneTimeTotal?.value || 0) > 0 && (
+                <tr><td>{t('Once')}</td><td className="num">{fmtAmount(Number(oracleVerdict.configurationPrice.oneTimeTotal.value), oracleVerdict.configurationPrice.oneTimeTotal.unit)}</td></tr>
+              )}
+            </tbody>
+          </table>
+          {(oracleVerdict.productConfiguration?.configurationAction || []).map((a, i) => (
+            <p key={i} className="dim small" data-testid="oracle-action">{a.description}{a.isSelected ? ` — ${t('added for you')}` : ''}</p>
+          ))}
+        </>
+      )}
+      {oracleRejected && (
+        <p className="error" data-testid="oracle-rejected">{(oracleVerdict.message || []).join(' · ')}</p>
+      )}
+      {!oracle && allPrices.length > 0 && (
         <>
           <h2>Pricing</h2>
           <table className="pricetable">
@@ -483,7 +553,7 @@ export default function Offering() {
           {unmetChoice.name}: pick at least {unmetChoice.numberRelOfferLowerLimit ?? 1} to continue.
         </p>
       )}
-      <button className="primary big" onClick={add} disabled={outOfStock || Boolean(unmetChoice)}>
+      <button className="primary big" onClick={add} disabled={outOfStock || Boolean(unmetChoice) || oracleRejected}>
         {outOfStock ? t('Out of stock') : t('Add to cart')}
       </button>
 

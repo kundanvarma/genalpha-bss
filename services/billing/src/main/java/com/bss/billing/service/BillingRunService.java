@@ -797,6 +797,42 @@ public class BillingRunService {
     @SuppressWarnings("unchecked")
     BigDecimal monthlyFor(String offeringId, Map<String, String> characteristics,
             Map<String, String> unitCache) {
+        // the ONE oracle first: the catalog prices the configuration exactly as every channel saw it —
+        // per unit times quantity, windows, named algorithms. Only when it does not answer does the
+        // run sum the offering's flat prices itself.
+        int quantity = 1;
+        Map<String, String> picks = new java.util.TreeMap<>();
+        if (characteristics != null) {
+            for (Map.Entry<String, String> c : characteristics.entrySet()) {
+                if ("quantity".equals(c.getKey())) {
+                    try {
+                        quantity = Math.max(1, (int) Double.parseDouble(c.getValue()));
+                    } catch (NumberFormatException ignored) {
+                        // a malformed quantity bills as one
+                    }
+                } else {
+                    picks.put(c.getKey(), c.getValue());
+                }
+            }
+        }
+        java.util.Optional<Map<String, Object>> priced = catalog.priceConfiguration(offeringId, picks, quantity);
+        if (priced.isPresent()) {
+            BigDecimal monthly = BigDecimal.ZERO;
+            boolean any = false;
+            for (Map<String, Object> line : (List<Map<String, Object>>) priced.get().getOrDefault("priceLine", List.of())) {
+                if (!"recurring".equals(line.get("priceType"))) {
+                    continue;
+                }
+                any = true;
+                monthly = monthly.add(new BigDecimal(String.valueOf(line.getOrDefault("amount", "0"))));
+                if (line.get("price") instanceof Map<?, ?> money && money.get("unit") != null) {
+                    unitCache.put(offeringId, String.valueOf(money.get("unit")));
+                }
+            }
+            if (any || quantity > 1) {
+                return monthly;
+            }
+        }
         Map<String, Object> offering = catalog.offering(offeringId);
         if (offering == null) {
             return BigDecimal.ZERO;

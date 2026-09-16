@@ -134,6 +134,34 @@ public class RestDownstreamClients {
             public Map<String, Object> price(String id) {
                 return get("productOfferingPrice", id);
             }
+
+            @Override
+            @SuppressWarnings("unchecked")
+            public java.util.Optional<Map<String, Object>> priceConfiguration(String offeringId,
+                    Map<String, String> characteristics, int quantity) {
+                try {
+                    List<Map<String, Object>> chars = new java.util.ArrayList<>();
+                    for (Map.Entry<String, String> c : characteristics.entrySet()) {
+                        chars.add(Map.of("name", c.getKey(), "value", c.getValue()));
+                    }
+                    Map<String, Object> config = new java.util.LinkedHashMap<>();
+                    config.put("productOffering", Map.of("id", offeringId));
+                    config.put("quantity", quantity);
+                    config.put("configurationCharacteristic", chars);
+                    Map<String, Object> body = rest.post().uri("/tmf-api/productConfigurationManagement/v5/checkProductConfiguration")
+                            .header("Content-Type", "application/json")
+                            .body(Map.of("checkProductConfigurationItem", List.of(Map.of("id", "1", "productConfiguration", config))))
+                            .retrieve().body(Map.class);
+                    if (body == null || !(body.get("checkProductConfigurationItem") instanceof List<?> items) || items.isEmpty()
+                            || !(items.get(0) instanceof Map<?, ?> item) || !"accepted".equals(item.get("state"))
+                            || !(item.get("configurationPrice") instanceof Map<?, ?> priced)) {
+                        return java.util.Optional.empty();
+                    }
+                    return java.util.Optional.of((Map<String, Object>) priced);
+                } catch (RestClientException e) {
+                    return java.util.Optional.empty();
+                }
+            }
         };
     }
 

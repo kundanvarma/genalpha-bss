@@ -22,6 +22,10 @@ public class StockOperationDto {
     @JsonProperty("relatedOrder")
     private Map<String, Object> relatedOrder;
 
+    /** TMF687 requestedProduct: the configured product (offering + productCharacteristic[] naming the variant). */
+    @com.fasterxml.jackson.annotation.JsonProperty("requestedProduct")
+    private Map<String, Object> requestedProduct;
+
     @JsonProperty("state")
     private String state;
 
@@ -58,5 +62,13 @@ public class StockOperationDto {
 
     public void setState(String state) {
         this.state = state;
+    }
+
+    public Map<String, Object> getRequestedProduct() {
+        return requestedProduct;
+    }
+
+    public void setRequestedProduct(Map<String, Object> requestedProduct) {
+        this.requestedProduct = requestedProduct;
     }
 }

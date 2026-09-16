@@ -36,6 +36,15 @@ public class ProductOfferingPriceDto {
     @JsonProperty("tax")
     private java.util.List<Map<String, Object>> tax;
 
+    @JsonProperty("validFor")
+    private Map<String, Object> validFor;
+
+    @JsonProperty("unitOfMeasure")
+    private Map<String, Object> unitOfMeasure;
+
+    @JsonProperty("pricingLogicAlgorithm")
+    private java.util.List<Map<String, Object>> pricingLogicAlgorithm;
+
     @JsonProperty("recurringChargePeriodType")
     private String recurringChargePeriodType;
 
@@ -167,5 +176,29 @@ public class ProductOfferingPriceDto {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public Map<String, Object> getValidFor() {
+        return validFor;
+    }
+
+    public void setValidFor(Map<String, Object> validFor) {
+        this.validFor = validFor;
+    }
+
+    public Map<String, Object> getUnitOfMeasure() {
+        return unitOfMeasure;
+    }
+
+    public void setUnitOfMeasure(Map<String, Object> unitOfMeasure) {
+        this.unitOfMeasure = unitOfMeasure;
+    }
+
+    public java.util.List<Map<String, Object>> getPricingLogicAlgorithm() {
+        return pricingLogicAlgorithm;
+    }
+
+    public void setPricingLogicAlgorithm(java.util.List<Map<String, Object>> pricingLogicAlgorithm) {
+        this.pricingLogicAlgorithm = pricingLogicAlgorithm;
     }
 }

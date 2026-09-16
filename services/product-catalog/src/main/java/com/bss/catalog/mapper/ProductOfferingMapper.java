@@ -42,6 +42,7 @@ public class ProductOfferingMapper {
         dto.setCategory(readJsonObjectList(entity.getCategoryJson()));
         dto.setProductOfferingPrice(readJsonObjectList(entity.getProductOfferingPriceJson()));
         dto.setProductOfferingTerm(readJsonObjectList(entity.getProductOfferingTermJson()));
+        dto.setProductOfferingRelationship(readJsonObjectList(entity.getProductOfferingRelationshipJson()));
         dto.setAttachment(readJsonObjectList(entity.getAttachmentJson()));
         dto.setChannel(readJsonObjectList(entity.getChannelJson()));
         dto.setType("ProductOffering");
@@ -70,6 +71,7 @@ public class ProductOfferingMapper {
         entity.setCategoryJson(writeJsonObjectList(dto.getCategory()));
         entity.setProductOfferingPriceJson(writeJsonObjectList(dto.getProductOfferingPrice()));
         entity.setProductOfferingTermJson(writeJsonObjectList(dto.getProductOfferingTerm()));
+        entity.setProductOfferingRelationshipJson(writeJsonObjectList(dto.getProductOfferingRelationship()));
         entity.setAttachmentJson(writeJsonObjectList(dto.getAttachment()));
         entity.setChannelJson(writeJsonObjectList(dto.getChannel()));
         applyWindow(dto, entity);
@@ -115,6 +117,9 @@ public class ProductOfferingMapper {
         }
         if (patch.getProductOfferingTerm() != null) {
             entity.setProductOfferingTermJson(writeJsonObjectList(patch.getProductOfferingTerm()));
+        }
+        if (patch.getProductOfferingRelationship() != null) {
+            entity.setProductOfferingRelationshipJson(writeJsonObjectList(patch.getProductOfferingRelationship()));
         }
         if (patch.getChannel() != null) {
             entity.setChannelJson(writeJsonObjectList(patch.getChannel()));

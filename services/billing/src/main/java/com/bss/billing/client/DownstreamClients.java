@@ -30,6 +30,17 @@ public final class DownstreamClients {
 
         Map<String, Object> price(String id);
 
+        /**
+         * The ONE pricing oracle (TMF760 checkProductConfiguration) for a product as configured: the
+         * recurring lines that apply to these characteristics and this quantity, per unit times quantity,
+         * windows honoured, algorithms evaluated — so the bill agrees with what every channel showed.
+         * Empty on outage: the caller falls back to summing the offering's flat prices itself.
+         */
+        default java.util.Optional<Map<String, Object>> priceConfiguration(String offeringId,
+                Map<String, String> characteristics, int quantity) {
+            return java.util.Optional.empty();
+        }
+
         /** The migration rehearsal maps legacy rows by offering NAME. */
         default List<Map<String, Object>> offeringsByName(String name) {
             return List.of();

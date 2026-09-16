@@ -57,6 +57,9 @@ public class ProductOfferingDto {
     @JsonProperty("productOfferingTerm")
     private List<Map<String, Object>> productOfferingTerm;
 
+    @JsonProperty("productOfferingRelationship")
+    private List<Map<String, Object>> productOfferingRelationship;
+
     @JsonProperty("channel")
     private java.util.List<java.util.Map<String, Object>> channel;
 
@@ -202,4 +205,12 @@ public class ProductOfferingDto {
 
     public java.util.List<java.util.Map<String, Object>> getChannel() { return channel; }
     public void setChannel(java.util.List<java.util.Map<String, Object>> v) { this.channel = v; }
+
+    public List<Map<String, Object>> getProductOfferingRelationship() {
+        return productOfferingRelationship;
+    }
+
+    public void setProductOfferingRelationship(List<Map<String, Object>> productOfferingRelationship) {
+        this.productOfferingRelationship = productOfferingRelationship;
+    }
 }

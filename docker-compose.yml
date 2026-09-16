@@ -85,6 +85,7 @@ services:
       # TMF760: the configurator consults policy's block rules under the
       # catalog's own machine identity, and the deal engine anonymously
       POLICY_BASE_URL: http://policy:8080
+      STOCK_BASE_URL: http://product-stock:8080
       OIDC_CLIENT_ID: bss-catalog
       OIDC_CLIENT_SECRET: catalog-secret
       OIDC_TOKEN_URI: http://keycloak:8080/realms/bss/protocol/openid-connect/token

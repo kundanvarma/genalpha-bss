@@ -53,7 +53,22 @@ public class StockOperationService {
         }
 
         String tenantId = tenantScope.currentTenantId();
-        ProductStock stock = stocks.findForUpdateByProductOfferingId(offeringId, tenantId).orElse(null);
+        // the row for THIS configuration: a variant row whose stockedProduct characteristics all match the
+        // requested product wins over the plain offering row; no row at all = not stock-managed
+        ProductStock stock = null;
+        java.util.Map<String, String> wanted = characteristicsOf(request.getRequestedProduct());
+        int bestMatch = -1;
+        for (ProductStock candidate : stocks.findByTenantIdAndProductOfferingId(tenantId, offeringId)) {
+            java.util.Map<String, String> rowChars = stockedCharacteristics(candidate);
+            boolean matches = rowChars.entrySet().stream().allMatch(e -> e.getValue().equals(wanted.get(e.getKey())));
+            if (matches && rowChars.size() > bestMatch) {
+                stock = candidate;
+                bestMatch = rowChars.size();
+            }
+        }
+        if (stock != null) {
+            stock = stocks.findForUpdateById(stock.getId(), tenantId).orElse(stock);
+        }
         if (stock == null) {
             request.setState(NOT_MANAGED);
             return request;
@@ -123,5 +138,33 @@ public class StockOperationService {
             throw new BadRequestException(field + ".id is required");
         }
         return String.valueOf(id);
+    }
+
+    /** {name: value} of a ProductRefOrValue's productCharacteristic[]. */
+    @SuppressWarnings("unchecked")
+    static java.util.Map<String, String> characteristicsOf(java.util.Map<String, Object> product) {
+        java.util.Map<String, String> out = new java.util.LinkedHashMap<>();
+        if (product != null && product.get("productCharacteristic") instanceof java.util.List<?> pcs) {
+            for (Object pc : pcs) {
+                if (pc instanceof java.util.Map<?, ?> m && m.get("name") != null) {
+                    out.put(String.valueOf(m.get("name")), String.valueOf(m.get("value")));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The variant a stock row is for, from the posted TMF687 body's stockedProduct.productCharacteristic[]. */
+    @SuppressWarnings("unchecked")
+    java.util.Map<String, String> stockedCharacteristics(ProductStock row) {
+        if (row.getPayloadJson() == null || row.getPayloadJson().isBlank()) {
+            return java.util.Map.of();
+        }
+        try {
+            java.util.Map<String, Object> body = new com.fasterxml.jackson.databind.ObjectMapper().readValue(row.getPayloadJson(), java.util.Map.class);
+            return characteristicsOf(body.get("stockedProduct") instanceof java.util.Map<?, ?> sp ? (java.util.Map<String, Object>) sp : null);
+        } catch (Exception e) {
+            return java.util.Map.of();
+        }
     }
 }

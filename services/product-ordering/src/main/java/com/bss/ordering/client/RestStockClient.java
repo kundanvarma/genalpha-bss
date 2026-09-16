@@ -26,13 +26,24 @@ public class RestStockClient implements StockClient {
 
     @Override
     public ReserveOutcome reserve(String productOfferingId, String offeringName, int quantity, String orderId) {
+        return reserve(productOfferingId, offeringName, quantity, orderId, null);
+    }
+
+    @Override
+    public ReserveOutcome reserve(String productOfferingId, String offeringName, int quantity, String orderId,
+            java.util.List<Map<String, Object>> characteristics) {
         try {
+            Map<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("productOffering", Map.of("id", productOfferingId, "name", offeringName));
+            body.put("quantity", quantity);
+            body.put("relatedOrder", Map.of("id", orderId));
+            if (characteristics != null && !characteristics.isEmpty()) {
+                // TMF687 requestedProduct: the configured variant this reservation is for
+                body.put("requestedProduct", Map.of("productOffering", Map.of("id", productOfferingId), "productCharacteristic", characteristics));
+            }
             restClient.post()
                     .uri(BASE + "/reserveProductStock")
-                    .body(Map.of(
-                            "productOffering", Map.of("id", productOfferingId, "name", offeringName),
-                            "quantity", quantity,
-                            "relatedOrder", Map.of("id", orderId)))
+                    .body(body)
                     .retrieve()
                     .toBodilessEntity();
             return ReserveOutcome.reserved();

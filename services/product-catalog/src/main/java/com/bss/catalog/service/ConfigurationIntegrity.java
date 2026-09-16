@@ -52,19 +52,29 @@ public class ConfigurationIntegrity {
             return; // a dangling reference is another rule's business
         }
         Map<String, Set<String>> declared = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> declaredRaw = new LinkedHashMap<>();
         for (Map<String, Object> c : list(spec.getProductSpecCharacteristicJson())) {
             Set<String> values = new LinkedHashSet<>();
+            List<Map<String, Object>> raws = new java.util.ArrayList<>();
             Object raw = c.get("productSpecCharacteristicValue");
             if (raw instanceof List<?> l) {
                 for (Object v : l) {
-                    if (v instanceof Map<?, ?> m && m.get("value") != null) {
-                        values.add(String.valueOf(m.get("value")));
-                    } else if (v != null && !(v instanceof Map)) {
+                    if (v instanceof Map<?, ?> m) {
+                        @SuppressWarnings("unchecked") Map<String, Object> mv = (Map<String, Object>) m;
+                        raws.add(mv);
+                        if (m.get("value") != null) {
+                            values.add(String.valueOf(m.get("value")));
+                        } else if (m.get("valueFrom") != null || m.get("valueTo") != null) {
+                            values.add((m.get("valueFrom") == null ? "…" : m.get("valueFrom")) + "–" + (m.get("valueTo") == null ? "…" : m.get("valueTo")));
+                        }
+                    } else if (v != null) {
                         values.add(String.valueOf(v));
+                        raws.add(Map.of("value", String.valueOf(v)));
                     }
                 }
             }
             declared.put(String.valueOf(c.get("name")), values);
+            declaredRaw.put(String.valueOf(c.get("name")), raws);
         }
         for (Map<String, Object> ref : priceRefs) {
             String priceId = ref == null || ref.get("id") == null ? "" : String.valueOf(ref.get("id"));
@@ -86,8 +96,18 @@ public class ConfigurationIntegrity {
                 Object raw = cond.get("productSpecCharacteristicValue");
                 if (raw instanceof List<?> l) {
                     for (Object v : l) {
+                        boolean rangeCondition = v instanceof Map<?, ?> rm && rm.get("value") == null && (rm.get("valueFrom") != null || rm.get("valueTo") != null);
+                        if (rangeCondition) {
+                            // a price conditioned on a range needs the characteristic to be numeric with a declared range
+                            boolean anyRange = declaredRaw.get(name).stream().anyMatch(d -> d.get("valueFrom") != null || d.get("valueTo") != null);
+                            if (!anyRange) {
+                                throw new BadRequestException("price \"" + price.getName() + "\" applies to a range of \"" + name
+                                        + "\", but specification \"" + spec.getName() + "\" declares only fixed values for it — declare a range (valueFrom/valueTo) on the characteristic first");
+                            }
+                            continue;
+                        }
                         String val = v instanceof Map<?, ?> m ? String.valueOf(m.get("value")) : String.valueOf(v);
-                        if (!declared.get(name).contains(val)) {
+                        if (!declared.get(name).contains(val) && !ConfiguratorService.valueAllowed(declaredRaw.get(name), val)) {
                             throw new BadRequestException("price \"" + price.getName() + "\" applies only when \"" + name + "\" is \"" + val
                                     + "\", but specification \"" + spec.getName() + "\" allows only: "
                                     + (declared.get(name).isEmpty() ? "no values at all" : String.join(", ", declared.get(name)))

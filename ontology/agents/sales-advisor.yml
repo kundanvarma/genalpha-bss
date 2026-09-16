@@ -7,7 +7,7 @@ meaning: The advisor behind "For you" and the offer captions — ranks the shelf
 intent: Personalisation that a customer can read the reason for; consent first.
 runsAs: caller
 autonomy: advisory
-reads: [productCatalog.offerings, party.individual]
+reads: [productCatalog.offerings, party.individual, catalog.configure, catalog.configurationSpace]
 actions:
   check: []
   execute: []

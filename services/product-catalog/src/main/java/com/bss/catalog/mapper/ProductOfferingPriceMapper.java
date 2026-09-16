@@ -35,6 +35,18 @@ public class ProductOfferingPriceMapper {
         dto.setTax(readJsonList(entity.getTaxJson()));
         dto.setRecurringChargePeriodType(entity.getRecurringChargePeriodType());
         dto.setRecurringChargePeriodLength(entity.getRecurringChargePeriodLength());
+        if (entity.getValidFrom() != null || entity.getValidTo() != null) {
+            Map<String, Object> window = new java.util.LinkedHashMap<>();
+            if (entity.getValidFrom() != null) {
+                window.put("startDateTime", entity.getValidFrom());
+            }
+            if (entity.getValidTo() != null) {
+                window.put("endDateTime", entity.getValidTo());
+            }
+            dto.setValidFor(window);
+        }
+        dto.setUnitOfMeasure(readJsonObject(entity.getUnitOfMeasureJson()));
+        dto.setPricingLogicAlgorithm(readJsonList(entity.getPricingLogicAlgorithmJson()));
         dto.setLifecycleStatus(entity.getLifecycleStatus());
         dto.setVersion(entity.getVersion());
         dto.setLastUpdate(entity.getLastUpdate());
@@ -54,6 +66,9 @@ public class ProductOfferingPriceMapper {
         entity.setTaxJson(writeJsonList(dto.getTax()));
         entity.setRecurringChargePeriodType(dto.getRecurringChargePeriodType());
         entity.setRecurringChargePeriodLength(dto.getRecurringChargePeriodLength());
+        applyWindow(dto.getValidFor(), entity);
+        entity.setUnitOfMeasureJson(writeJsonObject(dto.getUnitOfMeasure()));
+        entity.setPricingLogicAlgorithmJson(writeJsonList(dto.getPricingLogicAlgorithm()));
         entity.setLifecycleStatus(dto.getLifecycleStatus());
         entity.setVersion(dto.getVersion());
         entity.setLastUpdate(dto.getLastUpdate());
@@ -75,6 +90,15 @@ public class ProductOfferingPriceMapper {
         }
         if (patch.getPrice() != null) {
             entity.setPriceJson(writeJsonObject(patch.getPrice()));
+        }
+        if (patch.getValidFor() != null) {
+            applyWindow(patch.getValidFor(), entity);
+        }
+        if (patch.getUnitOfMeasure() != null) {
+            entity.setUnitOfMeasureJson(writeJsonObject(patch.getUnitOfMeasure()));
+        }
+        if (patch.getPricingLogicAlgorithm() != null) {
+            entity.setPricingLogicAlgorithmJson(writeJsonList(patch.getPricingLogicAlgorithm()));
         }
         if (patch.getTax() != null) {
             entity.setTaxJson(writeJsonList(patch.getTax()));
@@ -137,6 +161,29 @@ public class ProductOfferingPriceMapper {
             return objectMapper.readValue(json, JSON_OBJECT);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
+        }
+    }
+
+    /** TMF620 validFor {startDateTime, endDateTime} → the two columns; an absent bound stays open. */
+    private static void applyWindow(Map<String, Object> window, ProductOfferingPrice entity) {
+        if (window == null) {
+            return;
+        }
+        entity.setValidFrom(parseTime(window.get("startDateTime")));
+        entity.setValidTo(parseTime(window.get("endDateTime")));
+    }
+
+    private static java.time.OffsetDateTime parseTime(Object v) {
+        if (v == null || String.valueOf(v).isBlank()) {
+            return null;
+        }
+        if (v instanceof java.time.OffsetDateTime t) {
+            return t;
+        }
+        try {
+            return java.time.OffsetDateTime.parse(String.valueOf(v));
+        } catch (Exception e) {
+            return java.time.LocalDate.parse(String.valueOf(v).substring(0, 10)).atStartOfDay().atOffset(java.time.ZoneOffset.UTC);
         }
     }
 }

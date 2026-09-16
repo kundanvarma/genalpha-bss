@@ -102,10 +102,13 @@ public class ProductSpecificationMapper {
                             mv.put(String.valueOf(e.getKey()), e.getValue());
                         }
                         Object val = mv.get("value") != null ? mv.get("value") : mv.get("name");
-                        if (val == null) {
+                        boolean range = mv.get("valueFrom") != null || mv.get("valueTo") != null;
+                        if (val == null && !range) {
                             continue;
                         }
-                        mv.put("value", val instanceof String ? val : String.valueOf(val));
+                        if (val != null) {
+                            mv.put("value", val instanceof String ? val : String.valueOf(val));
+                        }
                         norm.add(mv);
                     } else if (v != null) {
                         Map<String, Object> mv = new java.util.LinkedHashMap<>();
