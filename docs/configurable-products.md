@@ -107,11 +107,31 @@ bill-time agree.
   behaviour in the v5 state vocabulary.
 - `ops/e2e/color_pricing_test.js`: phones, colour premiums and the bill.
 
+## Closed on the second night (2026-09-17)
+
+- **`exchangableTo` decides the plan-change list** in the shop, the business
+  console and the ontology's upgrade list; without it the category rule still
+  applies. The copilot proposes it from "customers can move to".
+- **Overage tiers ride to the charging system**: at activation the SOM reads
+  the offering's allowance table from the usage component (machine identity
+  with `usage:read`) and pushes it to the OCS through the seam; on SigScale it
+  lands on the subscriber's product as `bssOverageTiers`, the table the rating
+  function reads. A rating function that walks it inside SigScale is the OCS's
+  own configuration, outside this repository.
+- **The copilot sees every offering name** (a compact index of the whole
+  shelf beside full rows for the first forty) and resolves names case-
+  insensitively, so "needs Fiber 500" always finds it.
+- **The learning loop judges on verdicts**: a recommendation ranks down or
+  up from the answers it received (five or more), not from how often it was
+  shown in silence.
+- **A governed `configureProduct` action**: agents configure through the
+  registry with a receipt, the same check the shop runs; `check` and `execute`
+  both answer the verdict and the price.
+- **Billing prices an installed product `priceOnly`**: today's stock and
+  relationships never reprice a subscriber.
+
 ## Honest limits
 
-The ontology capability is a read; a governed `configureProduct` action is
-not yet an entry in the action registry. The mobile app configures inline in
-its buy tab, not on a page of its own. The business console's plan-change
-picker still lists like-for-like plans by category rather than through
-`exchangableTo`. Usage tiers are pushed to SigScale only as the flat rate
-today; the tier table reaches the OCS seam in the next charging pass.
+The tier table reaches SigScale as data; whether SigScale rates by it depends
+on the operator's rating configuration there. The mobile app configures
+inline in its buy tab, not on a page of its own.
