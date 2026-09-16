@@ -51,6 +51,10 @@ public class UsageAllowance {
     @Column(name = "boost")
     private boolean boost;
 
+    /** Stepped overage tiers [{valueFrom, valueTo, price}] over the units beyond the allowance; blank = one flat overage price. */
+    @jakarta.persistence.Column(name = "tier_json", length = 2000)
+    private String tierJson;
+
     public UsageAllowance() {
     }
 
@@ -149,4 +153,7 @@ public class UsageAllowance {
     public void setLastUpdate(OffsetDateTime lastUpdate) {
         this.lastUpdate = lastUpdate;
     }
+
+    public String getTierJson() { return tierJson; }
+    public void setTierJson(String tierJson) { this.tierJson = tierJson; }
 }

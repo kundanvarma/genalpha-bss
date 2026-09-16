@@ -96,14 +96,18 @@ public class ProductCopilotService {
                 "proposal": null or {"specs": [{"ref": "s1", "name", "brand"?, "productSpecCharacteristic": \
                 [{"name": "homeLocations", "configurable": true, "productSpecCharacteristicValue": [{"value": "1-2"}, {"value": "3-4"}]}]}], \
                 "prices": [{"ref": "p1", "name", "priceType", "recurringChargePeriodType"?, \
-                "price": {"unit", "value"}, "prodSpecCharValueUse"?}], \
+                "price": {"unit", "value"}, "prodSpecCharValueUse"?, "unitOfMeasure"?: {"amount", "units"}, \
+                "validFor"?: {"startDateTime", "endDateTime"}, "pricingLogicAlgorithm"?: [{"plaSpecId": \
+                "perUnitAbove"|"stepped", "characteristic", "threshold"?, "unitPrice"?, "tier"?: [{"valueFrom", "valueTo", "price"}]}]}], \
                 "offerings": [{"ref": "o1", "name", "description", "category": [{"name"}], \
                 "specRef"?, "priceRefs": [], "isBundle"?, "productOfferingTerm"?, \
                 "validFor"?: {"startDateTime": ISO, "endDateTime"?: ISO} (when the owner names a \
                 launch date or a campaign window), "channel"?: ["web","app","store","telesales",\
                 "care","business","partner","agent-acp","agent-mcp","agent-a2a"] (ONLY the channels \
                 the owner names; omit = every channel), \
-                "bundledChildren"?: [{"offeringRef" or "existingName", "optional": true|false}]}], \
+                "bundledChildren"?: [{"offeringRef" or "existingName", "optional": true|false}], \
+                "relationships"?: [{"relationshipType": "requires"|"excludes"|"exchangableTo", "offeringRef" or \
+                "existingName", "role"?: "auto-add"|"prompt"|"block"}]}], \
                 "pricingRules": [{"name", "message", "adjustmentType": "percent"|"amount", \
                 "adjustmentValue": -10, "whenCartHas": ["o1", "Samsung Galaxy S26"], \
                 "audience": "all"|"consumer"|"business"}], \
@@ -134,6 +138,18 @@ public class ProductCopilotService {
                 [{"name": "color", "productSpecCharacteristicValue": [{"value": "Titanium"}]}] \
                 — OMIT it entirely unless the price depends on a configured characteristic; \
                 never use it for bundle membership or descriptions.
+                MORE SHAPES, each with the standard's own field: a NUMERIC CHOICE ("up to 10 extra \
+                profiles, 10 per profile above two") is a characteristic whose productSpecCharacteristicValue \
+                is a RANGE [{"valueFrom": 0, "valueTo": 10}] and a price with pricingLogicAlgorithm \
+                [{"plaSpecId": "perUnitAbove", "characteristic": "extraProfiles", "threshold": 2, "unitPrice": 10}]; \
+                PER-SEAT or PER-LICENCE pricing is a price with "unitOfMeasure": {"amount": 1, "units": "seat"} \
+                and a spec fact {"name": "fungible", "configurable": false, "productSpecCharacteristicValue": [{"value": "true"}]} \
+                (units are interchangeable, sold in quantity on one line — never for lines with a number or a SIM); \
+                a LIMITED-TIME price line is a price with "validFor"; an EARLY-TERMINATION charge is a price with \
+                "priceType": "penalty" and "unitOfMeasure": {"amount": <term months>, "units": "month"} next to the \
+                offering's productOfferingTerm (it declines monthly and is never charged on the configuration); \
+                "needs X" is a relationship {"relationshipType": "requires", "existingName": "X", "role": "prompt"} \
+                and "cannot be combined with Y" is {"relationshipType": "excludes", "existingName": "Y"}. \
                 A CONFIGURABLE PRODUCT ("the customer picks the number of screens / locations / \
                 devices") is ONE offering whose spec has one configurable characteristic per choice \
                 with its allowed values as productSpecCharacteristicValue [{"value": ...}] (never a \
@@ -309,6 +325,55 @@ public class ProductCopilotService {
                 c.put("productSpecCharacteristicValue", valuesOf(rawValues));
             }
         }
+        // every characteristic an algorithm counts must exist on the offering's spec, as a numeric range
+        for (Map<String, Object> offering : offerings) {
+            Map<String, Object> spec = null;
+            for (Map<String, Object> s : specs) {
+                if (String.valueOf(s.get("ref")).equals(String.valueOf(offering.get("specRef")))) {
+                    spec = s;
+                }
+            }
+            if (spec == null) {
+                continue;
+            }
+            List<Map<String, Object>> chars = listOf(spec.get("productSpecCharacteristic"));
+            for (Object refObj : offering.get("priceRefs") instanceof List<?> refs ? refs : List.of()) {
+                for (Map<String, Object> price : prices) {
+                    if (!String.valueOf(refObj).equals(String.valueOf(price.get("ref")))) {
+                        continue;
+                    }
+                    for (Map<String, Object> pla : listOf(price.get("pricingLogicAlgorithm"))) {
+                        String name = String.valueOf(pla.getOrDefault("characteristic", "quantity"));
+                        if ("quantity".equals(name)) {
+                            continue;
+                        }
+                        Map<String, Object> target = null;
+                        for (Map<String, Object> c : chars) {
+                            if (name.equals(String.valueOf(c.get("name")))) {
+                                target = c;
+                            }
+                        }
+                        if (target == null) {
+                            target = new java.util.LinkedHashMap<>();
+                            target.put("name", name);
+                            chars.add(target);
+                        }
+                        target.put("configurable", true);
+                        target.put("valueType", "number");
+                        List<Map<String, Object>> have = listOf(target.get("productSpecCharacteristicValue"));
+                        if (have.isEmpty()) {
+                            Map<String, Object> range = new java.util.LinkedHashMap<>();
+                            range.put("valueFrom", 0);
+                            range.put("valueTo", pla.get("valueTo") != null ? pla.get("valueTo") : 10);
+                            range.put("rangeInterval", "closed");
+                            have.add(range);
+                        }
+                        target.put("productSpecCharacteristicValue", have);
+                    }
+                }
+            }
+            spec.put("productSpecCharacteristic", chars);
+        }
         // every choice a price conditions on must exist on the offering's spec, with that value
         for (Map<String, Object> offering : offerings) {
             Map<String, Object> spec = null;
@@ -385,11 +450,14 @@ public class ProductCopilotService {
             Map<String, Object> v = new java.util.LinkedHashMap<>();
             if (x instanceof Map<?, ?> m) {
                 Object val = m.get("value") != null ? m.get("value") : m.get("name");
-                if (val == null) {
+                boolean range = m.get("valueFrom") != null || m.get("valueTo") != null;
+                if (val == null && !range) {
                     continue;
                 }
                 v.putAll((Map<String, Object>) m);
-                v.put("value", String.valueOf(val));
+                if (val != null) {
+                    v.put("value", String.valueOf(val));
+                }
             } else {
                 v.put("value", String.valueOf(x));
             }

@@ -120,6 +120,7 @@ const RESOURCES = [
       // row 3 — what it is
       { name: 'productSpecification', label: 'Specification', kind: 'ref', resource: 'productSpecification', referredType: 'ProductSpecification', half: true, hint: 'The facts: data, validity, network…' },
       { name: 'productOfferingTerm', label: 'Commitment', kind: 'commitment', hint: 'Binding period, if any' },
+      { name: 'productOfferingRelationship', label: 'Requires / excludes', kind: 'jsontext', wide: true, placeholder: '[{"id": "<offering id>", "name": "Taranga Fiber 300", "relationshipType": "requires", "role": "prompt"}, {"id": "<offering id>", "name": "Taranga TV", "relationshipType": "excludes"}]', hint: 'TMF620 relationships the configurator enforces: requires (role auto-add | prompt | block), excludes, exchangableTo (the like-for-like change list).' },
       { name: 'isBundle', label: 'Is a bundle', kind: 'checkbox' },
       // row 4 — placement and price
       { name: 'category', label: 'Categories', kind: 'reflist', resource: 'category', referredType: 'Category', half: true, hint: 'Drive shop placement and fulfilment' },
@@ -176,15 +177,17 @@ const RESOURCES = [
     title: 'Product Offering Prices',
     fields: [
       { name: 'name', label: 'Name', required: true, half: true },
-      { name: 'priceType', label: 'Price type', kind: 'select', options: [{ value: 'recurring', label: 'recurring (per period)' }, { value: 'oneTime', label: 'one-time' }, { value: 'usage', label: 'usage' }], default: 'recurring', hint: 'What is charged, when' },
+      { name: 'priceType', label: 'Price type', kind: 'select', options: [{ value: 'recurring', label: 'recurring (per period)' }, { value: 'oneTime', label: 'one-time' }, { value: 'usage', label: 'usage' }, { value: 'penalty', label: 'early termination (never charged on a configuration — what leaving early costs, declining over the term)' }], default: 'recurring', hint: 'What is charged, when' },
       { name: 'price', label: 'Price', kind: 'money', hint: 'Amount and currency' },
       { name: 'recurringChargePeriodType', label: 'Charge period', kind: 'select', options: [{ value: 'month', label: 'month' }, { value: 'week', label: 'week' }, { value: 'day', label: 'day' }, { value: 'year', label: 'year' }], default: 'month', hint: 'Recurring prices only' },
       { name: 'recurringChargePeriodLength', label: 'Period length', kind: 'number', placeholder: '1', hint: 'e.g. 1 = every month' },
       { name: 'version', label: 'Version', placeholder: '1.0' },
       { name: 'isBundle', label: 'Bundle price', kind: 'checkbox' },
       { name: 'lifecycleStatus', label: 'Lifecycle status', placeholder: 'Active', hint: 'In study → In design → In test → Active → Retired' },
-      { name: 'validFrom', label: 'Available from', placeholder: 'blank = immediately', hint: 'ISO date-time' },
-      { name: 'validTo', label: 'Available until', placeholder: 'blank = forever', hint: 'ISO date-time' },
+      { name: 'unitOfMeasure', label: 'Per unit of', kind: 'jsontext', placeholder: '{"amount": 1, "units": "seat"}', hint: 'Quantity pricing: the price applies per this many (per seat, per 5 GB). Blank = a flat price.' },
+      { name: 'validFor', label: 'Price window', kind: 'jsontext', placeholder: '{"startDateTime": "2026-10-01T00:00:00Z", "endDateTime": "2026-12-31T23:59:59Z"}', hint: 'When this price line applies (an effective-dated segment). Blank = always. Never edit a live price on an offering with subscribers — add a dated segment.' },
+      { name: 'pricingLogicAlgorithm', label: 'Algorithm', kind: 'jsontext', wide: true, placeholder: '[{"plaSpecId": "perUnitAbove", "characteristic": "extraProfiles", "threshold": 2, "unitPrice": 10}]  or  [{"plaSpecId": "stepped", "characteristic": "quantity", "tier": [{"valueFrom": 1, "valueTo": 10, "price": 20}, {"valueFrom": 11, "valueTo": 999, "price": 15, "format": "perUnit"}]}]', hint: 'A named algorithm from the documented set: perUnitAbove (base plus unit price above a threshold) or stepped (a tier table on a characteristic or the quantity). Never free-form.' },
+      { name: 'prodSpecCharValueUse', label: 'Applies only when', kind: 'jsontext', wide: true, placeholder: '[{"name": "screens", "productSpecCharacteristicValue": [{"value": "5+"}]}]  or a range: [{"name": "extraProfiles", "productSpecCharacteristicValue": [{"valueFrom": 3, "valueTo": 10}]}]', hint: 'The configured choice this price is conditioned on. The specification must declare the choice and its values, or the catalog refuses the offering.' },
     ],
     columns: ['name', 'priceType', 'price', 'recurringChargePeriodType', 'lifecycleStatus', 'lastUpdate'],
   },
@@ -196,6 +199,7 @@ const RESOURCES = [
       { name: 'name', label: 'Name', required: true },
       { name: 'productOffering', label: 'Offering', kind: 'ref', resource: 'productOffering', referredType: 'ProductOffering' },
       { name: 'stockedQuantity', label: 'Stocked', kind: 'quantity' },
+      { name: 'stockedProduct', label: 'Variant (optional)', kind: 'jsontext', wide: true, placeholder: '{"productOffering": {"id": "<offering id>"}, "productCharacteristic": [{"name": "boxColour", "value": "Icy Blue"}]}', hint: 'TMF687 stockedProduct: count this row per configured variant (a colour, a storage size). Blank = the offering as a whole. The configurator marks a variant with no stock as not selectable.' },
     ],
     columns: ['name', 'productOffering', 'stockedQuantity', 'reservedQuantity', 'availableQuantity', 'lastUpdate'],
   },
@@ -3204,7 +3208,7 @@ function copilotValidate(proposal, context) {
   return problems;
 }
 
-async function copilotExecute(proposal) {
+async function copilotExecute(proposal, context = { offerings: [] }) {
   const created = []; // [{kind, id, base?}] for rollback, reverse order
   const jsonOf = async (res, what) => {
     if (!res.ok) {
@@ -3237,6 +3241,9 @@ async function copilotExecute(proposal) {
         name: priceName, priceType: price.priceType || 'recurring',
         recurringChargePeriodType: price.recurringChargePeriodType,
         price: money, prodSpecCharValueUse: price.prodSpecCharValueUse || undefined,
+        unitOfMeasure: price.unitOfMeasure || undefined,
+        validFor: price.validFor || undefined,
+        pricingLogicAlgorithm: price.pricingLogicAlgorithm || undefined,
         lifecycleStatus: 'Active',
       }), `price "${priceName}"`);
       prices[price.ref] = made;
@@ -3264,6 +3271,15 @@ async function copilotExecute(proposal) {
       if ((o.priceRefs || []).length) {
         body.productOfferingPrice = o.priceRefs.map((ref) => ({
           id: prices[ref].id, name: prices[ref].name, '@referredType': 'ProductOfferingPrice' }));
+      }
+      if ((o.relationships || []).length) {
+        // requires / excludes: a ref from this proposal or the exact name of an existing offering
+        body.productOfferingRelationship = o.relationships.map((rel) => {
+          const target = rel.offeringRef ? offerings[rel.offeringRef] : null;
+          const existing = !target && rel.existingName ? context.offerings.find((x) => x.name === rel.existingName) : null;
+          return { ...(target ? { id: target.id, name: target.name } : existing ? { id: existing.id, name: existing.name } : { name: rel.existingName }),
+            relationshipType: rel.relationshipType, ...(rel.role ? { role: rel.role } : {}) };
+        }).filter((r) => r.id);
       }
       if ((o.bundledChildren || []).length) {
         body.bundledProductOffering = o.bundledChildren.map((child) => {
@@ -3381,15 +3397,21 @@ function copilotProposalCard(reply, context, log) {
     }
   }
   for (const price of proposal.prices || []) {
-    const cond = (price.prodSpecCharValueUse || []).length ? ' (conditioned)' : '';
-    rows.push(`price · ${price.name} — ${price.price?.value} ${price.price?.unit}`
-      + (price.priceType === 'recurring' ? '/month' : ' one-time') + cond);
+    const conds = (price.prodSpecCharValueUse || []).map((c) => `${c.name} = ${(c.productSpecCharacteristicValue || []).map((v) => v.value != null ? v.value : `${v.valueFrom ?? '…'}–${v.valueTo ?? '…'}`).join('/')}`);
+    const cond = conds.length ? ` (only when ${conds.join(' and ')})` : '';
+    const uom = price.unitOfMeasure?.units ? ` per ${price.unitOfMeasure.amount || 1} ${price.unitOfMeasure.units}` : '';
+    const pla = (price.pricingLogicAlgorithm || [])[0];
+    const algo = pla ? (pla.plaSpecId === 'perUnitAbove' ? ` — ${pla.unitPrice} for each ${pla.characteristic} above ${pla.threshold}` : pla.plaSpecId === 'stepped' ? ` — stepped by ${pla.characteristic || 'quantity'}: ${(pla.tier || []).map((t) => `${t.valueFrom}-${t.valueTo} at ${t.price}`).join(', ')}` : ` — algorithm ${pla.plaSpecId}`) : '';
+    const win = price.validFor ? ` — ${price.validFor.startDateTime ? 'from ' + String(price.validFor.startDateTime).slice(0, 10) : ''}${price.validFor.endDateTime ? ' until ' + String(price.validFor.endDateTime).slice(0, 10) : ''}` : '';
+    const kind = price.priceType === 'recurring' ? '/month' : price.priceType === 'oneTime' ? ' one-time' : price.priceType === 'penalty' ? ' if leaving early (declining over the term)' : price.priceType === 'usage' ? ' per use' : '';
+    rows.push(`price · ${price.name} — ${price.price?.value} ${price.price?.unit}${uom}${kind}${cond}${algo}${win}`);
   }
   for (const o of proposal.offerings || []) {
     const kids = (o.bundledChildren || []).length ? ` — bundle of ${o.bundledChildren.length}` : '';
     const term = (o.productOfferingTerm || [])[0]?.duration;
     const bind = term?.amount ? ` — ${term.amount}-${term.units || 'month'} commitment` : '';
     rows.push(`offering · ${o.name} [${(o.category || [])[0]?.name || 'no category'}]${kids}${bind}`);
+    for (const rel of o.relationships || []) rows.push(`  ${rel.relationshipType} · ${rel.existingName || rel.offeringRef}${rel.role ? ` (${rel.role})` : ''}`);
   }
   for (const rule of proposal.pricingRules || []) {
     const scope = rule.audience === 'consumer' ? ' (private customers only)'
@@ -3431,7 +3453,7 @@ function copilotProposalCard(reply, context, log) {
     create.disabled = true;
     status.textContent = 'creating…';
     try {
-      const made = await copilotExecute(proposal);
+      const made = await copilotExecute(proposal, context);
       status.innerHTML = '';
       const done = document.createElement('div');
       done.className = 'copilot-msg copilot-done';

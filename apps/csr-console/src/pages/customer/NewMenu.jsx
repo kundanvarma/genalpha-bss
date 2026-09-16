@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { hasRole } from '../../auth.js';
-import { createTicket, sendMessage, orderForCustomer, logInteraction } from '../../api.js';
+import { createTicket, sendMessage, orderForCustomer, logInteraction, queryConfiguration, checkConfiguration } from '../../api.js';
 
 /* "+ New" — creating something is an action on the customer, not a permanent
  * form in the record. Ticket, message and order are raised here with the
@@ -16,6 +16,28 @@ export default function NewMenu({ id, customer, suggestions = [], act, onNote })
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [offeringId, setOfferingId] = useState('');
+  // the ONE oracle (TMF760): a configurable offering is configured here exactly as the customer would in the shop
+  const [space, setSpace] = useState(null);
+  const [picks, setPicks] = useState({});
+  const [qty, setQty] = useState(1);
+  const [verdict, setVerdict] = useState(null);
+  useEffect(() => {
+    setSpace(null); setPicks({}); setQty(1); setVerdict(null);
+    if (!offeringId) return;
+    queryConfiguration(offeringId).then((sp) => {
+      if (!sp || (!(sp.configurationCharacteristic || []).length && !sp.fungible)) { setSpace(null); return; }
+      setSpace(sp);
+      const defaults = {};
+      for (const c of sp.configurationCharacteristic || []) { const vals = c.productSpecCharacteristicValue || []; const d = vals.find((v) => v.isDefault) || vals.find((v) => v.value != null && v.isSelectable !== false); if (d && d.value != null) defaults[c.name] = d.value; }
+      setPicks(defaults);
+    }).catch(() => setSpace(null));
+  }, [offeringId]);
+  useEffect(() => {
+    if (!space || !offeringId) return;
+    let live = true;
+    checkConfiguration(offeringId, picks, qty).then((v) => { if (live) setVerdict(v); }).catch(() => {});
+    return () => { live = false; };
+  }, [space, offeringId, JSON.stringify(picks), qty]);
   const [done, setDone] = useState(null);
   const close = () => { setWhat(null); setDone(null); };
 
@@ -71,8 +93,8 @@ export default function NewMenu({ id, customer, suggestions = [], act, onNote })
           const it = suggestions.find((s) => s.offering.id === offeringId);
           if (!it) return;
           act(async () => {
-            await orderForCustomer(id, it.offering);
-            setDone(`Ordered on the customer's behalf: ${it.offering.name}`);
+            await orderForCustomer(id, it.offering, space ? picks : null, space?.fungible ? qty : 1);
+            setDone(`Ordered on the customer's behalf: ${it.offering.name}${space?.fungible && qty > 1 ? ` ×${qty}` : ''}`);
             setWhat(null);
           }, 'new');
         }}>
@@ -81,7 +103,24 @@ export default function NewMenu({ id, customer, suggestions = [], act, onNote })
             <option value="">Pick an offering…</option>
             {suggestions.map((s) => <option key={s.offering.id} value={s.offering.id}>{s.offering.name}</option>)}
           </select>
-          <button className="primary" type="submit" disabled={!offeringId}>Order now</button>
+          {space && (space.configurationCharacteristic || []).map((c) => {
+            const range = (c.productSpecCharacteristicValue || []).find((v) => v.value == null && (v.valueFrom != null || v.valueTo != null));
+            return (
+              <label key={c.name} className="small" data-testid={`new-order-pick-${c.name}`}>{c.name}{' '}
+                {range ? (
+                  <input type="number" min={range.valueFrom ?? undefined} max={range.valueTo ?? undefined} value={picks[c.name] ?? (range.valueFrom ?? 0)} onChange={(e) => setPicks((p) => ({ ...p, [c.name]: e.target.value }))} />
+                ) : (
+                  <select value={picks[c.name] || ''} onChange={(e) => setPicks((p) => ({ ...p, [c.name]: e.target.value }))}>
+                    {(c.productSpecCharacteristicValue || []).map((v) => <option key={v.value} value={v.value} disabled={v.isSelectable === false}>{v.value}{v.isSelectable === false ? ' — sold out' : ''}</option>)}
+                  </select>
+                )}
+              </label>
+            );
+          })}
+          {space?.fungible && <label className="small" data-testid="new-order-quantity">how many <input type="number" min="1" value={qty} onChange={(e) => setQty(Math.max(1, parseInt(e.target.value || '1', 10)))} /></label>}
+          {verdict && verdict.state === 'accepted' && <span className="dim small" data-testid="new-order-price">{Number(verdict.configurationPrice?.monthlyTotal?.value || 0).toFixed(2)} {verdict.configurationPrice?.monthlyTotal?.unit}/month{Number(verdict.configurationPrice?.oneTimeTotal?.value || 0) > 0 ? ` + ${Number(verdict.configurationPrice.oneTimeTotal.value).toFixed(2)} once` : ''}</span>}
+          {verdict && verdict.state === 'rejected' && <span className="error small" data-testid="new-order-rejected">{(verdict.message || []).join(' · ')}</span>}
+          <button className="primary" type="submit" disabled={!offeringId || (verdict && verdict.state === 'rejected')}>Order now</button>
           <button className="ghost" type="button" onClick={close}>Cancel</button>
         </form>
       )}

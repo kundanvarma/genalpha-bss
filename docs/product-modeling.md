@@ -169,3 +169,7 @@ the worked example; `color_pricing_test.js` proves the chain.
 `characteristicValues` ("color:Titanium Edition"), so a pricing rule — the
 console's "campaign on a configured choice" preset — can discount exactly
 one colour, in the cart preview and on the invoice, as data.
+
+## Every shape, one oracle (2026-09-16)
+
+Numeric ranges, per-seat prices, named algorithms, price windows, requires and excludes, early-termination prices, stock per variant, and the TMF760 door every channel asks: see [configurable products](configurable-products.md).

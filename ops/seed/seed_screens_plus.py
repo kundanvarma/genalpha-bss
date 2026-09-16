@@ -109,4 +109,9 @@ for colour, qty in (('Black', 25), ('Icy Blue', 0)):
         'stockedProduct': {'productOffering': {'id': off['id']}, 'productCharacteristic': [{'name': 'boxColour', 'value': colour}]},
         'stockedQuantity': {'amount': qty, 'units': 'unit'}, 'productStockLevel': {'amount': qty}})
     assert st == 201, s
-print('Screens Plus seeded:', off['id'], '| requires', broadband and broadband['name'], '| excludes', plain_tv and plain_tv['name'])
+# 3. a usage allowance with a stepped overage table: 10 streaming hours included, then 2.00/h for the first 5, 1.00/h after
+st, al = req('POST', f'{API}/tmf-api/usageManagement/v4/usageAllowance', {
+    'productOffering': {'id': off['id'], 'name': off['name']}, 'usageType': 'Streaming hours', 'allowance': {'value': 10, 'units': 'h'},
+    'overagePrice': {'unit': currency, 'value': 1.0}, 'overageTier': [{'valueFrom': 1, 'valueTo': 5, 'price': 2.0}, {'valueFrom': 6, 'valueTo': 20, 'price': 1.0}]})
+assert st == 201, al
+print('Screens Plus seeded:', off['id'], '| requires', broadband and broadband['name'], '| excludes', plain_tv and plain_tv['name'], '| tiered allowance', al['id'][:8])

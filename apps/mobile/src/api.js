@@ -175,18 +175,26 @@ export async function prices() {
   return Object.fromEntries(list.map((p) => [p.id, p]));
 }
 
-export function orderOffering(offering) {
+export function orderOffering(offering, characteristics = null, quantity = 1) {
+  const item = { id: '1', action: 'add', quantity: quantity || 1,
+    productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' } };
+  if (characteristics && Object.keys(characteristics).length) {
+    item.product = { productCharacteristic: Object.entries(characteristics).map(([name, value]) => ({ name, value: String(value) })) };
+  }
   return call('/tmf-api/productOrderingManagement/v4/productOrder', {
     method: 'POST',
-    body: JSON.stringify({
-      description: offering.name,
-      productOrderItem: [{
-        id: '1', action: 'add', quantity: 1,
-        productOffering: { id: offering.id, name: offering.name, '@referredType': 'ProductOffering' },
-      }],
-    }),
+    body: JSON.stringify({ description: quantity > 1 ? `${offering.name} ×${quantity}` : offering.name, productOrderItem: [item] }),
   });
 }
+
+/** TMF760 — the one oracle, the same the shop and the desk ask: the choices and what they cost. */
+export const queryConfiguration = (offeringId) => soft(call('/tmf-api/productConfigurationManagement/v5/queryProductConfiguration', {
+  method: 'POST', body: JSON.stringify({ productConfiguration: { productOffering: { id: offeringId } } }) })
+  .then((out) => (out.computedProductConfigurationItem || [])[0] || null), null);
+export const checkConfiguration = (offeringId, characteristics = {}, quantity = 1) => soft(call('/tmf-api/productConfigurationManagement/v5/checkProductConfiguration', {
+  method: 'POST', body: JSON.stringify({ checkProductConfigurationItem: [{ id: '1', productConfiguration: { productOffering: { id: offeringId }, quantity,
+    configurationCharacteristic: Object.entries(characteristics).filter(([, v]) => v != null && v !== '').map(([name, value]) => ({ name, value: String(value) })) } }] }) })
+  .then((out) => (out.checkProductConfigurationItem || [])[0] || null), null);
 
 export const myOrders = () => soft(call('/tmf-api/productOrderingManagement/v4/productOrder?limit=20'), []);
 

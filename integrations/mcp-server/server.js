@@ -297,13 +297,15 @@ const TOOLS = [
         },
         characteristics: {
           type: 'object', additionalProperties: { type: 'string' },
-          description: 'Characteristic picks, e.g. {"color": "Titanium Edition", "storage": "512GB"}',
+          description: 'Characteristic picks, e.g. {"color": "Titanium Edition", "storage": "512GB", "extraProfiles": "6"}',
         },
+        quantity: { type: 'integer', description: 'How many, for a per-seat (fungible) product; 1 otherwise', minimum: 1 },
       },
       required: ['offeringId'],
     },
     run: async (a) => {
       const configuration = {
+        quantity: a.quantity || 1,
         selectedOption: (a.selectedOptions || []).map((id) => ({ id })),
         configurationCharacteristic: Object.entries(a.characteristics || {})
           .map(([name, value]) => ({ name, value })),
@@ -319,7 +321,7 @@ const TOOLS = [
       return {
         result: 'approved',
         price: item.configurationPrice,
-        checkoutItem: { id: a.offeringId, quantity: 1, configuration },
+        checkoutItem: { id: a.offeringId, quantity: a.quantity || 1, configuration },
       };
     },
   },

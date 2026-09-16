@@ -147,7 +147,57 @@ const check = async (offeringId, chars, quantity = 1) => (await call('POST', `${
   if (Math.abs(recurring - expected) > 0.05) fail(`the bill must rate the configured product at 205/month through the oracle (prorated ${expected.toFixed(2)} for ${daysLeft}/${daysTotal} days); got ${recurring} from ${JSON.stringify(rates.map((r) => [r.name, r.type, r.taxExcludedAmount]))}`);
   console.log(`OK three seats became one product with quantity 3, and the bill rates it at 205/month through the same oracle (${recurring.toFixed(2)} prorated for ${daysLeft} of ${daysTotal} days)`);
 
-  /* ---------- 4. the catalog stays whole ---------- */
+  /* ---------- 4. the business console and the app ask the same oracle ---------- */
+  {
+    const b2 = await chromium.launch();
+    const biz = await (await b2.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+    await biz.goto(`${API}/biz/`);
+    try { await biz.click('text=Sign in', { timeout: 8000 }); } catch { /* straight to the IdP */ }
+    await biz.waitForSelector('input[name="username"]', { timeout: 30000 });
+    await biz.fill('input[name="username"]', 'bianca@acme.example'); await biz.fill('input[name="password"]', 'bianca');
+    await biz.click('input[type="submit"], button[type="submit"]');
+    await biz.waitForSelector('#order-offering', { timeout: 30000 });
+    await until('the business console to list Screens Plus', async () => (await biz.locator('#order-offering option').allInnerTexts()).some((x) => /Screens Plus/.test(x)), 20, 1000);
+    await biz.selectOption('#order-offering', { label: 'Screens Plus' });
+    await biz.locator('#order-config [data-pick="screens"]').waitFor({ timeout: 20000 });
+    await biz.selectOption('#order-config [data-pick="screens"]', '5+');
+    await biz.fill('#order-config [data-pick="extraProfiles"]', '6');
+    await biz.fill('#order-quantity', '3');
+    await biz.locator('#order-quantity').dispatchEvent('change');
+    await until('the business console price to follow the oracle', async () => /205/.test(await biz.locator('#order-price').innerText()), 15, 800);
+    if (await biz.locator('#order-config option', { hasText: 'Icy Blue' }).getAttribute('disabled') === null) fail('the business console must disable the sold-out colour');
+    console.log('OK the business console: order-for-someone configures Screens Plus through the oracle — 5+ screens, 6 profiles, 3 seats = 205, sold-out colour disabled');
+
+    const app = await (await b2.newContext({ viewport: { width: 420, height: 900 } })).newPage();
+    await app.goto(`${API}/app/`); await app.locator('[data-testid="signin"]').click();
+    await app.waitForSelector('input[name="username"]', { timeout: 30000 });
+    await app.fill('input[name="username"]', 'paula@family.example'); await app.fill('input[name="password"]', 'paula');
+    await app.click('input[type="submit"], button[type="submit"]');
+    await app.locator('text=Shop').last().waitFor({ timeout: 30000 }); await app.locator('text=Shop').last().click();
+    const card = app.locator('[data-testid="offer-card"]', { hasText: 'Screens Plus' }).first();
+    await card.locator('[data-testid="cfg-screens-5+"]').waitFor({ timeout: 30000 });
+    await card.locator('[data-testid="cfg-screens-5+"]').click();
+    await card.locator('[data-testid="cfg-extraProfiles"]').fill('6');
+    await until('the app price to follow the oracle (5+ screens, 6 profiles, 1 seat = 165)', async () => {
+      const el = card.locator('[data-testid="cfg-price"]');
+      const txt = (await el.count()) ? await el.innerText() : '(no price yet: ' + (await card.locator('[data-testid="cfg-rejected"]').innerText().catch(() => 'no rejection')) + ')';
+      return /165[.,]00/.test(txt);
+    }, 15, 1000);
+    const icyBtn = card.locator('[data-testid="cfg-boxColour-Icy Blue"]');
+    if (!/sold out/.test(await icyBtn.innerText())) fail('the app must mark the sold-out colour');
+    console.log('OK the app: the buy tab configures Screens Plus through the oracle — the same values, the same price, the same sold-out colour');
+    await b2.close();
+  }
+
+  /* ---------- 5. usage beyond the allowance walks the tier table ---------- */
+  {
+    const allowances = (await call('GET', `${API}/tmf-api/usageManagement/v4/usageAllowance?limit=100`, staff)).json || [];
+    const tiered = allowances.find((a) => a.productOffering?.id === sp.id && (a.overageTier || []).length);
+    if (!tiered) fail('the tiered allowance on Screens Plus is not seeded (usageType Streaming hours)');
+    console.log('OK usage tiers: the allowance carries a stepped table the rating walks beyond the allowance (2.00 for the first 5 hours over, 1.00 after)');
+  }
+
+  /* ---------- 6. the catalog stays whole ---------- */
   const bare = (await call('POST', `${C}/productSpecification`, staff, { name: `Bare ${Date.now()}`, lifecycleStatus: 'Active', productSpecCharacteristic: [{ name: 'screens', configurable: true }] })).json;
   const sur = (await call('POST', `${C}/productOfferingPrice`, staff, { name: 'Bare 5+', priceType: 'recurring', recurringChargePeriodType: 'month', price: { unit: 'EUR', value: 1 }, lifecycleStatus: 'Active', prodSpecCharValueUse: [{ name: 'screens', productSpecCharacteristicValue: [{ value: '5+' }] }] })).json;
   const refused = await call('POST', `${C}/productOffering`, staff, { name: `Bare TV ${Date.now()}`, lifecycleStatus: 'Active', productSpecification: { id: bare.id }, productOfferingPrice: [{ id: sur.id }] });

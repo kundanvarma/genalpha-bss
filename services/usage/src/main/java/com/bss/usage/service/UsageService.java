@@ -224,8 +224,7 @@ public class UsageService {
                     charge.setName(first.getUsageSpecName() + " overage: " + over.stripTrailingZeros().toPlainString()
                             + " " + rule.getUnits() + " over " + included.stripTrailingZeros().toPlainString()
                             + " " + rule.getUnits() + " included");
-                    charge.setAmountValue(over.multiply(rule.getOveragePriceValue())
-                            .setScale(2, RoundingMode.HALF_UP));
+                    charge.setAmountValue(steppedOverage(rule, over));
                     charge.setAmountUnit(rule.getOveragePriceUnit());
                     charge.setPeriodStart(periodStart);
                     charge.setCreatedAt(OffsetDateTime.now());
@@ -1180,6 +1179,7 @@ public class UsageService {
         entity.setOveragePriceValue(new BigDecimal(String.valueOf(price.get("value"))));
         entity.setOveragePriceUnit(String.valueOf(price.get("unit") == null ? "EUR" : price.get("unit")));
         entity.setBoost(Boolean.parseBoolean(String.valueOf(dto.getOrDefault("boost", "false"))));
+        entity.setTierJson(dto.get("overageTier") instanceof List<?> tiers && !tiers.isEmpty() ? writeJson(tiers) : null);
         entity.setLastUpdate(OffsetDateTime.now());
         allowances.save(entity);
         return allowanceMap(entity);
@@ -1199,6 +1199,9 @@ public class UsageService {
         map.put("productOffering", readJson(entity.getProductOfferingJson()));
         map.put("allowance", Map.of("value", entity.getAllowanceValue(), "units", entity.getUnits()));
         map.put("overagePrice", Map.of("unit", entity.getOveragePriceUnit(), "value", entity.getOveragePriceValue()));
+        if (entity.getTierJson() != null && !entity.getTierJson().isBlank()) {
+            map.put("overageTier", readJsonList(entity.getTierJson()));
+        }
         if (entity.isBoost()) {
             map.put("boost", true);
         }
@@ -1219,6 +1222,41 @@ public class UsageService {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
             throw new IllegalArgumentException("unserializable JSON value", e);
+        }
+    }
+
+    /** The overage amount: one flat unit price, or a STEPPED walk over the tier table (each slice of the units
+     * beyond the allowance at its own price — cumulative, the way a customer expects "the first 5 GB at 1, the next at 0.5"). */
+    BigDecimal steppedOverage(UsageAllowance rule, BigDecimal over) {
+        List<Map<String, Object>> tiers = rule.getTierJson() == null || rule.getTierJson().isBlank() ? List.of() : readJsonList(rule.getTierJson());
+        if (tiers.isEmpty()) {
+            return over.multiply(rule.getOveragePriceValue()).setScale(2, RoundingMode.HALF_UP);
+        }
+        BigDecimal amount = BigDecimal.ZERO;
+        BigDecimal remaining = over;
+        BigDecimal cursor = BigDecimal.ZERO;
+        for (Map<String, Object> tier : tiers) {
+            if (remaining.signum() <= 0) {
+                break;
+            }
+            BigDecimal to = tier.get("valueTo") == null ? null : new BigDecimal(String.valueOf(tier.get("valueTo")));
+            BigDecimal price = new BigDecimal(String.valueOf(tier.getOrDefault("price", rule.getOveragePriceValue())));
+            BigDecimal slice = to == null ? remaining : to.subtract(cursor).min(remaining).max(BigDecimal.ZERO);
+            amount = amount.add(slice.multiply(price));
+            remaining = remaining.subtract(slice);
+            cursor = cursor.add(slice);
+        }
+        if (remaining.signum() > 0) {
+            amount = amount.add(remaining.multiply(rule.getOveragePriceValue())); // beyond the last tier: the flat rate
+        }
+        return amount.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private List<Map<String, Object>> readJsonList(String json) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() { });
+        } catch (Exception e) {
+            return List.of();
         }
     }
 }

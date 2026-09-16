@@ -559,6 +559,16 @@ public class BillingRunService {
                                 charged, unit, taxRateFor(offeringId, productChars, taxCache)));
                         monthlyByOffering.merge(offeringId, charged, BigDecimal::add);
                     }
+                    // EARLY TERMINATION: a product that ended in this period inside its commitment carries the
+                    // offering's declining penalty price — value × months remaining ÷ term — unless the exit was
+                    // penalty-free (a change to the customer's detriment, base migration's flag). The law's cap:
+                    // never more than the remaining term's share; the country pack decides what the price may cover.
+                    if (effEnd.isBefore(periodEnd) && product.get("terminationDate") != null) {
+                        AppliedBillingRate etf = earlyTermination(tenantId, ownerParty, product, offeringId, effEnd, unit);
+                        if (etf != null) {
+                            lines.add(etf);
+                        }
+                    }
                 }
                 for (AppliedBillingRate line : lines) {
                     billRates.add(line);
@@ -987,6 +997,64 @@ public class BillingRunService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** The offering's penalty price, declined by the months already served; null when nothing is owed. */
+    @SuppressWarnings("unchecked")
+    AppliedBillingRate earlyTermination(String tenantId, String ownerParty, Map<String, Object> product,
+            String offeringId, LocalDate endedOn, String unit) {
+        for (Map<String, Object> c : (List<Map<String, Object>>) product.getOrDefault("productCharacteristic", List.of())) {
+            if ("penaltyFreeExit".equals(c.get("name")) && "true".equalsIgnoreCase(String.valueOf(c.get("value")))) {
+                return null; // the customer left because we changed the deal: the law says no charge
+            }
+        }
+        Map<String, Object> offering = catalog.offering(offeringId);
+        if (offering == null) {
+            return null;
+        }
+        Map<String, Object> penalty = null;
+        for (Map<String, Object> ref : (List<Map<String, Object>>) offering.getOrDefault("productOfferingPrice", List.of())) {
+            Map<String, Object> price = catalog.price(String.valueOf(ref.get("id")));
+            if (price != null && "penalty".equals(price.get("priceType"))) {
+                penalty = price;
+                break;
+            }
+        }
+        if (penalty == null || !(penalty.get("price") instanceof Map<?, ?> money) || money.get("value") == null) {
+            return null;
+        }
+        int termMonths = 0;
+        if (penalty.get("unitOfMeasure") instanceof Map<?, ?> uom && uom.get("amount") != null) {
+            termMonths = (int) Double.parseDouble(String.valueOf(uom.get("amount")));
+        }
+        for (Map<String, Object> term : (List<Map<String, Object>>) offering.getOrDefault("productOfferingTerm", List.of())) {
+            if (termMonths == 0 && term.get("duration") instanceof Map<?, ?> d && d.get("amount") != null) {
+                termMonths = (int) Double.parseDouble(String.valueOf(d.get("amount")));
+            }
+        }
+        if (termMonths <= 0 || product.get("startDate") == null) {
+            return null;
+        }
+        LocalDate started;
+        try {
+            started = OffsetDateTime.parse(String.valueOf(product.get("startDate"))).toLocalDate();
+        } catch (Exception e) {
+            return null;
+        }
+        long served = java.time.temporal.ChronoUnit.MONTHS.between(started, endedOn);
+        long remaining = termMonths - served;
+        if (remaining <= 0) {
+            return null; // the commitment was honoured
+        }
+        BigDecimal full = new BigDecimal(String.valueOf(money.get("value")));
+        BigDecimal owed = full.multiply(BigDecimal.valueOf(remaining))
+                .divide(BigDecimal.valueOf(termMonths), 2, java.math.RoundingMode.HALF_UP);
+        AppliedBillingRate rate = rateOf(tenantId, ownerParty, product,
+                String.valueOf(penalty.getOrDefault("name", "Early termination")) + " — " + remaining + " of " + termMonths
+                        + " months remaining (" + full + " declining)", owed,
+                money.get("unit") == null ? unit : String.valueOf(money.get("unit")));
+        rate.setRateType("oneTimeCharge");
+        return rate;
     }
 
     private AppliedBillingRate rateOf(String tenantId, String ownerParty,

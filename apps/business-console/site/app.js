@@ -206,6 +206,62 @@ async function loadPlans(orderable, memberCount) {
   if (!box.children.length) box.textContent = t('No priced plans in the catalog.');
 }
 
+/* ---------- the ONE oracle (TMF760): a configurable offering is configured here as in the shop ---------- */
+let orderSpace = null;
+async function loadOrderConfig() {
+  const box = el('order-config'); const priceLine = el('order-price');
+  box.replaceChildren(); priceLine.textContent = ''; orderSpace = null;
+  const offering = el('order-offering').value;
+  if (!offering) return;
+  const q = await authFetch('/tmf-api/productConfigurationManagement/v5/queryProductConfiguration', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ productConfiguration: { productOffering: { id: offering } } }) }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const space = q && (q.computedProductConfigurationItem || [])[0];
+  if (!space || (!(space.configurationCharacteristic || []).length && !space.fungible)) return;
+  orderSpace = space;
+  for (const ch of space.configurationCharacteristic || []) {
+    const vals = ch.productSpecCharacteristicValue || [];
+    const range = vals.find((v) => v.value == null && (v.valueFrom != null || v.valueTo != null));
+    const label = document.createElement('label'); label.className = 'dim'; label.textContent = ch.name + ' ';
+    let input;
+    if (range) {
+      input = document.createElement('input'); input.type = 'number'; input.min = range.valueFrom ?? ''; input.max = range.valueTo ?? ''; input.value = range.valueFrom ?? 0; input.style.width = '70px';
+    } else {
+      input = document.createElement('select');
+      for (const v of vals) { const o = new Option(v.value + (v.isSelectable === false ? ' — ' + t('sold out') : ''), v.value); o.disabled = v.isSelectable === false; if (v.isDefault) o.selected = true; input.append(o); }
+    }
+    input.dataset.pick = ch.name; input.addEventListener('change', priceOrderConfig); input.addEventListener('input', priceOrderConfig);
+    label.append(input); box.append(label);
+  }
+  if (space.fungible) {
+    const label = document.createElement('label'); label.className = 'dim'; label.textContent = t('how many') + ' ';
+    const input = document.createElement('input'); input.type = 'number'; input.min = 1; input.value = 1; input.id = 'order-quantity'; input.style.width = '70px';
+    input.addEventListener('change', priceOrderConfig); input.addEventListener('input', priceOrderConfig);
+    label.append(input); box.append(label);
+  }
+  priceOrderConfig();
+}
+function orderPicks() {
+  const picks = {};
+  for (const input of el('order-config').querySelectorAll('[data-pick]')) picks[input.dataset.pick] = input.value;
+  const q = el('order-quantity'); return { picks, quantity: q ? Math.max(1, parseInt(q.value || '1', 10)) : 1 };
+}
+async function priceOrderConfig() {
+  const offering = el('order-offering').value; if (!offering || !orderSpace) return;
+  const { picks, quantity } = orderPicks();
+  const r = await authFetch('/tmf-api/productConfigurationManagement/v5/checkProductConfiguration', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checkProductConfigurationItem: [{ id: '1', productConfiguration: { productOffering: { id: offering }, quantity,
+      configurationCharacteristic: Object.entries(picks).map(([name, value]) => ({ name, value: String(value) })) } }] }) }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+  const item = r && (r.checkProductConfigurationItem || [])[0];
+  const line = el('order-price');
+  if (!item) { line.textContent = ''; return; }
+  if (item.state === 'rejected') { line.className = 'err'; line.textContent = (item.message || []).join(' · '); el('place-order').disabled = true; return; }
+  const p = item.configurationPrice || {};
+  line.className = 'dim'; line.textContent = `${fmtMoney(Number(p.monthlyTotal?.value || 0), p.monthlyTotal?.unit)}/${t('month')}` + (Number(p.oneTimeTotal?.value || 0) > 0 ? ` + ${fmtMoney(Number(p.oneTimeTotal.value), p.oneTimeTotal.unit)} ${t('once')}` : '');
+  el('place-order').disabled = false;
+}
+
 async function placeOrder() {
   const member = el('order-member').value;
   const offering = el('order-offering').value;
@@ -213,12 +269,15 @@ async function placeOrder() {
   if (!member || !offering) return;
   status.className = ''; status.textContent = t('ordering…');
   try {
+    const { picks, quantity } = orderSpace ? orderPicks() : { picks: {}, quantity: 1 };
+    const item = { id: '1', action: 'add', quantity: orderSpace && orderSpace.fungible ? quantity : 1,
+      productOffering: { id: offering, name: el('order-offering').selectedOptions[0]?.text } };
+    if (Object.keys(picks).length) item.product = { productCharacteristic: Object.entries(picks).map(([name, value]) => ({ name, value: String(value) })) };
     await json(await authFetch(`${ORDERING}/productOrder`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        productOrderItem: [{ action: 'add', productOffering: {
-          id: offering, name: el('order-offering').selectedOptions[0]?.text } }],
+        productOrderItem: [item],
         relatedParty: [{ id: member, role: 'customer' }],
       }),
     }));
@@ -518,6 +577,7 @@ async function main() {
 
   el('add-member').addEventListener('click', addMember);
   el('place-order').addEventListener('click', placeOrder);
+  el('order-offering').addEventListener('change', loadOrderConfig);
   el('swap-member').addEventListener('change', loadSwapLines);
   el('reassign-member').addEventListener('change', loadReassignLines);
   el('reassign-go').addEventListener('click', reassignLine);
