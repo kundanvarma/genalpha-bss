@@ -9,8 +9,8 @@ runsAs: caller
 autonomy: supervised
 reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, productCatalog.offerings, billing.collectionCases, recommendation.list, catalog.configure, catalog.configurationSpace]
 actions:
-  check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
-  execute: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
+  check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription, configureProduct]
+  execute: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription, configureProduct]
 uses: []
 tools: [list_actions, list_agents, explain, recommend, customer_context, available_upgrades]
 component: ontology

@@ -9,8 +9,8 @@ runsAs: machine:bss-worker
 autonomy: policy-autonomous
 reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, decisionLog.read, billing.collectionCases]
 actions:
-  check: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
-  execute: [restartRouter, resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit]
+  check: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit, configureProduct]
+  execute: [restartRouter, resumeSubscription, replaceSim, cancelOrder, disputeBill, issueCredit, configureProduct]
 uses: []
 tools: [list_actions, explain, recommend, customer_context, available_upgrades]
 component: workforce

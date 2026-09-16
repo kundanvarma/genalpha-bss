@@ -9,8 +9,8 @@ runsAs: caller
 autonomy: supervised
 reads: [productCatalog.offerings, productCatalog.offering, productCatalog.price, catalog.governanceView, catalog.configure, catalog.configurationSpace]
 actions:
-  check: [requestLaunch]
-  execute: [requestLaunch]
+  check: [requestLaunch, configureProduct]
+  execute: [requestLaunch, configureProduct]
 uses: [product-copilot, product-copilot-retry, advisor-narrative]
 component: intelligence
 contract: "proposal → confirmation → execution with the caller's rights; launch governance applies to what it creates"

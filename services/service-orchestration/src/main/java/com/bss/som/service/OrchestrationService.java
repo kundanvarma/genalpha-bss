@@ -45,6 +45,8 @@ public class OrchestrationService {
     private final ResourceAssignmentRepository assignments;
     private final com.bss.som.repository.SimCardRepository sims;
     private final com.bss.som.client.CatalogClient catalog;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.bss.som.client.UsageAllowanceClient usageAllowances;
     private final com.bss.som.crypto.PukVault pukVault;
     private final com.bss.som.repository.StarterKitRepository starterKits;
     private final com.bss.som.repository.DealerAgreementRepository dealerAgreements;
@@ -389,6 +391,8 @@ public class OrchestrationService {
                 if (chargingSpec != null) {
                     // zero-rated apps ride along: the OCS, not the BSS, makes them free
                     ocs.provision(tenant, owner, serviceId, chargingSpec, catalog.zeroRatedAppsOf(so.getOfferingId()));
+                    // the BSS-defined overage steps ride to the charging system, so real-time and bill-time agree
+                    ocs.pushOverageTiers(tenant, serviceId, chargingSpec, usageAllowances.tiersOf(so.getOfferingId()));
                 }
                 // the entitlement server learns which SIM (and number) now belongs to
                 // this party and plan — the phone's next TS.43 check-in tells the truth

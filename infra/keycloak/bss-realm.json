@@ -1103,7 +1103,7 @@
     "party:read",
     "assurance:read",
     "insight:read"
-   ],
+   , "usage:read"],
    "id": "69af15c4-7f81-58ff-a9a0-6f1124c7a4fd"
   },
   {

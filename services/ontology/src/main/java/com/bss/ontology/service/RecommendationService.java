@@ -228,13 +228,14 @@ public class RecommendationService {
             int shown = h[0];
             int good = h[1];
             int bad = h[2];
+            int decided = good + bad; // the loop judges on VERDICTS; a recommendation nobody answered teaches nothing
             int adjustment = 0;
             String says;
-            if (shown < 5) {
+            if (decided < 5) {
                 says = shown == 0 ? "no history on this desk yet — ranked by the situation alone"
-                        : "too little history yet (" + shown + " shown) — ranked by the situation alone";
+                        : "too few verdicts yet (" + shown + " shown, " + decided + " answered) — ranked by the situation alone";
             } else {
-                double rate = (good - bad) / (double) shown;
+                double rate = (good - bad) / (double) decided;
                 adjustment = rate <= -0.5 ? 2 : rate <= -0.2 ? 1 : rate >= 0.5 ? -1 : 0;
                 says = "shown " + shown + " times on this desk; taken or found helpful " + good + ", dismissed or found unhelpful " + bad
                         + (adjustment > 0 ? " — ranked down" : adjustment < 0 ? " — ranked up" : " — rank unchanged");

@@ -990,7 +990,7 @@
         "assurance:read",
         "insight:read",
         "assurance:write"
-      ]
+      , "usage:read"]
     },
     {
       "username": "service-account-bss-campaign",

@@ -1,0 +1,36 @@
+action: configureProduct
+version: 1
+introduced: 2026-09-17
+status: active
+meaning: Ask the one configuration oracle whether a pick set on an offering is orderable and what it costs — the same TMF760 check the shop, the app, the desk and the bill use. A read that is governed like a write, so an agent's configuration leaves a receipt and can never bypass the oracle.
+intent: An agent or a channel configures a product for a customer ("five screens, six profiles, three seats") and needs the verdict and the exact price before it offers or orders.
+concept: ProductOffering
+inputs:
+  - { name: offeringId, type: ref, concept: ProductOffering, required: true, meaning: "the offering being configured" }
+  - { name: characteristics, type: string, required: false, meaning: "the picks as name=value pairs separated by commas, e.g. screens=5+, extraProfiles=6, boxColour=Black" }
+  - { name: quantity, type: string, required: false, meaning: "how many, for a per-seat product (1 otherwise)" }
+preconditions:
+  - id: offering-known
+    check: input
+    of: offeringId
+    says: an offering id is required
+permissions:
+  anyOf:
+    - { role: agent }
+    - { role: catalog:read }
+    - { role: ordering:write }
+governance: { autonomy: high, approval: none, audit: mandatory }
+executes:
+  capability: catalog.configure
+  pathVars: {}
+  template:
+    checkProductConfigurationItem:
+      - id: "1"
+        productConfiguration:
+          productOffering: { id: "${offeringId}" }
+          quantity: "${quantity}"
+          configurationCharacteristic: "${characteristics}"
+effects: []
+emits:
+  - { event: DecisionRecordedEvent, component: ontology }
+pages: [shop:offering, csr:customers, console:productOffering]

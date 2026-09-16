@@ -9,8 +9,8 @@ runsAs: caller
 autonomy: advisory
 reads: [productCatalog.offerings, party.individual, catalog.configure, catalog.configurationSpace]
 actions:
-  check: []
-  execute: []
+  check: [configureProduct]
+  execute: [configureProduct]
 uses: [for-you-caption, next-best-offer]
 component: intelligence
 contract: "consent-gated inputs; aggregate exposure by default; never sees a bill line"

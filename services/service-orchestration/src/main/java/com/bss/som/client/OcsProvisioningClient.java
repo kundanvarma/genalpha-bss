@@ -24,6 +24,13 @@ public interface OcsProvisioningClient {
 
     void changeRatePlan(String tenantId, String serviceId, String chargingSpecId);
 
+    /** The stepped overage table the BSS defined on the offering's allowance, pushed so real-time charging
+     * walks the same steps the bill does. tiers = [{valueFrom, valueTo, price}] over the units beyond the
+     * allowance; empty = the flat overage rate. Fail-open. */
+    default void pushOverageTiers(String tenantId, String serviceId, String chargingSpecId,
+            java.util.List<java.util.Map<String, Object>> tiers) {
+    }
+
     /** Pause / unpause charging for a line (vacation hold). Fail-open. */
     void suspend(String tenantId, String serviceId);
 

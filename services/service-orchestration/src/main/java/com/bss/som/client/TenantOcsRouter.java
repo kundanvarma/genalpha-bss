@@ -69,6 +69,15 @@ public class TenantOcsRouter implements OcsProvisioningClient {
     }
 
     @Override
+    public void pushOverageTiers(String tenantId, String serviceId, String chargingSpecId,
+            java.util.List<java.util.Map<String, Object>> tiers) {
+        OcsProviderAdapter a = adapterFor(tenantId);
+        if (a != null) {
+            a.pushOverageTiers(tenantId, serviceId, chargingSpecId, tiers);
+        }
+    }
+
+    @Override
     public void suspend(String tenantId, String serviceId) {
         OcsProviderAdapter a = adapterFor(tenantId);
         if (a != null) {

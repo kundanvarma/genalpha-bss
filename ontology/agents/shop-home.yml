@@ -9,8 +9,8 @@ runsAs: caller
 autonomy: advisory
 reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, assurance.problems, productCatalog.offerings, billing.collectionCases, recommendation.list, decisionLog.read, catalog.configure, catalog.configurationSpace]
 actions:
-  check: [restartRouter, upgradeSubscription]
-  execute: []
+  check: [restartRouter, upgradeSubscription, configureProduct]
+  execute: [configureProduct]
 uses: [for-you-caption]
 component: storefront
 contract: "the customer acts through the shop's own flows (order, top-up, pay); Home only recommends; incidents shown are limited to the customer's own services"

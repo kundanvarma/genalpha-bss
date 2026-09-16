@@ -83,8 +83,18 @@ public class UpgradeService {
         JsonNode concept = layer.concepts().get("ProductOffering");
         List<String> live = new ArrayList<>();
         concept.path("states").path("live").forEach(s -> live.add(s.asText().toLowerCase()));
+        // the catalog's own word: exchangableTo names the offerings this one may become; the family rule is the fallback
+        List<String> exchangeable = new ArrayList<>();
+        for (JsonNode rel : current.path("productOfferingRelationship")) {
+            if ("exchangableto".equalsIgnoreCase(rel.path("relationshipType").asText(""))) {
+                exchangeable.add(rel.path("id").asText());
+            }
+        }
         for (JsonNode o : shelf) {
             if (o.path("id").asText().equals(current.path("id").asText()) || o.path("isBundle").asBoolean(false)) {
+                continue;
+            }
+            if (!exchangeable.isEmpty() && !exchangeable.contains(o.path("id").asText())) {
                 continue;
             }
             if (o.path("requiresVerifiedIdentity").asBoolean(false) || o.path("productOfferingTerm").size() > 0) {
@@ -94,7 +104,7 @@ public class UpgradeService {
             if (!live.contains(o.path("lifecycleStatus").asText("").toLowerCase())) {
                 continue;
             }
-            if (!family.equalsIgnoreCase(o.path("category").path(0).path("name").asText())) {
+            if (exchangeable.isEmpty() && !family.equalsIgnoreCase(o.path("category").path(0).path("name").asText())) {
                 continue;
             }
             String key = "candidate:" + o.path("id").asText();

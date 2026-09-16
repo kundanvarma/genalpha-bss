@@ -293,6 +293,16 @@ public class ConfiguratorService {
     /** Picks in the house shape ({name, value}) or the v5 shape (selected characteristic values). */
     private static Map<String, String> picksOf(Map<String, Object> config) {
         Map<String, String> picks = new LinkedHashMap<>();
+        if (config.get("configurationCharacteristic") instanceof String flat) {
+            // the ontology's action inputs are strings: "screens=5+, extraProfiles=6"
+            for (String pair : flat.split("[,;]")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    picks.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
+                }
+            }
+            return picks;
+        }
         for (Map<String, Object> c : listOf(config.get("configurationCharacteristic"))) {
             if (c.get("name") == null) {
                 continue;

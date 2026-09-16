@@ -117,9 +117,11 @@ function ChangePlan({ product, services, offerings, prices, onChanged }) {
   const [error, setError] = useState(null);
 
   const current = offerings[product.productOffering?.id];
+  // the catalog's own word first: exchangableTo names the plans this one may become; without it, same category
+  const exchangeable = (current?.productOfferingRelationship || []).filter((r) => String(r.relationshipType || '').toLowerCase() === 'exchangableto').map((r) => r.id);
   const options = !open ? [] : Object.values(offerings)
     .filter((o) => !o.isBundle && !o.requiresVerifiedIdentity && o.id !== current?.id
-      && categoryOf(o) === categoryOf(current))
+      && (exchangeable.length ? exchangeable.includes(o.id) : categoryOf(o) === categoryOf(current)))
     .map((o) => {
       const monthly = pricesOf(o, prices).find((p) => p.priceType === 'recurring');
       return monthly ? { id: o.id, name: o.name, label: `${o.name} — ${fmtPrice(monthly)}` } : null;

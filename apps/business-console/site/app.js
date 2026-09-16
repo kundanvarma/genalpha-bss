@@ -145,6 +145,7 @@ async function loadOfferings() {
   const offers = await json(await authFetch(`${CATALOG}/productOffering?limit=100`));
   const picker = el('order-offering');
   picker.replaceChildren();
+  window.__bizOfferings = offers;
   const orderable = offers.filter((x) => !x.isBundle && !x.requiresVerifiedIdentity);
   // plan changes are like-for-like: plans only, never devices or add-ons
   const swapPicker = el('swap-offering');
@@ -295,6 +296,23 @@ async function loadSwapLines() {
   if (!member) return;
   const svcs = await json(await authFetch(`${SERVICE_INV}/service?relatedPartyId=${member}`))
     .catch(() => []);
+  // the member's products, so a line knows its offering (exchangableTo lives on the offering)
+  window.__bizProducts = await json(await authFetch(`${INVENTORY}/product?relatedPartyId=${member}&status=active&limit=100`)).catch(() => []);
+  // the swap picker follows the line: exchangableTo on the line's offering, else the plan categories
+  const restrict = async () => {
+    const line = lines.selectedOptions[0]; const swapPicker = el('swap-offering');
+    const offeringId = line && line.dataset.offering;
+    const all = window.__bizOfferings || [];
+    let targets = all.filter((o) => !o.isBundle && !o.requiresVerifiedIdentity && PLAN_CATS.includes(categoryOf(o)));
+    if (offeringId) {
+      const cur = all.find((o) => o.id === offeringId);
+      const ex = (cur?.productOfferingRelationship || []).filter((r) => String(r.relationshipType || '').toLowerCase() === 'exchangableto').map((r) => r.id);
+      if (ex.length) targets = all.filter((o) => ex.includes(o.id));
+    }
+    swapPicker.replaceChildren(new Option(t('New plan…'), ''));
+    for (const o of targets) swapPicker.append(new Option(o.name, o.id));
+  };
+  lines.onchange = restrict;
   for (const sv of (svcs || []).filter((s) => s.state === 'active')) {
     const num = (sv.supportingResource || []).map((r) => r.value).filter(Boolean).join(' ');
     const opt = new Option(`${sv.name}${num ? ' · ' + num : ''}`, sv.id);
@@ -313,7 +331,7 @@ async function loadReassignLines() {
     .catch(() => []);
   for (const sv of (svcs || []).filter((s) => s.state === 'active')) {
     const num = (sv.supportingResource || []).map((r) => r.value).filter(Boolean).join(' ');
-    lines.append(new Option(`${sv.name}${num ? ' · ' + num : ''}`, sv.id));
+    { const opt = new Option(`${sv.name}${num ? ' · ' + num : ''}`, sv.id); const prod = (window.__bizProducts || []).find((p) => p.name === sv.name && (p.relatedParty || []).some((rp) => rp.id === member)); if (prod && prod.productOffering) opt.dataset.offering = prod.productOffering.id; lines.append(opt); }
   }
 }
 

@@ -157,6 +157,37 @@ public class SigscaleOcsProvisioningClient implements OcsProviderAdapter {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
+    public void pushOverageTiers(String tenantId, String serviceId, String chargingSpecId,
+            java.util.List<java.util.Map<String, Object>> tiers) {
+        RestClient c = client(tenantId);
+        if (c == null) {
+            return;
+        }
+        try {
+            Map<String, Object> product = productOf(c, tenantId, serviceId);
+            if (product == null || product.get("id") == null) {
+                return;
+            }
+            List<Map<String, Object>> chars = new ArrayList<>();
+            for (Object o : product.get("characteristic") instanceof List<?> l ? l : List.of()) {
+                if (o instanceof Map<?, ?> m && !"bssOverageTiers".equals(m.get("name"))) {
+                    chars.add((Map<String, Object>) m);
+                }
+            }
+            if (tiers != null && !tiers.isEmpty()) {
+                chars.add(Map.of("name", "bssOverageTiers", "value",
+                        new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(tiers)));
+            }
+            patch(c, INVENTORY + "/product/" + product.get("id"),
+                    List.of(Map.of("op", "replace", "path", "/characteristic", "value", chars)));
+            log.info("SigScale OCS: service {} carries {} overage tier(s) for rating", serviceId, tiers == null ? 0 : tiers.size());
+        } catch (Exception e) {
+            log.warn("SigScale OCS: overage tiers not pushed for service {} — {}", serviceId, e.getMessage()); // fail-open
+        }
+    }
+
+    @Override
     public void suspend(String tenantId, String serviceId) {
         setEnabled(tenantId, serviceId, false);
     }

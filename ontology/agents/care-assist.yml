@@ -9,8 +9,8 @@ runsAs: caller
 autonomy: supervised
 reads: [cpe.status, party.individual, productInventory.products, serviceInventory.services, billing.bills, agreement.list, assurance.problems, decisionLog.read, productCatalog.offerings, billing.collectionCases, recommendation.list, catalog.configure, catalog.configurationSpace]
 actions:
-  check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription]
-  execute: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, changeSubscriptionPlan, replaceSim, cancelOrder, disputeBill, issueCredit]
+  check: [restartRouter, disputeBill, approveLaunch, cancelOrder, changeSubscriptionPlan, requestLaunch, issueCredit, holdLaunch, replaceSim, suspendSubscription, resumeSubscription, upgradeSubscription, configureProduct]
+  execute: [restartRouter, resumeSubscription, suspendSubscription, upgradeSubscription, changeSubscriptionPlan, replaceSim, cancelOrder, disputeBill, issueCredit, configureProduct]
 uses: [customer-summary, next-best-offer, knowledge-ask, chat-intent, wrap-up, ticket-reply]
 component: intelligence
 contract: "ontology.recommend — every recommendation shown is a logged decision; accepted / dismissed / helpful / unhelpful are its outcomes and the ranking reads them"

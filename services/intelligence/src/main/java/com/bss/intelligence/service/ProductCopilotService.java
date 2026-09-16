@@ -149,7 +149,9 @@ public class ProductCopilotService {
                 "priceType": "penalty" and "unitOfMeasure": {"amount": <term months>, "units": "month"} next to the \
                 offering's productOfferingTerm (it declines monthly and is never charged on the configuration); \
                 "needs X" is a relationship {"relationshipType": "requires", "existingName": "X", "role": "prompt"} \
-                and "cannot be combined with Y" is {"relationshipType": "excludes", "existingName": "Y"}. \
+                and "cannot be combined with Y" is {"relationshipType": "excludes", "existingName": "Y"}; \
+                "customers can move to Z" is {"relationshipType": "exchangableTo", "existingName": "Z"} (the like-for-like \
+                change list every channel offers). Catalog context lists EVERY offering name under "names"; use them verbatim. \
                 A CONFIGURABLE PRODUCT ("the customer picks the number of screens / locations / \
                 devices") is ONE offering whose spec has one configurable characteristic per choice \
                 with its allowed values as productSpecCharacteristicValue [{"value": ...}] (never a \

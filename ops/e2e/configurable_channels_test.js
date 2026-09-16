@@ -197,7 +197,34 @@ const check = async (offeringId, chars, quantity = 1) => (await call('POST', `${
     console.log('OK usage tiers: the allowance carries a stepped table the rating walks beyond the allowance (2.00 for the first 5 hours over, 1.00 after)');
   }
 
-  /* ---------- 6. the catalog stays whole ---------- */
+  /* ---------- 6. exchangableTo decides the plan-change list, everywhere ---------- */
+  {
+    const plans = offerings.filter((o) => !o.isBundle && /GenAlpha Mobile (10|50) GB/.test(o.name));
+    const ten = plans.find((o) => /10 GB/.test(o.name)); const fifty = plans.find((o) => /50 GB/.test(o.name));
+    if (ten && fifty) {
+      const before = ten.productOfferingRelationship || [];
+      const set = await call('PATCH', `${C}/productOffering/${ten.id}`, staff, { productOfferingRelationship: [...before, { id: fifty.id, name: fifty.name, relationshipType: 'exchangableTo' }] });
+      if (set.status >= 300) fail(`exchangableTo patch: ${set.status} ${set.text.slice(0, 120)}`);
+      try {
+        // the ontology's upgrade list for a customer on the 10 GB plan lists ONLY the 50 GB plan
+        const mine = (await call('GET', `${API}/tmf-api/productInventory/v4/product?limit=100`, paula)).json || [];
+        const held = mine.find((p) => p.status === 'active' && p.productOffering?.id === ten.id);
+        if (held) {
+          const ctx = (await call('GET', `${API}/ontology/v1/context/customer/${JSON.parse(Buffer.from(paula.split('.')[1], 'base64').toString()).sub}`, paula)).json;
+          const sub = (ctx.subscriptions || []).find((s) => s.id === held.id);
+          const ups = (sub?.availableUpgrades || []).map((u) => u.id);
+          if (ups.length && (ups.length !== 1 || ups[0] !== fifty.id)) fail('with exchangableTo set, the upgrade list must be exactly its targets: ' + JSON.stringify(sub?.availableUpgrades));
+          console.log('OK exchangableTo: the ontology offers the customer exactly the plans the catalog names' + (ups.length ? '' : ' (no dearer target priced — nothing offered, nothing invented)'));
+        } else {
+          console.log('OK exchangableTo stored on the offering (Paula does not hold the 10 GB plan; the list check runs where she does)');
+        }
+      } finally {
+        await call('PATCH', `${C}/productOffering/${ten.id}`, staff, { productOfferingRelationship: before });
+      }
+    }
+  }
+
+  /* ---------- 7. the catalog stays whole ---------- */
   const bare = (await call('POST', `${C}/productSpecification`, staff, { name: `Bare ${Date.now()}`, lifecycleStatus: 'Active', productSpecCharacteristic: [{ name: 'screens', configurable: true }] })).json;
   const sur = (await call('POST', `${C}/productOfferingPrice`, staff, { name: 'Bare 5+', priceType: 'recurring', recurringChargePeriodType: 'month', price: { unit: 'EUR', value: 1 }, lifecycleStatus: 'Active', prodSpecCharValueUse: [{ name: 'screens', productSpecCharacteristicValue: [{ value: '5+' }] }] })).json;
   const refused = await call('POST', `${C}/productOffering`, staff, { name: `Bare TV ${Date.now()}`, lifecycleStatus: 'Active', productSpecification: { id: bare.id }, productOfferingPrice: [{ id: sur.id }] });

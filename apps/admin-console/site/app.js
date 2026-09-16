@@ -3104,7 +3104,7 @@ function copilotPanel() {
 
 async function copilotCatalogContext() {
   const [offerings, prices] = await Promise.all([
-    authFetch(`${API_BASE}/productOffering?limit=60`).then((r) => r.json()).catch(() => []),
+    (async () => { const all = []; for (let off = 0; off < 1000; off += 100) { const page = await authFetch(`${API_BASE}/productOffering?limit=100&offset=${off}`).then((r) => r.json()).catch(() => []); all.push(...(Array.isArray(page) ? page : [])); if (!Array.isArray(page) || page.length < 100) break; } return all; })(),
     authFetch(`${API_BASE}/productOfferingPrice?limit=5`).then((r) => r.json()).catch(() => []),
   ]);
   const categories = [...new Set(offerings.flatMap((o) => (o.category || []).map((c) => c.name)).filter(Boolean))];
@@ -3112,7 +3112,10 @@ async function copilotCatalogContext() {
   return {
     categories,
     currency,
+    // every name, so "needs Fiber 500" always finds Fiber 500; full rows only for the shelf's first forty (the model's working set)
+    names: offerings.map((o) => o.name),
     offerings: offerings.slice(0, 40).map((o) => ({ name: o.name, category: (o.category || [])[0]?.name })),
+    all: offerings.map((o) => ({ id: o.id, name: o.name })),
   };
 }
 
@@ -3187,7 +3190,7 @@ function copilotValidate(proposal, context) {
       if (child.offeringRef && !offeringRefs.has(child.offeringRef)) {
         problems.push(`bundle "${o.name}" references unknown offering ${child.offeringRef}`);
       }
-      if (child.existingName && !context.offerings.some((x) => x.name === child.existingName)) {
+      if (child.existingName && !(context.all || context.offerings).some((x) => String(x.name).toLowerCase() === String(child.existingName).toLowerCase())) {
         problems.push(`bundle "${o.name}" references "${child.existingName}", not found in the catalog`);
       }
     }
@@ -3200,7 +3203,7 @@ function copilotValidate(proposal, context) {
   for (const rule of rules) {
     if (!Number(rule.adjustmentValue)) problems.push(`rule "${rule.name}" has no adjustment value`);
     for (const target of rule.whenCartHas || []) {
-      if (!offeringRefsAll.has(target) && !context.offerings.some((x) => x.name === target)) {
+      if (!offeringRefsAll.has(target) && !(context.all || context.offerings).some((x) => String(x.name).toLowerCase() === String(target).toLowerCase())) {
         problems.push(`rule "${rule.name}" references "${target}", not in this proposal or the catalog`);
       }
     }
@@ -3276,7 +3279,7 @@ async function copilotExecute(proposal, context = { offerings: [] }) {
         // requires / excludes: a ref from this proposal or the exact name of an existing offering
         body.productOfferingRelationship = o.relationships.map((rel) => {
           const target = rel.offeringRef ? offerings[rel.offeringRef] : null;
-          const existing = !target && rel.existingName ? context.offerings.find((x) => x.name === rel.existingName) : null;
+          const existing = !target && rel.existingName ? (context.all || context.offerings).find((x) => String(x.name).toLowerCase() === String(rel.existingName).toLowerCase()) : null;
           return { ...(target ? { id: target.id, name: target.name } : existing ? { id: existing.id, name: existing.name } : { name: rel.existingName }),
             relationshipType: rel.relationshipType, ...(rel.role ? { role: rel.role } : {}) };
         }).filter((r) => r.id);

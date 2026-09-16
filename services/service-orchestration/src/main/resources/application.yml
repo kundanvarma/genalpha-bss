@@ -55,6 +55,7 @@ bss:
     party-base-url: ${PARTY_BASE_URL:http://localhost:8081}
     assurance-base-url: ${ASSURANCE_BASE_URL:}
     ordering-base-url: ${ORDERING_BASE_URL:http://localhost:8082}
+    usage-base-url: ${USAGE_BASE_URL:}
     catalog-base-url: ${CATALOG_BASE_URL:http://localhost:8081}
     ocs-base-url: ${OCS_BASE_URL:}
     # which adapter speaks to that OCS: http (the generic subscriber/rate-plan
