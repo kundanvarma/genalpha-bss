@@ -230,7 +230,8 @@ async function apiGet(page, path, token) {
   const orderText = await orderRow.textContent();
   if (!orderText.includes('×2')) fail('order description missing quantity: ' + orderText);
   console.log('OK cart checked out as one order, state:', orderState);
-  await a.locator('.badge').waitFor({ state: 'detached', timeout: 5000 })
+  // the CART's badge; the inbox badge beside it lights up with the order notification and is meant to stay
+  await a.locator('.who a[href*="cart"] .badge, .who [data-testid="cart-link"] .badge').first().waitFor({ state: 'detached', timeout: 5000 })
     .catch(() => fail('cart badge did not clear after checkout'));
 
   // The checked-out cart is immutable history, linked to its order.
