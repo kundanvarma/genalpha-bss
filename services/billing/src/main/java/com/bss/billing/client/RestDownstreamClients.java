@@ -148,6 +148,7 @@ public class RestDownstreamClients {
                     config.put("productOffering", Map.of("id", offeringId));
                     config.put("quantity", quantity);
                     config.put("configurationCharacteristic", chars);
+                    config.put("priceOnly", true); // an installed product: stock and relationships are not its business
                     Map<String, Object> body = rest.post().uri("/tmf-api/productConfigurationManagement/v5/checkProductConfiguration")
                             .header("Content-Type", "application/json")
                             .body(Map.of("checkProductConfigurationItem", List.of(Map.of("id", "1", "productConfiguration", config))))

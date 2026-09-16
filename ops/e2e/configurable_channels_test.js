@@ -55,6 +55,15 @@ const check = async (offeringId, chars, quantity = 1) => (await call('POST', `${
   const sp = offerings.find((o) => o.name === 'Screens Plus');
   if (!sp) fail('Screens Plus is not seeded (ops/seed/seed_screens_plus.py bss)');
 
+  /* ---------- 0. the shelf as seeded: every run's orders consume Black boxes, so top the stock back up ---------- */
+  {
+    const rows = (await call('GET', `${API}/tmf-api/productStockManagement/v4/productStock?productOfferingId=${sp.id}&limit=100`, staff)).json || [];
+    for (const row of rows) {
+      const colour = ((row.stockedProduct || {}).productCharacteristic || []).find((c) => c.name === 'boxColour')?.value;
+      if (colour === 'Black') await call('PATCH', `${API}/tmf-api/productStockManagement/v4/productStock/${row.id}`, staff, { stockedQuantity: { amount: 25, units: 'unit' } });
+    }
+  }
+
   /* ---------- 1. the oracle ---------- */
   const q = (await call('POST', `${P}/queryProductConfiguration`, null, { productConfiguration: { productOffering: { id: sp.id } } })).json;
   const space = q.computedProductConfigurationItem[0];

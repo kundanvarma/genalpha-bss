@@ -37,7 +37,7 @@ public class ProductOrder {
     private String billingAccountId;
 
     /** JSON array of order items, stored verbatim (TMF622 mandatory). */
-    @Column(name = "product_order_item", length = 4000)
+    @Column(name = "product_order_item", columnDefinition = "TEXT")
     private String productOrderItemJson;
 
     /** JSON array of related parties, stored verbatim. */

@@ -168,6 +168,9 @@ public class ConfiguratorService {
                 .map(o -> String.valueOf(o.get("id"))).toList());
         Map<String, String> picks = picksOf(config);
         int quantity = intOf(config.get("quantity"), 1);
+        // an INSTALLED product is priced as configured: today's stock and today's relationships do not change
+        // what a subscriber already holds — billing asks with priceOnly
+        boolean priceOnly = Boolean.TRUE.equals(config.get("priceOnly")) || "true".equals(String.valueOf(config.get("priceOnly")));
         List<String> messages = new ArrayList<>();
         List<Map<String, Object>> reasons = new ArrayList<>();
         List<Map<String, Object>> actions = new ArrayList<>();
@@ -227,7 +230,7 @@ public class ConfiguratorService {
                     + quantity + " separate lines instead");
         }
         // 5. relationships: excludes rejects, requires blocks or suggests an action
-        for (Map<String, Object> rel : listOf(bundle.getProductOfferingRelationship())) {
+        for (Map<String, Object> rel : priceOnly ? List.<Map<String, Object>>of() : listOf(bundle.getProductOfferingRelationship())) {
             String type = String.valueOf(rel.getOrDefault("relationshipType", "")).toLowerCase();
             String relId = String.valueOf(rel.get("id"));
             String relName = rel.get("name") == null ? relId : String.valueOf(rel.get("name"));
@@ -248,8 +251,8 @@ public class ConfiguratorService {
             }
         }
         // 6. availability: a configured variant that is stock-managed must be in stock
-        Map<String, Object> availability = stock.availability(offeringId);
-        String shortage = stock.shortage(availability, picks, quantity);
+        Map<String, Object> availability = priceOnly ? Map.<String, Object>of() : stock.availability(offeringId);
+        String shortage = priceOnly ? null : stock.shortage(availability, picks, quantity);
         if (shortage != null) {
             reject(messages, reasons, "outOfStock", shortage);
         }
