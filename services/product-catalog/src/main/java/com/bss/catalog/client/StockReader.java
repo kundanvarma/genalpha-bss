@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import com.bss.catalog.security.TenantScope;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,8 +29,10 @@ public class StockReader {
     private static final ParameterizedTypeReference<List<Map<String, Object>>> LIST = new ParameterizedTypeReference<>() { };
 
     private final RestClient client;
+    private final TenantScope tenantScope;
 
-    public StockReader(RestClient.Builder builder, @Value("${bss.downstream.stock-base-url:}") String baseUrl) {
+    public StockReader(RestClient.Builder builder, TenantScope tenantScope, @Value("${bss.downstream.stock-base-url:}") String baseUrl) {
+        this.tenantScope = tenantScope;
         this.client = baseUrl == null || baseUrl.isBlank() ? null : builder.clone().baseUrl(baseUrl).build();
     }
 
@@ -40,8 +43,11 @@ public class StockReader {
             return Map.of();
         }
         try {
+            // the stock service keys its rows by tenant; an internal read says which tenant is asking (the gateway
+            // strips inbound copies of this header, so it is ours to set here and nowhere else)
             List<Map<String, Object>> stocks = client.get()
                     .uri("/tmf-api/productStockManagement/v4/productStock?productOfferingId={id}&limit=100", offeringId)
+                    .header("X-Tenant-Id", tenantScope.currentTenantId())
                     .retrieve().body(LIST);
             if (stocks == null || stocks.isEmpty()) {
                 return Map.of();
