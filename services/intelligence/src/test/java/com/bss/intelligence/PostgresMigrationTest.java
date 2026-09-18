@@ -37,7 +37,7 @@ class PostgresMigrationTest {
 
         Integer applied = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = true", Integer.class);
-        assertThat(applied).isEqualTo(30); // + V10 knowledge_gap, V11 RLS // every migration on disk (was a stale 6 since the churn-engine arc)
+        assertThat(applied).isEqualTo(32); // + V31 ai_management_resource, V32 RLS — every migration on disk
 
         assertThat(repository.count()).isZero();
     }

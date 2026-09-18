@@ -3,8 +3,8 @@ package com.bss.catalog.controller;
 import com.bss.catalog.api.ApiConstants;
 import com.bss.catalog.api.FieldSelector;
 import com.bss.catalog.api.PagedResult;
-import com.bss.catalog.dto.ServiceSpecificationDto;
-import com.bss.catalog.service.ServiceSpecificationService;
+import com.bss.catalog.dto.ServiceCandidateDto;
+import com.bss.catalog.service.ServiceCandidateService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -27,21 +27,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * TMF633 Service Catalog Management — ServiceSpecification (CFS/RFS). Served on
- * the v4 path and, for R18-era clients, on the v3 alias: same rows, same
- * canonical (v4) hrefs, only the PATCH status differs (v3 answers 201).
- */
+/** TMF633 Service Catalog Management — ServiceCandidate, on the v4 path and the v3 alias. */
 @RestController
 @Validated
-@RequestMapping({ApiConstants.SERVICE_CATALOG_BASE_PATH + "/serviceSpecification",
-        ApiConstants.SERVICE_CATALOG_V3_BASE_PATH + "/serviceSpecification"})
-public class ServiceSpecificationController {
+@RequestMapping({ApiConstants.SERVICE_CATALOG_BASE_PATH + "/serviceCandidate",
+        ApiConstants.SERVICE_CATALOG_V3_BASE_PATH + "/serviceCandidate"})
+public class ServiceCandidateController {
 
-    private final ServiceSpecificationService service;
+    private final ServiceCandidateService service;
     private final FieldSelector fieldSelector;
 
-    public ServiceSpecificationController(ServiceSpecificationService service, FieldSelector fieldSelector) {
+    public ServiceCandidateController(ServiceCandidateService service, FieldSelector fieldSelector) {
         this.service = service;
         this.fieldSelector = fieldSelector;
     }
@@ -56,7 +52,7 @@ public class ServiceSpecificationController {
         filters.remove("offset");
         filters.remove("limit");
         filters.remove("fields");
-        PagedResult<ServiceSpecificationDto> result = service.findAll(offset, limit, filters);
+        PagedResult<ServiceCandidateDto> result = service.findAll(offset, limit, filters);
         List<?> body = fields == null ? result.items() : fieldSelector.select(result.items(), fields, "href");
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(result.totalCount()))
@@ -67,7 +63,7 @@ public class ServiceSpecificationController {
     @GetMapping("/{id}")
     public ResponseEntity<?> getById(@PathVariable("id") String id,
                                      @RequestParam(name = "fields", required = false) String fields) {
-        ServiceSpecificationDto dto = service.findById(id);
+        ServiceCandidateDto dto = service.findById(id);
         if (fields == null || fields.isBlank()) {
             return ResponseEntity.ok(dto);
         }
@@ -75,17 +71,17 @@ public class ServiceSpecificationController {
     }
 
     @PostMapping
-    public ResponseEntity<ServiceSpecificationDto> create(@Valid @RequestBody ServiceSpecificationDto dto) {
-        ServiceSpecificationDto created = service.create(dto);
+    public ResponseEntity<ServiceCandidateDto> create(@Valid @RequestBody ServiceCandidateDto dto) {
+        ServiceCandidateDto created = service.create(dto);
         return ResponseEntity
                 .created(URI.create(created.getHref()))
                 .body(created);
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<ServiceSpecificationDto> patch(@PathVariable("id") String id,
-                                                         @RequestBody ServiceSpecificationDto patch,
-                                                         HttpServletRequest request) {
+    public ResponseEntity<ServiceCandidateDto> patch(@PathVariable("id") String id,
+                                                     @RequestBody ServiceCandidateDto patch,
+                                                     HttpServletRequest request) {
         HttpStatus status = ApiConstants.isServiceCatalogV3(request) ? HttpStatus.CREATED : HttpStatus.OK;
         return ResponseEntity.status(status).body(service.patch(id, patch));
     }

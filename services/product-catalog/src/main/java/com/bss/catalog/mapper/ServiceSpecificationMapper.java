@@ -1,5 +1,6 @@
 package com.bss.catalog.mapper;
 
+import com.bss.catalog.api.ApiConstants;
 import com.bss.catalog.dto.ServiceSpecificationDto;
 import com.bss.catalog.entity.ServiceSpecification;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,6 +17,10 @@ public class ServiceSpecificationMapper {
     private static final TypeReference<List<Map<String, Object>>> JSON_OBJECT_LIST = new TypeReference<>() {
     };
 
+    static final String BASE_TYPE = "ServiceSpecification";
+    static final String CFS_TYPE = "CustomerFacingServiceSpecification";
+    static final String RFS_TYPE = "ResourceFacingServiceSpecification";
+
     private final ObjectMapper objectMapper;
 
     public ServiceSpecificationMapper(ObjectMapper objectMapper) {
@@ -30,13 +35,38 @@ public class ServiceSpecificationMapper {
         dto.setDescription(entity.getDescription());
         dto.setVersion(entity.getVersion());
         dto.setLifecycleStatus(entity.getLifecycleStatus());
-        dto.setIsBundle(entity.getIsBundle());
+        // isBundle is mandatory on the wire: absent reads as "not a bundle"
+        dto.setIsBundle(entity.getIsBundle() != null && entity.getIsBundle());
         dto.setServiceType(entity.getServiceType());
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setServiceSpecCharacteristic(readJsonObjectList(entity.getServiceSpecCharacteristicJson()));
         dto.setServiceSpecRelationship(readJsonObjectList(entity.getServiceSpecRelationshipJson()));
-        dto.setType("ServiceSpecification");
+        dto.setType(typeFor(entity.getServiceType()));
+        dto.setBaseType(BASE_TYPE);
+        dto.setSchemaLocation(ApiConstants.SERVICE_SCHEMA_BASE + dto.getType() + ".schema.json");
         return dto;
+    }
+
+    /** The TMF633 subtype the CFS/RFS tag stands for — the same fact, spelled the standard's way. */
+    static String typeFor(String serviceType) {
+        if ("CFS".equalsIgnoreCase(serviceType)) {
+            return CFS_TYPE;
+        }
+        if ("RFS".equalsIgnoreCase(serviceType)) {
+            return RFS_TYPE;
+        }
+        return BASE_TYPE;
+    }
+
+    /** The CFS/RFS tag a client's {@code @type} implies; null when it says nothing about it. */
+    static String serviceTypeFor(String type) {
+        if (CFS_TYPE.equalsIgnoreCase(type)) {
+            return "CFS";
+        }
+        if (RFS_TYPE.equalsIgnoreCase(type)) {
+            return "RFS";
+        }
+        return null;
     }
 
     public ServiceSpecification toEntity(ServiceSpecificationDto dto) {
@@ -47,8 +77,9 @@ public class ServiceSpecificationMapper {
         entity.setDescription(dto.getDescription());
         entity.setVersion(dto.getVersion());
         entity.setLifecycleStatus(dto.getLifecycleStatus());
-        entity.setIsBundle(dto.getIsBundle());
-        entity.setServiceType(dto.getServiceType());
+        entity.setIsBundle(dto.getIsBundle() != null && dto.getIsBundle());
+        // serviceType wins when given; otherwise a subtype in @type classifies the spec
+        entity.setServiceType(dto.getServiceType() != null ? dto.getServiceType() : serviceTypeFor(dto.getType()));
         entity.setLastUpdate(dto.getLastUpdate());
         entity.setServiceSpecCharacteristicJson(writeJsonObjectList(dto.getServiceSpecCharacteristic()));
         entity.setServiceSpecRelationshipJson(writeJsonObjectList(dto.getServiceSpecRelationship()));
@@ -73,6 +104,8 @@ public class ServiceSpecificationMapper {
         }
         if (patch.getServiceType() != null) {
             entity.setServiceType(patch.getServiceType());
+        } else if (serviceTypeFor(patch.getType()) != null) {
+            entity.setServiceType(serviceTypeFor(patch.getType()));
         }
         if (patch.getServiceSpecCharacteristic() != null) {
             entity.setServiceSpecCharacteristicJson(writeJsonObjectList(patch.getServiceSpecCharacteristic()));

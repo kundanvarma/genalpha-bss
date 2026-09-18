@@ -10,6 +10,9 @@ public interface ServiceInstanceRepository extends JpaRepository<ServiceInstance
 
     Optional<ServiceInstance> findByIdAndTenantId(String id, String tenantId);
 
+    /** The whole tenant inventory, newest first — the TMF640 face lists it. */
+    List<ServiceInstance> findByTenantIdOrderByCreatedAtDesc(String tenantId);
+
     List<ServiceInstance> findByTenantIdAndOwnerPartyId(String tenantId, String ownerPartyId);
 
     /** Boost passes past their hour: the sweep releases them (the core already has). */

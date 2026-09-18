@@ -46,10 +46,37 @@ public class ServiceSpecificationDto {
     @JsonProperty("serviceSpecRelationship")
     private List<Map<String, Object>> serviceSpecRelationship;
 
+    /**
+     * TMF633 polymorphism: CustomerFacingServiceSpecification (CFS) or
+     * ResourceFacingServiceSpecification (RFS); plain ServiceSpecification when
+     * the spec has not been classified.
+     */
     @JsonProperty("@type")
     private String type = "ServiceSpecification";
 
+    @JsonProperty("@baseType")
+    private String baseType;
+
+    @JsonProperty("@schemaLocation")
+    private String schemaLocation;
+
     public ServiceSpecificationDto() {
+    }
+
+    public String getBaseType() {
+        return baseType;
+    }
+
+    public void setBaseType(String baseType) {
+        this.baseType = baseType;
+    }
+
+    public String getSchemaLocation() {
+        return schemaLocation;
+    }
+
+    public void setSchemaLocation(String schemaLocation) {
+        this.schemaLocation = schemaLocation;
     }
 
     public String getId() {

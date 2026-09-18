@@ -53,6 +53,8 @@ The 4th arg is the collection's base-URL variable name (`auto` detects it).
 | geographic-address | CTK-TMF674_GeographicSite | `/tmf-api/geographicSiteManagement/v4/` |
 | service-orchestration | CTK-TMF639-ResourceInventory | `/tmf-api/resourceInventoryManagement/v4/` |
 | assurance | CTK-TMF642-Alarm | `/tmf-api/alarmManagement/v4/` |
+| intelligence | CTK-TMF915-AI | `/tmf-api/aiManagement/v4/` |
+| service-orchestration | CTK-TMF640-ServiceActivationAndConfiguration | `/tmf-api/serviceActivationAndConfiguration/v4/` |
 
 ## R18-era kits (runctk-r18.py)
 
@@ -75,6 +77,11 @@ python3 runctk-r18.py <CTK-dir>/ctk/<collection>.json \
 | trouble-ticket | CTK-TMF621-TroubleTicket-R18-0 | `…/troubleTicket/v4` |
 | qualification | CTK-TMF645-ServiceQualification | `…/serviceQualificationManagement/v3` |
 | qualification | CTK-TMF679-ProductOfferingQualification-R18.0 | `…/productOfferingQualification/v4` |
+| product-catalog | CTK-TMF633-ServiceCatalog | `…/serviceCatalogManagement/v3` (the v3 dialect rides beside v4: same rows, PATCH answers 201 there) |
+| service-orchestration | CTK-TMF640-ServiceActivation-R18-5 | `…/serviceActivationAndConfiguration/v4` |
+
+The R18 runner reads collections with `utf-8-sig` — several kits (TMF640
+R18.5, TMF638) ship a UTF-8 BOM that plain `json.load` refuses.
 
 Note the TMF645 kit targets the **v3 task face** (the v4 resource is named
 `checkServiceQualification`; the v3 dialect rides beside it, same engine).
@@ -96,6 +103,17 @@ Note the TMF645 kit targets the **v3 task face** (the v4 resource is named
    ('ctk-probe-b-<ts>','genalpha','/tmf-api/serviceInventory/v4/service/ctk-probe-b-<ts>',
     'CTK Probe Mobile B <ts>','designed','ctk-probe-order-b','op-genalpha',
     now()+interval '1 second',now());
+  ```
+
+- **TMF633**: the kit's `ExportJob_N2` request lists `importJob` (a kit bug)
+  after `ImportJob_N5` has deleted the only import job, and treats an empty
+  list as an instance. Create one probe import job before the first run; it
+  stays in history from then on:
+
+  ```bash
+  curl -X POST http://localhost:8080/tmf-api/serviceCatalogManagement/v4/importJob \
+    -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"url":"https://example.invalid/ctk-probe/service-catalog.json","path":"/ctk/probe","contentType":"application/json"}'
   ```
 
 See [`../../docs/ctk-conformance.md`](../../docs/ctk-conformance.md) for the current scorecard.

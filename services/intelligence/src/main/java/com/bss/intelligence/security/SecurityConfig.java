@@ -48,9 +48,14 @@ public class SecurityConfig {
                         // and the ordering machine, never a customer surface
                         .requestMatchers("/tmf-api/riskManagement/v4/**").hasAuthority("risk:assess")
                         // TMF915: reading the control plane's face is ops-grade;
-                        // SUSPENDING a model contract is the first door behind
+                        // every write — SUSPENDING a model contract, registering
+                        // an alarm, rule, contract or model — is a door behind
                         // ai:admin — the seam production always needed, opened
                         .requestMatchers(HttpMethod.PATCH,
+                                "/tmf-api/aiManagement/v4/**").hasAuthority("ai:admin")
+                        .requestMatchers(HttpMethod.POST,
+                                "/tmf-api/aiManagement/v4/**").hasAuthority("ai:admin")
+                        .requestMatchers(HttpMethod.DELETE,
                                 "/tmf-api/aiManagement/v4/**").hasAuthority("ai:admin")
                         .requestMatchers("/tmf-api/aiManagement/v4/**").hasAuthority("ai:use")
                         // setting budgets / throwing the tenant kill-switch is

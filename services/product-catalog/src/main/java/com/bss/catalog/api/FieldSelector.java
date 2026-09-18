@@ -25,8 +25,18 @@ public class FieldSelector {
     }
 
     public List<Map<String, Object>> select(List<?> items, String fields) {
+        return select(items, fields, new String[0]);
+    }
+
+    /**
+     * Same projection, with extra attributes that are always returned whatever
+     * the caller asked for — the service catalog keeps {@code href} beside
+     * {@code id} so every projected row stays a navigable reference.
+     */
+    public List<Map<String, Object>> select(List<?> items, String fields, String... alwaysKeep) {
         Set<String> keep = new LinkedHashSet<>(Arrays.asList(fields.split(",")));
         keep.add("id");
+        keep.addAll(Arrays.asList(alwaysKeep));
         return items.stream()
                 .map(item -> objectMapper.convertValue(item, new TypeReference<LinkedHashMap<String, Object>>() {
                 }))

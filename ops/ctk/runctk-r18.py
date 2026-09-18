@@ -20,7 +20,7 @@ base = sys.argv[2].rstrip("/")
 token = sys.argv[3]
 varname = sys.argv[4] if len(sys.argv) > 4 else "auto"
 
-coll = json.load(open(coll_path))
+coll = json.load(open(coll_path, encoding="utf-8-sig"))  # some kits ship a UTF-8 BOM
 
 if varname == "auto":
     counts = Counter()

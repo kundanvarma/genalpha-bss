@@ -70,6 +70,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.ORDER_BASE + "/**",
                                 "/tmf-api/serviceOrdering/v3/**",
                                 ApiConstants.INVENTORY_BASE + "/**",
+                                // TMF640: the activation face reads like the inventory,
+                                // writes like it (service:write below)
+                                ApiConstants.ACTIVATION_BASE + "/**",
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**").hasAuthority(READ)
                         // customer SELF-CARE: any authenticated owner may act on
@@ -89,7 +92,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST,
                                 "/tmf-api/resourcePoolManagement/v4/**",
                                 "/tmf-api/intentManagement/v4/**",
-                                ApiConstants.INVENTORY_BASE + "/**").hasAuthority(WRITE)
+                                ApiConstants.INVENTORY_BASE + "/**",
+                                ApiConstants.ACTIVATION_BASE + "/**").hasAuthority(WRITE)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationManagerResolver(tenantIssuerResolver(tenants, authoritiesConverter)));

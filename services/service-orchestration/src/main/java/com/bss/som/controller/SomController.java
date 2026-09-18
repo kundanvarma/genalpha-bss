@@ -982,7 +982,8 @@ public class SomController {
                 }).toList());
     }
 
-    private Map<String, Object> serviceMap(ServiceInstance s) {
+    /** The inventory view of a service; the TMF640 face builds on the same map. */
+    Map<String, Object> serviceMap(ServiceInstance s) {
         Map<String, Object> map = new LinkedHashMap<>();
         String category = categoryOf(s.getName());
         map.put("id", s.getId());

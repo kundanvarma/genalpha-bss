@@ -61,8 +61,11 @@ public class SecurityConfig {
                         // catalog; authoring the CFS/RFS specs is a wholesale/catalog
                         // back-office act — accepts catalog:write OR wholesale:admin so
                         // a wholesale operator can model access without the full catalog role.
-                        .requestMatchers(HttpMethod.GET, ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**").permitAll()
-                        .requestMatchers(ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**")
+                        // The R18 (v3) alias is the same catalog: same doors, same keys.
+                        .requestMatchers(HttpMethod.GET, ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**",
+                                ApiConstants.SERVICE_CATALOG_V3_BASE_PATH + "/**").permitAll()
+                        .requestMatchers(ApiConstants.SERVICE_CATALOG_BASE_PATH + "/**",
+                                ApiConstants.SERVICE_CATALOG_V3_BASE_PATH + "/**")
                                 .hasAnyAuthority(WRITE, WHOLESALE_ADMIN)
                         // launch governance: reading the desk is catalog:read, every
                         // door is catalog:write; approve/reject check catalog:approve inside

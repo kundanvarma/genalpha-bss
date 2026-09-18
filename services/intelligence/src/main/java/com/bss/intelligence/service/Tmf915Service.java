@@ -7,6 +7,7 @@ import com.bss.intelligence.audit.AiContract;
 import com.bss.intelligence.audit.AiContractRepository;
 import com.bss.intelligence.churn.ChurnModelRecord;
 import com.bss.intelligence.churn.ChurnModelRepository;
+import com.bss.intelligence.exception.NotFoundException;
 import com.bss.intelligence.security.TenantScope;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -72,6 +73,7 @@ public class Tmf915Service {
                 m.put("name", model);
                 m.put("provider", provider);
                 m.put("category", "languageModel");
+                m.put("state", "active");
                 m.put("tier", new LinkedHashSet<String>());
                 m.put("servedContract", new LinkedHashSet<String>());
                 m.put("@type", "AIModel");
@@ -97,6 +99,7 @@ public class Tmf915Service {
         view.put("name", "churn-logistic");
         view.put("provider", "local");
         view.put("category", "trainedClassifier");
+        view.put("state", "active");
         view.put("trainingRecord", Map.of(
                 "sampleCount", record.getSampleCount(),
                 "positives", record.getPositives(),
@@ -104,6 +107,15 @@ public class Tmf915Service {
         view.put("servedContract", List.of("churn-sweep"));
         view.put("@type", "AIModel");
         return view;
+    }
+
+    /** One served model by its ledger id (provider/model, or local/churn-logistic). */
+    @Transactional(readOnly = true)
+    public Map<String, Object> findModel(String id) {
+        return listModels().stream()
+                .filter(m -> id.equals(m.get("id")))
+                .findFirst()
+                .orElseThrow(() -> NotFoundException.forResource("AiModel", id));
     }
 
     /* ---------- aiModelContract: the scenarios, with their numbers ---------- */

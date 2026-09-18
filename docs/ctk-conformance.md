@@ -34,12 +34,33 @@ with [`ops/ctk`](../ops/ctk/README.md).
 | **trouble-ticket** | **TMF621** | **488/488, 0 failures** |
 | **qualification (service, v3 task face)** | **TMF645** | **288/288, 0 failures** |
 | **qualification (offering, task face)** | **TMF679** | **160/160, 0 failures** |
+| **product-catalog (service catalog)** | **TMF633** (R18.5 kit, v3 path beside v4) | **337/337, 0 failures** |
+| **service-orchestration (activation face)** | **TMF640** v4 kit | **746/746, 0 failures** |
+| **service-orchestration (activation face)** | **TMF640** R18.5 kit | **1187/1187, 0 failures** |
+| **intelligence (AI management)** | **TMF915** | **794/794, 0 failures** |
 
-**Twenty-five kits, zero failures — and this is the closed list**: the
-`tmforum-rand` org publishes no CTK for the remaining faces this fleet serves
-(TMF688 events, TMF696 risk, TMF760 configurator, TMF915 AI management,
-TMF700/697 fulfilment, TMF701 process, TMF724 incident, TMF623 SLA). There is
-nothing left to run.
+**Twenty-eight kits, zero failures.** An earlier version of this page called
+the list closed at twenty-five; that was wrong. Checked against the
+`tmforum-rand` org on 2026-09-18, kits existed for three faces this fleet
+serves and had never been run — TMF633 (the catalog served only
+`serviceSpecification`), TMF640 (the README claimed it, but no endpoint
+existed: activation lived inside TMF641) and TMF915 (a read-only projection of
+the AI ledger). All three were built out that day and run to zero. What the
+org does NOT publish a kit for, as of that check: TMF646, 648, 667, 670, 671,
+672, 673, 680, 685, 699, 760, 688, 696, 701, 724 and 623. For those faces the
+only proof is our own suites, and this page makes no conformance claim.
+
+What the 18 Sep build added, honestly: TMF633 `serviceCandidate` is a real
+resource; `importJob`/`exportJob` are **recorded only** (a job row with a url,
+status "Not Started" — nothing fetches or writes the url; there is no runner).
+TMF640 `POST service` writes the same inventory row TMF638 reads, with the
+caller's document overlaid and a `monitor` born Completed — it never triggers
+fulfilment (no service order, no pool draw, no OCS/entitlement provisioning,
+no domain event); it is the declared-activation face, not the orchestrator.
+TMF915's six new resources (alarm, rule, aiContract, aiContractSpecification,
+aiContractViolation, aiModelSpecification) live in one tenant-scoped document
+store beside the ledger projection; `POST aiModel` registers a model that lists
+beside the projected ones.
 
 The 2026-08-06 campaign (twelve kits in one overnight) taught the same lesson
 TMF683 did, at scale: **the kits audit the whole history, not just their own
@@ -98,8 +119,11 @@ fixes that — it structures the collection URLs, injects a live bearer token, a
 runs with a modern newman, so every number here is trustworthy. The R18-era
 generation (raw Postman collection + environment, no config.json) runs through
 [`ops/ctk/runctk-r18.py`](../ops/ctk/runctk-r18.py) — same idea, plus
-secondary host-var resolution and baked Content-Type. Two kits need one-time
+secondary host-var resolution and baked Content-Type. Three kits need one-time
 data prep (documented in [`ops/ctk/README.md`](../ops/ctk/README.md)): TMF674's
-example payload must reference a STORED TMF673 address, and TMF638 assumes a
+example payload must reference a STORED TMF673 address, TMF638 assumes a
 sandbox inventory (seed two uniquely-named probe services, one in a state
-nothing else uses).
+nothing else uses), and TMF633 needs one probe `importJob` in history (a kit
+bug lists `importJob` after its own delete and treats an empty list as an
+instance). Some raw collections ship a UTF-8 BOM; the R18 runner reads them
+with `utf-8-sig`.
