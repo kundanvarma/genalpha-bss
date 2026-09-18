@@ -78,5 +78,5 @@ Drop photos in `ops/demo-assets/devices/` (gitignored), then
 
 ### THE THREE QUESTIONS
 - **vs Amdocs/Netcracker?** "Not competing on feature count — vendor-neutral, composable, AI-native from day one. Full BSS for a smaller operator, or a layer on what you have."
-- **Production-ready?** "Core is proven — 136 browser E2E suites (174 total), 25 CTKs at zero, crash-resumable billing, three clouds, a campaign-day browse cache for the Black-Friday surge. Honest gaps: OCS is a seam, no tax engine, no ERP, no pen test yet — all in the capability map."
+- **Production-ready?** "Core is proven — 136 browser E2E suites (174 total), 28 CTKs at zero, crash-resumable billing, three clouds, a campaign-day browse cache for the Black-Friday surge. Honest gaps: OCS is a seam, no tax engine, no ERP, no pen test yet — all in the capability map."
 - **Cost to build?** "One person, ~2 months, with an AI pair. ~10.6B tokens processed, ~24M generated — flat subscription, no API bills."

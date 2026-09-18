@@ -396,7 +396,7 @@ a full BSS for a smaller operator/MVNO, or as a layer on top of what you have."*
 
 **"Is it production-ready?"**
 *"The core is proven — 136 browser end-to-end suites (174 automated suites in
-all), 25 conformance kits at zero, crash-resumable billing, GDPR endpoints, runs
+all), 28 conformance kits at zero, crash-resumable billing, GDPR endpoints, runs
 on three clouds off one Helm chart. A campaign-day browse cache absorbs a
 Black-Friday surge at the gateway before it reaches the database. And it's honest
 about the gaps: the charging system is a seam (bring your own OCS), no tax engine,
