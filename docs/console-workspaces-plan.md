@@ -98,6 +98,12 @@ finance desk; the department IS a composite role your IdP admin edits."*
 - DOM-contract leg: bill_distribution's click-until-proven pattern still
   lands (grouped tab, same class, same text)
 
+**Command palette (⌘K / Ctrl+K, `palette.js`, suite `console_palette_test.js`):**
+the care desk's palette on the back office — type a page (every page the token
+can see, with its department), a recent page, or a button visible on the page in
+front of you; Enter runs it through the same path as a rail click; "Ask: …" hands
+the question to the ? drawer. The header shows a ⌘K hint; Esc closes.
+
 **Regression set (serial):** copilot, bill_distribution, operator_form,
 process_memory, workforce_runtime, agentic_workforce, martech (heaviest
 console-clickers), then the two personalization suites.
@@ -107,6 +113,15 @@ payloads are already role-shaped where it matters); new server-side
 roles; changes to the CSR/dealer/business consoles (each is already a
 single-audience surface — the back office is the only shared building).
 
+## Built since: groups in the page row, one verb per row, chips that filter
+
+- **Groups.** A department may carry `groups: [{ label, tabs, short }]` beside its flat `tabs`; the page row above the content then reads `CATALOG Offerings · Specifications | PRICING Prices | AVAILABILITY Stock · Serviceable areas | TOOLS Advisor · Copilot · Simulator · Prospect sim | LAUNCH Approvals · Envelopes` — one line at 1440px. Marketing (Campaigns / Audiences / Content / Insights / Care / Brand & guardrails) and AI & Automation (Work / Decisions / Audit) are grouped the same way; other departments stay flat.
+- `tabs` remains the union, so every `ws.tabs.includes(path)` lookup and the suites' `.tab` contract are untouched; `short` renames a page in the row only — the resource title, breadcrumb and rail keep the full name, and a page no group claims still gets a seat.
+- **Open + ⋯.** Every list row shows one text verb, **Open** (the editor), and an overflow **⋯** (`More actions`) with the lifecycle step (`→ In test`), **Edit** (same door as Open) and **Delete**. Delete appears only while the row is a draft (`In study` / `In design` / `In test`, or a resource with no lifecycle at all): a live offering is retired via the ladder, never deleted from a list.
+- The overflow is a fixed-position `.rowmenu` under its button — one open at a time; outside click, Escape and scroll close it. Suites that clicked `Edit` by text now click `Open` (`console_test.js`, `journey_edit_console_test.js`, `journey_video.js`).
+- **Chips filter.** A health chip that counted specific rows (`ids`) is also a filter: click it and the list narrows to those rows (`.kpi.on`, `aria-pressed`), click again and everything is back; chips without `ids` stay plain text. The filter resets when the page changes and survives re-renders (pager, sort) via the row-flag observer.
+- Suite `console_nav_test.js`: five group labels and a one-line row at 1440px, Open opens the editor, Delete only behind ⋯ on a draft, the `drafts` chip narrows and clears.
+
 ## Estimate
 
 P1+P2+suite #87: one focused evening. P3 (realm file+live, personas,
@@ -114,3 +129,19 @@ docs): a short second session, mostly ceremony around Keycloak's
 file+live doctrine. Suggested order: after the LinkedIn post and the
 overnight sweep — this arc touches the console every suite clicks
 through, and the fleet is currently in its best pre-post state.
+
+## Home / My Work — the first screen (built 2026-09-21)
+
+The console now opens on **Home**, one page in a department of its own, for
+every member of staff. It answers one question in five seconds: *what needs me
+today?* Five sections, top to bottom: **Attention** (offers still in draft or
+on sale past their window, launches waiting for a decision, overdue bills,
+orders open more than two days), **My work** (launches on hold, AI-workforce
+tasks waiting for approval, desk suggestions), **Operational health** (offers
+on the shelf, bills open, orders in flight, journeys live, AI workers busy),
+**Recent** (the last eight pages you opened) and **Quick actions** (new
+offering, the two copilots, Approvals). Every card is gated by the same role
+as the page it opens — a product manager sees catalog cards only, finance
+sees money only — and a card whose data the API refuses simply stays away.
+A quiet desk says "No action needed"; nothing is red unless something is late.
+Code: `apps/admin-console/site/home.js`; suite `ops/e2e/console_home_test.js`.

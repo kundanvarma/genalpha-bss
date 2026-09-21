@@ -59,8 +59,9 @@ async function token(ctx, client, user, pass) {
   if (!(await row.count())) fail('the journey row was not found in the console');
 
   /* ---------- Edit is offered and loads the real journey ---------- */
-  const editBtn = row.locator('button', { hasText: 'Edit' });
-  if (!(await editBtn.count()) || (await editBtn.isHidden())) fail('the Journeys pane offers no Edit action');
+  // the row's one verb is Open (Edit lives behind "⋯" and opens the same editor)
+  const editBtn = row.locator('button', { hasText: 'Open' });
+  if (!(await editBtn.count()) || (await editBtn.isHidden())) fail('the Journeys pane offers no Open action');
   await editBtn.click();
   await page.waitForSelector('#editor-title', { timeout: 10000 });
   if (!(await page.locator('#editor-title').textContent()).includes(name)) fail('the editor did not load the journey');

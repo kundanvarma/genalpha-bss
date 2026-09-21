@@ -123,6 +123,17 @@ td:first-child { min-width: 180px; }
 td:not(:first-child) { white-space: nowrap; }
 .rowactions { display: flex; gap: 6px; justify-content: flex-end; white-space: nowrap; flex-wrap: nowrap; }
 .rowactions button { flex-shrink: 0; }
+/* One verb per row: Open reads as the primary text action; "⋯" holds the rest. */
+.rowactions button.open { color: var(--teal); border-color: transparent; font-weight: 600; padding: 7px 8px; }
+.rowactions button.open:hover { border-color: var(--teal); }
+.rowactions button.more { padding: 7px 9px; line-height: 1; font-size: 15px; letter-spacing: 1px; border-color: transparent; }
+.rowactions button.more:hover, .rowactions button.more[aria-expanded="true"] { border-color: var(--line); color: var(--ink); }
+.rowmenu { position: fixed; z-index: 60; min-width: 150px; display: flex; flex-direction: column; padding: 4px;
+  background: var(--card, #fff); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.rowmenu[hidden] { display: none; }
+.rowmenu button { border: none; background: transparent; font: inherit; font-size: 13px; text-align: left; padding: 7px 10px; border-radius: 5px; color: var(--ink); cursor: pointer; }
+.rowmenu button:hover, .rowmenu button:focus-visible { background: color-mix(in srgb, var(--card) 92%, var(--ink)); outline: none; }
+.rowmenu button.danger { color: var(--danger); }
 
 .pager { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
 #page-label { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--dim); }
@@ -372,12 +383,25 @@ th { border-bottom-color: var(--line); }
 .kpi.warn { border-color: #f59e0b; } .kpi.warn strong { color: #b45309; }
 .kpi.bad { border-color: #dc2626; } .kpi.bad strong { color: #b91c1c; }
 .kpi.ok strong { color: var(--ink); }
+/* A chip that counted rows is a filter: click narrows the list to them, click again clears. */
+.kpi.click { cursor: pointer; user-select: none; }
+.kpi.click:hover { border-color: var(--ink); }
+.kpi.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.kpi.on strong { color: #fff; }
+.kpi.click:focus-visible { outline: 2px solid var(--teal); outline-offset: 1px; }
 #listing-body tr.flag td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
 /* the sibling pages of the department, as a row above the title (Ivan's sketch) */
 .pagerow { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 10px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-.pagetab { border: none; background: transparent; font: inherit; font-size: 13.5px; color: var(--dim); padding: 5px 10px; cursor: pointer; border-radius: 6px; }
+.pagetab { border: none; background: transparent; font: inherit; font-size: 13.5px; color: var(--dim); padding: 5px 10px; cursor: pointer; border-radius: 6px; white-space: nowrap; }
 .pagetab:hover { background: color-mix(in srgb, var(--card) 90%, var(--ink)); color: var(--ink); }
 .pagetab.on { color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--teal); border-radius: 0; }
+/* Grouped page row: "CATALOG Offerings · Specifications | PRICING Prices | …" — a mono
+   caps heading per job, pages tight beside it, a hairline between jobs. */
+.pagerow.grouped { gap: 0 2px; align-items: center; }
+.pageset { display: inline-flex; align-items: center; gap: 0; padding: 0 5px 0 5px; border-left: 1px solid var(--line); white-space: nowrap; }
+.pageset:first-child { border-left: none; padding-left: 0; }
+.pagegroup { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 9.5px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--dim); opacity: 0.75; margin-right: 3px; }
+.pagerow.grouped .pagetab { padding: 5px 6px; font-size: 13px; }
 
 /* the reading drawer: receipts and contracts (the form drawer stays the form's) */
 .side-drawer { position: fixed; top: 0; right: 0; height: 100vh; width: min(620px, 96vw); overflow-y: auto; background: var(--card); border-left: 1px solid var(--line); box-shadow: -12px 0 32px rgba(0,0,0,.12); padding: 22px 26px 40px; z-index: 60; transform: translateX(102%); transition: transform .22s ease; }
@@ -421,3 +445,20 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; font-size: 1
 .switch.warn { border-color: #f59e0b; color: #b45309; font-weight: 600; }
 .dry { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--line); }
 .dry-out { font-size: 13.5px; line-height: 1.5; }
+
+/* ⌘K command palette (palette.js): pages, recent pages, the actions on this page — typed, not clicked */
+.palette-hint { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; padding: 5px 10px; letter-spacing: 0.04em; }
+.palette-backdrop { position: fixed; inset: 0; background: rgba(14, 24, 28, 0.42); z-index: 80; display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.palette { width: min(640px, 94vw); max-height: 70vh; display: flex; flex-direction: column; background: var(--card); color: var(--ink); border: 1px solid var(--teal); border-radius: 10px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
+.palette input { width: 100%; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--ink); padding: 14px 18px; font: inherit; font-size: 16px; outline: none; }
+.palette input:focus { box-shadow: inset 0 -2px 0 var(--teal); }
+.palette-list { list-style: none; margin: 0; padding: 6px 0; overflow-y: auto; flex: 1 1 auto; }
+.palette-list li { display: flex; align-items: baseline; gap: 12px; padding: 8px 18px; cursor: pointer; font-size: 14px; border-left: 3px solid transparent; }
+.palette-list li[aria-selected="true"] { background: var(--teal-soft); border-left-color: var(--teal); color: var(--teal-text); }
+.palette-group { flex: 0 0 96px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); }
+.palette-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-hint-dept { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.palette-empty { color: var(--dim); cursor: default; }
+.palette-keys { display: flex; gap: 16px; flex-wrap: wrap; padding: 8px 18px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
+.palette-keys kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: var(--paper); color: var(--ink); }
+.palette .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

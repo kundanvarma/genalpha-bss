@@ -23,6 +23,9 @@ const run = Date.now();
   console.log('OK login, signed in as:', await page.locator('#username').textContent());
 
   // 2. Offerings table shows the bundle with isBundle=yes
+  // the console lands on Home now (console_home_test.js) — the catalog is a click away
+  await page.waitForSelector('#tabs .tab', { timeout: 10000 });
+  await page.locator('.tab', { hasText: 'Product Offerings' }).first().click();
   await page.waitForSelector('#listing-body tr');
   // the catalog accumulates run-unique offerings from other suites — the
   // bundle may live pages deep; walk the pager to it
@@ -39,7 +42,8 @@ const run = Date.now();
   console.log('OK bundle row:', cells.slice(0, 4).join(' | '));
 
   // 3. Edit the bundle: the COMPOSER renders components AND the choice group
-  await bundleRow.locator('button', { hasText: 'Edit' }).click();
+  // the row's one verb is Open (Edit lives behind "⋯" and opens the same editor)
+  await bundleRow.locator('button', { hasText: 'Open' }).click();
   await page.waitForFunction(() =>
     document.querySelectorAll('[data-composer-row]').length >= 5);
   const componentRows = await page.locator('[data-composer-row="component"]').count();

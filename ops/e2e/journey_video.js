@@ -279,7 +279,7 @@ async function shopTab(page, labelRe) {
     await page.waitForTimeout(700);
   }
   await fmRow.waitFor({ timeout: 15000 });
-  await glideClick(page, fmRow.locator('button', { hasText: 'Edit' }));
+  await glideClick(page, fmRow.locator('button', { hasText: 'Open' }));
   await page.waitForFunction(() => document.querySelectorAll('[data-composer-row]').length >= 5);
   await page.locator('[data-composer-row="choice"]').first().scrollIntoViewIfNeeded();
   await page.waitForTimeout(600);

@@ -105,6 +105,8 @@ const CHANNELS = [
 ];
 
 const RESOURCES = [
+  // Home / My Work: the first screen — what needs me, my work, health, recent, quick actions (home.js)
+  { path: 'home', title: 'Home', home: true, readOnly: true, fields: [], columns: [] },
   {
     path: 'productOffering',
     title: 'Product Offerings',
@@ -1669,6 +1671,10 @@ async function partyName(id) {
 // read/write (customers pay bills, book slots), so back-office visibility keys
 // on roles customers never hold.
 const TAB_ROLE = {
+  // 'home' is deliberately ABSENT: a tab without a gate shows to every STAFF token
+  // (the door gate isStaff() below still keeps customers out). Any-of arrays here drop
+  // customer-baseline roles (catalog:read, billing:read, ordering:write …), so listing
+  // them would not widen the gate — the absent entry is the "every staff member" mechanism.
   productOffering: 'catalog:write',
   productSpecification: 'catalog:write',
   productOfferingPrice: 'catalog:write',
@@ -1798,12 +1804,25 @@ function computeVisible() {
 // desk and nothing else. Membership is data; the .tab DOM contract the
 // suites click by text is untouched.
 const WORKSPACES = [
+  { label: 'Home', tabs: ['home'] },
+  // A department may carry `groups`: sub-headings inside the page row
+  // (CATALOG · PRICING · …) so eleven peer pages read as five jobs. `tabs`
+  // stays the flat union — every `ws.tabs.includes(path)` lookup and the
+  // suites' `.tab` contract are untouched. `short` renames a page ONLY in
+  // the row (the resource title, crumb and rail keep their full name).
   { label: 'Catalog & Pricing', tabs: ['productOffering', 'productSpecification',
     'productOfferingPrice', 'productStock', 'serviceableArea', 'findings', 'copilot', 'approvals', 'envelopes',
     // both simulators live where their gate lives: /ai/v1/simulate/** is
     // catalog:write server-side, so a Sales placement leaked a one-tab Sales
     // desk to product staff while real sellers would only have met the 403
-    'simulate/priceChange', 'simulate/prospect'] },
+    'simulate/priceChange', 'simulate/prospect'],
+    groups: [
+      { label: 'Catalog', tabs: ['productOffering', 'productSpecification'], short: { productOffering: 'Offerings', productSpecification: 'Specs' } },
+      { label: 'Pricing', tabs: ['productOfferingPrice'], short: { productOfferingPrice: 'Prices' } },
+      { label: 'Availability', tabs: ['productStock', 'serviceableArea'], short: { productStock: 'Stock', serviceableArea: 'Areas' } },
+      { label: 'Tools', tabs: ['findings', 'copilot', 'simulate/priceChange', 'simulate/prospect'], short: { findings: 'Advisor', copilot: 'Copilot' } },
+      { label: 'Launch', tabs: ['approvals', 'envelopes'] },
+    ] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
@@ -1815,15 +1834,31 @@ const WORKSPACES = [
   // one theme was three jobs. Role gates unchanged, so a narrow role lands on
   // just its own desk.
   { label: 'Marketing', tabs: ['growthCopilot', 'campaign', 'journey', 'landing',
-    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings', 'myOperator'] },
+    'audienceBuilder', 'audience', 'attribution', 'socialListening', 'socialCare', 'voc', 'settings', 'myOperator'],
+    groups: [
+      { label: 'Campaigns', tabs: ['growthCopilot', 'campaign', 'journey'], short: { growthCopilot: 'Copilot' } },
+      { label: 'Audiences', tabs: ['audienceBuilder', 'audience'], short: { audienceBuilder: 'Builder', audience: 'Saved' } },
+      { label: 'Content', tabs: ['landing'] },
+      { label: 'Insights', tabs: ['attribution', 'socialListening', 'voc'], short: { socialListening: 'Listening', voc: 'Voice of Customer' } },
+      { label: 'Care', tabs: ['socialCare'], short: { socialCare: 'Social care' } },
+      { label: 'Brand & guardrails', tabs: ['settings', 'myOperator'] },
+    ] },
   { label: 'Sales', tabs: ['salesLead', 'salesPipeline', 'salesOpportunity', 'quota'] },
   { label: 'Sales setup', tabs: ['scoringRule', 'routingRule', 'configRule',
     'guidedQuestion', 'guidedRecommendation', 'pricingRule'] },
-  { label: 'AI & Automation', tabs: ['desk-suggestions', 'decisions', 'learning-contracts', 'audit', 'runbook', 'workforce'] },
+  { label: 'AI & Automation', tabs: ['desk-suggestions', 'decisions', 'learning-contracts', 'audit', 'runbook', 'workforce'],
+    groups: [
+      { label: 'Work', tabs: ['desk-suggestions', 'workforce', 'runbook'], short: { workforce: 'Workforce' } },
+      { label: 'Decisions', tabs: ['decisions', 'learning-contracts'], short: { 'learning-contracts': 'Contracts' } },
+      { label: 'Audit', tabs: ['audit'], short: { audit: 'Audit trail' } },
+    ] },
   // 'profile' (Visitor consent) is a consent/accountability surface, not a growth
   // lever — it lives with governance, and Growth links to it for debugging.
   { label: 'Privacy & governance', tabs: ['profile', 'aiflows'] },
-  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations', 'ontology'] },
+  { label: 'Platform', tabs: ['operator', 'staff', 'policyRule', 'integrations'] },
+  // the ontology is every staff member's reading room, so it is its own desk: a persona
+  // that may read it must not thereby see the admin's Platform desk (suite console_workspaces)
+  { label: 'What the BSS can do', tabs: ['ontology'] },
 ];
 
 let active = RESOURCES[0];
@@ -1892,8 +1927,16 @@ function refObject(field, option) {
 }
 
 async function loadPicklist(field) {
-  const res = await authFetch(`${field.base || API_BASE}/${field.resource}?offset=0&limit=${REF_PICKLIST_LIMIT}`);
-  return res.json();
+  // the catalog API caps a page at 100 — page through, so a picker never
+  // silently misses the offerings past the first hundred
+  const all = [];
+  for (let off = 0; off < 1000; off += REF_PICKLIST_LIMIT) {
+    const page = await authFetch(`${field.base || API_BASE}/${field.resource}?offset=${off}&limit=${REF_PICKLIST_LIMIT}`).then((r) => r.json());
+    if (!Array.isArray(page)) return all.length ? all : page;
+    all.push(...page);
+    if (page.length < REF_PICKLIST_LIMIT) break;
+  }
+  return all;
 }
 
 function renderTabs() {
@@ -6742,8 +6785,20 @@ async function loadList() {
   document.getElementById('integrations-panel')?.setAttribute('hidden', '');
   document.getElementById('wholesale-panel')?.setAttribute('hidden', '');
   document.getElementById('pipeline-panel')?.setAttribute('hidden', '');
+  document.getElementById('home-panel')?.setAttribute('hidden', '');
   document.querySelector('.table-wrap')?.removeAttribute('hidden');   // generic tabs show the table again
   document.querySelector('.pager')?.removeAttribute('hidden');
+  if (active.home) {
+    el('editor').hidden = true;
+    el('total').textContent = '';
+    el('listing-head').replaceChildren();
+    el('listing-body').replaceChildren();
+    document.querySelector('.pager')?.setAttribute('hidden', '');
+    document.querySelector('.table-wrap')?.setAttribute('hidden', '');
+    // home.js loads after this file; a fast sign-in can reach here before it has run
+    if (typeof renderHome === 'function') renderHome(); else window.addEventListener('load', () => renderHome(), { once: true });
+    return;
+  }
   if (active.copilot) {
     el('editor').hidden = true;
     el('total').textContent = '';
@@ -7119,35 +7174,62 @@ async function loadList() {
       tr.append(td);
       return tr;
     }
+    // One verb per row — Open (the editor) — and everything else behind "⋯":
+    // the lifecycle step if the row has one, Edit (the same door as Open),
+    // Delete only while the row is still a draft. A row whose resource has
+    // no lifecycle keeps Delete; one that carries a lifecycle loses it the
+    // moment the thing is live (retire it instead — the ladder is the door).
+    const menuItems = [];
     if (active.rowAction) {
-      // A falsy label means the action doesn't apply to this row.
+      // A falsy (or '—') label means the action doesn't apply to this row.
       const label = active.rowAction.label(item);
-      if (label) {
-        const act = document.createElement('button');
-        act.textContent = label;
-        act.className = 'ghost';
-        act.addEventListener('click', async () => {
-          await active.rowAction.apply(item);
-          loadList();
-        });
-        td.append(act);
+      if (label && label !== '—') {
+        menuItems.push({ label, run: async () => { await active.rowAction.apply(item); loadList(); } });
       }
     }
-    const edit = document.createElement('button');
-    edit.textContent = 'Edit';
-    edit.className = 'ghost';
-    edit.hidden = Boolean(active.noEdit);
-    edit.addEventListener('click', () => startEditing(item));
-    const del = document.createElement('button');
-    del.textContent = 'Delete';
-    del.className = 'ghost danger';
-    del.hidden = Boolean(active.noDelete);
-    del.addEventListener('click', async () => {
-      if (!confirm(`Delete "${item.name || item.id}"?`)) return;
-      await authFetch(`${active.base || API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
-      loadList();
-    });
-    td.append(edit, del);
+    if (!active.noEdit) {
+      const open = document.createElement('button');
+      open.textContent = 'Open';
+      open.className = 'ghost open';
+      open.dataset.testid = 'row-open';
+      open.addEventListener('click', () => startEditing(item));
+      td.append(open);
+      menuItems.push({ label: 'Edit', run: () => startEditing(item) });
+    }
+    const hasLifecycle = Object.prototype.hasOwnProperty.call(item, 'lifecycleStatus')
+      || (active.fields || []).some((f) => f.name === 'lifecycleStatus');
+    const isDraft = !hasLifecycle || item.lifecycleStatus == null
+      || ['In study', 'In design', 'In test', 'Draft', 'draft'].includes(item.lifecycleStatus);
+    if (!active.noDelete && isDraft) {
+      menuItems.push({ label: 'Delete', danger: true, run: async () => {
+        if (!confirm(`Delete "${item.name || item.id}"?`)) return;
+        await authFetch(`${active.base || API_BASE}/${active.path}/${item.id}`, { method: 'DELETE' });
+        loadList();
+      } });
+    }
+    if (menuItems.length) {
+      const more = document.createElement('button');
+      more.type = 'button'; more.textContent = '⋯'; more.className = 'ghost more';
+      more.setAttribute('aria-label', 'More actions'); more.setAttribute('aria-haspopup', 'menu'); more.setAttribute('aria-expanded', 'false');
+      more.dataset.testid = 'row-more';
+      const menu = document.createElement('div'); menu.className = 'rowmenu'; menu.setAttribute('role', 'menu'); menu.hidden = true;
+      for (const it of menuItems) {
+        const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+        b.textContent = it.label; b.className = it.danger ? 'danger' : '';
+        b.addEventListener('click', async (e) => { e.stopPropagation(); closeRowMenus(); await it.run(); });
+        menu.append(b);
+      }
+      more.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasOpen = !menu.hidden;
+        closeRowMenus();
+        if (wasOpen) return;
+        menu.hidden = false; more.setAttribute('aria-expanded', 'true');
+        placeRowMenu(more, menu);
+        menu.querySelector('button')?.focus();
+      });
+      td.append(more, menu);
+    }
     tr.append(td);
     return tr;
   }));
@@ -7892,6 +7974,7 @@ async function renderKnowledgeGaps(resource) {
 /* A one-paragraph orientation under a tab's title: the tab's own intro, else the
  * page's GOAL — what a person on it is working towards (Ivan: say what the page is for). */
 const PAGE_GOALS = {
+  home: 'Goal: know in five seconds what needs you today.',
   productOffering: 'Goal: every offer on the shelf is right and on sale when it should be. Watch: drafts waiting, offers past their window.',
   productSpecification: 'Goal: the facts behind each offer (data, validity, pickers) are complete, so the shop, the network and the bill agree.',
   productOfferingPrice: 'Goal: one price per thing a customer pays for; discounts live in Rules, not here.',
@@ -8062,12 +8145,33 @@ const PAGE_KPIS = {
   },
 };
 let rowFlagIds = new Set();
+// a health chip clicked = the list narrowed to the rows it counted (null = no chip on)
+let kpiFilterIds = null;
 function applyRowFlags() {
-  document.querySelectorAll('#listing-body tr').forEach((tr) => tr.classList.toggle('flag', rowFlagIds.has(tr.dataset.id)));
+  let shown = 0, rows = 0;
+  document.querySelectorAll('#listing-body tr[data-id]').forEach((tr) => {
+    tr.classList.toggle('flag', rowFlagIds.has(tr.dataset.id));
+    tr.hidden = Boolean(kpiFilterIds) && !kpiFilterIds.has(tr.dataset.id);
+    rows++; if (!tr.hidden) shown++;
+  });
+  // the chip counted the whole resource, the table shows one page: say so
+  // instead of a blank table when none of them live on this page
+  // (idempotent: the list observer re-runs this on every child change, so
+  // only touch the DOM when the note's presence has to change)
+  const need = Boolean(kpiFilterIds) && rows > 0 && shown === 0;
+  const note = document.getElementById('kpi-filter-note');
+  if (!need && note) note.remove();
+  if (need && !note) {
+    const tr = document.createElement('tr'); tr.id = 'kpi-filter-note';
+    const td = document.createElement('td'); td.colSpan = (active.columns || []).length + 1; td.className = 'dim';
+    td.textContent = 'None of these are on this page — turn the pager, or click the chip again to show everything.';
+    tr.append(td); document.getElementById('listing-body')?.append(tr);
+  }
 }
 async function renderKpis(resource) {
   let row = document.getElementById('kpis');
   const fn = PAGE_KPIS[resource.path];
+  kpiFilterIds = null; // a new page starts unfiltered
   if (!fn) { if (row) row.hidden = true; rowFlagIds = new Set(); applyRowFlags(); return; }
   if (!row) {
     row = document.createElement('div'); row.id = 'kpis'; row.className = 'kpis'; row.dataset.testid = 'page-kpis';
@@ -8082,6 +8186,23 @@ async function renderKpis(resource) {
     const c = document.createElement('span'); c.className = `kpi ${k.tone || ''}`; c.dataset.testid = 'kpi';
     const v = document.createElement('strong'); v.textContent = String(k.value);
     c.append(v, document.createTextNode(' ' + k.label));
+    // a chip that counted specific rows is also a filter: click narrows the
+    // list to those rows, click again shows everything; static chips stay text
+    const ids = (k.ids || []).map(String);
+    if (ids.length) {
+      c.classList.add('click'); c.setAttribute('role', 'button'); c.tabIndex = 0; c.setAttribute('aria-pressed', 'false');
+      c.title = `Show only these ${ids.length}`;
+      const toggle = () => {
+        const on = !c.classList.contains('on');
+        row.querySelectorAll('.kpi.on').forEach((o) => { o.classList.remove('on'); o.setAttribute('aria-pressed', 'false'); });
+        kpiFilterIds = on ? new Set(ids) : null;
+        c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on));
+        applyRowFlags();
+        desk('kpi.filter', current.path, { label: k.label, on });
+      };
+      c.addEventListener('click', toggle);
+      c.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    }
     return c;
   }));
   rowFlagIds = new Set(kpis.flatMap((k) => (k.ids || []).map(String)));
@@ -8100,11 +8221,34 @@ function renderPageRow(resource) {
   if (!ws) { row.hidden = true; return; }
   const pages = ws.tabs.map((p) => visible.find((r) => r.path === p)).filter(Boolean);
   row.hidden = pages.length < 1;
-  for (const r of pages) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'pagetab' + (r === resource ? ' on' : ''); b.textContent = r.title;
+  const pageButton = (r, short) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'pagetab' + (r === resource ? ' on' : '');
+    b.textContent = short || r.title; if (short) b.title = r.title; b.dataset.path = r.path;
     b.addEventListener('click', () => { active = r; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', r.path); renderTabs(); loadList(); });
-    row.append(b);
+    return b;
+  };
+  const grouped = Array.isArray(ws.groups) && ws.groups.length > 0;
+  row.classList.toggle('grouped', grouped);
+  if (!grouped) {
+    for (const r of pages) row.append(pageButton(r));
+    return;
   }
+  // grouped: "CATALOG Offerings · Specifications | PRICING Prices | …" — a
+  // small mono heading per job, then its pages; a page the token cannot see
+  // drops out, an emptied group drops out with it, so the row never wraps
+  // at desk width and never shows a heading with nothing under it
+  const placed = new Set();
+  const sets = ws.groups.map((g) => ({ g, pages: g.tabs.map((p) => pages.find((r) => r.path === p)).filter(Boolean) }));
+  for (const { g, pages: gp } of sets) {
+    if (!gp.length) continue;
+    const set = document.createElement('div'); set.className = 'pageset'; set.dataset.group = g.label;
+    const lab = document.createElement('span'); lab.className = 'pagegroup'; lab.textContent = g.label; set.append(lab);
+    for (const r of gp) { set.append(pageButton(r, g.short && g.short[r.path])); placed.add(r.path); }
+    row.append(set);
+  }
+  // a page in `tabs` that no group claims still gets a seat (never lose a page to a typo)
+  const rest = pages.filter((r) => !placed.has(r.path));
+  if (rest.length) { const set = document.createElement('div'); set.className = 'pageset'; for (const r of rest) set.append(pageButton(r)); row.append(set); }
 }
 
 /* ---------------- The form as a drawer: off to the right until asked for ----------------
@@ -8122,6 +8266,25 @@ function closeDrawer() {
   const bd = document.getElementById('drawer-backdrop'); if (bd) bd.hidden = true;
 }
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && el('editor')?.classList.contains('open')) { stopEditing(); closeDrawer(); } });
+
+/* ---------------- The row overflow ("⋯"): one open at a time, gone on outside click / Escape / scroll ---------------- */
+function closeRowMenus() {
+  document.querySelectorAll('.rowmenu:not([hidden])').forEach((m) => { m.hidden = true; m.previousElementSibling?.setAttribute('aria-expanded', 'false'); });
+}
+// fixed under (or, near the bottom of the window, above) its button, so the
+// scrolling table wrapper never clips it; follows the button when the page scrolls
+function placeRowMenu(more, menu) {
+  const r = more.getBoundingClientRect();
+  const w = menu.offsetWidth || 160, h = menu.offsetHeight || 0;
+  const below = r.bottom + 4 + h <= window.innerHeight - 8;
+  menu.style.top = `${below ? r.bottom + 4 : Math.max(8, r.top - 4 - h)}px`;
+  menu.style.left = `${Math.max(8, r.right - w)}px`;
+}
+document.addEventListener('click', (e) => { if (!e.target.closest?.('.rowmenu')) closeRowMenus(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeRowMenus(); });
+document.addEventListener('scroll', () => {
+  document.querySelectorAll('.rowmenu:not([hidden])').forEach((m) => { const more = m.previousElementSibling; if (more) placeRowMenu(more, m); });
+}, true);
 document.addEventListener('DOMContentLoaded', () => {
   // rows render after their fetch — whenever the table changes, re-apply the KPI flags
   const body = el('listing-body');
