@@ -1,7 +1,7 @@
 /* Console navigation hierarchy: groups in the page row, one verb per row,
  * health chips that filter. Back-office UX plan steps 3 and 4.
  *
- *  - Catalog & Pricing's page row shows FIVE group headings (CATALOG PRICING
+ *  - Catalog & Pricing's page row shows FIVE primaries (Products Pricing
  *    AVAILABILITY TOOLS LAUNCH) and is ONE line at 1440px wide — no wrap
  *  - Marketing and AI & Automation are grouped too; a flat department has
  *    no headings
@@ -43,7 +43,7 @@ async function openDept(page, tabTitle) {
 }
 
 async function groupLabels(page) {
-  return page.evaluate(() => [...document.querySelectorAll('#pagerow .pagegroup')].map((e) => e.textContent));
+  return page.evaluate(() => [...document.querySelectorAll('#pagerow .primary-tab')].map((e) => e.textContent));
 }
 
 (async () => {
@@ -61,24 +61,45 @@ async function groupLabels(page) {
   await page.waitForSelector('#main:not([hidden])', { timeout: 20000 });
   await page.waitForSelector('#tabs .tab', { timeout: 10000 });
 
-  /* ---------- 1. Catalog & Pricing: five groups, one line at 1440 ---------- */
+  /* ---------- 1. Catalog & Pricing: five primaries on one line, the active one's pages on the next ---------- */
   await openDept(page, 'Product Offerings');
-  const labels = await groupLabels(page);
-  const want = ['Catalog', 'Pricing', 'Availability', 'Tools', 'Launch'];
-  if (JSON.stringify(labels) !== JSON.stringify(want)) await fail(`Catalog & Pricing groups: ${JSON.stringify(labels)}, expected ${JSON.stringify(want)}`);
+  const labels = await page.evaluate(() => [...document.querySelectorAll('#pagerow .primary-tab')].map((e) => e.textContent));
+  const want = ['Products', 'Pricing', 'Availability', 'Lifecycle', 'Tools'];
+  if (JSON.stringify(labels) !== JSON.stringify(want)) await fail(`Catalog & Pricing primaries: ${JSON.stringify(labels)}, expected ${JSON.stringify(want)}`);
   const geo = await page.evaluate(() => {
     const row = document.getElementById('pagerow');
-    const tabs = [...row.querySelectorAll('.pagetab')];
-    const tops = new Set(tabs.map((b) => Math.round(b.getBoundingClientRect().top)));
-    return { height: row.clientHeight, lines: tops.size, width: row.clientWidth, scroll: row.scrollWidth,
-      tab: tabs[0] ? tabs[0].getBoundingClientRect().height : 0, texts: tabs.map((b) => b.textContent) };
+    const prim = [...row.querySelectorAll('.primary-tab')];
+    const sub = [...row.querySelectorAll('.subnav .pagetab')];
+    const line = (els) => new Set(els.map((b) => Math.round(b.getBoundingClientRect().top))).size;
+    return { primLines: line(prim), subLines: line(sub), on: row.querySelector('.primary-tab.on')?.textContent, subTexts: sub.map((b) => b.textContent), width: row.clientWidth, scroll: row.scrollWidth };
   });
-  console.log(`  page row: ${geo.height}px tall, ${geo.lines} line(s), ${geo.width}px wide (content ${geo.scroll}px)`);
-  if (geo.lines !== 1) await fail(`the Catalog & Pricing page row wraps onto ${geo.lines} lines at 1440px: ${geo.texts.join(' | ')}`);
-  if (geo.height > geo.tab + 16) await fail(`the page row is ${geo.height}px tall for a ${geo.tab}px button — it wrapped`);
+  console.log(`  primaries on ${geo.primLines} line(s); active ${geo.on} → ${geo.subTexts.join(' · ')}`);
+  if (geo.primLines !== 1) await fail('the primaries wrap at 1440px');
+  if (geo.subLines !== 1) await fail('the subnav wraps at 1440px');
+  if (geo.on !== 'Products') await fail(`active primary is ${geo.on}, expected Products`);
+  if (JSON.stringify(geo.subTexts) !== JSON.stringify(['Product Offerings', 'Product Specifications'])) await fail('Products subnav: ' + geo.subTexts.join(' | '));
   if (geo.scroll > geo.width) await fail(`the page row overflows: ${geo.scroll}px of content in ${geo.width}px`);
-  if (!geo.texts.includes('Offerings') || !geo.texts.includes('Prospect sim')) await fail('page buttons missing: ' + geo.texts.join(' | '));
-  console.log('OK Catalog & Pricing: CATALOG · PRICING · AVAILABILITY · TOOLS · LAUNCH on one line');
+  // no copilot in the row: it is an action on every catalog page instead
+  if (geo.subTexts.some((t) => /copilot/i.test(t))) await fail('the copilot is still a page in the row');
+  if (!(await page.locator('[data-testid="ask-copilot"]').isVisible())) await fail('Ask Copilot is missing on Product Offerings');
+  // click a primary: its first page opens and its pages take the subnav
+  await page.locator('#pagerow .primary-tab', { hasText: 'Tools' }).click();
+  await page.waitForTimeout(600);
+  const tools = await page.evaluate(() => ({ on: document.querySelector('#pagerow .primary-tab.on')?.textContent, sub: [...document.querySelectorAll('#pagerow .subnav .pagetab')].map((b) => b.textContent), title: document.getElementById('resource-title').textContent }));
+  if (tools.on !== 'Tools' || tools.title !== 'Product advisor') await fail(`Tools primary opened ${tools.title} under ${tools.on}`);
+  if (!tools.sub.includes('Simulator') || !tools.sub.includes('Prospect sim')) await fail('Tools subnav: ' + tools.sub.join(' | '));
+  // the advisor's chips speak the advisor's language, never the offerings'
+  await page.waitForTimeout(1500);
+  const chips = await page.evaluate(() => { const k = document.getElementById('kpis'); return k && !k.hidden ? [...k.querySelectorAll('[data-testid="kpi"]')].map((c) => c.textContent) : []; });
+  if (chips.some((c) => /drafts|past their window/.test(c))) await fail('the advisor page shows the offerings\' chips: ' + chips.join(' | '));
+  if (!chips.some((c) => /recommendations/.test(c))) await fail('the advisor page has no recommendations chip: ' + chips.join(' | '));
+  // Ask Copilot opens the chat in a drawer over the current page
+  await page.locator('[data-testid="ask-copilot"]').click();
+  await page.waitForSelector('#side-drawer.open #copilot-input', { timeout: 10000 });
+  if ((await page.locator('#resource-title').textContent()) !== 'Product advisor') await fail('Ask Copilot navigated away from the page');
+  await page.locator('[data-testid="side-close"]').click();
+  await openDept(page, 'Product Offerings');
+  console.log('OK Catalog & Pricing: Products · Pricing · Availability · Lifecycle · Tools, one line, pages of the active primary beneath; Ask Copilot is a drawer; the advisor has its own chips');
 
   // the short label never renames the page: the rail and the crumb keep the full title
   const railHasFull = await page.locator('#tabs .tab', { hasText: 'Product Offerings' }).count();

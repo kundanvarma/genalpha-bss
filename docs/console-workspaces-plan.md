@@ -145,3 +145,28 @@ as the page it opens — a product manager sees catalog cards only, finance
 sees money only — and a card whose data the API refuses simply stays away.
 A quiet desk says "No action needed"; nothing is red unless something is late.
 Code: `apps/admin-console/site/home.js`; suite `ops/e2e/console_home_test.js`.
+
+### Navigation paper, 21 September (evening)
+
+Ivan's second paper looked at the grouped row above and said it was still one
+long menu. Built the same evening:
+
+- **Two short lines instead of one long one.** Catalog & Pricing shows five
+  primaries — Products · Pricing · Availability · Lifecycle · Tools — and, on
+  the line beneath, only the pages of the active primary. A department's
+  `groups` are the primaries; `quiet` names pages that keep their tab stub
+  (for the palette and the suites) but never sit in the row.
+- **Ask Copilot is an action, not a destination.** Every Catalog & Pricing
+  page carries an *Ask Copilot* button beside the help mark; it opens the
+  same chat in the reading drawer over the work in front of you and says
+  which page it was asked from. The copilot tab is gone from the row.
+- **Each page's chips speak its own language.** The Product advisor shows
+  *recommendations* and *ready to adopt as a draft*, counted from the rows it
+  just loaded — never the offerings' drafts. A chip row on a page without
+  chips is now truly hidden (it was a flex container that ignored `hidden`).
+- **Envelopes are Launch packages.** Operator vocabulary; the path and the
+  API are unchanged.
+
+Not yet: a Catalog & Pricing *Overview* page (the advisor's recommendations
+belong on it), and the local left navigation the paper prefers long-term,
+which waits for the Product Offering workspace. Suite `console_nav_test.js`.

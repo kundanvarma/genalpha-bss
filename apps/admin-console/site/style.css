@@ -462,3 +462,16 @@ label.inline { display: inline-flex; gap: 4px; align-items: center; font-size: 1
 .palette-keys { display: flex; gap: 16px; flex-wrap: wrap; padding: 8px 18px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); }
 .palette-keys kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: var(--paper); color: var(--ink); }
 .palette .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* navigation paper (21 Sep): primaries on one line, the active primary's pages on the next */
+.kpis[hidden] { display: none; }
+.pagerow.grouped { display: grid; gap: 4px; align-items: start; }
+.primaries { display: flex; flex-wrap: wrap; gap: 2px; }
+.primary-tab { border: none; background: transparent; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--dim); padding: 6px 12px; cursor: pointer; border-radius: 6px; white-space: nowrap; }
+.primary-tab:hover { background: color-mix(in srgb, var(--card) 90%, var(--ink)); color: var(--ink); }
+.primary-tab.on { color: var(--teal); background: var(--teal-soft, #E6F2F0); }
+.subnav { display: flex; flex-wrap: wrap; gap: 2px; padding-left: 6px; }
+.pagerow.grouped .subnav .pagetab { font-size: 13px; padding: 4px 8px; }
+.ask-copilot { margin-right: 6px; }
+.side-drawer.copilot-drawer { width: min(760px, 96vw); }
+.side-drawer.copilot-drawer #copilot-panel { max-width: none; }

@@ -1442,7 +1442,7 @@ const RESOURCES = [
   },
   {
     path: 'envelopes',
-    title: 'Envelopes',
+    title: 'Launch packages', // was 'Envelopes' — operator vocabulary (Ivan, 21 Sep)
     envelopes: true,    // pre-approved launch envelopes, authored with pickers
     readOnly: true,
     fields: [],
@@ -1816,13 +1816,18 @@ const WORKSPACES = [
     // catalog:write server-side, so a Sales placement leaked a one-tab Sales
     // desk to product staff while real sellers would only have met the 403
     'simulate/priceChange', 'simulate/prospect'],
+    // Ivan's navigation paper (21 Sep): a few stable primaries, the pages of
+    // the active one on a second line — never all destinations at once. The
+    // copilot is not a destination here: "Ask Copilot" sits on every catalog
+    // page (its tab stub stays for the palette and the suites).
     groups: [
-      { label: 'Catalog', tabs: ['productOffering', 'productSpecification'], short: { productOffering: 'Offerings', productSpecification: 'Specs' } },
-      { label: 'Pricing', tabs: ['productOfferingPrice'], short: { productOfferingPrice: 'Prices' } },
-      { label: 'Availability', tabs: ['productStock', 'serviceableArea'], short: { productStock: 'Stock', serviceableArea: 'Areas' } },
-      { label: 'Tools', tabs: ['findings', 'copilot', 'simulate/priceChange', 'simulate/prospect'], short: { findings: 'Advisor', copilot: 'Copilot' } },
-      { label: 'Launch', tabs: ['approvals', 'envelopes'] },
-    ] },
+      { label: 'Products', tabs: ['productOffering', 'productSpecification'] },
+      { label: 'Pricing', tabs: ['productOfferingPrice'] },
+      { label: 'Availability', tabs: ['productStock', 'serviceableArea'] },
+      { label: 'Lifecycle', tabs: ['approvals', 'envelopes'] },
+      { label: 'Tools', tabs: ['findings', 'simulate/priceChange', 'simulate/prospect'] },
+    ],
+    quiet: ['copilot'] },
   { label: 'Wholesale', tabs: ['wholesaleOwners', 'accessProduct', 'serviceSpecification',
     'coverageMap', 'wholesaleSettlement', 'mobileWholesale', 'mobileWholesaleProvider'] },
   { label: 'Money', tabs: ['customerBill', 'journalEntry', 'accountMapping', 'dispute',
@@ -3134,12 +3139,16 @@ function attachCopilotMic(input, bar, sendBtn) {
     }).catch(() => {});
 }
 
+let copilotHost = null; // set while Ask Copilot renders into the reading drawer
 function copilotPanel() {
   let panel = document.getElementById('copilot-panel');
+  // the tab route renders inline: a panel left inside the reading drawer (Ask Copilot) is evicted first
+  if (!copilotHost && panel && panel.closest('#side-drawer')) { panel.remove(); panel = null; }
+  if (copilotHost && panel && !copilotHost.contains(panel)) { panel.remove(); panel = null; }
   if (!panel) {
     panel = document.createElement('div');
     panel.id = 'copilot-panel';
-    document.querySelector('.table-wrap').after(panel);
+    if (copilotHost) copilotHost.append(panel); else document.querySelector('.table-wrap').after(panel);
   }
   panel.hidden = false;
   return panel;
@@ -6981,6 +6990,8 @@ async function loadList() {
     return;
   }
   const items = await res.json();
+  lastListItems = items; // the page's rows, for chips that read what was just loaded
+  if (active.path === 'findings') renderKpis(active); // chips read these rows
   const total = Number(res.headers.get('X-Total-Count') || items.length);
 
   // #200: search filters + header sorting over the loaded page (honest hint —
@@ -7825,6 +7836,41 @@ function helpButtonFor(resource) {
   btn.dataset.pane = resource.path;
   const drawer = document.getElementById('help-drawer');
   if (drawer && !drawer.hidden) openHelpDrawer(resource);
+  askCopilotButtonFor(resource);
+}
+
+/* "Ask Copilot" — the product copilot as a contextual action, not a destination (Ivan's
+ * navigation paper, 21 Sep): on every Catalog & Pricing page a button opens the same chat
+ * in the reading drawer, over the work in front of you; the copilot tab stub stays for the
+ * palette and the suites. The chat knows which page it was asked from. */
+function askCopilotButtonFor(resource) {
+  const head = document.querySelector('.panel-head');
+  let btn = document.getElementById('ask-copilot');
+  const ws = WORKSPACES.find((w) => w.tabs.includes(resource.path));
+  const here = Boolean(ws && (ws.quiet || []).includes('copilot') && resource.path !== 'copilot' && visible.some((r) => r.path === 'copilot'));
+  if (!here) { if (btn) btn.hidden = true; return; }
+  if (!btn) {
+    btn = document.createElement('button');
+    btn.id = 'ask-copilot'; btn.type = 'button'; btn.className = 'ghost ask-copilot'; btn.textContent = 'Ask Copilot';
+    btn.title = 'Describe a product in words — the copilot proposes it against this catalog; you decide';
+    btn.dataset.testid = 'ask-copilot';
+    btn.addEventListener('click', openCopilotDrawer);
+    head.insertBefore(btn, document.getElementById('help-button'));
+  }
+  btn.hidden = false;
+}
+async function openCopilotDrawer() {
+  const d = openSideDrawer('Product copilot');
+  d.classList.add('copilot-drawer');
+  const host = document.createElement('div'); host.id = 'copilot-drawer-host'; d.append(host);
+  desk('copilot.drawer', active.path);
+  copilotHost = host;
+  try { await renderProductCopilot(); } finally { copilotHost = null; }
+  const panel = host.querySelector('#copilot-panel');
+  const note = document.createElement('p'); note.className = 'dim'; note.style.cssText = 'font-size:12px;margin:0 0 6px';
+  note.textContent = `Asked from ${active.title}. Your work stays where it is; close this drawer to return.`;
+  panel?.prepend(note);
+  setTimeout(() => document.getElementById('copilot-input')?.focus(), 120);
 }
 
 async function openHelpDrawer(resource) {
@@ -8038,6 +8084,17 @@ function newButtonFor(resource) {
 const DAY = 24 * 3600 * 1000;
 const ageDays = (iso) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / DAY));
 const PAGE_KPIS = {
+  // the advisor's page speaks the advisor's language (recommendations, not drafts);
+  // its rows are what the list just loaded — the advisor computes on request, so
+  // a second call would double the wait
+  findings: async () => {
+    const rows = Array.isArray(lastListItems) ? lastListItems : [];
+    const adoptable = rows.filter((r) => r.proposal);
+    return [
+      { label: 'recommendations', value: rows.length, tone: 'ok' },
+      { label: 'ready to adopt as a draft', value: adoptable.length, tone: adoptable.length ? 'warn' : 'ok', ids: adoptable.map((r) => r.id) },
+    ];
+  },
   productOffering: async () => {
     const [offers, queue] = await Promise.all([
       authFetch(`${API_BASE}/productOffering?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
@@ -8067,7 +8124,7 @@ const PAGE_KPIS = {
   envelopes: async () => {
     const rules = await authFetch(`${POLICY_BASE}/policyRule?limit=200`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     const envs = rules.filter((r) => r.domain === 'launch');
-    return [{ label: 'envelopes', value: envs.length, tone: 'ok' }, { label: 'switched off', value: envs.filter((e) => e.enabled === false).length, tone: 'ok' }];
+    return [{ label: 'launch packages', value: envs.length, tone: 'ok' }, { label: 'switched off', value: envs.filter((e) => e.enabled === false).length, tone: 'ok' }];
   },
   customerBill: async () => {
     const bills = await authFetch(`${active.base}/customerBill?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
@@ -8147,6 +8204,7 @@ const PAGE_KPIS = {
 let rowFlagIds = new Set();
 // a health chip clicked = the list narrowed to the rows it counted (null = no chip on)
 let kpiFilterIds = null;
+let lastListItems = [];
 function applyRowFlags() {
   let shown = 0, rows = 0;
   document.querySelectorAll('#listing-body tr[data-id]').forEach((tr) => {
@@ -8233,22 +8291,28 @@ function renderPageRow(resource) {
     for (const r of pages) row.append(pageButton(r));
     return;
   }
-  // grouped: "CATALOG Offerings · Specifications | PRICING Prices | …" — a
-  // small mono heading per job, then its pages; a page the token cannot see
-  // drops out, an emptied group drops out with it, so the row never wraps
-  // at desk width and never shows a heading with nothing under it
+  // grouped: two short lines instead of one long one. Line 1 = the primaries
+  // (Products · Pricing · Availability · Lifecycle · Tools), the active one
+  // marked; line 2 = only the active primary's pages. A page the token cannot
+  // see drops out, an emptied primary drops out with it; a page in `tabs` that
+  // no primary claims still gets a seat under "More"; `quiet` pages (the
+  // copilot) keep their tab stub but never sit in the row.
+  const quiet = new Set(ws.quiet || []);
   const placed = new Set();
-  const sets = ws.groups.map((g) => ({ g, pages: g.tabs.map((p) => pages.find((r) => r.path === p)).filter(Boolean) }));
-  for (const { g, pages: gp } of sets) {
-    if (!gp.length) continue;
-    const set = document.createElement('div'); set.className = 'pageset'; set.dataset.group = g.label;
-    const lab = document.createElement('span'); lab.className = 'pagegroup'; lab.textContent = g.label; set.append(lab);
-    for (const r of gp) { set.append(pageButton(r, g.short && g.short[r.path])); placed.add(r.path); }
-    row.append(set);
+  const sets = ws.groups.map((g) => ({ g, pages: g.tabs.map((p) => pages.find((r) => r.path === p)).filter(Boolean) })).filter((x) => x.pages.length);
+  sets.forEach((x) => x.pages.forEach((r) => placed.add(r.path)));
+  const rest = pages.filter((r) => !placed.has(r.path) && !quiet.has(r.path));
+  if (rest.length) sets.push({ g: { label: 'More' }, pages: rest });
+  let current = sets.find((x) => x.pages.includes(resource)) || sets[0];
+  const primaries = document.createElement('div'); primaries.className = 'primaries'; primaries.dataset.testid = 'primaries';
+  for (const x of sets) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'primary-tab' + (x === current ? ' on' : ''); b.textContent = x.g.label; b.dataset.group = x.g.label;
+    b.addEventListener('click', () => { const first = x.pages.includes(active) ? active : x.pages[0]; active = first; offset = 0; listFilter = ''; listSortCol = null; stopEditing(); sessionStorage.setItem('bss.console.tab', first.path); renderTabs(); loadList(); });
+    primaries.append(b);
   }
-  // a page in `tabs` that no group claims still gets a seat (never lose a page to a typo)
-  const rest = pages.filter((r) => !placed.has(r.path));
-  if (rest.length) { const set = document.createElement('div'); set.className = 'pageset'; for (const r of rest) set.append(pageButton(r)); row.append(set); }
+  const sub = document.createElement('div'); sub.className = 'subnav'; sub.dataset.testid = 'subnav'; sub.dataset.group = current.g.label;
+  for (const r of current.pages) sub.append(pageButton(r));
+  row.append(primaries, sub);
 }
 
 /* ---------------- The form as a drawer: off to the right until asked for ----------------
