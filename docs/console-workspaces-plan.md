@@ -164,7 +164,7 @@ long menu. Built the same evening:
   *recommendations* and *ready to adopt as a draft*, counted from the rows it
   just loaded — never the offerings' drafts. A chip row on a page without
   chips is now truly hidden (it was a flex container that ignored `hidden`).
-- **Envelopes are Launch packages.** Operator vocabulary; the path and the
+- **Envelopes are Pre-approved launches.** The page holds standing rules that let routine offers launch without an approver; the path and the
   API are unchanged.
 
 Not yet: a Catalog & Pricing *Overview* page (the advisor's recommendations

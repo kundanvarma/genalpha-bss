@@ -1442,7 +1442,7 @@ const RESOURCES = [
   },
   {
     path: 'envelopes',
-    title: 'Launch packages', // was 'Envelopes' — operator vocabulary (Ivan, 21 Sep)
+    title: 'Pre-approved launches', // was 'Envelopes' — what the page holds: standing rules that let routine offers launch without an approver (Kundan, 21 Sep)
     envelopes: true,    // pre-approved launch envelopes, authored with pickers
     readOnly: true,
     fields: [],
@@ -8025,7 +8025,7 @@ const PAGE_GOALS = {
   productSpecification: 'Goal: the facts behind each offer (data, validity, pickers) are complete, so the shop, the network and the bill agree.',
   productOfferingPrice: 'Goal: one price per thing a customer pays for; discounts live in Rules, not here.',
   approvals: 'Goal: nothing launches without its decision and its readiness — and nothing waits longer than it must.',
-  envelopes: 'Goal: routine launches need no meeting. Keep the envelopes tight enough that only the exceptions reach the desk.',
+  envelopes: 'Goal: rules that let routine offers launch without an approver; anything outside them waits on Approvals. Keep them tight enough that only the exceptions reach the desk.',
   productStock: 'Goal: what the shop sells is in stock; what is out of stock says so before checkout.',
   customerBill: 'Goal: every bill is right, on time, and paid. Watch: disputes open, bills overdue.',
   productOrder: 'Goal: every order reaches active without a hand touching it; the ones that stall are visible here first.',
@@ -8124,7 +8124,7 @@ const PAGE_KPIS = {
   envelopes: async () => {
     const rules = await authFetch(`${POLICY_BASE}/policyRule?limit=200`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
     const envs = rules.filter((r) => r.domain === 'launch');
-    return [{ label: 'launch packages', value: envs.length, tone: 'ok' }, { label: 'switched off', value: envs.filter((e) => e.enabled === false).length, tone: 'ok' }];
+    return [{ label: 'pre-approved launch rules', value: envs.length, tone: 'ok' }, { label: 'switched off', value: envs.filter((e) => e.enabled === false).length, tone: 'ok' }];
   },
   customerBill: async () => {
     const bills = await authFetch(`${active.base}/customerBill?limit=100`).then((r) => (r.ok ? r.json() : [])).catch(() => []);
