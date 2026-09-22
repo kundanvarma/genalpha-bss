@@ -51,6 +51,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:read")
                         .requestMatchers(HttpMethod.POST, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
                         .requestMatchers(HttpMethod.PATCH, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
+                        // PUT was missing here, so a learning contract could be rewritten by any authenticated token (threat model 04, 22 Sep)
+                        .requestMatchers(HttpMethod.PUT, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
                         .requestMatchers(HttpMethod.DELETE, ApiConstants.BASE_PATH + "/**").hasAuthority("campaign:write")
                         .requestMatchers("/privacy/v1/**").authenticated()
                 .anyRequest().authenticated())
