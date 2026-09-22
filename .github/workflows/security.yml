@@ -1,0 +1,52 @@
+name: Security
+# Static analysis and dependency review in CI — the checks the agent must pass,
+# not prose it must remember (docs/engineering-conventions.md §9).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+jobs:
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [java-kotlin, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java-kotlin'
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+  architecture-ratchet:
+    name: Architecture ratchet
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ops/arch/ratchet.sh

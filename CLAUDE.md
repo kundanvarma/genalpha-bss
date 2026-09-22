@@ -8,7 +8,7 @@ matter are enforced by tools (see *Checks*), not by this prose.
 
 ## Where things live
 
-- `services/<component>/` — one Spring Boot service per ODA component (Java 25, Maven, Flyway). `src/main/resources/db/migration` and `db/migration-postgresql` **share one version space**.
+- `services/<component>/` — one Spring Boot service per ODA component (Java 17 source on a Java 25 runtime image, Maven, Flyway). `src/main/resources/db/migration` and `db/migration-postgresql` **share one version space**.
 - `apps/` — channels: `storefront`, `mobile`, `csr-console` (React); `admin-console`, `business-console`, `dealer-console`, `partner-console` (vanilla JS, being migrated — see conventions).
 - `ontology/` — the registry YAML: concepts, capabilities, governed actions, agents. `services/ontology` serves it; `ops/ontology/gen-sdk.mjs` regenerates the SDK.
 - `ops/e2e/` — the browser suites (Playwright, `node <name>_test.js`), `ops/ctk/` — TM Forum conformance kits, `ops/seed/` — demo data, `ops/cloud/aws-demo/` — the hosted demo box.
@@ -51,6 +51,14 @@ ops/arch/ratchet.sh                                       # architecture ratchet
 - **AI proposes, a human decides.** Copilots return a card; Create is a click. Agents act only through registered ontology actions with a receipt.
 - **UI**: React with components under 300 lines for channels; no new vanilla-JS files; the vanilla consoles shrink desk by desk (see conventions).
 - **Prices are positive; discounts are rules.** Laws are data a tenant cannot undercut.
+
+## Security with teeth
+
+- **A request body is a record, never a raw map.** A record cannot carry a field it does not declare, so mass assignment is impossible by construction. The ratchet counts PATCH/PUT/POST handlers with a raw `Map` body; the count may only fall.
+- **Tenant, owner and state come from the token and the store, never from the body.** Row-level security is the wall; the service is the door.
+- **CI runs CodeQL and dependency review** (`.github/workflows/security.yml`); Dependabot keeps dependencies current. A finding blocks the merge.
+- **Every component has a threat model** in `docs/threat-model/`; touching a trust boundary means updating it.
+- Secrets never enter the repo (pre-commit scan); PII is redacted before any model call; every model call is metered and logged.
 
 ## Discretion and safety
 
