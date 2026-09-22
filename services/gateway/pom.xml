@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.7</version>
+        <version>4.1.1</version>
         <relativePath/>
     </parent>
 
@@ -20,7 +20,7 @@
     <properties>
         <java.version>17</java.version>
         <!-- 2025.0.x is the release train matched to Boot 3.5 -->
-        <spring-cloud.version>2025.0.1</spring-cloud.version>
+        <spring-cloud.version>2025.1.3</spring-cloud.version>
     </properties>
 
     <dependencyManagement>
