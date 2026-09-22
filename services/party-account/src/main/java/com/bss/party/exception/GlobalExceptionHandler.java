@@ -21,6 +21,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
     }
 
+    /** A body a record refuses (wrong type, unreadable JSON) keeps the 400-with-message contract. */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        String detail = ex.getMostSpecificCause() == null ? ex.getMessage()
+                : ex.getMostSpecificCause().getMessage();
+        ErrorResponse body = new ErrorResponse(
+                "400",
+                "Bad Request",
+                "request body is not readable: " + (detail == null ? "" : detail.split("\n")[0]),
+                "400");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()

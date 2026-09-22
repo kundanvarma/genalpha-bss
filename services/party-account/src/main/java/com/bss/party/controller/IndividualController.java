@@ -3,6 +3,8 @@ package com.bss.party.controller;
 import com.bss.party.api.ApiConstants;
 import com.bss.party.api.FieldSelector;
 import com.bss.party.api.PagedResult;
+import com.bss.party.dto.HouseholdRequests;
+import com.bss.party.dto.HouseholdView;
 import com.bss.party.dto.IndividualDto;
 import com.bss.party.service.IndividualService;
 import jakarta.validation.Valid;
@@ -86,36 +88,30 @@ public class IndividualController {
 
     @PostMapping("/{id}/householdPayer")
     public ResponseEntity<IndividualDto> requestHouseholdPayer(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(service.requestHouseholdPayer(id,
-                body == null ? null : String.valueOf(body.get("payerEmail"))));
+            @RequestBody HouseholdRequests.PayerRequest body) {
+        return ResponseEntity.ok(service.requestHouseholdPayer(id, body.payerEmail()));
     }
 
     /** How the bill arrives: paper, einvoice or digital — the customer's
      * choice overrides the operator's default channel. */
     @PostMapping("/{id}/billDelivery")
     public ResponseEntity<IndividualDto> billDelivery(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        Object p = body.get("preference");
-        return ResponseEntity.ok(service.setBillDelivery(id,
-                p == null || "default".equals(p) ? null : String.valueOf(p)));
+            @RequestBody HouseholdRequests.BillDeliveryRequest body) {
+        return ResponseEntity.ok(service.setBillDelivery(id, body.preferenceOrNull()));
     }
 
     /** Payday alignment: the day (1-28) this customer's cycle starts. */
     @PostMapping("/{id}/billingCycle")
     public ResponseEntity<IndividualDto> billingCycle(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        Integer day = body.get("anchorDay") == null ? null
-                : Integer.valueOf(String.valueOf(body.get("anchorDay")));
-        return ResponseEntity.ok(service.setBillingAnchor(id, day));
+            @RequestBody HouseholdRequests.BillingCycleRequest body) {
+        return ResponseEntity.ok(service.setBillingAnchor(id, body.anchorDay()));
     }
 
     /** The payer INVITES an existing customer (mirror consent flow). */
     @PostMapping("/{id}/householdInvite")
     public ResponseEntity<IndividualDto> inviteMember(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(service.inviteHouseholdMember(id,
-                body.get("memberEmail") == null ? null : String.valueOf(body.get("memberEmail"))));
+            @RequestBody HouseholdRequests.InviteRequest body) {
+        return ResponseEntity.ok(service.inviteHouseholdMember(id, body.memberEmail()));
     }
 
     /** The invited member accepts — joining is their call. */
@@ -143,24 +139,21 @@ public class IndividualController {
     }
 
     @GetMapping("/{id}/household")
-    public ResponseEntity<Map<String, Object>> household(@PathVariable String id) {
+    public ResponseEntity<HouseholdView> household(@PathVariable String id) {
         return ResponseEntity.ok(service.householdOf(id));
     }
 
     /** Owner-only: promote a member to family admin, or demote back. */
     @PostMapping("/{id}/householdRole")
     public ResponseEntity<IndividualDto> setHouseholdRole(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(service.setHouseholdRole(id,
-                body == null ? null : String.valueOf(body.get("role"))));
+            @RequestBody HouseholdRequests.RoleRequest body) {
+        return ResponseEntity.ok(service.setHouseholdRole(id, body.role()));
     }
 
     /** Owner or admin: the family's monthly top-up budget for a member. */
     @PostMapping("/{id}/allowance")
     public ResponseEntity<IndividualDto> setTopupAllowance(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        Object v = body == null ? null : body.get("monthlyValue");
-        return ResponseEntity.ok(service.setTopupAllowance(id,
-                v == null ? null : new java.math.BigDecimal(String.valueOf(v))));
+            @RequestBody HouseholdRequests.AllowanceRequest body) {
+        return ResponseEntity.ok(service.setTopupAllowance(id, body.monthlyValue()));
     }
 }

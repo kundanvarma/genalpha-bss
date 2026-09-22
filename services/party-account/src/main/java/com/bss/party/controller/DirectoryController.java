@@ -1,6 +1,10 @@
 package com.bss.party.controller;
 
 import com.bss.party.api.ApiConstants;
+import com.bss.party.dto.DirectoryExportReceipt;
+import com.bss.party.dto.DirectoryExportRunDetail;
+import com.bss.party.dto.DirectorySettingRequest;
+import com.bss.party.dto.DirectorySettingView;
 import com.bss.party.service.DirectoryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The directory-services obligation: a customer's (or staff's) exposure
@@ -29,29 +32,25 @@ public class DirectoryController {
     }
 
     @GetMapping("/individual/{id}/directorySetting")
-    public ResponseEntity<List<Map<String, Object>>> list(@PathVariable("id") String id) {
+    public ResponseEntity<List<DirectorySettingView>> list(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.listSettings(id));
     }
 
     /** Upsert by (party, serviceRef): {serviceRef?, exposure?, secretNumber?}. */
     @PostMapping("/individual/{id}/directorySetting")
-    public ResponseEntity<Map<String, Object>> upsert(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> body) {
-        Map<String, Object> safe = body == null ? Map.of() : body;
-        return ResponseEntity.ok(service.upsertSetting(id,
-                safe.get("serviceRef") == null ? null : String.valueOf(safe.get("serviceRef")),
-                safe.get("exposure") == null ? null : String.valueOf(safe.get("exposure")),
-                safe.get("secretNumber") == null ? null
-                        : Boolean.valueOf(String.valueOf(safe.get("secretNumber")))));
+    public ResponseEntity<DirectorySettingView> upsert(@PathVariable("id") String id,
+            @RequestBody DirectorySettingRequest body) {
+        return ResponseEntity.ok(service.upsertSetting(id, body.serviceRef(), body.exposure(),
+                body.secretNumber()));
     }
 
     @PostMapping("/directoryExport/run")
-    public ResponseEntity<Map<String, Object>> run() {
+    public ResponseEntity<DirectoryExportReceipt> run() {
         return ResponseEntity.ok(service.runExport());
     }
 
     @GetMapping("/directoryExport/{runId}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable("runId") String runId) {
+    public ResponseEntity<DirectoryExportRunDetail> get(@PathVariable("runId") String runId) {
         return ResponseEntity.ok(service.getRun(runId));
     }
 }

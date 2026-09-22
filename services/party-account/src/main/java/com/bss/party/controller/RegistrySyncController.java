@@ -2,6 +2,8 @@ package com.bss.party.controller;
 
 import com.bss.party.api.ApiConstants;
 import com.bss.party.dto.IndividualDto;
+import com.bss.party.dto.RegistryLinkRequest;
+import com.bss.party.dto.RegistrySyncReceipt;
 import com.bss.party.service.RegistrySyncService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,7 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 
 /**
  * Registry re-sync plumbing (back-office): link a party to its registry
@@ -29,14 +30,12 @@ public class RegistrySyncController {
 
     @PostMapping("/individual/{id}/registryLink")
     public ResponseEntity<IndividualDto> link(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(service.linkRegistryPerson(id,
-                body == null || body.get("personRef") == null
-                        ? null : String.valueOf(body.get("personRef"))));
+            @RequestBody RegistryLinkRequest body) {
+        return ResponseEntity.ok(service.linkRegistryPerson(id, body.personRef()));
     }
 
     @PostMapping("/registrySync/run")
-    public ResponseEntity<Map<String, Object>> run() {
+    public ResponseEntity<RegistrySyncReceipt> run() {
         return ResponseEntity.ok(service.runOnce());
     }
 }

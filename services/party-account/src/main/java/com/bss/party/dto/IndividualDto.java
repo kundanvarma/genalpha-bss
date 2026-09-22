@@ -36,7 +36,7 @@ public class IndividualDto {
     private String region;
 
     @JsonProperty("organization")
-    private Map<String, Object> organization;
+    private EntityRef organization;
 
     @JsonProperty("birthDate")
     private String birthDate;
@@ -44,7 +44,7 @@ public class IndividualDto {
     /** Read-only projection: {id, status} of the person who pays for this
      * individual. Written ONLY through the consent endpoints, never PATCH. */
     @JsonProperty("householdPayer")
-    private Map<String, Object> householdPayer;
+    private HouseholdPayerView householdPayer;
 
     /** Read-only: the registry shares no address for this party (protected
      * marker) — street data is masked everywhere; channels offer pickup-point
@@ -114,10 +114,10 @@ public class IndividualDto {
         this.contactMedium = contactMedium;
     }
 
-    public Map<String, Object> getOrganization() { return organization; }
-    public void setOrganization(Map<String, Object> organization) { this.organization = organization; }
-    public Map<String, Object> getHouseholdPayer() { return householdPayer; }
-    public void setHouseholdPayer(Map<String, Object> v) { this.householdPayer = v; }
+    public EntityRef getOrganization() { return organization; }
+    public void setOrganization(EntityRef organization) { this.organization = organization; }
+    public HouseholdPayerView getHouseholdPayer() { return householdPayer; }
+    public void setHouseholdPayer(HouseholdPayerView v) { this.householdPayer = v; }
 
     public Integer getBillingAnchorDay() { return billingAnchorDay; }
     public void setBillingAnchorDay(Integer v) { this.billingAnchorDay = v; }

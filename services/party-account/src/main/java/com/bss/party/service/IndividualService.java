@@ -3,6 +3,7 @@ package com.bss.party.service;
 import com.bss.party.api.ApiConstants;
 import com.bss.party.api.OffsetPageRequest;
 import com.bss.party.api.PagedResult;
+import com.bss.party.dto.HouseholdView;
 import com.bss.party.dto.IndividualDto;
 import com.bss.party.entity.Individual;
 import com.bss.party.events.DomainEventPublisher;
@@ -164,8 +165,8 @@ public class IndividualService {
     @Transactional
     public IndividualDto patch(String id, IndividualDto patch) {
         requireOwn(id);
-        if (patch.getOrganization() != null && patch.getOrganization().get("id") != null) {
-            requireOwnOrg(String.valueOf(patch.getOrganization().get("id")));
+        if (patch.getOrganization() != null && patch.getOrganization().id() != null) {
+            requireOwnOrg(patch.getOrganization().id());
         }
         Individual entity = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, id));
@@ -432,46 +433,33 @@ public class IndividualService {
      * dependents) — that is what being promoted means.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> householdOf(String id) {
+    public HouseholdView householdOf(String id) {
         String caller = partyScope.scopedPartyId().orElse(null);
         if (caller != null && !caller.equals(id)) {
             throw NotFoundException.forResource("Individual", id);
         }
         Individual me = repository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Individual", id));
-        Map<String, Object> household = new java.util.LinkedHashMap<>();
+        HouseholdView.PayerBlock payerBlock = null;
         if (me.getHouseholdPayerId() != null) {
-            Map<String, Object> payer = new java.util.LinkedHashMap<>();
-            payer.put("id", me.getHouseholdPayerId());
-            payer.put("status", me.getHouseholdStatus());
-            repository.findByIdAndTenantId(me.getHouseholdPayerId(), tenantScope.currentTenantId())
-                    .ifPresent(p -> payer.put("name",
-                            (nullSafe(p.getGivenName()) + " " + nullSafe(p.getFamilyName())).trim()));
-            household.put("payer", payer);
-            household.put("myRole", me.getHouseholdRole());
+            String name = repository.findByIdAndTenantId(me.getHouseholdPayerId(), tenantScope.currentTenantId())
+                    .map(p -> (nullSafe(p.getGivenName()) + " " + nullSafe(p.getFamilyName())).trim())
+                    .orElse(null);
+            payerBlock = new HouseholdView.PayerBlock(
+                    new HouseholdView.Payer(me.getHouseholdPayerId(), me.getHouseholdStatus(), name),
+                    me.getHouseholdRole());
         }
-        household.put("dependents", dependentsOf(id));
-        if ("admin".equals(me.getHouseholdRole()) && "active".equals(me.getHouseholdStatus())) {
-            household.put("family", dependentsOf(me.getHouseholdPayerId()));
-        }
-        return household;
+        boolean activeAdmin = "admin".equals(me.getHouseholdRole()) && "active".equals(me.getHouseholdStatus());
+        return new HouseholdView(payerBlock, dependentsOf(id),
+                activeAdmin ? dependentsOf(me.getHouseholdPayerId()) : null);
     }
 
-    private java.util.List<Map<String, Object>> dependentsOf(String payerId) {
+    private java.util.List<HouseholdView.Dependent> dependentsOf(String payerId) {
         return repository
                 .findByTenantIdAndHouseholdPayerId(tenantScope.currentTenantId(), payerId).stream()
-                .map(d -> {
-                    Map<String, Object> dep = new java.util.LinkedHashMap<String, Object>();
-                    dep.put("id", d.getId());
-                    dep.put("givenName", d.getGivenName());
-                    dep.put("familyName", d.getFamilyName());
-                    dep.put("status", d.getHouseholdStatus());
-                    dep.put("role", d.getHouseholdRole());
-                    if (d.getTopupAllowanceValue() != null) {
-                        dep.put("topupAllowance", d.getTopupAllowanceValue());
-                    }
-                    return dep;
-                }).toList();
+                .map(d -> new HouseholdView.Dependent(d.getId(), d.getGivenName(), d.getFamilyName(),
+                        d.getHouseholdStatus(), d.getHouseholdRole(), d.getTopupAllowanceValue()))
+                .toList();
     }
 
     /**

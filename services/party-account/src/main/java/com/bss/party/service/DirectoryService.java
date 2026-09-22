@@ -1,5 +1,10 @@
 package com.bss.party.service;
 
+import com.bss.party.dto.DirectoryExportReceipt;
+import com.bss.party.dto.DirectoryExportRunDetail;
+import com.bss.party.dto.DirectoryExportRunView;
+import com.bss.party.dto.DirectoryListing;
+import com.bss.party.dto.DirectorySettingView;
 import com.bss.party.entity.DirectoryExportRow;
 import com.bss.party.entity.DirectoryExportRun;
 import com.bss.party.entity.DirectorySetting;
@@ -14,6 +19,7 @@ import com.bss.party.repository.IndividualRepository;
 import com.bss.party.security.PartyScope;
 import com.bss.party.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,11 +83,11 @@ public class DirectoryService {
     /* ------------------------- settings (self + staff) ------------------------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listSettings(String partyId) {
+    public List<DirectorySettingView> listSettings(String partyId) {
         requireOwn(partyId);
         requireParty(partyId);
         return settings.findByTenantIdAndPartyId(tenantScope.currentTenantId(), partyId)
-                .stream().map(this::toMap).toList();
+                .stream().map(DirectorySettingView::of).toList();
     }
 
     /**
@@ -91,7 +97,7 @@ public class DirectoryService {
      * exposure absent on first write = the legal default (minor → reserved).
      */
     @Transactional
-    public Map<String, Object> upsertSetting(String partyId, String serviceRef,
+    public DirectorySettingView upsertSetting(String partyId, String serviceRef,
             String exposure, Boolean secretNumber) {
         requireOwn(partyId);
         Individual person = requireParty(partyId);
@@ -122,7 +128,7 @@ public class DirectoryService {
             setting.setExposure(DirectorySetting.EXPOSURE_RESERVED);
         }
         setting.setUpdatedAt(OffsetDateTime.now());
-        return toMap(settings.save(setting));
+        return DirectorySettingView.of(settings.save(setting));
     }
 
     /** Same derivation as the household guardian logic (createDependent):
@@ -144,7 +150,7 @@ public class DirectoryService {
      * is part of the real directory agreement (deferred, noted in the arc).
      */
     @Transactional
-    public Map<String, Object> runExport() {
+    public DirectoryExportReceipt runExport() {
         requireBackOffice();
         String tenantId = tenantScope.currentTenantId();
         OffsetDateTime since = runs.findTopByTenantIdOrderByRanAtDesc(tenantId)
@@ -158,9 +164,9 @@ public class DirectoryService {
         run.setTenantId(tenantId);
         run.setRanAt(OffsetDateTime.now());
 
-        List<Map<String, Object>> exported = new ArrayList<>();
+        List<DirectoryListing> exported = new ArrayList<>();
         for (DirectorySetting setting : delta) {
-            Map<String, Object> payload = exportableRow(setting, tenantId);
+            DirectoryListing payload = exportableRow(setting, tenantId);
             if (payload == null) {
                 continue;
             }
@@ -178,33 +184,20 @@ public class DirectoryService {
         run.setRowCount(exported.size());
         runs.save(run);
 
-        Map<String, Object> resource = new LinkedHashMap<>();
-        resource.put("id", run.getId());
-        resource.put("ranAt", run.getRanAt().toString());
-        resource.put("rowCount", run.getRowCount());
-        if (since != null) {
-            resource.put("deltaSince", since.toString());
-        }
+        DirectoryExportRunView resource = DirectoryExportRunView.of(run, since);
         events.publish("DirectoryExportedEvent", "directoryExport", resource);
-
-        Map<String, Object> out = new LinkedHashMap<>(resource);
-        out.put("rows", exported);
-        return out;
+        return new DirectoryExportReceipt(resource, exported);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> getRun(String runId) {
+    public DirectoryExportRunDetail getRun(String runId) {
         requireBackOffice();
         String tenantId = tenantScope.currentTenantId();
         DirectoryExportRun run = runs.findByIdAndTenantId(runId, tenantId)
                 .orElseThrow(() -> NotFoundException.forResource("DirectoryExportRun", runId));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", run.getId());
-        out.put("ranAt", run.getRanAt().toString());
-        out.put("rowCount", run.getRowCount());
-        out.put("rows", rows.findByTenantIdAndRunId(tenantId, run.getId()).stream()
-                .map(r -> readJson(r.getPayload())).toList());
-        return out;
+        return new DirectoryExportRunDetail(DirectoryExportRunView.of(run, null),
+                rows.findByTenantIdAndRunId(tenantId, run.getId()).stream()
+                        .map(r -> readJson(r.getPayload())).toList());
     }
 
     /**
@@ -213,7 +206,7 @@ public class DirectoryService {
      * address, a deceased flag, or a party that no longer exists.
      */
     @SuppressWarnings("unchecked")
-    private Map<String, Object> exportableRow(DirectorySetting setting, String tenantId) {
+    private DirectoryListing exportableRow(DirectorySetting setting, String tenantId) {
         if (setting.isSecretNumber()
                 || DirectorySetting.EXPOSURE_RESERVED.equals(setting.getExposure())) {
             return null;
@@ -223,47 +216,25 @@ public class DirectoryService {
         if (person == null || person.isAddressProtected() || person.isDeceased()) {
             return null;
         }
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("partyId", person.getId());
-        if (setting.getServiceRef() != null) {
-            payload.put("serviceRef", setting.getServiceRef());
-        }
-        payload.put("name", ((person.getGivenName() == null ? "" : person.getGivenName())
-                + " " + person.getFamilyName()).trim());
-        payload.put("exposure", setting.getExposure());
+        String name = ((person.getGivenName() == null ? "" : person.getGivenName())
+                + " " + person.getFamilyName()).trim();
         List<Map<String, Object>> media = readMedia(person.getContactMediumJson());
         String phone = firstCharacteristic(media, "phoneNumber");
-        if (phone != null) {
-            payload.put("phoneNumber", phone);
-        }
+        Map<String, Object> address = null;
         if (DirectorySetting.EXPOSURE_FULL.equals(setting.getExposure())) {
             // full listing carries the postal address; partial NEVER does
-            media.stream()
+            address = media.stream()
                     .filter(m -> m.get("characteristic") instanceof Map<?, ?> c
                             && (c.get("city") != null || c.get("street1") != null))
                     .findFirst()
-                    .ifPresent(m -> payload.put("address",
-                            new LinkedHashMap<>((Map<String, Object>) m.get("characteristic"))));
+                    .map(m -> (Map<String, Object>) new LinkedHashMap<>((Map<String, Object>) m.get("characteristic")))
+                    .orElse(null);
         }
-        return payload;
+        return new DirectoryListing(person.getId(), setting.getServiceRef(), name, setting.getExposure(),
+                phone, address);
     }
 
     /* --------------------------------- shared --------------------------------- */
-
-    private Map<String, Object> toMap(DirectorySetting s) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", s.getId());
-        out.put("partyId", s.getPartyId());
-        if (s.getServiceRef() != null) {
-            out.put("serviceRef", s.getServiceRef());
-        }
-        out.put("exposure", s.getExposure());
-        out.put("secretNumber", s.isSecretNumber());
-        if (s.getUpdatedAt() != null) {
-            out.put("updatedAt", s.getUpdatedAt().toString());
-        }
-        return out;
-    }
 
     @SuppressWarnings("unchecked")
     private String firstCharacteristic(List<Map<String, Object>> media, String key) {
@@ -290,7 +261,7 @@ public class DirectoryService {
         }
     }
 
-    private String writeJson(Map<String, Object> payload) {
+    private String writeJson(DirectoryListing payload) {
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException e) {
@@ -298,13 +269,12 @@ public class DirectoryService {
         }
     }
 
-    private Map<String, Object> readJson(String payload) {
+    /** A stored row read back verbatim; an unreadable one is returned as its raw text. */
+    private JsonNode readJson(String payload) {
         try {
-            return objectMapper.readValue(payload,
-                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
-                    });
+            return objectMapper.readTree(payload);
         } catch (JsonProcessingException e) {
-            return Map.of("payload", payload);
+            return objectMapper.createObjectNode().put("payload", payload);
         }
     }
 

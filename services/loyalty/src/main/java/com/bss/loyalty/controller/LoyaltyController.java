@@ -1,15 +1,25 @@
 package com.bss.loyalty.controller;
 
 import com.bss.loyalty.api.ApiConstants;
+import com.bss.loyalty.dto.AdjustRequest;
+import com.bss.loyalty.dto.LiabilityView;
+import com.bss.loyalty.dto.LoyaltyMemberView;
+import com.bss.loyalty.dto.LoyaltyProgramRequest;
+import com.bss.loyalty.dto.LoyaltyProgramView;
+import com.bss.loyalty.dto.LoyaltyTransactionView;
+import com.bss.loyalty.dto.RedeemReceipt;
+import com.bss.loyalty.dto.RedeemRequest;
+import com.bss.loyalty.dto.SweepReceipt;
+import com.bss.loyalty.dto.TierVerdict;
 import com.bss.loyalty.service.LoyaltyService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF658-flavored surface:
@@ -31,37 +41,36 @@ public class LoyaltyController {
     }
 
     @GetMapping("/loyaltyProgram")
-    public Map<String, Object> program() {
+    public LoyaltyProgramView program() {
         return service.program();
     }
 
     @PostMapping("/loyaltyProgram")
-    public Map<String, Object> upsertProgram(@RequestBody Map<String, Object> dto) {
+    public LoyaltyProgramView upsertProgram(@RequestBody LoyaltyProgramRequest dto) {
         return service.upsertProgram(dto);
     }
 
     @PostMapping("/loyaltyProgramMember")
-    public Map<String, Object> enroll() {
+    public LoyaltyMemberView enroll() {
         return service.enroll();
     }
 
     @GetMapping("/loyaltyProgramMember/me")
-    public Map<String, Object> me() {
+    public LoyaltyMemberView me() {
         return service.me();
     }
 
     @GetMapping("/loyaltyTransaction")
-    public List<Map<String, Object>> journal() {
+    public List<LoyaltyTransactionView> journal() {
         return service.myJournal();
     }
 
     @PostMapping("/redeem")
-    public Map<String, Object> redeem(@RequestBody Map<String, Object> body) {
-        String type = String.valueOf(body.get("type"));
-        if ("data".equals(type)) {
-            return service.redeemData(Integer.parseInt(String.valueOf(body.getOrDefault("gb", "1"))));
+    public RedeemReceipt redeem(@RequestBody RedeemRequest body) {
+        if ("data".equals(body.type())) {
+            return service.redeemData(body.gbOrDefault());
         }
-        if ("voucher".equals(type)) {
+        if ("voucher".equals(body.type())) {
             return service.redeemVoucher();
         }
         throw new com.bss.loyalty.exception.BadRequestException(
@@ -70,25 +79,24 @@ public class LoyaltyController {
 
     /** Machine/staff read — billing enriches the pricing context with this. */
     @GetMapping("/tier")
-    public Map<String, Object> tier(
-            @org.springframework.web.bind.annotation.RequestParam("partyId") String partyId) {
+    public TierVerdict tier(@RequestParam("partyId") String partyId) {
         return service.tierOf(partyId);
     }
 
     /** Operator goodwill / service-recovery credit — cause required. */
     @PostMapping("/adjust")
-    public Map<String, Object> adjust(@RequestBody Map<String, Object> body) {
+    public LoyaltyMemberView adjust(@RequestBody AdjustRequest body) {
         return service.adjust(body);
     }
 
     /** On-demand expiry sweep — demos and suites don't wait for the clock. */
     @PostMapping("/expirySweep")
-    public Map<String, Object> expirySweep() {
+    public SweepReceipt expirySweep() {
         return service.expirySweep();
     }
 
     @GetMapping("/liability")
-    public Map<String, Object> liability() {
+    public LiabilityView liability() {
         return service.liability();
     }
 }

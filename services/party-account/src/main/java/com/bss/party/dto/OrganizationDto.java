@@ -19,11 +19,11 @@ public class OrganizationDto {
     private String tradingName;
 
     @JsonProperty("parentOrganization")
-    private java.util.Map<String, Object> parentOrganization;
+    private EntityRef parentOrganization;
 
     /** {value, unit}: monthly device co-pay the company covers per device. */
     @JsonProperty("deviceAllowance")
-    private java.util.Map<String, Object> deviceAllowance;
+    private Money deviceAllowance;
 
     @JsonProperty("@type")
     private String type = "Organization";
@@ -71,9 +71,9 @@ public class OrganizationDto {
         this.type = type;
     }
 
-    public java.util.Map<String, Object> getParentOrganization() { return parentOrganization; }
-    public void setParentOrganization(java.util.Map<String, Object> parentOrganization) { this.parentOrganization = parentOrganization; }
+    public EntityRef getParentOrganization() { return parentOrganization; }
+    public void setParentOrganization(EntityRef parentOrganization) { this.parentOrganization = parentOrganization; }
 
-    public java.util.Map<String, Object> getDeviceAllowance() { return deviceAllowance; }
-    public void setDeviceAllowance(java.util.Map<String, Object> deviceAllowance) { this.deviceAllowance = deviceAllowance; }
+    public Money getDeviceAllowance() { return deviceAllowance; }
+    public void setDeviceAllowance(Money deviceAllowance) { this.deviceAllowance = deviceAllowance; }
 }

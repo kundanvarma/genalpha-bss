@@ -2,6 +2,7 @@ package com.bss.party.service;
 
 import com.bss.party.client.RegistryClient;
 import com.bss.party.dto.IndividualDto;
+import com.bss.party.dto.RegistrySyncReceipt;
 import com.bss.party.entity.Individual;
 import com.bss.party.entity.RegistryFeedCursor;
 import com.bss.party.events.DomainEventPublisher;
@@ -108,7 +109,7 @@ public class RegistrySyncService {
      * the advance.
      */
     @Transactional
-    public Map<String, Object> syncCurrentTenant() {
+    public RegistrySyncReceipt syncCurrentTenant() {
         String tenantId = tenantScope.currentTenantId();
         RegistryFeedCursor cursor = cursors.findByTenantId(tenantId).orElseGet(() -> {
             RegistryFeedCursor fresh = new RegistryFeedCursor();
@@ -132,15 +133,12 @@ public class RegistrySyncService {
         }
         cursor.setUpdatedAt(OffsetDateTime.now());
         cursors.save(cursor);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("processed", processed);
-        out.put("lastSeq", cursor.getLastSeq());
-        return out;
+        return new RegistrySyncReceipt(processed, cursor.getLastSeq());
     }
 
     /** Trigger endpoint face: staff only. */
     @Transactional
-    public Map<String, Object> runOnce() {
+    public RegistrySyncReceipt runOnce() {
         requireBackOffice();
         return syncCurrentTenant();
     }

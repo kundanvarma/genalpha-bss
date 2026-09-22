@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The GDPR front door (routed via the gateway as /privacy/v1/**):
@@ -32,7 +31,7 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId,
+    public PrivacyPassport export(@RequestParam(required = false) String partyId,
             @RequestHeader("Authorization") String bearer) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
@@ -43,17 +42,17 @@ public class PrivacyController {
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request,
+    public ErasureReport erase(@RequestBody EraseRequest request,
             @RequestHeader("Authorization") String bearer) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
+        String target = String.valueOf(request.partyId());
         return privacy.erase(target, bearer, subject());
     }
 
     @GetMapping("/erasure")
-    public List<Map<String, Object>> auditTrail() {
+    public List<ErasureAuditRow> auditTrail() {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }

@@ -38,7 +38,7 @@ The 4th arg is the collection's base-URL variable name (`auto` detects it).
 |---|---|---|
 | product-catalog | CTK-TMF620-ProductCatalog | `/tmf-api/productCatalogManagement/v4/` |
 | product-ordering | CTK-TMF622-ProductOrdering | `/tmf-api/productOrderingManagement/v4/` |
-| party-account | CTK-TMF632-Party | `/tmf-api/partyManagement/v4/` |
+| party-account | CTK-TMF632-Party | `/tmf-api/party/v4/` (the routed base; the kit expects a fresh organisation at list index 0, so run it on a small tenant) |
 | product-inventory | CTK-TMF637-ProductInventory | `/tmf-api/productInventory/v4/` |
 | party-account | CTK-TMF666-Account | `/tmf-api/accountManagement/v4/` |
 | party-account | CTK-TMF669-PartyRole | `/tmf-api/partyRoleManagement/v4/` |

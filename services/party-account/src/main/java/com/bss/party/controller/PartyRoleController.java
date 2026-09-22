@@ -1,5 +1,7 @@
 package com.bss.party.controller;
 
+import com.bss.party.dto.PartyRoleRequest;
+import com.bss.party.dto.PartyRoleView;
 import com.bss.party.service.PartyRoleService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,13 +30,13 @@ public class PartyRoleController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<PartyRoleView> create(@RequestBody PartyRoleRequest dto) {
+        PartyRoleView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(@RequestParam Map<String, String> allParams) {
+    public ResponseEntity<List<PartyRoleView>> list(@RequestParam Map<String, String> allParams) {
         Map<String, String> filters = new HashMap<>(allParams);
         filters.remove("offset");
         filters.remove("limit");
@@ -44,12 +46,12 @@ public class PartyRoleController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String id) {
+    public ResponseEntity<PartyRoleView> get(@PathVariable String id) {
         return ResponseEntity.ok(service.findById(id));
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable String id, @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PartyRoleView> patch(@PathVariable String id, @RequestBody PartyRoleRequest dto) {
         return ResponseEntity.ok(service.patch(id, dto));
     }
 

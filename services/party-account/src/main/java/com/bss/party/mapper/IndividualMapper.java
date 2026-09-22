@@ -60,18 +60,12 @@ public class IndividualMapper {
             dto.setBirthDate(entity.getBirthDate().toString());
         }
         if (entity.getOrganizationId() != null) {
-            dto.setOrganization(java.util.Map.of("id", entity.getOrganizationId(), "@referredType", "Organization"));
+            dto.setOrganization(com.bss.party.dto.EntityRef.organization(entity.getOrganizationId()));
         }
         dto.setType("Individual");
         if (entity.getHouseholdPayerId() != null) {
-            java.util.Map<String, Object> payer = new java.util.LinkedHashMap<>();
-            payer.put("id", entity.getHouseholdPayerId());
-            payer.put("status", entity.getHouseholdStatus());
-            payer.put("role", entity.getHouseholdRole());
-            if (entity.getTopupAllowanceValue() != null) {
-                payer.put("topupAllowance", entity.getTopupAllowanceValue());
-            }
-            dto.setHouseholdPayer(payer);
+            dto.setHouseholdPayer(new com.bss.party.dto.HouseholdPayerView(entity.getHouseholdPayerId(),
+                    entity.getHouseholdStatus(), entity.getHouseholdRole(), entity.getTopupAllowanceValue()));
         }
         return dto;
     }
@@ -87,8 +81,8 @@ public class IndividualMapper {
         if (dto.getBirthDate() != null && !dto.getBirthDate().isBlank()) {
             entity.setBirthDate(java.time.LocalDate.parse(dto.getBirthDate()));
         }
-        if (dto.getOrganization() != null && dto.getOrganization().get("id") != null) {
-            entity.setOrganizationId(String.valueOf(dto.getOrganization().get("id")));
+        if (dto.getOrganization() != null && dto.getOrganization().id() != null) {
+            entity.setOrganizationId(dto.getOrganization().id());
         }
         return entity;
     }
@@ -112,8 +106,8 @@ public class IndividualMapper {
         if (patch.getBirthDate() != null && !patch.getBirthDate().isBlank()) {
             entity.setBirthDate(java.time.LocalDate.parse(patch.getBirthDate()));
         }
-        if (patch.getOrganization() != null && patch.getOrganization().get("id") != null) {
-            entity.setOrganizationId(String.valueOf(patch.getOrganization().get("id")));
+        if (patch.getOrganization() != null && patch.getOrganization().id() != null) {
+            entity.setOrganizationId(patch.getOrganization().id());
         }
     }
 

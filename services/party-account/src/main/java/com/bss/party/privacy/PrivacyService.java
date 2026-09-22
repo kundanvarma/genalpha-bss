@@ -5,6 +5,7 @@ import com.bss.party.entity.Individual;
 import com.bss.party.repository.ErasureRecordRepository;
 import com.bss.party.repository.IndividualRepository;
 import com.bss.party.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +18,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,12 +43,17 @@ public class PrivacyService {
     private static final Logger log = LoggerFactory.getLogger(PrivacyService.class);
 
     /** category → legal basis for retention (reported, never deleted here) */
-    private static final Map<String, String> RETAINED = Map.of(
-            "bills", "bookkeeping law — retained 5 years from fiscal year end (GDPR Art. 17(3)(b))",
-            "payments", "bookkeeping law — retained with the bills they settle",
-            "orders", "contract records — retained for the limitation period",
-            "usage", "billing evidence — retained with the bills it rated",
-            "agreements", "contract records — retained for the limitation period");
+    private static final Map<String, String> RETAINED = retained();
+
+    private static Map<String, String> retained() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("bills", "bookkeeping law — retained 5 years from fiscal year end (GDPR Art. 17(3)(b))");
+        m.put("payments", "bookkeeping law — retained with the bills they settle");
+        m.put("orders", "contract records — retained for the limitation period");
+        m.put("usage", "billing evidence — retained with the bills it rated");
+        m.put("agreements", "contract records — retained for the limitation period");
+        return Collections.unmodifiableMap(m);
+    }
 
     private final IndividualRepository individuals;
     private final ErasureRecordRepository erasures;
@@ -93,39 +100,33 @@ public class PrivacyService {
     }
 
     /** The passport: one JSON, a category per shelf, the caller's token
-     * doing all the talking. */
-    public Map<String, Object> export(String partyId, String bearer) {
+     * doing all the talking. Each sibling's shelf is its own document. */
+    public PrivacyPassport export(String partyId, String bearer) {
         String tenant = tenantScope.currentTenantId();
-        Map<String, Object> passport = new LinkedHashMap<>();
-        passport.put("partyId", partyId);
-        passport.put("exportedAt", OffsetDateTime.now().toString());
-        passport.put("profile", individuals.findByIdAndTenantId(partyId, tenant)
-                .map(this::profileOf).orElse(Map.of("note", "no profile row")));
-        List<Map<String, Object>> categories = new ArrayList<>();
+        PrivacyPassport.Profile profile = individuals.findByIdAndTenantId(partyId, tenant)
+                .<PrivacyPassport.Profile>map(this::profileOf).orElse(PrivacyPassport.NoProfile.NONE);
+        List<JsonNode> categories = new ArrayList<>();
         for (Sibling sibling : siblings) {
             if ("identity".equals(sibling.category())) {
                 continue; // the IdP slice has no export endpoint — login metadata only
             }
             try {
-                Map<String, Object> slice = rest.get()
+                JsonNode slice = rest.get()
                         .uri(sibling.baseUrl() + "/privacy/v1/export?partyId=" + partyId)
                         .header("Authorization", bearer)
-                        .retrieve().body(Map.class);
+                        .retrieve().body(JsonNode.class);
                 categories.add(slice);
             } catch (RuntimeException unavailable) {
-                categories.add(Map.of("category", sibling.category(),
-                        "error", "unavailable — retry the export"));
+                categories.add(json.valueToTree(CategoryReceipt.exportUnavailable(sibling.category())));
             }
         }
-        passport.put("categories", categories);
-        passport.put("alsoHeldUnderLegalBasis", RETAINED);
-        return passport;
+        return new PrivacyPassport(partyId, OffsetDateTime.now().toString(), profile, categories, RETAINED);
     }
 
     /** The eraser: refuse-if-active, fan out, kill the login, anonymize
      * the profile, write the audit. */
     @Transactional
-    public Map<String, Object> erase(String partyId, String bearer, String executedBy) {
+    public ErasureReport erase(String partyId, String bearer, String executedBy) {
         String tenant = tenantScope.currentTenantId();
         Individual person = individuals.findByIdAndTenantId(partyId, tenant)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
@@ -134,20 +135,19 @@ public class PrivacyService {
                     "the party holds ACTIVE services — terminate them first; "
                     + "erasure cannot break a running contract (GDPR Art. 17(3)(b))");
         }
-        List<Map<String, Object>> categories = new ArrayList<>();
+        List<JsonNode> categories = new ArrayList<>();
         boolean partial = false;
         for (Sibling sibling : siblings) {
             try {
-                Map<String, Object> result = rest.post().uri(sibling.baseUrl() + "/privacy/v1/erase")
+                JsonNode result = rest.post().uri(sibling.baseUrl() + "/privacy/v1/erase")
                         .header("Authorization", bearer)
                         .header("Content-Type", "application/json")
-                        .body(Map.of("partyId", partyId))
-                        .retrieve().body(Map.class);
+                        .body(new EraseRequest(partyId))
+                        .retrieve().body(JsonNode.class);
                 categories.add(result);
             } catch (RuntimeException unavailable) {
                 partial = true;
-                categories.add(Map.of("category", sibling.category(), "deleted", 0,
-                        "error", "unavailable — this category is NOT erased; re-run"));
+                categories.add(json.valueToTree(CategoryReceipt.eraseUnavailable(sibling.category())));
                 log.warn("erasure fan-out failed for {}: {}", sibling.category(),
                         unavailable.getMessage());
             }
@@ -159,18 +159,13 @@ public class PrivacyService {
         person.setContactMediumJson("[]");
         person.setBirthDate(null);
         individuals.save(person);
-        categories.add(Map.of("category", "profile", "deleted", 0, "retained", 1,
-                "note", "anonymized in place — id kept for referential integrity"));
+        categories.add(json.valueToTree(CategoryReceipt.profileAnonymized()));
         for (Map.Entry<String, String> held : RETAINED.entrySet()) {
-            categories.add(Map.of("category", held.getKey(), "deleted", 0,
-                    "retained", -1, "reason", held.getValue()));
+            categories.add(json.valueToTree(CategoryReceipt.retained(held.getKey(), held.getValue())));
         }
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("partyId", partyId);
-        report.put("status", partial ? "partial — re-run required" : "completed");
-        report.put("executedBy", executedBy);
-        report.put("executedAt", OffsetDateTime.now().toString());
-        report.put("categories", categories);
+        ErasureReport report = new ErasureReport(partyId,
+                partial ? "partial — re-run required" : "completed",
+                executedBy, OffsetDateTime.now().toString(), categories, null);
         ErasureRecord record = new ErasureRecord();
         record.setId(UUID.randomUUID().toString());
         record.setTenantId(tenant);
@@ -179,24 +174,17 @@ public class PrivacyService {
         record.setExecutedAt(OffsetDateTime.now());
         record.setReportJson(writeJson(report));
         erasures.save(record);
-        report.put("auditRecordId", record.getId());
-        return report;
+        return report.withAudit(record.getId());
     }
 
-    public List<Map<String, Object>> auditTrail() {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (ErasureRecord r : erasures.findTop50ByTenantIdOrderByExecutedAtDesc(
-                tenantScope.currentTenantId())) {
-            out.add(Map.of("id", r.getId(), "partyId", r.getPartyId(),
-                    "executedBy", r.getExecutedBy(), "executedAt", r.getExecutedAt().toString()));
-        }
-        return out;
+    public List<ErasureAuditRow> auditTrail() {
+        return erasures.findTop50ByTenantIdOrderByExecutedAtDesc(tenantScope.currentTenantId())
+                .stream().map(ErasureAuditRow::of).toList();
     }
 
     /** Erasure's honest precondition: no running contract. Walks the
      * inventory pages with the CALLER's token. Fail-CLOSED: if the
      * inventory cannot be read, erasure refuses rather than guesses. */
-    @SuppressWarnings("unchecked")
     private boolean hasActiveProducts(String partyId, String bearer) {
         if (inventoryBase == null || inventoryBase.isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -204,21 +192,21 @@ public class PrivacyService {
         }
         try {
             for (int offset = 0; offset < 100_000; offset += 100) {
-                List<Map<String, Object>> page = rest.get()
+                JsonNode page = rest.get()
                         .uri(inventoryBase + "/tmf-api/productInventory/v4/product?limit=100&offset=" + offset)
                         .header("Authorization", bearer)
-                        .retrieve().body(List.class);
-                if (page == null || page.isEmpty()) {
+                        .retrieve().body(JsonNode.class);
+                if (page == null || !page.isArray() || page.isEmpty()) {
                     return false;
                 }
-                for (Map<String, Object> product : page) {
-                    if (!"active".equalsIgnoreCase(String.valueOf(product.get("status")))) {
+                for (JsonNode product : page) {
+                    if (!"active".equalsIgnoreCase(product.path("status").asText())) {
                         continue;
                     }
-                    Object related = product.get("relatedParty");
-                    if (related instanceof List<?> parties && parties.stream()
-                            .anyMatch(p -> p instanceof Map<?, ?> m && partyId.equals(String.valueOf(m.get("id"))))) {
-                        return true;
+                    for (JsonNode related : product.path("relatedParty")) {
+                        if (partyId.equals(related.path("id").asText())) {
+                            return true;
+                        }
                     }
                 }
                 if (page.size() < 100) {
@@ -234,21 +222,15 @@ public class PrivacyService {
         }
     }
 
-    private Map<String, Object> profileOf(Individual person) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", person.getId());
-        m.put("givenName", person.getGivenName());
-        m.put("familyName", person.getFamilyName());
-        m.put("birthDate", person.getBirthDate());
-        m.put("contactMedium", readJson(person.getContactMediumJson()));
-        return m;
+    private PrivacyPassport.ProfileView profileOf(Individual person) {
+        return PrivacyPassport.ProfileView.of(person, readJson(person.getContactMediumJson()));
     }
 
-    private Object readJson(String raw) {
+    private JsonNode readJson(String raw) {
         try {
-            return raw == null ? List.of() : json.readValue(raw, Object.class);
+            return raw == null ? json.createArrayNode() : json.readTree(raw);
         } catch (Exception e) {
-            return List.of();
+            return json.createArrayNode();
         }
     }
 

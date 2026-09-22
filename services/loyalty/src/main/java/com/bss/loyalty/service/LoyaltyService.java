@@ -11,6 +11,16 @@ import com.bss.loyalty.repository.LoyaltyMemberRepository;
 import com.bss.loyalty.repository.LoyaltyProgramRepository;
 import com.bss.loyalty.repository.LoyaltyTransactionRepository;
 import com.bss.loyalty.client.PromotionMint;
+import com.bss.loyalty.dto.AdjustRequest;
+import com.bss.loyalty.dto.LiabilityView;
+import com.bss.loyalty.dto.LoyaltyMemberView;
+import com.bss.loyalty.dto.LoyaltyProgramRequest;
+import com.bss.loyalty.dto.LoyaltyProgramView;
+import com.bss.loyalty.dto.LoyaltyTransactionView;
+import com.bss.loyalty.dto.RedeemReceipt;
+import com.bss.loyalty.dto.Reward;
+import com.bss.loyalty.dto.SweepReceipt;
+import com.bss.loyalty.dto.TierVerdict;
 import com.bss.loyalty.security.PartyScope;
 import com.bss.loyalty.security.TenantScope;
 import org.slf4j.Logger;
@@ -64,48 +74,48 @@ public class LoyaltyService {
     /* ---------- the program (data, marketer-owned) ---------- */
 
     @Transactional
-    public Map<String, Object> upsertProgram(Map<String, Object> dto) {
+    public LoyaltyProgramView upsertProgram(LoyaltyProgramRequest dto) {
         String tenant = tenantScope.currentTenantId();
         LoyaltyProgram p = programs.findByTenantId(tenant).orElseGet(LoyaltyProgram::new);
         p.setTenantId(tenant);
-        if (dto.get("enabled") != null) {
-            p.setEnabled(Boolean.parseBoolean(String.valueOf(dto.get("enabled"))));
+        if (dto.enabled() != null) {
+            p.setEnabled(dto.enabled());
         }
-        if (dto.get("earnPointsPerCurrency") != null) {
-            p.setEarnPointsPerCurrency(new BigDecimal(String.valueOf(dto.get("earnPointsPerCurrency"))));
+        if (dto.earnPointsPerCurrency() != null) {
+            p.setEarnPointsPerCurrency(dto.earnPointsPerCurrency());
         }
-        if (dto.get("pointsPerGb") != null) {
-            p.setPointsPerGb(Integer.parseInt(String.valueOf(dto.get("pointsPerGb"))));
+        if (dto.pointsPerGb() != null) {
+            p.setPointsPerGb(dto.pointsPerGb());
         }
-        if (dto.get("expiryMonths") != null) {
-            p.setExpiryMonths(Integer.parseInt(String.valueOf(dto.get("expiryMonths"))));
+        if (dto.expiryMonths() != null) {
+            p.setExpiryMonths(dto.expiryMonths());
         }
-        if (dto.get("voucherPercent") != null) {
-            p.setVoucherPercent(Integer.parseInt(String.valueOf(dto.get("voucherPercent"))));
+        if (dto.voucherPercent() != null) {
+            p.setVoucherPercent(dto.voucherPercent());
         }
-        if (dto.get("pointsPerVoucher") != null) {
-            p.setPointsPerVoucher(Integer.parseInt(String.valueOf(dto.get("pointsPerVoucher"))));
+        if (dto.pointsPerVoucher() != null) {
+            p.setPointsPerVoucher(dto.pointsPerVoucher());
         }
-        if (dto.get("silverThreshold") != null) {
-            p.setSilverThreshold(Long.parseLong(String.valueOf(dto.get("silverThreshold"))));
+        if (dto.silverThreshold() != null) {
+            p.setSilverThreshold(dto.silverThreshold());
         }
-        if (dto.get("goldThreshold") != null) {
-            p.setGoldThreshold(Long.parseLong(String.valueOf(dto.get("goldThreshold"))));
+        if (dto.goldThreshold() != null) {
+            p.setGoldThreshold(dto.goldThreshold());
         }
         p.setLastUpdate(OffsetDateTime.now());
-        return programView(programs.save(p));
+        return LoyaltyProgramView.of(programs.save(p));
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> program() {
-        return programView(programs.findByTenantId(tenantScope.currentTenantId())
+    public LoyaltyProgramView program() {
+        return LoyaltyProgramView.of(programs.findByTenantId(tenantScope.currentTenantId())
                 .orElseThrow(() -> new NotFoundException("no loyalty program for this operator")));
     }
 
     /* ---------- membership (opt-in, self) ---------- */
 
     @Transactional
-    public Map<String, Object> enroll() {
+    public LoyaltyMemberView enroll() {
         String tenant = tenantScope.currentTenantId();
         LoyaltyProgram p = programs.findByTenantId(tenant).orElse(null);
         if (p == null || !p.isEnabled()) {
@@ -114,7 +124,7 @@ public class LoyaltyService {
         String party = requireSelf();
         LoyaltyMember m = members.findByIdAndTenantId(party, tenant).orElse(null);
         if (m != null) {
-            return memberView(m); // enrolling twice is a no-op, not an error
+            return LoyaltyMemberView.of(m); // enrolling twice is a no-op, not an error
         }
         m = new LoyaltyMember();
         m.setId(party);
@@ -122,21 +132,21 @@ public class LoyaltyService {
         m.setBalance(0);
         m.setEnrolledAt(OffsetDateTime.now());
         m.setLastUpdate(OffsetDateTime.now());
-        return memberView(members.save(m));
+        return LoyaltyMemberView.of(members.save(m));
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> me() {
+    public LoyaltyMemberView me() {
         LoyaltyMember m = members.findByIdAndTenantId(requireSelf(), tenantScope.currentTenantId())
                 .orElseThrow(() -> new NotFoundException("not a loyalty member"));
-        return memberView(m);
+        return LoyaltyMemberView.of(m);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> myJournal() {
+    public List<LoyaltyTransactionView> myJournal() {
         return txs.findTop50ByTenantIdAndPartyIdOrderByCreatedAtDesc(
                 tenantScope.currentTenantId(), requireSelf())
-                .stream().map(this::txView).toList();
+                .stream().map(LoyaltyTransactionView::of).toList();
     }
 
     /* ---------- earning: the settled bill (idempotent per bill) ---------- */
@@ -170,7 +180,7 @@ public class LoyaltyService {
     /* ---------- burning: gigabytes, delivered by event ---------- */
 
     @Transactional
-    public Map<String, Object> redeemData(int gb) {
+    public RedeemReceipt redeemData(int gb) {
         if (gb < 1 || gb > 50) {
             throw new BadRequestException("redeem between 1 and 50 GB");
         }
@@ -198,24 +208,20 @@ public class LoyaltyService {
         reward.put("partyId", party);
         reward.put("gb", gb);
         events.publish("LoyaltyDataRewardEvent", "loyaltyReward", reward);
-        Map<String, Object> out = memberView(m);
-        out.put("redeemed", Map.of("gb", gb, "points", cost, "redemptionId", redemptionId));
-        return out;
+        return new RedeemReceipt(LoyaltyMemberView.of(m), new Reward.Data(gb, cost, redemptionId));
     }
 
     /* ---------- the liability (the number finance books) ---------- */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> liability() {
-        long total = members.liability(tenantScope.currentTenantId());
-        return Map.of("outstandingPoints", total,
-                "definition", "sum of all member balances — the operator's points liability");
+    public LiabilityView liability() {
+        return LiabilityView.of(members.liability(tenantScope.currentTenantId()));
     }
 
     /* ---------- vouchers: a real promotion, unique per redemption ---------- */
 
     @Transactional
-    public Map<String, Object> redeemVoucher() {
+    public RedeemReceipt redeemVoucher() {
         String tenant = tenantScope.currentTenantId();
         LoyaltyProgram p = programs.findByTenantId(tenant)
                 .orElseThrow(() -> new ConflictException("this operator runs no loyalty program"));
@@ -233,10 +239,8 @@ public class LoyaltyService {
         m.setBalance(m.getBalance() - cost);
         m.setLastUpdate(OffsetDateTime.now());
         members.save(m);
-        Map<String, Object> out = memberView(m);
-        out.put("redeemed", Map.of("voucherCode", code, "percent", p.getVoucherPercent(),
-                "points", cost));
-        return out;
+        return new RedeemReceipt(LoyaltyMemberView.of(m),
+                new Reward.Voucher(code, p.getVoucherPercent(), cost));
     }
 
     /* ---------- tiers: computed from the rolling year, benefits as policy ---------- */
@@ -258,8 +262,8 @@ public class LoyaltyService {
 
     /** Machine/staff read: the tier billing puts into the pricing context. */
     @Transactional(readOnly = true)
-    public Map<String, Object> tierOf(String partyId) {
-        return Map.of("partyId", partyId, "tier",
+    public TierVerdict tierOf(String partyId) {
+        return new TierVerdict(partyId,
                 members.findByIdAndTenantId(partyId, tenantScope.currentTenantId())
                         .map(LoyaltyMember::getTier).orElse("none"));
     }
@@ -267,13 +271,13 @@ public class LoyaltyService {
     /* ---------- operator adjustment (service recovery / goodwill) ---------- */
 
     @Transactional
-    public Map<String, Object> adjust(Map<String, Object> body) {
+    public LoyaltyMemberView adjust(AdjustRequest body) {
         String tenant = tenantScope.currentTenantId();
         LoyaltyProgram p = programs.findByTenantId(tenant)
                 .orElseThrow(() -> new ConflictException("this operator runs no loyalty program"));
-        String party = String.valueOf(body.get("partyId"));
-        long points = Long.parseLong(String.valueOf(body.getOrDefault("points", "0")));
-        String reason = body.get("reason") == null ? null : String.valueOf(body.get("reason"));
+        String party = String.valueOf(body.partyId());
+        long points = body.pointsOrZero();
+        String reason = body.reason();
         if (points == 0 || reason == null || reason.isBlank()) {
             throw new BadRequestException("points (non-zero) and reason are required — goodwill has a cause too");
         }
@@ -285,7 +289,7 @@ public class LoyaltyService {
         m.setLastUpdate(OffsetDateTime.now());
         recomputeTier(p, m);
         members.save(m);
-        return memberView(m);
+        return LoyaltyMemberView.of(m);
     }
 
     /* ---------- expiry: points are a liability with a clock ---------- */
@@ -298,15 +302,15 @@ public class LoyaltyService {
     }
 
     @Transactional
-    public Map<String, Object> expirySweep() {
+    public SweepReceipt expirySweep() {
         if (!tickGuard.claim("loyalty-expiry", java.time.Duration.ofMinutes(5))) {
-            return Map.of("skipped", "another replica sweeps");
+            return SweepReceipt.Skipped.ANOTHER_REPLICA;
         }
         try {
             String tenant = tenantScope.currentTenantId();
             LoyaltyProgram p = programs.findByTenantId(tenant).orElse(null);
             if (p == null || p.getExpiryMonths() <= 0) {
-                return Map.of("expired", 0, "note", "no expiry configured");
+                return SweepReceipt.NoExpiry.NONE;
             }
             OffsetDateTime cutoff = OffsetDateTime.now().minusMonths(p.getExpiryMonths());
             long expiredTotal = 0;
@@ -333,7 +337,7 @@ public class LoyaltyService {
             }
             log.info("loyalty expiry: {} points expired across {} members ({})",
                     expiredTotal, membersTouched, tenant);
-            return Map.of("expired", expiredTotal, "members", membersTouched);
+            return new SweepReceipt.Swept(expiredTotal, membersTouched);
         } finally {
             tickGuard.release("loyalty-expiry");
         }
@@ -359,36 +363,4 @@ public class LoyaltyService {
                         "loyalty membership is personal — a customer token is required"));
     }
 
-    private Map<String, Object> programView(LoyaltyProgram p) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("enabled", p.isEnabled());
-        map.put("earnPointsPerCurrency", p.getEarnPointsPerCurrency());
-        map.put("pointsPerGb", p.getPointsPerGb());
-        map.put("expiryMonths", p.getExpiryMonths());
-        map.put("voucherPercent", p.getVoucherPercent());
-        map.put("pointsPerVoucher", p.getPointsPerVoucher());
-        map.put("silverThreshold", p.getSilverThreshold());
-        map.put("goldThreshold", p.getGoldThreshold());
-        map.put("@type", "LoyaltyProgramSpecification");
-        return map;
-    }
-
-    private Map<String, Object> memberView(LoyaltyMember m) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", m.getId());
-        map.put("balance", m.getBalance());
-        map.put("tier", m.getTier());
-        map.put("enrolledAt", m.getEnrolledAt());
-        map.put("@type", "LoyaltyProgramMember");
-        return map;
-    }
-
-    private Map<String, Object> txView(LoyaltyTransaction t) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("type", t.getTxType());
-        map.put("points", t.getPoints());
-        map.put("cause", t.getCause());
-        map.put("createdAt", t.getCreatedAt());
-        return map;
-    }
 }
