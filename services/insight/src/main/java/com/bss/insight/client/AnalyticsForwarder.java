@@ -62,7 +62,7 @@ public class AnalyticsForwarder {
      * Fail-open to an empty catalog.
      */
     @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> audienceCatalog(String tenantId) {
+    public List<com.bss.insight.dto.AnalyticsAudience> audienceCatalog(String tenantId) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || tenant.getAnalyticsDataUrl() == null
                 || tenant.getAnalyticsDataUrl().isBlank()
@@ -82,7 +82,7 @@ public class AnalyticsForwarder {
             if (report == null || !(report.get("rows") instanceof List<?> rows)) {
                 return List.of();
             }
-            List<Map<String, Object>> catalog = new java.util.ArrayList<>();
+            List<com.bss.insight.dto.AnalyticsAudience> catalog = new java.util.ArrayList<>();
             for (Object row : rows) {
                 if (!(row instanceof Map<?, ?> r)) {
                     continue;
@@ -91,8 +91,7 @@ public class AnalyticsForwarder {
                         .get("value").toString();
                 String size = ((Map<String, Object>) ((List<?>) r.get("metricValues")).get(0))
                         .get("value").toString();
-                catalog.add(Map.of("name", name, "size", Long.parseLong(size),
-                        "source", "analytics"));
+                catalog.add(new com.bss.insight.dto.AnalyticsAudience(name, Long.parseLong(size), "analytics"));
             }
             return catalog;
         } catch (Exception e) {

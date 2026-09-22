@@ -1,5 +1,6 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.ActivationJobView;
 import com.bss.insight.entity.ActivationJob;
 import com.bss.insight.repository.ActivationJobRepository;
 import com.bss.insight.security.TenantScope;
@@ -7,8 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -44,11 +43,10 @@ public class ActivationJobService {
     }
 
     @Transactional
-    public Map<String, Object> markRunning(String jobId) {
+    public void markRunning(String jobId) {
         ActivationJob j = load(jobId);
         j.setStatus(ActivationJob.RUNNING);
         jobs.save(j);
-        return Map.of("audienceId", j.getAudienceId(), "externalAudienceId", j.getExternalAudienceId());
     }
 
     @Transactional
@@ -72,8 +70,8 @@ public class ActivationJobService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> status(String jobId) {
-        return toMap(load(jobId));
+    public ActivationJobView status(String jobId) {
+        return view(load(jobId));
     }
 
     private ActivationJob load(String jobId) {
@@ -81,19 +79,9 @@ public class ActivationJobService {
                 .orElseThrow(() -> new IllegalArgumentException("activation job not found: " + jobId));
     }
 
-    static Map<String, Object> toMap(ActivationJob j) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("jobId", j.getId());
-        m.put("audienceId", j.getAudienceId());
-        m.put("externalAudienceId", j.getExternalAudienceId());
-        m.put("mode", j.getMode());
-        m.put("destination", j.getDestination());
-        m.put("status", j.getStatus());
-        m.put("members", j.getMembers());
-        m.put("pushed", j.getPushed());
-        m.put("skipped", j.getSkipped());
-        if (j.getError() != null) m.put("error", j.getError());
-        m.put("finishedAt", j.getFinishedAt());
-        return m;
+    static ActivationJobView view(ActivationJob j) {
+        return new ActivationJobView(j.getId(), j.getAudienceId(), j.getExternalAudienceId(), j.getMode(),
+                j.getDestination(), j.getStatus(), j.getMembers(), j.getPushed(), j.getSkipped(), j.getError(),
+                j.getFinishedAt());
     }
 }

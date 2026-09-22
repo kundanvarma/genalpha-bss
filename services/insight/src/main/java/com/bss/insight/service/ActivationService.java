@@ -1,5 +1,9 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.ActivationJobView;
+import com.bss.insight.dto.ActivationRequest;
+import com.bss.insight.dto.ActivationResult;
+import com.bss.insight.dto.AudienceMember;
 import com.bss.insight.entity.PartyTrait;
 import com.bss.insight.repository.PartyTraitRepository;
 import com.bss.insight.security.TenantContext;
@@ -20,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
  * the background so nothing blocks. Two modes: seed (lookalike source) and
  * suppress (paid-spend exclusion). Emails resolve with no per-row fan-out — a
  * prospect carries its own; a customer's is read from the denormalised trait
- * store in one query. Hashing + batching live in {@link SocialAudienceClient}.
+ * store in one query. Hashing + batching live in the destinations.
  */
 @Service
 public class ActivationService {
@@ -51,18 +55,17 @@ public class ActivationService {
     }
 
     /** Queue the export and return the job — the push runs in the background. */
-    public Map<String, Object> activate(String audienceId, Map<String, Object> body) {
+    public ActivationResult activate(String audienceId, ActivationRequest body) {
         // THE SANDBOX WALL: a clone's audiences never reach an ad platform
         com.bss.insight.security.TenantRegistry.TenantEntry te =
                 tenantRegistry.byId(tenantScope.currentTenantId());
         if (te != null && te.isSandbox()) {
-            return Map.of("activated", false, "reason",
+            return new ActivationResult.Refused(false,
                     "sandbox tenants cannot activate to external ad platforms — the wall is the point");
         }
-        String externalAudienceId = body.get("externalAudienceId") == null
-                ? null : String.valueOf(body.get("externalAudienceId"));
-        String mode = "suppress".equals(body.get("mode")) ? "suppress" : "seed";
-        String destination = body.get("destination") == null ? "meta" : String.valueOf(body.get("destination"));
+        String externalAudienceId = body.externalAudienceId();
+        String mode = "suppress".equals(body.mode()) ? "suppress" : "seed";
+        String destination = body.destination() == null ? "meta" : body.destination();
         if (externalAudienceId == null || externalAudienceId.isBlank()) {
             throw new IllegalArgumentException("externalAudienceId (the platform Custom Audience id) is required");
         }
@@ -76,22 +79,16 @@ public class ActivationService {
                 runJob(jobId, audienceId, externalAudienceId, destination);
             }
         });
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("jobId", jobId);
-        out.put("mode", mode);
-        out.put("destination", destination);
-        out.put("status", "queued");
-        out.put("enabled", destinations.get(destination).enabled());
-        return out;
+        return new ActivationResult.Queued(jobId, mode, destination, "queued", destinations.get(destination).enabled());
     }
 
-    public Map<String, Object> jobStatus(String jobId) {
+    public ActivationJobView jobStatus(String jobId) {
         return jobs.status(jobId);
     }
 
     /** The activatable destinations (platform keys) and whether each is configured. */
-    public Map<String, Object> availableDestinations() {
-        Map<String, Object> out = new LinkedHashMap<>();
+    public Map<String, Boolean> availableDestinations() {
+        Map<String, Boolean> out = new LinkedHashMap<>();
         destinations.forEach((k, v) -> out.put(k, v.enabled()));
         return out;
     }
@@ -101,24 +98,22 @@ public class ActivationService {
     private void runJob(String jobId, String audienceId, String externalAudienceId, String destination) {
         jobs.markRunning(jobId);
         try {
-            List<Map<String, Object>> members = audiences.members(audienceId, null);
+            List<AudienceMember> members = audiences.members(audienceId, null);
             Map<String, String> emailByParty = null;
             List<String> emails = new ArrayList<>();
-            for (Map<String, Object> m : members) {
-                Object email = m.get("email");
-                if (email != null && !String.valueOf(email).isBlank()) {
-                    emails.add(String.valueOf(email));
+            for (AudienceMember m : members) {
+                if (m.email() != null && !m.email().isBlank()) {
+                    emails.add(m.email());
                     continue;
                 }
-                Object partyId = m.get("partyId");
-                if (partyId != null) {
+                if (m.partyId() != null) {
                     if (emailByParty == null) {
                         emailByParty = new LinkedHashMap<>();
                         for (PartyTrait t : traits.findByTenantIdAndTraitKey(tenantScope.currentTenantId(), "email")) {
                             emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
                         }
                     }
-                    String e = emailByParty.get(String.valueOf(partyId));
+                    String e = emailByParty.get(m.partyId());
                     if (e != null) emails.add(e);
                 }
             }

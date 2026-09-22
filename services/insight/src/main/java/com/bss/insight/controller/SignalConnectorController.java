@@ -1,6 +1,10 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.ConnectorSyncReceipt;
+import com.bss.insight.dto.SignalConnectorRequest;
+import com.bss.insight.dto.SignalConnectorView;
+import com.bss.insight.dto.SignalView;
 import com.bss.insight.service.SignalConnectorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The operator's signal connectors (SI-P2): CRUD + poll-mode sync are
@@ -31,12 +34,12 @@ public class SignalConnectorController {
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/connector")
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<SignalConnectorView>> list() {
         return ResponseEntity.ok(service.list());
     }
 
     @PutMapping(ApiConstants.BASE_PATH + "/connector")
-    public ResponseEntity<Map<String, Object>> upsert(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<SignalConnectorView> upsert(@RequestBody SignalConnectorRequest dto) {
         return ResponseEntity.ok(service.upsert(dto));
     }
 
@@ -47,13 +50,13 @@ public class SignalConnectorController {
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/connector/{name}/sync")
-    public ResponseEntity<Map<String, Object>> sync(@PathVariable String name) {
+    public ResponseEntity<ConnectorSyncReceipt> sync(@PathVariable String name) {
         return ResponseEntity.ok(service.sync(name));
     }
 
     /** The generic inbound webhook — a foreign system pushes its own shape. */
     @PostMapping(ApiConstants.BASE_PATH + "/hook/{connectorId}")
-    public ResponseEntity<Map<String, Object>> hook(@PathVariable String connectorId,
+    public ResponseEntity<SignalView> hook(@PathVariable String connectorId,
             @RequestHeader(value = "X-Hook-Secret", required = false) String secret,
             @RequestBody String rawBody) {
         return ResponseEntity.status(201).body(service.webhook(connectorId, secret, rawBody));

@@ -1,5 +1,7 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.ProspectImport;
+import com.bss.insight.dto.ProspectView;
 import com.bss.insight.entity.Prospect;
 import com.bss.insight.repository.ProspectRepository;
 import com.bss.insight.security.TenantScope;
@@ -7,9 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,23 +34,21 @@ public class ProspectService {
 
     /** Bulk import (an Excel paste, a purchased list, a social lead-form sync). */
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> importBulk(Map<String, Object> body) {
+    public ProspectImport.Receipt importBulk(ProspectImport body) {
         String tenantId = tenantScope.currentTenantId();
-        List<Map<String, Object>> rows = body.get("prospects") instanceof List<?> l
-                ? (List<Map<String, Object>>) l : List.of();
-        String defaultSource = str(body.get("source"), "import");
+        List<ProspectImport.Row> rows = body.prospects() == null ? List.of() : body.prospects();
+        String defaultSource = str(body.source(), "import");
         int imported = 0;
         int updated = 0;
         int reachable = 0;
-        for (Map<String, Object> r : rows) {
-            String email = str(r.get("email"), null);
+        for (ProspectImport.Row r : rows) {
+            String email = str(r.email(), null);
             if (email == null || email.isBlank()) {
                 continue;
             }
             email = email.trim().toLowerCase();
             // Consent is granted ONLY by an explicit lawful basis on the row.
-            String lawfulBasis = str(r.get("lawfulBasis"), null);
+            String lawfulBasis = str(r.lawfulBasis(), null);
             boolean consented = lawfulBasis != null && !lawfulBasis.isBlank();
             Prospect p = prospects.findByTenantIdAndEmail(tenantId, email).orElse(null);
             boolean isNew = p == null;
@@ -61,10 +59,10 @@ public class ProspectService {
                 p.setEmail(email);
                 p.setCreatedAt(OffsetDateTime.now());
             }
-            p.setName(str(r.get("name"), p.getName()));
-            p.setPhone(str(r.get("phone"), p.getPhone()));
-            p.setSource(str(r.get("source"), p.getSource() != null ? p.getSource() : defaultSource));
-            p.setSocialRef(str(r.get("socialRef"), p.getSocialRef()));
+            p.setName(str(r.name(), p.getName()));
+            p.setPhone(str(r.phone(), p.getPhone()));
+            p.setSource(str(r.source(), p.getSource() != null ? p.getSource() : defaultSource));
+            p.setSocialRef(str(r.socialRef(), p.getSocialRef()));
             // Never downgrade an already-consented prospect; upgrade only on a basis.
             if (consented) {
                 p.setConsent(Prospect.CONSENTED);
@@ -77,12 +75,7 @@ public class ProspectService {
             if (isNew) imported++; else updated++;
             if (Prospect.CONSENTED.equals(p.getConsent())) reachable++;
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("imported", imported);
-        out.put("updated", updated);
-        out.put("reachable", reachable);
-        out.put("heldUnconsented", (imported + updated) - reachable);
-        return out;
+        return new ProspectImport.Receipt(imported, updated, reachable, (imported + updated) - reachable);
     }
 
     /**
@@ -115,30 +108,23 @@ public class ProspectService {
         prospects.save(p);
     }
 
+    /** The tenant's prospects, optionally narrowed by source and/or consent state. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(Map<String, String> filters) {
+    public List<ProspectView> list(String source, String consent) {
         String tenantId = tenantScope.currentTenantId();
         return prospects.findByTenantId(tenantId).stream()
-                .filter(p -> filters.get("source") == null || filters.get("source").equals(p.getSource()))
-                .filter(p -> filters.get("consent") == null || filters.get("consent").equals(p.getConsent()))
-                .map(ProspectService::toMap)
+                .filter(p -> source == null || source.equals(p.getSource()))
+                .filter(p -> consent == null || consent.equals(p.getConsent()))
+                .map(ProspectService::view)
                 .toList();
     }
 
-    static Map<String, Object> toMap(Prospect p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId());
-        m.put("email", p.getEmail());
-        m.put("name", p.getName());
-        m.put("phone", p.getPhone());
-        m.put("source", p.getSource());
-        m.put("consent", p.getConsent());
-        m.put("lawfulBasis", p.getLawfulBasis());
-        m.put("@type", "Prospect");
-        return m;
+    static ProspectView view(Prospect p) {
+        return new ProspectView(p.getId(), p.getEmail(), p.getName(), p.getPhone(), p.getSource(), p.getConsent(),
+                p.getLawfulBasis(), "Prospect");
     }
 
-    private static String str(Object o, String dflt) {
-        return o == null ? dflt : String.valueOf(o);
+    private static String str(String o, String dflt) {
+        return o == null ? dflt : o;
     }
 }

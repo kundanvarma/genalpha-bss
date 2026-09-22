@@ -1,5 +1,7 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.VocSummary;
+import com.bss.insight.dto.VocSweepReceipt;
 import com.bss.insight.entity.CustomerSignal;
 import com.bss.insight.entity.SignalClassification;
 import com.bss.insight.entity.VocAlert;
@@ -56,8 +58,34 @@ public class VocService {
         this.tenantScope = tenantScope;
     }
 
+    /** One aspect's counters while the window is being walked; frozen into {@link VocSummary.Aspect} at the end. */
+    private static final class AspectDraft {
+        final String aspect;
+        int total, positive, neutral, negative, thisWeek, weekNegatives;
+        final List<VocSummary.PainPoint> painPoints = new ArrayList<>();
+
+        AspectDraft(String aspect) {
+            this.aspect = aspect;
+        }
+
+        void bump(String sentiment) {
+            switch (sentiment == null ? "neutral" : sentiment) {
+                case "positive" -> positive++;
+                case "negative" -> negative++;
+                default -> neutral++; // an out-of-vocabulary sentiment counts as neutral
+            }
+        }
+
+        VocSummary.Aspect frozen() {
+            // baseline: the prior 3 weeks' negatives as a weekly average
+            double baseline = Math.max((negative - weekNegatives) / 3.0, 0);
+            return new VocSummary.Aspect(aspect, total, positive, neutral, negative, thisWeek, weekNegatives, painPoints,
+                    round2(baseline), weekNegatives >= MIN_NEGATIVES && weekNegatives >= baseline * DEVIATION_RATIO);
+        }
+    }
+
     @Transactional(readOnly = true)
-    public Map<String, Object> summary() {
+    public VocSummary summary() {
         String tenant = tenantScope.currentTenantId();
         List<CustomerSignal> recent = signals.findTop100ByTenantIdOrderByReceivedAtDesc(tenant);
         Map<String, SignalClassification> byId = classifications
@@ -67,7 +95,7 @@ public class VocService {
         OffsetDateTime cutoff = OffsetDateTime.now().minusDays(WINDOW_DAYS);
         OffsetDateTime weekAgo = OffsetDateTime.now().minusDays(7);
 
-        Map<String, Map<String, Object>> aspects = new LinkedHashMap<>();
+        Map<String, AspectDraft> aspects = new LinkedHashMap<>();
         int classified = 0;
         for (CustomerSignal s : recent) {
             SignalClassification c = byId.get(s.getId());
@@ -76,59 +104,25 @@ public class VocService {
             }
             classified++;
             String aspect = c.getAspect() == null ? "other" : c.getAspect();
-            Map<String, Object> a = aspects.computeIfAbsent(aspect, k -> {
-                Map<String, Object> fresh = new LinkedHashMap<>();
-                fresh.put("aspect", k);
-                fresh.put("total", 0);
-                fresh.put("positive", 0);
-                fresh.put("neutral", 0);
-                fresh.put("negative", 0);
-                fresh.put("thisWeek", 0);
-                fresh.put("weekNegatives", 0);
-                fresh.put("painPoints", new ArrayList<Map<String, Object>>());
-                return fresh;
-            });
-            bump(a, "total");
-            bump(a, c.getSentiment() == null ? "neutral" : c.getSentiment());
+            AspectDraft a = aspects.computeIfAbsent(aspect, AspectDraft::new);
+            a.total++;
+            a.bump(c.getSentiment());
             boolean thisWeek = !s.getReceivedAt().isBefore(weekAgo);
             if (thisWeek) {
-                bump(a, "thisWeek");
+                a.thisWeek++;
                 if ("negative".equals(c.getSentiment())) {
-                    bump(a, "weekNegatives");
+                    a.weekNegatives++;
                 }
             }
-            if (c.getPainPoint() != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> pains = (List<Map<String, Object>>) a.get("painPoints");
-                if (pains.size() < 5) {
-                    Map<String, Object> p = new LinkedHashMap<>();
-                    p.put("painPoint", c.getPainPoint());
-                    if (c.getPainImpact() != null) {
-                        p.put("impact", c.getPainImpact());
-                    }
-                    p.put("signalId", s.getId());
-                    pains.add(p);
-                }
+            if (c.getPainPoint() != null && a.painPoints.size() < 5) {
+                a.painPoints.add(new VocSummary.PainPoint(c.getPainPoint(), c.getPainImpact(), s.getId()));
             }
         }
-        for (Map<String, Object> a : aspects.values()) {
-            // baseline: the prior 3 weeks' negatives as a weekly average
-            int negatives = (int) a.get("negative");
-            int weekNeg = (int) a.get("weekNegatives");
-            double baseline = Math.max((negatives - weekNeg) / 3.0, 0);
-            a.put("baselineWeeklyNegatives", round2(baseline));
-            a.put("deviating", weekNeg >= MIN_NEGATIVES
-                    && weekNeg >= baseline * DEVIATION_RATIO);
-        }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("windowDays", WINDOW_DAYS);
-        out.put("classifiedSignals", classified);
-        out.put("aspects", aspects.values().stream()
-                .sorted((x, y) -> Integer.compare((int) y.get("total"), (int) x.get("total"))).toList());
-        out.put("alerts", alerts.findTop20ByTenantIdOrderByCreatedAtDesc(tenant));
+        List<VocSummary.Aspect> rows = aspects.values().stream().map(AspectDraft::frozen)
+                .sorted((x, y) -> Integer.compare(y.total(), x.total())).toList();
         // honesty label: what this pane IS at v1
-        out.put("method", "battery-aggregates-v1 (SQL over verified classifications; not embedding clustering)");
-        return out;
+        return new VocSummary(WINDOW_DAYS, classified, rows, alerts.findTop20ByTenantIdOrderByCreatedAtDesc(tenant),
+                "battery-aggregates-v1 (SQL over verified classifications; not embedding clustering)");
     }
 
     /** Hourly + on demand: trip at most one auditable alert per (aspect, week). */
@@ -145,17 +139,16 @@ public class VocService {
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> deviationSweep() {
+    public VocSweepReceipt deviationSweep() {
         String tenant = tenantScope.currentTenantId();
         String isoWeek = isoWeekNow();
         int fired = 0;
         int notified = 0;
-        for (Map<String, Object> a : (List<Map<String, Object>>) summary().get("aspects")) {
-            if (!Boolean.TRUE.equals(a.get("deviating"))) {
+        for (VocSummary.Aspect a : summary().aspects()) {
+            if (!a.deviating()) {
                 continue;
             }
-            String aspect = String.valueOf(a.get("aspect"));
+            String aspect = a.aspect();
             if (alerts.existsByTenantIdAndAspectAndIsoWeek(tenant, aspect, isoWeek)) {
                 continue;
             }
@@ -164,11 +157,10 @@ public class VocService {
             alert.setTenantId(tenant);
             alert.setAspect(aspect);
             alert.setIsoWeek(isoWeek);
-            alert.setWeekNegatives((int) a.get("weekNegatives"));
-            alert.setBaselineAvg(BigDecimal.valueOf((double) a.get("baselineWeeklyNegatives")));
-            double baseline = (double) a.get("baselineWeeklyNegatives");
-            alert.setRatio(BigDecimal.valueOf(baseline == 0 ? 99
-                    : round2((int) a.get("weekNegatives") / baseline)));
+            alert.setWeekNegatives(a.weekNegatives());
+            double baseline = a.baselineWeeklyNegatives();
+            alert.setBaselineAvg(BigDecimal.valueOf(baseline));
+            alert.setRatio(BigDecimal.valueOf(baseline == 0 ? 99 : round2(a.weekNegatives() / baseline)));
             alert.setCreatedAt(OffsetDateTime.now());
             alerts.save(alert);
 
@@ -184,11 +176,7 @@ public class VocService {
                     + baseline + "/week baseline (" + isoWeek + "). Customers are telling you something.");
             fired++;
         }
-        return Map.of("fired", fired, "notified", notified, "isoWeek", isoWeek);
-    }
-
-    private static void bump(Map<String, Object> m, String key) {
-        m.merge(key, 1, (a, b) -> (int) a + (int) b);
+        return new VocSweepReceipt(fired, notified, isoWeek);
     }
 
     private static double round2(double v) {

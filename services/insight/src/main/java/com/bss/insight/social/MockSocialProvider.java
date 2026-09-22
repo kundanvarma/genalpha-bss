@@ -1,5 +1,9 @@
 package com.bss.insight.social;
 
+import com.bss.insight.dto.PublishedPost;
+import com.bss.insight.dto.SocialMessage;
+import com.fasterxml.jackson.databind.JsonNode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.client.RestClient;
@@ -22,56 +26,67 @@ public class MockSocialProvider implements SocialProvider {
         return cfg.apiUrl().replaceAll("/+$", "");
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> data(Map<String, Object> body) {
-        return body != null && body.get("data") instanceof List<?> l ? (List<Map<String, Object>>) l : List.of();
+    private static List<JsonNode> data(JsonNode body) {
+        List<JsonNode> out = new ArrayList<>();
+        if (body != null && body.path("data").isArray()) {
+            body.path("data").forEach(out::add);
+        }
+        return out;
+    }
+
+    /** The mock's row is already the normalised shape — read it field by field. */
+    static SocialMessage message(JsonNode m) {
+        return new SocialMessage(text(m, "id"), text(m, "platform"), text(m, "author"), text(m, "handle"), text(m, "text"),
+                text(m, "created_time"), text(m, "permalink"));
+    }
+
+    private static String text(JsonNode n, String key) {
+        JsonNode v = n.get(key);
+        return v == null || v.isNull() ? null : v.asText();
+    }
+
+    private JsonNode get(SocialConfig cfg, String path, String var, String token) {
+        return http.get().uri(base(cfg) + path, var).header("Authorization", "Bearer " + token)
+                .retrieve().body(JsonNode.class);
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> mentions(SocialConfig cfg) {
-        return data(http.get().uri(base(cfg) + "/v1/{acct}/mentions", cfg.accountId())
-                .header("Authorization", "Bearer " + cfg.accessToken()).retrieve().body(Map.class));
+    public List<SocialMessage> mentions(SocialConfig cfg) {
+        return data(get(cfg, "/v1/{acct}/mentions", cfg.accountId(), cfg.accessToken()))
+                .stream().map(MockSocialProvider::message).toList();
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> dms(SocialConfig cfg) {
-        return data(http.get().uri(base(cfg) + "/v1/{acct}/dms", cfg.accountId())
-                .header("Authorization", "Bearer " + cfg.accessToken()).retrieve().body(Map.class));
+    public List<SocialMessage> dms(SocialConfig cfg) {
+        return data(get(cfg, "/v1/{acct}/dms", cfg.accountId(), cfg.accessToken()))
+                .stream().map(MockSocialProvider::message).toList();
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> publish(SocialConfig cfg, String message) {
-        Map<String, Object> res = http.post().uri(base(cfg) + "/v1/{acct}/posts", cfg.accountId())
+    public PublishedPost publish(SocialConfig cfg, String message) {
+        JsonNode res = http.post().uri(base(cfg) + "/v1/{acct}/posts", cfg.accountId())
                 .header("Authorization", "Bearer " + cfg.accessToken())
-                .body(Map.of("message", message)).retrieve().body(Map.class);
-        return Map.of("id", res == null ? "" : String.valueOf(res.get("id")),
-                "permalink", res == null ? "" : String.valueOf(res.get("permalink")));
+                .body(Map.of("message", message)).retrieve().body(JsonNode.class);
+        return new PublishedPost(res == null ? "" : res.path("id").asText(),
+                res == null ? "" : res.path("permalink").asText());
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> posts(SocialConfig cfg) {
-        return data(http.get().uri(base(cfg) + "/v1/{acct}/posts", cfg.accountId())
-                .header("Authorization", "Bearer " + cfg.accessToken()).retrieve().body(Map.class));
+    public List<JsonNode> posts(SocialConfig cfg) {
+        return data(get(cfg, "/v1/{acct}/posts", cfg.accountId(), cfg.accessToken()));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public int pushAudience(SocialConfig cfg, String audienceId, List<String> hashedEmails) {
         List<List<String>> rows = hashedEmails.stream().map(List::of).toList();
-        Map<String, Object> res = http.post().uri(base(cfg) + "/v1/{aid}/users", audienceId)
+        JsonNode res = http.post().uri(base(cfg) + "/v1/{aid}/users", audienceId)
                 .header("Authorization", "Bearer " + cfg.adsTokenOrPage())
-                .body(Map.of("schema", List.of("EMAIL_SHA256"), "data", rows)).retrieve().body(Map.class);
-        return res != null && res.get("num_received") instanceof Number n ? n.intValue() : rows.size();
+                .body(Map.of("schema", List.of("EMAIL_SHA256"), "data", rows)).retrieve().body(JsonNode.class);
+        return res != null && res.path("num_received").isNumber() ? res.path("num_received").intValue() : rows.size();
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> leads(SocialConfig cfg, String formId) {
-        return data(http.get().uri(base(cfg) + "/v1/{form}/leads", formId)
-                .header("Authorization", "Bearer " + cfg.accessToken()).retrieve().body(Map.class));
+    public List<JsonNode> leads(SocialConfig cfg, String formId) {
+        return data(get(cfg, "/v1/{form}/leads", formId, cfg.accessToken()));
     }
 }

@@ -15,8 +15,6 @@ import org.springframework.stereotype.Component;
 
 import java.lang.management.ManagementFactory;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -126,20 +124,10 @@ public class AudienceRefreshScheduler {
     }
 
     /** What ops sees: scheduler activity + live JVM heap, in one place. */
-    public Map<String, Object> status() {
+    public com.bss.insight.dto.RefreshStatus status() {
         java.lang.management.MemoryUsage heap = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("enabled", enabled.get());
-        m.put("intervalMs", intervalMs);
-        m.put("maxPerRun", maxPerRun);
-        m.put("totalRuns", totalRuns.get());
-        m.put("totalRefreshed", totalRefreshed.get());
-        m.put("totalErrors", totalErrors.get());
-        m.put("lastRunAt", lastRunAt);
-        m.put("lastDurationMs", lastDurationMs.get());
-        m.put("lastRefreshed", lastRefreshed.get());
-        m.put("heapUsedMb", heap.getUsed() / (1024 * 1024));
-        m.put("heapMaxMb", heap.getMax() / (1024 * 1024));
-        return m;
+        return new com.bss.insight.dto.RefreshStatus(enabled.get(), intervalMs, maxPerRun, totalRuns.get(),
+                totalRefreshed.get(), totalErrors.get(), lastRunAt, lastDurationMs.get(), lastRefreshed.get(),
+                heap.getUsed() / (1024 * 1024), heap.getMax() / (1024 * 1024));
     }
 }

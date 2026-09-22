@@ -45,9 +45,8 @@ public class DecisionLogListener {
             Map<String, Object> event = envelope.get("event") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
                 if ("DecisionRecordedEvent".equals(type)) {
-                    Map<String, Object> decision = event.get("decision") instanceof Map<?, ?> d
-                            ? (Map<String, Object>) d : Map.of();
-                    decisions.record(tenantId, decision);
+                    Object decision = event.get("decision") instanceof Map<?, ?> d ? d : Map.of();
+                    decisions.record(tenantId, objectMapper.convertValue(decision, com.bss.insight.dto.DecisionInput.class));
                 } else {
                     Map<String, Object> outcome = event.get("decisionOutcome") instanceof Map<?, ?> o
                             ? (Map<String, Object>) o : Map.of();

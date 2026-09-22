@@ -1,13 +1,15 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.SignalInput;
+import com.bss.insight.dto.SocialCareDtos;
+import com.bss.insight.dto.SocialMessage;
 import com.bss.insight.entity.SocialDm;
 import com.bss.insight.events.DomainEventPublisher;
 import com.bss.insight.repository.SocialDmRepository;
 import com.bss.insight.security.TenantScope;
-import org.springframework.beans.factory.annotation.Value;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -53,23 +55,22 @@ public class SocialCareService {
 
     /** Pull DMs, score them, store the new ones, and request tickets for the ones that need care. */
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> sync() {
+    public SocialCareDtos.SyncReceipt sync() {
         String tenantId = tenantScope.currentTenantId();
         int ingested = 0;
         int ticketsRequested = 0;
         com.bss.insight.social.SocialConfig cfg = providers.current();
         boolean enabled = cfg.enabled();
         if (enabled) {
-            List<Map<String, Object>> data = providers.providerFor(cfg).dms(cfg);
-            for (Map<String, Object> m : data) {
-                String platform = String.valueOf(m.getOrDefault("platform", "x"));
-                String externalId = m.get("id") == null ? null : String.valueOf(m.get("id"));
+            List<SocialMessage> data = providers.providerFor(cfg).dms(cfg);
+            for (SocialMessage m : data) {
+                String platform = m.platformOr("x");
+                String externalId = m.id();
                 if (externalId == null
                         || dms.existsByTenantIdAndPlatformAndExternalId(tenantId, platform, externalId)) {
                     continue; // idempotent: a DM is ingested (and ticketed) exactly once
                 }
-                String text = m.get("text") == null ? "" : String.valueOf(m.get("text"));
+                String text = m.textOrEmpty();
                 String sentiment = score(text);
                 boolean needsCare = "negative".equals(sentiment) || isSupport(text);
 
@@ -78,8 +79,8 @@ public class SocialCareService {
                 dm.setTenantId(tenantId);
                 dm.setPlatform(platform);
                 dm.setExternalId(externalId);
-                dm.setAuthor(m.get("author") == null ? null : String.valueOf(m.get("author")));
-                dm.setHandle(m.get("handle") == null ? null : String.valueOf(m.get("handle")));
+                dm.setAuthor(m.author());
+                dm.setHandle(m.handle());
                 dm.setText(text);
                 dm.setSentiment(sentiment);
                 dm.setNeedsCare(needsCare);
@@ -105,29 +106,26 @@ public class SocialCareService {
                 // a DM IS a customer signal (SI-P1) — the author's handle is PII-ish
                 // context, the text passes the firewall like every other source
                 try {
-                    signalService.ingest(java.util.Map.of(
-                            "source", "chat", "sourceRef", "dm:" + platform + ":" + externalId,
-                            "channel", "social-dm", "text", text,
-                            "context", java.util.Map.of("platform", platform, "sentiment", sentiment,
-                                    "needsCare", needsCare)));
+                    signalService.ingest(new SignalInput("chat", text, "dm:" + platform + ":" + externalId, null,
+                            "social-dm", null, JsonNodeFactory.instance.objectNode()
+                                    .put("platform", platform).put("sentiment", sentiment).put("needsCare", needsCare)));
                 } catch (RuntimeException e) {
                     // non-fatal by design
                 }
                 ingested++;
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ingested", ingested);
-        out.put("ticketsRequested", ticketsRequested);
-        out.put("enabled", enabled);
-        return out;
+        return new SocialCareDtos.SyncReceipt(ingested, ticketsRequested, enabled);
     }
 
     /** Care-queue health: how many DMs, how many need a human, mood split. */
     @Transactional(readOnly = true)
-    public Map<String, Object> summary() {
+    public SocialCareDtos.Summary summary() {
         List<SocialDm> all = dms.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
-        Map<String, Integer> sentiment = new LinkedHashMap<>(Map.of("positive", 0, "neutral", 0, "negative", 0));
+        Map<String, Integer> sentiment = new LinkedHashMap<>();
+        sentiment.put("positive", 0);
+        sentiment.put("neutral", 0);
+        sentiment.put("negative", 0);
         int needCare = 0;
         for (SocialDm m : all) {
             sentiment.merge(m.getSentiment() == null ? "neutral" : m.getSentiment(), 1, Integer::sum);
@@ -135,30 +133,16 @@ public class SocialCareService {
                 needCare++;
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("total", all.size());
-        out.put("needCare", needCare);
-        out.put("sentiment", sentiment);
-        return out;
+        return new SocialCareDtos.Summary(all.size(), needCare, sentiment);
     }
 
     /** The care queue: recent DMs, newest first, with their triage. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> queue() {
+    public List<SocialCareDtos.QueueItem> queue() {
         return dms.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().limit(100).map(m -> {
-                    Map<String, Object> o = new LinkedHashMap<>();
-                    o.put("id", m.getId());
-                    o.put("platform", m.getPlatform());
-                    o.put("author", m.getAuthor());
-                    o.put("handle", m.getHandle());
-                    o.put("text", m.getText());
-                    o.put("sentiment", m.getSentiment());
-                    o.put("needsCare", m.isNeedsCare());
-                    o.put("ticketRequested", m.isTicketRequested());
-                    o.put("createdAt", m.getCreatedAt());
-                    return o;
-                }).toList();
+                .stream().limit(100).map(m -> new SocialCareDtos.QueueItem(m.getId(), m.getPlatform(), m.getAuthor(),
+                        m.getHandle(), m.getText(), m.getSentiment(), m.isNeedsCare(), m.isTicketRequested(),
+                        m.getCreatedAt())).toList();
     }
 
     /** Transparent keyword classifier — swap for the intelligence LLM in prod. */

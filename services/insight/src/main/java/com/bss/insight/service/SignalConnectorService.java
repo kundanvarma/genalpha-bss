@@ -1,5 +1,10 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.ConnectorSyncReceipt;
+import com.bss.insight.dto.SignalConnectorRequest;
+import com.bss.insight.dto.SignalConnectorView;
+import com.bss.insight.dto.SignalInput;
+import com.bss.insight.dto.SignalView;
 import com.bss.insight.entity.SignalConnector;
 import com.bss.insight.repository.SignalConnectorRepository;
 import com.bss.insight.security.TenantScope;
@@ -15,9 +20,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -53,17 +56,17 @@ public class SignalConnectorService {
     /* ---------- CRUD (back-office) ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<SignalConnectorView> list() {
         return connectors.findByTenantIdOrderByNameAsc(tenantScope.currentTenantId())
-                .stream().map(SignalConnectorService::toMap).toList();
+                .stream().map(SignalConnectorService::view).toList();
     }
 
     @Transactional
-    public Map<String, Object> upsert(Map<String, Object> dto) {
-        String name = str(dto.get("name"));
-        String kind = str(dto.get("kind"));
-        String source = str(dto.get("source"));
-        String mode = str(dto.get("mode"));
+    public SignalConnectorView upsert(SignalConnectorRequest dto) {
+        String name = dto.name();
+        String kind = dto.kind();
+        String source = dto.source();
+        String mode = dto.mode();
         if (name == null || name.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "name is required");
         }
@@ -90,13 +93,13 @@ public class SignalConnectorService {
         c.setKind(kind);
         c.setSource(source);
         c.setMode(mode);
-        c.setBaseUrl(str(dto.get("baseUrl")));
-        c.setSecretRef(str(dto.get("secretRef")));
-        c.setWebhookSecretRef(str(dto.get("webhookSecretRef")));
-        c.setConfig(json(dto.get("config")));
-        c.setEnabled(!Boolean.FALSE.equals(dto.get("enabled")));
+        c.setBaseUrl(dto.baseUrl());
+        c.setSecretRef(dto.secretRef());
+        c.setWebhookSecretRef(dto.webhookSecretRef());
+        c.setConfig(json(dto.config()));
+        c.setEnabled(!Boolean.FALSE.equals(dto.enabled()));
         c.setLastUpdate(OffsetDateTime.now());
-        return toMap(connectors.save(c));
+        return view(connectors.save(c));
     }
 
     @Transactional
@@ -108,7 +111,7 @@ public class SignalConnectorService {
     /* ---------- poll-mode sync ---------- */
 
     @Transactional
-    public Map<String, Object> sync(String name) {
+    public ConnectorSyncReceipt sync(String name) {
         SignalConnector c = required(name);
         if (!"poll".equals(c.getMode())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -121,11 +124,9 @@ public class SignalConnectorService {
         }
         int ingested = 0;
         int duplicates = 0;
-        for (Map<String, Object> item : adapter.pull(c)) {
-            Map<String, Object> dto = new LinkedHashMap<>(item);
-            dto.put("source", c.getSource());
-            Map<String, Object> stored = signals.ingest(dto);
-            if (Boolean.TRUE.equals(stored.get("duplicate"))) {
+        for (SignalInput item : adapter.pull(c)) {
+            SignalView stored = signals.ingest(item.withSource(c.getSource()));
+            if (stored.duplicated()) {
                 duplicates++;
             } else {
                 ingested++;
@@ -133,11 +134,7 @@ public class SignalConnectorService {
         }
         c.setLastSyncAt(OffsetDateTime.now());
         connectors.save(c);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("connector", name);
-        out.put("ingested", ingested);
-        out.put("duplicates", duplicates);
-        return out;
+        return new ConnectorSyncReceipt(name, ingested, duplicates);
     }
 
     /* ---------- the generic inbound webhook ---------- */
@@ -150,7 +147,7 @@ public class SignalConnectorService {
      * compared constant-time) is the door key.
      */
     @Transactional
-    public Map<String, Object> webhook(String connectorId, String presentedSecret, String rawBody) {
+    public SignalView webhook(String connectorId, String presentedSecret, String rawBody) {
         SignalConnector c = connectors.findByIdAndTenantId(connectorId, tenantScope.currentTenantId())
                 .filter(SignalConnector::isEnabled)
                 .filter(x -> "webhook".equals(x.getMode()))
@@ -174,16 +171,9 @@ public class SignalConnectorService {
         if (text == null || text.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "no text at the configured pointer");
         }
-        Map<String, Object> dto = new LinkedHashMap<>();
-        dto.put("source", c.getSource());
-        dto.put("text", text);
         String ref = at(body, cfg, "refPointer", "/id");
-        if (ref != null) dto.put("sourceRef", c.getName() + ":" + ref);
-        String party = at(body, cfg, "partyPointer", null);
-        if (party != null) dto.put("partyId", party);
-        String lang = at(body, cfg, "langPointer", null);
-        if (lang != null) dto.put("lang", lang);
-        return signals.ingest(dto);
+        return signals.ingest(new SignalInput(c.getSource(), text, ref == null ? null : c.getName() + ":" + ref,
+                at(body, cfg, "partyPointer", null), null, at(body, cfg, "langPointer", null), null));
     }
 
     private JsonNode readConfig(SignalConnector c) {
@@ -210,12 +200,13 @@ public class SignalConnectorService {
                         "connector '" + name + "' is not configured for this tenant"));
     }
 
-    private String json(Object v) {
-        if (v == null) {
+    /** The adapter's config as stored text: a JSON string is kept as-is, an object is serialised. */
+    private String json(JsonNode v) {
+        if (v == null || v.isNull()) {
             return null;
         }
-        if (v instanceof String s) {
-            return s;
+        if (v.isTextual()) {
+            return v.asText();
         }
         try {
             return objectMapper.writeValueAsString(v);
@@ -224,25 +215,10 @@ public class SignalConnectorService {
         }
     }
 
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
-
     /** Secrets are references only — values are never returned. */
-    private static Map<String, Object> toMap(SignalConnector c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("name", c.getName());
-        m.put("kind", c.getKind());
-        m.put("source", c.getSource());
-        m.put("mode", c.getMode());
-        if (c.getBaseUrl() != null) m.put("baseUrl", c.getBaseUrl());
-        if (c.getSecretRef() != null) m.put("secretRef", c.getSecretRef());
-        if (c.getWebhookSecretRef() != null) m.put("webhookSecretRef", c.getWebhookSecretRef());
-        if (c.getConfig() != null) m.put("config", c.getConfig());
-        m.put("enabled", c.isEnabled());
-        if (c.getLastSyncAt() != null) m.put("lastSyncAt", c.getLastSyncAt());
-        m.put("@type", "SignalConnector");
-        return m;
+    private static SignalConnectorView view(SignalConnector c) {
+        return new SignalConnectorView(c.getId(), c.getName(), c.getKind(), c.getSource(), c.getMode(), c.getBaseUrl(),
+                c.getSecretRef(), c.getWebhookSecretRef(), c.getConfig(), c.isEnabled(), c.getLastSyncAt(),
+                "SignalConnector");
     }
 }

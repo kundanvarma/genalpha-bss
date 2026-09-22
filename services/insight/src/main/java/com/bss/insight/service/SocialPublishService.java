@@ -1,11 +1,11 @@
 package com.bss.insight.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.bss.insight.dto.PublishResult;
+import com.bss.insight.dto.PublishedPost;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Organic publishing: put a post OUT on the brand's own handle — the outbound,
@@ -21,20 +21,21 @@ public class SocialPublishService {
         this.providers = providers;
     }
 
-    public Map<String, Object> publish(String content) {
+    public PublishResult publish(String content) {
         com.bss.insight.social.SocialConfig cfg = providers.current();
         if (!cfg.enabled()) {
-            return Map.of("published", false, "reason", "no social handle configured for this tenant");
+            return PublishResult.NotPublished.because("no social handle configured for this tenant");
         }
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("content is required to publish");
         }
-        Map<String, Object> res = providers.providerFor(cfg).publish(cfg, content);
-        return Map.of("published", true, "id", String.valueOf(res.getOrDefault("id", "")),
-                "permalink", String.valueOf(res.getOrDefault("permalink", "")), "provider", cfg.providerName());
+        PublishedPost res = providers.providerFor(cfg).publish(cfg, content);
+        return PublishResult.Published.of(res.id() == null ? "" : res.id(),
+                res.permalink() == null ? "" : res.permalink(), cfg.providerName());
     }
 
-    public List<Map<String, Object>> posts() {
+    /** The platform's own post documents, verbatim. */
+    public List<JsonNode> posts() {
         com.bss.insight.social.SocialConfig cfg = providers.current();
         if (!cfg.enabled()) {
             return List.of();

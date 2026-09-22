@@ -1,9 +1,9 @@
 package com.bss.insight.signal;
 
+import com.bss.insight.dto.SignalInput;
 import com.bss.insight.entity.SignalConnector;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * One kind of external signal source (SI-P2). Beans implementing this are
@@ -19,8 +19,8 @@ public interface SignalConnectorAdapter {
     String kind();
 
     /**
-     * Pull the source's items, mapped to signal DTOs (text, sourceRef,
+     * Pull the source's items, mapped to signal inputs (text, sourceRef,
      * partyId?, lang?, context?). The service adds source + runs the firewall.
      */
-    List<Map<String, Object>> pull(SignalConnector cfg);
+    List<SignalInput> pull(SignalConnector cfg);
 }

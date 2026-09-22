@@ -1,5 +1,9 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.LandingPageRequest;
+import com.bss.insight.dto.LandingPageView;
+import com.bss.insight.dto.LeadCapture;
+import com.bss.insight.dto.LeadForm;
 import com.bss.insight.entity.LandingPage;
 import com.bss.insight.repository.LandingPageRepository;
 import com.bss.insight.security.TenantScope;
@@ -7,9 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -33,8 +35,8 @@ public class LandingPageService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        String slug = slugify(str(dto.get("slug"), str(dto.get("headline"), "page")));
+    public LandingPageView create(LandingPageRequest dto) {
+        String slug = slugify(str(dto.slug(), str(dto.headline(), "page")));
         String tenant = tenantScope.currentTenantId();
         LandingPage p = pages.findByTenantIdAndSlug(tenant, slug).orElseGet(LandingPage::new);
         if (p.getId() == null) {
@@ -43,42 +45,42 @@ public class LandingPageService {
             p.setSlug(slug);
             p.setCreatedAt(OffsetDateTime.now());
         }
-        p.setHeadline(str(dto.get("headline"), "An offer for you"));
-        p.setSubhead(str(dto.get("subhead"), null));
-        p.setCtaLabel(str(dto.get("ctaLabel"), "Get the offer"));
-        p.setUtmSource(str(dto.get("utmSource"), slug));
+        p.setHeadline(str(dto.headline(), "An offer for you"));
+        p.setSubhead(str(dto.subhead(), null));
+        p.setCtaLabel(str(dto.ctaLabel(), "Get the offer"));
+        p.setUtmSource(str(dto.utmSource(), slug));
         // Customization — URLs and the colour are sanitized so a page can never
         // become an injection vector (only http/https/relative URLs, only #hex).
-        p.setLogoUrl(safeUrl(str(dto.get("logoUrl"), null)));
-        p.setHeroImageUrl(safeUrl(str(dto.get("heroImageUrl"), null)));
-        p.setBrandColor(safeColor(str(dto.get("brandColor"), null)));
-        p.setCtaUrl(safeUrl(str(dto.get("ctaUrl"), null)));
-        p.setPrivacyUrl(safeUrl(str(dto.get("privacyUrl"), null)));
-        return toMap(pages.save(p));
+        p.setLogoUrl(safeUrl(str(dto.logoUrl(), null)));
+        p.setHeroImageUrl(safeUrl(str(dto.heroImageUrl(), null)));
+        p.setBrandColor(safeColor(str(dto.brandColor(), null)));
+        p.setCtaUrl(safeUrl(str(dto.ctaUrl(), null)));
+        p.setPrivacyUrl(safeUrl(str(dto.privacyUrl(), null)));
+        return view(pages.save(p));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<LandingPageView> list() {
         return pages.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(LandingPageService::toMap).toList();
+                .stream().map(LandingPageService::view).toList();
     }
 
     /** Edit an existing page by id — the console's pre-filled edit form saves here.
      * The slug (the page's public URL/identity) is deliberately not changed. */
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> dto) {
+    public LandingPageView patch(String id, LandingPageRequest dto) {
         LandingPage p = pages.findById(id)
                 .orElseThrow(() -> com.bss.insight.exception.NotFoundException.forResource("LandingPage", id));
-        p.setHeadline(str(dto.get("headline"), p.getHeadline()));
-        p.setSubhead(str(dto.get("subhead"), null));
-        p.setCtaLabel(str(dto.get("ctaLabel"), p.getCtaLabel()));
-        p.setUtmSource(str(dto.get("utmSource"), p.getUtmSource()));
-        p.setLogoUrl(safeUrl(str(dto.get("logoUrl"), null)));
-        p.setHeroImageUrl(safeUrl(str(dto.get("heroImageUrl"), null)));
-        p.setBrandColor(safeColor(str(dto.get("brandColor"), null)));
-        p.setCtaUrl(safeUrl(str(dto.get("ctaUrl"), null)));
-        p.setPrivacyUrl(safeUrl(str(dto.get("privacyUrl"), null)));
-        return toMap(pages.save(p));
+        p.setHeadline(str(dto.headline(), p.getHeadline()));
+        p.setSubhead(str(dto.subhead(), null));
+        p.setCtaLabel(str(dto.ctaLabel(), p.getCtaLabel()));
+        p.setUtmSource(str(dto.utmSource(), p.getUtmSource()));
+        p.setLogoUrl(safeUrl(str(dto.logoUrl(), null)));
+        p.setHeroImageUrl(safeUrl(str(dto.heroImageUrl(), null)));
+        p.setBrandColor(safeColor(str(dto.brandColor(), null)));
+        p.setCtaUrl(safeUrl(str(dto.ctaUrl(), null)));
+        p.setPrivacyUrl(safeUrl(str(dto.privacyUrl(), null)));
+        return view(pages.save(p));
     }
 
     /** Delete a page (RLS scopes findById to the caller's tenant, so a foreign id is a no-op). */
@@ -89,26 +91,22 @@ public class LandingPageService {
 
     /** Capture a consented lead → a CONSENTED prospect stamped with the campaign. */
     @Transactional
-    public Map<String, Object> captureLead(String slug, Map<String, Object> body) {
+    public LeadCapture captureLead(String slug, LeadForm body) {
         LandingPage page = pages.findByTenantIdAndSlug(tenantScope.currentTenantId(), slug).orElse(null);
         if (page == null) {
-            return Map.of("status", "not_found");
+            return LeadCapture.NotFound.page();
         }
-        boolean consent = Boolean.TRUE.equals(body.get("consent"))
-                || "true".equalsIgnoreCase(String.valueOf(body.get("consent")))
-                || "on".equalsIgnoreCase(String.valueOf(body.get("consent")));
-        String email = str(body.get("email"), null);
-        if (!consent) {
-            return Map.of("status", "declined", "captured", false,
-                    "reason", "consent is required to capture a lead");
+        String email = str(body.email(), null);
+        if (!body.consented()) {
+            return LeadCapture.Rejected.declined();
         }
         if (email == null || email.isBlank()) {
-            return Map.of("status", "invalid", "captured", false, "reason", "email is required");
+            return LeadCapture.Rejected.invalid("email is required");
         }
         // The lead's source is the page's campaign (or a utm override on the submit).
-        String source = str(body.get("utmSource"), page.getUtmSource());
-        prospects.captureLead(email, str(body.get("name"), null), source, "landing-page-optin");
-        return Map.of("status", "captured", "captured", true, "source", source);
+        String source = str(body.utmSource(), page.getUtmSource());
+        prospects.captureLead(email, str(body.name(), null), source, "landing-page-optin");
+        return LeadCapture.Captured.from(source);
     }
 
     /** The public landing page — a self-contained HTML page with a consent-first form. */
@@ -172,22 +170,10 @@ public class LandingPageService {
                 + "<body><div class=\"wrap\">" + body + "</div></body></html>";
     }
 
-    static Map<String, Object> toMap(LandingPage p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId());
-        m.put("slug", p.getSlug());
-        m.put("headline", p.getHeadline());
-        m.put("subhead", p.getSubhead());
-        m.put("ctaLabel", p.getCtaLabel());
-        m.put("utmSource", p.getUtmSource());
-        m.put("logoUrl", p.getLogoUrl());
-        m.put("heroImageUrl", p.getHeroImageUrl());
-        m.put("brandColor", p.getBrandColor());
-        m.put("ctaUrl", p.getCtaUrl());
-        m.put("privacyUrl", p.getPrivacyUrl());
-        m.put("url", "/insight/v1/landing/" + p.getSlug() + "/view");
-        m.put("createdAt", p.getCreatedAt());
-        return m;
+    static LandingPageView view(LandingPage p) {
+        return new LandingPageView(p.getId(), p.getSlug(), p.getHeadline(), p.getSubhead(), p.getCtaLabel(),
+                p.getUtmSource(), p.getLogoUrl(), p.getHeroImageUrl(), p.getBrandColor(), p.getCtaUrl(), p.getPrivacyUrl(),
+                "/insight/v1/landing/" + p.getSlug() + "/view", p.getCreatedAt());
     }
 
     /** Only http(s) or root-relative URLs — never javascript:/data: (XSS via src/href). */
@@ -213,8 +199,8 @@ public class LandingPageService {
         return base.isBlank() ? "page" : base;
     }
 
-    private static String str(Object o, String dflt) {
-        return o == null || String.valueOf(o).isBlank() ? dflt : String.valueOf(o);
+    private static String str(String o, String dflt) {
+        return o == null || o.isBlank() ? dflt : o;
     }
 
     private static String esc(String s) {

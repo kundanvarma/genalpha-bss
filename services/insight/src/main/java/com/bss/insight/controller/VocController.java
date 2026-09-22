@@ -1,14 +1,14 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.VocSummary;
+import com.bss.insight.dto.VocSweepReceipt;
 import com.bss.insight.service.VocService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /** Voice of Customer (SI-P4): the aggregate read + the on-demand deviation
  * sweep (demos and tests don't wait for the hourly schedule). */
@@ -23,12 +23,12 @@ public class VocController {
     }
 
     @GetMapping("/summary")
-    public ResponseEntity<Map<String, Object>> summary() {
+    public ResponseEntity<VocSummary> summary() {
         return ResponseEntity.ok(service.summary());
     }
 
     @PostMapping("/sweep")
-    public ResponseEntity<Map<String, Object>> sweep() {
+    public ResponseEntity<VocSweepReceipt> sweep() {
         return ResponseEntity.ok(service.deviationSweep());
     }
 }

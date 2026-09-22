@@ -1,5 +1,6 @@
 package com.bss.insight.privacy;
 
+import com.bss.insight.dto.PrivacyDtos;
 import com.bss.insight.repository.CustomerSignalRepository;
 import com.bss.insight.repository.TwinVaultRepository;
 import com.bss.insight.repository.VisitorEventRepository;
@@ -16,8 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.Map;
 
 /**
  * The GDPR corner of the behavioural store: visitor profiles stitched
@@ -46,7 +45,7 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyDtos.Export export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
@@ -54,17 +53,16 @@ public class PrivacyController {
         }
         var stitched = profiles.findByTenantIdAndPartyId(tenantScope.currentTenantId(), target);
         var said = signals.findByTenantIdAndPartyId(tenantScope.currentTenantId(), target);
-        return Map.of("category", "behavioral", "count", stitched.size(), "items", stitched,
-                "signals", said.size());
+        return new PrivacyDtos.Export("behavioral", stitched.size(), stitched, said.size());
     }
 
     @PostMapping("/erase")
     @Transactional
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public PrivacyDtos.Erasure erase(@RequestBody PrivacyDtos.ErasureRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
+        String target = String.valueOf(request.partyId());
         String tenant = tenantScope.currentTenantId();
         var stitched = profiles.findByTenantIdAndPartyId(tenant, target);
         for (var profile : stitched) {
@@ -76,8 +74,7 @@ public class PrivacyController {
         // Tvilling: destroying the vault keys makes any twin that ever left
         // permanently unlinkable — erasure reaches the cloud retroactively
         long twinKeysGone = twinVault.deleteByTenantIdAndPartyId(tenant, target);
-        return Map.of("category", "behavioral", "deleted", stitched.size(),
-                "signalsDeleted", signalsGone, "twinKeysDestroyed", twinKeysGone, "retained", 0);
+        return new PrivacyDtos.Erasure("behavioral", stitched.size(), signalsGone, twinKeysGone, 0);
     }
 
     private String subject() {

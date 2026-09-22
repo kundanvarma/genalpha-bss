@@ -63,18 +63,12 @@ public class SignalListener {
                 partyId = String.valueOf(p.get("id"));
             }
             try (TenantContext ignored = TenantContext.actAs(tenantId)) {
-                Map<String, Object> dto = new java.util.LinkedHashMap<>();
-                dto.put("source", "ticket");
-                dto.put("sourceRef", String.valueOf(ticket.get("id")));
-                dto.put("channel", "support");
-                dto.put("text", text);
-                if (partyId != null) {
-                    dto.put("partyId", partyId);
-                }
+                com.fasterxml.jackson.databind.node.ObjectNode context = null;
                 if (ticket.get("severity") != null) {
-                    dto.put("context", Map.of("severity", String.valueOf(ticket.get("severity"))));
+                    context = objectMapper.createObjectNode().put("severity", String.valueOf(ticket.get("severity")));
                 }
-                signals.ingest(dto);
+                signals.ingest(new com.bss.insight.dto.SignalInput("ticket", text, String.valueOf(ticket.get("id")),
+                        partyId, "support", null, context));
             }
         } catch (Exception e) {
             log.warn("signal ingest from bus skipped: {}", e.getMessage());

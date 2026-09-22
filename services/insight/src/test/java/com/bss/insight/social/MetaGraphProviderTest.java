@@ -7,6 +7,9 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import com.bss.insight.dto.PublishedPost;
+import com.bss.insight.dto.SocialMessage;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -74,11 +77,14 @@ class MetaGraphProviderTest {
 
     @Test
     void mentions_mergeTaggedPostsCommentsAndInstagram_andDropTheBrandsOwnReplies() {
-        List<Map<String, Object>> rows = new MetaGraphProvider(RestClient.builder()).mentions(cfg("ig9"));
-        assertThat(rows).extracting(r -> r.get("id")).containsExactly("t1", "c1", "ig1");
-        assertThat(rows.get(0)).containsEntry("platform", "facebook").containsEntry("author", "Ana")
-                .containsEntry("text", "love the new fibre").containsEntry("permalink", "https://fb/t1");
-        assertThat(rows.get(2)).containsEntry("platform", "instagram").containsEntry("handle", "@cara");
+        List<SocialMessage> rows = new MetaGraphProvider(RestClient.builder()).mentions(cfg("ig9"));
+        assertThat(rows).extracting(SocialMessage::id).containsExactly("t1", "c1", "ig1");
+        assertThat(rows.get(0).platform()).isEqualTo("facebook");
+        assertThat(rows.get(0).author()).isEqualTo("Ana");
+        assertThat(rows.get(0).text()).isEqualTo("love the new fibre");
+        assertThat(rows.get(0).permalink()).isEqualTo("https://fb/t1");
+        assertThat(rows.get(2).platform()).isEqualTo("instagram");
+        assertThat(rows.get(2).handle()).isEqualTo("@cara");
         assertThat(lastAuth.get("/v21.0/page1/tagged")).isEqualTo("Bearer PAGE-TOKEN");
     }
 
@@ -86,8 +92,8 @@ class MetaGraphProviderTest {
     void mentions_withoutInstagram_skipTheTagsFeed_andAMissingPermissionFailsOnlyThatFeed() {
         SocialConfig noIg = new SocialConfig("meta", "http://localhost:" + server.getAddress().getPort(), null,
                 "page1", null, "PAGE-TOKEN", null);
-        List<Map<String, Object>> rows = new MetaGraphProvider(RestClient.builder()).mentions(noIg);
-        assertThat(rows).extracting(r -> r.get("id")).containsExactly("t1", "c1");
+        List<SocialMessage> rows = new MetaGraphProvider(RestClient.builder()).mentions(noIg);
+        assertThat(rows).extracting(SocialMessage::id).containsExactly("t1", "c1");
         // a page id the stub answers with a Graph error: the sync survives with zero rows
         SocialConfig broken = new SocialConfig("meta", "http://localhost:" + server.getAddress().getPort(), null,
                 "nopage", null, "PAGE-TOKEN", null);
@@ -96,17 +102,19 @@ class MetaGraphProviderTest {
 
     @Test
     void dms_readInboundMessagesPerPlatform_andDropOurOwnReplies() {
-        List<Map<String, Object>> rows = new MetaGraphProvider(RestClient.builder()).dms(cfg("ig9"));
-        assertThat(rows).extracting(r -> r.get("id")).containsExactly("m1-messenger", "m1-instagram");
-        assertThat(rows.get(0)).containsEntry("platform", "messenger").containsEntry("author", "Dev")
-                .containsEntry("text", "my bill is wrong");
-        assertThat(rows.get(1)).containsEntry("platform", "instagram");
+        List<SocialMessage> rows = new MetaGraphProvider(RestClient.builder()).dms(cfg("ig9"));
+        assertThat(rows).extracting(SocialMessage::id).containsExactly("m1-messenger", "m1-instagram");
+        assertThat(rows.get(0).platform()).isEqualTo("messenger");
+        assertThat(rows.get(0).author()).isEqualTo("Dev");
+        assertThat(rows.get(0).text()).isEqualTo("my bill is wrong");
+        assertThat(rows.get(1).platform()).isEqualTo("instagram");
     }
 
     @Test
     void publish_postsToTheFeed_andReturnsAPermalink() {
-        Map<String, Object> res = new MetaGraphProvider(RestClient.builder()).publish(cfg(null), "Match day boost is on");
-        assertThat(res).containsEntry("id", "page1_99").containsEntry("permalink", "https://www.facebook.com/page1_99");
+        PublishedPost res = new MetaGraphProvider(RestClient.builder()).publish(cfg(null), "Match day boost is on");
+        assertThat(res.id()).isEqualTo("page1_99");
+        assertThat(res.permalink()).isEqualTo("https://www.facebook.com/page1_99");
         assertThat(lastBody.get("/v21.0/page1/feed")).contains("Match day boost is on");
     }
 
@@ -120,8 +128,9 @@ class MetaGraphProviderTest {
 
     @Test
     void leads_comeBackInMetaFieldDataShape() {
-        List<Map<String, Object>> rows = new MetaGraphProvider(RestClient.builder()).leads(cfg(null), "form3");
+        List<JsonNode> rows = new MetaGraphProvider(RestClient.builder()).leads(cfg(null), "form3");
         assertThat(rows).hasSize(1);
-        assertThat(rows.get(0)).containsEntry("id", "l1").containsKey("field_data");
+        assertThat(rows.get(0).path("id").asText()).isEqualTo("l1");
+        assertThat(rows.get(0).has("field_data")).isTrue();
     }
 }

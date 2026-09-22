@@ -1,5 +1,14 @@
 package com.bss.insight.desk;
 
+import com.bss.insight.dto.DecisionInput;
+import com.bss.insight.dto.DeskEventInput;
+import com.bss.insight.dto.DeskExport;
+import com.bss.insight.dto.DeskIngestReceipt;
+import com.bss.insight.dto.DeskPresetView;
+import com.bss.insight.dto.DeskSuggestion;
+import com.bss.insight.dto.FrictionReport;
+import com.bss.insight.dto.SuggestedAction;
+import com.bss.insight.dto.SuggestionDecision;
 import com.bss.insight.entity.DeskDecision;
 import com.bss.insight.entity.DeskEvent;
 import com.bss.insight.entity.DeskPreset;
@@ -9,7 +18,9 @@ import com.bss.insight.repository.DeskPresetRepository;
 import com.bss.insight.security.TenantRegistry;
 import com.bss.insight.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.OffsetDateTime;
@@ -83,15 +94,15 @@ public class DeskLearningService {
     /* ------------------------------------------------------------------ ingest */
 
     @Transactional
-    public Map<String, Object> ingest(List<Map<String, Object>> batch) {
+    public DeskIngestReceipt ingest(List<DeskEventInput> batch) {
         if (!enabled()) {
-            return Map.of("accepted", 0, "enabled", false);
+            return new DeskIngestReceipt(0, false);
         }
         String tenant = tenantScope.currentTenantId();
         String actor = actorHash(tenant);
         int n = 0;
-        for (Map<String, Object> e : batch == null ? List.<Map<String, Object>>of() : batch) {
-            String event = str(e.get("event"));
+        for (DeskEventInput e : batch == null ? List.<DeskEventInput>of() : batch) {
+            String event = e.event();
             if (event == null || event.isBlank()) {
                 continue;
             }
@@ -99,13 +110,14 @@ public class DeskLearningService {
             d.setId(UUID.randomUUID().toString());
             d.setTenantId(tenant);
             d.setActorHash(actor);
-            d.setSessionId(trim(str(e.get("session")), 64));
-            d.setDesk(trim(str(e.getOrDefault("desk", "console")), 32));
+            d.setSessionId(trim(e.session(), 64));
+            d.setDesk(trim(e.desk() == null ? "console" : e.desk(), 32));
             d.setEvent(trim(event, 32));
-            d.setTarget(trim(str(e.get("target")), 128));
-            Object props = e.get("props");
+            d.setTarget(trim(e.target(), 128));
+            JsonNode props = e.props();
             try {
-                d.setProps(props == null ? null : trim(json.writeValueAsString(scrub(props)), 4000));
+                d.setProps(props == null || props.isNull() ? null
+                        : trim(json.writeValueAsString(scrub(json.convertValue(props, Object.class))), 4000));
             } catch (Exception ex) {
                 d.setProps(null);
             }
@@ -113,11 +125,10 @@ public class DeskLearningService {
             events.save(d);
             n++;
         }
-        return Map.of("accepted", n, "enabled", true);
+        return new DeskIngestReceipt(n, true);
     }
 
     /** No free text that could carry a customer: values are kept only for short, enumerable fields. */
-    @SuppressWarnings("unchecked")
     private Object scrub(Object props) {
         if (!(props instanceof Map<?, ?> m)) {
             return props;
@@ -150,98 +161,78 @@ public class DeskLearningService {
     /* ------------------------------------------------------------------ friction */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> friction(int days) {
+    public FrictionReport friction(int days) {
         String tenant = tenantScope.currentTenantId();
         List<DeskEvent> all = events.findByTenantIdAndOccurredAtAfterOrderByOccurredAtAsc(tenant,
                 OffsetDateTime.now().minusDays(Math.max(1, Math.min(days, 90))));
         Analysis a = analyse(all);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("enabled", enabled());
-        out.put("days", days);
-        out.put("events", all.size());
-        out.put("activeStaff", all.stream().map(DeskEvent::getActorHash).collect(Collectors.toSet()).size());
-        out.put("abandonedForms", a.abandoned);
-        out.put("repeatedForms", a.repeated);
-        out.put("emptySearches", a.emptySearches);
-        out.put("copilotRewrites", a.rewrites);
-        out.put("unusedFeatures", a.unused);
-        out.put("journeysWithoutHoldout", a.noHoldout);
-        return out;
+        return new FrictionReport(enabled(), days, all.size(),
+                all.stream().map(DeskEvent::getActorHash).collect(Collectors.toSet()).size(),
+                a.abandoned, a.repeated, a.emptySearches, a.rewrites, a.unused, a.noHoldout);
     }
 
     /* ------------------------------------------------------------------ suggestions */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> suggestions() {
+    public List<DeskSuggestion> suggestions() {
         String tenant = tenantScope.currentTenantId();
         List<DeskEvent> all = events.findByTenantIdAndOccurredAtAfterOrderByOccurredAtAsc(tenant, OffsetDateTime.now().minusDays(7));
         Analysis a = analyse(all);
         Set<String> quiet = decisions.findByTenantIdAndDecidedAtAfter(tenant, OffsetDateTime.now().minusDays(30))
                 .stream().map(DeskDecision::getSuggestionId).collect(Collectors.toSet());
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Map<String, Object> r : a.repeated) {
-            Map<String, Object> common = (Map<String, Object>) r.get("commonValues");
+        List<DeskSuggestion> out = new ArrayList<>();
+        for (FrictionReport.RepeatedForm r : a.repeated) {
+            Map<String, String> common = r.commonValues();
             if (common == null || common.isEmpty()) {
                 continue;
             }
-            Map<String, Object> s = suggestion("preset", str(r.get("form")), "Save a preset for the " + r.get("form") + " form",
-                    r.get("count") + " submissions in 7 days shared the same " + common.keySet() + " — one click would prefill them.",
-                    "operator", Map.of("kind", "preset", "desk", str(r.get("desk")), "form", str(r.get("form")), "values", common), quiet);
+            DeskSuggestion s = suggestion("preset", r.form(), "Save a preset for the " + r.form() + " form",
+                    r.count() + " submissions in 7 days shared the same " + common.keySet() + " — one click would prefill them.",
+                    "operator", SuggestedAction.Preset.of(r.desk(), r.form(), common), quiet);
             // structured facts beside the sentence, so a desk can say them in its own words (page titles, field labels)
-            s.put("form", str(r.get("form")));
-            s.put("fields", new ArrayList<>(common.keySet()));
-            s.put("count", r.get("count"));
-            out.add(s);
+            out.add(s.preset(r.form(), new ArrayList<>(common.keySet()), r.count()));
         }
-        for (Map<String, Object> j : a.noHoldout) {
-            out.add(suggestion("holdout", str(j.get("journeyId")), "Add a holdout to the journey \"" + j.get("name") + "\"",
+        for (FrictionReport.JourneyWithoutHoldout j : a.noHoldout) {
+            out.add(suggestion("holdout", j.journeyId(), "Add a holdout to the journey \"" + j.name() + "\"",
                     "Created without a control group, so its lift cannot be measured. 10 % held out keeps the claim honest.",
-                    "operator", Map.of("kind", "action", "method", "PATCH",
-                            "path", "/tmf-api/campaignManagement/v4/journey/" + j.get("journeyId"),
-                            "body", Map.of("holdoutPercent", 10)), quiet));
+                    "operator", SuggestedAction.Http.of("PATCH",
+                            "/tmf-api/campaignManagement/v4/journey/" + j.journeyId(),
+                            json.createObjectNode().put("holdoutPercent", 10)), quiet));
         }
-        for (Map<String, Object> ab : a.abandoned) {
-            if ((int) ab.get("count") >= 2) {
-                Map<String, Object> s = suggestion("abandon", str(ab.get("form")), "People start the " + ab.get("form") + " form and leave",
-                        ab.get("count") + " abandoned starts; most stop at \"" + ab.getOrDefault("stopField", "?") + "\". "
+        for (FrictionReport.AbandonedForm ab : a.abandoned) {
+            if (ab.count() >= 2) {
+                String stop = ab.stopField() == null ? "?" : ab.stopField();
+                DeskSuggestion s = suggestion("abandon", ab.form(), "People start the " + ab.form() + " form and leave",
+                        ab.count() + " abandoned starts; most stop at \"" + stop + "\". "
                                 + "A default, a hint or a preset there would help.", "vendor", null, quiet);
-                s.put("form", str(ab.get("form")));
-                s.put("stopField", str(ab.getOrDefault("stopField", "")));
-                s.put("count", ab.get("count"));
-                out.add(s);
+                out.add(s.abandon(ab.form(), ab.stopField() == null ? "" : ab.stopField(), ab.count()));
             }
         }
-        for (Map<String, Object> s : a.emptySearches) {
-            if ((int) s.get("count") >= 2) {
-                out.add(suggestion("search", str(s.get("query")), "Searches for \"" + s.get("query") + "\" find nothing",
-                        s.get("count") + " times this week. A knowledge article, an alias or a filter would answer it.",
+        for (FrictionReport.EmptySearch s : a.emptySearches) {
+            if (s.count() >= 2) {
+                out.add(suggestion("search", s.query(), "Searches for \"" + s.query() + "\" find nothing",
+                        s.count() + " times this week. A knowledge article, an alias or a filter would answer it.",
                         "operator", null, quiet));
             }
         }
-        for (Map<String, Object> rw : a.rewrites) {
-            if ((int) rw.get("count") >= 2) {
-                Map<String, Object> s = suggestion("rewrite", str(rw.get("form")), "Copilot drafts for " + rw.get("form") + " are rewritten before use",
-                        rw.get("count") + " drafts changed by more than half. The prompt or its defaults are off for this tenant.",
+        for (FrictionReport.CopilotRewrite rw : a.rewrites) {
+            if (rw.count() >= 2) {
+                DeskSuggestion s = suggestion("rewrite", rw.form(), "Copilot drafts for " + rw.form() + " are rewritten before use",
+                        rw.count() + " drafts changed by more than half. The prompt or its defaults are off for this tenant.",
                         "vendor", null, quiet);
-                s.put("form", str(rw.get("form")));
-                s.put("count", rw.get("count"));
-                out.add(s);
+                out.add(s.rewrite(rw.form(), rw.count()));
             }
         }
         // "never opened" only means something once the desk has been used: a week of
         // one person poking at a few tabs says nothing about the other fifty pages
         int people = all.stream().map(DeskEvent::getActorHash).collect(Collectors.toSet()).size();
         if (!a.unused.isEmpty() && all.size() >= UNUSED_MIN_ACTIONS && a.opened >= UNUSED_MIN_OPENED && people >= UNUSED_MIN_PEOPLE) {
-            Map<String, Object> s = suggestion("unused", "features", a.unused.size() + " pages nobody opened this week",
+            DeskSuggestion s = suggestion("unused", "features", a.unused.size() + " pages nobody opened this week",
                     "In " + all.size() + " desk actions by " + people + (people == 1 ? " person" : " people") + ", "
                             + a.opened + " pages were used and these never: "
                             + String.join(", ", a.unused.stream().limit(8).toList()) + (a.unused.size() > 8 ? ", …" : "")
                             + ". Open one to see what it is for, or tell us if this desk never needs it.", "vendor", null, quiet);
-            s.put("features", a.unused);
-            s.put("opened", a.opened);
-            s.put("actions", all.size());
-            s.put("people", people);
-            out.add(s);
+            out.add(s.unused(a.unused, a.opened, all.size(), people));
         }
         return out;
     }
@@ -253,41 +244,37 @@ public class DeskLearningService {
     static final int UNUSED_MIN_PEOPLE = 2;
 
     @Transactional
-    public Map<String, Object> decide(String suggestionId, String decision) {
+    public SuggestionDecision decide(String suggestionId, String decision) {
         String tenant = tenantScope.currentTenantId();
-        Map<String, Object> found = suggestions().stream().filter(s -> suggestionId.equals(s.get("id"))).findFirst().orElse(null);
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", suggestionId);
-        result.put("decision", decision);
-        if (found != null && "accepted".equals(decision) && found.get("action") instanceof Map<?, ?> action) {
-            if ("preset".equals(action.get("kind"))) {
-                String valuesJson;
-                try {
-                    valuesJson = json.writeValueAsString(action.get("values"));
-                } catch (Exception e) {
-                    valuesJson = "{}";
-                }
-                // the same preset accepted twice is one preset
-                final String wanted = valuesJson;
-                DeskPreset existing = presets.findByTenantIdAndDeskAndFormOrderByCreatedAtDesc(tenant, str(action.get("desk")), str(action.get("form")))
-                        .stream().filter(x -> wanted.equals(x.getValuesJson())).findFirst().orElse(null);
-                if (existing != null) {
-                    result.put("preset", presetView(existing));
-                    return result;
-                }
-                DeskPreset p = new DeskPreset();
-                p.setId(UUID.randomUUID().toString());
-                p.setTenantId(tenant);
-                p.setDesk(str(action.get("desk")));
-                p.setForm(str(action.get("form")));
-                p.setName("Preset · " + String.join(", ", ((Map<?, ?>) action.get("values")).values().stream().map(String::valueOf).limit(3).toList()));
-                p.setValuesJson(valuesJson);
-                p.setCreatedAt(OffsetDateTime.now());
-                presets.save(p);
-                result.put("preset", presetView(p));
-            } else {
-                result.put("action", action); // the desk executes it with the user's own token
+        DeskSuggestion found = suggestions().stream().filter(s -> suggestionId.equals(s.id())).findFirst().orElse(null);
+        DeskPresetView preset = null;
+        SuggestedAction action = null;
+        if (found != null && "accepted".equals(decision) && found.action() instanceof SuggestedAction.Preset p) {
+            String valuesJson;
+            try {
+                valuesJson = json.writeValueAsString(p.values());
+            } catch (Exception e) {
+                valuesJson = "{}";
             }
+            // the same preset accepted twice is one preset
+            final String wanted = valuesJson;
+            DeskPreset existing = presets.findByTenantIdAndDeskAndFormOrderByCreatedAtDesc(tenant, p.desk(), p.form())
+                    .stream().filter(x -> wanted.equals(x.getValuesJson())).findFirst().orElse(null);
+            if (existing != null) {
+                return new SuggestionDecision(suggestionId, decision, presetView(existing), null);
+            }
+            DeskPreset saved = new DeskPreset();
+            saved.setId(UUID.randomUUID().toString());
+            saved.setTenantId(tenant);
+            saved.setDesk(p.desk());
+            saved.setForm(p.form());
+            saved.setName("Preset · " + String.join(", ", p.values().values().stream().limit(3).toList()));
+            saved.setValuesJson(valuesJson);
+            saved.setCreatedAt(OffsetDateTime.now());
+            presets.save(saved);
+            preset = presetView(saved);
+        } else if (found != null && "accepted".equals(decision) && found.action() instanceof SuggestedAction.Http h) {
+            action = h; // the desk executes it with the user's own token
         }
         DeskDecision d = new DeskDecision();
         d.setId(UUID.randomUUID().toString());
@@ -298,11 +285,11 @@ public class DeskLearningService {
         decisions.save(d);
         // the human's verdict is the suggestion's outcome
         decisionLog.outcome(tenant, "desk-" + suggestionId, decision, null, null);
-        return result;
+        return new SuggestionDecision(suggestionId, decision, preset, action);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> presets(String desk, String form) {
+    public List<DeskPresetView> presets(String desk, String form) {
         String tenant = tenantScope.currentTenantId();
         List<DeskPreset> rows = form == null || form.isBlank()
                 ? presets.findByTenantIdOrderByCreatedAtDesc(tenant)
@@ -312,30 +299,24 @@ public class DeskLearningService {
 
     /** Vendor feed material: counts only. No hashes, no values, no tenant name — the caller adds nothing either. */
     @Transactional(readOnly = true)
-    public Map<String, Object> export(int days) {
-        Map<String, Object> f = friction(days);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("days", days);
-        out.put("events", f.get("events"));
-        out.put("activeStaff", f.get("activeStaff"));
-        out.put("abandonedForms", ((List<Map<String, Object>>) f.get("abandonedForms")).stream()
-                .map(x -> Map.of("form", x.get("form"), "count", x.get("count"), "stopField", x.getOrDefault("stopField", ""))).toList());
-        out.put("repeatedForms", ((List<Map<String, Object>>) f.get("repeatedForms")).stream()
-                .map(x -> Map.of("form", x.get("form"), "count", x.get("count"), "sharedFields", ((Map<?, ?>) x.get("commonValues")).keySet())).toList());
-        out.put("emptySearchCount", ((List<?>) f.get("emptySearches")).size());
-        out.put("copilotRewrites", f.get("copilotRewrites"));
-        out.put("unusedFeatures", f.get("unusedFeatures"));
-        return out;
+    public DeskExport export(int days) {
+        FrictionReport f = friction(days);
+        return new DeskExport(days, f.events(), f.activeStaff(),
+                f.abandonedForms().stream().map(x -> new DeskExport.Abandoned(x.form(), x.count(),
+                        x.stopField() == null ? "" : x.stopField())).toList(),
+                f.repeatedForms().stream().map(x -> new DeskExport.Repeated(x.form(), x.count(),
+                        x.commonValues().keySet())).toList(),
+                f.emptySearches().size(), f.copilotRewrites(), f.unusedFeatures());
     }
 
     /* ------------------------------------------------------------------ analysis */
 
     private static final class Analysis {
-        List<Map<String, Object>> abandoned = new ArrayList<>();
-        List<Map<String, Object>> repeated = new ArrayList<>();
-        List<Map<String, Object>> emptySearches = new ArrayList<>();
-        List<Map<String, Object>> rewrites = new ArrayList<>();
-        List<Map<String, Object>> noHoldout = new ArrayList<>();
+        List<FrictionReport.AbandonedForm> abandoned = new ArrayList<>();
+        List<FrictionReport.RepeatedForm> repeated = new ArrayList<>();
+        List<FrictionReport.EmptySearch> emptySearches = new ArrayList<>();
+        List<FrictionReport.CopilotRewrite> rewrites = new ArrayList<>();
+        List<FrictionReport.JourneyWithoutHoldout> noHoldout = new ArrayList<>();
         List<String> unused = new ArrayList<>();
         int opened;
     }
@@ -368,7 +349,7 @@ public class DeskLearningService {
                         String h = String.valueOf(values.get("holdoutPercent")).trim();
                         String jid = str(p.get("createdId"));
                         if ((h.isEmpty() || "0".equals(h) || "0.0".equals(h)) && jid != null && !jid.isBlank()) {
-                            a.noHoldout.add(Map.of("journeyId", jid, "name", str(p.getOrDefault("createdName", "journey"))));
+                            a.noHoldout.add(new FrictionReport.JourneyWithoutHoldout(jid, str(p.getOrDefault("createdName", "journey"))));
                         }
                     }
                 }
@@ -391,18 +372,16 @@ public class DeskLearningService {
             if (lf != null) stopFields.computeIfAbsent(form, k -> new HashMap<>()).merge(lf, 1, Integer::sum);
         }
         for (Map.Entry<String, int[]> en : abandonedByForm.entrySet()) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("form", en.getKey());
-            row.put("count", en.getValue()[0]);
             Map<String, Integer> sf = stopFields.get(en.getKey());
-            if (sf != null) row.put("stopField", sf.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(""));
-            a.abandoned.add(row);
+            String stop = sf == null ? null
+                    : sf.entrySet().stream().max(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse("");
+            a.abandoned.add(new FrictionReport.AbandonedForm(en.getKey(), en.getValue()[0], stop));
         }
         // repeated: same actor, same form, 3+ submits sharing values
         for (Map.Entry<String, List<Map<String, Object>>> en : submitsByActorForm.entrySet()) {
             List<Map<String, Object>> subs = en.getValue();
             if (subs.size() < 3) continue;
-            Map<String, Object> common = new TreeMap<>();
+            Map<String, String> common = new TreeMap<>();
             for (Map.Entry<String, Object> kv : subs.get(0).entrySet()) {
                 String k = kv.getKey();
                 String v = String.valueOf(kv.getValue());
@@ -410,15 +389,10 @@ public class DeskLearningService {
                 if (subs.stream().allMatch(s -> v.equals(String.valueOf(s.get(k))))) common.put(k, v);
             }
             String[] parts = en.getKey().split("\\|", 3);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("desk", parts[1]);
-            row.put("form", parts[2]);
-            row.put("count", subs.size());
-            row.put("commonValues", common);
-            a.repeated.add(row);
+            a.repeated.add(new FrictionReport.RepeatedForm(parts[1], parts[2], subs.size(), common));
         }
-        emptyQueries.forEach((q, c) -> { if (!q.isBlank()) a.emptySearches.add(Map.of("query", q, "count", c)); });
-        rewriteByForm.forEach((f, c) -> a.rewrites.add(Map.of("form", f, "count", c)));
+        emptyQueries.forEach((q, c) -> { if (!q.isBlank()) a.emptySearches.add(new FrictionReport.EmptySearch(q, c)); });
+        rewriteByForm.forEach((f, c) -> a.rewrites.add(new FrictionReport.CopilotRewrite(f, c)));
         a.unused = tabs.stream().filter(t -> !opened.contains(t)).toList();
         a.opened = opened.size();
         return a;
@@ -426,64 +400,40 @@ public class DeskLearningService {
 
     /* ------------------------------------------------------------------ helpers */
 
-    private Map<String, Object> suggestion(String kind, String target, String title, String evidence, String audience,
-            Map<String, Object> action, Set<String> quiet) {
+    private DeskSuggestion suggestion(String kind, String target, String title, String evidence, String audience,
+            SuggestedAction action, Set<String> quiet) {
         String id = kind + "-" + sha(kind + "|" + target).substring(0, 12);
-        Map<String, Object> s = new LinkedHashMap<>();
-        s.put("id", id);
-        s.put("kind", kind);
-        s.put("target", target);
-        s.put("title", title);
-        s.put("evidence", evidence);
-        s.put("audience", audience);
-        if (action != null) s.put("action", action);
-        s.put("quiet", quiet.contains(id));
         // the suggestion IS a decision of the BSS (desk.suggestion): logged once
         // per content-derived id, so the accept/dismiss can be attributed later
         String decisionId = "desk-" + id;
-        s.put("decisionId", decisionId);
         try {
-            Map<String, Object> record = new LinkedHashMap<>();
-            record.put("decisionId", decisionId);
-            record.put("decisionPoint", "desk.suggestion");
-            record.put("subjectType", "desk");
-            record.put("subjectId", target);
-            record.put("candidates", SUGGESTION_KINDS);
-            record.put("eligibleActions", SUGGESTION_KINDS);
-            record.put("constraints", List.of());
-            record.put("action", kind);
-            record.put("policy", "desk-rules");
-            record.put("policyVersion", "1");
-            record.put("reason", evidence);
-            record.put("context", Map.of("target", target, "audience", audience));
-            record.put("evidence", Map.of("title", title));
-            record.put("autonomy", "medium");
-            record.put("fallback", false);
-            record.put("source", "insight");
-            record.put("decidedAt", OffsetDateTime.now().toString());
-            decisionLog.record(tenantScope.currentTenantId(), record);
+            ObjectNode context = json.createObjectNode();
+            context.put("target", target);
+            context.put("audience", audience);
+            ObjectNode evidenceNode = json.createObjectNode();
+            evidenceNode.put("title", title);
+            JsonNode kinds = json.valueToTree(SUGGESTION_KINDS);
+            decisionLog.record(tenantScope.currentTenantId(), new DecisionInput(decisionId, "desk.suggestion", "desk", target,
+                    kinds, kinds, json.createArrayNode(), kind, null, "desk-rules", "1", evidence, context, evidenceNode,
+                    "medium", false, "insight", OffsetDateTime.now().toString(), null));
         } catch (RuntimeException e) {
             log.debug("desk suggestion {} not logged as a decision: {}", id, e.getMessage());
         }
-        return s;
+        return new DeskSuggestion(id, kind, target, title, evidence, audience, action, quiet.contains(id), decisionId,
+                null, null, null, null, null, null, null, null);
     }
 
     /** Everything the desk rules can suggest — the eligible set of desk.suggestion. */
     private static final List<String> SUGGESTION_KINDS = List.of("preset", "holdout", "abandon", "search", "rewrite", "unused");
 
-    private Map<String, Object> presetView(DeskPreset p) {
-        Map<String, Object> v = new LinkedHashMap<>();
-        v.put("id", p.getId());
-        v.put("desk", p.getDesk());
-        v.put("form", p.getForm());
-        v.put("name", p.getName());
+    private DeskPresetView presetView(DeskPreset p) {
+        JsonNode values;
         try {
-            v.put("values", json.readValue(p.getValuesJson(), new TypeReference<Map<String, Object>>() { }));
+            values = json.readTree(p.getValuesJson());
         } catch (Exception e) {
-            v.put("values", Map.of());
+            values = json.createObjectNode();
         }
-        v.put("createdAt", p.getCreatedAt());
-        return v;
+        return new DeskPresetView(p.getId(), p.getDesk(), p.getForm(), p.getName(), values, p.getCreatedAt());
     }
 
     private Map<String, Object> props(DeskEvent e) {

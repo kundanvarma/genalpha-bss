@@ -1,8 +1,14 @@
 package com.bss.insight.desk;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.DeskEventInput;
+import com.bss.insight.dto.DeskExport;
+import com.bss.insight.dto.DeskIngestReceipt;
+import com.bss.insight.dto.DeskPresetView;
+import com.bss.insight.dto.DeskSuggestion;
+import com.bss.insight.dto.FrictionReport;
+import com.bss.insight.dto.SuggestionDecision;
 import java.util.List;
-import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,38 +29,38 @@ public class DeskLearningController {
 
     /** Desks post batches of what staff did. Any authenticated staff user of the tenant. */
     @PostMapping("/event")
-    public Map<String, Object> ingest(@RequestBody List<Map<String, Object>> batch) {
+    public DeskIngestReceipt ingest(@RequestBody List<DeskEventInput> batch) {
         return service.ingest(batch);
     }
 
     @GetMapping("/friction")
-    public Map<String, Object> friction(@RequestParam(defaultValue = "7") int days) {
+    public FrictionReport friction(@RequestParam(defaultValue = "7") int days) {
         return service.friction(days);
     }
 
     @GetMapping("/suggestions")
-    public List<Map<String, Object>> suggestions() {
+    public List<DeskSuggestion> suggestions() {
         return service.suggestions();
     }
 
     @PostMapping("/suggestions/{id}/accept")
-    public Map<String, Object> accept(@PathVariable String id) {
+    public SuggestionDecision accept(@PathVariable String id) {
         return service.decide(id, "accepted");
     }
 
     @PostMapping("/suggestions/{id}/dismiss")
-    public Map<String, Object> dismiss(@PathVariable String id) {
+    public SuggestionDecision dismiss(@PathVariable String id) {
         return service.decide(id, "dismissed");
     }
 
     @GetMapping("/presets")
-    public List<Map<String, Object>> presets(@RequestParam(required = false) String desk, @RequestParam(required = false) String form) {
+    public List<DeskPresetView> presets(@RequestParam(required = false) String desk, @RequestParam(required = false) String form) {
         return service.presets(desk, form);
     }
 
     /** Anonymised counts for the vendor's backlog feed. */
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(defaultValue = "7") int days) {
+    public DeskExport export(@RequestParam(defaultValue = "7") int days) {
         return service.export(days);
     }
 }

@@ -1,5 +1,11 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.ClassificationInput;
+import com.bss.insight.dto.FlywheelPair;
+import com.bss.insight.dto.SignalClassificationView;
+import com.bss.insight.dto.SignalInput;
+import com.bss.insight.dto.SignalTwin;
+import com.bss.insight.dto.SignalView;
 import com.bss.insight.entity.CustomerSignal;
 import com.bss.insight.entity.SignalClassification;
 import com.bss.insight.events.DomainEventPublisher;
@@ -10,7 +16,10 @@ import com.bss.insight.entity.TwinVault;
 import com.bss.insight.repository.TwinVaultRepository;
 import com.bss.insight.signal.TwinningService;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +36,10 @@ import java.util.UUID;
 
 /**
  * The signal store's front door (SI-P1): redact FIRST, then dedup, then
- * store. Raw text never touches the database — the {@link RedactionService}
- * result is the only text persisted, and the redaction audit rides the row.
- * Idempotent by (tenant, source, sourceRef|text) so connector re-syncs and
- * at-least-once event delivery never duplicate a signal.
+ * store. Raw text never touches the database — the twinning result is the
+ * only text persisted, and the redaction audit rides the row. Idempotent by
+ * (tenant, source, sourceRef|text) so connector re-syncs and at-least-once
+ * event delivery never duplicate a signal.
  */
 @Service
 public class SignalService {
@@ -61,9 +70,9 @@ public class SignalService {
     }
 
     @Transactional
-    public Map<String, Object> ingest(Map<String, Object> dto) {
-        String source = str(dto.get("source"));
-        String rawText = str(dto.get("text"));
+    public SignalView ingest(SignalInput dto) {
+        String source = dto.source();
+        String rawText = dto.text();
         if (source == null || source.isBlank() || rawText == null || rawText.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "source and text are required");
         }
@@ -77,7 +86,7 @@ public class SignalService {
         TwinningService.Twinned clean = twinning.twin(
                 rawText.length() > MAX_TEXT ? rawText.substring(0, MAX_TEXT) : rawText, twinKey);
 
-        String sourceRef = str(dto.get("sourceRef"));
+        String sourceRef = dto.sourceRef();
         String hash = sha256(source + "|" + (sourceRef != null ? sourceRef : clean.redacted()));
         CustomerSignal existing = signals.findByTenantIdAndDedupHash(tenant, hash).orElse(null);
         if (existing != null) {
@@ -89,12 +98,12 @@ public class SignalService {
         s.setTenantId(tenant);
         s.setSource(source);
         s.setSourceRef(sourceRef);
-        s.setPartyId(str(dto.get("partyId")));
-        s.setChannel(str(dto.get("channel")));
-        s.setLang(str(dto.get("lang")));
+        s.setPartyId(dto.partyId());
+        s.setChannel(dto.channel());
+        s.setLang(dto.lang());
         s.setText(clean.redacted());
         s.setTwinText(clean.twin());
-        s.setContext(json(dto.get("context")));
+        s.setContext(json(dto.context()));
         s.setRedactions(clean.counts().isEmpty() ? null : json(clean.counts()));
         s.setDedupHash(hash);
         s.setReceivedAt(OffsetDateTime.now());
@@ -112,7 +121,7 @@ public class SignalService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String source, boolean unclassifiedOnly) {
+    public List<SignalView> list(String source, boolean unclassifiedOnly) {
         String tenant = tenantScope.currentTenantId();
         List<CustomerSignal> rows = source == null || source.isBlank()
                 ? signals.findTop100ByTenantIdOrderByReceivedAtDesc(tenant)
@@ -124,12 +133,9 @@ public class SignalService {
         return rows.stream()
                 .filter(r -> !unclassifiedOnly || !byId.containsKey(r.getId()))
                 .map(r -> {
-                    Map<String, Object> v = view(r, false);
+                    SignalView v = view(r, false);
                     SignalClassification c = byId.get(r.getId());
-                    if (c != null) {
-                        v.put("classification", classificationView(c));
-                    }
-                    return v;
+                    return c == null ? v : v.withClassification(classificationView(c));
                 }).toList();
     }
 
@@ -141,14 +147,19 @@ public class SignalService {
      * churn signal marks the party's trait, and the event goes on the bus.
      */
     @Transactional
-    public Map<String, Object> classify(String signalId, Map<String, Object> dto) {
+    public SignalClassificationView classify(String signalId, ClassificationInput dto) {
         String tenant = tenantScope.currentTenantId();
         CustomerSignal signal = signals.findById(signalId)
                 .filter(x -> tenant.equals(x.getTenantId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "no signal '" + signalId + "'"));
-        Map<String, Object> evidence = dto.get("evidence") instanceof Map<?, ?> e
-                ? castMap(e) : Map.of();
+        Map<String, String> evidence = new LinkedHashMap<>();
+        if (dto.evidence() != null && dto.evidence().isObject()) {
+            for (Map.Entry<String, JsonNode> e : (Iterable<Map.Entry<String, JsonNode>>) dto.evidence()::fields) {
+                JsonNode v = e.getValue();
+                evidence.put(e.getKey(), v.isNull() ? null : v.isValueNode() ? v.asText() : v.toString());
+            }
+        }
         if (evidence.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                     "a classification without evidence quotes is not accepted");
@@ -157,19 +168,19 @@ public class SignalService {
         // twin-space. Re-anchor each one through the vault's offset map into
         // stored-text space BEFORE the verbatim gate — a quote that cuts a
         // surrogate in half cannot re-anchor and drops the classification.
-        if ("twin".equals(str(dto.get("evidenceSpace")))) {
+        if ("twin".equals(dto.evidenceSpace())) {
             String twinText = signal.getTwinText();
             List<TwinningService.TwinSpan> spans = twinSpansOf(signalId, tenant);
             if (twinText == null || spans == null) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "twin evidence offered but the signal has no twin/vault");
             }
-            Map<String, Object> anchored = new LinkedHashMap<>();
-            for (Map.Entry<String, Object> q : evidence.entrySet()) {
+            Map<String, String> anchored = new LinkedHashMap<>();
+            for (Map.Entry<String, String> q : evidence.entrySet()) {
                 if (q.getValue() == null) {
                     continue;
                 }
-                String real = reanchor(String.valueOf(q.getValue()), twinText, spans);
+                String real = reanchor(q.getValue(), twinText, spans);
                 if (real == null) {
                     throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                             "evidence for '" + q.getKey() + "' cannot be re-anchored from the twin");
@@ -177,13 +188,12 @@ public class SignalService {
                 anchored.put(q.getKey(), real);
             }
             evidence = anchored;
-            dto.remove("evidenceSpace");
         }
-        for (Map.Entry<String, Object> quote : evidence.entrySet()) {
+        for (Map.Entry<String, String> quote : evidence.entrySet()) {
             if (quote.getValue() == null) {
                 continue;
             }
-            if (!signal.getText().contains(String.valueOf(quote.getValue()))) {
+            if (!signal.getText().contains(quote.getValue())) {
                 throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
                         "evidence for '" + quote.getKey() + "' is not a verbatim quote from the signal");
             }
@@ -196,17 +206,17 @@ public class SignalService {
                     fresh.setSignalId(signalId);
                     return fresh;
                 });
-        c.setSentiment(str(dto.get("sentiment")));
-        c.setAspect(str(dto.get("aspect")));
-        c.setCategory(str(dto.get("category")));
-        c.setPainPoint(str(dto.get("painPoint")));
-        c.setPainImpact(dto.get("painImpact") instanceof Number n ? n.intValue() : null);
-        c.setLoyaltyIndicator(str(dto.get("loyaltyIndicator")));
-        c.setChurnSignal(Boolean.TRUE.equals(dto.get("churnSignal")));
-        c.setChurnReason(str(dto.get("churnReason")));
+        c.setSentiment(dto.sentiment());
+        c.setAspect(dto.aspect());
+        c.setCategory(dto.category());
+        c.setPainPoint(dto.painPoint());
+        c.setPainImpact(dto.painImpact());
+        c.setLoyaltyIndicator(dto.loyaltyIndicator());
+        c.setChurnSignal(Boolean.TRUE.equals(dto.churnSignal()));
+        c.setChurnReason(dto.churnReason());
         c.setEvidence(json(evidence));
-        c.setProvider(str(dto.get("provider")));
-        c.setModel(str(dto.get("model")));
+        c.setProvider(dto.provider());
+        c.setModel(dto.model());
         c.setClassifiedAt(OffsetDateTime.now());
         classifications.save(c);
 
@@ -274,9 +284,9 @@ public class SignalService {
      * taxonomy and the quoting contract without ever reading a customer.
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> flywheelDataset() {
+    public List<FlywheelPair> flywheelDataset() {
         String tenant = tenantScope.currentTenantId();
-        List<Map<String, Object>> pairs = new java.util.ArrayList<>();
+        List<FlywheelPair> pairs = new java.util.ArrayList<>();
         for (CustomerSignal s : signals.findTop100ByTenantIdOrderByReceivedAtDesc(tenant)) {
             if (s.getTwinText() == null) {
                 continue;
@@ -287,37 +297,28 @@ public class SignalService {
                 continue;
             }
             List<TwinningService.TwinSpan> spans = twinSpansOf(s.getId(), tenant);
-            Map<String, Object> label = classificationView(c);
-            label.remove("provider");
-            label.remove("model");
-            label.remove("classifiedAt");
-            label.remove("@type");
+            SignalClassificationView view = classificationView(c);
             // reverse-anchor the evidence into twin space; a quote that cannot
             // be mapped drops the PAIR — the corpus stays fiction-only
-            Object ev = label.get("evidence");
-            if (ev instanceof Map<?, ?> em && spans != null) {
-                Map<String, Object> twinEv = new LinkedHashMap<>();
+            JsonNode evidence = view.evidence();
+            if (evidence != null && evidence.isObject() && spans != null) {
+                ObjectNode twinEv = objectMapper.createObjectNode();
                 boolean ok = true;
-                for (Map.Entry<?, ?> q : em.entrySet()) {
-                    String mapped = toTwinSpace(String.valueOf(q.getValue()), s.getText(),
-                            s.getTwinText(), spans);
+                for (Map.Entry<String, JsonNode> q : (Iterable<Map.Entry<String, JsonNode>>) evidence::fields) {
+                    String mapped = toTwinSpace(q.getValue().isValueNode() ? q.getValue().asText() : q.getValue().toString(),
+                            s.getText(), s.getTwinText(), spans);
                     if (mapped == null) {
                         ok = false;
                         break;
                     }
-                    twinEv.put(String.valueOf(q.getKey()), mapped);
+                    twinEv.put(q.getKey(), mapped);
                 }
                 if (!ok) {
                     continue;
                 }
-                label.put("evidence", twinEv);
+                evidence = twinEv;
             }
-            Map<String, Object> pair = new LinkedHashMap<>();
-            pair.put("input", s.getTwinText());
-            pair.put("source", s.getSource());
-            if (s.getLang() != null) pair.put("lang", s.getLang());
-            pair.put("output", label);
-            pairs.add(pair);
+            pairs.add(new FlywheelPair(s.getTwinText(), s.getSource(), s.getLang(), view.label(evidence)));
         }
         return pairs;
     }
@@ -348,65 +349,33 @@ public class SignalService {
         return out.toString();
     }
 
-    private Map<String, Object> classificationView(SignalClassification c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        if (c.getSentiment() != null) m.put("sentiment", c.getSentiment());
-        if (c.getAspect() != null) m.put("aspect", c.getAspect());
-        if (c.getCategory() != null) m.put("category", c.getCategory());
-        if (c.getPainPoint() != null) m.put("painPoint", c.getPainPoint());
-        if (c.getPainImpact() != null) m.put("painImpact", c.getPainImpact());
-        if (c.getLoyaltyIndicator() != null) m.put("loyaltyIndicator", c.getLoyaltyIndicator());
-        m.put("churnSignal", c.isChurnSignal());
-        if (c.getChurnReason() != null) m.put("churnReason", c.getChurnReason());
-        if (c.getEvidence() != null) m.put("evidence", read(c.getEvidence()));
-        if (c.getProvider() != null) m.put("provider", c.getProvider());
-        if (c.getModel() != null) m.put("model", c.getModel());
-        m.put("classifiedAt", c.getClassifiedAt());
-        m.put("@type", "SignalClassification");
-        return m;
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> m) {
-        return (Map<String, Object>) m;
+    private SignalClassificationView classificationView(SignalClassification c) {
+        return new SignalClassificationView(c.getSentiment(), c.getAspect(), c.getCategory(), c.getPainPoint(),
+                c.getPainImpact(), c.getLoyaltyIndicator(), c.isChurnSignal(), c.getChurnReason(),
+                c.getEvidence() == null ? null : read(c.getEvidence()), c.getProvider(), c.getModel(),
+                c.getClassifiedAt(), "SignalClassification");
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> twinOf(String signalId) {
+    public SignalTwin twinOf(String signalId) {
         String tenant = tenantScope.currentTenantId();
         CustomerSignal s = signals.findById(signalId)
                 .filter(x -> tenant.equals(x.getTenantId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "no signal '" + signalId + "'"));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("signalId", signalId);
-        out.put("text", s.getText());
-        out.put("twin", s.getTwinText());
-        out.put("linkable", twins.findByTenantIdAndSignalId(tenant, signalId).isPresent());
-        out.put("@type", "SignalTwin");
-        return out;
+        return new SignalTwin(signalId, s.getText(), s.getTwinText(),
+                twins.findByTenantIdAndSignalId(tenant, signalId).isPresent(), "SignalTwin");
     }
 
-    private Map<String, Object> view(CustomerSignal s, boolean duplicate) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", s.getId());
-        m.put("source", s.getSource());
-        if (s.getSourceRef() != null) m.put("sourceRef", s.getSourceRef());
-        if (s.getPartyId() != null) m.put("partyId", s.getPartyId());
-        if (s.getChannel() != null) m.put("channel", s.getChannel());
-        if (s.getLang() != null) m.put("lang", s.getLang());
-        m.put("text", s.getText());
-        if (s.getTwinText() != null) m.put("twin", s.getTwinText());
-        if (s.getContext() != null) m.put("context", read(s.getContext()));
-        if (s.getRedactions() != null) m.put("redactions", read(s.getRedactions()));
-        m.put("receivedAt", s.getReceivedAt());
-        if (duplicate) m.put("duplicate", true);
-        m.put("@type", "CustomerSignal");
-        return m;
+    private SignalView view(CustomerSignal s, boolean duplicate) {
+        return new SignalView(s.getId(), s.getSource(), s.getSourceRef(), s.getPartyId(), s.getChannel(), s.getLang(),
+                s.getText(), s.getTwinText(), s.getContext() == null ? null : read(s.getContext()),
+                s.getRedactions() == null ? null : read(s.getRedactions()), s.getReceivedAt(),
+                duplicate ? Boolean.TRUE : null, "CustomerSignal", null);
     }
 
     private String json(Object v) {
-        if (v == null) {
+        if (v == null || (v instanceof JsonNode n && n.isNull())) {
             return null;
         }
         try {
@@ -416,11 +385,12 @@ public class SignalService {
         }
     }
 
-    private Object read(String json) {
+    /** A stored JSON block as a tree; text that is not JSON comes back as the text it is. */
+    private JsonNode read(String json) {
         try {
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() { });
+            return objectMapper.readTree(json);
         } catch (Exception e) {
-            return json;
+            return TextNode.valueOf(json);
         }
     }
 
@@ -431,9 +401,5 @@ public class SignalService {
         } catch (Exception e) {
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
-    }
-
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
     }
 }

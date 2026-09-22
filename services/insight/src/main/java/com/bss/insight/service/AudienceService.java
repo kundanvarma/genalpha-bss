@@ -2,6 +2,12 @@ package com.bss.insight.service;
 
 import com.bss.insight.api.ApiConstants;
 import com.bss.insight.client.AnalyticsForwarder;
+import com.bss.insight.dto.AudienceExplain;
+import com.bss.insight.dto.AudienceMember;
+import com.bss.insight.dto.AudienceRefreshReceipt;
+import com.bss.insight.dto.AudienceRequest;
+import com.bss.insight.dto.AudienceView;
+import com.bss.insight.dto.Facet;
 import com.bss.insight.entity.Audience;
 import com.bss.insight.entity.AudienceSnapshot;
 import com.bss.insight.entity.PartyTrait;
@@ -14,7 +20,9 @@ import com.bss.insight.repository.VisitorEventRepository;
 import com.bss.insight.repository.VisitorProfileRepository;
 import com.bss.insight.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +37,8 @@ import java.util.UUID;
 /**
  * Saved audiences with a criteria tree, evaluated against the consented,
  * stitched profiles this service holds. The tree is the marketer-friendly
- * replacement for a bare segment string.
+ * replacement for a bare segment string — a document the marketer authored,
+ * kept verbatim ({@link JsonNode} on the wire) and evaluated here.
  */
 @Service
 public class AudienceService {
@@ -71,48 +80,38 @@ public class AudienceService {
      * cadence in production.
      */
     @Transactional
-    public Map<String, Object> refresh(String id) {
+    public AudienceRefreshReceipt refresh(String id) {
         Resolved r = resolve(id);
         Audience a = load(id);
         String tenantId = tenantScope.currentTenantId();
         snapshots.deleteByTenantIdAndAudienceId(tenantId, id);
         OffsetDateTime now = OffsetDateTime.now();
-        for (Map<String, Object> m : r.members()) {
+        for (AudienceMember m : r.members()) {
             AudienceSnapshot s = new AudienceSnapshot();
             s.setId(UUID.randomUUID().toString());
             s.setTenantId(tenantId);
             s.setAudienceId(id);
-            s.setPartyId(m.get("partyId") == null ? null : String.valueOf(m.get("partyId")));
-            s.setEmail(m.get("email") == null ? null : String.valueOf(m.get("email")));
+            s.setPartyId(m.partyId());
+            s.setEmail(m.email());
             s.setCreatedAt(now);
             snapshots.save(s);
         }
         a.setMaterializedAt(now);
         a.setMemberCount(r.members().size());
         audiences.save(a);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("audienceId", id);
-        out.put("path", r.path());
-        out.put("memberCount", r.members().size());
-        out.put("materializedAt", now);
-        return out;
+        return new AudienceRefreshReceipt(id, r.path(), r.members().size(), now);
     }
 
     /** The frozen member set — instant, no recompute. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> snapshotMembers(String id) {
+    public List<AudienceMember> snapshotMembers(String id) {
         return snapshots.findByTenantIdAndAudienceId(tenantScope.currentTenantId(), id).stream()
-                .map(s -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    if (s.getPartyId() != null) m.put("partyId", s.getPartyId());
-                    if (s.getEmail() != null) m.put("email", s.getEmail());
-                    return m;
-                }).toList();
+                .map(s -> AudienceMember.snapshot(s.getPartyId(), s.getEmail())).toList();
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || dto.get("criteria") == null) {
+    public AudienceView create(AudienceRequest dto) {
+        if (dto.name() == null || !dto.hasCriteria()) {
             throw new IllegalArgumentException("name and criteria are required");
         }
         Audience a = new Audience();
@@ -120,34 +119,34 @@ public class AudienceService {
         a.setId(id);
         a.setHref(ApiConstants.BASE_PATH + "/audience/" + id);
         a.setTenantId(tenantScope.currentTenantId());
-        a.setName(String.valueOf(dto.get("name")));
-        a.setCriteria(serialize(dto.get("criteria")));
-        a.setPopulation("prospect".equals(dto.get("population")) ? "prospect"
-                : "organization".equals(dto.get("population")) ? "organization"
-                : "visitor".equals(dto.get("population")) ? "visitor" : "customer");
+        a.setName(dto.name());
+        a.setCriteria(serialize(dto.criteria()));
+        a.setPopulation("prospect".equals(dto.population()) ? "prospect"
+                : "organization".equals(dto.population()) ? "organization"
+                : "visitor".equals(dto.population()) ? "visitor" : "customer");
         a.setCreatedAt(OffsetDateTime.now());
         a.setLastUpdate(OffsetDateTime.now());
-        return toMap(audiences.save(a));
+        return view(audiences.save(a));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<AudienceView> list() {
         return audiences.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(this::view).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String id) {
-        return toMap(load(id));
+    public AudienceView get(String id) {
+        return view(load(id));
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public AudienceView patch(String id, AudienceRequest patch) {
         Audience a = load(id);
-        if (patch.get("name") != null) a.setName(String.valueOf(patch.get("name")));
-        if (patch.get("criteria") != null) a.setCriteria(serialize(patch.get("criteria")));
+        if (patch.name() != null) a.setName(patch.name());
+        if (patch.hasCriteria()) a.setCriteria(serialize(patch.criteria()));
         a.setLastUpdate(OffsetDateTime.now());
-        return toMap(audiences.save(a));
+        return view(audiences.save(a));
     }
 
     /**
@@ -164,17 +163,17 @@ public class AudienceService {
      * set is "who matches", not "who may be messaged regardless".
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> members(String id, Integer limit) {
-        List<Map<String, Object>> resolved = resolve(id).members();
+    public List<AudienceMember> members(String id, Integer limit) {
+        List<AudienceMember> resolved = resolve(id).members();
         // A preview (console drill-down) bounds the work: only enrich what it shows,
         // never a million rows. limit == null means the full set (activation export).
-        List<Map<String, Object>> raw = limit != null && limit > 0 && resolved.size() > limit
+        List<AudienceMember> raw = limit != null && limit > 0 && resolved.size() > limit
                 ? resolved.subList(0, limit) : resolved;
         // Enrich party members with a human label (email) so the console shows WHO
         // is in the audience, not just an opaque id. One query for all emails, then a map.
         java.util.List<String> partyIds = raw.stream()
-                .filter(m -> m.get("partyId") != null && m.get("email") == null)
-                .map(m -> String.valueOf(m.get("partyId"))).distinct().toList();
+                .filter(m -> m.partyId() != null && m.email() == null)
+                .map(AudienceMember::partyId).distinct().toList();
         if (partyIds.isEmpty()) {
             return raw;
         }
@@ -189,17 +188,10 @@ public class AudienceService {
                 emailByParty.putIfAbsent(t.getPartyId(), t.getTraitValue());
             }
         }
-        List<Map<String, Object>> out = new java.util.ArrayList<>(raw.size());
-        for (Map<String, Object> m : raw) {
-            Map<String, Object> copy = new LinkedHashMap<>(m);
-            Object pid = copy.get("partyId");
-            if (pid != null && copy.get("email") == null) {
-                String email = emailByParty.get(String.valueOf(pid));
-                if (email != null) {
-                    copy.put("email", email);
-                }
-            }
-            out.add(copy);
+        List<AudienceMember> out = new java.util.ArrayList<>(raw.size());
+        for (AudienceMember m : raw) {
+            String email = m.partyId() != null && m.email() == null ? emailByParty.get(m.partyId()) : null;
+            out.add(email != null ? m.withEmail(email) : m);
         }
         return out;
     }
@@ -217,9 +209,9 @@ public class AudienceService {
      * so ops (and a test) can confirm a trait-only audience takes the scalable
      * set-based SQL path rather than the in-memory fallback. */
     @Transactional(readOnly = true)
-    public Map<String, Object> membersExplain(String id) {
+    public AudienceExplain membersExplain(String id) {
         Resolved r = resolve(id);
-        return Map.of("path", r.path(), "count", r.members().size(), "members", r.members());
+        return new AudienceExplain(r.path(), r.members().size(), r.members());
     }
 
     private Resolved resolve(String id) {
@@ -267,16 +259,16 @@ public class AudienceService {
      * all-trait-parties EXCEPT child). One query, no per-row loop — the real
      * scale path. RLS + an explicit tenant filter keep it tenant-scoped.
      */
-    private List<Map<String, Object>> setBasedMembers(Object criteria, String tenantId) {
+    private List<AudienceMember> setBasedMembers(Object criteria, String tenantId) {
         SqlCtx ctx = new SqlCtx();
         String sql = "SELECT DISTINCT party_id FROM " + compile(criteria, ctx) + " AS seg";
         jakarta.persistence.Query q = em.createNativeQuery(sql);
         q.setParameter("t", tenantId);
         ctx.params.forEach(q::setParameter);
         List<?> rows = q.getResultList();
-        List<Map<String, Object>> out = new java.util.ArrayList<>(rows.size());
+        List<AudienceMember> out = new java.util.ArrayList<>(rows.size());
         for (Object r : rows) {
-            out.add(Map.of("partyId", String.valueOf(r)));
+            out.add(AudienceMember.party(String.valueOf(r)));
         }
         return out;
     }
@@ -326,9 +318,9 @@ public class AudienceService {
         final Map<String, Object> params = new LinkedHashMap<>();
     }
 
-    private record Resolved(String path, List<Map<String, Object>> members) { }
+    private record Resolved(String path, List<AudienceMember> members) { }
 
-    private List<Map<String, Object>> inMemoryMembers(Object criteria, String tenantId) {
+    private List<AudienceMember> inMemoryMembers(Object criteria, String tenantId) {
         // Only touch the signals the tree actually references — a pure trait
         // audience must not pay for per-row browsing/GA4 work.
         boolean usesBehaviour = treeUses(criteria, "interest");
@@ -352,7 +344,7 @@ public class AudienceService {
         // candidate base = trait-carrying customers ∪ consented profiles
         Set<String> candidates = new LinkedHashSet<>(traitsByParty.keySet());
         candidates.addAll(profileByParty.keySet());
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        List<AudienceMember> out = new java.util.ArrayList<>();
         for (String partyId : candidates) {
             Set<String> interests = new LinkedHashSet<>();
             List<String> ga4 = List.of();
@@ -367,7 +359,7 @@ public class AudienceService {
             }
             Map<String, Set<String>> byKey = traitsByParty.getOrDefault(partyId, Map.of());
             if (matches(criteria, interests, ga4, byKey)) {
-                out.add(Map.of("partyId", partyId));
+                out.add(AudienceMember.party(partyId));
             }
         }
         return out;
@@ -392,8 +384,8 @@ public class AudienceService {
      * bought list, an unverified import) is NEVER returned, so a downstream send
      * can only ever reach a contact the operator may lawfully message.
      */
-    private List<Map<String, Object>> prospectMembers(Object criteria, String tenantId) {
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
+    private List<AudienceMember> prospectMembers(Object criteria, String tenantId) {
+        List<AudienceMember> out = new java.util.ArrayList<>();
         boolean emptyTree = !(criteria instanceof Map<?, ?> m)
                 || (!(m.get("all") instanceof List<?> a && !a.isEmpty())
                     && !(m.get("any") instanceof List<?> o && !o.isEmpty()) && m.get("not") == null && m.get("type") == null);
@@ -405,8 +397,7 @@ public class AudienceService {
             if (p.getSource() != null) facts.put("source", Set.of(p.getSource()));
             if (p.getConsent() != null) facts.put("consent", Set.of(p.getConsent()));
             if (emptyTree || matches(criteria, Set.of(), List.of(), facts)) {
-                out.add(Map.of("prospectId", p.getId(), "email", p.getEmail() == null ? "" : p.getEmail(),
-                        "consent", p.getConsent()));
+                out.add(AudienceMember.prospect(p.getId(), p.getEmail() == null ? "" : p.getEmail(), p.getConsent()));
             }
         }
         return out;
@@ -418,11 +409,11 @@ public class AudienceService {
      * account required. The identifier is a cookie/device id (not email), so this
      * feeds on-site personalization + web retargeting lists, not email export.
      */
-    private List<Map<String, Object>> visitorMembers(Object criteria, String tenantId) {
+    private List<AudienceMember> visitorMembers(Object criteria, String tenantId) {
         boolean emptyTree = !(criteria instanceof Map<?, ?> m)
                 || (!(m.get("all") instanceof List<?> a && !a.isEmpty())
                     && !(m.get("any") instanceof List<?> o && !o.isEmpty()) && m.get("not") == null && m.get("type") == null);
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        List<AudienceMember> out = new java.util.ArrayList<>();
         for (VisitorProfile p : profiles.findByTenantId(tenantId)) {
             if (!p.isPersonalizationConsent()) {
                 continue; // retargeting rides the personalization-consent spine
@@ -432,10 +423,7 @@ public class AudienceService {
                 if (row.length > 0 && row[0] != null) interests.add(String.valueOf(row[0]));
             }
             if (emptyTree || matches(criteria, interests, List.of(), Map.of())) {
-                Map<String, Object> mem = new LinkedHashMap<>();
-                mem.put("visitorId", p.getVisitorId());
-                if (p.getPartyId() != null) mem.put("partyId", p.getPartyId());
-                out.add(mem);
+                out.add(AudienceMember.visitor(p.getVisitorId(), p.getPartyId()));
             }
         }
         return out;
@@ -444,10 +432,11 @@ public class AudienceService {
     /** The facets a builder can offer as real choices: the BSS traits this
      * tenant actually holds, grouped so the UI can present key -> values. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> facets() {
+    public List<Facet> facets() {
         String tenantId = tenantScope.currentTenantId();
         return traits.distinctKeyValues(tenantId).stream()
-                .map(kv -> Map.<String, Object>of("key", kv[0], "value", kv[1]))
+                .map(kv -> new Facet(kv[0] == null ? null : String.valueOf(kv[0]),
+                        kv[1] == null ? null : String.valueOf(kv[1])))
                 .toList();
     }
 
@@ -526,9 +515,10 @@ public class AudienceService {
                 .orElseThrow(() -> new IllegalArgumentException("audience not found: " + id));
     }
 
-    private String serialize(Object criteria) {
+    /** The tree as the marketer sent it — a JSON string or an object — stored as text after a parse check. */
+    private String serialize(JsonNode criteria) {
         try {
-            String json = criteria instanceof String s ? s : objectMapper.writeValueAsString(criteria);
+            String json = criteria.isTextual() ? criteria.asText() : objectMapper.writeValueAsString(criteria);
             objectMapper.readValue(json, OBJECT); // validate it parses as an object
             return json;
         } catch (Exception e) {
@@ -536,6 +526,7 @@ public class AudienceService {
         }
     }
 
+    /** The evaluation form of the stored tree: nested maps and lists the matcher walks. */
     private Object parse(String criteria) {
         try {
             return objectMapper.readValue(criteria == null ? "{}" : criteria, OBJECT);
@@ -544,21 +535,15 @@ public class AudienceService {
         }
     }
 
-    private Map<String, Object> toMap(Audience a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("href", a.getHref());
-        map.put("name", a.getName());
-        map.put("population", a.getPopulation() == null ? "customer" : a.getPopulation());
-        if (a.getMaterializedAt() != null) map.put("materializedAt", a.getMaterializedAt());
-        if (a.getMemberCount() != null) map.put("memberCount", a.getMemberCount());
+    private AudienceView view(Audience a) {
+        JsonNode criteria;
         try {
-            map.put("criteria", objectMapper.readValue(a.getCriteria() == null ? "{}" : a.getCriteria(), OBJECT));
+            criteria = objectMapper.readTree(a.getCriteria() == null ? "{}" : a.getCriteria());
         } catch (Exception e) {
-            map.put("criteria", a.getCriteria());
+            criteria = TextNode.valueOf(a.getCriteria());
         }
-        map.put("lastUpdate", a.getLastUpdate());
-        map.put("@type", "Audience");
-        return map;
+        return new AudienceView(a.getId(), a.getHref(), a.getName(),
+                a.getPopulation() == null ? "customer" : a.getPopulation(),
+                a.getMaterializedAt(), a.getMemberCount(), criteria, a.getLastUpdate(), "Audience");
     }
 }

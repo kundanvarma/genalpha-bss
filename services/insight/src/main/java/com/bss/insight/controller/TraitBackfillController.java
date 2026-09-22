@@ -1,6 +1,7 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.BackfillRequest;
 import com.bss.insight.service.PartyTraitService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * CDP backfill: ingest traits for EXISTING customers whose account/order events
@@ -32,31 +32,22 @@ public class TraitBackfillController {
     /** Batch write: {traits:[{partyId,key,value,multi?}]}. multi=true adds to a
      * multi-valued trait (e.g. product holdings); otherwise it replaces. */
     @PostMapping("/backfill")
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> backfill(@RequestBody Map<String, Object> body) {
-        Object raw = body.get("traits");
-        List<Map<String, Object>> items = raw instanceof List<?> l ? (List<Map<String, Object>>) l : List.of();
+    public ResponseEntity<BackfillRequest.Receipt> backfill(@RequestBody BackfillRequest body) {
+        List<BackfillRequest.TraitRow> items = body.traits() == null ? List.of() : body.traits();
         int written = 0;
         int skipped = 0;
-        for (Map<String, Object> t : items) {
-            String partyId = str(t.get("partyId"));
-            String key = str(t.get("key"));
-            String value = str(t.get("value"));
-            if (partyId == null || key == null || value == null || value.isBlank()) {
+        for (BackfillRequest.TraitRow t : items) {
+            if (t.partyId() == null || t.key() == null || t.value() == null || t.value().isBlank()) {
                 skipped++;
                 continue;
             }
-            if (Boolean.TRUE.equals(t.get("multi"))) {
-                traits.upsert(partyId, key, value);
+            if (Boolean.TRUE.equals(t.multi())) {
+                traits.upsert(t.partyId(), t.key(), t.value());
             } else {
-                traits.setTrait(partyId, key, value);
+                traits.setTrait(t.partyId(), t.key(), t.value());
             }
             written++;
         }
-        return ResponseEntity.ok(Map.of("written", written, "skipped", skipped));
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
+        return ResponseEntity.ok(new BackfillRequest.Receipt(written, skipped));
     }
 }

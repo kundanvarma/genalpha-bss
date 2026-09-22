@@ -1,12 +1,14 @@
 package com.bss.insight.service;
 
+import com.bss.insight.dto.SignalInput;
+import com.bss.insight.dto.SocialListeningDtos;
+import com.bss.insight.dto.SocialMessage;
 import com.bss.insight.entity.SocialMention;
 import com.bss.insight.repository.SocialMentionRepository;
 import com.bss.insight.security.TenantScope;
-import org.springframework.beans.factory.annotation.Value;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestClient;
 
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -45,17 +47,16 @@ public class SocialListeningService {
 
     /** Pull the brand's mentions, score sentiment, store the new ones. */
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> sync() {
+    public SocialListeningDtos.SyncReceipt sync() {
         String tenantId = tenantScope.currentTenantId();
         int ingested = 0;
         com.bss.insight.social.SocialConfig cfg = providers.current();
         boolean enabled = cfg.enabled();
         if (enabled) {
-            List<Map<String, Object>> data = providers.providerFor(cfg).mentions(cfg);
-            for (Map<String, Object> m : data) {
-                String platform = String.valueOf(m.getOrDefault("platform", "x"));
-                String externalId = m.get("id") == null ? null : String.valueOf(m.get("id"));
+            List<SocialMessage> data = providers.providerFor(cfg).mentions(cfg);
+            for (SocialMessage m : data) {
+                String platform = m.platformOr("x");
+                String externalId = m.id();
                 if (externalId == null
                         || mentions.existsByTenantIdAndPlatformAndExternalId(tenantId, platform, externalId)) {
                     continue;
@@ -65,8 +66,8 @@ public class SocialListeningService {
                 sm.setTenantId(tenantId);
                 sm.setPlatform(platform);
                 sm.setExternalId(externalId);
-                sm.setAuthor(m.get("author") == null ? null : String.valueOf(m.get("author")));
-                String text = m.get("text") == null ? "" : String.valueOf(m.get("text"));
+                sm.setAuthor(m.author());
+                String text = m.textOrEmpty();
                 sm.setText(text);
                 sm.setSentiment(score(text));
                 sm.setCreatedAt(OffsetDateTime.now());
@@ -74,52 +75,39 @@ public class SocialListeningService {
                 // a mention IS a customer signal (SI-P1) — same door, same firewall;
                 // a failed ingest must never break the listening sync
                 try {
-                    signalService.ingest(java.util.Map.of(
-                            "source", "mention", "sourceRef", platform + ":" + externalId,
-                            "channel", "social", "text", text,
-                            "context", java.util.Map.of("platform", platform, "sentiment", sm.getSentiment())));
+                    signalService.ingest(new SignalInput("mention", text, platform + ":" + externalId, null, "social",
+                            null, JsonNodeFactory.instance.objectNode()
+                                    .put("platform", platform).put("sentiment", sm.getSentiment())));
                 } catch (RuntimeException e) {
                     // non-fatal by design
                 }
                 ingested++;
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("ingested", ingested);
-        out.put("enabled", enabled);
-        return out;
+        return new SocialListeningDtos.SyncReceipt(ingested, enabled);
     }
 
     /** Share-of-mood + by-platform, for a listening dashboard. */
     @Transactional(readOnly = true)
-    public Map<String, Object> summary() {
+    public SocialListeningDtos.Summary summary() {
         List<SocialMention> all = mentions.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
-        Map<String, Integer> sentiment = new LinkedHashMap<>(Map.of("positive", 0, "neutral", 0, "negative", 0));
+        Map<String, Integer> sentiment = new LinkedHashMap<>();
+        sentiment.put("positive", 0);
+        sentiment.put("neutral", 0);
+        sentiment.put("negative", 0);
         Map<String, Integer> byPlatform = new TreeMap<>();
         for (SocialMention m : all) {
             sentiment.merge(m.getSentiment() == null ? "neutral" : m.getSentiment(), 1, Integer::sum);
             byPlatform.merge(m.getPlatform() == null ? "other" : m.getPlatform(), 1, Integer::sum);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("total", all.size());
-        out.put("sentiment", sentiment);
-        out.put("byPlatform", byPlatform);
-        return out;
+        return new SocialListeningDtos.Summary(all.size(), sentiment, byPlatform);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> recent() {
+    public List<SocialListeningDtos.Mention> recent() {
         return mentions.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().limit(100).map(m -> {
-                    Map<String, Object> o = new LinkedHashMap<>();
-                    o.put("id", m.getId());
-                    o.put("platform", m.getPlatform());
-                    o.put("author", m.getAuthor());
-                    o.put("text", m.getText());
-                    o.put("sentiment", m.getSentiment());
-                    o.put("createdAt", m.getCreatedAt());
-                    return o;
-                }).toList();
+                .stream().limit(100).map(m -> new SocialListeningDtos.Mention(m.getId(), m.getPlatform(), m.getAuthor(),
+                        m.getText(), m.getSentiment(), m.getCreatedAt())).toList();
     }
 
     /** Transparent keyword classifier — swap for the intelligence LLM in prod. */

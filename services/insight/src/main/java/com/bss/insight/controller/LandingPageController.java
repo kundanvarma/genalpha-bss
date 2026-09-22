@@ -1,6 +1,10 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.LandingPageRequest;
+import com.bss.insight.dto.LandingPageView;
+import com.bss.insight.dto.LeadCapture;
+import com.bss.insight.dto.LeadForm;
 import com.bss.insight.service.LandingPageService;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Campaign landing pages. Authoring is back-office (insight:read); the page view
@@ -31,12 +34,12 @@ public class LandingPageController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<LandingPageView> create(@RequestBody LandingPageRequest dto) {
         return ResponseEntity.ok(service.create(dto));
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<LandingPageView>> list() {
         return ResponseEntity.ok(service.list());
     }
 
@@ -49,14 +52,12 @@ public class LandingPageController {
 
     /** PUBLIC — a consented form submit becomes a prospect stamped with the campaign. */
     @PostMapping("/{slug}/lead")
-    public ResponseEntity<Map<String, Object>> lead(@PathVariable String slug,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<LeadCapture> lead(@PathVariable String slug, @RequestBody LeadForm body) {
         return ResponseEntity.ok(service.captureLead(slug, body));
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<LandingPageView> patch(@PathVariable String id, @RequestBody LandingPageRequest body) {
         return ResponseEntity.ok(service.patch(id, body));
     }
 

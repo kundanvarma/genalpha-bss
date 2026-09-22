@@ -1,9 +1,13 @@
 package com.bss.insight.decision;
 
+import com.bss.insight.dto.DecisionInput;
+import com.bss.insight.dto.DecisionReceipt;
+import com.bss.insight.dto.DecisionSummary;
+import com.bss.insight.dto.DecisionView;
 import com.bss.insight.entity.DecisionLog;
 import com.bss.insight.repository.DecisionLogRepository;
 import com.bss.insight.security.TenantScope;
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,9 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * THE DECISION LOG. Every service that makes an adaptive choice publishes a
@@ -33,8 +35,6 @@ import java.util.Map;
 public class DecisionLogService {
 
     private static final Logger log = LoggerFactory.getLogger(DecisionLogService.class);
-    private static final TypeReference<Map<String, Object>> MAP = new TypeReference<>() { };
-    private static final TypeReference<List<Object>> LIST = new TypeReference<>() { };
 
     private final DecisionLogRepository decisions;
     private final TenantScope tenantScope;
@@ -48,10 +48,10 @@ public class DecisionLogService {
 
     /** Record a decision (idempotent by id — the bus is at-least-once). Returns false when it was already there. */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean record(String tenantId, Map<String, Object> decision) {
-        String id = str(decision.get("decisionId"));
+    public boolean record(String tenantId, DecisionInput decision) {
+        String id = decision.decisionId();
         if (id == null || id.isBlank() || id.length() > 64) {
-            log.warn("decision without a usable id skipped: {}", decision.get("decisionPoint"));
+            log.warn("decision without a usable id skipped: {}", decision.decisionPoint());
             return false;
         }
         if (decisions.existsById(id)) {
@@ -60,24 +60,24 @@ public class DecisionLogService {
         DecisionLog d = new DecisionLog();
         d.setId(id);
         d.setTenantId(tenantId);
-        d.setDecisionPoint(cut(str(decision.get("decisionPoint")), 64));
-        d.setSubjectType(cut(str(decision.get("subjectType")), 32));
-        d.setSubjectId(cut(str(decision.get("subjectId")), 64));
-        d.setCandidates(encode(decision.get("candidates")));
-        d.setEligible(encode(decision.get("eligibleActions")));
-        d.setConstraints(encode(decision.get("constraints")));
-        d.setAction(cut(str(decision.get("action")), 120));
-        d.setPropensity(decision.get("propensity") instanceof Number n ? BigDecimal.valueOf(n.doubleValue()) : null);
-        d.setPolicy(cut(str(decision.getOrDefault("policy", "unknown")), 64));
-        d.setPolicyVersion(cut(str(decision.getOrDefault("policyVersion", "0")), 16));
-        d.setReason(cut(str(decision.get("reason")), 1000));
-        d.setContext(encode(decision.get("context")));
-        d.setEvidence(encode(decision.get("evidence")));
-        d.setAutonomy(cut(str(decision.get("autonomy")), 8));
-        d.setFallback(Boolean.TRUE.equals(decision.get("fallback")));
-        d.setSource(cut(str(decision.getOrDefault("source", "unknown")), 40));
-        d.setDecidedAt(parseTime(decision.get("decidedAt")));
-        d.setContract(cut(str(decision.get("contract")), 80));
+        d.setDecisionPoint(cut(decision.decisionPoint(), 64));
+        d.setSubjectType(cut(decision.subjectType(), 32));
+        d.setSubjectId(cut(decision.subjectId(), 64));
+        d.setCandidates(encode(decision.candidates()));
+        d.setEligible(encode(decision.eligibleActions()));
+        d.setConstraints(encode(decision.constraints()));
+        d.setAction(cut(decision.action(), 120));
+        d.setPropensity(decision.propensity() == null ? null : BigDecimal.valueOf(decision.propensity()));
+        d.setPolicy(cut(decision.policy() == null ? "unknown" : decision.policy(), 64));
+        d.setPolicyVersion(cut(decision.policyVersion() == null ? "0" : decision.policyVersion(), 16));
+        d.setReason(cut(decision.reason(), 1000));
+        d.setContext(encode(decision.context()));
+        d.setEvidence(encode(decision.evidence()));
+        d.setAutonomy(cut(decision.autonomy(), 8));
+        d.setFallback(Boolean.TRUE.equals(decision.fallback()));
+        d.setSource(cut(decision.source() == null ? "unknown" : decision.source(), 40));
+        d.setDecidedAt(parseTime(decision.decidedAt()));
+        d.setContract(cut(decision.contract(), 80));
         decisions.save(d);
         return true;
     }
@@ -105,7 +105,7 @@ public class DecisionLogService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String decisionPoint, String subjectId, int limit) {
+    public List<DecisionView> list(String decisionPoint, String subjectId, int limit) {
         String tenant = tenantScope.currentTenantId();
         PageRequest page = PageRequest.of(0, Math.max(1, Math.min(limit, 500)));
         List<DecisionLog> rows;
@@ -123,18 +123,19 @@ public class DecisionLogService {
 
     /** The receipt: the record plus the sentences an auditor reads first. */
     @Transactional(readOnly = true)
-    public Map<String, Object> receipt(String id) {
+    public DecisionReceipt receipt(String id) {
         DecisionLog d = decisions.findByIdAndTenantId(id, tenantScope.currentTenantId()).orElse(null);
         if (d == null) {
             return null;
         }
-        Map<String, Object> out = view(d);
+        DecisionView view = view(d);
         List<String> lines = new ArrayList<>();
-        Map<String, Object> ctx = decodeMap(d.getContext());
-        lines.add("Context used: " + (ctx.isEmpty() ? "none" : String.join(", ", ctx.keySet())) + ".");
-        List<Object> candidates = decodeList(d.getCandidates());
-        List<Object> eligible = decodeList(d.getEligible());
-        List<Object> constraints = decodeList(d.getConstraints());
+        List<String> ctxKeys = new ArrayList<>();
+        view.context().fieldNames().forEachRemaining(ctxKeys::add);
+        lines.add("Context used: " + (ctxKeys.isEmpty() ? "none" : String.join(", ", ctxKeys)) + ".");
+        JsonNode candidates = view.candidates();
+        JsonNode eligible = view.eligibleActions();
+        JsonNode constraints = view.constraints();
         lines.add("Eligible actions: " + join(eligible) + (candidates.size() == eligible.size() ? ""
                 : " (of " + candidates.size() + " candidates; removed by constraints: " + join(constraints) + ")") + ".");
         lines.add("Chosen: \"" + d.getAction() + "\" by policy " + d.getPolicy() + " v" + d.getPolicyVersion()
@@ -148,80 +149,41 @@ public class DecisionLogService {
         lines.add(d.getOutcome() == null ? "Outcome: none attributed yet."
                 : "Outcome: " + d.getOutcome() + (d.getOutcomeValue() == null ? ""
                         : " worth " + d.getOutcomeValue().stripTrailingZeros().toPlainString()) + " at " + d.getOutcomeAt() + ".");
-        out.put("receipt", lines);
-        out.put("@type", "DecisionReceipt");
-        return out;
+        return new DecisionReceipt(view.asReceipt(), lines);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> summary() {
-        List<Map<String, Object>> points = new ArrayList<>();
+    public DecisionSummary summary() {
+        List<DecisionSummary.Point> points = new ArrayList<>();
         long total = 0, withOutcome = 0, withPropensity = 0;
         for (Object[] r : decisions.summary(tenantScope.currentTenantId())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("decisionPoint", r[0]);
-            m.put("policy", r[1]);
-            m.put("policyVersion", r[2]);
-            m.put("source", r[3]);
-            m.put("autonomy", r[4]);
             long n = ((Number) r[5]).longValue();
             long p = r[6] == null ? 0 : ((Number) r[6]).longValue();
             long o = r[7] == null ? 0 : ((Number) r[7]).longValue();
             long f = r[8] == null ? 0 : ((Number) r[8]).longValue();
-            m.put("decisions", n);
-            m.put("withPropensity", p);
-            m.put("withOutcome", o);
-            m.put("fallbacks", f);
-            m.put("outcomeRate", n == 0 ? 0 : Math.round(1000.0 * o / n) / 10.0);
-            m.put("lastDecidedAt", r[9]);
-            points.add(m);
+            points.add(new DecisionSummary.Point((String) r[0], (String) r[1], (String) r[2], (String) r[3], (String) r[4],
+                    n, p, o, f, n == 0 ? 0 : Math.round(1000.0 * o / n) / 10.0, (OffsetDateTime) r[9]));
             total += n;
             withOutcome += o;
             withPropensity += p;
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("decisions", total);
-        out.put("withOutcome", withOutcome);
-        out.put("withPropensity", withPropensity);
-        out.put("points", points);
-        out.put("@type", "DecisionLogSummary");
-        return out;
+        return new DecisionSummary(total, withOutcome, withPropensity, points, "DecisionLogSummary");
     }
 
     /* ------------------------------------------------------------------ helpers */
 
-    private Map<String, Object> view(DecisionLog d) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("decisionId", d.getId());
-        m.put("decisionPoint", d.getDecisionPoint());
-        m.put("subjectType", d.getSubjectType());
-        m.put("subjectId", d.getSubjectId());
-        m.put("candidates", decodeList(d.getCandidates()));
-        m.put("eligibleActions", decodeList(d.getEligible()));
-        m.put("constraints", decodeList(d.getConstraints()));
-        m.put("action", d.getAction());
-        m.put("propensity", d.getPropensity());
-        m.put("policy", d.getPolicy());
-        m.put("policyVersion", d.getPolicyVersion());
-        m.put("reason", d.getReason());
-        m.put("context", decodeMap(d.getContext()));
-        m.put("evidence", decodeMap(d.getEvidence()));
-        m.put("autonomy", d.getAutonomy());
-        m.put("fallback", d.isFallback());
-        m.put("source", d.getSource());
-        m.put("decidedAt", d.getDecidedAt());
-        m.put("contract", d.getContract());
-        if (d.getOutcome() != null) {
-            m.put("outcome", d.getOutcome());
-            m.put("outcomeValue", d.getOutcomeValue());
-            m.put("outcomeAt", d.getOutcomeAt());
-        }
-        m.put("@type", "Decision");
-        return m;
+    private DecisionView view(DecisionLog d) {
+        DecisionView.Outcome outcome = d.getOutcome() == null ? null
+                : new DecisionView.Outcome(d.getOutcome(), d.getOutcomeValue(), d.getOutcomeAt());
+        return new DecisionView(d.getId(), d.getDecisionPoint(), d.getSubjectType(), d.getSubjectId(),
+                decodeList(d.getCandidates()), decodeList(d.getEligible()), decodeList(d.getConstraints()), d.getAction(),
+                d.getPropensity(), d.getPolicy(), d.getPolicyVersion(), d.getReason(), decodeMap(d.getContext()),
+                decodeMap(d.getEvidence()), d.getAutonomy(), d.isFallback(), d.getSource(), d.getDecidedAt(),
+                d.getContract(), outcome, "Decision");
     }
 
-    private String encode(Object o) {
-        if (o == null) {
+    private String encode(JsonNode o) {
+        if (o == null || o.isNull()) {
             return null;
         }
         try {
@@ -231,30 +193,41 @@ public class DecisionLogService {
         }
     }
 
-    private Map<String, Object> decodeMap(String s) {
+    /** The stored object block, or an empty object when there is none or it does not parse as one. */
+    private JsonNode decodeMap(String s) {
         if (s == null || s.isBlank()) {
-            return Map.of();
+            return json.createObjectNode();
         }
         try {
-            return json.readValue(s, MAP);
+            JsonNode n = json.readTree(s);
+            return n.isObject() ? n : json.createObjectNode();
         } catch (Exception e) {
-            return Map.of();
+            return json.createObjectNode();
         }
     }
 
-    private List<Object> decodeList(String s) {
+    /** The stored list block, or an empty list when there is none or it does not parse as one. */
+    private JsonNode decodeList(String s) {
         if (s == null || s.isBlank()) {
-            return List.of();
+            return json.createArrayNode();
         }
         try {
-            return json.readValue(s, LIST);
+            JsonNode n = json.readTree(s);
+            return n.isArray() ? n : json.createArrayNode();
         } catch (Exception e) {
-            return List.of();
+            return json.createArrayNode();
         }
     }
 
-    private static String join(List<Object> l) {
-        return l.isEmpty() ? "none" : String.join(", ", l.stream().map(String::valueOf).toList());
+    private static String join(JsonNode l) {
+        if (l.isEmpty()) {
+            return "none";
+        }
+        List<String> parts = new ArrayList<>();
+        for (JsonNode n : l) {
+            parts.add(n.isTextual() ? n.asText() : n.toString());
+        }
+        return String.join(", ", parts);
     }
 
     private static OffsetDateTime parseTime(Object o) {
@@ -266,10 +239,6 @@ public class DecisionLogService {
         } catch (Exception e) {
             return OffsetDateTime.now();
         }
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
     }
 
     private static String cut(String s, int max) {

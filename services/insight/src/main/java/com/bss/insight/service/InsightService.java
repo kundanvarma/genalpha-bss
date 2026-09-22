@@ -1,6 +1,16 @@
 package com.bss.insight.service;
 
 import com.bss.insight.client.PolicyClient;
+import com.bss.insight.dto.AnalyticsAudience;
+import com.bss.insight.dto.ConsentReceipt;
+import com.bss.insight.dto.Experience;
+import com.bss.insight.dto.LeadSignal;
+import com.bss.insight.dto.PartyProfile;
+import com.bss.insight.dto.PartySegments;
+import com.bss.insight.dto.ProfileRow;
+import com.bss.insight.dto.SegmentMember;
+import com.bss.insight.dto.StitchReceipt;
+import com.bss.insight.dto.VisitorProfileView;
 import com.bss.insight.entity.VisitorEvent;
 import com.bss.insight.entity.VisitorProfile;
 import com.bss.insight.exception.BadRequestException;
@@ -61,8 +71,8 @@ public class InsightService {
      * engagement trait is keyed by "prospect:&lt;email&gt;", set by the martech
      * engagement loop. A pure read — the CDP owns this question.
      */
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public Map<String, Object> leadSignal(String email) {
+    @Transactional(readOnly = true)
+    public LeadSignal leadSignal(String email) {
         String tenant = tenantScope.currentTenantId();
         boolean known = email != null && prospects.findByTenantIdAndEmail(tenant, email).isPresent();
         String engagement = "none";
@@ -75,12 +85,8 @@ public class InsightService {
                 }
             }
         }
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        out.put("email", email);
-        out.put("knownProspect", known);
-        out.put("engagement", engagement);
-        out.put("engaged", "opened".equals(engagement) || "clicked".equals(engagement));
-        return out;
+        return new LeadSignal(email, known, engagement,
+                "opened".equals(engagement) || "clicked".equals(engagement));
     }
 
     /**
@@ -88,20 +94,16 @@ public class InsightService {
      * region, spend band, …). The one governed segment definition marketing
      * targets on, reused by CPQ segment pricing. A pure read (insight:read).
      */
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public Map<String, Object> partySegments(String partyId) {
+    @Transactional(readOnly = true)
+    public PartySegments partySegments(String partyId) {
         String tenant = tenantScope.currentTenantId();
-        Map<String, Object> byKey = new LinkedHashMap<>();
+        Map<String, String> byKey = new LinkedHashMap<>();
         java.util.Set<String> values = new java.util.LinkedHashSet<>();
         for (com.bss.insight.entity.PartyTrait t : traits.findByTenantIdAndPartyId(tenant, partyId)) {
             byKey.put(t.getTraitKey(), t.getTraitValue());
             if (t.getTraitValue() != null) values.add(t.getTraitValue());
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("partyId", partyId);
-        out.put("traits", byKey);
-        out.put("segments", new java.util.ArrayList<>(values));
-        return out;
+        return new PartySegments(partyId, byKey, new java.util.ArrayList<>(values));
     }
 
     /** Order-preserving dedup: keep the first (most-recent) occurrence. */
@@ -112,7 +114,7 @@ public class InsightService {
     /** The consent choice — the only write allowed for an unknown visitor.
      * Revoking analytics consent DELETES the breadcrumbs already held. */
     @Transactional
-    public Map<String, Object> consent(String visitorId, boolean analytics, boolean personalization) {
+    public ConsentReceipt consent(String visitorId, boolean analytics, boolean personalization) {
         requireVisitor(visitorId);
         String tenantId = tenantScope.currentTenantId();
         VisitorProfile p = profiles.findByTenantIdAndVisitorId(tenantId, visitorId)
@@ -131,8 +133,7 @@ public class InsightService {
         if (!analytics) {
             events.deleteByTenantIdAndVisitorId(tenantId, visitorId);
         }
-        return Map.of("visitorId", visitorId, "analytics", analytics,
-                "personalization", personalization);
+        return new ConsentReceipt(visitorId, analytics, personalization);
     }
 
     /** A behavioral breadcrumb — dropped silently without analytics consent.
@@ -170,7 +171,7 @@ public class InsightService {
     /** The login stitch: this browser's profile belongs to this party now —
      * only under personalization consent, never silently. */
     @Transactional
-    public Map<String, Object> stitch(String visitorId, String partyId) {
+    public StitchReceipt stitch(String visitorId, String partyId) {
         requireVisitor(visitorId);
         if (partyId == null || partyId.isBlank()) {
             throw new BadRequestException("stitching needs a signed-in caller");
@@ -178,12 +179,12 @@ public class InsightService {
         String tenantId = tenantScope.currentTenantId();
         VisitorProfile p = profiles.findByTenantIdAndVisitorId(tenantId, visitorId).orElse(null);
         if (p == null || !p.isPersonalizationConsent()) {
-            return Map.of("stitched", false);
+            return StitchReceipt.refused();
         }
         p.setPartyId(partyId);
         p.setLastUpdate(OffsetDateTime.now());
         profiles.save(p);
-        return Map.of("stitched", true, "partyId", partyId);
+        return StitchReceipt.to(partyId);
     }
 
     /**
@@ -194,14 +195,12 @@ public class InsightService {
      * fallback — lead with what they looked at most.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> experience(String visitorId) {
+    public Experience experience(String visitorId) {
         requireVisitor(visitorId);
         String tenantId = tenantScope.currentTenantId();
-        Map<String, Object> out = new LinkedHashMap<>();
         VisitorProfile p = profiles.findByTenantIdAndVisitorId(tenantId, visitorId).orElse(null);
         if (p == null || !p.isPersonalizationConsent()) {
-            out.put("personalized", false);
-            return out;
+            return Experience.defaultPage();
         }
         List<String> interests = events.interestsOf(tenantId, visitorId).stream()
                 .map(row -> String.valueOf(row[0]))
@@ -229,32 +228,31 @@ public class InsightService {
         // the frequency signal: rules can greet a RETURNING visitor as data
         context.put("visits", events.visitDaysOf(tenantId, visitorId));
         Map<String, Object> decision = policy.experience(context).orElse(null);
-        out.put("personalized", !interests.isEmpty() || decision != null || !segments.isEmpty());
-        out.put("interests", interests);
-        out.put("channel", channel);
-        if (!segments.isEmpty()) {
-            out.put("segments", segments);
-        }
         // NEXT-HIT: the session's most-recent category leads; the all-time
         // favourite is the fallback when the session has no fresh view.
-        if (sessionHero != null) {
-            out.put("heroCategory", sessionHero);
-        } else if (!interests.isEmpty()) {
-            out.put("heroCategory", interests.get(0));
-        }
-        if (!recentOfferings.isEmpty()) {
-            out.put("recentOfferings", recentOfferings);
-        }
+        String hero = sessionHero != null ? sessionHero : interests.isEmpty() ? null : interests.get(0);
+        Object banner = null;
+        String ruleName = null;
+        Map<String, Object> open = new LinkedHashMap<>();
         if (decision != null) {
-            if (decision.get("banner") != null) {
-                out.put("banner", decision.get("banner"));
-            }
+            banner = decision.get("banner");
+            // the rule's experience block rides beside the typed keys; a key
+            // it shares with one of them (heroCategory, banner) overrides it
             if (decision.get("experience") instanceof Map<?, ?> exp) {
-                exp.forEach((k, v) -> out.put(String.valueOf(k), v));
+                for (Map.Entry<?, ?> e : exp.entrySet()) {
+                    String key = String.valueOf(e.getKey());
+                    switch (key) {
+                        case "heroCategory" -> hero = e.getValue() == null ? null : String.valueOf(e.getValue());
+                        case "banner" -> banner = e.getValue();
+                        default -> open.put(key, e.getValue());
+                    }
+                }
             }
-            out.put("ruleName", decision.get("ruleName"));
+            ruleName = decision.get("ruleName") == null ? null : String.valueOf(decision.get("ruleName"));
         }
-        return out;
+        return new Experience(!interests.isEmpty() || decision != null || !segments.isEmpty(), interests, channel,
+                segments.isEmpty() ? null : segments, hero, recentOfferings.isEmpty() ? null : recentOfferings,
+                banner, ruleName, open);
     }
 
     /**
@@ -264,7 +262,7 @@ public class InsightService {
      * consented stitches link them.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> partyProfile(String partyId) {
+    public PartyProfile partyProfile(String partyId) {
         String tenantId = tenantScope.currentTenantId();
         Map<String, Long> merged = new LinkedHashMap<>();
         for (VisitorProfile p : profiles.findByTenantIdAndPartyId(tenantId, partyId)) {
@@ -280,7 +278,7 @@ public class InsightService {
                 .map(Map.Entry::getKey)
                 .limit(5)
                 .toList();
-        return Map.of("partyId", partyId, "interests", interests);
+        return new PartyProfile(partyId, interests);
     }
 
     /**
@@ -291,7 +289,7 @@ public class InsightService {
      * can never reach someone the consent spine does not cover.
      */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> segmentMembers(String segment) {
+    public List<SegmentMember> segmentMembers(String segment) {
         String tenantId = tenantScope.currentTenantId();
         java.util.Set<String> parties = new java.util.LinkedHashSet<>();
         for (VisitorProfile p : profiles.findByTenantIdAndPartyIdIsNotNull(tenantId)) {
@@ -306,13 +304,13 @@ public class InsightService {
                 parties.add(p.getPartyId());
             }
         }
-        return parties.stream().map(id -> Map.<String, Object>of("partyId", id)).toList();
+        return parties.stream().map(SegmentMember::new).toList();
     }
 
     /** The back-office ledger: recent profiles, consent state first — the
      * operator can SEE what the platform holds and under which consent. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> recentProfiles() {
+    public List<ProfileRow> recentProfiles() {
         return profiles.findTop100ByTenantIdOrderByLastUpdateDesc(tenantScope.currentTenantId())
                 .stream().map(InsightService::profileRow).toList();
     }
@@ -320,7 +318,7 @@ public class InsightService {
     /** The consent ledger, paginated and searchable — a real browsable ledger,
      * not a fixed recent-100 window. {@code q} matches visitor id or party id. */
     @Transactional(readOnly = true)
-    public com.bss.insight.api.PagedResult<Map<String, Object>> profilePage(long offset, int limit, String q) {
+    public com.bss.insight.api.PagedResult<ProfileRow> profilePage(long offset, int limit, String q) {
         String tenant = tenantScope.currentTenantId();
         var page = new com.bss.insight.api.OffsetPageRequest(offset, limit,
                 org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "lastUpdate"));
@@ -328,40 +326,28 @@ public class InsightService {
                 (q == null || q.isBlank())
                         ? profiles.findByTenantId(tenant, page)
                         : profiles.search(tenant, "%" + q.trim().toLowerCase() + "%", page);
-        List<Map<String, Object>> rows = result.getContent().stream().map(InsightService::profileRow).toList();
+        List<ProfileRow> rows = result.getContent().stream().map(InsightService::profileRow).toList();
         return new com.bss.insight.api.PagedResult<>(rows, result.getTotalElements());
     }
 
-    private static Map<String, Object> profileRow(com.bss.insight.entity.VisitorProfile p) {
-        Map<String, Object> m = new LinkedHashMap<String, Object>();
-        m.put("id", p.getVisitorId());
-        m.put("visitorId", p.getVisitorId());
-        m.put("partyId", p.getPartyId());
-        m.put("analyticsConsent", p.isAnalyticsConsent());
-        m.put("personalizationConsent", p.isPersonalizationConsent());
-        m.put("utmSource", p.getUtmSource());
-        m.put("lastUpdate", p.getLastUpdate());
-        return m;
+    private static ProfileRow profileRow(com.bss.insight.entity.VisitorProfile p) {
+        return new ProfileRow(p.getVisitorId(), p.getVisitorId(), p.getPartyId(), p.isAnalyticsConsent(),
+                p.isPersonalizationConsent(), p.getUtmSource(), p.getLastUpdate());
     }
 
     /** Back-office window (and the E2E's honesty probe): the raw profile. */
     @Transactional(readOnly = true)
-    public Map<String, Object> profileOf(String visitorId) {
+    public VisitorProfileView profileOf(String visitorId) {
         String tenantId = tenantScope.currentTenantId();
         VisitorProfile p = profiles.findByTenantIdAndVisitorId(tenantId, visitorId)
                 .orElseThrow(() -> new NotFoundException(
                         "VisitorProfile '" + visitorId + "' not found"));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("visitorId", p.getVisitorId());
-        out.put("partyId", p.getPartyId());
-        out.put("analyticsConsent", p.isAnalyticsConsent());
-        out.put("personalizationConsent", p.isPersonalizationConsent());
-        out.put("utmSource", p.getUtmSource());
-        out.put("eventCount", events.countByTenantIdAndVisitorId(tenantId, p.getVisitorId()));
-        out.put("interests", events.interestsOf(tenantId, p.getVisitorId()).stream()
-                .map(row -> Map.of("category", String.valueOf(row[0]), "views", row[1]))
-                .toList());
-        return out;
+        List<VisitorProfileView.Interest> interests = events.interestsOf(tenantId, p.getVisitorId()).stream()
+                .map(row -> new VisitorProfileView.Interest(String.valueOf(row[0]), ((Number) row[1]).longValue()))
+                .toList();
+        return new VisitorProfileView(p.getVisitorId(), p.getPartyId(), p.isAnalyticsConsent(),
+                p.isPersonalizationConsent(), p.getUtmSource(),
+                events.countByTenantIdAndVisitorId(tenantId, p.getVisitorId()), interests);
     }
 
     /** Social attribution the honest way: the campaign tag says where they
@@ -388,7 +374,7 @@ public class InsightService {
 
     /** The tenant's audience catalog, imported live through the GA4 Data
      * API wire shape (what their analytics computed, name + size). */
-    public java.util.List<java.util.Map<String, Object>> audienceCatalog() {
+    public List<AnalyticsAudience> audienceCatalog() {
         return analytics.audienceCatalog(tenantScope.currentTenantId());
     }
 }

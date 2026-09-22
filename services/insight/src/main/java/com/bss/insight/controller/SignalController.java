@@ -1,6 +1,12 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.ClassificationInput;
+import com.bss.insight.dto.FlywheelPair;
+import com.bss.insight.dto.SignalClassificationView;
+import com.bss.insight.dto.SignalInput;
+import com.bss.insight.dto.SignalTwin;
+import com.bss.insight.dto.SignalView;
 import com.bss.insight.service.SignalService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The signal store's API (SI-P1). POST is the connectors' door (and the
@@ -31,14 +36,13 @@ public class SignalController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> ingest(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> out = service.ingest(dto);
-        return ResponseEntity.status(Boolean.TRUE.equals(out.get("duplicate"))
-                ? HttpStatus.OK : HttpStatus.CREATED).body(out);
+    public ResponseEntity<SignalView> ingest(@RequestBody SignalInput dto) {
+        SignalView out = service.ingest(dto);
+        return ResponseEntity.status(out.duplicated() ? HttpStatus.OK : HttpStatus.CREATED).body(out);
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list(
+    public ResponseEntity<List<SignalView>> list(
             @RequestParam(required = false) String source,
             @RequestParam(required = false, defaultValue = "false") boolean unclassified) {
         return ResponseEntity.ok(service.list(source, unclassified));
@@ -47,22 +51,22 @@ public class SignalController {
     /** The flywheel's fine-tune corpus (T-P4): evidence-verified pairs in
      * TWIN SPACE — zero real facts by construction. */
     @GetMapping("/flywheel/dataset")
-    public ResponseEntity<List<Map<String, Object>>> flywheelDataset() {
+    public ResponseEntity<List<FlywheelPair>> flywheelDataset() {
         return ResponseEntity.ok(service.flywheelDataset());
     }
 
     /** The twin (Tvilling T-P1): the fiction that would leave in T-P2 —
      * back-office read, so an operator can SEE what the frontier would see. */
     @GetMapping("/{signalId}/twin")
-    public ResponseEntity<Map<String, Object>> twin(@PathVariable String signalId) {
+    public ResponseEntity<SignalTwin> twin(@PathVariable String signalId) {
         return ResponseEntity.ok(service.twinOf(signalId));
     }
 
     /** The battery's write-back (SI-P3) — evidence quotes verified at the
      * store; a classification that cannot cite its source is refused. */
     @PostMapping("/{signalId}/classification")
-    public ResponseEntity<Map<String, Object>> classify(@PathVariable String signalId,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<SignalClassificationView> classify(@PathVariable String signalId,
+            @RequestBody ClassificationInput dto) {
         return ResponseEntity.status(201).body(service.classify(signalId, dto));
     }
 }

@@ -1,6 +1,16 @@
 package com.bss.insight.controller;
 
 import com.bss.insight.api.ApiConstants;
+import com.bss.insight.dto.AnalyticsAudience;
+import com.bss.insight.dto.ConsentReceipt;
+import com.bss.insight.dto.Experience;
+import com.bss.insight.dto.LeadSignal;
+import com.bss.insight.dto.PartyProfile;
+import com.bss.insight.dto.PartySegments;
+import com.bss.insight.dto.ProfileRow;
+import com.bss.insight.dto.SegmentMember;
+import com.bss.insight.dto.StitchReceipt;
+import com.bss.insight.dto.VisitorRequests;
 import com.bss.insight.service.InsightService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -12,7 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import java.util.List;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
@@ -27,68 +37,61 @@ public class InsightController {
     /** The consent choice — anonymous by nature; the gateway's hostname
      * mapping decides the tenant. */
     @PostMapping("/consent")
-    public ResponseEntity<Map<String, Object>> consent(@RequestBody Map<String, Object> dto) {
-        return ResponseEntity.ok(service.consent(
-                String.valueOf(dto.get("visitorId")),
-                Boolean.TRUE.equals(dto.get("analytics")),
-                Boolean.TRUE.equals(dto.get("personalization"))));
+    public ResponseEntity<ConsentReceipt> consent(@RequestBody VisitorRequests.Consent dto) {
+        return ResponseEntity.ok(service.consent(dto.visitorId(),
+                Boolean.TRUE.equals(dto.analytics()), Boolean.TRUE.equals(dto.personalization())));
     }
 
     /** A behavioral breadcrumb; 204 regardless — consent state never leaks. */
     @PostMapping("/event")
-    public ResponseEntity<Void> event(@RequestBody Map<String, Object> dto) {
-        service.event(String.valueOf(dto.get("visitorId")),
-                dto.get("type") == null ? null : String.valueOf(dto.get("type")),
-                dto.get("category") == null ? null : String.valueOf(dto.get("category")),
-                dto.get("offeringId") == null ? null : String.valueOf(dto.get("offeringId")),
-                dto.get("utmSource") == null ? null : String.valueOf(dto.get("utmSource")));
+    public ResponseEntity<Void> event(@RequestBody VisitorRequests.Event dto) {
+        service.event(dto.visitorId(), dto.type(), dto.category(), dto.offeringId(), dto.utmSource());
         return ResponseEntity.noContent().build();
     }
 
     /** The login stitch: caller's verified token subject becomes the party. */
     @PostMapping("/stitch")
-    public ResponseEntity<Map<String, Object>> stitch(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<StitchReceipt> stitch(@RequestBody VisitorRequests.Stitch dto) {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         String partyId = auth instanceof JwtAuthenticationToken jwt ? jwt.getName() : null;
-        return ResponseEntity.ok(service.stitch(String.valueOf(dto.get("visitorId")), partyId));
+        return ResponseEntity.ok(service.stitch(dto.visitorId(), partyId));
     }
 
     /** "What should this person see?" */
     @GetMapping("/experience")
-    public ResponseEntity<Map<String, Object>> experience(@RequestParam String visitorId) {
+    public ResponseEntity<Experience> experience(@RequestParam String visitorId) {
         return ResponseEntity.ok(service.experience(visitorId));
     }
 
     /** Known customers in a segment (insight:read — the campaign engine). */
     @GetMapping("/segmentMembers")
-    public ResponseEntity<java.util.List<Map<String, Object>>> segmentMembers(
-            @RequestParam String segment) {
+    public ResponseEntity<List<SegmentMember>> segmentMembers(@RequestParam String segment) {
         return ResponseEntity.ok(service.segmentMembers(segment));
     }
 
     /** A known customer's merged interests (insight:read — machines). */
     @GetMapping("/partyProfile")
-    public ResponseEntity<Map<String, Object>> partyProfile(@RequestParam String partyId) {
+    public ResponseEntity<PartyProfile> partyProfile(@RequestParam String partyId) {
         return ResponseEntity.ok(service.partyProfile(partyId));
     }
 
     /** The lead signal for the sales funnel (insight:read — machines): is this
      *  email a known prospect, and has it engaged? */
     @GetMapping("/leadSignal")
-    public ResponseEntity<Map<String, Object>> leadSignal(@RequestParam String email) {
+    public ResponseEntity<LeadSignal> leadSignal(@RequestParam String email) {
         return ResponseEntity.ok(service.leadSignal(email));
     }
 
     /** A party's CDP segments (insight:read — machines): for CPQ segment pricing. */
     @GetMapping("/partySegments")
-    public ResponseEntity<Map<String, Object>> partySegments(@RequestParam String partyId) {
+    public ResponseEntity<PartySegments> partySegments(@RequestParam String partyId) {
         return ResponseEntity.ok(service.partySegments(partyId));
     }
 
     /** The tenant's audience catalog from their OWN analytics, through the
      * GA4 Data API wire shape (insight:read). */
     @GetMapping("/audiences")
-    public ResponseEntity<java.util.List<Map<String, Object>>> audiences() {
+    public ResponseEntity<List<AnalyticsAudience>> audiences() {
         return ResponseEntity.ok(service.audienceCatalog());
     }
 
@@ -102,7 +105,7 @@ public class InsightController {
         if (visitorId != null && !visitorId.isBlank()) {
             return ResponseEntity.ok(service.profileOf(visitorId));
         }
-        com.bss.insight.api.PagedResult<java.util.Map<String, Object>> page =
+        com.bss.insight.api.PagedResult<ProfileRow> page =
                 service.profilePage(offset, Math.min(Math.max(limit, 1), 200), q);
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(page.totalCount()))
