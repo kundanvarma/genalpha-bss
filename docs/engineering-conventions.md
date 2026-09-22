@@ -19,6 +19,13 @@ services the demos lean on (catalog, ordering, ontology), then ratchet the
 rest down arc by arc. Never rewrite a component in one go; every batch ends
 with its suites green.
 
+**Worked example: product-catalog (22 Sep).** 35 → 0 public `Map<String, Object>` returns, wire unchanged (TMF620 CTK, suites #119/#131 green).
+- One record per resource, verdict or receipt, plain names (`LaunchDecision`, `ReadinessItem`, `CheckProductConfiguration`, `PriceView`); shared wire atoms once (`Money`, `Quantity`, `TimePeriod`, `EntityRef`, `NameValue`).
+- Key order = component declaration order, pinned with `@JsonPropertyOrder`; `@JsonInclude(NON_NULL)` only where the map used to leave the key off, per-component where a record mixes both; `@JsonProperty("@type")` for TMF markers.
+- Open edge stays open: `@JsonAnyGetter @JsonAnySetter Map<String, Object> extensions` on wire records (unknown fields round-trip), `Object` for characteristic values, `JsonNode` for a polymorphic input (string | ref | list), `List<Map<String, Object>>` for the standard's own open blocks (spec values, terms, price conditions).
+- Request bodies are records too (`GovernanceRequest`, `ProductConfigurationRequest`) with `@JsonIgnoreProperties(ignoreUnknown = true)` and an `EMPTY` for an optional body; a lenient `@JsonCreator` keeps old parsing (a bare date in `TimePeriod`).
+- A mutable stored blob (`GovernanceState`, the `governance_json` column) is a plain class with public fields plus `extensions`, unwrapped into the view with `@JsonUnwrapped`; a `DtoRoundTripTest` (pure Jackson, no context) pins bytes and order, and runs in seconds.
+
 ## 2. Modules and size
 
 | Rule | Check |

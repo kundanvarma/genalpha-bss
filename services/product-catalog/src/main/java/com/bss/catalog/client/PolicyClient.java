@@ -1,5 +1,9 @@
 package com.bss.catalog.client;
 
+import com.bss.catalog.dto.IndicativePrice;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,6 +11,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,6 +36,25 @@ public class PolicyClient {
         }
     }
 
+    /** The policy service's verdict as it answers: allow|deny and, when a rule spoke, which one and what it said. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Decision(String decision, String ruleId, String ruleName, String message) {
+    }
+
+    /** The order-domain context the block rules and the deal engine read: the lines, their count, the largest quantity, the channel. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @JsonPropertyOrder({"items", "itemCount", "maxLineQuantity", "channel", "subtotal"})
+    public record OrderContext(List<OrderItem> items, int itemCount, int maxLineQuantity, String channel, BigDecimal subtotal) {
+
+        public OrderContext withSubtotal(BigDecimal subtotal) {
+            return new OrderContext(items, itemCount, maxLineQuantity, channel, subtotal);
+        }
+    }
+
+    @JsonPropertyOrder({"offeringId", "name", "quantity"})
+    public record OrderItem(String offeringId, String name, int quantity) {
+    }
+
     private final RestClient evaluateClient;
     private final RestClient anonymousClient;
 
@@ -40,35 +65,33 @@ public class PolicyClient {
         this.anonymousClient = builder.clone().baseUrl(baseUrl).build();
     }
 
-    /** The raw verdict for any domain — null when the policy service cannot answer,
+    /** The verdict for any domain — null when the policy service cannot answer,
      *  which launch governance reads as "no envelope matched" (fail-closed). */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> evaluateRaw(String domain, Map<String, Object> context) {
+    public Decision decision(String domain, Object context) {
         try {
             return evaluateClient.post()
                     .uri(BASE + "/evaluate")
                     .body(Map.of("domain", domain, "context", context))
                     .retrieve()
-                    .body(Map.class);
+                    .body(Decision.class);
         } catch (RestClientException e) {
             log.warn("policy service unreachable for domain '{}': {}", domain, e.getMessage());
             return null;
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public Verdict evaluate(Map<String, Object> context) {
+    public Verdict evaluate(OrderContext context) {
         try {
-            Map<String, Object> body = evaluateClient.post()
+            Decision body = evaluateClient.post()
                     .uri(BASE + "/evaluate")
                     .body(Map.of("domain", "order", "context", context))
                     .retrieve()
-                    .body(Map.class);
-            if (body != null && "deny".equals(body.get("decision"))) {
-                String message = body.get("message") == null
+                    .body(Decision.class);
+            if (body != null && "deny".equals(body.decision())) {
+                String message = body.message() == null
                         ? "This configuration is not permitted by a business rule."
-                        : String.valueOf(body.get("message"));
-                return new Verdict(false, message, String.valueOf(body.get("ruleName")));
+                        : body.message();
+                return new Verdict(false, message, String.valueOf(body.ruleName()));
             }
             return Verdict.allow();
         } catch (RestClientException e) {
@@ -77,14 +100,13 @@ public class PolicyClient {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> indicativePrice(Map<String, Object> context) {
+    public IndicativePrice indicativePrice(OrderContext context) {
         try {
             return anonymousClient.post()
                     .uri(BASE + "/price/indicative")
                     .body(Map.of("context", context))
                     .retrieve()
-                    .body(Map.class);
+                    .body(IndicativePrice.class);
         } catch (RestClientException e) {
             log.warn("policy service unreachable, skipping indicative pricing (fail-open): {}", e.getMessage());
             return null;

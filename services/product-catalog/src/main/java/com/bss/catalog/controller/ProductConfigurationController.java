@@ -1,13 +1,14 @@
 package com.bss.catalog.controller;
 
+import com.bss.catalog.dto.CheckProductConfiguration;
+import com.bss.catalog.dto.ProductConfigurationRequest;
+import com.bss.catalog.dto.QueryProductConfiguration;
 import com.bss.catalog.service.ConfiguratorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * TMF760 Product Configuration (v5 — the API of the Product Configurator
@@ -29,13 +30,13 @@ public class ProductConfigurationController {
 
     /** The configuration space of an offering: groups, pickers, prices. */
     @PostMapping("/queryProductConfiguration")
-    public ResponseEntity<Map<String, Object>> query(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<QueryProductConfiguration> query(@RequestBody ProductConfigurationRequest.Query request) {
         return ResponseEntity.ok(configurator.query(request));
     }
 
     /** Is this pick set orderable — and what does it cost? */
     @PostMapping("/checkProductConfiguration")
-    public ResponseEntity<Map<String, Object>> check(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<CheckProductConfiguration> check(@RequestBody ProductConfigurationRequest.Check request) {
         return ResponseEntity.ok(configurator.check(request));
     }
 }

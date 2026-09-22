@@ -75,8 +75,8 @@ public class GeoController {
         ProductOfferingPriceDto p = pickPrice(o);
         String name = esc(o.getName());
         String desc = esc(o.getDescription() == null ? "" : o.getDescription());
-        String amount = p == null ? null : String.valueOf(p.getPrice().get("value"));
-        String currency = p == null ? "EUR" : String.valueOf(p.getPrice().getOrDefault("unit", "EUR"));
+        String amount = p == null ? null : String.valueOf(p.getPrice().value());
+        String currency = p == null ? "EUR" : p.getPrice().unitOr("EUR");
         String category = o.getCategory() == null || o.getCategory().isEmpty()
                 ? "" : esc(String.valueOf(o.getCategory().get(0).get("name")));
 
@@ -189,14 +189,12 @@ public class GeoController {
                         ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
                         dto.setId(String.valueOf(ref.get("id")));
                         dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> pm = (Map<String, Object>) p;
-                        dto.setPrice(pm);
+                        dto.setPrice(com.bss.catalog.dto.Money.of(p));
                         return dto;
                     }
                     return null;
                 })
-                .filter(p -> p != null && p.getPrice() != null && p.getPrice().get("value") != null)
+                .filter(p -> p != null && p.getPrice() != null && p.getPrice().value() != null)
                 .filter(p -> p.getProdSpecCharValueUse() == null || p.getProdSpecCharValueUse().isEmpty())
                 .toList();
         return resolved.stream().filter(p -> "oneTime".equals(p.getPriceType())).findFirst()

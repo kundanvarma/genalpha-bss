@@ -1,5 +1,7 @@
 package com.bss.catalog.controller;
 
+import com.bss.catalog.dto.AcpProductFeed;
+import com.bss.catalog.dto.Money;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.exception.NotFoundException;
@@ -13,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -53,12 +54,12 @@ public class AcpFeedController {
     }
 
     @GetMapping("/product_feed")
-    public Map<String, Object> productFeed(@RequestParam(name = "id", required = false) String onlyId) {
+    public AcpProductFeed productFeed(@RequestParam(name = "id", required = false) String onlyId) {
         requireExposed();
         Map<String, ProductOfferingPriceDto> priceIndex = prices.findAll(0, 500, Map.of()).items()
                 .stream().collect(Collectors.toMap(ProductOfferingPriceDto::getId, Function.identity(),
                         (a, b) -> a));
-        List<Map<String, Object>> products = new ArrayList<>();
+        List<AcpProductFeed.Item> products = new ArrayList<>();
         for (ProductOfferingDto offering : offerings.findAll(0, 500,
                 Map.of("lifecycleStatus", "Active")).items()) {
             if (onlyId != null && !onlyId.equals(offering.getId())) {
@@ -67,12 +68,12 @@ public class AcpFeedController {
             if (!lifecycle.sellableDtoIn(offering, "agent-acp")) {
                 continue; // held back from AI shopping agents by the offer's channel list
             }
-            Map<String, Object> product = toFeedItem(offering, priceIndex);
+            AcpProductFeed.Item product = toFeedItem(offering, priceIndex);
             if (product != null) {
                 products.add(product);
             }
         }
-        return Map.of("products", products);
+        return new AcpProductFeed(products);
     }
 
     private void requireExposed() {
@@ -90,35 +91,20 @@ public class AcpFeedController {
      * made), one-time preferred; an unpriced offering is skipped — a feed
      * row an agent cannot price is noise, not reach.
      */
-    private Map<String, Object> toFeedItem(ProductOfferingDto offering,
+    private AcpProductFeed.Item toFeedItem(ProductOfferingDto offering,
             Map<String, ProductOfferingPriceDto> priceIndex) {
         ProductOfferingPriceDto price = pickPrice(offering, priceIndex);
-        if (price == null || price.getPrice() == null || price.getPrice().get("value") == null) {
+        if (price == null || price.getPrice() == null || price.getPrice().value() == null) {
             return null;
         }
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("id", offering.getId());
-        item.put("title", offering.getName());
-        if (offering.getDescription() != null) {
-            item.put("description", offering.getDescription());
-        }
         List<Map<String, Object>> categories = offering.getCategory();
-        if (categories != null && !categories.isEmpty()) {
-            item.put("item_category", categories.get(0).get("name"));
-        }
-        item.put("link", "/shop/offering/" + offering.getId());
-        item.put("availability", "in_stock");
-        item.put("price", Map.of(
-                "amount", String.valueOf(price.getPrice().get("value")),
-                "currency", price.getPrice().getOrDefault("unit", "EUR")));
-        item.put("price_type", price.getPriceType());
-        if ("recurring".equals(price.getPriceType()) && price.getRecurringChargePeriodType() != null) {
-            item.put("recurring_period", price.getRecurringChargePeriodType());
-        }
-        if (Boolean.TRUE.equals(offering.getIsBundle())) {
-            item.put("is_bundle", true);
-        }
-        return item;
+        String category = categories != null && !categories.isEmpty() && categories.get(0).get("name") != null
+                ? String.valueOf(categories.get(0).get("name")) : null;
+        String recurringPeriod = "recurring".equals(price.getPriceType()) ? price.getRecurringChargePeriodType() : null;
+        return new AcpProductFeed.Item(offering.getId(), offering.getName(), offering.getDescription(), category,
+                "/shop/offering/" + offering.getId(), "in_stock",
+                new AcpProductFeed.Price(String.valueOf(price.getPrice().value()), price.getPrice().unitOr("EUR")),
+                price.getPriceType(), recurringPeriod, Boolean.TRUE.equals(offering.getIsBundle()) ? Boolean.TRUE : null);
     }
 
     private ProductOfferingPriceDto pickPrice(ProductOfferingDto offering,
@@ -139,7 +125,7 @@ public class AcpFeedController {
                         ProductOfferingPriceDto dto = new ProductOfferingPriceDto();
                         dto.setId(String.valueOf(ref.get("id")));
                         dto.setPriceType(String.valueOf(ref.getOrDefault("priceType", "oneTime")));
-                        dto.setPrice((Map<String, Object>) p);
+                        dto.setPrice(Money.of(p));
                         return dto;
                     }
                     return null;

@@ -1,5 +1,6 @@
 package com.bss.catalog.controller;
 
+import com.bss.catalog.dto.ComponentDescriptor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -7,9 +8,7 @@ import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -32,13 +31,7 @@ public class ComponentDescriptorController {
     }
 
     @GetMapping(WELL_KNOWN)
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", "product-catalog");
-        out.put("meaning", "The shelf — offerings, specifications, prices, categories, channels and launch governance.");
-        out.put("manages", List.of("ProductOffering"));
-        out.put("events", EVENTS);
-        out.put("topic", "bss.catalog.events");
+    public ComponentDescriptor describe() {
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
             if (info.getPathPatternsCondition() == null) {
@@ -49,8 +42,8 @@ public class ComponentDescriptorController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        out.put("routes", new ArrayList<>(routes));
-        out.put("@type", "GenAlphaComponent");
-        return out;
+        return new ComponentDescriptor("product-catalog",
+                "The shelf — offerings, specifications, prices, categories, channels and launch governance.",
+                List.of("ProductOffering"), EVENTS, "bss.catalog.events", new ArrayList<>(routes), "GenAlphaComponent");
     }
 }

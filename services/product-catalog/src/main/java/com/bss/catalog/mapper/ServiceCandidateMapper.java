@@ -1,6 +1,7 @@
 package com.bss.catalog.mapper;
 
 import com.bss.catalog.api.ApiConstants;
+import com.bss.catalog.dto.EntityRef;
 import com.bss.catalog.dto.ServiceCandidateDto;
 import com.bss.catalog.entity.ServiceCandidate;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -16,7 +17,7 @@ public class ServiceCandidateMapper {
 
     private static final TypeReference<List<Map<String, Object>>> JSON_OBJECT_LIST = new TypeReference<>() {
     };
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
+    private static final TypeReference<EntityRef> SPEC_REF = new TypeReference<>() {
     };
     static final String TYPE = "ServiceCandidate";
 
@@ -38,7 +39,7 @@ public class ServiceCandidateMapper {
             dto.setValidFor(new ServiceCandidateDto.TimePeriod(entity.getValidFrom(), entity.getValidTo()));
         }
         dto.setCategory(readJson(entity.getCategoryJson(), JSON_OBJECT_LIST));
-        dto.setServiceSpecification(readJson(entity.getServiceSpecificationJson(), JSON_OBJECT));
+        dto.setServiceSpecification(readJson(entity.getServiceSpecificationJson(), SPEC_REF));
         dto.setLastUpdate(entity.getLastUpdate());
         dto.setType(TYPE);
         dto.setSchemaLocation(ApiConstants.SERVICE_SCHEMA_BASE + TYPE + ".schema.json");

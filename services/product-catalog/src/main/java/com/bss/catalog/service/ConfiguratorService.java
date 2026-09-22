@@ -2,10 +2,34 @@ package com.bss.catalog.service;
 
 import com.bss.catalog.client.PolicyClient;
 import com.bss.catalog.client.StockReader;
+import com.bss.catalog.dto.Availability;
+import com.bss.catalog.dto.CheckProductConfiguration;
+import com.bss.catalog.dto.ComputedProductConfigurationItem;
+import com.bss.catalog.dto.ComputedProductConfigurationItem.ChoiceGroup;
+import com.bss.catalog.dto.ComputedProductConfigurationItem.ChoiceOption;
+import com.bss.catalog.dto.ComputedProductConfigurationItem.FixedMember;
+import com.bss.catalog.dto.ConfigurableCharacteristic;
+import com.bss.catalog.dto.ConfigurationAction;
+import com.bss.catalog.dto.ConfigurationPrice;
+import com.bss.catalog.dto.ConfigurationPriceSummary;
+import com.bss.catalog.dto.ConfigurationPriceSummary.EarlyTermination;
+import com.bss.catalog.dto.ConfigurationPriceSummary.PriceLine;
+import com.bss.catalog.dto.EntityRef;
+import com.bss.catalog.dto.IndicativePrice;
+import com.bss.catalog.dto.Money;
+import com.bss.catalog.dto.NameValue;
+import com.bss.catalog.dto.OrderReadyConfiguration;
+import com.bss.catalog.dto.PriceView;
+import com.bss.catalog.dto.ProductConfiguration;
+import com.bss.catalog.dto.ProductConfigurationRequest;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.dto.ProductOfferingPriceDto;
 import com.bss.catalog.dto.ProductSpecificationDto;
+import com.bss.catalog.dto.Quantity;
+import com.bss.catalog.dto.QueryProductConfiguration;
+import com.bss.catalog.dto.TimePeriod;
 import com.bss.catalog.exception.BadRequestException;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -19,6 +43,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -37,7 +62,7 @@ import java.util.Set;
  * `stateReason[{code, label}]`, a `ProductConfiguration` with
  * `configurationCharacteristic[]`, `configurationPrice[]`,
  * `configurationAction[]`, `quantity`), plus the house extension
- * `priceSummary` and the flat `message[]` earlier clients read.
+ * `configurationPrice` totals and the flat `message[]` earlier clients read.
  */
 @Service
 public class ConfiguratorService {
@@ -68,17 +93,14 @@ public class ConfiguratorService {
      * ===================================================================== */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> query(Map<String, Object> request) {
-        String offeringId = offeringIdOf(request);
+    public QueryProductConfiguration query(ProductConfigurationRequest.Query request) {
+        String offeringId = offeringIdOf(request.configuration());
         ProductOfferingDto offering = offerings.findById(offeringId);
-        Map<String, Object> availability = stock.availability(offeringId);
+        Availability availability = stock.availability(offeringId);
 
         // ---- the house view (what the first clients read)
-        Map<String, Object> item = new LinkedHashMap<>();
-        item.put("productOffering", ref(offering));
-        item.put("isBundle", Boolean.TRUE.equals(offering.getIsBundle()));
-        List<Map<String, Object>> fixedMembers = new ArrayList<>();
-        List<Map<String, Object>> choiceGroups = new ArrayList<>();
+        List<FixedMember> fixedMembers = new ArrayList<>();
+        List<ChoiceGroup> choiceGroups = new ArrayList<>();
         for (Map<String, Object> member : listOf(offering.getBundledProductOffering())) {
             if (isChoiceGroup(member)) {
                 choiceGroups.add(choiceGroupView(member));
@@ -86,48 +108,19 @@ public class ConfiguratorService {
                 fixedMembers.add(fixedMemberView(member));
             }
         }
-        if (!fixedMembers.isEmpty()) {
-            item.put("fixedMember", fixedMembers);
-        }
-        if (!choiceGroups.isEmpty()) {
-            item.put("choiceGroup", choiceGroups);
-        }
-        List<Map<String, Object>> ownChars = configurableCharacteristicsOf(offering, availability);
-        if (!ownChars.isEmpty()) {
-            item.put("configurationCharacteristic", ownChars);
-        }
-        List<Map<String, Object>> ownPrices = priceViewsOf(offering);
-        if (!ownPrices.isEmpty()) {
-            item.put("price", ownPrices);
-        }
-        if (offering.getProductOfferingTerm() != null && !offering.getProductOfferingTerm().isEmpty()) {
-            item.put("productOfferingTerm", offering.getProductOfferingTerm());
-        }
+        List<ConfigurableCharacteristic> ownChars = configurableCharacteristicsOf(offering, availability);
+        List<PriceView> ownPrices = priceViewsOf(offering);
         List<Map<String, Object>> relationships = relationshipViews(offering);
-        if (!relationships.isEmpty()) {
-            item.put("productOfferingRelationship", relationships);
-        }
-        item.put("fungible", isFungible(offering));
-        if (!availability.isEmpty()) {
-            item.put("availability", availability);
-        }
-        item.put("@type", "ComputedProductConfiguration");
+        ComputedProductConfigurationItem item = new ComputedProductConfigurationItem(ref(offering),
+                Boolean.TRUE.equals(offering.getIsBundle()), orNull(fixedMembers), orNull(choiceGroups), orNull(ownChars),
+                orNull(ownPrices), orNull(offering.getProductOfferingTerm()), orNull(relationships), isFungible(offering),
+                availability.managed() ? availability : null, "ComputedProductConfiguration");
 
         // ---- the v5 item: the same facts in the standard's shape
-        Map<String, Object> v5 = new LinkedHashMap<>();
-        v5.put("id", "1");
-        v5.put("state", "accepted");
-        v5.put("productConfiguration", v5Configuration(offering, ownChars, ownPrices, relationships, fixedMembers, choiceGroups));
-        v5.put("@type", "QueryProductConfigurationItem");
+        QueryProductConfiguration.Item v5 = new QueryProductConfiguration.Item("1", "accepted",
+                v5Configuration(offering, ownChars, ownPrices, relationships, fixedMembers, choiceGroups), "QueryProductConfigurationItem");
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", offeringId);
-        out.put("state", "done");
-        out.put("instantSync", true);
-        out.put("queryProductConfigurationItem", List.of(v5));
-        out.put("computedProductConfigurationItem", List.of(item));
-        out.put("@type", "QueryProductConfiguration");
-        return out;
+        return new QueryProductConfiguration(offeringId, "done", true, List.of(v5), List.of(item), "QueryProductConfiguration");
     }
 
     /* =====================================================================
@@ -136,44 +129,37 @@ public class ConfiguratorService {
      * ===================================================================== */
 
     @Transactional(readOnly = true)
-    public Map<String, Object> check(Map<String, Object> request) {
-        List<Map<String, Object>> items = listOf(request.get("checkProductConfigurationItem"));
+    public CheckProductConfiguration check(ProductConfigurationRequest.Check request) {
+        List<ProductConfigurationRequest.Check.Item> items = request.checkProductConfigurationItem() == null ? List.of()
+                : request.checkProductConfigurationItem().stream().filter(Objects::nonNull).toList();
         if (items.isEmpty()) {
             throw new BadRequestException("checkProductConfigurationItem is required");
         }
-        List<Map<String, Object>> outItems = new ArrayList<>();
+        List<CheckProductConfiguration.Item> outItems = new ArrayList<>();
         boolean allAccepted = true;
         int seq = 0;
-        for (Map<String, Object> item : items) {
+        for (ProductConfigurationRequest.Check.Item item : items) {
             seq++;
-            Map<String, Object> config = mapOf(item.get("productConfiguration"));
-            Map<String, Object> outItem = checkOne(config);
-            outItem.put("id", item.get("id") == null ? String.valueOf(seq) : item.get("id"));
-            allAccepted = allAccepted && "accepted".equals(outItem.get("state"));
+            CheckProductConfiguration.Item outItem = checkOne(item.configuration(), item.id() == null ? String.valueOf(seq) : item.id());
+            allAccepted = allAccepted && outItem.accepted();
             outItems.add(outItem);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("state", "done");
-        out.put("instantSync", true);
-        out.put("result", allAccepted ? "accepted" : "rejected");
-        out.put("checkProductConfigurationItem", outItems);
-        out.put("@type", "CheckProductConfiguration");
-        return out;
+        return new CheckProductConfiguration("done", true, allAccepted ? "accepted" : "rejected", outItems, "CheckProductConfiguration");
     }
 
-    private Map<String, Object> checkOne(Map<String, Object> config) {
+    private CheckProductConfiguration.Item checkOne(ProductConfigurationRequest config, String itemId) {
         String offeringId = offeringIdOf(config);
         ProductOfferingDto bundle = offerings.findById(offeringId);
-        List<String> selected = new ArrayList<>(listOf(config.get("selectedOption")).stream()
-                .map(o -> String.valueOf(o.get("id"))).toList());
-        Map<String, String> picks = picksOf(config);
-        int quantity = intOf(config.get("quantity"), 1);
+        List<String> selected = new ArrayList<>(config.selectedOptionOrEmpty().stream().filter(Objects::nonNull)
+                .map(o -> String.valueOf(o.id())).toList());
+        Map<String, String> picks = picksOf(config.configurationCharacteristic());
+        int quantity = config.quantityOr(1);
         // an INSTALLED product is priced as configured: today's stock and today's relationships do not change
         // what a subscriber already holds — billing asks with priceOnly
-        boolean priceOnly = Boolean.TRUE.equals(config.get("priceOnly")) || "true".equals(String.valueOf(config.get("priceOnly")));
+        boolean priceOnly = config.isPriceOnly();
         List<String> messages = new ArrayList<>();
-        List<Map<String, Object>> reasons = new ArrayList<>();
-        List<Map<String, Object>> actions = new ArrayList<>();
+        List<CheckProductConfiguration.StateReason> reasons = new ArrayList<>();
+        List<ConfigurationAction> actions = new ArrayList<>();
 
         // 1. every selected id must actually be part of the bundle
         Set<String> memberIds = new LinkedHashSet<>();
@@ -238,20 +224,15 @@ public class ConfiguratorService {
             if ("excludes".equals(type) && selected.contains(relId)) {
                 reject(messages, reasons, "excludes", "'" + bundle.getName() + "' cannot be combined with '" + relName + "'");
             } else if ("requires".equals(type) && !selected.contains(relId)) {
-                Map<String, Object> action = new LinkedHashMap<>();
-                action.put("action", "add");
-                action.put("description", "'" + bundle.getName() + "' requires '" + relName + "'");
-                action.put("productOffering", Map.of("id", relId, "name", relName, "@referredType", "ProductOffering"));
-                action.put("isSelected", "auto-add".equals(role));
-                action.put("role", role);
-                actions.add(action);
+                actions.add(new ConfigurationAction("add", "'" + bundle.getName() + "' requires '" + relName + "'",
+                        EntityRef.of(relId, relName, "ProductOffering"), "auto-add".equals(role), role));
                 if ("block".equals(role)) {
                     reject(messages, reasons, "requires", "'" + bundle.getName() + "' requires '" + relName + "' — add it first");
                 }
             }
         }
         // 6. availability: a configured variant that is stock-managed must be in stock
-        Map<String, Object> availability = priceOnly ? Map.<String, Object>of() : stock.availability(offeringId);
+        Availability availability = priceOnly ? Availability.NONE : stock.availability(offeringId);
         String shortage = priceOnly ? null : stock.shortage(availability, picks, quantity);
         if (shortage != null) {
             reject(messages, reasons, "outOfStock", shortage);
@@ -265,40 +246,37 @@ public class ConfiguratorService {
             }
         }
 
-        Map<String, Object> outItem = new LinkedHashMap<>();
-        Map<String, Object> configuration = orderReadyConfiguration(bundle, selectedOfferings, picks, quantity);
+        List<OrderReadyConfiguration.SelectedOption> options = new ArrayList<>();
+        for (ProductOfferingDto offering : selectedOfferings) {
+            options.add(new OrderReadyConfiguration.SelectedOption(offering.getId(), offering.getName(), orNull(picksOwnedBy(offering, picks))));
+        }
+        List<NameValue> ownPicks = orNull(picksOwnedBy(bundle, picks));
         if (messages.isEmpty()) {
-            outItem.put("state", "accepted");
-            Map<String, Object> priced = priceConfiguration(bundle, selectedOfferings, picks, quantity);
-            outItem.put("configurationPrice", priced);
-            configuration.put("configurationPrice", priced.get("configurationPrice"));
-        } else {
-            outItem.put("state", "rejected");
-            outItem.put("message", messages);
-            outItem.put("stateReason", reasons);
-            if (!verdict.allowed() && verdict.ruleName() != null) {
-                outItem.put("ruleName", verdict.ruleName());
-            }
+            ConfigurationPriceSummary priced = priceConfiguration(bundle, selectedOfferings, picks, quantity);
+            OrderReadyConfiguration configuration = new OrderReadyConfiguration(ref(bundle), quantity, options, ownPicks,
+                    priced.configurationPrice(), orNull(actions), "ProductConfiguration");
+            return new CheckProductConfiguration.Item(itemId, "accepted", priced, null, null, null, configuration, "CheckProductConfigurationItem");
         }
-        if (!actions.isEmpty()) {
-            configuration.put("configurationAction", actions);
-        }
-        outItem.put("productConfiguration", configuration);
-        outItem.put("@type", "CheckProductConfigurationItem");
-        return outItem;
+        OrderReadyConfiguration configuration = new OrderReadyConfiguration(ref(bundle), quantity, options, ownPicks,
+                null, orNull(actions), "ProductConfiguration");
+        String ruleName = !verdict.allowed() && verdict.ruleName() != null ? verdict.ruleName() : null;
+        return new CheckProductConfiguration.Item(itemId, "rejected", null, messages, reasons, ruleName, configuration, "CheckProductConfigurationItem");
     }
 
-    private static void reject(List<String> messages, List<Map<String, Object>> reasons, String code, String label) {
+    private static void reject(List<String> messages, List<CheckProductConfiguration.StateReason> reasons, String code, String label) {
         messages.add(label);
-        reasons.add(Map.of("code", code, "label", label));
+        reasons.add(new CheckProductConfiguration.StateReason(code, label));
     }
 
-    /** Picks in the house shape ({name, value}) or the v5 shape (selected characteristic values). */
-    private static Map<String, String> picksOf(Map<String, Object> config) {
+    /** Picks in the house shape ({name, value}), the v5 shape (selected characteristic values) or the ontology's flat string. */
+    private static Map<String, String> picksOf(JsonNode node) {
         Map<String, String> picks = new LinkedHashMap<>();
-        if (config.get("configurationCharacteristic") instanceof String flat) {
+        if (node == null || node.isNull()) {
+            return picks;
+        }
+        if (node.isTextual()) {
             // the ontology's action inputs are strings: "screens=5+, extraProfiles=6"
-            for (String pair : flat.split("[,;]")) {
+            for (String pair : node.asText().split("[,;]")) {
                 int eq = pair.indexOf('=');
                 if (eq > 0) {
                     picks.put(pair.substring(0, eq).trim(), pair.substring(eq + 1).trim());
@@ -306,19 +284,28 @@ public class ConfiguratorService {
             }
             return picks;
         }
-        for (Map<String, Object> c : listOf(config.get("configurationCharacteristic"))) {
-            if (c.get("name") == null) {
+        if (!node.isArray()) {
+            return picks;
+        }
+        for (JsonNode c : node) {
+            if (!c.isObject() || isAbsent(c.get("name"))) {
                 continue;
             }
-            if (c.get("value") != null) {
-                picks.put(String.valueOf(c.get("name")), String.valueOf(c.get("value")));
+            String name = textOf(c.get("name"));
+            if (!isAbsent(c.get("value"))) {
+                picks.put(name, textOf(c.get("value")));
                 continue;
             }
-            for (Map<String, Object> v : listOf(c.get("configurationCharacteristicValue"))) {
-                if (Boolean.TRUE.equals(v.get("isSelected")) || listOf(c.get("configurationCharacteristicValue")).size() == 1) {
-                    Object val = mapOf(v.get("characteristicValue")).get("value");
-                    if (val != null) {
-                        picks.put(String.valueOf(c.get("name")), String.valueOf(val));
+            JsonNode values = c.get("configurationCharacteristicValue");
+            if (values == null || !values.isArray()) {
+                continue;
+            }
+            for (JsonNode v : values) {
+                JsonNode sel = v.get("isSelected");
+                if ((sel != null && sel.isBoolean() && sel.booleanValue()) || values.size() == 1) {
+                    JsonNode val = v.path("characteristicValue").get("value");
+                    if (!isAbsent(val)) {
+                        picks.put(name, textOf(val));
                     }
                 }
             }
@@ -326,41 +313,23 @@ public class ConfiguratorService {
         return picks;
     }
 
-    /* ---------- the order-ready echo ---------- */
-
-    private Map<String, Object> orderReadyConfiguration(ProductOfferingDto bundle,
-            List<ProductOfferingDto> selectedOfferings, Map<String, String> picks, int quantity) {
-        Map<String, Object> config = new LinkedHashMap<>();
-        config.put("productOffering", ref(bundle));
-        config.put("quantity", quantity);
-        List<Map<String, Object>> options = new ArrayList<>();
-        for (ProductOfferingDto offering : selectedOfferings) {
-            Map<String, Object> option = new LinkedHashMap<>();
-            option.put("id", offering.getId());
-            option.put("name", offering.getName());
-            List<Map<String, Object>> owned = picksOwnedBy(offering, picks);
-            if (!owned.isEmpty()) {
-                option.put("characteristic", owned);
-            }
-            options.add(option);
-        }
-        config.put("selectedOption", options);
-        List<Map<String, Object>> ownPicks = picksOwnedBy(bundle, picks);
-        if (!ownPicks.isEmpty()) {
-            config.put("configurationCharacteristic", ownPicks);
-        }
-        config.put("@type", "ProductConfiguration");
-        return config;
+    private static boolean isAbsent(JsonNode n) {
+        return n == null || n.isNull() || n.isMissingNode();
     }
 
+    private static String textOf(JsonNode n) {
+        return n.isValueNode() ? n.asText() : n.toString();
+    }
+
+    /* ---------- the order-ready echo ---------- */
+
     /** The picks whose name belongs to this offering's own spec and whose value it allows. */
-    private List<Map<String, Object>> picksOwnedBy(ProductOfferingDto offering, Map<String, String> picks) {
-        List<Map<String, Object>> owned = new ArrayList<>();
-        for (Map<String, Object> ch : configurableCharacteristicsOf(offering, Map.of())) {
-            String name = String.valueOf(ch.get("name"));
-            String picked = picks.get(name);
-            if (picked != null && valueAllowed(listOf(ch.get("productSpecCharacteristicValue")), picked)) {
-                owned.add(Map.of("name", name, "value", picked));
+    private List<NameValue> picksOwnedBy(ProductOfferingDto offering, Map<String, String> picks) {
+        List<NameValue> owned = new ArrayList<>();
+        for (ConfigurableCharacteristic ch : configurableCharacteristicsOf(offering, Availability.NONE)) {
+            String picked = picks.get(ch.name());
+            if (picked != null && valueAllowed(ch.productSpecCharacteristicValue(), picked)) {
+                owned.add(new NameValue(ch.name(), picked));
             }
         }
         return owned;
@@ -372,10 +341,10 @@ public class ConfiguratorService {
      * quantity, named algorithms evaluated. Totals in the tenant's money.
      * ===================================================================== */
 
-    private Map<String, Object> priceConfiguration(ProductOfferingDto bundle,
+    private ConfigurationPriceSummary priceConfiguration(ProductOfferingDto bundle,
             List<ProductOfferingDto> selectedOfferings, Map<String, String> picks, int quantity) {
-        List<Map<String, Object>> lines = new ArrayList<>();
-        List<Map<String, Object>> v5Lines = new ArrayList<>();
+        List<PriceLine> lines = new ArrayList<>();
+        List<ConfigurationPrice> v5Lines = new ArrayList<>();
         BigDecimal monthly = BigDecimal.ZERO;
         BigDecimal oneTime = BigDecimal.ZERO;
         String currency = null;
@@ -383,7 +352,7 @@ public class ConfiguratorService {
         List<ProductOfferingDto> all = new ArrayList<>();
         all.add(bundle);
         all.addAll(selectedOfferings);
-        List<Map<String, Object>> terminations = new ArrayList<>();
+        List<EarlyTermination> terminations = new ArrayList<>();
         for (ProductOfferingDto offering : all) {
             int qty = offering == bundle ? quantity : 1;
             for (Map<String, Object> ref : listOf(offering.getProductOfferingPrice())) {
@@ -393,41 +362,22 @@ public class ConfiguratorService {
                 }
                 if ("penalty".equals(price.getPriceType())) {
                     // never a charge on the configuration: what leaving early would cost, declining over the term
-                    Map<String, Object> term = new LinkedHashMap<>();
-                    term.put("name", price.getName());
-                    term.put("price", price.getPrice());
-                    if (price.getUnitOfMeasure() != null) {
-                        term.put("declinesOver", price.getUnitOfMeasure());
-                    }
-                    term.put("says", "leaving early costs at most " + amountOf(price) + " " + (price.getPrice() == null ? "" : price.getPrice().get("unit"))
-                            + (price.getUnitOfMeasure() != null ? ", falling by a twelfth each month of the " + price.getUnitOfMeasure().get("amount") + "-" + price.getUnitOfMeasure().get("units") + " term" : ""));
-                    terminations.add(term);
+                    Quantity term = price.getUnitOfMeasure();
+                    String says = "leaving early costs at most " + amountOf(price) + " " + (price.getPrice() == null ? "" : price.getPrice().unit())
+                            + (term != null ? ", falling by a twelfth each month of the " + term.amount() + "-" + term.units() + " term" : "");
+                    terminations.add(new EarlyTermination(price.getName(), price.getPrice(), term, says));
                     continue;
                 }
                 PricedLine pl = evaluate(price, picks, qty);
                 if (pl == null) {
                     continue;
                 }
-                if (currency == null && price.getPrice() != null && price.getPrice().get("unit") != null) {
-                    currency = String.valueOf(price.getPrice().get("unit"));
+                if (currency == null && price.getPrice() != null && price.getPrice().unit() != null) {
+                    currency = price.getPrice().unit();
                 }
-                Map<String, Object> line = new LinkedHashMap<>();
-                line.put("offering", Map.of("id", offering.getId(), "name", offering.getName()));
-                line.put("name", price.getName());
-                line.put("priceType", price.getPriceType());
-                line.put("price", price.getPrice());
-                if (pl.unitPrice != null) {
-                    line.put("unitPrice", pl.unitPrice);
-                    line.put("quantity", pl.units);
-                }
-                line.put("amount", pl.amount);
-                if (pl.how != null) {
-                    line.put("how", pl.how);
-                }
-                if (price.getProdSpecCharValueUse() != null && !price.getProdSpecCharValueUse().isEmpty()) {
-                    line.put("appliesWhen", price.getProdSpecCharValueUse());
-                }
-                lines.add(line);
+                lines.add(new PriceLine(EntityRef.of(offering.getId(), offering.getName()), price.getName(), price.getPriceType(),
+                        price.getPrice(), pl.unitPrice, pl.unitPrice != null ? pl.units : null, pl.amount, pl.how,
+                        orNull(price.getProdSpecCharValueUse())));
                 v5Lines.add(v5Price(price, pl));
                 if ("recurring".equals(price.getPriceType())) {
                     monthly = monthly.add(pl.amount);
@@ -439,20 +389,9 @@ public class ConfiguratorService {
         if (currency == null) {
             currency = "EUR";
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("monthlyTotal", Map.of("unit", currency, "value", monthly));
-        out.put("oneTimeTotal", Map.of("unit", currency, "value", oneTime));
-        out.put("priceLine", lines);
-        out.put("configurationPrice", v5Lines);
-        if (!terminations.isEmpty()) {
-            out.put("earlyTermination", terminations);
-        }
-        Map<String, Object> indicative = policy.indicativePrice(indicativeContext(bundle, selectedOfferings, monthly, quantity));
-        if (indicative != null) {
-            out.put("indicative", indicative);
-        }
-        out.put("@type", "ConfigurationPrice");
-        return out;
+        IndicativePrice indicative = policy.indicativePrice(indicativeContext(bundle, selectedOfferings, monthly, quantity));
+        return new ConfigurationPriceSummary(new Money(currency, monthly), new Money(currency, oneTime), lines, v5Lines,
+                orNull(terminations), indicative, "ConfigurationPrice");
     }
 
     private record PricedLine(BigDecimal amount, BigDecimal unitPrice, int units, String how) {
@@ -492,12 +431,12 @@ public class ConfiguratorService {
             }
             log.warn("configurator: unknown pricingLogicAlgorithm '{}' on price {} — charged flat", spec, price.getId());
         }
-        Map<String, Object> uom = price.getUnitOfMeasure();
-        if (uom != null && uom.get("units") != null && quantity > 1) {
-            int per = Math.max(1, intOf(uom.get("amount"), 1));
+        Quantity uom = price.getUnitOfMeasure();
+        if (uom != null && uom.units() != null && quantity > 1) {
+            int per = Math.max(1, intOf(uom.amount(), 1));
             int units = (int) Math.ceil(quantity / (double) per);
             return new PricedLine(value.multiply(BigDecimal.valueOf(units)).setScale(2, RoundingMode.HALF_UP), value, units,
-                    units + " × " + value + " per " + per + " " + uom.get("units"));
+                    units + " × " + value + " per " + per + " " + uom.units());
         }
         return new PricedLine(value, uom != null ? value : null, 1, null);
     }
@@ -523,13 +462,8 @@ public class ConfiguratorService {
     }
 
     static boolean inWindow(ProductOfferingPriceDto price, OffsetDateTime now) {
-        Map<String, Object> w = price.getValidFor();
-        if (w == null) {
-            return true;
-        }
-        OffsetDateTime from = timeOf(w.get("startDateTime"));
-        OffsetDateTime to = timeOf(w.get("endDateTime"));
-        return (from == null || !now.isBefore(from)) && (to == null || now.isBefore(to));
+        TimePeriod w = price.getValidFor();
+        return w == null || w.contains(now);
     }
 
     /** Does a picked value satisfy the declared values: an exact match, or inside a declared range. */
@@ -570,24 +504,18 @@ public class ConfiguratorService {
 
     /* ---------- policy contexts ---------- */
 
-    private Map<String, Object> policyContext(ProductOfferingDto bundle, List<ProductOfferingDto> selectedOfferings, int quantity) {
-        List<Map<String, Object>> items = new ArrayList<>();
-        items.add(Map.of("offeringId", bundle.getId(), "name", bundle.getName(), "quantity", quantity));
+    private PolicyClient.OrderContext policyContext(ProductOfferingDto bundle, List<ProductOfferingDto> selectedOfferings, int quantity) {
+        List<PolicyClient.OrderItem> items = new ArrayList<>();
+        items.add(new PolicyClient.OrderItem(bundle.getId(), bundle.getName(), quantity));
         for (ProductOfferingDto o : selectedOfferings) {
-            items.add(Map.of("offeringId", o.getId(), "name", o.getName(), "quantity", 1));
+            items.add(new PolicyClient.OrderItem(o.getId(), o.getName(), 1));
         }
-        Map<String, Object> context = new LinkedHashMap<>();
-        context.put("items", items);
-        context.put("itemCount", items.size());
-        context.put("maxLineQuantity", quantity);
-        context.put("channel", "configurator");
-        return context;
+        return new PolicyClient.OrderContext(items, items.size(), quantity, "configurator", null);
     }
 
-    private Map<String, Object> indicativeContext(ProductOfferingDto bundle, List<ProductOfferingDto> selectedOfferings, BigDecimal monthly, int quantity) {
-        Map<String, Object> context = policyContext(bundle, selectedOfferings, quantity);
-        context.put("subtotal", monthly);
-        return context;
+    private PolicyClient.OrderContext indicativeContext(ProductOfferingDto bundle, List<ProductOfferingDto> selectedOfferings,
+            BigDecimal monthly, int quantity) {
+        return policyContext(bundle, selectedOfferings, quantity).withSubtotal(monthly);
     }
 
     /* ---------- the configuration space, normalized ---------- */
@@ -596,72 +524,44 @@ public class ConfiguratorService {
         return member.get("options") instanceof List;
     }
 
-    private Map<String, Object> choiceGroupView(Map<String, Object> group) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("name", group.get("name"));
-        out.put("minSelections", longOf(group.get("numberRelOfferLowerLimit"), 1));
-        out.put("maxSelections", longOf(group.get("numberRelOfferUpperLimit"), 1));
-        if (group.get("default") != null) {
-            out.put("default", group.get("default"));
-        }
-        List<Map<String, Object>> options = new ArrayList<>();
+    private ChoiceGroup choiceGroupView(Map<String, Object> group) {
+        List<ChoiceOption> options = new ArrayList<>();
         for (Map<String, Object> ref : listOf(group.get("options"))) {
             options.add(optionView(String.valueOf(ref.get("id")), ref));
         }
-        out.put("option", options);
-        out.put("@type", "BundledProductOfferingChoice");
-        return out;
+        return new ChoiceGroup(str(group.get("name")), longOf(group.get("numberRelOfferLowerLimit"), 1),
+                longOf(group.get("numberRelOfferUpperLimit"), 1), str(group.get("default")), options, "BundledProductOfferingChoice");
     }
 
-    private Map<String, Object> fixedMemberView(Map<String, Object> member) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", member.get("id"));
-        out.put("name", member.get("name"));
+    private FixedMember fixedMemberView(Map<String, Object> member) {
         Map<String, Object> option = mapOf(member.get("bundledProductOfferingOption"));
-        out.put("minCardinality", longOf(option.get("numberRelOfferLowerLimit"), 1));
-        out.put("maxCardinality", longOf(option.get("numberRelOfferUpperLimit"), 1));
-        out.put("@type", "BundledProductOffering");
-        return out;
+        return new FixedMember(str(member.get("id")), str(member.get("name")), longOf(option.get("numberRelOfferLowerLimit"), 1),
+                longOf(option.get("numberRelOfferUpperLimit"), 1), "BundledProductOffering");
     }
 
-    private Map<String, Object> optionView(String offeringId, Map<String, Object> ref) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", offeringId);
+    private ChoiceOption optionView(String offeringId, Map<String, Object> ref) {
         try {
             ProductOfferingDto offering = offerings.findById(offeringId);
-            out.put("name", offering.getName());
-            List<Map<String, Object>> chars = configurableCharacteristicsOf(offering, stock.availability(offeringId));
-            if (!chars.isEmpty()) {
-                out.put("configurationCharacteristic", chars);
-            }
-            List<Map<String, Object>> priceViews = priceViewsOf(offering);
-            if (!priceViews.isEmpty()) {
-                out.put("price", priceViews);
-            }
+            List<ConfigurableCharacteristic> chars = configurableCharacteristicsOf(offering, stock.availability(offeringId));
+            return new ChoiceOption(offeringId, offering.getName(), orNull(chars), orNull(priceViewsOf(offering)), "ProductOffering");
         } catch (RuntimeException e) {
-            out.put("name", ref.get("name"));
             log.warn("configurator: option {} did not resolve: {}", offeringId, e.getMessage());
+            return new ChoiceOption(offeringId, str(ref.get("name")), null, null, "ProductOffering");
         }
-        out.put("@referredType", "ProductOffering");
-        return out;
     }
 
     /** Absent `configurable` means TRUE — only display-only facts say false. Each value says whether it can be picked (stock). */
-    private List<Map<String, Object>> configurableCharacteristicsOf(ProductOfferingDto offering, Map<String, Object> availability) {
+    private List<ConfigurableCharacteristic> configurableCharacteristicsOf(ProductOfferingDto offering, Availability availability) {
         ProductSpecificationDto spec = findSpec(offering);
         if (spec == null) {
             return List.of();
         }
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<ConfigurableCharacteristic> out = new ArrayList<>();
         for (Map<String, Object> ch : listOf(spec.getProductSpecCharacteristic())) {
             if (Boolean.FALSE.equals(ch.get("configurable"))) {
                 continue;
             }
             String name = String.valueOf(ch.get("name"));
-            Map<String, Object> view = new LinkedHashMap<>();
-            view.put("name", name);
-            view.put("valueType", ch.getOrDefault("valueType", "string"));
-            view.put("configurable", true);
             List<Map<String, Object>> values = new ArrayList<>();
             for (Map<String, Object> v : listOf(ch.get("productSpecCharacteristicValue"))) {
                 Map<String, Object> vv = new LinkedHashMap<>(v);
@@ -671,8 +571,7 @@ public class ConfiguratorService {
                 }
                 values.add(vv);
             }
-            view.put("productSpecCharacteristicValue", values);
-            out.add(view);
+            out.add(new ConfigurableCharacteristic(name, str(ch.getOrDefault("valueType", "string")), true, values));
         }
         return out;
     }
@@ -684,43 +583,24 @@ public class ConfiguratorService {
         all.add(bundle);
         all.addAll(selectedOfferings);
         for (ProductOfferingDto offering : all) {
-            for (Map<String, Object> ch : configurableCharacteristicsOf(offering, Map.of())) {
-                allowed.computeIfAbsent(String.valueOf(ch.get("name")), k -> new ArrayList<>())
-                        .addAll(listOf(ch.get("productSpecCharacteristicValue")));
+            for (ConfigurableCharacteristic ch : configurableCharacteristicsOf(offering, Availability.NONE)) {
+                allowed.computeIfAbsent(ch.name(), k -> new ArrayList<>()).addAll(ch.productSpecCharacteristicValue());
             }
         }
         return allowed;
     }
 
-    private List<Map<String, Object>> priceViewsOf(ProductOfferingDto offering) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private List<PriceView> priceViewsOf(ProductOfferingDto offering) {
+        List<PriceView> out = new ArrayList<>();
         for (Map<String, Object> ref : listOf(offering.getProductOfferingPrice())) {
             ProductOfferingPriceDto price = findPrice(String.valueOf(ref.get("id")));
             if (price == null) {
                 continue;
             }
-            Map<String, Object> view = new LinkedHashMap<>();
-            view.put("id", price.getId());
-            view.put("name", price.getName());
-            view.put("priceType", price.getPriceType());
-            view.put("price", price.getPrice());
-            if (price.getRecurringChargePeriodType() != null) {
-                view.put("recurringChargePeriodType", price.getRecurringChargePeriodType());
-            }
-            if (price.getUnitOfMeasure() != null) {
-                view.put("unitOfMeasure", price.getUnitOfMeasure());
-            }
-            if (price.getValidFor() != null) {
-                view.put("validFor", price.getValidFor());
-                view.put("inWindow", inWindow(price, OffsetDateTime.now()));
-            }
-            if (price.getPricingLogicAlgorithm() != null && !price.getPricingLogicAlgorithm().isEmpty()) {
-                view.put("pricingLogicAlgorithm", price.getPricingLogicAlgorithm());
-            }
-            if (price.getProdSpecCharValueUse() != null && !price.getProdSpecCharValueUse().isEmpty()) {
-                view.put("appliesWhen", price.getProdSpecCharValueUse());
-            }
-            out.add(view);
+            out.add(new PriceView(price.getId(), price.getName(), price.getPriceType(), price.getPrice(),
+                    price.getRecurringChargePeriodType(), price.getUnitOfMeasure(), price.getValidFor(),
+                    price.getValidFor() != null ? inWindow(price, OffsetDateTime.now()) : null,
+                    orNull(price.getPricingLogicAlgorithm()), orNull(price.getProdSpecCharValueUse())));
         }
         return out;
     }
@@ -758,73 +638,27 @@ public class ConfiguratorService {
 
     /* ---------- the v5 shape ---------- */
 
-    private Map<String, Object> v5Configuration(ProductOfferingDto offering, List<Map<String, Object>> chars,
-            List<Map<String, Object>> priceViews, List<Map<String, Object>> relationships,
-            List<Map<String, Object>> fixedMembers, List<Map<String, Object>> choiceGroups) {
-        Map<String, Object> pc = new LinkedHashMap<>();
-        pc.put("productOffering", ref(offering));
-        if (offering.getProductSpecification() != null) {
-            pc.put("productSpecification", offering.getProductSpecification());
-        }
-        pc.put("quantity", 1);
-        pc.put("isSelectable", true);
-        pc.put("isSelected", true);
-        pc.put("isVisible", true);
-        List<Map<String, Object>> v5Chars = new ArrayList<>();
-        for (Map<String, Object> ch : chars) {
-            Map<String, Object> c = new LinkedHashMap<>();
-            c.put("id", ch.get("name"));
-            c.put("name", ch.get("name"));
-            c.put("valueType", ch.get("valueType"));
-            c.put("isConfigurable", true);
-            c.put("minCardinality", 1);
-            c.put("maxCardinality", 1);
-            List<Map<String, Object>> vals = new ArrayList<>();
+    private ProductConfiguration v5Configuration(ProductOfferingDto offering, List<ConfigurableCharacteristic> chars,
+            List<PriceView> priceViews, List<Map<String, Object>> relationships,
+            List<FixedMember> fixedMembers, List<ChoiceGroup> choiceGroups) {
+        List<ProductConfiguration.Characteristic> v5Chars = new ArrayList<>();
+        for (ConfigurableCharacteristic ch : chars) {
+            List<ProductConfiguration.CharacteristicValue> vals = new ArrayList<>();
             boolean first = true;
-            for (Map<String, Object> v : listOf(ch.get("productSpecCharacteristicValue"))) {
-                Map<String, Object> cv = new LinkedHashMap<>();
-                cv.put("isSelectable", v.getOrDefault("isSelectable", true));
-                cv.put("isSelected", Boolean.TRUE.equals(v.get("isDefault")) || (first && v.get("isDefault") == null));
-                for (String k : List.of("valueFrom", "valueTo", "rangeInterval", "unitOfMeasure", "regex")) {
-                    if (v.get(k) != null) {
-                        cv.put(k, v.get(k));
-                    }
-                }
-                if (v.get("value") != null) {
-                    cv.put("characteristicValue", Map.of("name", ch.get("name"), "value", v.get("value")));
-                }
-                cv.put("@type", "ConfigurationCharacteristicValue");
-                vals.add(cv);
+            for (Map<String, Object> v : ch.productSpecCharacteristicValue()) {
+                vals.add(new ProductConfiguration.CharacteristicValue(v.getOrDefault("isSelectable", true),
+                        Boolean.TRUE.equals(v.get("isDefault")) || (first && v.get("isDefault") == null),
+                        v.get("valueFrom"), v.get("valueTo"), v.get("rangeInterval"), v.get("unitOfMeasure"), v.get("regex"),
+                        v.get("value") != null ? new NameValue(ch.name(), v.get("value")) : null, "ConfigurationCharacteristicValue"));
                 first = false;
             }
-            c.put("configurationCharacteristicValue", vals);
-            c.put("@type", "ConfigurationCharacteristic");
-            v5Chars.add(c);
+            v5Chars.add(new ProductConfiguration.Characteristic(ch.name(), ch.name(), ch.valueType(), true, 1, 1, vals, "ConfigurationCharacteristic"));
         }
-        if (!v5Chars.isEmpty()) {
-            pc.put("configurationCharacteristic", v5Chars);
-        }
-        List<Map<String, Object>> v5Prices = new ArrayList<>();
-        for (Map<String, Object> pv : priceViews) {
-            Map<String, Object> cp = new LinkedHashMap<>();
-            cp.put("name", pv.get("name"));
-            cp.put("priceType", pv.get("priceType"));
-            cp.put("productOfferingPrice", Map.of("id", pv.get("id"), "@referredType", "ProductOfferingPrice"));
-            if (pv.get("unitOfMeasure") != null) {
-                cp.put("unitOfMeasure", pv.get("unitOfMeasure"));
-            }
-            if (pv.get("recurringChargePeriodType") != null) {
-                cp.put("recurringChargePeriod", Map.of("amount", 1, "units", pv.get("recurringChargePeriodType")));
-            }
-            cp.put("price", Map.of("dutyFreeAmount", pv.get("price")));
-            if (pv.get("appliesWhen") != null) {
-                cp.put("prodSpecCharValueUse", pv.get("appliesWhen"));
-            }
-            cp.put("@type", "ConfigurationPrice");
-            v5Prices.add(cp);
-        }
-        if (!v5Prices.isEmpty()) {
-            pc.put("configurationPrice", v5Prices);
+        List<ConfigurationPrice> v5Prices = new ArrayList<>();
+        for (PriceView pv : priceViews) {
+            v5Prices.add(new ConfigurationPrice(pv.name(), pv.priceType(), EntityRef.to(pv.id(), "ProductOfferingPrice"), pv.unitOfMeasure(),
+                    pv.recurringChargePeriodType() != null ? new Quantity(1, pv.recurringChargePeriodType()) : null,
+                    new ConfigurationPrice.Amount(pv.price()), null, pv.appliesWhen(), "ConfigurationPrice"));
         }
         List<Map<String, Object>> terms = new ArrayList<>();
         for (Map<String, Object> t : listOf(offering.getProductOfferingTerm())) {
@@ -834,80 +668,51 @@ public class ConfiguratorService {
             ct.put("@type", "ConfigurationTerm");
             terms.add(ct);
         }
-        if (!terms.isEmpty()) {
-            pc.put("configurationTerm", terms);
-        }
-        List<Map<String, Object>> actions = new ArrayList<>();
+        List<ConfigurationAction> actions = new ArrayList<>();
         for (Map<String, Object> rel : relationships) {
             String type = String.valueOf(rel.getOrDefault("relationshipType", "")).toLowerCase();
             if ("requires".equals(type)) {
-                Map<String, Object> a = new LinkedHashMap<>();
-                a.put("action", "add");
-                a.put("description", "requires " + rel.get("name"));
-                a.put("productOffering", Map.of("id", rel.get("id"), "name", rel.getOrDefault("name", rel.get("id")), "@referredType", "ProductOffering"));
-                a.put("isSelected", "auto-add".equalsIgnoreCase(String.valueOf(rel.getOrDefault("role", ""))));
-                actions.add(a);
+                actions.add(new ConfigurationAction("add", "requires " + rel.get("name"),
+                        EntityRef.of(str(rel.get("id")), str(rel.getOrDefault("name", rel.get("id"))), "ProductOffering"),
+                        "auto-add".equalsIgnoreCase(String.valueOf(rel.getOrDefault("role", ""))), null));
             }
         }
-        if (!actions.isEmpty()) {
-            pc.put("configurationAction", actions);
+        List<ProductConfiguration.Child> children = new ArrayList<>();
+        for (FixedMember fm : fixedMembers) {
+            children.add(new ProductConfiguration.Child(EntityRef.of(fm.id(), fm.name(), "ProductOffering"), false, true,
+                    new ProductConfiguration.Cardinality(fm.minCardinality(), fm.maxCardinality()), null));
         }
-        List<Map<String, Object>> children = new ArrayList<>();
-        for (Map<String, Object> fm : fixedMembers) {
-            Map<String, Object> child = new LinkedHashMap<>();
-            child.put("productOffering", Map.of("id", fm.get("id"), "name", fm.get("name"), "@referredType", "ProductOffering"));
-            child.put("isSelectable", false);
-            child.put("isSelected", true);
-            child.put("bundledProductOfferingOption", Map.of("numberRelOfferLowerLimit", fm.get("minCardinality"), "numberRelOfferUpperLimit", fm.get("maxCardinality")));
-            children.add(child);
-        }
-        for (Map<String, Object> g : choiceGroups) {
-            for (Map<String, Object> opt : listOf(g.get("option"))) {
-                Map<String, Object> child = new LinkedHashMap<>();
-                child.put("productOffering", Map.of("id", opt.get("id"), "name", opt.getOrDefault("name", opt.get("id")), "@referredType", "ProductOffering"));
-                child.put("isSelectable", true);
-                child.put("isSelected", opt.get("id").equals(g.get("default")));
-                child.put("bundledGroupProductOffering", Map.of("name", g.get("name"), "numberRelOfferLowerLimit", g.get("minSelections"), "numberRelOfferUpperLimit", g.get("maxSelections")));
-                children.add(child);
+        for (ChoiceGroup g : choiceGroups) {
+            for (ChoiceOption opt : g.option()) {
+                children.add(new ProductConfiguration.Child(EntityRef.of(opt.id(), opt.name() != null ? opt.name() : opt.id(), "ProductOffering"),
+                        true, opt.id().equals(g.defaultOption()), null,
+                        new ProductConfiguration.GroupCardinality(g.name(), g.minSelections(), g.maxSelections())));
             }
         }
-        if (!children.isEmpty()) {
-            pc.put("productConfiguration", children);
-        }
-        pc.put("@type", "ProductConfiguration");
-        return pc;
+        return new ProductConfiguration(ref(offering), offering.getProductSpecification(), 1, true, true, true,
+                orNull(v5Chars), orNull(v5Prices), orNull(terms), orNull(actions), orNull(children), "ProductConfiguration");
     }
 
-    private static Map<String, Object> v5Price(ProductOfferingPriceDto price, PricedLine pl) {
-        Map<String, Object> cp = new LinkedHashMap<>();
-        cp.put("name", price.getName());
-        cp.put("priceType", price.getPriceType());
-        cp.put("productOfferingPrice", Map.of("id", price.getId(), "@referredType", "ProductOfferingPrice"));
-        if (price.getUnitOfMeasure() != null) {
-            cp.put("unitOfMeasure", price.getUnitOfMeasure());
-        }
-        String unit = price.getPrice() == null || price.getPrice().get("unit") == null ? "EUR" : String.valueOf(price.getPrice().get("unit"));
-        cp.put("price", Map.of("dutyFreeAmount", Map.of("unit", unit, "value", pl.amount)));
-        if (pl.unitPrice != null) {
-            cp.put("quantity", pl.units);
-        }
-        cp.put("@type", "ConfigurationPrice");
-        return cp;
+    private static ConfigurationPrice v5Price(ProductOfferingPriceDto price, PricedLine pl) {
+        String unit = price.getPrice() == null || price.getPrice().unit() == null ? "EUR" : price.getPrice().unit();
+        return new ConfigurationPrice(price.getName(), price.getPriceType(), EntityRef.to(price.getId(), "ProductOfferingPrice"),
+                price.getUnitOfMeasure(), null, new ConfigurationPrice.Amount(new Money(unit, pl.amount)),
+                pl.unitPrice != null ? pl.units : null, null, "ConfigurationPrice");
     }
 
     /* ---------- small helpers ---------- */
 
-    private static Map<String, Object> ref(ProductOfferingDto o) {
-        return Map.of("id", o.getId(), "name", o.getName(), "@referredType", "ProductOffering");
+    private static EntityRef ref(ProductOfferingDto o) {
+        return EntityRef.of(o.getId(), o.getName(), "ProductOffering");
     }
 
     private ProductSpecificationDto findSpec(ProductOfferingDto offering) {
-        Map<String, Object> ref = mapOf(offering.getProductSpecification());
-        if (ref.get("id") == null) {
+        EntityRef ref = offering.getProductSpecification();
+        if (ref == null || ref.id() == null) {
             return null;
         }
         try {
-            return specs.findById(String.valueOf(ref.get("id")));
+            return specs.findById(ref.id());
         } catch (RuntimeException e) {
             return null;
         }
@@ -922,18 +727,15 @@ public class ConfiguratorService {
         }
     }
 
-    private static String offeringIdOf(Map<String, Object> request) {
-        Map<String, Object> config = mapOf(request.getOrDefault("productConfiguration", request));
-        Map<String, Object> ref = mapOf(config.get("productOffering"));
-        if (ref.get("id") == null) {
+    private static String offeringIdOf(ProductConfigurationRequest config) {
+        if (config.productOffering() == null || config.productOffering().id() == null) {
             throw new BadRequestException("productOffering.id is required");
         }
-        return String.valueOf(ref.get("id"));
+        return config.productOffering().id();
     }
 
     private static BigDecimal amountOf(ProductOfferingPriceDto price) {
-        Object value = price.getPrice() == null ? null : price.getPrice().get("value");
-        return decimalOf(value, BigDecimal.ZERO);
+        return price.getPrice() == null || price.getPrice().value() == null ? BigDecimal.ZERO : price.getPrice().value();
     }
 
     private static BigDecimal decimalOf(Object v, BigDecimal dflt) {
@@ -941,17 +743,6 @@ public class ConfiguratorService {
             return v == null ? dflt : new BigDecimal(String.valueOf(v));
         } catch (NumberFormatException e) {
             return dflt;
-        }
-    }
-
-    private static OffsetDateTime timeOf(Object v) {
-        if (v == null) {
-            return null;
-        }
-        try {
-            return OffsetDateTime.parse(String.valueOf(v));
-        } catch (Exception e) {
-            return null;
         }
     }
 
@@ -981,6 +772,15 @@ public class ConfiguratorService {
         } catch (NumberFormatException e) {
             return dflt;
         }
+    }
+
+    private static String str(Object o) {
+        return o == null ? null : String.valueOf(o);
+    }
+
+    /** An empty list is left off the wire, as the maps left it off. */
+    private static <T> List<T> orNull(List<T> l) {
+        return l == null || l.isEmpty() ? null : l;
     }
 
     @SuppressWarnings("unchecked")

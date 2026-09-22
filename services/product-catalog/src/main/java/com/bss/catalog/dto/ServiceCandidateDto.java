@@ -38,7 +38,7 @@ public class ServiceCandidateDto {
     private List<Map<String, Object>> category;
 
     @JsonProperty("serviceSpecification")
-    private Map<String, Object> serviceSpecification;
+    private EntityRef serviceSpecification;
 
     @JsonProperty("lastUpdate")
     private OffsetDateTime lastUpdate;
@@ -154,11 +154,11 @@ public class ServiceCandidateDto {
         this.category = category;
     }
 
-    public Map<String, Object> getServiceSpecification() {
+    public EntityRef getServiceSpecification() {
         return serviceSpecification;
     }
 
-    public void setServiceSpecification(Map<String, Object> serviceSpecification) {
+    public void setServiceSpecification(EntityRef serviceSpecification) {
         this.serviceSpecification = serviceSpecification;
     }
 

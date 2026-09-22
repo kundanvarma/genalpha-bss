@@ -1,5 +1,6 @@
 package com.bss.catalog.mapper;
 
+import com.bss.catalog.dto.EntityRef;
 import com.bss.catalog.dto.ProductOfferingDto;
 import com.bss.catalog.entity.ProductOffering;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -12,9 +13,6 @@ import java.util.Map;
 
 @Component
 public class ProductOfferingMapper {
-
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
-    };
 
     private static final TypeReference<List<Map<String, Object>>> JSON_OBJECT_LIST = new TypeReference<>() {
     };
@@ -35,7 +33,7 @@ public class ProductOfferingMapper {
         // an unversioned offering is its first version — TMF620 lists version among the mandatory attributes
         dto.setVersion(entity.getVersion() == null || entity.getVersion().isBlank() ? "1.0" : entity.getVersion());
         dto.setLastUpdate(entity.getLastUpdate());
-        dto.setProductSpecification(readJsonObject(entity.getProductSpecificationJson()));
+        dto.setProductSpecification(readRef(entity.getProductSpecificationJson()));
         dto.setIsBundle(entity.getIsBundle());
         dto.setRequiresVerifiedIdentity(entity.getRequiresVerifiedIdentity());
         dto.setBundledProductOffering(readJsonObjectList(entity.getBundledProductOfferingJson()));
@@ -64,7 +62,7 @@ public class ProductOfferingMapper {
         entity.setLifecycleStatus(dto.getLifecycleStatus());
         entity.setVersion(dto.getVersion());
         entity.setLastUpdate(dto.getLastUpdate());
-        entity.setProductSpecificationJson(writeJsonObject(dto.getProductSpecification()));
+        entity.setProductSpecificationJson(writeRef(dto.getProductSpecification()));
         entity.setIsBundle(dto.getIsBundle());
         entity.setRequiresVerifiedIdentity(dto.getRequiresVerifiedIdentity());
         entity.setBundledProductOfferingJson(writeJsonObjectList(dto.getBundledProductOffering()));
@@ -98,7 +96,7 @@ public class ProductOfferingMapper {
             entity.setVersion(patch.getVersion());
         }
         if (patch.getProductSpecification() != null) {
-            entity.setProductSpecificationJson(writeJsonObject(patch.getProductSpecification()));
+            entity.setProductSpecificationJson(writeRef(patch.getProductSpecification()));
         }
         if (patch.getIsBundle() != null) {
             entity.setIsBundle(patch.getIsBundle());
@@ -129,7 +127,7 @@ public class ProductOfferingMapper {
         }
     }
 
-    private String writeJsonObject(Map<String, Object> value) {
+    private String writeRef(EntityRef value) {
         if (value == null) {
             return null;
         }
@@ -140,12 +138,12 @@ public class ProductOfferingMapper {
         }
     }
 
-    private Map<String, Object> readJsonObject(String json) {
+    private EntityRef readRef(String json) {
         if (json == null) {
             return null;
         }
         try {
-            return objectMapper.readValue(json, JSON_OBJECT);
+            return objectMapper.readValue(json, EntityRef.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }

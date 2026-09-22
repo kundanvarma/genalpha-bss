@@ -42,11 +42,15 @@ public class Channels {
             return;
         }
         for (Map<String, Object> c : channel) {
-            String id = c == null || c.get("id") == null ? null : String.valueOf(c.get("id"));
-            if (!known(id)) {
-                throw new BadRequestException("unknown channel '" + id + "' — the registered channels are "
-                        + REGISTERED.stream().map(c2 -> c2.get("id")).toList());
-            }
+            requireKnownId(c == null || c.get("id") == null ? null : String.valueOf(c.get("id")));
+        }
+    }
+
+    /** The same rule for one id. */
+    public static void requireKnownId(String id) {
+        if (!known(id)) {
+            throw new BadRequestException("unknown channel '" + id + "' — the registered channels are "
+                    + REGISTERED.stream().map(c2 -> c2.get("id")).toList());
         }
     }
 

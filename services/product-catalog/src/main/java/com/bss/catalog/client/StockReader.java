@@ -1,12 +1,13 @@
 package com.bss.catalog.client;
 
+import com.bss.catalog.dto.Availability;
+import com.bss.catalog.security.TenantScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
-import com.bss.catalog.security.TenantScope;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,11 +37,10 @@ public class StockReader {
         this.client = baseUrl == null || baseUrl.isBlank() ? null : builder.clone().baseUrl(baseUrl).build();
     }
 
-    /** {rows: [{characteristics: {name: value}, available: n}], managed: true} or empty when not stock-managed. */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> availability(String offeringId) {
+    /** The stocked variants of an offering and what is left of each, or {@link Availability#NONE} when not stock-managed. */
+    public Availability availability(String offeringId) {
         if (client == null) {
-            return Map.of();
+            return Availability.NONE;
         }
         try {
             // the stock service keys its rows by tenant; an internal read says which tenant is asking (the gateway
@@ -50,9 +50,9 @@ public class StockReader {
                     .header("X-Tenant-Id", tenantScope.currentTenantId())
                     .retrieve().body(LIST);
             if (stocks == null || stocks.isEmpty()) {
-                return Map.of();
+                return Availability.NONE;
             }
-            List<Map<String, Object>> rows = new ArrayList<>();
+            List<Availability.Row> rows = new ArrayList<>();
             for (Map<String, Object> s : stocks) {
                 Map<String, String> chars = new LinkedHashMap<>();
                 Object stocked = s.get("stockedProduct");
@@ -67,53 +67,44 @@ public class StockReader {
                 if (s.get("availableQuantity") instanceof Map<?, ?> aq && aq.get("amount") != null) {
                     available = (int) Double.parseDouble(String.valueOf(aq.get("amount")));
                 }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("characteristics", chars);
-                row.put("available", available);
-                rows.add(row);
+                rows.add(new Availability.Row(chars, available));
             }
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("managed", true);
-            out.put("rows", rows);
-            return out;
+            return new Availability(true, rows);
         } catch (RuntimeException e) {
             log.warn("stock unavailable for offering {}: {}", offeringId, e.getMessage());
-            return Map.of();
+            return Availability.NONE;
         }
     }
 
     /** Can this characteristic value be picked? null = stock says nothing about it (not managed per this variant). */
-    @SuppressWarnings("unchecked")
-    public Boolean selectable(Map<String, Object> availability, String name, Object value) {
-        if (availability.isEmpty() || value == null) {
+    public Boolean selectable(Availability availability, String name, Object value) {
+        if (!availability.managed() || value == null) {
             return null;
         }
         boolean anyRowForName = false;
         int total = 0;
-        for (Map<String, Object> row : (List<Map<String, Object>>) availability.get("rows")) {
-            Map<String, String> chars = (Map<String, String>) row.get("characteristics");
+        for (Availability.Row row : availability.rows()) {
+            Map<String, String> chars = row.characteristics();
             if (!chars.containsKey(name)) {
                 continue;
             }
             anyRowForName = true;
             if (String.valueOf(value).equals(chars.get(name))) {
-                total += (int) row.get("available");
+                total += row.available();
             }
         }
         return anyRowForName ? total > 0 : null;
     }
 
     /** A shortage message for these picks and quantity, or null when stock allows them. */
-    @SuppressWarnings("unchecked")
-    public String shortage(Map<String, Object> availability, Map<String, String> picks, int quantity) {
-        if (availability.isEmpty()) {
+    public String shortage(Availability availability, Map<String, String> picks, int quantity) {
+        if (!availability.managed()) {
             return null;
         }
-        List<Map<String, Object>> rows = (List<Map<String, Object>>) availability.get("rows");
-        Map<String, Object> best = null;
+        Availability.Row best = null;
         int bestMatch = -1;
-        for (Map<String, Object> row : rows) {
-            Map<String, String> chars = (Map<String, String>) row.get("characteristics");
+        for (Availability.Row row : availability.rows()) {
+            Map<String, String> chars = row.characteristics();
             boolean matches = true;
             for (Map.Entry<String, String> c : chars.entrySet()) {
                 if (!c.getValue().equals(picks.get(c.getKey()))) {
@@ -129,9 +120,9 @@ public class StockReader {
         if (best == null) {
             return null; // no row describes this combination: not managed at that grain
         }
-        int available = (int) best.get("available");
+        int available = best.available();
         if (available < quantity) {
-            Map<String, String> chars = (Map<String, String>) best.get("characteristics");
+            Map<String, String> chars = best.characteristics();
             String what = chars.isEmpty() ? "this product" : chars.entrySet().stream().map(e -> e.getKey() + " " + e.getValue()).reduce((a, b) -> a + ", " + b).orElse("");
             return available == 0 ? what + " is out of stock" : "only " + available + " of " + what + " left, " + quantity + " requested";
         }

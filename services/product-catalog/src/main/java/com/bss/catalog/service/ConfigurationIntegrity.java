@@ -1,5 +1,6 @@
 package com.bss.catalog.service;
 
+import com.bss.catalog.dto.EntityRef;
 import com.bss.catalog.exception.BadRequestException;
 import com.bss.catalog.repository.ProductOfferingPriceRepository;
 import com.bss.catalog.repository.ProductSpecificationRepository;
@@ -38,11 +39,11 @@ public class ConfigurationIntegrity {
         this.objectMapper = objectMapper;
     }
 
-    public void check(String offeringName, Map<String, Object> specRef, List<Map<String, Object>> priceRefs) {
+    public void check(String offeringName, EntityRef specRef, List<Map<String, Object>> priceRefs) {
         if (specRef == null || priceRefs == null || priceRefs.isEmpty()) {
             return;
         }
-        String specId = specRef.get("id") == null ? "" : String.valueOf(specRef.get("id"));
+        String specId = specRef.id() == null ? "" : specRef.id();
         if (specId.isBlank()) {
             return;
         }

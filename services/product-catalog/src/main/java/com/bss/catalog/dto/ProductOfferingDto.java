@@ -37,7 +37,7 @@ public class ProductOfferingDto {
     private OffsetDateTime lastUpdate;
 
     @JsonProperty("productSpecification")
-    private Map<String, Object> productSpecification;
+    private EntityRef productSpecification;
 
     @JsonProperty("isBundle")
     private Boolean isBundle;
@@ -136,11 +136,11 @@ public class ProductOfferingDto {
         this.lastUpdate = lastUpdate;
     }
 
-    public Map<String, Object> getProductSpecification() {
+    public EntityRef getProductSpecification() {
         return productSpecification;
     }
 
-    public void setProductSpecification(Map<String, Object> productSpecification) {
+    public void setProductSpecification(EntityRef productSpecification) {
         this.productSpecification = productSpecification;
     }
 

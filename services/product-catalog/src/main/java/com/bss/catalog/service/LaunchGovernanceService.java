@@ -1,7 +1,17 @@
 package com.bss.catalog.service;
 
 import com.bss.catalog.client.PolicyClient;
+import com.bss.catalog.dto.EntityRef;
+import com.bss.catalog.dto.EnvelopeRef;
+import com.bss.catalog.dto.GovernanceRequest;
+import com.bss.catalog.dto.GovernanceState;
+import com.bss.catalog.dto.LaunchContext;
+import com.bss.catalog.dto.LaunchDecision;
+import com.bss.catalog.dto.LaunchDryRun;
+import com.bss.catalog.dto.LedgerLine;
+import com.bss.catalog.dto.Money;
 import com.bss.catalog.dto.ProductOfferingDto;
+import com.bss.catalog.dto.ReadinessItem;
 import com.bss.catalog.entity.GovernanceLedger;
 import com.bss.catalog.entity.ProductOffering;
 import com.bss.catalog.entity.ProductOfferingPrice;
@@ -17,6 +27,7 @@ import com.bss.catalog.repository.ProductSpecificationRepository;
 import com.bss.catalog.security.TenantRegistry;
 import com.bss.catalog.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,8 +65,8 @@ import java.util.regex.Pattern;
 public class LaunchGovernanceService {
 
     private static final Logger log = LoggerFactory.getLogger(LaunchGovernanceService.class);
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() { };
     private static final TypeReference<List<Map<String, Object>>> JSON_LIST = new TypeReference<>() { };
+    private static final TypeReference<List<EntityRef>> REF_LIST = new TypeReference<>() { };
     private static final Pattern NUMBER = Pattern.compile("(\\d+(?:[.,]\\d+)?)");
 
     public static final String APPROVE_AUTHORITY = "catalog:approve";
@@ -118,9 +129,9 @@ public class LaunchGovernanceService {
     }
 
     /** The readiness template: one tick per configured owner, "authority|label". */
-    public List<Map<String, Object>> readinessTemplate() {
+    public List<ReadinessItem> readinessTemplate() {
         TenantRegistry.TenantEntry e = tenants.byId(scope.currentTenantId());
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<ReadinessItem> out = new ArrayList<>();
         if (e == null || e.getLaunchReadiness() == null) {
             return out;
         }
@@ -129,11 +140,7 @@ public class LaunchGovernanceService {
                 continue;
             }
             String[] parts = line.split("\\|", 2);
-            Map<String, Object> t = new LinkedHashMap<>();
-            t.put("owner", parts[0].trim());
-            t.put("label", parts[1].trim());
-            t.put("done", false);
-            out.add(t);
+            out.add(ReadinessItem.open(parts[0].trim(), parts[1].trim()));
         }
         return out;
     }
@@ -186,10 +193,10 @@ public class LaunchGovernanceService {
             return;
         }
         if (LifecyclePolicy.launched(entity.getLifecycleStatus())) {
-            Map<String, Object> g = state(entity);
-            g.put("approvedAt", now());
-            g.put("approvedBy", actor());
-            g.put("substanceHash", substanceHash(entity));
+            GovernanceState g = state(entity);
+            g.approvedAt = now();
+            g.approvedBy = actor();
+            g.substanceHash = substanceHash(entity);
             markLaunched(entity, g, "created live by " + actor() + " (approver)", null, null);
         }
     }
@@ -212,7 +219,7 @@ public class LaunchGovernanceService {
         if (!on()) {
             return;
         }
-        Map<String, Object> g = state(entity);
+        GovernanceState g = state(entity);
         if (launchedNow) {
             markLaunched(entity, g, "launched by lifecycle change (" + actor() + ")", null, null);
             return;
@@ -221,8 +228,8 @@ public class LaunchGovernanceService {
         if ((APPROVED.equals(st) || REQUESTED.equals(st)) && !Objects.equals(hashBefore, substanceHash(entity))) {
             entity.setGovernanceState(NONE);
             entity.setApprovalExpiresAt(null);
-            g.put("voidedAt", now());
-            g.put("voidedReason", "substance changed after " + st);
+            g.voidedAt = now();
+            g.voidedReason = "substance changed after " + st;
             store(entity, g);
             line(entity, "voided", "approval voided — price, allowance, category, terms or channels changed after it was "
                     + st + "; request again", null, null);
@@ -233,40 +240,40 @@ public class LaunchGovernanceService {
     /* ---------- the doors ---------- */
 
     @Transactional
-    public Map<String, Object> request(String id, Map<String, Object> body) {
+    public LaunchDecision request(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
         String st = entity(e);
         if (REQUESTED.equals(st) || APPROVED.equals(st) || HELD.equals(st) || LAUNCHED.equals(st)) {
             return view(e);
         }
-        Map<String, Object> g = new LinkedHashMap<>();
-        g.put("requestedAt", now());
-        g.put("requestedBy", actor());
-        g.put("note", str(body.get("note")));
-        g.put("origin", body.get("origin") == null ? "human" : String.valueOf(body.get("origin")));
-        g.put("readiness", readinessTemplate());
-        g.put("substanceHash", substanceHash(e));
+        GovernanceState g = new GovernanceState();
+        g.requestedAt = now();
+        g.requestedBy = actor();
+        g.note = body.note();
+        g.origin = body.origin() == null ? "human" : body.origin();
+        g.readiness = readinessTemplate();
+        g.substanceHash = substanceHash(e);
         e.setGovernanceState(REQUESTED);
         store(e, g);
-        line(e, "requested", str(body.get("note")), null, null);
-        emit(e, g, "requested", str(body.get("note")));
+        line(e, "requested", body.note(), null, null);
+        emit(e, g, "requested", body.note());
         // an AI proposal in a "trust" tenant is judged like a human draft; in an
         // "approve" tenant it always asks, envelope or not
-        boolean ai = "ai".equals(g.get("origin"));
+        boolean ai = "ai".equals(g.origin);
         if ("envelope".equals(mode()) && !(ai && "approve".equals(aiProposals()))) {
-            Map<String, Object> verdict = envelopeVerdict(describe(e));
+            PolicyClient.Decision verdict = envelopeVerdict(describe(e));
             if (verdict != null) {
-                approveWith(e, g, "envelope", "pre-approved: inside envelope '" + verdict.get("ruleName") + "'"
-                        + (verdict.get("message") == null ? "" : " — " + verdict.get("message")),
-                        String.valueOf(verdict.get("ruleId")), String.valueOf(verdict.get("ruleName")));
+                approveWith(e, g, "envelope", "pre-approved: inside envelope '" + verdict.ruleName() + "'"
+                        + (verdict.message() == null ? "" : " — " + verdict.message()),
+                        String.valueOf(verdict.ruleId()), String.valueOf(verdict.ruleName()));
             }
         }
         return view(e);
     }
 
     @Transactional
-    public Map<String, Object> approve(String id, Map<String, Object> body) {
+    public LaunchDecision approve(String id, GovernanceRequest body) {
         requireOn();
         requireApprover();
         ProductOffering e = load(id);
@@ -277,38 +284,38 @@ public class LaunchGovernanceService {
         if (HELD.equals(st)) {
             throw new BadRequestException("'" + e.getName() + "' is on hold — resume it first");
         }
-        Map<String, Object> g = state(e);
-        if (g.get("readiness") == null) {
-            g.put("readiness", readinessTemplate());
+        GovernanceState g = state(e);
+        if (g.readiness == null) {
+            g.readiness = readinessTemplate();
         }
-        if (g.get("substanceHash") == null) {
-            g.put("substanceHash", substanceHash(e));
+        if (g.substanceHash == null) {
+            g.substanceHash = substanceHash(e);
         }
-        approveWith(e, g, actor(), str(body.get("note")), null, null);
+        approveWith(e, g, actor(), body.note(), null, null);
         return view(e);
     }
 
     @Transactional
-    public Map<String, Object> reject(String id, Map<String, Object> body) {
+    public LaunchDecision reject(String id, GovernanceRequest body) {
         requireOn();
         requireApprover();
         ProductOffering e = load(id);
-        Map<String, Object> g = state(e);
+        GovernanceState g = state(e);
         e.setGovernanceState(REJECTED);
         e.setApprovalExpiresAt(null);
-        g.put("rejectedAt", now());
-        g.put("rejectedBy", actor());
-        g.put("rejectedReason", str(body.get("note")));
+        g.rejectedAt = now();
+        g.rejectedBy = actor();
+        g.rejectedReason = body.note();
         store(e, g);
-        line(e, "rejected", str(body.get("note")), null, null);
-        emit(e, g, "rejected", str(body.get("note")));
+        line(e, "rejected", body.note(), null, null);
+        emit(e, g, "rejected", body.note());
         return view(e);
     }
 
     /** Hold: any catalog writer may pull the brake (a hold is the safe direction). A dated hold
      *  pushes the window; an open-ended hold withdraws a live offer until someone resumes it. */
     @Transactional
-    public Map<String, Object> hold(String id, Map<String, Object> body) {
+    public LaunchDecision hold(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
         String st = entity(e);
@@ -319,186 +326,184 @@ public class LaunchGovernanceService {
             throw new BadRequestException("only a requested, approved or launched offer can be held ('"
                     + e.getName() + "' is " + st + ")");
         }
-        OffsetDateTime until = body.get("until") == null ? null : OffsetDateTime.parse(String.valueOf(body.get("until")));
-        Map<String, Object> g = state(e);
-        g.put("heldFrom", st);
-        g.put("heldAt", now());
-        g.put("heldBy", actor());
-        g.put("holdReason", str(body.get("note")));
-        g.put("holdUntil", until == null ? null : until.toString());
+        OffsetDateTime until = body.until() == null ? null : OffsetDateTime.parse(body.until());
+        GovernanceState g = state(e);
+        g.heldFrom = st;
+        g.heldAt = now();
+        g.heldBy = actor();
+        g.holdReason = body.note();
+        g.holdUntil = until == null ? null : until.toString();
         if (LifecyclePolicy.launched(e.getLifecycleStatus())) {
             if (until != null) {
-                g.put("heldValidFrom", e.getValidFrom() == null ? null : e.getValidFrom().toString());
+                // "" = the offer had no launch date; a resume then puts it on sale now
+                g.heldValidFrom = e.getValidFrom() == null ? "" : e.getValidFrom().toString();
                 e.setValidFrom(until);
                 e.setAnnouncedAt(null); // launch day fires again when the hold lifts
             } else {
-                g.put("heldStatus", e.getLifecycleStatus());
+                g.heldStatus = e.getLifecycleStatus();
                 e.setLifecycleStatus("In test");
             }
         }
         e.setGovernanceState(HELD);
         e.setLaunchHoldUntil(until);
         store(e, g);
-        line(e, "held", (until == null ? "held until resumed" : "held until " + until) + note(body), null, null);
-        emit(e, g, "held", str(body.get("note")));
+        line(e, "held", (until == null ? "held until resumed" : "held until " + until) + body.noteSuffix(), null, null);
+        emit(e, g, "held", body.note());
         return view(e);
     }
 
     @Transactional
-    public Map<String, Object> resume(String id, Map<String, Object> body) {
+    public LaunchDecision resume(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
         if (!HELD.equals(entity(e))) {
             throw new BadRequestException("'" + e.getName() + "' is not on hold");
         }
-        Map<String, Object> g = state(e);
-        String back = g.get("heldFrom") == null ? APPROVED : String.valueOf(g.get("heldFrom"));
-        if (g.get("heldStatus") != null) {
-            e.setLifecycleStatus(String.valueOf(g.remove("heldStatus")));
+        GovernanceState g = state(e);
+        String back = g.heldFrom == null ? APPROVED : g.heldFrom;
+        if (g.heldStatus != null) {
+            e.setLifecycleStatus(g.heldStatus);
+            g.heldStatus = null;
         }
-        if (g.containsKey("heldValidFrom")) {
-            Object was = g.remove("heldValidFrom");
-            OffsetDateTime restored = was == null ? OffsetDateTime.now() : OffsetDateTime.parse(String.valueOf(was));
+        if (g.heldValidFrom != null) {
+            String was = g.heldValidFrom;
+            g.heldValidFrom = null;
+            OffsetDateTime restored = was.isBlank() ? OffsetDateTime.now() : OffsetDateTime.parse(was);
             e.setValidFrom(restored.isAfter(OffsetDateTime.now()) ? restored : OffsetDateTime.now());
         }
-        g.put("resumedAt", now());
-        g.put("resumedBy", actor());
-        g.put("holdUntil", null);
+        g.resumedAt = now();
+        g.resumedBy = actor();
+        g.holdUntil = null;
         e.setGovernanceState(back);
         e.setLaunchHoldUntil(null);
         store(e, g);
-        line(e, "resumed", "back to " + back + note(body), null, null);
-        emit(e, g, "resumed", str(body.get("note")));
+        line(e, "resumed", "back to " + back + body.noteSuffix(), null, null);
+        emit(e, g, "resumed", body.note());
         return view(e);
     }
 
     /** A readiness tick: the owner (or an approver) says their part is done. */
     @Transactional
-    public Map<String, Object> ready(String id, Map<String, Object> body) {
+    public LaunchDecision ready(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
-        String owner = str(body.get("owner"));
+        String owner = body.owner();
         if (owner == null) {
             throw new BadRequestException("owner (the readiness authority, e.g. campaign:write) is required");
         }
         if (!approver() && !holds(owner)) {
             throw new BadRequestException("only the " + owner + " owner or an approver can tick this readiness");
         }
-        Map<String, Object> g = state(e);
-        List<Map<String, Object>> readiness = readiness(g);
-        Map<String, Object> hit = readiness.stream().filter(r -> owner.equals(r.get("owner"))).findFirst()
-                .orElseThrow(() -> new BadRequestException("no readiness item is owned by " + owner));
-        hit.put("done", !Boolean.FALSE.equals(body.getOrDefault("done", true)));
-        hit.put("by", actor());
-        hit.put("at", now());
-        hit.put("note", str(body.get("note")));
-        g.put("readiness", readiness);
+        GovernanceState g = state(e);
+        List<ReadinessItem> readiness = new ArrayList<>(g.readinessOrEmpty());
+        int at = -1;
+        for (int i = 0; i < readiness.size(); i++) {
+            if (owner.equals(readiness.get(i).owner())) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            throw new BadRequestException("no readiness item is owned by " + owner);
+        }
+        ReadinessItem hit = readiness.get(at).ticked(!Boolean.FALSE.equals(body.done()), actor(), now(), body.note());
+        readiness.set(at, hit);
+        g.readiness = readiness;
         store(e, g);
-        line(e, "ready", hit.get("label") + " — " + (Boolean.TRUE.equals(hit.get("done")) ? "done" : "reopened")
-                + " by " + actor() + note(body), null, null);
+        line(e, "ready", hit.label() + " — " + (hit.done() ? "done" : "reopened") + " by " + actor() + body.noteSuffix(), null, null);
         Map<String, Object> extra = new LinkedHashMap<>();
         extra.put("owner", owner);
-        extra.put("done", hit.get("done"));
-        emit(e, g, "ready", str(body.get("note")), extra);
+        extra.put("done", hit.done());
+        emit(e, g, "ready", body.note(), extra);
         return view(e);
     }
 
     /** Launch now: approved + not held + ready (an approver may force past readiness). */
     @Transactional
-    public Map<String, Object> launch(String id, Map<String, Object> body) {
+    public LaunchDecision launch(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
-        boolean force = Boolean.TRUE.equals(body.get("force")) && approver();
+        boolean force = Boolean.TRUE.equals(body.force()) && approver();
         if (LAUNCHED.equals(entity(e)) && LifecyclePolicy.launched(e.getLifecycleStatus())) {
             return view(e);
         }
         requireLaunchable(e, force);
-        Map<String, Object> g = state(e);
-        if (body.get("channel") instanceof List<?> ch && !ch.isEmpty()) {
-            List<Map<String, Object>> list = new ArrayList<>();
-            for (Object o : ch) {
-                Map<String, Object> ref = new LinkedHashMap<>();
-                String cid = o instanceof Map<?, ?> m ? String.valueOf(m.get("id")) : String.valueOf(o);
-                ref.put("id", cid);
-                Channels.REGISTERED.stream().filter(r -> r.get("id").equals(cid)).findFirst()
-                        .ifPresent(r -> ref.put("name", r.get("name")));
-                list.add(ref);
+        GovernanceState g = state(e);
+        if (body.channel() != null && !body.channel().isEmpty()) {
+            List<EntityRef> list = new ArrayList<>();
+            for (JsonNode o : body.channel()) {
+                String cid = o.isObject() ? String.valueOf(o.get("id") == null || o.get("id").isNull() ? null : o.get("id").asText()) : o.asText();
+                String name = Channels.REGISTERED.stream().filter(r -> r.get("id").equals(cid)).findFirst()
+                        .map(r -> r.get("name")).orElse(null);
+                list.add(EntityRef.of(cid, name));
             }
-            Channels.requireKnown(list);
-            e.setChannelJson(mapper.writeJsonObjectList(list));
+            list.forEach(ref -> Channels.requireKnownId(ref.id()));
+            e.setChannelJson(writeRefs(list));
         }
-        if (body.get("validFrom") != null) {
-            e.setValidFrom(OffsetDateTime.parse(String.valueOf(body.get("validFrom"))));
+        if (body.validFrom() != null) {
+            e.setValidFrom(OffsetDateTime.parse(body.validFrom()));
         } else if (e.getValidFrom() == null || e.getValidFrom().isAfter(OffsetDateTime.now())) {
             e.setValidFrom(e.getValidFrom() == null ? OffsetDateTime.now() : e.getValidFrom());
         }
-        if (body.get("validTo") != null) {
-            e.setValidTo(OffsetDateTime.parse(String.valueOf(body.get("validTo"))));
+        if (body.validTo() != null) {
+            e.setValidTo(OffsetDateTime.parse(body.validTo()));
         }
         e.setLifecycleStatus("Active");
         e.setAnnouncedAt(null);
-        String skipped = force ? readiness(g).stream().filter(r -> !Boolean.TRUE.equals(r.get("done")))
-                .map(r -> String.valueOf(r.get("label"))).reduce((a, b) -> a + ", " + b).orElse(null) : null;
+        String skipped = force ? g.readinessOrEmpty().stream().filter(r -> !r.done())
+                .map(ReadinessItem::label).reduce((a, b) -> a + ", " + b).orElse(null) : null;
         markLaunched(e, g, "launched by " + actor() + (skipped == null ? "" : " — forced past readiness: " + skipped)
-                + note(body), null, null);
+                + body.noteSuffix(), null, null);
         return view(e);
     }
 
     /** Unlaunch: Retired with an end date — the trail keeps the launch, the shelf loses the offer. */
     @Transactional
-    public Map<String, Object> unlaunch(String id, Map<String, Object> body) {
+    public LaunchDecision unlaunch(String id, GovernanceRequest body) {
         requireOn();
         ProductOffering e = load(id);
         if (!LifecyclePolicy.launched(e.getLifecycleStatus())) {
             throw new BadRequestException("'" + e.getName() + "' is not launched");
         }
-        OffsetDateTime end = body.get("endDate") == null ? OffsetDateTime.now()
-                : OffsetDateTime.parse(String.valueOf(body.get("endDate")));
-        Map<String, Object> g = state(e);
+        OffsetDateTime end = body.endDate() == null ? OffsetDateTime.now() : OffsetDateTime.parse(body.endDate());
+        GovernanceState g = state(e);
         e.setValidTo(end);
         if (!end.isAfter(OffsetDateTime.now())) {
             e.setLifecycleStatus("Retired");
         }
         e.setGovernanceState(NONE);
         e.setApprovalExpiresAt(null);
-        g.put("unlaunchedAt", now());
-        g.put("unlaunchedBy", actor());
-        g.put("unlaunchEnd", end.toString());
+        g.unlaunchedAt = now();
+        g.unlaunchedBy = actor();
+        g.unlaunchEnd = end.toString();
         store(e, g);
-        line(e, "unlaunched", "sales end " + end + note(body), null, null);
-        emit(e, g, "unlaunched", str(body.get("note")));
+        line(e, "unlaunched", "sales end " + end + body.noteSuffix(), null, null);
+        emit(e, g, "unlaunched", body.note());
         return view(e);
     }
 
     /** Envelope dry-run for a draft that may not be saved yet: would it launch by itself? */
-    public Map<String, Object> dryRun(ProductOfferingDto dto) {
-        Map<String, Object> ctx = describe(dto);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("mode", mode());
-        out.put("context", ctx);
-        Map<String, Object> verdict = "envelope".equals(mode()) ? envelopeVerdict(ctx) : null;
-        out.put("preApproved", verdict != null);
-        if (verdict != null) {
-            out.put("envelope", Map.of("id", String.valueOf(verdict.get("ruleId")),
-                    "name", String.valueOf(verdict.get("ruleName")),
-                    "message", verdict.get("message") == null ? "" : String.valueOf(verdict.get("message"))));
-        }
-        out.put("verdict", verdict != null ? "launches by itself — inside envelope '" + verdict.get("ruleName") + "'"
+    public LaunchDryRun dryRun(ProductOfferingDto dto) {
+        LaunchContext ctx = describe(dto);
+        PolicyClient.Decision verdict = "envelope".equals(mode()) ? envelopeVerdict(ctx) : null;
+        EnvelopeRef envelope = verdict == null ? null : new EnvelopeRef(String.valueOf(verdict.ruleId()),
+                String.valueOf(verdict.ruleName()), verdict.message() == null ? "" : verdict.message());
+        String text = verdict != null ? "launches by itself — inside envelope '" + verdict.ruleName() + "'"
                 : NONE.equals(mode()) ? "launch governance is off for this tenant — a write is a launch"
                 : "always".equals(mode()) ? "needs an approver — this tenant approves every launch"
-                : "needs an approver — outside every envelope");
-        return out;
+                : "needs an approver — outside every envelope";
+        return new LaunchDryRun(mode(), ctx, verdict != null, envelope, text);
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> view(String id) {
+    public LaunchDecision view(String id) {
         return view(load(id));
     }
 
     /** The approvals desk: everything waiting on a decision, a tick or a resume. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> queue() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<LaunchDecision> queue() {
+        List<LaunchDecision> out = new ArrayList<>();
         for (ProductOffering e : offerings.findByTenantId(scope.currentTenantId())) {
             String st = e.getGovernanceState();
             if (st == null || NONE.equals(st)) {
@@ -509,7 +514,7 @@ public class LaunchGovernanceService {
             }
             out.add(view(e));
         }
-        out.sort((a, b) -> String.valueOf(b.get("lastUpdate")).compareTo(String.valueOf(a.get("lastUpdate"))));
+        out.sort((a, b) -> b.lastUpdate().compareTo(a.lastUpdate()));
         return out;
     }
 
@@ -518,19 +523,19 @@ public class LaunchGovernanceService {
     public void tick(ProductOffering e, OffsetDateTime now) {
         String st = e.getGovernanceState();
         if (APPROVED.equals(st) && e.getApprovalExpiresAt() != null && e.getApprovalExpiresAt().isBefore(now)) {
-            Map<String, Object> g = state(e);
+            GovernanceState g = state(e);
             e.setGovernanceState(EXPIRED);
-            g.put("expiredAt", now.toString());
+            g.expiredAt = now.toString();
             store(e, g);
             offerings.save(e);
             line(e, "expired", "approval expired on " + e.getApprovalExpiresAt() + " — request again", null, null);
             emit(e, g, "expired", null);
         } else if (HELD.equals(st) && e.getLaunchHoldUntil() != null && e.getLaunchHoldUntil().isBefore(now)
                 && LifecyclePolicy.launched(e.getLifecycleStatus())) {
-            Map<String, Object> g = state(e);
-            g.put("resumedAt", now.toString());
-            g.put("resumedBy", "clock");
-            g.remove("heldValidFrom");
+            GovernanceState g = state(e);
+            g.resumedAt = now.toString();
+            g.resumedBy = "clock";
+            g.heldValidFrom = null;
             e.setGovernanceState(LAUNCHED);
             e.setLaunchHoldUntil(null);
             store(e, g);
@@ -542,14 +547,12 @@ public class LaunchGovernanceService {
 
     /* ---------- the envelope context ---------- */
 
-    public Map<String, Object> describe(ProductOffering e) {
+    public LaunchContext describe(ProductOffering e) {
         return describe(mapper.toDto(e));
     }
 
     /** What an envelope may look at: plain facts, in plain units. */
-    public Map<String, Object> describe(ProductOfferingDto dto) {
-        Map<String, Object> ctx = new LinkedHashMap<>();
-        ctx.put("name", dto.getName());
+    public LaunchContext describe(ProductOfferingDto dto) {
         List<String> categories = new ArrayList<>();
         List<String> categoryIds = new ArrayList<>();
         for (Map<String, Object> c : nullSafe(dto.getCategory())) {
@@ -560,8 +563,6 @@ public class LaunchGovernanceService {
                 categoryIds.add(String.valueOf(c.get("id")));
             }
         }
-        ctx.put("category", categories);
-        ctx.put("categoryId", categoryIds);
         // price: the lowest recurring charge if there is one, else the lowest one-time
         Double recurring = null;
         Double oneTime = null;
@@ -574,13 +575,13 @@ public class LaunchGovernanceService {
             if (p == null) {
                 continue;
             }
-            Map<String, Object> price = readObject(p.getPriceJson());
-            Double value = price.get("value") == null ? null : Double.valueOf(String.valueOf(price.get("value")));
+            Money price = readMoney(p.getPriceJson());
+            Double value = price == null || price.value() == null ? null : price.value().doubleValue();
             if (value == null) {
                 continue;
             }
-            if (currency == null && price.get("unit") != null) {
-                currency = String.valueOf(price.get("unit"));
+            if (currency == null && price.unit() != null) {
+                currency = price.unit();
             }
             if ("recurring".equalsIgnoreCase(p.getPriceType())) {
                 recurring = recurring == null ? value : Math.min(recurring, value);
@@ -588,16 +589,15 @@ public class LaunchGovernanceService {
                 oneTime = oneTime == null ? value : Math.min(oneTime, value);
             }
         }
-        ctx.put("price", recurring != null ? recurring : oneTime != null ? oneTime : 0);
-        ctx.put("priceType", recurring != null ? "recurring" : oneTime != null ? "oneTime" : "none");
-        ctx.put("currency", currency);
+        Double price = recurring != null ? recurring : oneTime != null ? oneTime : 0d;
+        String priceType = recurring != null ? "recurring" : oneTime != null ? "oneTime" : "none";
         // spec characteristics: allowance and validity, parsed to numbers
+        String specification = null;
         Map<String, Object> chars = new LinkedHashMap<>();
-        if (dto.getProductSpecification() != null && dto.getProductSpecification().get("id") != null) {
-            ProductSpecification spec = specs.findByIdAndTenantId(String.valueOf(dto.getProductSpecification().get("id")),
-                    scope.currentTenantId()).orElse(null);
+        if (dto.getProductSpecification() != null && dto.getProductSpecification().id() != null) {
+            ProductSpecification spec = specs.findByIdAndTenantId(dto.getProductSpecification().id(), scope.currentTenantId()).orElse(null);
             if (spec != null) {
-                ctx.put("specification", spec.getName());
+                specification = spec.getName();
                 for (Map<String, Object> ch : readList(spec.getProductSpecCharacteristicJson())) {
                     Object name = ch.get("name");
                     if (name == null) {
@@ -612,10 +612,6 @@ public class LaunchGovernanceService {
                 }
             }
         }
-        ctx.put("chars", chars);
-        ctx.put("allowanceGb", gigabytes(firstOf(chars, "Data", "data", "allowance", "Allowance", "dataAllowance")));
-        ctx.put("validityDays", days(firstOf(chars, "Validity", "validity", "validityDays")));
-        ctx.put("zeroRatedApps", firstOf(chars, "zeroRatedApps", "Zero-rated apps") != null);
         List<String> channels = new ArrayList<>();
         for (Map<String, Object> c : nullSafe(dto.getChannel())) {
             if (c.get("id") != null) {
@@ -625,22 +621,22 @@ public class LaunchGovernanceService {
         if (channels.isEmpty()) {
             Channels.REGISTERED.forEach(r -> channels.add(r.get("id")));
         }
-        ctx.put("channel", channels);
-        ctx.put("channelCount", channels.size());
         List<String> terms = new ArrayList<>();
         for (Map<String, Object> t : nullSafe(dto.getProductOfferingTerm())) {
             if (t.get("name") != null) {
                 terms.add(String.valueOf(t.get("name")).toLowerCase(Locale.ROOT));
             }
         }
-        ctx.put("term", terms);
-        ctx.put("isBundle", Boolean.TRUE.equals(dto.getIsBundle()));
-        return ctx;
+        return new LaunchContext(dto.getName(), categories, categoryIds, price, priceType, currency, specification, chars,
+                gigabytes(firstOf(chars, "Data", "data", "allowance", "Allowance", "dataAllowance")),
+                days(firstOf(chars, "Validity", "validity", "validityDays")),
+                firstOf(chars, "zeroRatedApps", "Zero-rated apps") != null,
+                channels, channels.size(), terms, Boolean.TRUE.equals(dto.getIsBundle()));
     }
 
-    private Map<String, Object> envelopeVerdict(Map<String, Object> ctx) {
-        Map<String, Object> v = policy.evaluateRaw("launch", ctx);
-        if (v == null || !"allow".equals(v.get("decision")) || v.get("ruleId") == null) {
+    private PolicyClient.Decision envelopeVerdict(LaunchContext ctx) {
+        PolicyClient.Decision v = policy.decision("launch", ctx);
+        if (v == null || !"allow".equals(v.decision()) || v.ruleId() == null) {
             return null;
         }
         return v;
@@ -662,7 +658,7 @@ public class LaunchGovernanceService {
 
     private void requireLaunchable(ProductOffering e, boolean force) {
         String st = entity(e);
-        Map<String, Object> g = state(e);
+        GovernanceState g = state(e);
         if (HELD.equals(st)) {
             throw new BadRequestException("'" + e.getName() + "' is on hold"
                     + (e.getLaunchHoldUntil() == null ? "" : " until " + e.getLaunchHoldUntil()) + " — resume it first");
@@ -673,8 +669,7 @@ public class LaunchGovernanceService {
                 throw new BadRequestException("the approval of '" + e.getName() + "' expired on "
                         + e.getApprovalExpiresAt() + " — request it again");
             }
-            List<String> open = readiness(g).stream().filter(r -> !Boolean.TRUE.equals(r.get("done")))
-                    .map(r -> String.valueOf(r.get("label"))).toList();
+            List<String> open = g.readinessOrEmpty().stream().filter(r -> !r.done()).map(ReadinessItem::label).toList();
             if (!open.isEmpty() && !force) {
                 throw new BadRequestException("'" + e.getName() + "' is approved but not ready: " + String.join(", ", open)
                         + (approver() ? " — an approver may launch anyway with force" : ""));
@@ -683,10 +678,10 @@ public class LaunchGovernanceService {
         }
         if (approver()) {
             // the approver's one-stroke path: approve and launch in the same breath
-            if (g.get("readiness") == null) {
-                g.put("readiness", readinessTemplate());
+            if (g.readiness == null) {
+                g.readiness = readinessTemplate();
             }
-            g.put("substanceHash", substanceHash(e));
+            g.substanceHash = substanceHash(e);
             approveWith(e, g, actor(), "approved directly by " + actor(), null, null);
             return;
         }
@@ -694,28 +689,24 @@ public class LaunchGovernanceService {
                 + mode() + ") — request it: POST productOffering/" + e.getId() + "/governance/request");
     }
 
-    private void approveWith(ProductOffering e, Map<String, Object> g, String by, String note, String envelopeId, String envelopeName) {
+    private void approveWith(ProductOffering e, GovernanceState g, String by, String note, String envelopeId, String envelopeName) {
         e.setGovernanceState(APPROVED);
         e.setApprovalExpiresAt(OffsetDateTime.now().plusDays(expiryDays()));
-        g.put("approvedAt", now());
-        g.put("approvedBy", by);
-        g.put("approvalNote", note);
-        if (envelopeId != null) {
-            g.put("envelope", Map.of("id", envelopeId, "name", envelopeName));
-        } else {
-            g.remove("envelope");
-        }
+        g.approvedAt = now();
+        g.approvedBy = by;
+        g.approvalNote = note;
+        g.envelope = envelopeId != null ? new EnvelopeRef(envelopeId, envelopeName) : null;
         store(e, g);
         line(e, "approved", note, envelopeId, envelopeName);
         emit(e, g, "approved", note);
     }
 
-    private void markLaunched(ProductOffering e, Map<String, Object> g, String note, String envelopeId, String envelopeName) {
+    private void markLaunched(ProductOffering e, GovernanceState g, String note, String envelopeId, String envelopeName) {
         e.setGovernanceState(LAUNCHED);
         e.setLaunchHoldUntil(null);
-        g.put("launchedAt", now());
-        g.put("launchedBy", actor());
-        g.put("launchedChannels", readList(e.getChannelJson()).stream().map(c -> String.valueOf(c.get("id"))).toList());
+        g.launchedAt = now();
+        g.launchedBy = actor();
+        g.launchedChannels = readRefs(e.getChannelJson()).stream().map(c -> String.valueOf(c.id())).toList();
         store(e, g);
         line(e, "launched", note, envelopeId, envelopeName);
         emit(e, g, "launched", note);
@@ -730,31 +721,26 @@ public class LaunchGovernanceService {
         return e.getGovernanceState() == null ? NONE : e.getGovernanceState();
     }
 
-    public Map<String, Object> state(ProductOffering e) {
-        return readObject(e.getGovernanceJson());
+    /** The stored governance state of an offering; a fresh one when nothing is stored yet. */
+    public GovernanceState state(ProductOffering e) {
+        String s = e.getGovernanceJson();
+        if (s == null || s.isBlank()) {
+            return new GovernanceState();
+        }
+        try {
+            return json.readValue(s, GovernanceState.class);
+        } catch (Exception ex) {
+            return new GovernanceState();
+        }
     }
 
-    private void store(ProductOffering e, Map<String, Object> g) {
+    private void store(ProductOffering e, GovernanceState g) {
         try {
             e.setGovernanceJson(json.writeValueAsString(g));
         } catch (Exception ex) {
             throw new IllegalStateException(ex);
         }
         e.setLastUpdate(OffsetDateTime.now());
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> readiness(Map<String, Object> g) {
-        if (g.get("readiness") instanceof List<?> l) {
-            List<Map<String, Object>> out = new ArrayList<>();
-            for (Object o : l) {
-                if (o instanceof Map<?, ?> m) {
-                    out.add(new LinkedHashMap<>((Map<String, Object>) m));
-                }
-            }
-            return out;
-        }
-        return new ArrayList<>();
     }
 
     private void line(ProductOffering e, String action, String note, String envelopeId, String envelopeName) {
@@ -771,11 +757,11 @@ public class LaunchGovernanceService {
         ledger.save(l);
     }
 
-    private void emit(ProductOffering e, Map<String, Object> g, String action, String note) {
+    private void emit(ProductOffering e, GovernanceState g, String action, String note) {
         emit(e, g, action, note, Map.of());
     }
 
-    private void emit(ProductOffering e, Map<String, Object> g, String action, String note, Map<String, Object> extra) {
+    private void emit(ProductOffering e, GovernanceState g, String action, String note, Map<String, Object> extra) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("id", e.getId());
         body.put("name", e.getName());
@@ -784,8 +770,8 @@ public class LaunchGovernanceService {
         body.put("lifecycleStatus", e.getLifecycleStatus());
         body.put("actor", actor());
         body.put("note", note);
-        body.put("readiness", g.get("readiness"));
-        body.put("envelope", g.get("envelope"));
+        body.put("readiness", g.readiness);
+        body.put("envelope", g.envelope);
         body.put("holdUntil", e.getLaunchHoldUntil() == null ? null : e.getLaunchHoldUntil().toString());
         body.put("approvalExpiresAt", e.getApprovalExpiresAt() == null ? null : e.getApprovalExpiresAt().toString());
         body.put("validFrom", e.getValidFrom() == null ? null : e.getValidFrom().toString());
@@ -794,35 +780,27 @@ public class LaunchGovernanceService {
         log.info("governance {}: '{}' -> {} ({})", action, e.getName(), e.getGovernanceState(), note);
     }
 
-    private Map<String, Object> view(ProductOffering e) {
-        Map<String, Object> v = new LinkedHashMap<>();
-        v.put("id", e.getId());
-        v.put("name", e.getName());
-        v.put("lifecycleStatus", e.getLifecycleStatus());
-        v.put("validFrom", e.getValidFrom() == null ? null : e.getValidFrom().toString());
-        v.put("validTo", e.getValidTo() == null ? null : e.getValidTo().toString());
-        v.put("governanceState", entity(e));
-        v.put("mode", mode());
-        v.put("holdUntil", e.getLaunchHoldUntil() == null ? null : e.getLaunchHoldUntil().toString());
-        v.put("approvalExpiresAt", e.getApprovalExpiresAt() == null ? null : e.getApprovalExpiresAt().toString());
-        v.put("channel", readList(e.getChannelJson()));
-        v.put("lastUpdate", e.getLastUpdate() == null ? "" : e.getLastUpdate().toString());
-        v.putAll(state(e));
-        v.put("readiness", readiness(state(e)));
-        List<Map<String, Object>> trail = new ArrayList<>();
+    private LaunchDecision view(ProductOffering e) {
+        GovernanceState st = state(e);
+        // the stored state rides unwrapped in the view; its holdUntil and readiness have their own place there
+        GovernanceState unwrapped = json.convertValue(st, GovernanceState.class);
+        unwrapped.holdUntil = null;
+        unwrapped.readiness = null;
+        String holdUntil = st.holdUntil != null ? st.holdUntil
+                : e.getLaunchHoldUntil() == null ? null : e.getLaunchHoldUntil().toString();
+        List<LedgerLine> trail = new ArrayList<>();
         for (GovernanceLedger l : ledger.findAllByTenantIdAndOfferingIdOrderByAtAsc(e.getTenantId(), e.getId())) {
-            Map<String, Object> t = new LinkedHashMap<>();
-            t.put("action", l.getAction());
-            t.put("actor", l.getActor());
-            t.put("note", l.getNote());
-            t.put("envelopeId", l.getEnvelopeId());
-            t.put("envelopeName", l.getEnvelopeName());
-            t.put("at", l.getAt().toString());
-            trail.add(t);
+            trail.add(new LedgerLine(l.getAction(), l.getActor(), l.getNote(), l.getEnvelopeId(), l.getEnvelopeName(),
+                    l.getAt().toString()));
         }
-        v.put("ledger", trail);
-        v.put("canApprove", approver());
-        return v;
+        return new LaunchDecision(e.getId(), e.getName(), e.getLifecycleStatus(),
+                e.getValidFrom() == null ? null : e.getValidFrom().toString(),
+                e.getValidTo() == null ? null : e.getValidTo().toString(),
+                entity(e), mode(), holdUntil,
+                e.getApprovalExpiresAt() == null ? null : e.getApprovalExpiresAt().toString(),
+                readRefs(e.getChannelJson()),
+                e.getLastUpdate() == null ? "" : e.getLastUpdate().toString(),
+                unwrapped, st.readinessOrEmpty(), trail, approver());
     }
 
     /** The substance an approval covers: what a customer pays, gets and where. Dates and copy are free to edit. */
@@ -838,14 +816,14 @@ public class LaunchGovernanceService {
         }
     }
 
-    private Map<String, Object> readObject(String s) {
+    private Money readMoney(String s) {
         if (s == null || s.isBlank()) {
-            return new LinkedHashMap<>();
+            return null;
         }
         try {
-            return json.readValue(s, JSON_OBJECT);
+            return json.readValue(s, Money.class);
         } catch (Exception ex) {
-            return new LinkedHashMap<>();
+            return null;
         }
     }
 
@@ -857,6 +835,25 @@ public class LaunchGovernanceService {
             return json.readValue(s, JSON_LIST);
         } catch (Exception ex) {
             return new ArrayList<>();
+        }
+    }
+
+    private List<EntityRef> readRefs(String s) {
+        if (s == null || s.isBlank()) {
+            return new ArrayList<>();
+        }
+        try {
+            return json.readValue(s, REF_LIST);
+        } catch (Exception ex) {
+            return new ArrayList<>();
+        }
+    }
+
+    private String writeRefs(List<EntityRef> refs) {
+        try {
+            return json.writeValueAsString(refs);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("unserializable channel list", ex);
         }
     }
 
@@ -924,13 +921,5 @@ public class LaunchGovernanceService {
 
     private static String now() {
         return OffsetDateTime.now().toString();
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
-    }
-
-    private static String note(Map<String, Object> body) {
-        return body.get("note") == null ? "" : " — " + body.get("note");
     }
 }

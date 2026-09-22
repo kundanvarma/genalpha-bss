@@ -1,6 +1,9 @@
 package com.bss.catalog.mapper;
 
+import com.bss.catalog.dto.Money;
 import com.bss.catalog.dto.ProductOfferingPriceDto;
+import com.bss.catalog.dto.Quantity;
+import com.bss.catalog.dto.TimePeriod;
 import com.bss.catalog.entity.ProductOfferingPrice;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -12,8 +15,6 @@ import java.util.Map;
 @Component
 public class ProductOfferingPriceMapper {
 
-    private static final TypeReference<Map<String, Object>> JSON_OBJECT = new TypeReference<>() {
-    };
     private static final TypeReference<java.util.List<Map<String, Object>>> JSON_LIST = new TypeReference<>() {
     };
 
@@ -30,22 +31,15 @@ public class ProductOfferingPriceMapper {
         dto.setName(entity.getName());
         dto.setPriceType(entity.getPriceType());
         dto.setIsBundle(entity.getIsBundle());
-        dto.setPrice(readJsonObject(entity.getPriceJson()));
+        dto.setPrice(readJson(entity.getPriceJson(), Money.class));
         dto.setProdSpecCharValueUse(readJsonList(entity.getProdSpecCharValueUseJson()));
         dto.setTax(readJsonList(entity.getTaxJson()));
         dto.setRecurringChargePeriodType(entity.getRecurringChargePeriodType());
         dto.setRecurringChargePeriodLength(entity.getRecurringChargePeriodLength());
         if (entity.getValidFrom() != null || entity.getValidTo() != null) {
-            Map<String, Object> window = new java.util.LinkedHashMap<>();
-            if (entity.getValidFrom() != null) {
-                window.put("startDateTime", entity.getValidFrom());
-            }
-            if (entity.getValidTo() != null) {
-                window.put("endDateTime", entity.getValidTo());
-            }
-            dto.setValidFor(window);
+            dto.setValidFor(new TimePeriod(entity.getValidFrom(), entity.getValidTo()));
         }
-        dto.setUnitOfMeasure(readJsonObject(entity.getUnitOfMeasureJson()));
+        dto.setUnitOfMeasure(readJson(entity.getUnitOfMeasureJson(), Quantity.class));
         dto.setPricingLogicAlgorithm(readJsonList(entity.getPricingLogicAlgorithmJson()));
         dto.setLifecycleStatus(entity.getLifecycleStatus());
         dto.setVersion(entity.getVersion());
@@ -61,14 +55,14 @@ public class ProductOfferingPriceMapper {
         entity.setName(dto.getName());
         entity.setPriceType(dto.getPriceType());
         entity.setIsBundle(dto.getIsBundle());
-        entity.setPriceJson(writeJsonObject(dto.getPrice()));
-        entity.setProdSpecCharValueUseJson(writeJsonList(dto.getProdSpecCharValueUse()));
-        entity.setTaxJson(writeJsonList(dto.getTax()));
+        entity.setPriceJson(writeJson(dto.getPrice()));
+        entity.setProdSpecCharValueUseJson(writeJson(dto.getProdSpecCharValueUse()));
+        entity.setTaxJson(writeJson(dto.getTax()));
         entity.setRecurringChargePeriodType(dto.getRecurringChargePeriodType());
         entity.setRecurringChargePeriodLength(dto.getRecurringChargePeriodLength());
         applyWindow(dto.getValidFor(), entity);
-        entity.setUnitOfMeasureJson(writeJsonObject(dto.getUnitOfMeasure()));
-        entity.setPricingLogicAlgorithmJson(writeJsonList(dto.getPricingLogicAlgorithm()));
+        entity.setUnitOfMeasureJson(writeJson(dto.getUnitOfMeasure()));
+        entity.setPricingLogicAlgorithmJson(writeJson(dto.getPricingLogicAlgorithm()));
         entity.setLifecycleStatus(dto.getLifecycleStatus());
         entity.setVersion(dto.getVersion());
         entity.setLastUpdate(dto.getLastUpdate());
@@ -89,22 +83,22 @@ public class ProductOfferingPriceMapper {
             entity.setIsBundle(patch.getIsBundle());
         }
         if (patch.getPrice() != null) {
-            entity.setPriceJson(writeJsonObject(patch.getPrice()));
+            entity.setPriceJson(writeJson(patch.getPrice()));
         }
         if (patch.getValidFor() != null) {
             applyWindow(patch.getValidFor(), entity);
         }
         if (patch.getUnitOfMeasure() != null) {
-            entity.setUnitOfMeasureJson(writeJsonObject(patch.getUnitOfMeasure()));
+            entity.setUnitOfMeasureJson(writeJson(patch.getUnitOfMeasure()));
         }
         if (patch.getPricingLogicAlgorithm() != null) {
-            entity.setPricingLogicAlgorithmJson(writeJsonList(patch.getPricingLogicAlgorithm()));
+            entity.setPricingLogicAlgorithmJson(writeJson(patch.getPricingLogicAlgorithm()));
         }
         if (patch.getTax() != null) {
-            entity.setTaxJson(writeJsonList(patch.getTax()));
+            entity.setTaxJson(writeJson(patch.getTax()));
         }
         if (patch.getProdSpecCharValueUse() != null) {
-            entity.setProdSpecCharValueUseJson(writeJsonList(patch.getProdSpecCharValueUse()));
+            entity.setProdSpecCharValueUseJson(writeJson(patch.getProdSpecCharValueUse()));
         }
         if (patch.getRecurringChargePeriodType() != null) {
             entity.setRecurringChargePeriodType(patch.getRecurringChargePeriodType());
@@ -120,14 +114,14 @@ public class ProductOfferingPriceMapper {
         }
     }
 
-    private String writeJsonList(java.util.List<Map<String, Object>> value) {
+    private String writeJson(Object value) {
         if (value == null) {
             return null;
         }
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("unserializable JSON list", e);
+            throw new IllegalArgumentException("unserializable JSON value", e);
         }
     }
 
@@ -142,48 +136,23 @@ public class ProductOfferingPriceMapper {
         }
     }
 
-    private String writeJsonObject(Map<String, Object> value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("unserializable JSON object", e);
-        }
-    }
-
-    private Map<String, Object> readJsonObject(String json) {
+    private <T> T readJson(String json, Class<T> type) {
         if (json == null) {
             return null;
         }
         try {
-            return objectMapper.readValue(json, JSON_OBJECT);
+            return objectMapper.readValue(json, type);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON object is unreadable", e);
         }
     }
 
     /** TMF620 validFor {startDateTime, endDateTime} → the two columns; an absent bound stays open. */
-    private static void applyWindow(Map<String, Object> window, ProductOfferingPrice entity) {
+    private static void applyWindow(TimePeriod window, ProductOfferingPrice entity) {
         if (window == null) {
             return;
         }
-        entity.setValidFrom(parseTime(window.get("startDateTime")));
-        entity.setValidTo(parseTime(window.get("endDateTime")));
-    }
-
-    private static java.time.OffsetDateTime parseTime(Object v) {
-        if (v == null || String.valueOf(v).isBlank()) {
-            return null;
-        }
-        if (v instanceof java.time.OffsetDateTime t) {
-            return t;
-        }
-        try {
-            return java.time.OffsetDateTime.parse(String.valueOf(v));
-        } catch (Exception e) {
-            return java.time.LocalDate.parse(String.valueOf(v).substring(0, 10)).atStartOfDay().atOffset(java.time.ZoneOffset.UTC);
-        }
+        entity.setValidFrom(window.startDateTime());
+        entity.setValidTo(window.endDateTime());
     }
 }

@@ -27,7 +27,7 @@ public class ProductOfferingPriceDto {
     private Boolean isBundle;
 
     @JsonProperty("price")
-    private Map<String, Object> price;
+    private Money price;
 
     @JsonProperty("prodSpecCharValueUse")
     private java.util.List<Map<String, Object>> prodSpecCharValueUse;
@@ -37,10 +37,10 @@ public class ProductOfferingPriceDto {
     private java.util.List<Map<String, Object>> tax;
 
     @JsonProperty("validFor")
-    private Map<String, Object> validFor;
+    private TimePeriod validFor;
 
     @JsonProperty("unitOfMeasure")
-    private Map<String, Object> unitOfMeasure;
+    private Quantity unitOfMeasure;
 
     @JsonProperty("pricingLogicAlgorithm")
     private java.util.List<Map<String, Object>> pricingLogicAlgorithm;
@@ -106,11 +106,11 @@ public class ProductOfferingPriceDto {
         this.isBundle = isBundle;
     }
 
-    public Map<String, Object> getPrice() {
+    public Money getPrice() {
         return price;
     }
 
-    public void setPrice(Map<String, Object> price) {
+    public void setPrice(Money price) {
         this.price = price;
     }
 
@@ -178,19 +178,19 @@ public class ProductOfferingPriceDto {
         this.type = type;
     }
 
-    public Map<String, Object> getValidFor() {
+    public TimePeriod getValidFor() {
         return validFor;
     }
 
-    public void setValidFor(Map<String, Object> validFor) {
+    public void setValidFor(TimePeriod validFor) {
         this.validFor = validFor;
     }
 
-    public Map<String, Object> getUnitOfMeasure() {
+    public Quantity getUnitOfMeasure() {
         return unitOfMeasure;
     }
 
-    public void setUnitOfMeasure(Map<String, Object> unitOfMeasure) {
+    public void setUnitOfMeasure(Quantity unitOfMeasure) {
         this.unitOfMeasure = unitOfMeasure;
     }
 
