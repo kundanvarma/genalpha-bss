@@ -42,7 +42,7 @@ with its suites green.
 |---|---|
 | Channels ask, never compute: pricing from the catalog's configurator, eligibility from policy, actions from the ontology. | Suite #131 pattern; review. |
 | Every front end sends `X-Channel`; every agent surface sends `X-GenAlpha-Agent`. | Gateway refuses what a channel cannot see; suite #118. |
-| React for channels; **no new vanilla-JS files**. The vanilla consoles are migrated desk by desk: split into ES modules first, then mount React islands with `createRoot` into the existing ids, one desk at a time, deleting the old desk when the new one is green. | Ratchet on file size; suite per desk. |
+| React for channels; **no new vanilla-JS files**. The vanilla consoles are migrated desk by desk: split into files first (classic scripts in load order, so the shared globals keep working), then mount React islands with `createRoot` into the existing ids, one desk at a time, deleting the old desk when the new one is green. | Ratchet on file size; suite per desk. |
 | Screens speak operator language: names, never keys or UUIDs; healthy states stay quiet; every page has a goal line and a ? drawer. | Screenshot + look before handover; `console_home_test` asserts no UUID text on Home. A no-UUID assertion on every console page is a follow-up. |
 | Accessibility: keyboard operable, visible focus, colour never the only signal. | Suite spot checks. |
 

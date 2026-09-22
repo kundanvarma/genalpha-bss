@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/ops/arch/post-edit-check.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ]
+  }
+}
