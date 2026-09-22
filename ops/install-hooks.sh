@@ -6,7 +6,9 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 HOOK="$REPO/.git/hooks/pre-commit"
 cat > "$HOOK" <<'EOF'
 #!/bin/bash
-exec "$(git rev-parse --show-toplevel)/ops/scan-secrets.sh"
+R="$(git rev-parse --show-toplevel)"
+"$R/ops/scan-secrets.sh" || exit $?
+exec "$R/ops/arch/ratchet.sh"
 EOF
 chmod +x "$HOOK"
-echo "install-hooks: pre-commit now runs ops/scan-secrets.sh on every commit"
+echo "install-hooks: pre-commit now runs ops/scan-secrets.sh and ops/arch/ratchet.sh on every commit"
