@@ -1,5 +1,9 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.Money;
+import com.bss.usage.dto.SpendMeterView;
+import com.bss.usage.dto.SpendPolicyPatch;
+import com.bss.usage.dto.SpendVerdict;
 import com.bss.usage.entity.SpendMeter;
 import com.bss.usage.events.DomainEventPublisher;
 import com.bss.usage.exception.BadRequestException;
@@ -15,7 +19,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -92,25 +95,24 @@ public class SpendPolicyService {
     }
 
     @Transactional
-    public List<Map<String, Object>> policyOf(String partyId) {
+    public List<SpendMeterView> policyOf(String partyId) {
         String tenantId = tenantScope.currentTenantId();
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<SpendMeterView> out = new ArrayList<>();
         for (String type : List.of(SpendMeter.SPEND, SpendMeter.CONTENT, SpendMeter.ROAMING)) {
-            out.add(meterMap(ensureMeter(tenantId, partyId, type)));
+            out.add(meterView(ensureMeter(tenantId, partyId, type)));
         }
         return out;
     }
 
     @Transactional
-    public Map<String, Object> patch(String partyId, String meterType, Map<String, Object> dto) {
+    public SpendMeterView patch(String partyId, String meterType, SpendPolicyPatch dto) {
         String tenantId = tenantScope.currentTenantId();
         if (!Set.of(SpendMeter.SPEND, SpendMeter.CONTENT, SpendMeter.ROAMING).contains(meterType)) {
             throw new BadRequestException("meterType must be spend, content or roaming");
         }
         SpendMeter meter = ensureMeter(tenantId, partyId, meterType);
-        if (dto.containsKey("limit")) {
-            BigDecimal limit = dto.get("limit") == null ? null
-                    : new BigDecimal(String.valueOf(dto.get("limit")));
+        if (dto.hasLimit()) {
+            BigDecimal limit = dto.limitValue();
             if (limit != null && limit.signum() <= 0) {
                 throw new BadRequestException("limit must be positive");
             }
@@ -124,23 +126,23 @@ public class SpendPolicyService {
             }
             meter.setLimitValue(limit);
         }
-        if (dto.containsKey("currency") && dto.get("currency") != null) {
-            meter.setCurrency(String.valueOf(dto.get("currency")));
+        if (dto.currency() != null) {
+            meter.setCurrency(dto.currency());
         }
-        if (dto.containsKey("enabled")) {
-            meter.setEnabled(Boolean.parseBoolean(String.valueOf(dto.get("enabled"))));
+        if (dto.enabled() != null) {
+            meter.setEnabled(dto.enabled());
         }
-        if (dto.containsKey("notifyAtPct")) {
-            meter.setNotifyAtPct(new BigDecimal(String.valueOf(dto.get("notifyAtPct"))));
+        if (dto.notifyAtPct() != null) {
+            meter.setNotifyAtPct(dto.notifyAtPct());
         }
-        if (dto.containsKey("blockOnBreach")) {
-            meter.setBlockOnBreach(Boolean.parseBoolean(String.valueOf(dto.get("blockOnBreach"))));
+        if (dto.blockOnBreach() != null) {
+            meter.setBlockOnBreach(dto.blockOnBreach());
         }
-        if (dto.containsKey("barred")) {
+        if (dto.barred() != null) {
             if (!SpendMeter.CONTENT.equals(meterType)) {
                 throw new BadRequestException("barring belongs to the content-services face");
             }
-            boolean barred = Boolean.parseBoolean(String.valueOf(dto.get("barred")));
+            boolean barred = dto.barred();
             // a minor's barring is mandatory: only a guardian or staff lifts it
             if (!barred && partyScope.scopedPartyId().map(partyId::equals).orElse(false)
                     && household.isMinor(partyId)) {
@@ -152,7 +154,7 @@ public class SpendPolicyService {
         // a raised limit or re-enable clears a stale block for the new headroom
         reEvaluate(meter);
         meter.setUpdatedAt(OffsetDateTime.now());
-        return meterMap(meters.save(meter));
+        return meterView(meters.save(meter));
     }
 
     /**
@@ -161,7 +163,7 @@ public class SpendPolicyService {
      * rest of the cycle and says so on the event bus.
      */
     @Transactional
-    public Map<String, Object> roamingContinue(String partyId) {
+    public SpendMeterView roamingContinue(String partyId) {
         String tenantId = tenantScope.currentTenantId();
         SpendMeter meter = ensureMeter(tenantId, partyId, SpendMeter.ROAMING);
         rollPeriod(meter);
@@ -175,7 +177,7 @@ public class SpendPolicyService {
                 "accrued", money(meter.getAccruedValue(), meter.getCurrency()),
                 "limit", money(meter.getLimitValue(), meter.getCurrency()),
                 "period", period().toString()), tenantId);
-        return meterMap(meter);
+        return meterView(meter);
     }
 
     // ---------------- the accrue seam ----------------
@@ -187,13 +189,13 @@ public class SpendPolicyService {
      * edge (carrier-billing gateway / OCS) to refuse the charge.
      */
     @Transactional
-    public Map<String, Object> accrue(String tenantId, String partyId, String chargeClass,
+    public SpendVerdict accrue(String tenantId, String partyId, String chargeClass,
             BigDecimal amount, String currency) {
         if (amount == null || amount.signum() <= 0) {
             throw new BadRequestException("amount {value, unit} must be positive");
         }
         boolean accepted = true;
-        List<Map<String, Object>> touched = new ArrayList<>();
+        List<SpendMeterView> touched = new ArrayList<>();
         String primary = switch (chargeClass == null ? "usage" : chargeClass) {
             case "content" -> SpendMeter.CONTENT;
             case "roaming" -> SpendMeter.ROAMING;
@@ -210,7 +212,7 @@ public class SpendPolicyService {
                             "amount", money(amount, currency),
                             "reason", meter.isBarred() ? "barred" : "limit"), tenantId);
                 }
-                touched.add(meterMap(meter));
+                touched.add(meterView(meter));
             } else {
                 touched.add(accrueInto(meter, amount, tenantId));
             }
@@ -220,14 +222,11 @@ public class SpendPolicyService {
         rollPeriod(spend);
         if (accepted && refuses(spend)) {
             accepted = false;
-            touched.add(meterMap(spend));
+            touched.add(meterView(spend));
         } else if (accepted) {
             touched.add(accrueInto(spend, amount, tenantId));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("accepted", accepted);
-        out.put("meter", touched);
-        return out;
+        return new SpendVerdict(accepted, touched);
     }
 
     private boolean refuses(SpendMeter meter) {
@@ -240,7 +239,7 @@ public class SpendPolicyService {
         return meter.isEnabled() && meter.isBlocked();
     }
 
-    private Map<String, Object> accrueInto(SpendMeter meter, BigDecimal amount, String tenantId) {
+    private SpendMeterView accrueInto(SpendMeter meter, BigDecimal amount, String tenantId) {
         BigDecimal before = meter.getAccruedValue();
         meter.setAccruedValue(before.add(amount));
         meter.setUpdatedAt(OffsetDateTime.now());
@@ -264,7 +263,7 @@ public class SpendPolicyService {
                 publishThreshold(meter, BigDecimal.valueOf(100), true, tenantId);
             }
         }
-        return meterMap(meters.save(meter));
+        return meterView(meters.save(meter));
     }
 
     private void publishThreshold(SpendMeter meter, BigDecimal threshold, boolean breach, String tenantId) {
@@ -339,31 +338,21 @@ public class SpendPolicyService {
         }
     }
 
-    private Map<String, Object> meterMap(SpendMeter meter) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("partyId", meter.getPartyId());
-        map.put("meterType", meter.getMeterType());
-        map.put("enabled", meter.isEnabled());
-        if (SpendMeter.CONTENT.equals(meter.getMeterType())) {
-            map.put("barred", meter.isBarred());
-            map.put("lowestSelectableLimit", money(contentCapFloor, contentCurrency));
-        }
-        if (meter.getLimitValue() != null) {
-            map.put("limit", money(meter.getLimitValue(), meter.getCurrency()));
-        }
-        map.put("notifyAtPct", meter.getNotifyAtPct());
-        map.put("blockOnBreach", meter.isBlockOnBreach());
+    private SpendMeterView meterView(SpendMeter meter) {
+        boolean content = SpendMeter.CONTENT.equals(meter.getMeterType());
+        boolean roaming = SpendMeter.ROAMING.equals(meter.getMeterType());
         LocalDate period = period();
-        BigDecimal accrued = period.equals(meter.getAccrualPeriod())
-                ? meter.getAccruedValue() : BigDecimal.ZERO;
-        map.put("accrued", money(accrued, meter.getCurrency()));
-        map.put("blocked", period.equals(meter.getAccrualPeriod()) && meter.isBlocked());
-        if (SpendMeter.ROAMING.equals(meter.getMeterType())) {
-            map.put("continueElected", period.equals(meter.getAccrualPeriod()) && meter.isContinueElected());
-        }
-        map.put("period", period.toString());
-        map.put("@type", "SpendMeter");
-        return map;
+        boolean thisPeriod = period.equals(meter.getAccrualPeriod());
+        BigDecimal accrued = thisPeriod ? meter.getAccruedValue() : BigDecimal.ZERO;
+        return new SpendMeterView(meter.getPartyId(), meter.getMeterType(), meter.isEnabled(),
+                content ? meter.isBarred() : null,
+                content ? money(contentCapFloor, contentCurrency) : null,
+                meter.getLimitValue() != null ? money(meter.getLimitValue(), meter.getCurrency()) : null,
+                meter.getNotifyAtPct(), meter.isBlockOnBreach(),
+                money(accrued, meter.getCurrency()),
+                thisPeriod && meter.isBlocked(),
+                roaming ? thisPeriod && meter.isContinueElected() : null,
+                period.toString(), "SpendMeter");
     }
 
     private LocalDate period() {
@@ -375,10 +364,7 @@ public class SpendPolicyService {
                 : used.multiply(BigDecimal.valueOf(100)).divide(limit, 2, RoundingMode.HALF_UP);
     }
 
-    private static Map<String, Object> money(BigDecimal value, String unit) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("value", value);
-        m.put("unit", unit);
-        return m;
+    private static Money money(BigDecimal value, String unit) {
+        return new Money(value, unit);
     }
 }

@@ -1,6 +1,27 @@
 package com.bss.usage.service;
 
 import com.bss.usage.api.ApiConstants;
+import com.bss.usage.dto.ConsumptionBucket;
+import com.bss.usage.dto.ConsumptionReport;
+import com.bss.usage.dto.CycleCloseReceipt;
+import com.bss.usage.dto.DataGift;
+import com.bss.usage.dto.Money;
+import com.bss.usage.dto.PriorityUsageNotification;
+import com.bss.usage.dto.PriorityUsageReceipt;
+import com.bss.usage.dto.RatedChargeView;
+import com.bss.usage.dto.RelatedPartyRef;
+import com.bss.usage.dto.SpendThresholdNotification;
+import com.bss.usage.dto.SpendVerdict;
+import com.bss.usage.dto.Tier;
+import com.bss.usage.dto.TimePeriod;
+import com.bss.usage.dto.TravelPassRequest;
+import com.bss.usage.dto.TravelPassView;
+import com.bss.usage.dto.UnitValue;
+import com.bss.usage.dto.UsageAllowanceRequest;
+import com.bss.usage.dto.UsageAllowanceView;
+import com.bss.usage.dto.UsageSpecificationView;
+import com.bss.usage.dto.UsageThresholdNotification;
+import com.bss.usage.dto.UsageView;
 import com.bss.usage.entity.RatedCharge;
 import com.bss.usage.entity.UsageAllowance;
 import com.bss.usage.entity.UsageRecord;
@@ -13,7 +34,10 @@ import com.bss.usage.repository.UsageRecordRepository;
 import com.bss.usage.security.PartyScope;
 import com.bss.usage.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,50 +124,50 @@ public class UsageService {
         this.numberClient = numberClient;
     }
 
-    /** Mediation seam: one usage record in, verbatim semantics, no rating yet. */
+    /**
+     * Mediation seam: one usage record in, verbatim semantics, no rating yet.
+     * The posted TMF635 document is stored as it came (an open document, so
+     * it round-trips byte for byte); the app fields are derived from it.
+     */
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> ingest(Map<String, Object> dto) {
+    public UsageView ingest(ObjectNode dto) {
         String owner = null;
-        if (dto.get("relatedParty") instanceof List<?> parties) {
-            for (Object p : parties) {
-                if (p instanceof Map<?, ?> ref && "customer".equalsIgnoreCase(String.valueOf(ref.get("role")))) {
-                    owner = String.valueOf(ref.get("id"));
-                }
+        for (JsonNode ref : dto.path("relatedParty")) {
+            if ("customer".equalsIgnoreCase(ref.path("role").asText())) {
+                owner = ref.path("id").asText();
             }
         }
         // TMF635: only usageSpecification is meaningful on intake; usageType,
         // usageCharacteristic and relatedParty are optional per the spec. Store
         // the posted body so it round-trips; derive the app fields when present.
-        Map<String, Object> characteristic = dto.get("usageCharacteristic") instanceof Map<?, ?> m
-                ? (Map<String, Object>) m
-                : (dto.get("usageCharacteristic") instanceof List<?> cl && !cl.isEmpty()
-                        && cl.get(0) instanceof Map<?, ?> cm ? (Map<String, Object>) cm : null);
+        JsonNode posted = dto.path("usageCharacteristic");
+        JsonNode characteristic = posted.isObject() ? posted
+                : (posted.isArray() && !posted.isEmpty() && posted.get(0).isObject() ? posted.get(0) : null);
         UsageRecord entity = new UsageRecord();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/usage/" + id);
         entity.setPayloadJson(writeJson(dto));
-        entity.setUsageSpecName(dto.get("usageType") == null ? null : String.valueOf(dto.get("usageType")));
-        entity.setUsageDate(dto.get("usageDate") == null ? OffsetDateTime.now()
-                : OffsetDateTime.parse(String.valueOf(dto.get("usageDate"))));
-        if (characteristic != null && characteristic.get("value") != null) {
-            entity.setValue(new BigDecimal(String.valueOf(characteristic.get("value"))));
-            entity.setUnits(characteristic.get("units") == null ? "unit" : String.valueOf(characteristic.get("units")));
+        entity.setUsageSpecName(text(dto.get("usageType")));
+        entity.setUsageDate(dto.hasNonNull("usageDate") ? OffsetDateTime.parse(dto.get("usageDate").asText())
+                : OffsetDateTime.now());
+        if (characteristic != null && characteristic.hasNonNull("value")) {
+            entity.setValue(new BigDecimal(characteristic.get("value").asText()));
+            entity.setUnits(characteristic.hasNonNull("units") ? characteristic.get("units").asText() : "unit");
         } else {
             entity.setValue(BigDecimal.ZERO);
             entity.setUnits("unit");
         }
         entity.setOwnerPartyId(owner);
-        if (dto.get("productOffering") instanceof Map<?, ?> off && off.get("id") != null) {
-            entity.setProductOfferingId(String.valueOf(off.get("id")));
+        if (dto.path("productOffering").hasNonNull("id")) {
+            entity.setProductOfferingId(dto.path("productOffering").get("id").asText());
         }
         // the roaming zone hint rides the record (top level or characteristic)
-        Object zone = dto.get("zone") != null ? dto.get("zone")
-                : (characteristic == null ? null : characteristic.get("zone"));
-        if (zone != null && !String.valueOf(zone).isBlank()) {
-            entity.setZone(String.valueOf(zone));
+        String zone = dto.hasNonNull("zone") ? dto.get("zone").asText()
+                : (characteristic == null ? null : text(characteristic.get("zone")));
+        if (zone != null && !zone.isBlank()) {
+            entity.setZone(zone);
         }
         entity.setStatus(RECEIVED);
         entity.setCreatedAt(OffsetDateTime.now());
@@ -172,11 +196,8 @@ public class UsageService {
         if (entity.getOwnerPartyId() != null && "GB".equalsIgnoreCase(String.valueOf(entity.getUnits()))) {
             applyPendingRewards(entity.getTenantId(), entity.getOwnerPartyId());
         }
-        Map<String, Object> out = toRecordMap(entity);
-        if (zoneEntered) {
-            out.put("zoneEntered", true);
-        }
-        return out;
+        UsageView out = toView(entity);
+        return zoneEntered ? out.withZoneEntered() : out;
     }
 
     /**
@@ -185,7 +206,7 @@ public class UsageService {
      * records never rate twice. Returns this period's charges for the party.
      */
     @Transactional
-    public List<Map<String, Object>> rateForParty(String ownerPartyId, LocalDate periodStart, LocalDate periodEnd) {
+    public List<RatedChargeView> rateForParty(String ownerPartyId, LocalDate periodStart, LocalDate periodEnd) {
         String tenantId = tenantScope.currentTenantId();
         OffsetDateTime from = periodStart.atStartOfDay().atOffset(ZoneOffset.UTC);
         OffsetDateTime to = periodEnd.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
@@ -229,7 +250,7 @@ public class UsageService {
                     charge.setPeriodStart(periodStart);
                     charge.setCreatedAt(OffsetDateTime.now());
                     ratedCharges.save(charge);
-                    events.publish("UsageRatedEvent", "ratedCharge", chargeMap(charge));
+                    events.publish("UsageRatedEvent", "ratedCharge", chargeView(charge));
                     // usage-rated charges land on the subscription spend cap
                     spendPolicy.accrue(tenantId, ownerPartyId, "usage",
                             charge.getAmountValue(), charge.getAmountUnit());
@@ -239,7 +260,7 @@ public class UsageService {
             records.saveAll(rs);
         }
         return ratedCharges.findByTenantIdAndOwnerPartyIdAndPeriodStart(tenantId, ownerPartyId, periodStart)
-                .stream().map(this::chargeMap).toList();
+                .stream().map(this::chargeView).toList();
     }
 
     /**
@@ -311,26 +332,25 @@ public class UsageService {
      * says so. Idempotent per (service, minute) so a re-delivered report never
      * double-charges. Currency comes from the party's allowance rules.
      */
-    public Map<String, Object> recordPriorityUsage(Map<String, Object> n) {
-        String tenantId = n.get("tenantId") == null || String.valueOf(n.get("tenantId")).isBlank()
-                ? tenantScope.currentTenantId() : String.valueOf(n.get("tenantId"));
-        String party = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
-        String serviceId = n.get("serviceId") == null ? null : String.valueOf(n.get("serviceId"));
-        BigDecimal gb = n.get("gb") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(n.get("gb")));
-        BigDecimal uplift = n.get("upliftPerGb") == null ? BigDecimal.ZERO : new BigDecimal(String.valueOf(n.get("upliftPerGb")));
+    public PriorityUsageReceipt recordPriorityUsage(PriorityUsageNotification n) {
+        String tenantId = n.tenantId() == null || n.tenantId().isBlank()
+                ? tenantScope.currentTenantId() : n.tenantId();
+        String party = n.partyId();
+        String serviceId = n.serviceId();
+        BigDecimal gb = n.gb() == null ? BigDecimal.ZERO : n.gb();
+        BigDecimal uplift = n.upliftPerGb() == null ? BigDecimal.ZERO : n.upliftPerGb();
         if (party == null || gb.signum() <= 0 || uplift.signum() <= 0) {
-            return Map.of("status", "ignored");
+            return PriorityUsageReceipt.IGNORED;
         }
         // the tenant context must be set BEFORE the transaction opens — RLS binds
         // app.tenant_id at connection checkout, so an anonymous internal call that
         // switches tenant inside a transaction is refused by the second lock
         try (com.bss.usage.security.TenantContext ignored = com.bss.usage.security.TenantContext.actAs(tenantId)) {
-            return tx.execute(status -> ratePriorityUsage(tenantId, party, serviceId, gb, uplift,
-                    n.get("currency") == null ? null : String.valueOf(n.get("currency"))));
+            return tx.execute(status -> ratePriorityUsage(tenantId, party, serviceId, gb, uplift, n.currency()));
         }
     }
 
-    Map<String, Object> ratePriorityUsage(String tenantId, String party, String serviceId,
+    PriorityUsageReceipt ratePriorityUsage(String tenantId, String party, String serviceId,
             BigDecimal gb, BigDecimal uplift, String reportedCurrency) {
         {
             // currency: what this party was last rated in, else what the report says, else EUR
@@ -352,28 +372,29 @@ public class UsageService {
             charge.setPeriodStart(LocalDate.now().withDayOfMonth(1));
             charge.setCreatedAt(OffsetDateTime.now());
             ratedCharges.save(charge);
-            events.publish("UsageRatedEvent", "ratedCharge", chargeMap(charge));
+            events.publish("UsageRatedEvent", "ratedCharge", chargeView(charge));
             spendPolicy.accrue(tenantId, party, "usage", charge.getAmountValue(), charge.getAmountUnit());
-            return Map.of("status", "rated", "amount", charge.getAmountValue(), "unit", unit);
+            return PriorityUsageReceipt.rated(charge.getAmountValue(), unit);
         }
     }
 
     @Transactional
-    public void notifyUsageThreshold(Map<String, Object> n) {
-        String tenantId = n.get("tenantId") != null && !String.valueOf(n.get("tenantId")).isBlank()
-                ? String.valueOf(n.get("tenantId")) : tenantScope.currentTenantId();
-        String partyId = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
+    public void notifyUsageThreshold(UsageThresholdNotification n) {
+        String tenantId = n.tenantId() != null && !n.tenantId().isBlank()
+                ? n.tenantId() : tenantScope.currentTenantId();
+        String partyId = n.partyId();
         if (partyId == null) {
             throw new BadRequestException("partyId is required on an OCS usage-threshold notification");
         }
+        // the event's resource is the notification's bucket facts (event shape: a standing rule)
         Map<String, Object> resource = new LinkedHashMap<>();
         resource.put("relatedParty", List.of(Map.of("id", partyId, "role", "customer")));
-        if (n.get("bucketName") != null) resource.put("bucketName", n.get("bucketName"));
-        if (n.get("remainingGB") != null) resource.put("remainingGB", n.get("remainingGB"));
-        if (n.get("percentUsed") != null) resource.put("percentUsed", n.get("percentUsed"));
-        if (n.get("threshold") != null) resource.put("threshold", n.get("threshold"));
-        if (n.get("serviceId") != null) resource.put("serviceId", n.get("serviceId"));
-        resource.put("units", n.get("units") == null ? "GB" : n.get("units"));
+        if (n.bucketName() != null) resource.put("bucketName", n.bucketName());
+        if (n.remainingGB() != null) resource.put("remainingGB", n.remainingGB());
+        if (n.percentUsed() != null) resource.put("percentUsed", n.percentUsed());
+        if (n.threshold() != null) resource.put("threshold", n.threshold());
+        if (n.serviceId() != null) resource.put("serviceId", n.serviceId());
+        resource.put("units", n.units() == null ? "GB" : n.units());
         events.publish("UsageThresholdBreachedEvent", "bucket", resource, tenantId);
         // the same breach drives opt-in auto top-up — idempotent per breach
         // window per cycle, so the at-least-once webhook can repeat itself
@@ -389,28 +410,48 @@ public class UsageService {
      * decide warn/block and answer whether the charge may stand.
      */
     @Transactional
-    public Map<String, Object> notifySpendThreshold(Map<String, Object> n) {
-        String tenantId = n.get("tenantId") != null && !String.valueOf(n.get("tenantId")).isBlank()
-                ? String.valueOf(n.get("tenantId")) : tenantScope.currentTenantId();
-        String partyId = n.get("partyId") == null ? null : String.valueOf(n.get("partyId"));
+    public SpendVerdict notifySpendThreshold(SpendThresholdNotification n) {
+        String tenantId = n.tenantId() != null && !n.tenantId().isBlank()
+                ? n.tenantId() : tenantScope.currentTenantId();
+        String partyId = n.partyId();
         if (partyId == null) {
             throw new BadRequestException("partyId is required on an OCS spend-threshold notification");
         }
-        if (!(n.get("amount") instanceof Map<?, ?> money) || money.get("value") == null) {
+        if (n.amount() == null || n.amount().value() == null) {
             throw new BadRequestException("amount {value, unit} is required");
         }
-        String chargeClass = n.get("chargeClass") == null ? "usage" : String.valueOf(n.get("chargeClass"));
+        String chargeClass = n.chargeClass() == null ? "usage" : n.chargeClass();
         try (com.bss.usage.security.TenantContext ignored
                 = com.bss.usage.security.TenantContext.actAs(tenantId)) {
-            return spendPolicy.accrue(tenantId, partyId, chargeClass,
-                    new BigDecimal(String.valueOf(money.get("value"))),
-                    money.get("unit") == null ? null : String.valueOf(money.get("unit")));
+            return spendPolicy.accrue(tenantId, partyId, chargeClass, n.amount().value(), n.amount().unit());
+        }
+    }
+
+    /** A bucket while the month's records are still being summed into it. */
+    private static final class BucketDraft {
+        final String id;
+        final String name;
+        final String zone;
+        final String units;
+        final BigDecimal allowedValue;
+        BigDecimal usedValue = BigDecimal.ZERO;
+
+        BucketDraft(String id, String name, String zone, String units, BigDecimal allowedValue) {
+            this.id = id;
+            this.name = name;
+            this.zone = zone;
+            this.units = units;
+            this.allowedValue = allowedValue;
+        }
+
+        ConsumptionBucket freeze() {
+            return new ConsumptionBucket(id, name, zone, usedValue, units, allowedValue);
         }
     }
 
     /** TMF677: this month's buckets for the calling customer (or a named party for staff). */
     @Transactional(readOnly = true)
-    public Map<String, Object> consumptionReport(String requestedPartyId) {
+    public ConsumptionReport consumptionReport(String requestedPartyId) {
         String tenantId = tenantScope.currentTenantId();
         String scoped = partyScope.scopedPartyId().orElse(null);
         // A guardian's window, CHILD ACCOUNTS ONLY: the payer or a family
@@ -429,85 +470,70 @@ public class UsageService {
 
         // Purchased top-ups extend this period's allowance per usage spec.
         Map<String, BigDecimal> boostBySpec = boostTotals(tenantId, party, periodStart);
-        Map<String, Map<String, Object>> buckets = new LinkedHashMap<>();
+        Map<String, BucketDraft> buckets = new LinkedHashMap<>();
         for (UsageRecord r : monthly) {
             if (r.getZone() != null) {
                 continue;   // zone traffic reads from its pass bucket below
             }
             String key = r.getProductOfferingId() + "|" + r.getUsageSpecName();
-            Map<String, Object> bucket = buckets.computeIfAbsent(key, k -> {
-                Map<String, Object> b = new LinkedHashMap<>();
-                // TMF677: buckets are addressable — a stable id per (party, offering, spec).
-                b.put("id", "bkt-" + Integer.toHexString((party + "|" + k).hashCode()));
-                b.put("name", r.getUsageSpecName());
-                b.put("usedValue", BigDecimal.ZERO);
-                b.put("units", r.getUnits());
+            BucketDraft bucket = buckets.computeIfAbsent(key, k -> {
                 List<UsageAllowance> rules = r.getProductOfferingId() == null ? List.of()
                         : allowances.findByTenantIdAndProductOfferingIdAndUsageSpecName(
                                 tenantId, r.getProductOfferingId(), r.getUsageSpecName());
                 BigDecimal extra = boostBySpec.get(r.getUsageSpecName());
+                BigDecimal allowed = null;
                 if (!rules.isEmpty() || extra != null) {
                     BigDecimal base = rules.isEmpty() ? BigDecimal.ZERO : rules.get(0).getAllowanceValue();
-                    b.put("allowedValue", extra == null ? base : base.add(extra));
+                    allowed = extra == null ? base : base.add(extra);
                 }
-                return b;
+                // TMF677: buckets are addressable — a stable id per (party, offering, spec).
+                return new BucketDraft("bkt-" + Integer.toHexString((party + "|" + k).hashCode()),
+                        r.getUsageSpecName(), null, r.getUnits(), allowed);
             });
             // the personal meter shows what the personal allowance carried —
             // the pool's share reads from the pool section
-            bucket.put("usedValue", ((BigDecimal) bucket.get("usedValue")).add(r.unpooledValue()));
+            bucket.usedValue = bucket.usedValue.add(r.unpooledValue());
         }
         // zone-tagged usage per (spec, zone), with any travel-pass capacity
-        Map<String, Map<String, Object>> zoneBuckets = new LinkedHashMap<>();
+        Map<String, BucketDraft> zoneBuckets = new LinkedHashMap<>();
         for (UsageRecord r : monthly) {
             if (r.getZone() == null) {
                 continue;
             }
             String key = r.getUsageSpecName() + "|" + r.getZone();
-            Map<String, Object> bucket = zoneBuckets.computeIfAbsent(key, k -> {
-                Map<String, Object> b = new LinkedHashMap<>();
-                b.put("id", "bkt-" + Integer.toHexString((party + "|zone|" + k).hashCode()));
-                b.put("name", r.getUsageSpecName() + " — " + r.getZone());
-                b.put("zone", r.getZone());
-                b.put("usedValue", BigDecimal.ZERO);
-                b.put("units", r.getUnits());
+            BucketDraft bucket = zoneBuckets.computeIfAbsent(key, k -> {
                 BigDecimal passGb = boosts.findByTenantIdAndOwnerPartyId(tenantId, party).stream()
                         .filter(p -> p.getZone() != null && p.getZone().equals(r.getZone())
                                 && java.util.Objects.equals(p.getUsageSpecName(), r.getUsageSpecName())
                                 && p.coversDate(r.getUsageDate()))
                         .map(com.bss.usage.entity.AllowanceBoost::getBoostValue)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
-                if (passGb.signum() > 0) {
-                    b.put("allowedValue", passGb);
-                }
-                return b;
+                return new BucketDraft("bkt-" + Integer.toHexString((party + "|zone|" + k).hashCode()),
+                        r.getUsageSpecName() + " — " + r.getZone(), r.getZone(), r.getUnits(),
+                        passGb.signum() > 0 ? passGb : null);
             });
-            bucket.put("usedValue", ((BigDecimal) bucket.get("usedValue")).add(r.getValue()));
+            bucket.usedValue = bucket.usedValue.add(r.getValue());
         }
         // A deterministic report per party: the same customer always gets the
         // same report id, so the report is addressable as a resource (TMF677).
         String reportId = "ucr-" + party;
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("id", reportId);
-        report.put("href", ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport/" + reportId);
-        report.put("name", "usageConsumptionReport-" + party);
-        report.put("effectiveDate", OffsetDateTime.now().toString());
-        report.put("@type", "UsageConsumptionReport");
-        report.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
-        report.put("period", Map.of("startDateTime", periodStart.toString()));
-        List<Map<String, Object>> allBuckets = new ArrayList<>(buckets.values());
-        allBuckets.addAll(zoneBuckets.values());
-        report.put("bucket", allBuckets);
-        // TMF677 extension: the household pool this party draws (per-member
-        // buckets included for the pool's owner)
-        poolService.reportSection(party).ifPresent(pool -> report.put("pool", pool));
-        return report;
+        List<ConsumptionBucket> allBuckets = new ArrayList<>();
+        buckets.values().forEach(b -> allBuckets.add(b.freeze()));
+        zoneBuckets.values().forEach(b -> allBuckets.add(b.freeze()));
+        return new ConsumptionReport(reportId,
+                ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport/" + reportId,
+                "usageConsumptionReport-" + party, OffsetDateTime.now().toString(), "UsageConsumptionReport",
+                List.of(RelatedPartyRef.customer(party)), TimePeriod.from(periodStart.toString()), allBuckets,
+                // TMF677 extension: the household pool this party draws (per-member
+                // buckets included for the pool's owner)
+                poolService.reportSection(party).orElse(null));
     }
 
     // ---- TMF677 usageConsumptionReport as a resource ----
 
     /** One report per party with usage this month, so the collection is listable. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findReports(Map<String, String> filters) {
+    public List<ConsumptionReport> findReports(Map<String, String> filters) {
         String tenantId = tenantScope.currentTenantId();
         // A customer only ever sees their own report; staff see the tenant's.
         List<String> parties = partyScope.scopedPartyId().map(List::of)
@@ -516,17 +542,15 @@ public class UsageService {
                         .filter(java.util.Objects::nonNull)
                         .distinct().toList());
         return parties.stream().map(this::consumptionReport)
-                .filter(r -> !((List<?>) r.get("bucket")).isEmpty())
-                .filter(r -> filters.get("id") == null || filters.get("id").equals(r.get("id")))
-                .filter(r -> filters.get("name") == null || filters.get("name").equals(r.get("name")))
-                .filter(r -> filters.get("bucket.id") == null || ((List<?>) r.get("bucket")).stream()
-                        .anyMatch(b -> b instanceof Map<?, ?> bm
-                                && filters.get("bucket.id").equals(bm.get("id"))))
+                .filter(r -> !r.bucket().isEmpty())
+                .filter(r -> filters.get("id") == null || filters.get("id").equals(r.id()))
+                .filter(r -> filters.get("name") == null || filters.get("name").equals(r.name()))
+                .filter(r -> filters.get("bucket.id") == null || r.hasBucket(filters.get("bucket.id")))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findReportById(String id) {
+    public ConsumptionReport findReportById(String id) {
         if (!id.startsWith("ucr-")) {
             throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
         }
@@ -536,108 +560,92 @@ public class UsageService {
                 throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
             }
         });
-        Map<String, Object> report = consumptionReport(party);
-        if (((List<?>) report.get("bucket")).isEmpty()) {
+        ConsumptionReport report = consumptionReport(party);
+        if (report.bucket().isEmpty()) {
             throw new com.bss.usage.exception.NotFoundException("UsageConsumptionReport '" + id + "' not found");
         }
         return report;
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> toRecordMap(UsageRecord r) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        Object stored = readJsonValue(r.getPayloadJson());
-        if (stored instanceof Map<?, ?> m) {
-            map.putAll((Map<String, Object>) m);
-        }
-        map.put("id", r.getId());
-        map.put("href", r.getHref());
-        if (r.getUsageSpecName() != null) {
-            map.put("usageType", r.getUsageSpecName());
-        }
-        map.put("usageDate", r.getUsageDate());
-        if (map.get("usageCharacteristic") == null) {
-            map.put("usageCharacteristic", Map.of("value", r.getValue(), "units", r.getUnits()));
-        }
-        if (r.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", r.getOwnerPartyId(), "role", "customer")));
-        }
-        map.put("status", r.getStatus());
-        if (r.getZone() != null) {
-            map.put("zone", r.getZone());
-        }
-        if (r.getPooledValue() != null) {
-            map.put("pooledValue", r.getPooledValue());
-        }
+    /**
+     * The stored document with the record's fields laid over it: the keys usage
+     * owns are typed, whatever else the feed posted rides in the extensions.
+     */
+    private UsageView toView(UsageRecord r) {
+        ObjectNode stored = storedObject(r.getPayloadJson());
+        Map<String, Object> extensions = extensionsOf(stored, "id", "href", "usageType", "usageDate",
+                "usageCharacteristic", "relatedParty", "status", "zone", "pooledValue", "usageSpecification", "@type");
+        Object characteristic = stored.hasNonNull("usageCharacteristic") ? stored.get("usageCharacteristic")
+                : new UnitValue(r.getValue(), r.getUnits());
+        Object relatedParty = r.getOwnerPartyId() != null
+                ? List.of(RelatedPartyRef.customer(r.getOwnerPartyId())) : stored.get("relatedParty");
         // TMF635 mandatory attribute — always present.
-        map.putIfAbsent("usageSpecification", Map.of());
-        map.put("@type", "Usage");
-        return map;
+        JsonNode specification = stored.hasNonNull("usageSpecification") ? stored.get("usageSpecification")
+                : objectMapper.createObjectNode();
+        return new UsageView(r.getId(), r.getHref(), r.getUsageSpecName(), r.getUsageDate(), characteristic,
+                relatedParty, r.getStatus(), r.getZone(), r.getPooledValue(), specification, "Usage", null,
+                extensions);
     }
 
     // ---- Usage as a retrievable resource ----
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findUsage(Map<String, String> filters) {
+    public List<UsageView> findUsage(Map<String, String> filters) {
         return records.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(r -> filters.get("id") == null || filters.get("id").equals(r.getId()))
                 .filter(r -> filters.get("href") == null || filters.get("href").equals(r.getHref()))
-                .map(this::toRecordMap).toList();
+                .map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findUsageById(String id) {
-        return toRecordMap(records.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public UsageView findUsageById(String id) {
+        return toView(records.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("Usage '" + id + "' not found")));
     }
 
-    // ---- UsageSpecification resource (TMF635) ----
+    // ---- UsageSpecification resource (TMF635): the posted document, stored verbatim ----
 
     @Transactional
-    public Map<String, Object> createSpec(Map<String, Object> dto) {
+    public UsageSpecificationView createSpec(ObjectNode dto) {
         UsageSpecification e = new UsageSpecification();
         String id = UUID.randomUUID().toString();
         e.setId(id);
         e.setTenantId(tenantScope.currentTenantId());
         e.setHref(ApiConstants.BASE_PATH + "/usageSpecification/" + id);
-        e.setName(dto.get("name") == null ? null : String.valueOf(dto.get("name")));
-        e.setUnits(dto.get("units") == null ? "unit" : String.valueOf(dto.get("units")));
+        e.setName(text(dto.get("name")));
+        e.setUnits(dto.hasNonNull("units") ? dto.get("units").asText() : "unit");
         e.setPayloadJson(writeJson(dto));
         e.setLastUpdate(OffsetDateTime.now());
-        return toSpecMap(specs.save(e));
+        return toSpecView(specs.save(e));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findSpecs(Map<String, String> filters) {
+    public List<UsageSpecificationView> findSpecs(Map<String, String> filters) {
         return specs.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(s -> filters.get("id") == null || filters.get("id").equals(s.getId()))
                 .filter(s -> filters.get("href") == null || filters.get("href").equals(s.getHref()))
                 .filter(s -> filters.get("name") == null || filters.get("name").equals(s.getName()))
-                .map(this::toSpecMap).toList();
+                .map(this::toSpecView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findSpecById(String id) {
-        return toSpecMap(specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public UsageSpecificationView findSpecById(String id) {
+        return toSpecView(specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found")));
     }
 
     @Transactional
-    public Map<String, Object> patchSpec(String id, Map<String, Object> dto) {
+    public UsageSpecificationView patchSpec(String id, ObjectNode dto) {
         UsageSpecification e = specs.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new com.bss.usage.exception.NotFoundException("UsageSpecification '" + id + "' not found"));
-        if (dto.containsKey("name")) {
-            e.setName(String.valueOf(dto.get("name")));
+        if (dto.has("name")) {
+            e.setName(dto.get("name").asText());
         }
-        Object stored = readJsonValue(e.getPayloadJson());
-        Map<String, Object> merged = new LinkedHashMap<>();
-        if (stored instanceof Map<?, ?> m) {
-            merged.putAll(castMap(m));
-        }
-        merged.putAll(dto);
+        ObjectNode merged = storedObject(e.getPayloadJson());
+        merged.setAll(dto);
         e.setPayloadJson(writeJson(merged));
         e.setLastUpdate(OffsetDateTime.now());
-        return toSpecMap(specs.save(e));
+        return toSpecView(specs.save(e));
     }
 
     @Transactional
@@ -647,42 +655,45 @@ public class UsageService {
         specs.delete(e);
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> toSpecMap(UsageSpecification s) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        Object stored = readJsonValue(s.getPayloadJson());
-        if (stored instanceof Map<?, ?> m) {
-            map.putAll((Map<String, Object>) m);
-        }
-        map.put("id", s.getId());
-        map.put("href", s.getHref());
-        map.put("name", s.getName());
-        map.put("lastUpdate", s.getLastUpdate());
-        map.put("@type", "UsageSpecification");
-        return map;
+    private UsageSpecificationView toSpecView(UsageSpecification s) {
+        return new UsageSpecificationView(s.getId(), s.getHref(), s.getName(), s.getLastUpdate(),
+                "UsageSpecification", extensionsOf(storedObject(s.getPayloadJson()),
+                        "id", "href", "name", "lastUpdate", "@type"));
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> m) {
-        return (Map<String, Object>) m;
+    /** The stored document as an object; anything unreadable (or not an object) reads as empty. */
+    private ObjectNode storedObject(String json) {
+        if (json != null && !json.isBlank()) {
+            try {
+                JsonNode node = objectMapper.readTree(json);
+                if (node instanceof ObjectNode object) {
+                    return object;
+                }
+            } catch (JsonProcessingException e) {
+                // fall through: an unreadable payload reads as empty, as before
+            }
+        }
+        return objectMapper.createObjectNode();
     }
 
-    private Object readJsonValue(String s) {
-        if (s == null || s.isBlank()) {
-            return Map.of();
-        }
-        try {
-            return objectMapper.readValue(s, Object.class);
-        } catch (Exception e) {
-            return Map.of();
-        }
+    /** The stored keys the view does not declare, in stored order. */
+    private static Map<String, Object> extensionsOf(ObjectNode stored, String... declared) {
+        java.util.Set<String> known = java.util.Set.of(declared);
+        Map<String, Object> extensions = new LinkedHashMap<>();
+        stored.fields().forEachRemaining(f -> {
+            if (!known.contains(f.getKey())) {
+                extensions.put(f.getKey(), f.getValue());
+            }
+        });
+        return extensions;
     }
 
-    private Map<String, Object> chargeMap(RatedCharge c) {
-        return Map.of(
-                "ownerPartyId", c.getOwnerPartyId(),
-                "name", c.getName(),
-                "amount", Map.of("unit", c.getAmountUnit(), "value", c.getAmountValue()));
+    private static String text(JsonNode node) {
+        return node == null || node.isNull() ? null : node.asText();
+    }
+
+    private RatedChargeView chargeView(RatedCharge c) {
+        return new RatedChargeView(c.getOwnerPartyId(), c.getName(), new Money(c.getAmountValue(), c.getAmountUnit()));
     }
 
     /**
@@ -917,7 +928,7 @@ public class UsageService {
      * pair of boosts: minus on the giver, plus on the receiver.
      */
     @Transactional
-    public Map<String, Object> giftData(String receiverId, String receiverPhone, BigDecimal amount) {
+    public DataGift giftData(String receiverId, String receiverPhone, BigDecimal amount) {
         String giverId = partyScope.scopedPartyId()
                 .orElseThrow(() -> new BadRequestException("gifting is a customer's own decision"));
         if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
@@ -1001,11 +1012,8 @@ public class UsageService {
                 "gift-" + giftId + "-out", "gift:to:" + receiverId, periodStart));
         boosts.save(giftBoost(tenantId, receiverId, position.spec(), amount,
                 "gift-" + giftId + "-in", "gift:from:" + giverName, periodStart));
-        Map<String, Object> gift = Map.of(
-                "id", giftId,
-                "giver", Map.of("id", giverId, "name", giverName),
-                "receiver", Map.of("id", receiverId, "name", receiverName),
-                "amount", amount, "units", "GB", "usageType", position.spec());
+        DataGift gift = new DataGift(giftId, new DataGift.PartyName(giverId, giverName),
+                new DataGift.PartyName(receiverId, receiverName), amount, "GB", position.spec());
         events.publish("DataGiftEvent", "dataGift", gift);
         return gift;
     }
@@ -1019,7 +1027,7 @@ public class UsageService {
      * usage this month have nothing metered, so nothing rolls.
      */
     @Transactional
-    public Map<String, Object> cycleClose() {
+    public CycleCloseReceipt cycleClose() {
         String tenantId = tenantScope.currentTenantId();
         LocalDate periodStart = LocalDate.now().withDayOfMonth(1);
         LocalDate nextPeriod = periodStart.plusMonths(1);
@@ -1053,7 +1061,7 @@ public class UsageService {
                 rolled++;
             }
         }
-        return Map.of("period", periodStart.toString(), "rolledBuckets", rolled);
+        return new CycleCloseReceipt(periodStart.toString(), rolled);
     }
 
     /**
@@ -1062,23 +1070,22 @@ public class UsageService {
      * Time-boxed, zone-locked extra GB consumed before home meters.
      */
     @Transactional
-    public Map<String, Object> createTravelPass(Map<String, Object> dto) {
-        String party = dto.get("partyId") == null ? null : String.valueOf(dto.get("partyId"));
-        String spec = dto.get("usageType") == null ? null : String.valueOf(dto.get("usageType"));
-        String zone = dto.get("zone") == null ? null : String.valueOf(dto.get("zone"));
-        if (party == null || spec == null || zone == null || dto.get("amountGB") == null) {
+    public TravelPassView createTravelPass(TravelPassRequest dto) {
+        String party = dto.partyId();
+        String spec = dto.usageType();
+        String zone = dto.zone();
+        if (party == null || spec == null || zone == null || dto.amountGB() == null) {
             throw new BadRequestException("partyId, usageType, zone and amountGB are required");
         }
-        BigDecimal gb = new BigDecimal(String.valueOf(dto.get("amountGB")));
+        BigDecimal gb = dto.amountGB();
         if (gb.signum() <= 0) {
             throw new BadRequestException("amountGB must be positive");
         }
-        OffsetDateTime validFrom = dto.get("validFrom") == null ? OffsetDateTime.now()
-                : OffsetDateTime.parse(String.valueOf(dto.get("validFrom")));
-        long days = dto.get("validityDays") == null ? 7
-                : Long.parseLong(String.valueOf(dto.get("validityDays")));
-        OffsetDateTime validTo = dto.get("validTo") == null ? validFrom.plusDays(days)
-                : OffsetDateTime.parse(String.valueOf(dto.get("validTo")));
+        OffsetDateTime validFrom = dto.validFrom() == null ? OffsetDateTime.now()
+                : OffsetDateTime.parse(dto.validFrom());
+        long days = dto.validityDays() == null ? 7 : dto.validityDays();
+        OffsetDateTime validTo = dto.validTo() == null ? validFrom.plusDays(days)
+                : OffsetDateTime.parse(dto.validTo());
         String tenantId = tenantScope.currentTenantId();
         com.bss.usage.entity.AllowanceBoost pass = giftBoost(tenantId, party, spec, gb,
                 "pass-" + UUID.randomUUID(), "travel-pass", LocalDate.now().withDayOfMonth(1));
@@ -1091,15 +1098,8 @@ public class UsageService {
                 "amount", gb, "units", "GB", "usageType", spec, "source", "travel-pass",
                 "zone", zone, "validFor", Map.of(
                         "startDateTime", validFrom.toString(), "endDateTime", validTo.toString())));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", pass.getId());
-        out.put("partyId", party);
-        out.put("usageType", spec);
-        out.put("zone", zone);
-        out.put("amountGB", gb);
-        out.put("validFor", Map.of("startDateTime", validFrom.toString(), "endDateTime", validTo.toString()));
-        out.put("@type", "TravelPass");
-        return out;
+        return new TravelPassView(pass.getId(), party, spec, zone, gb,
+                new TimePeriod(validFrom.toString(), validTo.toString()), "TravelPass");
     }
 
     private static BigDecimal leverDecimal(Map<String, String> levers, String name, BigDecimal fallback) {
@@ -1157,61 +1157,53 @@ public class UsageService {
 
     /** Admin data: which offerings include how much of what, and the price beyond. */
     @Transactional
-    public Map<String, Object> createAllowance(Map<String, Object> dto) {
-        if (!(dto.get("productOffering") instanceof Map<?, ?> off) || off.get("id") == null
-                || dto.get("usageType") == null || dto.get("allowance") == null
-                || !(dto.get("overagePrice") instanceof Map<?, ?> price) || price.get("value") == null) {
+    public UsageAllowanceView createAllowance(UsageAllowanceRequest dto) {
+        if (dto.offeringId() == null || dto.usageType() == null || dto.allowance() == null
+                || dto.allowance().value() == null
+                || dto.overagePrice() == null || dto.overagePrice().value() == null) {
             throw new BadRequestException(
                     "productOffering.id, usageType, allowance {value, units} and overagePrice {value, unit} are required");
         }
-        @SuppressWarnings("unchecked")
-        Map<String, Object> allowance = (Map<String, Object>) dto.get("allowance");
         UsageAllowance entity = new UsageAllowance();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/usageAllowance/" + id);
-        entity.setProductOfferingJson(writeJson(dto.get("productOffering")));
-        entity.setProductOfferingId(String.valueOf(off.get("id")));
-        entity.setUsageSpecName(String.valueOf(dto.get("usageType")));
-        entity.setAllowanceValue(new BigDecimal(String.valueOf(allowance.get("value"))));
-        entity.setUnits(String.valueOf(allowance.getOrDefault("units", "unit")));
-        entity.setOveragePriceValue(new BigDecimal(String.valueOf(price.get("value"))));
-        entity.setOveragePriceUnit(String.valueOf(price.get("unit") == null ? "EUR" : price.get("unit")));
-        entity.setBoost(Boolean.parseBoolean(String.valueOf(dto.getOrDefault("boost", "false"))));
-        entity.setTierJson(dto.get("overageTier") instanceof List<?> tiers && !tiers.isEmpty() ? writeJson(tiers) : null);
+        entity.setProductOfferingJson(writeJson(dto.productOffering()));
+        entity.setProductOfferingId(dto.offeringId());
+        entity.setUsageSpecName(dto.usageType());
+        entity.setAllowanceValue(dto.allowance().value());
+        entity.setUnits(dto.allowance().units() == null ? "unit" : dto.allowance().units());
+        entity.setOveragePriceValue(dto.overagePrice().value());
+        entity.setOveragePriceUnit(dto.overagePrice().unit() == null ? "EUR" : dto.overagePrice().unit());
+        entity.setBoost(Boolean.TRUE.equals(dto.boost()));
+        // the tier table is stored as the JSON array it always was
+        entity.setTierJson(dto.overageTier() != null && !dto.overageTier().isEmpty() ? writeJson(dto.overageTier()) : null);
         entity.setLastUpdate(OffsetDateTime.now());
         allowances.save(entity);
-        return allowanceMap(entity);
+        return allowanceView(entity);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listAllowances() {
+    public List<UsageAllowanceView> listAllowances() {
         return allowances.findByTenantId(tenantScope.currentTenantId())
-                .stream().map(this::allowanceMap).toList();
+                .stream().map(this::allowanceView).toList();
     }
 
-    private Map<String, Object> allowanceMap(UsageAllowance entity) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("href", entity.getHref());
-        map.put("usageType", entity.getUsageSpecName());
-        map.put("productOffering", readJson(entity.getProductOfferingJson()));
-        map.put("allowance", Map.of("value", entity.getAllowanceValue(), "units", entity.getUnits()));
-        map.put("overagePrice", Map.of("unit", entity.getOveragePriceUnit(), "value", entity.getOveragePriceValue()));
-        if (entity.getTierJson() != null && !entity.getTierJson().isBlank()) {
-            map.put("overageTier", readJsonList(entity.getTierJson()));
-        }
-        if (entity.isBoost()) {
-            map.put("boost", true);
-        }
-        map.put("@type", "UsageAllowance");
-        return map;
+    private UsageAllowanceView allowanceView(UsageAllowance entity) {
+        List<Tier> tiers = tiersOf(entity);
+        return new UsageAllowanceView(entity.getId(), entity.getHref(), entity.getUsageSpecName(),
+                readJson(entity.getProductOfferingJson()),
+                new UnitValue(entity.getAllowanceValue(), entity.getUnits()),
+                new Money(entity.getOveragePriceValue(), entity.getOveragePriceUnit()),
+                tiers.isEmpty() ? null : tiers,
+                entity.isBoost() ? Boolean.TRUE : null,
+                "UsageAllowance");
     }
 
-    private Object readJson(String json) {
+    private JsonNode readJson(String json) {
         try {
-            return json == null ? null : objectMapper.readValue(json, Object.class);
+            return json == null ? null : objectMapper.readTree(json);
         } catch (com.fasterxml.jackson.core.JacksonException e) {
             throw new IllegalStateException("unreadable stored JSON", e);
         }
@@ -1228,19 +1220,19 @@ public class UsageService {
     /** The overage amount: one flat unit price, or a STEPPED walk over the tier table (each slice of the units
      * beyond the allowance at its own price — cumulative, the way a customer expects "the first 5 GB at 1, the next at 0.5"). */
     BigDecimal steppedOverage(UsageAllowance rule, BigDecimal over) {
-        List<Map<String, Object>> tiers = rule.getTierJson() == null || rule.getTierJson().isBlank() ? List.of() : readJsonList(rule.getTierJson());
+        List<Tier> tiers = tiersOf(rule);
         if (tiers.isEmpty()) {
             return over.multiply(rule.getOveragePriceValue()).setScale(2, RoundingMode.HALF_UP);
         }
         BigDecimal amount = BigDecimal.ZERO;
         BigDecimal remaining = over;
         BigDecimal cursor = BigDecimal.ZERO;
-        for (Map<String, Object> tier : tiers) {
+        for (Tier tier : tiers) {
             if (remaining.signum() <= 0) {
                 break;
             }
-            BigDecimal to = tier.get("valueTo") == null ? null : new BigDecimal(String.valueOf(tier.get("valueTo")));
-            BigDecimal price = new BigDecimal(String.valueOf(tier.getOrDefault("price", rule.getOveragePriceValue())));
+            BigDecimal to = tier.valueTo();
+            BigDecimal price = tier.price() == null ? rule.getOveragePriceValue() : tier.price();
             BigDecimal slice = to == null ? remaining : to.subtract(cursor).min(remaining).max(BigDecimal.ZERO);
             amount = amount.add(slice.multiply(price));
             remaining = remaining.subtract(slice);
@@ -1252,9 +1244,13 @@ public class UsageService {
         return amount.setScale(2, RoundingMode.HALF_UP);
     }
 
-    private List<Map<String, Object>> readJsonList(String json) {
+    /** The allowance's stepped tier table; blank or unreadable = flat. */
+    private List<Tier> tiersOf(UsageAllowance rule) {
+        if (rule.getTierJson() == null || rule.getTierJson().isBlank()) {
+            return List.of();
+        }
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() { });
+            return objectMapper.readValue(rule.getTierJson(), new TypeReference<List<Tier>>() { });
         } catch (Exception e) {
             return List.of();
         }

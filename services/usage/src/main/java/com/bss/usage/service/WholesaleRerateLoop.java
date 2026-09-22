@@ -1,5 +1,6 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.WholesaleRerated;
 import com.bss.usage.security.TenantContext;
 import com.bss.usage.security.TenantRegistry;
 import org.slf4j.Logger;
@@ -9,7 +10,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * The tick that CLOSES the late-CDR loop: reconciliation's "a CDR landed
@@ -38,11 +38,11 @@ public class WholesaleRerateLoop {
     public void sweep() {
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
-                List<Map<String, Object>> rerated = wholesale.rerateDrifted(tenant.getId(), windowDays);
-                for (Map<String, Object> row : rerated) {
+                List<WholesaleRerated> rerated = wholesale.rerateDrifted(tenant.getId(), windowDays);
+                for (WholesaleRerated row : rerated) {
                     log.info("late-CDR re-rate: tenant {} {} {} -> {} (delta {}) — rerate #{}",
-                            tenant.getId(), row.get("usageSpecName"), row.get("previousAmount"),
-                            row.get("amount"), row.get("delta"), row.get("rerateCount"));
+                            tenant.getId(), row.ledger().usageSpecName(), row.previousAmount(),
+                            row.ledger().amount(), row.delta(), row.ledger().rerateCount());
                 }
             } catch (RuntimeException e) {
                 log.warn("late-CDR sweep skipped for tenant {}: {}", tenant.getId(), e.getMessage());

@@ -1,10 +1,14 @@
 package com.bss.usage.client;
 
+import com.bss.usage.dto.OcsBucket;
+import com.bss.usage.dto.OcsSubscriber;
 import com.bss.usage.entity.PrepayTask;
 import com.bss.usage.repository.PrepayTaskRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
@@ -28,7 +32,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *       honest: used = granted − remaining.</li>
  * </ul>
  * One projected bucket per product (id = product id), so a TMF654 top-up by
- * bucket id lands on the right product.
+ * bucket id lands on the right product. The OCS's product is a foreign
+ * document ({@link JsonNode}); what the adapter projects is the
+ * {@link OcsSubscriber} every consumer of the seam understands.
  */
 @Component
 public class SigscaleOcsClient implements OcsBalanceAdapter {
@@ -39,6 +45,7 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     public static final String BALANCE = "/balanceManagement/v1";
     static final String JSON_PATCH = "application/json-patch+json";
     public static final double GB = 1_000_000_000d;
+    private static final ParameterizedTypeReference<List<JsonNode>> PRODUCTS = new ParameterizedTypeReference<>() { };
 
     private final RestClient.Builder builder;
     private final OcsSettings settings;
@@ -79,14 +86,14 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     }
 
     @Override
-    public List<Map<String, Object>> subscribersOf(String tenantId, String partyId) {
+    public List<OcsSubscriber> subscribersOf(String tenantId, String partyId) {
         RestClient c = client(tenantId);
         if (c == null || partyId == null) {
             return List.of();
         }
         try {
-            List<Map<String, Object>> out = new ArrayList<>();
-            for (Map<String, Object> p : productsWhere(c, "bssPartyId", partyId)) {
+            List<OcsSubscriber> out = new ArrayList<>();
+            for (JsonNode p : productsWhere(c, "bssPartyId", partyId)) {
                 if (tenantId.equals(characteristic(p, "bssTenantId"))) {
                     out.add(project(p));
                 }
@@ -120,49 +127,36 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
 
     /* ------------------------------------------------------------- shared */
 
-    /** The product by id, or null when the OCS no longer has it. */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> product(String tenantId, String productId) {
+    /** The product by id (the OCS's own TMF637 document), or null when the OCS no longer has it. */
+    public JsonNode product(String tenantId, String productId) {
         RestClient c = client(tenantId);
         if (c == null) {
             return null;
         }
         try {
-            return c.get().uri(INVENTORY + "/product/{id}", productId).retrieve().body(Map.class);
+            return c.get().uri(INVENTORY + "/product/{id}", productId).retrieve().body(JsonNode.class);
         } catch (HttpClientErrorException.NotFound e) {
             return null;
         }
     }
 
     /** The mock-shaped projection every consumer of the seam understands. */
-    public Map<String, Object> project(Map<String, Object> p) {
-        String productId = String.valueOf(p.get("id"));
+    public OcsSubscriber project(JsonNode p) {
+        String productId = p.path("id").asText();
         double remaining = remainingGb(p);
         String tenantId = characteristic(p, "bssTenantId");
         double allowance = parse(characteristic(p, "bssAllowanceGB"));
         double granted = allowance + (tenantId == null ? 0 : topupsGb(tenantId, productId));
         double total = granted > 0 ? Math.max(granted, remaining) : remaining;
-        Map<String, Object> offering = p.get("productOffering") instanceof Map<?, ?> m
-                ? (Map<String, Object>) m : Map.of();
-        String ratePlanId = offering.get("id") == null ? null : String.valueOf(offering.get("id"));
-        Map<String, Object> bucket = new LinkedHashMap<>();
-        bucket.put("id", productId);
-        bucket.put("name", (offering.get("name") == null ? ratePlanId : offering.get("name")) + " data");
-        bucket.put("ratePlanId", ratePlanId);
-        bucket.put("totalGB", round(total));
-        bucket.put("usedGB", round(Math.max(0, total - remaining)));
-        bucket.put("rolloverGB", 0);
-        bucket.put("rollover", false);
-        Map<String, Object> sub = new LinkedHashMap<>();
-        sub.put("id", productId);
-        sub.put("tenantId", characteristic(p, "bssTenantId"));
-        sub.put("partyId", characteristic(p, "bssPartyId"));
-        sub.put("serviceId", characteristic(p, "bssServiceId"));
-        sub.put("ratePlanId", ratePlanId);
-        sub.put("status", p.get("status") == null ? "active" : p.get("status"));
-        sub.put("buckets", List.of(bucket));
-        sub.put("provider", "sigscale");
-        return sub;
+        JsonNode offering = p.path("productOffering");
+        String ratePlanId = offering.hasNonNull("id") ? offering.get("id").asText() : null;
+        OcsBucket bucket = new OcsBucket(productId,
+                (offering.hasNonNull("name") ? offering.get("name").asText() : ratePlanId) + " data",
+                ratePlanId, round(total), round(Math.max(0, total - remaining)), 0, false);
+        return new OcsSubscriber(productId, characteristic(p, "bssTenantId"), characteristic(p, "bssPartyId"),
+                characteristic(p, "bssServiceId"), ratePlanId,
+                p.hasNonNull("status") ? p.get("status").asText() : "active",
+                List.of(bucket), "sigscale");
     }
 
     static final int PAGE = 500;
@@ -174,16 +168,15 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
      * Fine at operator-of-tens-of-thousands scale; a per-party index would be
      * the next step for millions.
      */
-    @SuppressWarnings("unchecked")
-    List<Map<String, Object>> productsWhere(RestClient c, String charName, String value) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    List<JsonNode> productsWhere(RestClient c, String charName, String value) {
+        List<JsonNode> out = new ArrayList<>();
         for (int page = 0; page < 40; page++) {
             int from = page * PAGE + 1;
-            List<Map<String, Object>> products;
+            List<JsonNode> products;
             try {
                 products = c.get().uri(INVENTORY + "/product")
                         .header("Range", "items=" + from + "-" + (from + PAGE - 1))
-                        .retrieve().body(List.class);
+                        .retrieve().body(PRODUCTS);
             } catch (HttpClientErrorException.NotFound e) {
                 break;
             } catch (HttpClientErrorException e) {
@@ -195,7 +188,7 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
             if (products == null) {
                 break;
             }
-            for (Map<String, Object> p : products) {
+            for (JsonNode p : products) {
                 if (value.equals(characteristic(p, charName))) {
                     out.add(p);
                 }
@@ -217,12 +210,11 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
         double sum = 0;
         try {
             for (PrepayTask t : tasks.findAllByTenantIdAndResourceTypeOrderByCreatedAtAsc(tenantId, "topupBalance")) {
-                Map<String, Object> payload = mapper.readValue(t.getPayloadJson(), Map.class);
-                Object bucket = payload.get("bucket");
-                Object amount = payload.get("amount");
-                if (bucket instanceof Map<?, ?> b && productId.equals(String.valueOf(b.get("id")))
-                        && amount instanceof Map<?, ?> a && a.get("amount") != null) {
-                    sum += parse(String.valueOf(a.get("amount")));
+                JsonNode payload = mapper.readTree(t.getPayloadJson());
+                JsonNode bucket = payload.path("bucket");
+                JsonNode amount = payload.path("amount");
+                if (productId.equals(bucket.path("id").asText()) && amount.hasNonNull("amount")) {
+                    sum += parse(amount.get("amount").asText());
                 }
             }
         } catch (RuntimeException | java.io.IOException e) {
@@ -232,13 +224,11 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     }
 
     /** The accumulated data balance on a product, in GB. */
-    public static double remainingGb(Map<String, Object> product) {
-        Object balances = product == null ? null : product.get("balance");
-        if (balances instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> b && "octets".equals(b.get("name"))
-                        && b.get("totalBalance") instanceof Map<?, ?> t) {
-                    return octets(t.get("amount")) / GB;
+    public static double remainingGb(JsonNode product) {
+        if (product != null) {
+            for (JsonNode b : product.path("balance")) {
+                if ("octets".equals(b.path("name").asText()) && b.path("totalBalance").isObject()) {
+                    return octets(b.path("totalBalance").get("amount")) / GB;
                 }
             }
         }
@@ -246,14 +236,14 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
     }
 
     /** SigScale renders octets as a number or as "9000000000b". */
-    public static double octets(Object amount) {
-        if (amount == null) {
+    public static double octets(JsonNode amount) {
+        if (amount == null || amount.isNull() || amount.isMissingNode()) {
             return 0;
         }
-        if (amount instanceof Number n) {
-            return n.doubleValue();
+        if (amount.isNumber()) {
+            return amount.doubleValue();
         }
-        String s = String.valueOf(amount).trim().toLowerCase();
+        String s = amount.asText().trim().toLowerCase();
         if (s.endsWith("b")) {
             s = s.substring(0, s.length() - 1);
         }
@@ -264,28 +254,15 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
         }
     }
 
-    public static String characteristic(Map<String, Object> product, String name) {
-        Object chars = product == null ? null : product.get("characteristic");
-        if (chars instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> m && name.equals(m.get("name"))) {
-                    return m.get("value") == null ? null : String.valueOf(m.get("value"));
+    public static String characteristic(JsonNode product, String name) {
+        if (product != null) {
+            for (JsonNode m : product.path("characteristic")) {
+                if (name.equals(m.path("name").asText())) {
+                    return m.hasNonNull("value") ? m.get("value").asText() : null;
                 }
             }
         }
         return null;
-    }
-
-    static int characteristicIndex(Map<String, Object> product, String name) {
-        Object chars = product == null ? null : product.get("characteristic");
-        if (chars instanceof List<?> list) {
-            for (int i = 0; i < list.size(); i++) {
-                if (list.get(i) instanceof Map<?, ?> m && name.equals(m.get("name"))) {
-                    return i;
-                }
-            }
-        }
-        return -1;
     }
 
     static double parse(String v) {
@@ -298,9 +275,5 @@ public class SigscaleOcsClient implements OcsBalanceAdapter {
 
     public static double round(double v) {
         return Math.round(v * 1000.0) / 1000.0;
-    }
-
-    private static String trim(double v) {
-        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(round(v));
     }
 }

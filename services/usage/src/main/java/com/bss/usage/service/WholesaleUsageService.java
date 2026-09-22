@@ -1,6 +1,16 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.ImsiRangeRequest;
+import com.bss.usage.dto.ImsiRangeView;
+import com.bss.usage.dto.SimulateWholesaleRequest;
+import com.bss.usage.dto.WholesaleLedgerView;
+import com.bss.usage.dto.WholesaleRateCardRequest;
+import com.bss.usage.dto.WholesaleRateCardView;
+import com.bss.usage.dto.WholesaleRerated;
+import com.bss.usage.dto.WholesaleSettlement;
+import com.bss.usage.dto.WholesaleSimulation;
 import com.bss.usage.entity.ImsiRange;
+import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.entity.UsageRecord;
 import com.bss.usage.entity.WholesaleRateCard;
 import com.bss.usage.entity.WholesaleUsageLedger;
@@ -79,10 +89,10 @@ public class WholesaleUsageService {
      * (keyed on the ledger id) never double-posts COGS.
      */
     @Transactional
-    public List<Map<String, Object>> rateWholesale(LocalDate periodStart, LocalDate periodEnd) {
+    public List<WholesaleLedgerView> rateWholesale(LocalDate periodStart, LocalDate periodEnd) {
         String tenant = tenantScope.currentTenantId();
         Map<String, BigDecimal> units = unitsBySpec(tenant, periodStart, periodEnd);
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<WholesaleLedgerView> out = new ArrayList<>();
         for (Map.Entry<String, BigDecimal> e : units.entrySet()) {
             String spec = e.getKey();
             Optional<WholesaleRateCard> cardOpt = rateCards.findByTenantIdAndUsageSpecName(tenant, spec);
@@ -93,7 +103,7 @@ public class WholesaleUsageService {
             Optional<WholesaleUsageLedger> existing =
                     ledger.findByTenantIdAndPeriodStartAndUsageSpecName(tenant, periodStart, spec);
             if (existing.isPresent()) {
-                out.add(ledgerMap(existing.get()));
+                out.add(ledgerView(existing.get()));
                 continue;
             }
             WholesaleUsageLedger row = new WholesaleUsageLedger();
@@ -111,8 +121,8 @@ public class WholesaleUsageService {
             row.setCreatedAt(OffsetDateTime.now());
             ledger.save(row);
             // Revenue books the MVNO's wholesale cost off this event (amount rides it).
-            events.publish("WholesaleUsageRatedEvent", "wholesaleUsageLedger", ledgerMap(row));
-            out.add(ledgerMap(row));
+            events.publish("WholesaleUsageRatedEvent", "wholesaleUsageLedger", ledgerView(row));
+            out.add(ledgerView(row));
         }
         return out;
     }
@@ -127,9 +137,9 @@ public class WholesaleUsageService {
      * a window: a settled old period is a dispute, not a silent mutation.
      */
     @Transactional
-    public List<Map<String, Object>> rerateDrifted(String tenant, int windowDays) {
+    public List<WholesaleRerated> rerateDrifted(String tenant, int windowDays) {
         LocalDate earliest = clock.today().minusDays(windowDays).withDayOfMonth(1);   // T3: the window lives on the tenant clock
-        List<Map<String, Object>> rerated = new ArrayList<>();
+        List<WholesaleRerated> rerated = new ArrayList<>();
         for (WholesaleUsageLedger row : ledger.findByTenantIdAndPeriodStartGreaterThanEqual(tenant, earliest)) {
             LocalDate periodStart = row.getPeriodStart();
             LocalDate periodEnd = periodStart.plusMonths(1).minusDays(1);
@@ -144,9 +154,8 @@ public class WholesaleUsageService {
             row.setRerateCount(row.getRerateCount() + 1);
             row.setLastReratedAt(OffsetDateTime.now());
             ledger.save(row);
-            Map<String, Object> event = ledgerMap(row);
-            event.put("previousAmount", oldAmount);
-            event.put("delta", row.getAmount().subtract(oldAmount));
+            WholesaleRerated event = new WholesaleRerated(ledgerView(row), oldAmount,
+                    row.getAmount().subtract(oldAmount));
             events.publish("WholesaleUsageReratedEvent", "wholesaleUsageLedger", event, tenant);
             rerated.add(event);
         }
@@ -161,18 +170,17 @@ public class WholesaleUsageService {
      * table at the renegotiation.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> simulateWholesale(LocalDate periodStart, LocalDate periodEnd,
-            List<Map<String, Object>> proposedRates) {
+    public WholesaleSimulation simulateWholesale(LocalDate periodStart, LocalDate periodEnd,
+            List<SimulateWholesaleRequest.ProposedRate> proposedRates) {
         String tenant = tenantScope.currentTenantId();
         Map<String, BigDecimal> units = unitsBySpec(tenant, periodStart, periodEnd);
         Map<String, BigDecimal> proposal = new LinkedHashMap<>();
-        for (Map<String, Object> r : proposedRates == null ? List.<Map<String, Object>>of() : proposedRates) {
-            if (r.get("usageSpecName") != null && r.get("wholesaleRate") != null) {
-                proposal.put(String.valueOf(r.get("usageSpecName")),
-                        new BigDecimal(String.valueOf(r.get("wholesaleRate"))));
+        for (SimulateWholesaleRequest.ProposedRate r : proposedRates == null ? List.<SimulateWholesaleRequest.ProposedRate>of() : proposedRates) {
+            if (r.usageSpecName() != null && r.wholesaleRate() != null) {
+                proposal.put(r.usageSpecName(), r.wholesaleRate());
             }
         }
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<WholesaleSimulation.Line> lines = new ArrayList<>();
         BigDecimal currentTotal = BigDecimal.ZERO;
         BigDecimal proposedTotal = BigDecimal.ZERO;
         String currency = null;
@@ -189,39 +197,21 @@ public class WholesaleUsageService {
             BigDecimal proposedCost = e.getValue().multiply(proposedRate).setScale(2, RoundingMode.HALF_UP);
             currentTotal = currentTotal.add(currentCost);
             proposedTotal = proposedTotal.add(proposedCost);
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("usageSpecName", e.getKey());
-            line.put("units", e.getValue());
-            line.put("unit", card.getUnit());
-            line.put("currentRate", currentRate);
-            line.put("proposedRate", proposedRate);
-            line.put("currentCost", currentCost);
-            line.put("proposedCost", proposedCost);
-            line.put("delta", proposedCost.subtract(currentCost));
-            lines.add(line);
+            lines.add(new WholesaleSimulation.Line(e.getKey(), e.getValue(), card.getUnit(), currentRate,
+                    proposedRate, currentCost, proposedCost, proposedCost.subtract(currentCost)));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "WholesaleNegotiationSimulation");
-        out.put("periodStart", periodStart.toString());
-        out.put("periodEnd", periodEnd.toString());
-        out.put("line", lines);
-        out.put("currentTotal", currentTotal);
-        out.put("proposedTotal", proposedTotal);
-        out.put("delta", proposedTotal.subtract(currentTotal));
-        if (currency != null) {
-            out.put("currency", currency);
-        }
-        out.put("assumptions", List.of(
-                "units are the period's REAL CDRs — traffic mix assumed unchanged under the new rates",
-                "specs without a proposed rate keep the current agreed rate",
-                "read-only: nothing was rated, booked or stored"));
-        return out;
+        return new WholesaleSimulation("WholesaleNegotiationSimulation", periodStart.toString(),
+                periodEnd.toString(), lines, currentTotal, proposedTotal, proposedTotal.subtract(currentTotal),
+                currency, List.of(
+                        "units are the period's REAL CDRs — traffic mix assumed unchanged under the new rates",
+                        "specs without a proposed rate keep the current agreed rate",
+                        "read-only: nothing was rated, booked or stored"));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> ledgerFor(LocalDate periodStart) {
+    public List<WholesaleLedgerView> ledgerFor(LocalDate periodStart) {
         return ledger.findByTenantIdAndPeriodStart(tenantScope.currentTenantId(), periodStart)
-                .stream().map(this::ledgerMap).toList();
+                .stream().map(this::ledgerView).toList();
     }
 
     /**
@@ -230,11 +220,11 @@ public class WholesaleUsageService {
      * rating) is flagged — revenue assurance, not just a sum.
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> settlement(LocalDate periodStart, LocalDate periodEnd) {
+    public WholesaleSettlement settlement(LocalDate periodStart, LocalDate periodEnd) {
         String tenant = tenantScope.currentTenantId();
         List<WholesaleUsageLedger> rows = ledger.findByTenantIdAndPeriodStart(tenant, periodStart);
         Map<String, BigDecimal> live = unitsBySpec(tenant, periodStart, periodEnd);
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<WholesaleSettlement.Line> lines = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
         boolean reconciled = true;
         String host = null;
@@ -245,38 +235,26 @@ public class WholesaleUsageService {
                 reconciled = false;
             }
             host = row.getHostPartyId();
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("usageSpecName", row.getUsageSpecName());
-            line.put("ratedUnits", row.getTotalUnits());
-            line.put("liveUnits", liveUnits);
-            line.put("unit", row.getUnit());
-            line.put("wholesaleRate", row.getWholesaleRate());
-            line.put("amount", row.getAmount());
-            line.put("currency", row.getCurrency());
-            line.put("reconciled", match);
-            lines.add(line);
+            lines.add(new WholesaleSettlement.Line(row.getUsageSpecName(), row.getTotalUnits(), liveUnits,
+                    row.getUnit(), row.getWholesaleRate(), row.getAmount(), row.getCurrency(), match));
             total = total.add(row.getAmount());
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "MobileWholesaleSettlement");
-        out.put("periodType", "month");
-        out.put("periodStart", periodStart.toString());
-        out.put("hostPartyId", host);
-        out.put("line", lines);
-        out.put("totalOwed", total.setScale(2, RoundingMode.HALF_UP));
         // the statement's currency is the ledger's, not a hardcoded default
-        out.put("currency", rows.isEmpty() || rows.get(0).getCurrency() == null
-                ? "EUR" : rows.get(0).getCurrency());
-        out.put("reconciled", reconciled);
-        return out;
+        return new WholesaleSettlement("MobileWholesaleSettlement", "month", periodStart.toString(), host, lines,
+                total.setScale(2, RoundingMode.HALF_UP),
+                rows.isEmpty() || rows.get(0).getCurrency() == null ? "EUR" : rows.get(0).getCurrency(),
+                reconciled);
     }
 
     /* ---------- rate card + IMSI admin ---------- */
 
     @Transactional
-    public Map<String, Object> upsertRateCard(Map<String, Object> dto) {
+    public WholesaleRateCardView upsertRateCard(WholesaleRateCardRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String spec = String.valueOf(dto.get("usageSpecName"));
+        if (dto.usageSpecName() == null || dto.wholesaleRate() == null) {
+            throw new BadRequestException("usageSpecName and wholesaleRate are required");
+        }
+        String spec = dto.usageSpecName();
         WholesaleRateCard card = rateCards.findByTenantIdAndUsageSpecName(tenant, spec)
                 .orElseGet(WholesaleRateCard::new);
         if (card.getId() == null) {
@@ -284,87 +262,63 @@ public class WholesaleUsageService {
             card.setTenantId(tenant);
             card.setUsageSpecName(spec);
         }
-        card.setWholesaleRate(new BigDecimal(String.valueOf(dto.get("wholesaleRate"))));
-        card.setUnit(dto.get("unit") == null ? null : String.valueOf(dto.get("unit")));
-        card.setCurrency(dto.get("currency") == null ? "EUR" : String.valueOf(dto.get("currency")));
-        card.setHostPartyId(dto.get("hostPartyId") == null ? null : String.valueOf(dto.get("hostPartyId")));
-        card.setHostName(dto.get("hostName") == null ? null : String.valueOf(dto.get("hostName")));
+        card.setWholesaleRate(dto.wholesaleRate());
+        card.setUnit(dto.unit());
+        card.setCurrency(dto.currency() == null ? "EUR" : dto.currency());
+        card.setHostPartyId(dto.hostPartyId());
+        card.setHostName(dto.hostName());
         card.setLastUpdate(OffsetDateTime.now());
-        return rateCardMap(rateCards.save(card));
+        return rateCardView(rateCards.save(card));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> rateCards() {
-        return rateCards.findByTenantId(tenantScope.currentTenantId()).stream().map(this::rateCardMap).toList();
+    public List<WholesaleRateCardView> rateCards() {
+        return rateCards.findByTenantId(tenantScope.currentTenantId()).stream().map(this::rateCardView).toList();
     }
 
     @Transactional
-    public Map<String, Object> allocateImsi(Map<String, Object> dto) {
+    public ImsiRangeView allocateImsi(ImsiRangeRequest dto) {
+        if (dto.fromImsi() == null || dto.toImsi() == null) {
+            throw new BadRequestException("fromImsi and toImsi are required");
+        }
         ImsiRange r = new ImsiRange();
         r.setId(UUID.randomUUID().toString());
         r.setTenantId(tenantScope.currentTenantId());
-        r.setHostPartyId(dto.get("hostPartyId") == null ? null : String.valueOf(dto.get("hostPartyId")));
-        r.setHostName(dto.get("hostName") == null ? null : String.valueOf(dto.get("hostName")));
-        r.setPrefix(dto.get("prefix") == null ? null : String.valueOf(dto.get("prefix")));
-        r.setFromImsi(String.valueOf(dto.get("fromImsi")));
-        r.setToImsi(String.valueOf(dto.get("toImsi")));
-        r.setCapacity(dto.get("capacity") == null ? null : Integer.valueOf(String.valueOf(dto.get("capacity"))));
-        r.setNote(dto.get("note") == null ? null : String.valueOf(dto.get("note")));
+        r.setHostPartyId(dto.hostPartyId());
+        r.setHostName(dto.hostName());
+        r.setPrefix(dto.prefix());
+        r.setFromImsi(dto.fromImsi());
+        r.setToImsi(dto.toImsi());
+        r.setCapacity(dto.capacity());
+        r.setNote(dto.note());
         r.setAllocatedAt(OffsetDateTime.now());
-        return imsiMap(imsiRanges.save(r));
+        return imsiView(imsiRanges.save(r));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> imsiRanges() {
-        return imsiRanges.findByTenantId(tenantScope.currentTenantId()).stream().map(this::imsiMap).toList();
+    public List<ImsiRangeView> imsiRanges() {
+        return imsiRanges.findByTenantId(tenantScope.currentTenantId()).stream().map(this::imsiView).toList();
     }
 
     /* ---------- mappers ---------- */
 
-    private Map<String, Object> ledgerMap(WholesaleUsageLedger r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("periodStart", r.getPeriodStart() == null ? null : r.getPeriodStart().toString());
-        m.put("usageSpecName", r.getUsageSpecName());
-        m.put("totalUnits", r.getTotalUnits());
-        m.put("unit", r.getUnit());
-        m.put("wholesaleRate", r.getWholesaleRate());
-        m.put("amount", r.getAmount());
-        m.put("currency", r.getCurrency());
-        m.put("hostPartyId", r.getHostPartyId());
-        m.put("status", r.getStatus());
-        if (r.getRerateCount() > 0) {
-            m.put("rerateCount", r.getRerateCount());
-            m.put("lastReratedAt", r.getLastReratedAt());
-        }
-        m.put("@type", "WholesaleUsageLedger");
-        return m;
+    private WholesaleLedgerView ledgerView(WholesaleUsageLedger r) {
+        boolean rerated = r.getRerateCount() > 0;
+        return new WholesaleLedgerView(r.getId(),
+                r.getPeriodStart() == null ? null : r.getPeriodStart().toString(),
+                r.getUsageSpecName(), r.getTotalUnits(), r.getUnit(), r.getWholesaleRate(), r.getAmount(),
+                r.getCurrency(), r.getHostPartyId(), r.getStatus(),
+                rerated ? r.getRerateCount() : null, rerated ? r.getLastReratedAt() : null,
+                "WholesaleUsageLedger");
     }
 
-    private Map<String, Object> rateCardMap(WholesaleRateCard c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("usageSpecName", c.getUsageSpecName());
-        m.put("wholesaleRate", c.getWholesaleRate());
-        m.put("unit", c.getUnit());
-        m.put("currency", c.getCurrency());
-        m.put("hostPartyId", c.getHostPartyId());
-        m.put("hostName", c.getHostName());
-        m.put("@type", "WholesaleRateCard");
-        return m;
+    private WholesaleRateCardView rateCardView(WholesaleRateCard c) {
+        return new WholesaleRateCardView(c.getId(), c.getUsageSpecName(), c.getWholesaleRate(), c.getUnit(),
+                c.getCurrency(), c.getHostPartyId(), c.getHostName(), "WholesaleRateCard");
     }
 
-    private Map<String, Object> imsiMap(ImsiRange r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("hostPartyId", r.getHostPartyId());
-        m.put("hostName", r.getHostName());
-        m.put("prefix", r.getPrefix());
-        m.put("fromImsi", r.getFromImsi());
-        m.put("toImsi", r.getToImsi());
-        m.put("capacity", r.getCapacity());
-        m.put("note", r.getNote());
-        m.put("@type", "ImsiRange");
-        return m;
+    private ImsiRangeView imsiView(ImsiRange r) {
+        return new ImsiRangeView(r.getId(), r.getHostPartyId(), r.getHostName(), r.getPrefix(), r.getFromImsi(),
+                r.getToImsi(), r.getCapacity(), r.getNote(), "ImsiRange");
     }
 }

@@ -1,7 +1,19 @@
 package com.bss.usage.controller;
 
 import com.bss.usage.api.ApiConstants;
+import com.bss.usage.dto.ConsumptionReport;
+import com.bss.usage.dto.CycleCloseReceipt;
+import com.bss.usage.dto.DataGift;
+import com.bss.usage.dto.GiftRequest;
+import com.bss.usage.dto.RateUsageRequest;
+import com.bss.usage.dto.RatedChargeView;
+import com.bss.usage.dto.UsageAllowanceRequest;
+import com.bss.usage.dto.UsageAllowanceView;
+import com.bss.usage.dto.UsageSpecificationView;
+import com.bss.usage.dto.UsageView;
+import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.service.UsageService;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -14,7 +26,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
-import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,7 +34,9 @@ import java.util.Map;
  * TMF635 side: POST /usage is the mediation/OCS seam; /usageAllowance is
  * admin rule data; /rateUsage is the billing run's task endpoint. All writes
  * are machine/back-office (usage:write). TMF677 side: the consumption report,
- * party-scoped for customers.
+ * party-scoped for customers. The TMF635 documents (usage, specification)
+ * are stored verbatim, so their bodies are open documents; the house shapes
+ * are records.
  */
 @RestController
 public class UsageController {
@@ -37,59 +50,55 @@ public class UsageController {
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/usage")
-    public ResponseEntity<Map<String, Object>> ingest(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.ingest(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<UsageView> ingest(@RequestBody ObjectNode dto) {
+        UsageView created = service.ingest(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/usage")
-    public ResponseEntity<List<Map<String, Object>>> listUsage(@RequestParam Map<String, String> allParams) {
+    public ResponseEntity<List<UsageView>> listUsage(@RequestParam Map<String, String> allParams) {
         return ResponseEntity.ok(service.findUsage(cleanFilters(allParams)));
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/usage/{id}")
-    public ResponseEntity<Map<String, Object>> getUsage(@PathVariable("id") String id) {
+    public ResponseEntity<UsageView> getUsage(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findUsageById(id));
     }
 
     /** Gift remaining GB — to a family member by id, or to any number the
      * plan's giftScope reaches. The caller's own data, their call. */
     @PostMapping(ApiConstants.BASE_PATH + "/gift")
-    public ResponseEntity<Map<String, Object>> gift(@RequestBody Map<String, Object> dto) {
-        Object amount = dto.get("amount");
-        return ResponseEntity.ok(service.giftData(
-                dto.get("receiverId") == null ? null : String.valueOf(dto.get("receiverId")),
-                dto.get("receiverPhone") == null ? null : String.valueOf(dto.get("receiverPhone")),
-                amount == null ? null : new java.math.BigDecimal(String.valueOf(amount))));
+    public ResponseEntity<DataGift> gift(@RequestBody GiftRequest dto) {
+        return ResponseEntity.ok(service.giftData(dto.receiverId(), dto.receiverPhone(), dto.amount()));
     }
 
     /** Month close: unused GB rolls into next cycle (back-office/scheduler). */
     @PostMapping(ApiConstants.BASE_PATH + "/cycleClose")
-    public ResponseEntity<Map<String, Object>> cycleClose() {
+    public ResponseEntity<CycleCloseReceipt> cycleClose() {
         return ResponseEntity.ok(service.cycleClose());
     }
 
     // ---- UsageSpecification (TMF635) ----
 
     @PostMapping(ApiConstants.BASE_PATH + "/usageSpecification")
-    public ResponseEntity<Map<String, Object>> createSpec(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.createSpec(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<UsageSpecificationView> createSpec(@RequestBody ObjectNode dto) {
+        UsageSpecificationView created = service.createSpec(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/usageSpecification")
-    public ResponseEntity<List<Map<String, Object>>> listSpecs(@RequestParam Map<String, String> allParams) {
+    public ResponseEntity<List<UsageSpecificationView>> listSpecs(@RequestParam Map<String, String> allParams) {
         return ResponseEntity.ok(service.findSpecs(cleanFilters(allParams)));
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/usageSpecification/{id}")
-    public ResponseEntity<Map<String, Object>> getSpec(@PathVariable("id") String id) {
+    public ResponseEntity<UsageSpecificationView> getSpec(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findSpecById(id));
     }
 
     @PatchMapping(ApiConstants.BASE_PATH + "/usageSpecification/{id}")
-    public ResponseEntity<Map<String, Object>> patchSpec(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<UsageSpecificationView> patchSpec(@PathVariable("id") String id,
+            @RequestBody ObjectNode dto) {
         return ResponseEntity.ok(service.patchSpec(id, dto));
     }
 
@@ -106,44 +115,42 @@ public class UsageController {
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/usageAllowance")
-    public ResponseEntity<Map<String, Object>> allowance(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.createAllowance(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<UsageAllowanceView> allowance(@RequestBody UsageAllowanceRequest dto) {
+        UsageAllowanceView created = service.createAllowance(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/usageAllowance")
-    public ResponseEntity<List<Map<String, Object>>> allowances() {
+    public ResponseEntity<List<UsageAllowanceView>> allowances() {
         return ResponseEntity.ok(service.listAllowances());
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/rateUsage")
-    public ResponseEntity<List<Map<String, Object>>> rate(@RequestBody Map<String, Object> request) {
-        String party = String.valueOf(request.get("relatedPartyId"));
-        LocalDate start = LocalDate.parse(String.valueOf(request.get("periodStart")));
-        LocalDate end = LocalDate.parse(String.valueOf(request.get("periodEnd")));
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.rateForParty(party, start, end));
+    public ResponseEntity<List<RatedChargeView>> rate(@RequestBody RateUsageRequest request) {
+        if (request.relatedPartyId() == null || request.periodStart() == null || request.periodEnd() == null) {
+            throw new BadRequestException("relatedPartyId, periodStart and periodEnd are required");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                service.rateForParty(request.relatedPartyId(), request.periodStart(), request.periodEnd()));
     }
 
     /** One round trip rates MANY parties (partyId → charges) — the billing run's
      * fresh-period batch; the per-account HTTP fan-out was the slow part, not
      * the rating arithmetic. Same gate as /rateUsage (usage:write). */
     @PostMapping(ApiConstants.BASE_PATH + "/rateUsageBatch")
-    public ResponseEntity<Map<String, List<Map<String, Object>>>> rateBatch(
-            @RequestBody Map<String, Object> request) {
-        LocalDate start = LocalDate.parse(String.valueOf(request.get("periodStart")));
-        LocalDate end = LocalDate.parse(String.valueOf(request.get("periodEnd")));
-        Map<String, List<Map<String, Object>>> out = new java.util.LinkedHashMap<>();
-        if (request.get("relatedPartyIds") instanceof List<?> ids) {
-            for (Object p : ids) {
-                String party = String.valueOf(p);
-                out.put(party, service.rateForParty(party, start, end));
-            }
+    public ResponseEntity<Map<String, List<RatedChargeView>>> rateBatch(@RequestBody RateUsageRequest request) {
+        if (request.periodStart() == null || request.periodEnd() == null) {
+            throw new BadRequestException("periodStart and periodEnd are required");
+        }
+        Map<String, List<RatedChargeView>> out = new java.util.LinkedHashMap<>();
+        for (String party : request.relatedPartyIds() == null ? List.<String>of() : request.relatedPartyIds()) {
+            out.put(party, service.rateForParty(party, request.periodStart(), request.periodEnd()));
         }
         return ResponseEntity.ok(out);
     }
 
     @GetMapping(ApiConstants.CONSUMPTION_BASE_PATH + "/queryUsageConsumption")
-    public ResponseEntity<Map<String, Object>> consumption(
+    public ResponseEntity<ConsumptionReport> consumption(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(service.consumptionReport(relatedPartyId));
     }
@@ -154,12 +161,12 @@ public class UsageController {
     public ResponseEntity<List<?>> listReports(
             @RequestParam(name = "fields", required = false) String fields,
             @RequestParam Map<String, String> allParams) {
-        List<Map<String, Object>> items = service.findReports(cleanFilters(allParams));
+        List<ConsumptionReport> items = service.findReports(cleanFilters(allParams));
         return ResponseEntity.ok(fields == null ? items : fieldSelector.select(items, fields));
     }
 
     @GetMapping(ApiConstants.CONSUMPTION_BASE_PATH + "/usageConsumptionReport/{id}")
-    public ResponseEntity<Map<String, Object>> getReport(@PathVariable("id") String id) {
+    public ResponseEntity<ConsumptionReport> getReport(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findReportById(id));
     }
 }

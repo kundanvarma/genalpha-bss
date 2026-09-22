@@ -2,13 +2,20 @@ package com.bss.usage.controller;
 
 import com.bss.usage.api.FieldSelector;
 import com.bss.usage.client.OcsClient;
+import com.bss.usage.dto.Amount;
+import com.bss.usage.dto.OcsBucket;
+import com.bss.usage.dto.OcsSubscriber;
+import com.bss.usage.dto.PrepayBucketView;
+import com.bss.usage.dto.RelatedPartyRef;
 import com.bss.usage.entity.PrepayTask;
 import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.exception.NotFoundException;
 import com.bss.usage.repository.PrepayTaskRepository;
 import com.bss.usage.security.PartyScope;
 import com.bss.usage.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -33,8 +38,11 @@ import java.util.UUID;
  * stays the master; live meters project from its buckets, and the TMF654
  * task resources (bucket, topupBalance, adjustBalance, reserveBalance)
  * persist here in the TMF shape — CTK-conformant — recording what was
- * asked. Where a real credit path exists (top-up), the OCS does the
- * arithmetic before the task row is written.
+ * asked. A task is the caller's document echoed back with the server's keys
+ * laid over it, so it is stored and answered as an open document
+ * ({@link ObjectNode}); the live bucket projection is a record.
+ * Where a real credit path exists (top-up), the OCS does the arithmetic
+ * before the task row is written.
  * (Served by the usage component in v1; splits into its own ODA component
  * with the v2 usage flip.)
  */
@@ -61,7 +69,7 @@ public class PrepayBalanceController {
     /* ---------- bucket: live projection for a party, task log otherwise ---------- */
 
     @GetMapping("/bucket")
-    public ResponseEntity<List<Map<String, Object>>> buckets(
+    public ResponseEntity<List<?>> buckets(
             @RequestParam(required = false) String relatedPartyId,
             @RequestParam(required = false) String fields,
             @RequestParam(required = false) String id,
@@ -72,40 +80,27 @@ public class PrepayBalanceController {
             // no party in sight: the resource face — created bucket records
             return ResponseEntity.ok(select(list("bucket", id, status, usageType), fields));
         }
-        List<Map<String, Object>> buckets = new ArrayList<>();
-        for (Map<String, Object> sub : ocs.subscribersOf(tenantScope.currentTenantId(), party)) {
-            for (Object o : asList(sub.get("buckets"))) {
-                if (!(o instanceof Map<?, ?> raw)) {
-                    continue;
-                }
-                @SuppressWarnings("unchecked")
-                Map<String, Object> bucket = (Map<String, Object>) raw;
-                double total = number(bucket.get("totalGB")) + number(bucket.get("rolloverGB"));
-                double used = number(bucket.get("usedGB"));
-                Map<String, Object> dto = new LinkedHashMap<>();
-                dto.put("id", bucket.get("id"));
-                dto.put("@type", "Bucket");
-                dto.put("name", bucket.get("name"));
-                dto.put("ratePlanId", bucket.get("ratePlanId"));
-                dto.put("subscriberId", sub.get("id"));
-                dto.put("serviceId", sub.get("serviceId"));
-                dto.put("remainingValue", Map.of(
-                        "amount", Math.max(0, round(total - used)), "units", "GB"));
-                dto.put("usedValue", Map.of("amount", round(used), "units", "GB"));
-                dto.put("rolloverValue", Map.of(
-                        "amount", round(number(bucket.get("rolloverGB"))), "units", "GB"));
-                dto.put("isRolloverEligible", Boolean.TRUE.equals(bucket.get("rollover")));
-                dto.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
-                buckets.add(dto);
+        List<PrepayBucketView> buckets = new ArrayList<>();
+        for (OcsSubscriber sub : ocs.subscribersOf(tenantScope.currentTenantId(), party)) {
+            for (OcsBucket bucket : sub.bucketList()) {
+                double total = bucket.totalGB() + bucket.rolloverGB();
+                double used = bucket.usedGB();
+                buckets.add(new PrepayBucketView(bucket.id(), "Bucket", bucket.name(), bucket.ratePlanId(),
+                        sub.id(), sub.serviceId(),
+                        new Amount(Math.max(0, round(total - used)), "GB"),
+                        new Amount(round(used), "GB"),
+                        new Amount(round(bucket.rolloverGB()), "GB"),
+                        bucket.rollover(),
+                        List.of(RelatedPartyRef.customer(party))));
             }
         }
         return ResponseEntity.ok(select(buckets, fields));
     }
 
     @PostMapping("/bucket")
-    public ResponseEntity<Map<String, Object>> createBucket(@RequestBody Map<String, Object> request) {
-        Map<String, Object> extra = new LinkedHashMap<>();
-        if (request.get("usageType") == null) {
+    public ResponseEntity<ObjectNode> createBucket(@RequestBody ObjectNode request) {
+        ObjectNode extra = objectMapper.createObjectNode();
+        if (!request.hasNonNull("usageType")) {
             extra.put("usageType", "monetary");
         }
         extra.put("confirmationDate", OffsetDateTime.now().toString());
@@ -113,39 +108,34 @@ public class PrepayBalanceController {
     }
 
     @GetMapping("/bucket/{id}")
-    public ResponseEntity<Map<String, Object>> bucketById(@PathVariable("id") String id) {
+    public ResponseEntity<ObjectNode> bucketById(@PathVariable("id") String id) {
         return ResponseEntity.ok(byId("bucket", "Bucket", id));
     }
 
     /* ---------- topupBalance: the OCS credits, the task log remembers ---------- */
 
     @PostMapping("/topupBalance")
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> topup(@RequestBody Map<String, Object> request) {
-        String party = partyScope.scopedPartyId().orElseGet(() ->
-                request.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                        && parties.get(0) instanceof Map<?, ?> p && p.get("id") != null
-                        ? String.valueOf(p.get("id")) : null);
+    public ResponseEntity<ObjectNode> topup(@RequestBody ObjectNode request) {
+        JsonNode firstParty = request.path("relatedParty").path(0);
+        String party = partyScope.scopedPartyId().orElse(
+                firstParty.hasNonNull("id") ? firstParty.get("id").asText() : null);
         if (party == null) {
             // no party named: record the task in the TMF shape (resource face)
-            return created(save("topupBalance", "TopupBalance", "done", request, Map.of()));
+            return created(save("topupBalance", "TopupBalance", "done", request, objectMapper.createObjectNode()));
         }
-        double amount = request.get("amount") instanceof Map<?, ?> money && money.get("amount") != null
-                ? number(money.get("amount")) : 0;
+        double amount = number(request.path("amount").get("amount"));
         if (amount <= 0) {
             throw new BadRequestException("amount {amount, units} must be positive");
         }
-        String bucketId = request.get("bucket") instanceof Map<?, ?> b && b.get("id") != null
-                ? String.valueOf(b.get("id")) : null;
+        String bucketId = request.path("bucket").hasNonNull("id") ? request.path("bucket").get("id").asText() : null;
         // the party boundary IS the authorization: only own subscribers reachable
         String tenant = tenantScope.currentTenantId();
-        for (Map<String, Object> sub : ocs.subscribersOf(tenant, party)) {
-            boolean match = bucketId == null || asList(sub.get("buckets")).stream()
-                    .anyMatch(o -> o instanceof Map<?, ?> raw && bucketId.equals(String.valueOf(raw.get("id"))));
-            if (match && ocs.credit(tenant, String.valueOf(sub.get("id")), amount)) {
-                Map<String, Object> extra = new LinkedHashMap<>();
-                extra.put("amount", Map.of("amount", amount, "units", "GB"));
-                extra.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
+        for (OcsSubscriber sub : ocs.subscribersOf(tenant, party)) {
+            boolean match = bucketId == null || sub.hasBucket(bucketId);
+            if (match && ocs.credit(tenant, sub.id(), amount)) {
+                ObjectNode extra = objectMapper.createObjectNode();
+                extra.set("amount", objectMapper.valueToTree(new Amount(amount, "GB")));
+                extra.set("relatedParty", objectMapper.valueToTree(List.of(RelatedPartyRef.customer(party))));
                 return created(save("topupBalance", "TopupBalance", "done", request, extra));
             }
         }
@@ -154,7 +144,7 @@ public class PrepayBalanceController {
     }
 
     @GetMapping("/topupBalance")
-    public ResponseEntity<List<Map<String, Object>>> topups(
+    public ResponseEntity<List<?>> topups(
             @RequestParam(required = false) String fields,
             @RequestParam(required = false) String id,
             @RequestParam(required = false) String status,
@@ -163,7 +153,7 @@ public class PrepayBalanceController {
     }
 
     @GetMapping("/topupBalance/{id}")
-    public ResponseEntity<Map<String, Object>> topupById(@PathVariable("id") String id) {
+    public ResponseEntity<ObjectNode> topupById(@PathVariable("id") String id) {
         return ResponseEntity.ok(byId("topupBalance", "TopupBalance", id));
     }
 
@@ -173,16 +163,16 @@ public class PrepayBalanceController {
      * production OCS behind the seam is where the counters actually move. */
 
     @PostMapping("/adjustBalance")
-    public ResponseEntity<Map<String, Object>> adjust(@RequestBody Map<String, Object> request) {
-        Map<String, Object> extra = new LinkedHashMap<>();
-        if (request.get("usageType") == null) {
+    public ResponseEntity<ObjectNode> adjust(@RequestBody ObjectNode request) {
+        ObjectNode extra = objectMapper.createObjectNode();
+        if (!request.hasNonNull("usageType")) {
             extra.put("usageType", "monetary");
         }
         return created(save("adjustBalance", "AdjustBalance", "done", request, extra));
     }
 
     @GetMapping("/adjustBalance")
-    public ResponseEntity<List<Map<String, Object>>> adjusts(
+    public ResponseEntity<List<?>> adjusts(
             @RequestParam(required = false) String fields,
             @RequestParam(required = false) String id,
             @RequestParam(required = false) String status,
@@ -191,22 +181,23 @@ public class PrepayBalanceController {
     }
 
     @GetMapping("/adjustBalance/{id}")
-    public ResponseEntity<Map<String, Object>> adjustById(@PathVariable("id") String id) {
+    public ResponseEntity<ObjectNode> adjustById(@PathVariable("id") String id) {
         return ResponseEntity.ok(byId("adjustBalance", "AdjustBalance", id));
     }
 
     @PostMapping("/reserveBalance")
-    public ResponseEntity<Map<String, Object>> reserve(@RequestBody Map<String, Object> request) {
-        Map<String, Object> extra = new LinkedHashMap<>();
-        if (!(request.get("relatedParty") instanceof List<?> parties) || parties.isEmpty()) {
+    public ResponseEntity<ObjectNode> reserve(@RequestBody ObjectNode request) {
+        ObjectNode extra = objectMapper.createObjectNode();
+        JsonNode parties = request.get("relatedParty");
+        if (parties == null || !parties.isArray() || parties.isEmpty()) {
             partyScope.scopedPartyId().ifPresent(p ->
-                    extra.put("relatedParty", List.of(Map.of("id", p, "role", "customer"))));
+                    extra.set("relatedParty", objectMapper.valueToTree(List.of(RelatedPartyRef.customer(p)))));
         }
         return created(save("reserveBalance", "ReserveBalance", "done", request, extra));
     }
 
     @GetMapping("/reserveBalance")
-    public ResponseEntity<List<Map<String, Object>>> reserves(
+    public ResponseEntity<List<?>> reserves(
             @RequestParam(required = false) String fields,
             @RequestParam(required = false) String id,
             @RequestParam(required = false) String status,
@@ -215,16 +206,16 @@ public class PrepayBalanceController {
     }
 
     @GetMapping("/reserveBalance/{id}")
-    public ResponseEntity<Map<String, Object>> reserveById(@PathVariable("id") String id) {
+    public ResponseEntity<ObjectNode> reserveById(@PathVariable("id") String id) {
         return ResponseEntity.ok(byId("reserveBalance", "ReserveBalance", id));
     }
 
     /* ---------- the task-resource plumbing ---------- */
 
-    private Map<String, Object> save(String type, String atType, String status,
-            Map<String, Object> body, Map<String, Object> serverFields) {
-        Map<String, Object> echo = new LinkedHashMap<>(body);
-        echo.putAll(serverFields);
+    /** The caller's document with the server's keys laid over it, stored and answered as one. */
+    private ObjectNode save(String type, String atType, String status, ObjectNode body, ObjectNode serverFields) {
+        ObjectNode echo = body.deepCopy();
+        echo.setAll(serverFields);
         String taskId = UUID.randomUUID().toString();
         echo.put("id", taskId);
         echo.put("href", "/tmf-api/prepayBalanceManagement/v4/" + type + "/" + taskId);
@@ -235,15 +226,15 @@ public class PrepayBalanceController {
         task.setTenantId(tenantScope.currentTenantId());
         task.setResourceType(type);
         task.setStatus(status);
-        task.setUsageType(echo.get("usageType") == null ? null : String.valueOf(echo.get("usageType")));
+        task.setUsageType(echo.hasNonNull("usageType") ? echo.get("usageType").asText() : null);
         task.setPayloadJson(writeJson(echo));
         task.setCreatedAt(OffsetDateTime.now());
         tasks.save(task);
         return echo;
     }
 
-    private List<Map<String, Object>> list(String type, String id, String status, String usageType) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private List<ObjectNode> list(String type, String id, String status, String usageType) {
+        List<ObjectNode> out = new ArrayList<>();
         for (PrepayTask task : tasks.findAllByTenantIdAndResourceTypeOrderByCreatedAtAsc(
                 tenantScope.currentTenantId(), type)) {
             if (id != null && !id.equals(task.getId())) {
@@ -260,17 +251,17 @@ public class PrepayBalanceController {
         return out;
     }
 
-    private Map<String, Object> byId(String type, String resource, String id) {
+    private ObjectNode byId(String type, String resource, String id) {
         return tasks.findByIdAndTenantIdAndResourceType(id, tenantScope.currentTenantId(), type)
                 .map(t -> readJson(t.getPayloadJson()))
                 .orElseThrow(() -> NotFoundException.forResource(resource, id));
     }
 
-    private List<Map<String, Object>> select(List<Map<String, Object>> items, String fields) {
+    private List<?> select(List<?> items, String fields) {
         return fields == null ? items : fieldSelector.select(items, fields);
     }
 
-    private ResponseEntity<Map<String, Object>> created(Map<String, Object> body) {
+    private ResponseEntity<ObjectNode> created(ObjectNode body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
@@ -282,22 +273,18 @@ public class PrepayBalanceController {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> readJson(String s) {
+    private ObjectNode readJson(String s) {
         try {
-            return s == null ? new LinkedHashMap<>() : objectMapper.readValue(s, Map.class);
+            JsonNode node = s == null ? null : objectMapper.readTree(s);
+            return node instanceof ObjectNode object ? object : objectMapper.createObjectNode();
         } catch (Exception e) {
-            return new LinkedHashMap<>();
+            return objectMapper.createObjectNode();
         }
     }
 
-    private static List<?> asList(Object value) {
-        return value instanceof List<?> list ? list : List.of();
-    }
-
-    private static double number(Object value) {
+    private static double number(JsonNode value) {
         try {
-            return value == null ? 0 : Double.parseDouble(String.valueOf(value));
+            return value == null || value.isNull() ? 0 : Double.parseDouble(value.asText());
         } catch (NumberFormatException e) {
             return 0;
         }

@@ -2,6 +2,11 @@ package com.bss.usage.service;
 
 import com.bss.usage.client.OcsSettings;
 import com.bss.usage.client.SigscaleOcsClient;
+import com.bss.usage.dto.OcsBucket;
+import com.bss.usage.dto.OcsSubscriber;
+import com.bss.usage.dto.SigscaleRelayReceipt;
+import com.bss.usage.dto.UsageThresholdNotification;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +15,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.util.LinkedHashMap;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,19 +67,17 @@ public class SigscaleNotificationService {
     /* ----------------------------------------------------------- inbound */
 
     /** One hub delivery (possibly several events). Returns what was relayed. */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> accept(String tenantId, Map<String, Object> body) {
-        List<Map<String, Object>> relayed = new java.util.ArrayList<>();
-        Object events = body == null ? null : body.get("event");
-        if (!(events instanceof List<?> list)) {
-            return Map.of("status", "ignored", "reason", "no event array");
+    public SigscaleRelayReceipt accept(String tenantId, JsonNode body) {
+        List<UsageThresholdNotification> relayed = new java.util.ArrayList<>();
+        JsonNode events = body == null ? null : body.get("event");
+        if (events == null || !events.isArray()) {
+            return SigscaleRelayReceipt.ignored("no event array");
         }
-        for (Object o : list) {
-            if (!(o instanceof Map<?, ?> raw)) {
+        for (JsonNode event : events) {
+            if (!event.isObject()) {
                 continue;
             }
-            Map<String, Object> event = (Map<String, Object>) raw;
-            String productId = event.get("id") == null ? null : String.valueOf(event.get("id"));
+            String productId = event.hasNonNull("id") ? event.get("id").asText() : null;
             if (productId == null) {
                 continue;
             }
@@ -86,7 +89,7 @@ public class SigscaleNotificationService {
             if (!told.add(productId)) {
                 continue; // this low episode was already relayed
             }
-            Map<String, Object> product = sigscale.product(tenantId, productId);
+            JsonNode product = sigscale.product(tenantId, productId);
             if (product == null || !tenantId.equals(SigscaleOcsClient.characteristic(product, "bssTenantId"))) {
                 told.remove(productId);
                 log.warn("SigScale OCS: threshold event for product {} that is not tenant {}'s — ignored", productId, tenantId);
@@ -94,52 +97,39 @@ public class SigscaleNotificationService {
             }
             // an anonymous door: the tenant comes from the hub subscription, so
             // bind it before any RLS-scoped read (the top-up log) happens
-            Map<String, Object> n;
+            UsageThresholdNotification n;
             try (com.bss.usage.security.TenantContext ignored = com.bss.usage.security.TenantContext.actAs(tenantId)) {
                 n = translate(tenantId, product, remainingBytes);
             }
             usage.notifyUsageThreshold(n);
             relayed.add(n);
             log.info("SigScale OCS: {} GB left on {} (party {}) — running-low relayed for tenant {}",
-                    n.get("remainingGB"), productId, n.get("partyId"), tenantId);
+                    n.remainingGB(), productId, n.partyId(), tenantId);
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("status", "accepted");
-        out.put("relayed", relayed);
-        return out;
+        return SigscaleRelayReceipt.accepted(relayed);
     }
 
-    Map<String, Object> translate(String tenantId, Map<String, Object> product, double remainingBytes) {
-        Map<String, Object> proj = sigscale.project(product);
-        @SuppressWarnings("unchecked")
-        Map<String, Object> bucket = ((List<Map<String, Object>>) proj.get("buckets")).get(0);
+    UsageThresholdNotification translate(String tenantId, JsonNode product, double remainingBytes) {
+        OcsSubscriber proj = sigscale.project(product);
+        OcsBucket bucket = proj.bucketList().get(0);
         double remainingGb = SigscaleOcsClient.round(remainingBytes / SigscaleOcsClient.GB);
-        double totalGb = ((Number) bucket.get("totalGB")).doubleValue();
-        Map<String, Object> n = new LinkedHashMap<>();
-        n.put("tenantId", tenantId);
-        n.put("partyId", proj.get("partyId"));
-        n.put("serviceId", proj.get("serviceId"));
-        n.put("ratePlanId", proj.get("ratePlanId"));
-        n.put("bucketName", bucket.get("name"));
-        n.put("totalGB", totalGb);
-        n.put("usedGB", SigscaleOcsClient.round(Math.max(0, totalGb - remainingGb)));
-        n.put("remainingGB", remainingGb);
+        double totalGb = bucket.totalGB();
+        BigDecimal percentUsed = null;
+        BigDecimal threshold = null;
         if (totalGb > 0) {
-            n.put("percentUsed", (int) Math.round(Math.max(0, totalGb - remainingGb) / totalGb * 100));
-            n.put("threshold", SigscaleOcsClient.round(1 - (thresholdBytes / SigscaleOcsClient.GB) / totalGb));
+            percentUsed = BigDecimal.valueOf(Math.round(Math.max(0, totalGb - remainingGb) / totalGb * 100));
+            threshold = BigDecimal.valueOf(SigscaleOcsClient.round(1 - (thresholdBytes / SigscaleOcsClient.GB) / totalGb));
         }
-        n.put("units", "GB");
-        n.put("source", "sigscale");
-        return n;
+        return new UsageThresholdNotification(tenantId, proj.partyId(), proj.serviceId(), proj.ratePlanId(),
+                bucket.name(), BigDecimal.valueOf(totalGb),
+                BigDecimal.valueOf(SigscaleOcsClient.round(Math.max(0, totalGb - remainingGb))),
+                BigDecimal.valueOf(remainingGb), percentUsed, threshold, "GB", "sigscale", null);
     }
 
-    static double totalOctets(Map<String, Object> event) {
-        Object tb = event.get("totalBalance");
-        if (tb instanceof List<?> list) {
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> m && "octets".equals(m.get("units"))) {
-                    return SigscaleOcsClient.octets(m.get("amount"));
-                }
+    static double totalOctets(JsonNode event) {
+        for (JsonNode m : event.path("totalBalance")) {
+            if ("octets".equals(m.path("units").asText())) {
+                return SigscaleOcsClient.octets(m.get("amount"));
             }
         }
         return Double.MAX_VALUE; // not a data balance: never "low"

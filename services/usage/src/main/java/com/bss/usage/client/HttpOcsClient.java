@@ -1,5 +1,7 @@
 package com.bss.usage.client;
 
+import com.bss.usage.dto.OcsSubscriber;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -42,17 +44,19 @@ public class HttpOcsClient implements OcsBalanceAdapter {
         return clients.computeIfAbsent(b.baseUrl(), url -> builder.clone().baseUrl(url).build());
     }
 
+    private static final ParameterizedTypeReference<List<OcsSubscriber>> SUBSCRIBERS =
+            new ParameterizedTypeReference<>() { };
+
     @Override
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> subscribersOf(String tenantId, String partyId) {
+    public List<OcsSubscriber> subscribersOf(String tenantId, String partyId) {
         RestClient restClient = client(tenantId);
         if (restClient == null) {
             return List.of();
         }
         try {
-            List<Map<String, Object>> subs = restClient.get()
+            List<OcsSubscriber> subs = restClient.get()
                     .uri("/subscribers?tenantId={t}&partyId={p}", tenantId, partyId)
-                    .retrieve().body(List.class);
+                    .retrieve().body(SUBSCRIBERS);
             return subs == null ? List.of() : subs;
         } catch (RuntimeException e) {
             return List.of(); // fail open: no balances beats no page

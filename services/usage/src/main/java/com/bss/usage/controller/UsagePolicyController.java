@@ -1,6 +1,21 @@
 package com.bss.usage.controller;
 
 import com.bss.usage.api.ApiConstants;
+import com.bss.usage.dto.AutoTopupPolicyRequest;
+import com.bss.usage.dto.AutoTopupPolicyView;
+import com.bss.usage.dto.Money;
+import com.bss.usage.dto.PoolMemberPatch;
+import com.bss.usage.dto.PoolMemberRequest;
+import com.bss.usage.dto.PoolRequest;
+import com.bss.usage.dto.PoolView;
+import com.bss.usage.dto.RoamingContinueRequest;
+import com.bss.usage.dto.SpendChargeRequest;
+import com.bss.usage.dto.SpendMeterView;
+import com.bss.usage.dto.SpendPolicyPatch;
+import com.bss.usage.dto.SpendThresholdNotification;
+import com.bss.usage.dto.SpendVerdict;
+import com.bss.usage.dto.TravelPassRequest;
+import com.bss.usage.dto.TravelPassView;
 import com.bss.usage.exception.BadRequestException;
 import com.bss.usage.service.AutoTopupService;
 import com.bss.usage.service.PoolService;
@@ -18,9 +33,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The usage-policy faces: the household pool (owner-managed), the three
@@ -47,30 +60,28 @@ public class UsagePolicyController {
     // ---- household pool ----
 
     @PostMapping(ApiConstants.BASE_PATH + "/allowancePool")
-    public ResponseEntity<Map<String, Object>> createPool(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = pools.create(dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    public ResponseEntity<PoolView> createPool(@RequestBody PoolRequest dto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(pools.create(dto));
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/allowancePool")
-    public ResponseEntity<List<Map<String, Object>>> listPools() {
+    public ResponseEntity<List<PoolView>> listPools() {
         return ResponseEntity.ok(pools.list());
     }
 
     @GetMapping(ApiConstants.BASE_PATH + "/allowancePool/{id}")
-    public ResponseEntity<Map<String, Object>> getPool(@PathVariable("id") String id) {
+    public ResponseEntity<PoolView> getPool(@PathVariable("id") String id) {
         return ResponseEntity.ok(pools.get(id));
     }
 
     @PostMapping(ApiConstants.BASE_PATH + "/allowancePool/{id}/member")
-    public ResponseEntity<Map<String, Object>> addMember(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PoolView> addMember(@PathVariable("id") String id, @RequestBody PoolMemberRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(pools.addMember(id, dto));
     }
 
     @PatchMapping(ApiConstants.BASE_PATH + "/allowancePool/{id}/member/{partyId}")
-    public ResponseEntity<Map<String, Object>> patchMember(@PathVariable("id") String id,
-            @PathVariable("partyId") String partyId, @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<PoolView> patchMember(@PathVariable("id") String id,
+            @PathVariable("partyId") String partyId, @RequestBody PoolMemberPatch dto) {
         return ResponseEntity.ok(pools.patchMember(id, partyId, dto));
     }
 
@@ -84,65 +95,63 @@ public class UsagePolicyController {
     // ---- spend meters (spend / content / roaming) ----
 
     @GetMapping(ApiConstants.BASE_PATH + "/spendPolicy")
-    public ResponseEntity<List<Map<String, Object>>> spendPolicy(
+    public ResponseEntity<List<SpendMeterView>> spendPolicy(
             @RequestParam(name = "partyId", required = false) String partyId) {
         return ResponseEntity.ok(spendPolicy.policyOf(spendPolicy.resolveParty(partyId)));
     }
 
     @PatchMapping(ApiConstants.BASE_PATH + "/spendPolicy/{meterType}")
-    public ResponseEntity<Map<String, Object>> patchSpendPolicy(
+    public ResponseEntity<SpendMeterView> patchSpendPolicy(
             @PathVariable("meterType") String meterType,
             @RequestParam(name = "partyId", required = false) String partyId,
-            @RequestBody Map<String, Object> dto) {
+            @RequestBody SpendPolicyPatch dto) {
         return ResponseEntity.ok(spendPolicy.patch(spendPolicy.resolveParty(partyId), meterType, dto));
     }
 
     /** The audited "keep me roaming" election (EU 2022/612: past the limit
      * only on the customer's explicit request). */
     @PostMapping(ApiConstants.BASE_PATH + "/roamingLimit/continue")
-    public ResponseEntity<Map<String, Object>> roamingContinue(
-            @RequestBody(required = false) Map<String, Object> dto) {
-        String partyId = dto == null || dto.get("partyId") == null
-                ? null : String.valueOf(dto.get("partyId"));
+    public ResponseEntity<SpendMeterView> roamingContinue(
+            @RequestBody(required = false) RoamingContinueRequest dto) {
+        String partyId = dto == null ? null : dto.partyId();
         return ResponseEntity.ok(spendPolicy.roamingContinue(spendPolicy.resolveParty(partyId)));
     }
 
     /** Machine seam: one rated charge lands on the party's meters; the answer
-     * says whether the charging edge may let it stand. */
+     * says whether the charging edge may let it stand. The tenant is the
+     * caller's — the body never names one. */
     @PostMapping(ApiConstants.BASE_PATH + "/spendMeter/charge")
-    public ResponseEntity<Map<String, Object>> charge(@RequestBody Map<String, Object> dto) {
-        if (dto.get("partyId") == null) {
+    public ResponseEntity<SpendVerdict> charge(@RequestBody SpendChargeRequest dto) {
+        if (dto.partyId() == null) {
             throw new BadRequestException("partyId is required");
         }
-        if (!(dto.get("amount") instanceof Map<?, ?> money) || money.get("value") == null) {
+        if (dto.amount() == null || dto.amount().value() == null) {
             throw new BadRequestException("amount {value, unit} is required");
         }
-        return ResponseEntity.ok(usage.notifySpendThreshold(Map.of(
-                "partyId", dto.get("partyId"),
-                "chargeClass", dto.get("chargeClass") == null ? "usage" : dto.get("chargeClass"),
-                "amount", Map.of("value", new BigDecimal(String.valueOf(money.get("value"))),
-                        "unit", money.get("unit") == null ? "" : money.get("unit")))));
+        return ResponseEntity.ok(usage.notifySpendThreshold(new SpendThresholdNotification(null, dto.partyId(),
+                dto.chargeClass() == null ? "usage" : dto.chargeClass(),
+                new Money(dto.amount().value(), dto.amount().unit() == null ? "" : dto.amount().unit()))));
     }
 
     // ---- auto top-up ----
 
     @GetMapping(ApiConstants.BASE_PATH + "/autoTopupPolicy")
-    public ResponseEntity<Map<String, Object>> getAutoTopup(
+    public ResponseEntity<AutoTopupPolicyView> getAutoTopup(
             @RequestParam(name = "partyId", required = false) String partyId) {
         return ResponseEntity.ok(autoTopup.get(partyId));
     }
 
     @PutMapping(ApiConstants.BASE_PATH + "/autoTopupPolicy")
-    public ResponseEntity<Map<String, Object>> putAutoTopup(
+    public ResponseEntity<AutoTopupPolicyView> putAutoTopup(
             @RequestParam(name = "partyId", required = false) String partyId,
-            @RequestBody Map<String, Object> dto) {
+            @RequestBody AutoTopupPolicyRequest dto) {
         return ResponseEntity.ok(autoTopup.put(partyId, dto));
     }
 
     // ---- travel pass (machine/back-office grant) ----
 
     @PostMapping(ApiConstants.BASE_PATH + "/travelPass")
-    public ResponseEntity<Map<String, Object>> travelPass(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<TravelPassView> travelPass(@RequestBody TravelPassRequest dto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(usage.createTravelPass(dto));
     }
 }

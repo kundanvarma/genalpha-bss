@@ -1,7 +1,8 @@
 package com.bss.usage.client;
 
+import com.bss.usage.dto.OcsSubscriber;
+
 import java.util.List;
-import java.util.Map;
 
 /**
  * The usage component's read/credit window onto the Online Charging System.
@@ -21,7 +22,7 @@ public interface OcsClient {
     /** Whether this tenant has any OCS behind the seam. */
     boolean enabled(String tenantId);
 
-    List<Map<String, Object>> subscribersOf(String tenantId, String partyId);
+    List<OcsSubscriber> subscribersOf(String tenantId, String partyId);
 
     /** Credit a top-up onto a subscriber's data counter. */
     boolean credit(String tenantId, String subscriberId, double gb);

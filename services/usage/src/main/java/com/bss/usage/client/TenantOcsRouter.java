@@ -1,5 +1,6 @@
 package com.bss.usage.client;
 
+import com.bss.usage.dto.OcsSubscriber;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
@@ -47,7 +48,7 @@ public class TenantOcsRouter implements OcsClient {
     }
 
     @Override
-    public List<Map<String, Object>> subscribersOf(String tenantId, String partyId) {
+    public List<OcsSubscriber> subscribersOf(String tenantId, String partyId) {
         OcsBalanceAdapter a = adapterFor(tenantId);
         return a == null ? List.of() : a.subscribersOf(tenantId, partyId);
     }

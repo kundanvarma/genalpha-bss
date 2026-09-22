@@ -1,6 +1,11 @@
 package com.bss.usage.service;
 
 import com.bss.usage.api.ApiConstants;
+import com.bss.usage.dto.PoolMemberPatch;
+import com.bss.usage.dto.PoolMemberRequest;
+import com.bss.usage.dto.PoolMemberView;
+import com.bss.usage.dto.PoolRequest;
+import com.bss.usage.dto.PoolView;
 import com.bss.usage.entity.AllowancePool;
 import com.bss.usage.entity.PoolMember;
 import com.bss.usage.entity.UsageRecord;
@@ -20,7 +25,6 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,27 +68,26 @@ public class PoolService {
     // ---------------- management (owner / household admin / staff) ----------------
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
+    public PoolView create(PoolRequest dto) {
         String tenantId = tenantScope.currentTenantId();
         String scoped = partyScope.scopedPartyId().orElse(null);
-        String owner = scoped != null ? scoped
-                : (dto.get("ownerPartyId") == null ? null : String.valueOf(dto.get("ownerPartyId")));
+        String owner = scoped != null ? scoped : dto.ownerPartyId();
         if (owner == null) {
             throw new BadRequestException("ownerPartyId is required for unscoped callers");
         }
-        if (dto.get("poolGB") == null) {
+        if (dto.poolGB() == null) {
             throw new BadRequestException("poolGB is required");
         }
-        BigDecimal size = new BigDecimal(String.valueOf(dto.get("poolGB")));
+        BigDecimal size = dto.poolGB();
         if (size.signum() <= 0) {
             throw new BadRequestException("poolGB must be positive");
         }
         AllowancePool pool = new AllowancePool();
         pool.setId(UUID.randomUUID().toString());
         pool.setTenantId(tenantId);
-        pool.setName(dto.get("name") == null ? "Family data pool" : String.valueOf(dto.get("name")));
+        pool.setName(dto.name() == null ? "Family data pool" : dto.name());
         pool.setOwnerPartyId(owner);
-        pool.setUsageSpecName(dto.get("usageType") == null ? null : String.valueOf(dto.get("usageType")));
+        pool.setUsageSpecName(dto.usageType());
         pool.setPoolValue(size);
         pool.setUnits("GB");
         pool.setConsumedValue(BigDecimal.ZERO);
@@ -94,16 +97,16 @@ public class PoolService {
         pools.save(pool);
         // the owner draws the pool too — a member row from the start
         saveMember(pool, owner, null, null);
-        return poolMap(pool, true);
+        return poolView(pool, true);
     }
 
     @Transactional
-    public Map<String, Object> addMember(String poolId, Map<String, Object> dto) {
+    public PoolView addMember(String poolId, PoolMemberRequest dto) {
         AllowancePool pool = managedPool(poolId);
-        if (dto.get("partyId") == null) {
+        if (dto.partyId() == null) {
             throw new BadRequestException("partyId is required");
         }
-        String partyId = String.valueOf(dto.get("partyId"));
+        String partyId = dto.partyId();
         // scoped callers stay inside their household; staff attach freely
         if (partyScope.scopedPartyId().isPresent()
                 && !household.inHousehold(partyId, pool.getOwnerPartyId())) {
@@ -115,27 +118,28 @@ public class PoolService {
         if (!members.findByTenantIdAndPartyIdAndStatus(pool.getTenantId(), partyId, ACTIVE).isEmpty()) {
             throw new ConflictException("already drawing another pool");
         }
-        saveMember(pool, partyId, decimal(dto.get("softLimitGB")), decimal(dto.get("hardLimitGB")));
-        return poolMap(pool, true);
+        saveMember(pool, partyId, dto.softLimitGB(), dto.hardLimitGB());
+        return poolView(pool, true);
     }
 
+    /** A cap absent from the patch stays; a cap sent as null is removed. */
     @Transactional
-    public Map<String, Object> patchMember(String poolId, String partyId, Map<String, Object> dto) {
+    public PoolView patchMember(String poolId, String partyId, PoolMemberPatch dto) {
         AllowancePool pool = managedPool(poolId);
         PoolMember member = members.findByTenantIdAndPoolIdAndPartyId(pool.getTenantId(), poolId, partyId)
                 .orElseThrow(() -> NotFoundException.forResource("PoolMember", partyId));
-        if (dto.containsKey("softLimitGB")) {
-            member.setSoftLimitValue(decimal(dto.get("softLimitGB")));
+        if (dto.softLimitGB() != null) {
+            member.setSoftLimitValue(PoolMemberPatch.value(dto.softLimitGB()));
         }
-        if (dto.containsKey("hardLimitGB")) {
-            member.setHardLimitValue(decimal(dto.get("hardLimitGB")));
+        if (dto.hardLimitGB() != null) {
+            member.setHardLimitValue(PoolMemberPatch.value(dto.hardLimitGB()));
         }
         if (member.getSoftLimitValue() != null && member.getHardLimitValue() != null
                 && member.getSoftLimitValue().compareTo(member.getHardLimitValue()) > 0) {
             throw new BadRequestException("softLimitGB cannot exceed hardLimitGB");
         }
         members.save(member);
-        return poolMap(pool, true);
+        return poolView(pool, true);
     }
 
     @Transactional
@@ -150,36 +154,36 @@ public class PoolService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String poolId) {
+    public PoolView get(String poolId) {
         String tenantId = tenantScope.currentTenantId();
         AllowancePool pool = pools.findByIdAndTenantId(poolId, tenantId)
                 .orElseThrow(() -> NotFoundException.forResource("AllowancePool", poolId));
         String scoped = partyScope.scopedPartyId().orElse(null);
         if (scoped == null || household.managesHousehold(scoped, pool.getOwnerPartyId())) {
-            return poolMap(pool, true);
+            return poolView(pool, true);
         }
         // a plain member sees the pool's totals and their own draw, not the family's
         if (members.findByTenantIdAndPoolIdAndPartyId(tenantId, poolId, scoped).isEmpty()) {
             throw NotFoundException.forResource("AllowancePool", poolId);
         }
-        return poolMap(pool, false);
+        return poolView(pool, false);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<PoolView> list() {
         String tenantId = tenantScope.currentTenantId();
         String scoped = partyScope.scopedPartyId().orElse(null);
         if (scoped == null) {
-            return pools.findByTenantId(tenantId).stream().map(p -> poolMap(p, true)).toList();
+            return pools.findByTenantId(tenantId).stream().map(p -> poolView(p, true)).toList();
         }
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<PoolView> out = new ArrayList<>();
         for (AllowancePool pool : pools.findByTenantIdAndOwnerPartyId(tenantId, scoped)) {
-            out.add(poolMap(pool, true));
+            out.add(poolView(pool, true));
         }
         for (PoolMember m : members.findByTenantIdAndPartyIdAndStatus(tenantId, scoped, ACTIVE)) {
             pools.findByIdAndTenantId(m.getPoolId(), tenantId)
                     .filter(p -> !p.getOwnerPartyId().equals(scoped))
-                    .ifPresent(p -> out.add(poolMap(p, false)));
+                    .ifPresent(p -> out.add(poolView(p, false)));
         }
         return out;
     }
@@ -264,12 +268,12 @@ public class PoolService {
 
     /** The TMF677 extension: the pool bucket (+ per-member buckets for household managers). */
     @Transactional(readOnly = true)
-    public Optional<Map<String, Object>> reportSection(String partyId) {
+    public Optional<PoolView> reportSection(String partyId) {
         String tenantId = tenantScope.currentTenantId();
         return members.findByTenantIdAndPartyIdAndStatus(tenantId, partyId, ACTIVE).stream()
                 .findFirst()
                 .flatMap(m -> pools.findByIdAndTenantId(m.getPoolId(), tenantId))
-                .map(pool -> poolMap(pool, pool.getOwnerPartyId().equals(partyId)));
+                .map(pool -> poolView(pool, pool.getOwnerPartyId().equals(partyId)));
     }
 
     private void memberCapEvent(AllowancePool pool, PoolMember member, BigDecimal before,
@@ -313,43 +317,23 @@ public class PoolService {
         members.save(member);
     }
 
-    private Map<String, Object> poolMap(AllowancePool pool, boolean withMembers) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", pool.getId());
-        map.put("href", ApiConstants.BASE_PATH + "/allowancePool/" + pool.getId());
-        map.put("name", pool.getName());
-        map.put("ownerPartyId", pool.getOwnerPartyId());
-        if (pool.getUsageSpecName() != null) {
-            map.put("usageType", pool.getUsageSpecName());
-        }
+    private PoolView poolView(AllowancePool pool, boolean withMembers) {
         LocalDate period = period();
         BigDecimal consumed = period.equals(pool.getConsumedPeriod())
                 ? pool.getConsumedValue() : BigDecimal.ZERO;
-        map.put("poolGB", pool.getPoolValue());
-        map.put("consumedGB", consumed);
-        map.put("remainingGB", pool.getPoolValue().subtract(consumed).max(BigDecimal.ZERO));
-        map.put("units", pool.getUnits());
-        map.put("status", pool.getStatus());
-        map.put("@type", "AllowancePool");
+        List<PoolMemberView> member = null;
         if (withMembers) {
-            List<Map<String, Object>> bucket = new ArrayList<>();
+            member = new ArrayList<>();
             for (PoolMember m : members.findByTenantIdAndPoolId(pool.getTenantId(), pool.getId())) {
-                Map<String, Object> b = new LinkedHashMap<>();
-                b.put("partyId", m.getPartyId());
-                b.put("consumedGB", period.equals(m.getConsumedPeriod())
-                        ? m.getConsumedValue() : BigDecimal.ZERO);
-                if (m.getSoftLimitValue() != null) {
-                    b.put("softLimitGB", m.getSoftLimitValue());
-                }
-                if (m.getHardLimitValue() != null) {
-                    b.put("hardLimitGB", m.getHardLimitValue());
-                }
-                b.put("status", m.getStatus());
-                bucket.add(b);
+                member.add(new PoolMemberView(m.getPartyId(),
+                        period.equals(m.getConsumedPeriod()) ? m.getConsumedValue() : BigDecimal.ZERO,
+                        m.getSoftLimitValue(), m.getHardLimitValue(), m.getStatus()));
             }
-            map.put("member", bucket);
         }
-        return map;
+        return new PoolView(pool.getId(), ApiConstants.BASE_PATH + "/allowancePool/" + pool.getId(),
+                pool.getName(), pool.getOwnerPartyId(), pool.getUsageSpecName(),
+                pool.getPoolValue(), consumed, pool.getPoolValue().subtract(consumed).max(BigDecimal.ZERO),
+                pool.getUnits(), pool.getStatus(), "AllowancePool", member);
     }
 
     private void resetForPeriod(AllowancePool pool, LocalDate period) {
@@ -373,9 +357,5 @@ public class PoolService {
     private static BigDecimal pct(BigDecimal used, BigDecimal total) {
         return total.signum() <= 0 ? BigDecimal.ZERO
                 : used.multiply(BigDecimal.valueOf(100)).divide(total, 2, RoundingMode.HALF_UP);
-    }
-
-    private static BigDecimal decimal(Object value) {
-        return value == null ? null : new BigDecimal(String.valueOf(value));
     }
 }

@@ -1,5 +1,8 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.AutoTopupPolicyRequest;
+import com.bss.usage.dto.AutoTopupPolicyView;
+import com.bss.usage.dto.UsageThresholdNotification;
 import com.bss.usage.entity.AllowanceBoost;
 import com.bss.usage.entity.AutoTopupPolicy;
 import com.bss.usage.entity.SpendMeter;
@@ -19,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,19 +65,19 @@ public class AutoTopupService {
     // ---------------- customer CRUD (PartyScope) ----------------
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String requestedPartyId) {
+    public AutoTopupPolicyView get(String requestedPartyId) {
         String tenantId = tenantScope.currentTenantId();
         String party = resolveParty(requestedPartyId);
         return policies.findByTenantIdAndPartyId(tenantId, party)
-                .map(this::policyMap)
-                .orElseGet(() -> disabledShape(party));
+                .map(this::policyView)
+                .orElseGet(() -> AutoTopupPolicyView.disabled(party));
     }
 
     /** PUT semantics: the policy is small enough to state whole. Enabling
      * REQUIRES consent:true in the same request — the consent timestamp is
      * part of the record, and there is no default-on path anywhere. */
     @Transactional
-    public Map<String, Object> put(String requestedPartyId, Map<String, Object> dto) {
+    public AutoTopupPolicyView put(String requestedPartyId, AutoTopupPolicyRequest dto) {
         String tenantId = tenantScope.currentTenantId();
         String party = resolveParty(requestedPartyId);
         AutoTopupPolicy policy = policies.findByTenantIdAndPartyId(tenantId, party)
@@ -87,13 +89,12 @@ public class AutoTopupService {
                     p.setCreatedAt(OffsetDateTime.now());
                     return p;
                 });
-        boolean enable = Boolean.parseBoolean(String.valueOf(dto.getOrDefault("enabled", "false")));
+        boolean enable = dto.enable();
         if (enable) {
-            if (!Boolean.parseBoolean(String.valueOf(dto.getOrDefault("consent", "false")))
-                    && policy.getConsentAt() == null) {
+            if (!dto.consented() && policy.getConsentAt() == null) {
                 throw new BadRequestException("auto top-up is opt-in: consent=true is required to enable");
             }
-            if (dto.get("boostOfferingId") == null && policy.getBoostOfferingId() == null) {
+            if (dto.boostOfferingId() == null && policy.getBoostOfferingId() == null) {
                 throw new BadRequestException("boostOfferingId is required");
             }
             if (policy.getConsentAt() == null) {
@@ -101,24 +102,24 @@ public class AutoTopupService {
             }
         }
         policy.setEnabled(enable);
-        if (dto.get("boostOfferingId") != null) {
-            policy.setBoostOfferingId(String.valueOf(dto.get("boostOfferingId")));
+        if (dto.boostOfferingId() != null) {
+            policy.setBoostOfferingId(dto.boostOfferingId());
         }
-        String trigger = String.valueOf(dto.getOrDefault("trigger",
-                policy.getTriggerType() == null ? AutoTopupPolicy.TRIGGER_DEPLETION : policy.getTriggerType()));
+        String trigger = dto.trigger() != null ? dto.trigger()
+                : policy.getTriggerType() == null ? AutoTopupPolicy.TRIGGER_DEPLETION : policy.getTriggerType();
         if (!AutoTopupPolicy.TRIGGER_DEPLETION.equals(trigger)
                 && !AutoTopupPolicy.TRIGGER_THRESHOLD.equals(trigger)) {
             throw new BadRequestException("trigger must be depletion or thresholdPct");
         }
         policy.setTriggerType(trigger);
-        if (dto.get("triggerPct") != null) {
-            policy.setTriggerPct(new BigDecimal(String.valueOf(dto.get("triggerPct"))));
+        if (dto.triggerPct() != null) {
+            policy.setTriggerPct(dto.triggerPct());
         }
         if (AutoTopupPolicy.TRIGGER_THRESHOLD.equals(trigger) && policy.getTriggerPct() == null) {
             throw new BadRequestException("triggerPct is required for the thresholdPct trigger");
         }
-        if (dto.get("maxBoostsPerCycle") != null) {
-            int max = Integer.parseInt(String.valueOf(dto.get("maxBoostsPerCycle")));
+        if (dto.maxBoostsPerCycle() != null) {
+            int max = dto.maxBoostsPerCycle();
             if (max < 1) {
                 throw new BadRequestException("maxBoostsPerCycle must be at least 1");
             }
@@ -126,12 +127,11 @@ public class AutoTopupService {
         } else if (policy.getMaxBoostsPerCycle() == 0) {
             policy.setMaxBoostsPerCycle(1);
         }
-        if (dto.containsKey("maxSpendPerCycle")) {
-            policy.setMaxSpendPerCycle(dto.get("maxSpendPerCycle") == null ? null
-                    : new BigDecimal(String.valueOf(dto.get("maxSpendPerCycle"))));
+        if (dto.hasMaxSpendPerCycle()) {
+            policy.setMaxSpendPerCycle(dto.maxSpendPerCycleValue());
         }
         policy.setUpdatedAt(OffsetDateTime.now());
-        return policyMap(policies.save(policy));
+        return policyView(policies.save(policy));
     }
 
     // ---------------- the breach consumer ----------------
@@ -143,16 +143,14 @@ public class AutoTopupService {
      * (order, spec) uniqueness makes a replayed notification a no-op.
      */
     @Transactional
-    public void onThresholdBreach(String tenantId, String partyId, Map<String, Object> notification) {
+    public void onThresholdBreach(String tenantId, String partyId, UsageThresholdNotification notification) {
         AutoTopupPolicy policy = policies.findByTenantIdAndPartyId(tenantId, partyId).orElse(null);
         if (policy == null || !policy.isEnabled() || policy.getConsentAt() == null
                 || policy.getBoostOfferingId() == null) {
             return;
         }
-        BigDecimal percentUsed = notification.get("percentUsed") == null ? null
-                : new BigDecimal(String.valueOf(notification.get("percentUsed")));
-        BigDecimal remaining = notification.get("remainingGB") == null ? null
-                : new BigDecimal(String.valueOf(notification.get("remainingGB")));
+        BigDecimal percentUsed = notification.percentUsed();
+        BigDecimal remaining = notification.remainingGB();
         boolean fires = AutoTopupPolicy.TRIGGER_DEPLETION.equals(policy.getTriggerType())
                 ? (percentUsed != null && percentUsed.compareTo(BigDecimal.valueOf(100)) >= 0)
                         || (remaining != null && remaining.signum() <= 0)
@@ -165,10 +163,10 @@ public class AutoTopupService {
         // breach window: the OCS's windowId when it sends one (a NEW breach
         // after a refill), else the threshold value — replays of the same
         // window never buy twice
-        String window = notification.get("windowId") != null
-                ? String.valueOf(notification.get("windowId"))
-                : notification.get("threshold") == null
-                        ? "breach" : String.valueOf(notification.get("threshold"));
+        String window = notification.windowId() != null
+                ? notification.windowId()
+                : notification.threshold() == null
+                        ? "breach" : notification.threshold().toString();
         String marker = "autotopup-" + period + "-" + partyId + "-" + window;
 
         List<UsageAllowance> rules = allowances
@@ -247,33 +245,9 @@ public class AutoTopupService {
         return requestedPartyId;
     }
 
-    private Map<String, Object> disabledShape(String party) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("partyId", party);
-        map.put("enabled", false);
-        map.put("@type", "AutoTopupPolicy");
-        return map;
-    }
-
-    private Map<String, Object> policyMap(AutoTopupPolicy p) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("partyId", p.getPartyId());
-        map.put("enabled", p.isEnabled());
-        if (p.getBoostOfferingId() != null) {
-            map.put("boostOfferingId", p.getBoostOfferingId());
-        }
-        map.put("trigger", p.getTriggerType());
-        if (p.getTriggerPct() != null) {
-            map.put("triggerPct", p.getTriggerPct());
-        }
-        map.put("maxBoostsPerCycle", p.getMaxBoostsPerCycle());
-        if (p.getMaxSpendPerCycle() != null) {
-            map.put("maxSpendPerCycle", p.getMaxSpendPerCycle());
-        }
-        if (p.getConsentAt() != null) {
-            map.put("consentAt", p.getConsentAt().toString());
-        }
-        map.put("@type", "AutoTopupPolicy");
-        return map;
+    private AutoTopupPolicyView policyView(AutoTopupPolicy p) {
+        return new AutoTopupPolicyView(p.getPartyId(), p.isEnabled(), p.getBoostOfferingId(), p.getTriggerType(),
+                p.getTriggerPct(), p.getMaxBoostsPerCycle(), p.getMaxSpendPerCycle(),
+                p.getConsentAt() == null ? null : p.getConsentAt().toString(), "AutoTopupPolicy");
     }
 }

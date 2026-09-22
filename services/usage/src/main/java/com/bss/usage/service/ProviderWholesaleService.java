@@ -1,5 +1,13 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.MvnoStatement;
+import com.bss.usage.dto.ProviderLedgerView;
+import com.bss.usage.dto.ProviderLine;
+import com.bss.usage.dto.ProviderRateCardRequest;
+import com.bss.usage.dto.ProviderRateCardView;
+import com.bss.usage.dto.ProviderSettlement;
+import com.bss.usage.dto.ProviderUsageRequest;
+import com.bss.usage.dto.ProviderUsageResult;
 import com.bss.usage.entity.ProviderRateCard;
 import com.bss.usage.entity.ProviderUsageLedger;
 import com.bss.usage.events.DomainEventPublisher;
@@ -66,15 +74,15 @@ public class ProviderWholesaleService {
      * so revenue never double-books.
      */
     @Transactional
-    public Map<String, Object> recordProviderUsage(Map<String, Object> dto) {
+    public ProviderUsageResult recordProviderUsage(ProviderUsageRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String mvno = str(dto.get("mvnoPartyId"));
-        String spec = str(dto.get("usageSpecName"));
-        if (mvno == null || spec == null || dto.get("units") == null || dto.get("periodStart") == null) {
+        String mvno = dto.mvnoPartyId();
+        String spec = dto.usageSpecName();
+        if (mvno == null || spec == null || dto.units() == null || dto.periodStart() == null) {
             throw new BadRequestException("mvnoPartyId, usageSpecName, units and periodStart are required");
         }
-        LocalDate period = LocalDate.parse(str(dto.get("periodStart")));
-        BigDecimal units = new BigDecimal(str(dto.get("units")));
+        LocalDate period = LocalDate.parse(dto.periodStart());
+        BigDecimal units = dto.units();
         Optional<ProviderUsageLedger> existing =
                 ledger.findByTenantIdAndMvnoPartyIdAndPeriodStartAndUsageSpecName(tenant, mvno, period, spec);
         if (existing.isPresent()) {
@@ -87,11 +95,11 @@ public class ProviderWholesaleService {
         row.setId(UUID.randomUUID().toString());
         row.setTenantId(tenant);
         row.setMvnoPartyId(mvno);
-        row.setMvnoName(dto.get("mvnoName") == null ? card.getMvnoName() : str(dto.get("mvnoName")));
+        row.setMvnoName(dto.mvnoName() == null ? card.getMvnoName() : dto.mvnoName());
         row.setPeriodStart(period);
         row.setUsageSpecName(spec);
         row.setTotalUnits(units);
-        row.setUnit(dto.get("unit") == null ? card.getUnit() : str(dto.get("unit")));
+        row.setUnit(dto.unit() == null ? card.getUnit() : dto.unit());
         row.setRate(card.getRate());
         row.setAmount(units.multiply(card.getRate()).setScale(2, RoundingMode.HALF_UP));
         row.setCurrency(card.getCurrency() == null ? "EUR" : card.getCurrency());
@@ -99,8 +107,8 @@ public class ProviderWholesaleService {
         row.setCreatedAt(OffsetDateTime.now());
         ledger.save(row);
         // Revenue books the host's wholesale REVENUE off this event (amount rides it).
-        events.publish("ProviderWholesaleRatedEvent", "providerUsageLedger", ledgerMap(row));
-        return ledgerMap(row);
+        events.publish("ProviderWholesaleRatedEvent", "providerUsageLedger", ledgerView(row));
+        return ledgerView(row);
     }
 
     /**
@@ -113,9 +121,9 @@ public class ProviderWholesaleService {
      * wholesale AR moves with the truth. Outside the window nothing mutates:
      * a settled old period is a dispute, not a silent correction.
      */
-    private Map<String, Object> correctIfMoved(ProviderUsageLedger row, BigDecimal units) {
+    private ProviderUsageResult correctIfMoved(ProviderUsageLedger row, BigDecimal units) {
         if (units.compareTo(row.getTotalUnits()) == 0) {
-            return ledgerMap(row);
+            return ledgerView(row);
         }
         if (row.getPeriodStart().isBefore(
                 clock.today().minusDays(rerateWindowDays).withDayOfMonth(1))) {
@@ -129,76 +137,65 @@ public class ProviderWholesaleService {
         row.setRerateCount(row.getRerateCount() + 1);
         row.setLastReratedAt(OffsetDateTime.now());
         ledger.save(row);
-        Map<String, Object> event = ledgerMap(row);
-        event.put("previousAmount", oldAmount);
-        event.put("delta", row.getAmount().subtract(oldAmount));
-        event.put("rerateCount", row.getRerateCount());
+        ProviderUsageResult.Rerated event = new ProviderUsageResult.Rerated(ledgerView(row), oldAmount,
+                row.getAmount().subtract(oldAmount), row.getRerateCount());
         events.publish("ProviderWholesaleReratedEvent", "providerUsageLedger", event);
         return event;
     }
 
     /** The host's consolidated settlement: per MVNO, what each owes — host AR. */
     @Transactional(readOnly = true)
-    public Map<String, Object> providerSettlement(LocalDate periodStart) {
+    public ProviderSettlement providerSettlement(LocalDate periodStart) {
         String tenant = tenantScope.currentTenantId();
         List<ProviderUsageLedger> rows = ledger.findByTenantIdAndPeriodStart(tenant, periodStart);
-        Map<String, Map<String, Object>> byMvno = new LinkedHashMap<>();
+        // grouped per MVNO in first-seen order; the name is the first row's
+        Map<String, List<ProviderUsageLedger>> byMvno = new LinkedHashMap<>();
         BigDecimal grand = BigDecimal.ZERO;
         for (ProviderUsageLedger r : rows) {
-            Map<String, Object> m = byMvno.computeIfAbsent(r.getMvnoPartyId(), k -> {
-                Map<String, Object> x = new LinkedHashMap<>();
-                x.put("mvnoPartyId", r.getMvnoPartyId());
-                x.put("mvnoName", r.getMvnoName());
-                x.put("line", new ArrayList<Map<String, Object>>());
-                x.put("total", BigDecimal.ZERO);
-                return x;
-            });
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> lines = (List<Map<String, Object>>) m.get("line");
-            lines.add(lineMap(r));
-            m.put("total", ((BigDecimal) m.get("total")).add(r.getAmount()));
+            byMvno.computeIfAbsent(r.getMvnoPartyId(), k -> new ArrayList<>()).add(r);
             grand = grand.add(r.getAmount());
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "MobileWholesaleProviderSettlement");
-        out.put("periodType", "month");
-        out.put("periodStart", periodStart.toString());
-        out.put("mvno", new ArrayList<>(byMvno.values()));
-        out.put("totalRevenue", grand.setScale(2, RoundingMode.HALF_UP));
-        out.put("currency", "EUR");
-        return out;
+        List<ProviderSettlement.Mvno> mvnos = new ArrayList<>();
+        for (List<ProviderUsageLedger> group : byMvno.values()) {
+            BigDecimal total = BigDecimal.ZERO;
+            List<ProviderLine> lines = new ArrayList<>();
+            for (ProviderUsageLedger r : group) {
+                lines.add(line(r));
+                total = total.add(r.getAmount());
+            }
+            mvnos.add(new ProviderSettlement.Mvno(group.get(0).getMvnoPartyId(), group.get(0).getMvnoName(),
+                    lines, total));
+        }
+        return new ProviderSettlement("MobileWholesaleProviderSettlement", "month", periodStart.toString(), mvnos,
+                grand.setScale(2, RoundingMode.HALF_UP), "EUR");
     }
 
     /** One MVNO's statement — the face an external MVNO's BSS pulls to reconcile. */
     @Transactional(readOnly = true)
-    public Map<String, Object> mvnoStatement(String mvnoPartyId, LocalDate periodStart) {
+    public MvnoStatement mvnoStatement(String mvnoPartyId, LocalDate periodStart) {
         String tenant = tenantScope.currentTenantId();
         List<ProviderUsageLedger> rows =
                 ledger.findByTenantIdAndMvnoPartyIdAndPeriodStart(tenant, mvnoPartyId, periodStart);
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<ProviderLine> lines = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
         String name = null;
         for (ProviderUsageLedger r : rows) {
-            lines.add(lineMap(r));
+            lines.add(line(r));
             total = total.add(r.getAmount());
             name = r.getMvnoName();
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "MobileWholesaleStatement");
-        out.put("mvnoPartyId", mvnoPartyId);
-        out.put("mvnoName", name);
-        out.put("periodStart", periodStart.toString());
-        out.put("line", lines);
-        out.put("totalOwed", total.setScale(2, RoundingMode.HALF_UP));
-        out.put("currency", "EUR");
-        return out;
+        return new MvnoStatement("MobileWholesaleStatement", mvnoPartyId, name, periodStart.toString(), lines,
+                total.setScale(2, RoundingMode.HALF_UP), "EUR");
     }
 
     @Transactional
-    public Map<String, Object> upsertProviderRateCard(Map<String, Object> dto) {
+    public ProviderRateCardView upsertProviderRateCard(ProviderRateCardRequest dto) {
         String tenant = tenantScope.currentTenantId();
-        String mvno = str(dto.get("mvnoPartyId"));   // null = default
-        String spec = str(dto.get("usageSpecName"));
+        if (dto.usageSpecName() == null || dto.rate() == null) {
+            throw new BadRequestException("usageSpecName and rate are required");
+        }
+        String mvno = dto.mvnoPartyId();   // null = default
+        String spec = dto.usageSpecName();
         Optional<ProviderRateCard> found = mvno == null
                 ? rateCards.findByTenantIdAndMvnoPartyIdIsNullAndUsageSpecName(tenant, spec)
                 : rateCards.findByTenantIdAndMvnoPartyIdAndUsageSpecName(tenant, mvno, spec);
@@ -209,58 +206,33 @@ public class ProviderWholesaleService {
             c.setMvnoPartyId(mvno);
             c.setUsageSpecName(spec);
         }
-        c.setMvnoName(str(dto.get("mvnoName")));
-        c.setRate(new BigDecimal(str(dto.get("rate"))));
-        c.setUnit(str(dto.get("unit")));
-        c.setCurrency(dto.get("currency") == null ? "EUR" : str(dto.get("currency")));
+        c.setMvnoName(dto.mvnoName());
+        c.setRate(dto.rate());
+        c.setUnit(dto.unit());
+        c.setCurrency(dto.currency() == null ? "EUR" : dto.currency());
         c.setLastUpdate(OffsetDateTime.now());
-        return rateCardMap(rateCards.save(c));
+        return rateCardView(rateCards.save(c));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> providerRateCards() {
-        return rateCards.findByTenantId(tenantScope.currentTenantId()).stream().map(this::rateCardMap).toList();
+    public List<ProviderRateCardView> providerRateCards() {
+        return rateCards.findByTenantId(tenantScope.currentTenantId()).stream().map(this::rateCardView).toList();
     }
 
-    private static String str(Object o) { return o == null ? null : String.valueOf(o); }
-
-    private Map<String, Object> lineMap(ProviderUsageLedger r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("usageSpecName", r.getUsageSpecName());
-        m.put("totalUnits", r.getTotalUnits());
-        m.put("unit", r.getUnit());
-        m.put("rate", r.getRate());
-        m.put("amount", r.getAmount());
-        m.put("currency", r.getCurrency());
-        return m;
+    private ProviderLine line(ProviderUsageLedger r) {
+        return new ProviderLine(r.getUsageSpecName(), r.getTotalUnits(), r.getUnit(), r.getRate(), r.getAmount(),
+                r.getCurrency());
     }
 
-    private Map<String, Object> ledgerMap(ProviderUsageLedger r) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", r.getId());
-        m.put("mvnoPartyId", r.getMvnoPartyId());
-        m.put("mvnoName", r.getMvnoName());
-        m.put("periodStart", r.getPeriodStart() == null ? null : r.getPeriodStart().toString());
-        m.put("usageSpecName", r.getUsageSpecName());
-        m.put("totalUnits", r.getTotalUnits());
-        m.put("unit", r.getUnit());
-        m.put("rate", r.getRate());
-        m.put("amount", r.getAmount());
-        m.put("currency", r.getCurrency());
-        m.put("@type", "ProviderUsageLedger");
-        return m;
+    private ProviderLedgerView ledgerView(ProviderUsageLedger r) {
+        return new ProviderLedgerView(r.getId(), r.getMvnoPartyId(), r.getMvnoName(),
+                r.getPeriodStart() == null ? null : r.getPeriodStart().toString(),
+                r.getUsageSpecName(), r.getTotalUnits(), r.getUnit(), r.getRate(), r.getAmount(), r.getCurrency(),
+                "ProviderUsageLedger");
     }
 
-    private Map<String, Object> rateCardMap(ProviderRateCard c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("mvnoPartyId", c.getMvnoPartyId());
-        m.put("mvnoName", c.getMvnoName());
-        m.put("usageSpecName", c.getUsageSpecName());
-        m.put("rate", c.getRate());
-        m.put("unit", c.getUnit());
-        m.put("currency", c.getCurrency());
-        m.put("@type", "ProviderRateCard");
-        return m;
+    private ProviderRateCardView rateCardView(ProviderRateCard c) {
+        return new ProviderRateCardView(c.getId(), c.getMvnoPartyId(), c.getMvnoName(), c.getUsageSpecName(),
+                c.getRate(), c.getUnit(), c.getCurrency(), "ProviderRateCard");
     }
 }

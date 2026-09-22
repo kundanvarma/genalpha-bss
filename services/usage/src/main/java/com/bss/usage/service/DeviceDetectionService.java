@@ -1,5 +1,7 @@
 package com.bss.usage.service;
 
+import com.bss.usage.dto.DeviceDetectionReceipt;
+import com.bss.usage.dto.DeviceDetectionRequest;
 import com.bss.usage.events.DomainEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -25,27 +27,24 @@ public class DeviceDetectionService {
         this.events = events;
     }
 
-    public Map<String, Object> record(Map<String, Object> dto) {
-        String partyId = str(dto.get("partyId"));
-        String model = str(dto.get("deviceModel"));
+    public DeviceDetectionReceipt record(DeviceDetectionRequest dto) {
+        String partyId = dto.partyId();
+        String model = dto.deviceModel();
         if (partyId == null || partyId.isBlank() || model == null || model.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "partyId and deviceModel are required (the EIR resolves IMEI/TAC to a model)");
         }
+        // the event's resource (event shape: a standing rule)
         Map<String, Object> resource = new LinkedHashMap<>();
         resource.put("partyId", partyId);
         resource.put("deviceModel", model);
-        if (dto.get("tac") != null) {
-            resource.put("tac", str(dto.get("tac")));
+        if (dto.tac() != null) {
+            resource.put("tac", dto.tac());
         }
-        if (dto.get("imei") != null) {
-            resource.put("imei", str(dto.get("imei")));
+        if (dto.imei() != null) {
+            resource.put("imei", dto.imei());
         }
         events.publish("DeviceDetectedEvent", "deviceDetection", resource);
-        return Map.of("status", "recorded", "partyId", partyId, "deviceModel", model);
-    }
-
-    private static String str(Object o) {
-        return o == null ? null : String.valueOf(o);
+        return new DeviceDetectionReceipt("recorded", partyId, model);
     }
 }
