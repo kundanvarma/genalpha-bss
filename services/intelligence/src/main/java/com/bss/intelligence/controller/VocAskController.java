@@ -50,10 +50,9 @@ public class VocAskController {
         if (question.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "question is required");
         }
-        Map<String, Object> summary = bss.vocSummary();
         String data;
         try {
-            data = objectMapper.writeValueAsString(summary);
+            data = objectMapper.writeValueAsString(bss.vocSummary());
         } catch (Exception e) {
             data = "{}";
         }

@@ -1,5 +1,7 @@
 package com.bss.intelligence.controller;
 
+import com.bss.intelligence.service.AdoptReceipt;
+import com.bss.intelligence.service.CopilotRequests.AdoptProposal;
 import com.bss.intelligence.service.ProductAdvisorService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,7 +29,7 @@ public class ProductAdvisorController {
     }
 
     @PostMapping("/advisor/v1/adopt")
-    public ResponseEntity<Map<String, Object>> adopt(@RequestBody Map<String, Object> proposal) {
+    public ResponseEntity<AdoptReceipt> adopt(@RequestBody AdoptProposal proposal) {
         return ResponseEntity.ok(advisor.adopt(proposal));
     }
 }

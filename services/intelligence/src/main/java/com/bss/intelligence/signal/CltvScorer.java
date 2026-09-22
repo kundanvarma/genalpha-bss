@@ -53,7 +53,7 @@ public class CltvScorer {
         sweepAllTenants();
     }
 
-    public Map<String, Object> sweepAllTenants() {
+    public SweepResults.CltvSweepResult sweepAllTenants() {
         int scored = 0;
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
@@ -62,7 +62,7 @@ public class CltvScorer {
                 log.warn("cltv sweep skipped tenant '{}': {}", tenant.getId(), e.getMessage());
             }
         }
-        return Map.of("scored", scored);
+        return new SweepResults.CltvSweepResult(scored);
     }
 
     public int sweepCurrentTenant() {

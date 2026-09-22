@@ -14,7 +14,6 @@ import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,14 +47,13 @@ public class PriceSimService {
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> simulate(Map<String, Object> request) {
-        if (!(request.get("changes") instanceof List<?> rawChanges) || rawChanges.isEmpty()) {
+    public PriceSimReportView simulate(PriceSimRequest request) {
+        List<PriceSimRequest.PriceChange> rawChanges = request.changes();
+        if (rawChanges == null || rawChanges.isEmpty()) {
             throw new BadRequestException("changes [{offeringName, newMonthlyPrice}] are required");
         }
         String tenant = tenantScope.currentTenantId();
-        BigDecimal churnPct = request.get("assumedChurnPct") == null ? null
-                : new BigDecimal(String.valueOf(request.get("assumedChurnPct")));
+        BigDecimal churnPct = request.assumedChurnPct();
         if (churnPct != null && (churnPct.signum() < 0 || churnPct.compareTo(BigDecimal.valueOf(100)) > 0)) {
             throw new BadRequestException("assumedChurnPct must be 0-100");
         }
@@ -115,14 +113,13 @@ public class PriceSimService {
         }
 
         // ---- the simulation: mechanical first, assumption-labeled second ----
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<PriceSimReportView.Line> lines = new ArrayList<>();
         BigDecimal totalAnnualDelta = BigDecimal.ZERO;
         String currency = null;
         int totalChurnRisk = 0;
-        for (Object rawChange : rawChanges) {
-            Map<String, Object> change = (Map<String, Object>) rawChange;
-            String name = String.valueOf(change.get("offeringName"));
-            BigDecimal proposed = num(change.get("newMonthlyPrice"));
+        for (PriceSimRequest.PriceChange change : rawChanges) {
+            String name = String.valueOf(change.offeringName());
+            BigDecimal proposed = change.newMonthlyPrice();
             if (proposed == null || proposed.signum() < 0) {
                 throw new BadRequestException("newMonthlyPrice is required per change");
             }
@@ -145,29 +142,23 @@ public class PriceSimService {
                     .map(a -> a.getPartyId()).distinct().count();
             totalChurnRisk += churnRisk;
 
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("offeringName", name);
-            line.put("subscribers", subs);
-            line.put("currentMonthly", current);
-            line.put("proposedMonthly", proposed);
-            line.put("monthlyRevenueDelta", monthlyDelta.setScale(2, RoundingMode.HALF_UP));
-            line.put("annualRevenueDelta", annualDelta.setScale(2, RoundingMode.HALF_UP));
             BigDecimal gb = allowanceGb.get(String.valueOf(offering.get("id")));
-            if (dataRate != null && gb != null) {
-                BigDecimal cost = gb.multiply(dataRate);
-                line.put("wholesaleCostCeilingPerSub", cost.setScale(2, RoundingMode.HALF_UP));
-                line.put("marginPerSubBefore", current.subtract(cost).setScale(2, RoundingMode.HALF_UP));
-                line.put("marginPerSubAfter", proposed.subtract(cost).setScale(2, RoundingMode.HALF_UP));
-            }
-            line.put("subscribersAtChurnRisk", churnRisk);
+            BigDecimal cost = dataRate != null && gb != null ? gb.multiply(dataRate) : null;
+            BigDecimal churnedAnnual = null;
             if (churnPct != null && proposed.compareTo(current) > 0) {
                 BigDecimal keep = BigDecimal.ONE.subtract(churnPct.movePointLeft(2));
-                BigDecimal churnedAnnual = proposed.multiply(BigDecimal.valueOf(subs)).multiply(keep)
+                churnedAnnual = proposed.multiply(BigDecimal.valueOf(subs)).multiply(keep)
                         .subtract(current.multiply(BigDecimal.valueOf(subs)))
                         .multiply(BigDecimal.valueOf(12));
-                line.put("annualRevenueDeltaWithAssumedChurn", churnedAnnual.setScale(2, RoundingMode.HALF_UP));
             }
-            lines.add(line);
+            lines.add(new PriceSimReportView.Line(name, subs, current, proposed,
+                    monthlyDelta.setScale(2, RoundingMode.HALF_UP),
+                    annualDelta.setScale(2, RoundingMode.HALF_UP),
+                    cost == null ? null : cost.setScale(2, RoundingMode.HALF_UP),
+                    cost == null ? null : current.subtract(cost).setScale(2, RoundingMode.HALF_UP),
+                    cost == null ? null : proposed.subtract(cost).setScale(2, RoundingMode.HALF_UP),
+                    churnRisk,
+                    churnedAnnual == null ? null : churnedAnnual.setScale(2, RoundingMode.HALF_UP)));
         }
 
         // ---- honesty on the face: assumptions + basis, always ----
@@ -182,53 +173,39 @@ public class PriceSimService {
         assumptions.add(costBasis);
         assumptions.add("base = active inventory at simulation time; usage-priced and one-time components unchanged");
 
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("@type", "PriceChangeSimulation");
-        report.put("lines", lines);
-        report.put("totalAnnualRevenueDelta", totalAnnualDelta.setScale(2, RoundingMode.HALF_UP));
-        if (currency != null) {
-            report.put("currency", currency);
-        }
-        report.put("subscribersAtChurnRisk", totalChurnRisk);
-        report.put("assumptions", assumptions);
-        report.put("basis", Map.of("activeProducts", products.size(),
-                "offeringsInCatalog", offerings.size(), "asOf", OffsetDateTime.now().toString()));
+        PriceSimReportView report = new PriceSimReportView("PriceChangeSimulation", lines,
+                totalAnnualDelta.setScale(2, RoundingMode.HALF_UP), currency, totalChurnRisk, assumptions,
+                new PriceSimReportView.Basis(products.size(), offerings.size(), OffsetDateTime.now().toString()),
+                null, null);
 
         // the ONLY write this simulation performs: its own receipt
-        PriceSimReport row = new PriceSimReport();
-        row.setId(UUID.randomUUID().toString());
-        row.setTenantId(tenant);
-        row.setName(String.valueOf(request.getOrDefault("name",
-                lines.get(0).get("offeringName") + " → " + ((Map<String, Object>) rawChanges.get(0)).get("newMonthlyPrice"))));
-        row.setRequestJson(toJson(request));
-        row.setReportJson(toJson(report));
-        row.setCreatedAt(OffsetDateTime.now());
-        reports.save(row);
-        report.put("id", row.getId());
-        report.put("name", row.getName());
-        return report;
+        String name = request.name() != null ? request.name()
+                : lines.get(0).offeringName() + " → " + rawChanges.get(0).newMonthlyPrice();
+        Receipt receipt = saveReport(name, toJson(request), report);
+        return report.saved(receipt.id(), receipt.name());
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<SavedReport> list() {
         return list("PriceChangeSimulation");
     }
 
     /** Saved reports of one kind — the price pane and the prospect pane each
      *  read their own shelf of receipts. */
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> list(String type) {
-        List<Map<String, Object>> all = listAll();
-        return all.stream().filter(m -> {
-            Object report = m.get("report");
-            return report instanceof Map<?, ?> r && type.equals(r.get("@type"));
-        }).toList();
+    public List<SavedReport> list(String type) {
+        return listAll().stream()
+                .filter(m -> m.report() != null && type.equals(m.report().path("@type").asText(null)))
+                .toList();
+    }
+
+    /** The saved receipt's id and name — what a simulator appends to its report. */
+    public record Receipt(String id, String name) {
     }
 
     /** Persist any simulator's report as a receipt on the shared shelf. */
     @Transactional
-    public Map<String, Object> saveReport(String name, String requestJson, Map<String, Object> report) {
+    public Receipt saveReport(String name, String requestJson, Object report) {
         PriceSimReport row = new PriceSimReport();
         row.setId(UUID.randomUUID().toString());
         row.setTenantId(tenantScope.currentTenantId());
@@ -237,33 +214,19 @@ public class PriceSimService {
         row.setReportJson(toJson(report));
         row.setCreatedAt(OffsetDateTime.now());
         reports.save(row);
-        report.put("id", row.getId());
-        report.put("name", row.getName());
-        return report;
+        return new Receipt(row.getId(), row.getName());
     }
 
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> listAll() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private List<SavedReport> listAll() {
+        List<SavedReport> out = new ArrayList<>();
         for (PriceSimReport r : reports.findTop50ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", r.getId());
-            m.put("name", r.getName());
-            m.put("createdAt", r.getCreatedAt());
             try {
-                Map<String, Object> report = objectMapper.readValue(r.getReportJson(), Map.class);
-                m.put("totalAnnualRevenueDelta", report.get("totalAnnualRevenueDelta"));
-                m.put("currency", report.get("currency"));
-                m.put("subscribersAtChurnRisk", report.get("subscribersAtChurnRisk"));
-                m.put("totalSubscribers", report.get("totalSubscribers"));
-                m.put("annualRevenue", report.get("annualRevenue"));
-                m.put("annualGrossMarginFloor", report.get("annualGrossMarginFloor"));
-                m.put("report", report);
+                out.add(SavedReport.of(r, objectMapper.readTree(r.getReportJson())));
             } catch (Exception ignored) {
                 // an unreadable stored report still lists by name
+                out.add(SavedReport.unreadable(r));
             }
-            out.add(m);
         }
         return out;
     }

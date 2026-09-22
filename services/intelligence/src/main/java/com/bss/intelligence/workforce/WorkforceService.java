@@ -14,7 +14,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,7 +58,7 @@ public class WorkforceService {
     /** The open queue: every backlog item not currently claimed or already
      * worked. Recomputed on every read — the sources are the truth. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> openTasks() {
+    public List<OpenTask> openTasks() {
         requireEnabled();
         return deriveOpen();
     }
@@ -67,12 +66,11 @@ public class WorkforceService {
     /** The derivation without the kill-switch guard — the staffing signal
      * and the scoreboard read backlog even while the workforce is stopped. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> deriveOpen() {
+    public List<OpenTask> deriveOpen() {
         String tenant = tenantScope.currentTenantId();
-        List<Map<String, Object>> open = new ArrayList<>();
-        for (Map<String, Object> candidate : derive()) {
-            Optional<WorkforceTask> row = tasks.findByIdAndTenantId(
-                    String.valueOf(candidate.get("id")), tenant);
+        List<OpenTask> open = new ArrayList<>();
+        for (OpenTask candidate : derive()) {
+            Optional<WorkforceTask> row = tasks.findByIdAndTenantId(candidate.id(), tenant);
             boolean taken = row.isPresent() && (isDone(row.get()) || leaseActive(row.get()));
             if (!taken) {
                 open.add(candidate);
@@ -96,11 +94,11 @@ public class WorkforceService {
     }
 
     @Transactional
-    public Map<String, Object> claim(String taskId) {
+    public WorkforceTaskView claim(String taskId) {
         requireEnabled();
         String tenant = tenantScope.currentTenantId();
-        Map<String, Object> candidate = derive().stream()
-                .filter(c -> taskId.equals(c.get("id"))).findFirst()
+        OpenTask candidate = derive().stream()
+                .filter(c -> taskId.equals(c.id())).findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "no such open task — the backlog item is gone or never existed"));
         WorkforceTask row = tasks.findByIdAndTenantId(taskId, tenant).orElseGet(WorkforceTask::new);
@@ -127,9 +125,9 @@ public class WorkforceService {
         }
         row.setId(taskId);
         row.setTenantId(tenant);
-        row.setKind(String.valueOf(candidate.get("kind")));
-        row.setSubjectRef(String.valueOf(candidate.get("subjectRef")));
-        row.setSummary(String.valueOf(candidate.get("summary")));
+        row.setKind(candidate.kind());
+        row.setSubjectRef(candidate.subjectRef());
+        row.setSummary(candidate.summary());
         row.setStatus(WorkforceTask.CLAIMED);
         row.setClaimedBy(caller);
         row.setClaimedByName(callerName());
@@ -140,23 +138,23 @@ public class WorkforceService {
     }
 
     @Transactional
-    public Map<String, Object> complete(String taskId, Map<String, Object> body) {
+    public WorkforceTaskView complete(String taskId, WorkforceRequests.CompleteTaskRequest body) {
         requireEnabled();
         WorkforceTask row = requireMyClaim(taskId);
         verifyDone(row);
         row.setStatus(WorkforceTask.COMPLETED);
-        row.setOutcome(body == null ? null : str(body.get("outcome")));
-        applySelfReport(row, body);
+        row.setOutcome(body == null ? null : body.outcome());
+        applySelfReport(row, body == null ? null : body.selfReported());
         row.setCompletedAt(OffsetDateTime.now());
         row.setLastUpdate(OffsetDateTime.now());
         return view(tasks.save(row));
     }
 
     @Transactional
-    public Map<String, Object> escalate(String taskId, Map<String, Object> body) {
+    public WorkforceTaskView escalate(String taskId, WorkforceRequests.EscalateRequest body) {
         requireEnabled();
         WorkforceTask row = requireMyClaim(taskId);
-        String reason = body == null ? null : str(body.get("reason"));
+        String reason = body == null ? null : body.reason();
         if (reason == null || reason.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "a reason is required — an escalation without one helps nobody");
@@ -170,19 +168,19 @@ public class WorkforceService {
 
     /** The shift ledger — what the workforce worked, newest first. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> ledger() {
+    public List<WorkforceTaskView> ledger() {
         requireEnabled();
         return tasks.findTop200ByTenantIdOrderByLastUpdateDesc(tenantScope.currentTenantId())
-                .stream().map(this::view).toList();
+                .stream().map(WorkforceTaskView::of).toList();
     }
 
     /* ---------- queue derivation ---------- */
 
-    private List<Map<String, Object>> derive() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    private List<OpenTask> derive() {
+        List<OpenTask> out = new ArrayList<>();
         for (Map<String, Object> ticket : bss.unworkedTickets()) {
             String id = String.valueOf(ticket.get("id"));
-            out.add(task(KIND_TICKET, id,
+            out.add(OpenTask.of(KIND_TICKET, id,
                     "[" + ticket.getOrDefault("severity", "-") + "] "
                             + ticket.getOrDefault("name", "trouble ticket")));
         }
@@ -196,35 +194,26 @@ public class WorkforceService {
                         OffsetDateTime.parse(String.valueOf(inc.get("OPENED_TS"))),
                         OffsetDateTime.now()).toMinutes();
             } catch (Exception ignored) { }
-            out.add(task(LegacyIncidentClient.KIND, no,
+            out.add(OpenTask.of(LegacyIncidentClient.KIND, no,
                     "[legacy estate] " + inc.getOrDefault("SUMMARY", "incident")
                             + " · opened " + ageMin + "m ago · asOf " + OffsetDateTime.now()));
         }
         for (Map<String, Object> cash : bss.unappliedCash()) {
             String id = String.valueOf(cash.get("id"));
             Object amount = cash.get("amount");
-            out.add(task(KIND_CASH, id,
+            out.add(OpenTask.of(KIND_CASH, id,
                     "unapplied " + (amount == null ? "payment" : amount) + " — "
                             + cash.getOrDefault("reason", "")));
         }
         return out;
     }
 
-    private Map<String, Object> task(String kind, String subjectRef, String summary) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", kind + "~" + subjectRef);
-        map.put("kind", kind);
-        map.put("subjectRef", subjectRef);
-        map.put("summary", summary.length() > 490 ? summary.substring(0, 490) : summary);
-        return map;
-    }
-
     /* ---------- completion verification ---------- */
 
     private void verifyDone(WorkforceTask row) {
         if (KIND_TICKET.equals(row.getKind())) {
-            Map<String, Object> ticket = bss.ticketById(row.getSubjectRef());
-            String status = ticket == null ? null : String.valueOf(ticket.get("status"));
+            com.fasterxml.jackson.databind.JsonNode ticket = bss.ticketById(row.getSubjectRef());
+            String status = ticket == null ? null : ticket.path("status").asText(null);
             if (ticket != null && !"resolved".equals(status) && !"closed".equals(status)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "the ticket is still '" + status
@@ -286,48 +275,22 @@ public class WorkforceService {
                 && row.getLeaseUntil().isAfter(OffsetDateTime.now());
     }
 
-    private void applySelfReport(WorkforceTask row, Map<String, Object> body) {
-        Object self = body == null ? null : body.get("selfReported");
-        if (self instanceof Map<?, ?> m) {
-            if (m.get("tokens") != null) {
-                row.setSelfTokens(Integer.parseInt(String.valueOf(m.get("tokens"))));
+    private void applySelfReport(WorkforceTask row, WorkforceRequests.CompleteTaskRequest.SelfReport self) {
+        if (self != null) {
+            if (self.tokens() != null) {
+                row.setSelfTokens(self.tokens());
             }
-            if (m.get("costMicros") != null) {
-                row.setSelfCostMicros(Long.parseLong(String.valueOf(m.get("costMicros"))));
+            if (self.costMicros() != null) {
+                row.setSelfCostMicros(self.costMicros());
             }
-            if (m.get("model") != null) {
-                row.setSelfModel(String.valueOf(m.get("model")));
+            if (self.model() != null) {
+                row.setSelfModel(self.model());
             }
         }
     }
 
-    private Map<String, Object> view(WorkforceTask row) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", row.getId());
-        map.put("kind", row.getKind());
-        map.put("subjectRef", row.getSubjectRef());
-        map.put("summary", row.getSummary());
-        map.put("status", row.getStatus());
-        map.put("claimedBy", row.getClaimedBy());
-        map.put("claimedByName", row.getClaimedByName());
-        map.put("claimedAt", row.getClaimedAt());
-        map.put("leaseUntil", row.getLeaseUntil());
-        if (row.getOutcome() != null) {
-            map.put("outcome", row.getOutcome());
-        }
-        if (row.getSelfCostMicros() != null || row.getSelfTokens() != null) {
-            // the worker's own word about its own model — labeled, never
-            // conflated with the control plane's metered truth
-            Map<String, Object> self = new LinkedHashMap<>();
-            self.put("tokens", row.getSelfTokens());
-            self.put("costMicros", row.getSelfCostMicros());
-            self.put("model", row.getSelfModel());
-            map.put("selfReported", self);
-        }
-        if (row.getCompletedAt() != null) {
-            map.put("completedAt", row.getCompletedAt());
-        }
-        return map;
+    private WorkforceTaskView view(WorkforceTask row) {
+        return WorkforceTaskView.of(row);
     }
 
     private String callerId() {
@@ -350,9 +313,5 @@ public class WorkforceService {
             }
         }
         return auth == null ? "unknown" : auth.getName();
-    }
-
-    private String str(Object value) {
-        return value == null ? null : String.valueOf(value);
     }
 }

@@ -1,6 +1,7 @@
 package com.bss.intelligence.client;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -76,15 +77,17 @@ public class BssApiClient {
         this.objectMapper = objectMapper;
     }
 
-    /** The failed flow, with tasks and its cross-system timeline. */
-    public Map<String, Object> processFlow(String flowId) {
+    /** The failed flow, with tasks and its cross-system timeline — another
+     * component's TMF document, kept as the open JSON it is; empty when unavailable. */
+    public JsonNode processFlow(String flowId) {
         try {
             String body = processClient.get()
                     .uri("/tmf-api/processFlowManagement/v4/processFlow/" + flowId)
                     .retrieve().body(String.class);
-            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() { });
+            JsonNode node = objectMapper.readTree(body);
+            return node == null || node.isMissingNode() ? objectMapper.createObjectNode() : node;
         } catch (Exception e) {
-            return Map.of();
+            return objectMapper.createObjectNode();
         }
     }
 
@@ -152,13 +155,12 @@ public class BssApiClient {
 
     /** One ticket, for completion VERIFICATION: a workforce task closes only
      * when the work behind it actually happened. Null when it is gone. */
-    public Map<String, Object> ticketById(String ticketId) {
+    public JsonNode ticketById(String ticketId) {
         try {
             String body = ticketClient.get()
                     .uri("/tmf-api/troubleTicket/v4/troubleTicket/" + ticketId)
                     .retrieve().body(String.class);
-            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() {
-            });
+            return objectMapper.readTree(body);
         } catch (Exception e) {
             return null;
         }
@@ -230,14 +232,15 @@ public class BssApiClient {
     /** The VoC aggregates — the ONLY signal-derived data the ask surface
      * feeds a frontier model (aggregates and battery outputs, never raw
      * signal text — the SI doctrine). */
-    public Map<String, Object> vocSummary() {
+    public JsonNode vocSummary() {
         try {
             String body = insightClient.get()
                     .uri("/insight/v1/voc/summary")
                     .retrieve().body(String.class);
-            return objectMapper.readValue(body, new TypeReference<Map<String, Object>>() { });
+            JsonNode node = objectMapper.readTree(body);
+            return node == null || node.isMissingNode() ? objectMapper.createObjectNode() : node;
         } catch (Exception e) {
-            return Map.of();
+            return objectMapper.createObjectNode();
         }
     }
 

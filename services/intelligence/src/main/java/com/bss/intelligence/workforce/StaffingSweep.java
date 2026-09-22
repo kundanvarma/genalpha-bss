@@ -74,10 +74,10 @@ public class StaffingSweep {
     }
 
     private void sweepTenant(String tenantId) {
-        Map<String, Object> s = kpis.staffing();
-        long backlog = ((Number) s.get("backlogDepth")).longValue();
-        long active = ((Number) s.get("activeWorkers")).longValue();
-        boolean surge = Boolean.TRUE.equals(s.get("surge"));
+        WorkforceKpis.Staffing s = kpis.staffing();
+        long backlog = s.backlogDepth();
+        long active = s.activeWorkers();
+        boolean surge = s.surge();
 
         gauge(backlogGauges, "bss_workforce_backlog_depth", tenantId).set(backlog);
         gauge(workerGauges, "bss_workforce_active_workers", tenantId).set(active);

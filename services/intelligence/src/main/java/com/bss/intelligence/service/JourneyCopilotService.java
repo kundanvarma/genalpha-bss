@@ -2,6 +2,7 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.CopilotRequests.CopilotChatRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -36,9 +37,9 @@ public class JourneyCopilotService {
         this.objectMapper = objectMapper;
     }
 
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> chat(Map<String, Object> request) {
-        if (!(request.get("messages") instanceof List<?> messages) || messages.isEmpty()) {
+    public CopilotReply chat(CopilotChatRequest request) {
+        List<CopilotChatRequest.Turn> messages = request == null ? null : request.messages();
+        if (messages == null || messages.isEmpty()) {
             throw new BadRequestException("messages [{role, content}] are required");
         }
         String system = """
@@ -77,11 +78,9 @@ public class JourneyCopilotService {
                 10% holdout so lift is measurable.""";
 
         StringBuilder conversation = new StringBuilder();
-        List<Map<String, Object>> turns = (List<Map<String, Object>>) messages;
-        for (Map<String, Object> turn : turns.subList(Math.max(0, turns.size() - HISTORY_TURNS), turns.size())) {
-            conversation.append("owner".equalsIgnoreCase(String.valueOf(turn.get("role")))
-                    || "user".equalsIgnoreCase(String.valueOf(turn.get("role"))) ? "OWNER: " : "COPILOT: ");
-            conversation.append(redactor.redact(String.valueOf(turn.getOrDefault("content", "")))).append("\n");
+        for (CopilotChatRequest.Turn turn : messages.subList(Math.max(0, messages.size() - HISTORY_TURNS), messages.size())) {
+            conversation.append(turn.fromOwner() ? "OWNER: " : "COPILOT: ");
+            conversation.append(redactor.redact(turn.contentOrEmpty())).append("\n");
         }
 
         String raw = governor.complete("journey-copilot", LlmAdapter.Tier.SMART, system, conversation.toString());
@@ -95,9 +94,20 @@ public class JourneyCopilotService {
         if (parsed == null) {
             throw new BadRequestException("the model did not follow the copilot JSON contract");
         }
-        parsed.put("provider", llm.provider());
-        parsed.put("model", llm.model());
-        return parsed;
+        return reply(parsed, llm.provider(), llm.model(), null, objectMapper);
+    }
+
+    /** The model's document becomes the wire record: the contract keys typed, the proposal and
+     * anything else the model wrote kept open. Shared with the product copilot. */
+    static CopilotReply reply(Map<String, Object> parsed, String provider, String model,
+            Object forecast, ObjectMapper objectMapper) {
+        Map<String, Object> rest = new java.util.LinkedHashMap<>(parsed);
+        String kind = String.valueOf(rest.remove("kind"));
+        String message = String.valueOf(rest.remove("message"));
+        Object proposal = rest.remove("proposal");
+        return new CopilotReply(kind, message,
+                proposal == null ? null : objectMapper.valueToTree(proposal), provider, model,
+                forecast == null ? null : objectMapper.valueToTree(forecast), rest);
     }
 
     /** Markdown-tolerant JSON parse: strip fences, take the outermost object. */

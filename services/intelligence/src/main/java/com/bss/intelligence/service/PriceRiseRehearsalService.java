@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,7 +33,7 @@ public class PriceRiseRehearsalService {
     }
 
     @SuppressWarnings("unchecked")
-    public Map<String, Object> rehearse(String offeringName, BigDecimal percent) {
+    public PriceRiseRehearsal rehearse(String offeringName, BigDecimal percent) {
         String tenant = tenantScope.currentTenantId();
         Set<String> cohort = new HashSet<>();
         for (Map<String, Object> p : bss.allActiveProducts()) {
@@ -78,22 +77,14 @@ public class PriceRiseRehearsalService {
         BigDecimal delta = monthly.multiply(percent)
                 .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         BigDecimal newMonthly = monthly.add(delta);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "PriceRiseRehearsal");
-        out.put("offeringName", offeringName);
-        out.put("risePercent", percent);
-        out.put("currentMonthly", monthly);
-        out.put("newMonthly", newMonthly);
-        out.put("notificationLetters", cohort.size());
-        out.put("monthlyUpsideIfNobodyLeaves", delta.multiply(new BigDecimal(cohort.size())));
-        out.put("portOutExposureCustomers", atRisk);
-        out.put("annualRevenueAtRisk", newMonthly.multiply(new BigDecimal(atRisk))
-                .multiply(new BigDecimal(12)).setScale(2, RoundingMode.HALF_UP));
-        out.put("assumptions", List.of(
+        return new PriceRiseRehearsal("PriceRiseRehearsal", offeringName, percent, monthly, newMonthly,
+                cohort.size(), delta.multiply(new BigDecimal(cohort.size())), atRisk,
+                newMonthly.multiply(new BigDecimal(atRisk))
+                        .multiply(new BigDecimal(12)).setScale(2, RoundingMode.HALF_UP),
+                List.of(
                 "the cohort IS the notification list — every holder gets the letter",
                 "port-out exposure = cohort members with an OPEN churn-risk alert; a score is the model's opinion, not fate",
                 "base monthly from the live catalog's recurring components; characteristics not applied",
                 "read-only: no price changed, no letter sent"));
-        return out;
     }
 }

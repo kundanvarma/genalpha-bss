@@ -1,14 +1,13 @@
 package com.bss.intelligence.controller;
 
 import com.bss.intelligence.api.ApiConstants;
+import com.bss.intelligence.service.ForYouRail;
 import com.bss.intelligence.service.ForYouService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * The customer's own rail. SELF-scoped by construction: the party is the
@@ -27,7 +26,7 @@ public class ForYouController {
     }
 
     @GetMapping("/forYou")
-    public ResponseEntity<Map<String, Object>> forYou() {
+    public ResponseEntity<ForYouRail> forYou() {
         String subject = SecurityContextHolder.getContext().getAuthentication().getName();
         return ResponseEntity.ok(forYou.forParty(subject));
     }

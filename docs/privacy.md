@@ -89,23 +89,30 @@ untested region is an untested backup at continental scale.
 
 ## What reaches an AI model today — stated plainly
 
-The rule is that personal data is redacted before any model call. Today
-it is not: the intelligence component's `AiGovernor` sends the prompt to
-the provider as written and redacts only the copy it stores in the AI
-ledger, and its `Redactor` recognises email addresses and phone numbers
-only — not names, national ids or addresses. What stands between a
-customer's data and a remote model today is the per-tenant raw-exposure
-opt-in per use case (a use case that sends raw customer data refuses
-unless the tenant enabled it) and the stub provider in every suite. No
-retention sweep deletes AI ledger rows, so stored prompts are kept until
+Personal data is redacted before any model call (since 2026-09-22). The
+intelligence component's `AiGovernor` is the one door, and every prompt
+that leaves the process goes through its `Redactor` first: email
+addresses, phone numbers, IBANs and bank accounts, SIM ICCIDs, IMEIs, card
+numbers, national identity numbers (Norwegian fødselsnummer and Nordic
+personnummer shapes, plus generic 9–12-digit ids) and labelled address
+lines are replaced by typed placeholders (`<email#1>`, `<phone#1>` …) that
+stay stable within the call, so the model can still say "reply to
+<email#1>" and the answer is un-redacted for the caller before anyone sees
+it. What is NOT recognised: personal names (signals are twinned by
+insight's PII firewall before they reach a model; a copilot prompt that
+names a customer sends the name) and free-text addresses without a label.
+A tenant that sets `ai-raw-exposure: true` in `tenants.yml` sends the raw
+prompt instead; every demo tenant does, and the ledger row then says
+`rawExposure: true`. The ledger (`ai_audit`) keeps the redacted prompt and
+response either way and records `redactedFields`. No retention sweep
+deletes AI ledger rows, so stored (redacted) prompts are kept until
 someone removes them, and neither `ai_audit` nor the decision log is yet
-a category in the passport or the erase fan-out. Redact-before-send with a wider redactor is
-scheduled in the intelligence typing batch.
+a category in the passport or the erase fan-out.
 
 ## Still on the ledger
 
 Third-party penetration test; GDPR records-of-processing (Art. 30
 register, an operator document); DPIA templates; per-tenant retention in
 the registry; consent-lifecycle UI surfaces beyond the existing DNC/
-marketing-consent seams; redaction before the model call and the AI
+marketing-consent seams; name recognition in the redactor, and the AI
 ledger in the passport and erasure (see above).

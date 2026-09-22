@@ -1,14 +1,14 @@
 package com.bss.intelligence.controller;
 
 import com.bss.intelligence.api.ApiConstants;
+import com.bss.intelligence.service.CopilotReply;
+import com.bss.intelligence.service.CopilotRequests.CopilotChatRequest;
 import com.bss.intelligence.service.JourneyCopilotService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /** Conversational authoring for journeys and campaigns — chat in, proposal out. */
 @RestController
@@ -22,7 +22,7 @@ public class JourneyCopilotController {
     }
 
     @PostMapping("/journeyCopilot")
-    public ResponseEntity<Map<String, Object>> chat(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<CopilotReply> chat(@RequestBody CopilotChatRequest request) {
         return ResponseEntity.ok(service.chat(request));
     }
 }

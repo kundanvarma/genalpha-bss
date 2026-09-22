@@ -45,13 +45,13 @@ public class FairPlayService {
         this.partyCap = partyCap;
     }
 
-    public Map<String, Object> sweep() {
+    public FairPlaySweep sweep() {
         return sweep(null);
     }
 
     /** Targeted (partyId) or capped whole-base pass — the shadow-billing lesson. */
     @SuppressWarnings("unchecked")
-    public Map<String, Object> sweep(String onlyPartyId) {
+    public FairPlaySweep sweep(String onlyPartyId) {
         String tenant = tenantScope.currentTenantId();
 
         // catalog: monthly price per offering + allowance GB per offering
@@ -114,7 +114,7 @@ public class FairPlayService {
         if (onlyPartyId != null) {
             plansByOwner.keySet().retainAll(List.of(onlyPartyId));
         }
-        List<Map<String, Object>> suggestions = new ArrayList<>();
+        List<FairPlaySweep.RightPlanSuggestion> suggestions = new ArrayList<>();
         int seen = 0;
         for (Map.Entry<String, List<String>> owner : plansByOwner.entrySet()) {
             if (++seen > partyCap) {
@@ -134,7 +134,7 @@ public class FairPlayService {
                     continue;   // they use their plan — nothing to right-size
                 }
                 // the cheaper plan that still fits with headroom (1.5x current use)
-                Map<String, Object> best = null;
+                FairPlaySweep.SuggestedPlan best = null;
                 BigDecimal bestPrice = price;
                 String category = categoryByName.get(planName);
                 for (Map.Entry<String, String> cand : offeringIdByName.entrySet()) {
@@ -151,35 +151,23 @@ public class FairPlayService {
                     if (candPrice.compareTo(bestPrice) < 0
                             && candAllowance.compareTo(allowance) < 0
                             && candAllowance.compareTo(used.multiply(new BigDecimal("1.5"))) >= 0) {
-                        best = Map.of("offeringName", cand.getKey(), "monthlyPrice", candPrice,
-                                "allowanceGb", candAllowance);
+                        best = new FairPlaySweep.SuggestedPlan(cand.getKey(), candPrice, candAllowance);
                         bestPrice = candPrice;
                     }
                 }
                 if (best != null) {
-                    Map<String, Object> suggestion = new LinkedHashMap<>();
-                    suggestion.put("partyId", owner.getKey());
-                    suggestion.put("currentOffering", planName);
-                    suggestion.put("currentMonthly", price);
-                    suggestion.put("usedGb", used);
-                    suggestion.put("allowanceGb", allowance);
-                    suggestion.put("suggested", best);
-                    suggestion.put("monthlySaving", price.subtract(bestPrice));
+                    FairPlaySweep.RightPlanSuggestion suggestion = new FairPlaySweep.RightPlanSuggestion(
+                            owner.getKey(), planName, price, used, allowance, best, price.subtract(bestPrice));
                     suggestions.add(suggestion);
                     events.publish("RightPlanSuggestedEvent", "rightPlan", suggestion, tenant);
                 }
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "FairPlaySweep");
-        out.put("suggestions", suggestions);
-        out.put("rightSized", suggestions.size());
-        out.put("assumptions", List.of(
+        return new FairPlaySweep("FairPlaySweep", suggestions, suggestions.size(), List.of(
                 "a plan is oversized when this month's use is under "
                         + usageShare.movePointRight(2) + "% of its allowance",
                 "suggestions keep 1.5x the current use as headroom — nobody is squeezed",
                 "read-only: the customer decides; the journey only tells them"));
-        return out;
     }
 
     private BigDecimal usedGbOf(String partyId) {

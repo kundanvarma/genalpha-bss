@@ -11,9 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * P4 — THE PROSPECT SIMULATOR: "your business on this BSS" from a price list
@@ -36,71 +34,59 @@ public class ProspectSimController {
     }
 
     @org.springframework.web.bind.annotation.GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<SavedReport>> list() {
         return ResponseEntity.ok(sims.list("ProspectSimulation"));
     }
 
     @PostMapping
-    @SuppressWarnings("unchecked")
-    public ResponseEntity<Map<String, Object>> simulate(@RequestBody Map<String, Object> request) {
-        if (!(request.get("offerings") instanceof List<?> rawOfferings) || rawOfferings.isEmpty()) {
+    public ResponseEntity<ProspectSimulation> simulate(@RequestBody ProspectSimulation.Request request) {
+        List<ProspectSimulation.Request.Offering> rawOfferings = request.offerings();
+        if (rawOfferings == null || rawOfferings.isEmpty()) {
             throw new BadRequestException(
                     "offerings [{name, monthlyPrice, subscribers, allowanceGb?}] are required");
         }
-        BigDecimal dataRate = request.get("wholesaleDataRatePerGb") == null ? null
-                : new BigDecimal(String.valueOf(request.get("wholesaleDataRatePerGb")));
-        String currency = request.get("currency") == null ? "" : String.valueOf(request.get("currency"));
+        BigDecimal dataRate = request.wholesaleDataRatePerGb();
+        String currency = request.currency() == null ? "" : request.currency();
 
-        List<Map<String, Object>> lines = new ArrayList<>();
+        List<ProspectSimulation.Line> lines = new ArrayList<>();
         BigDecimal annualRevenue = BigDecimal.ZERO;
         BigDecimal annualCostCeiling = BigDecimal.ZERO;
         long totalSubs = 0;
-        for (Object raw : rawOfferings) {
-            Map<String, Object> o = (Map<String, Object>) raw;
-            if (o.get("name") == null || o.get("monthlyPrice") == null || o.get("subscribers") == null) {
+        for (ProspectSimulation.Request.Offering o : rawOfferings) {
+            if (o == null || o.name() == null || o.monthlyPrice() == null || o.subscribers() == null) {
                 throw new BadRequestException("each offering needs name, monthlyPrice and subscribers");
             }
-            BigDecimal price = new BigDecimal(String.valueOf(o.get("monthlyPrice")));
-            long subs = Long.parseLong(String.valueOf(o.get("subscribers")));
+            BigDecimal price = o.monthlyPrice();
+            long subs = o.subscribers();
             BigDecimal revenue = price.multiply(BigDecimal.valueOf(subs)).multiply(BigDecimal.valueOf(12));
             annualRevenue = annualRevenue.add(revenue);
             totalSubs += subs;
-            Map<String, Object> line = new LinkedHashMap<>();
-            line.put("name", o.get("name"));
-            line.put("subscribers", subs);
-            line.put("monthlyPrice", price);
-            line.put("annualRevenue", revenue.setScale(2, RoundingMode.HALF_UP));
-            if (dataRate != null && o.get("allowanceGb") != null) {
-                BigDecimal cost = new BigDecimal(String.valueOf(o.get("allowanceGb")))
-                        .multiply(dataRate);
+            BigDecimal cost = null;
+            if (dataRate != null && o.allowanceGb() != null) {
+                cost = o.allowanceGb().multiply(dataRate);
                 BigDecimal annualCost = cost.multiply(BigDecimal.valueOf(subs)).multiply(BigDecimal.valueOf(12));
                 annualCostCeiling = annualCostCeiling.add(annualCost);
-                line.put("wholesaleCostCeilingPerSub", cost.setScale(2, RoundingMode.HALF_UP));
-                line.put("marginPerSub", price.subtract(cost).setScale(2, RoundingMode.HALF_UP));
             }
-            lines.add(line);
+            lines.add(new ProspectSimulation.Line(o.name(), subs, price,
+                    revenue.setScale(2, RoundingMode.HALF_UP),
+                    cost == null ? null : cost.setScale(2, RoundingMode.HALF_UP),
+                    cost == null ? null : price.subtract(cost).setScale(2, RoundingMode.HALF_UP)));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "ProspectSimulation");
-        out.put("lines", lines);
-        out.put("totalSubscribers", totalSubs);
-        out.put("annualRevenue", annualRevenue.setScale(2, RoundingMode.HALF_UP));
-        if (annualCostCeiling.signum() > 0) {
-            out.put("annualWholesaleCostCeiling", annualCostCeiling.setScale(2, RoundingMode.HALF_UP));
-            out.put("annualGrossMarginFloor",
-                    annualRevenue.subtract(annualCostCeiling).setScale(2, RoundingMode.HALF_UP));
-        }
-        if (!currency.isBlank()) {
-            out.put("currency", currency);
-        }
-        out.put("assumptions", List.of(
+        boolean costed = annualCostCeiling.signum() > 0;
+        ProspectSimulation out = new ProspectSimulation("ProspectSimulation", lines, totalSubs,
+                annualRevenue.setScale(2, RoundingMode.HALF_UP),
+                costed ? annualCostCeiling.setScale(2, RoundingMode.HALF_UP) : null,
+                costed ? annualRevenue.subtract(annualCostCeiling).setScale(2, RoundingMode.HALF_UP) : null,
+                currency.isBlank() ? null : currency,
+                List.of(
                 "EVERY number here is a stated assumption — no real subscriber, usage or billing data was read",
                 "cost ceiling assumes full-allowance burn at the given wholesale data rate; real burn is lower",
-                "flat base: no growth, churn or seasonality modeled"));
-        String name = request.get("name") == null
-                ? "Prospect: " + totalSubs + " subs" : String.valueOf(request.get("name"));
+                "flat base: no growth, churn or seasonality modeled"),
+                null, null);
+        String name = request.name() == null ? "Prospect: " + totalSubs + " subs" : request.name();
         try {
-            sims.saveReport(name, objectMapper.writeValueAsString(request), out);
+            PriceSimService.Receipt receipt = sims.saveReport(name, objectMapper.writeValueAsString(request), out);
+            out = out.saved(receipt.id(), receipt.name());
         } catch (Exception e) {
             // an unsaveable receipt does not block the answer
         }

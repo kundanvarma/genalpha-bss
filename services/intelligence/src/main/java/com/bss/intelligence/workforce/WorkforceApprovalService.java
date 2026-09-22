@@ -2,7 +2,9 @@ package com.bss.intelligence.workforce;
 
 import com.bss.intelligence.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.TextNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -15,9 +17,7 @@ import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,11 +48,11 @@ public class WorkforceApprovalService {
     }
 
     @Transactional
-    public Map<String, Object> file(Map<String, Object> body) {
-        String action = str(body.get("action"));
-        String method = str(body.get("method"));
-        String path = str(body.get("path"));
-        String reason = str(body.get("reason"));
+    public ApprovalView file(WorkforceRequests.FileApprovalRequest body) {
+        String action = body.action();
+        String method = body.method();
+        String path = body.path();
+        String reason = body.reason();
         if (action == null || method == null || path == null || reason == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "action, method, path and reason are all required");
@@ -76,7 +76,7 @@ public class WorkforceApprovalService {
         row.setAction(action);
         row.setMethod(method);
         row.setPath(path);
-        row.setBodyJson(body.get("body") == null ? null : writeJson(body.get("body")));
+        row.setBodyJson(body.body() == null || body.body().isNull() ? null : writeJson(body.body()));
         row.setReason(reason);
         row.setStatus(WorkforceApproval.PENDING);
         row.setCreatedAt(OffsetDateTime.now());
@@ -84,7 +84,7 @@ public class WorkforceApprovalService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String status) {
+    public List<ApprovalView> list(String status) {
         String tenant = tenantScope.currentTenantId();
         List<WorkforceApproval> rows = status == null
                 ? approvals.findTop200ByTenantIdOrderByCreatedAtDesc(tenant)
@@ -99,7 +99,7 @@ public class WorkforceApprovalService {
      * human can fix and retry, or refuse it.
      */
     @Transactional
-    public Map<String, Object> approve(String id, String authorization, Map<String, Object> body) {
+    public ApprovalView approve(String id, String authorization, WorkforceRequests.DecisionNote body) {
         WorkforceApproval row = pending(id);
         if (authorization == null || authorization.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
@@ -124,7 +124,7 @@ public class WorkforceApprovalService {
         row.setStatus(WorkforceApproval.APPROVED);
         row.setDecidedBy(callerId());
         row.setDecidedByName(WorkforceService.callerName());
-        row.setDecisionNote(body == null ? null : str(body.get("note")));
+        row.setDecisionNote(body == null ? null : body.note());
         row.setResultJson(result == null ? null
                 : result.length() > 1900 ? result.substring(0, 1900) : result);
         row.setDecidedAt(OffsetDateTime.now());
@@ -132,12 +132,12 @@ public class WorkforceApprovalService {
     }
 
     @Transactional
-    public Map<String, Object> refuse(String id, Map<String, Object> body) {
+    public ApprovalView refuse(String id, WorkforceRequests.DecisionNote body) {
         WorkforceApproval row = pending(id);
         row.setStatus(WorkforceApproval.REFUSED);
         row.setDecidedBy(callerId());
         row.setDecidedByName(WorkforceService.callerName());
-        row.setDecisionNote(body == null ? null : str(body.get("note")));
+        row.setDecisionNote(body == null ? null : body.note());
         row.setDecidedAt(OffsetDateTime.now());
         return view(approvals.save(row));
     }
@@ -153,41 +153,18 @@ public class WorkforceApprovalService {
         return row;
     }
 
-    private Map<String, Object> view(WorkforceApproval row) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", row.getId());
-        map.put("action", row.getAction());
-        map.put("method", row.getMethod());
-        map.put("path", row.getPath());
-        if (row.getBodyJson() != null) {
-            map.put("body", readJson(row.getBodyJson()));
-        }
-        map.put("reason", row.getReason());
-        map.put("status", row.getStatus());
-        map.put("requestedBy", row.getRequestedBy());
-        map.put("requestedByName", row.getRequestedByName());
-        map.put("createdAt", row.getCreatedAt());
-        if (row.getDecidedBy() != null) {
-            map.put("decidedBy", row.getDecidedBy());
-            map.put("decidedByName", row.getDecidedByName());
-            map.put("decidedAt", row.getDecidedAt());
-        }
-        if (row.getDecisionNote() != null) {
-            map.put("decisionNote", row.getDecisionNote());
-        }
-        if (row.getResultJson() != null) {
-            map.put("result", readJson(row.getResultJson()));
-        }
-        return map;
+    private ApprovalView view(WorkforceApproval row) {
+        return new ApprovalView(row.getId(), row.getAction(), row.getMethod(), row.getPath(),
+                row.getBodyJson() == null ? null : readJson(row.getBodyJson()),
+                row.getReason(), row.getStatus(), row.getRequestedBy(), row.getRequestedByName(),
+                row.getCreatedAt(), row.getDecidedBy(), row.getDecidedByName(), row.getDecidedAt(),
+                row.getDecisionNote(),
+                row.getResultJson() == null ? null : readJson(row.getResultJson()));
     }
 
     private String callerId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         return auth == null ? "unknown" : auth.getName();
-    }
-
-    private String str(Object value) {
-        return value == null ? null : String.valueOf(value);
     }
 
     private String writeJson(Object value) {
@@ -198,11 +175,12 @@ public class WorkforceApprovalService {
         }
     }
 
-    private Object readJson(String json) {
+    /** The stored JSON as it was written; an unparseable blob reads as its text. */
+    private JsonNode readJson(String json) {
         try {
-            return objectMapper.readValue(json, Object.class);
+            return objectMapper.readTree(json);
         } catch (JsonProcessingException e) {
-            return json;
+            return TextNode.valueOf(json);
         }
     }
 }

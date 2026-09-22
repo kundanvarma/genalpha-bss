@@ -90,7 +90,7 @@ public class ChurnScorer {
         }
     }
 
-    public Map<String, Object> sweepAllTenants() {
+    public ChurnLearning.ChurnSweepResult sweepAllTenants() {
         int total = 0;
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
@@ -99,7 +99,7 @@ public class ChurnScorer {
                 log.warn("churn sweep skipped tenant '{}': {}", tenant.getId(), e.getMessage());
             }
         }
-        return Map.of("alerts", total);
+        return new ChurnLearning.ChurnSweepResult(total);
     }
 
     public int sweepCurrentTenant() {

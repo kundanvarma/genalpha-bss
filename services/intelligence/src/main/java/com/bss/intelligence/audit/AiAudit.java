@@ -74,6 +74,20 @@ public class AiAudit {
     @Column(name = "resource_ref", length = 128)
     private String resourceRef;
 
+    /** true when the provider received the prompt UNREDACTED (tenant opt-in
+     * ai-raw-exposure); the prompt/response columns are redacted regardless */
+    @Column(name = "raw_exposure")
+    private Boolean rawExposure;
+
+    /** how many distinct personal values the redactor replaced on this call */
+    @Column(name = "redacted_fields")
+    private Integer redactedFields;
+
+    public Boolean getRawExposure() { return rawExposure; }
+    public void setRawExposure(Boolean v) { this.rawExposure = v; }
+    public Integer getRedactedFields() { return redactedFields; }
+    public void setRedactedFields(Integer v) { this.redactedFields = v; }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getExposure() { return exposure; }

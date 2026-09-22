@@ -12,7 +12,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
+
+import com.bss.intelligence.chat.ChatViews.AgentReply;
+import com.bss.intelligence.chat.ChatViews.ChatEscalateRequest;
+import com.bss.intelligence.chat.ChatViews.ChatMessageRequest;
+import com.bss.intelligence.chat.ChatViews.ChatMessageView;
+import com.bss.intelligence.chat.ChatViews.ChatSessionOpened;
+import com.bss.intelligence.chat.ChatViews.ChatSessionView;
+import com.bss.intelligence.chat.ChatViews.ChatTurn;
+import com.bss.intelligence.chat.ChatViews.EscalationReceipt;
 
 /**
  * Care chat, three faces:
@@ -41,70 +49,70 @@ public class CareChatController {
     /* ---------------- guest ---------------- */
 
     @PostMapping("/guest/session")
-    public Map<String, Object> guestOpen() {
-        return Map.of("id", chat.open(null).getId());
+    public ChatSessionOpened guestOpen() {
+        return new ChatSessionOpened(chat.open(null).getId());
     }
 
     @PostMapping("/guest/session/{id}/message")
-    public Map<String, Object> guestMessage(@PathVariable String id,
-            @RequestBody Map<String, String> body) {
-        return chat.customerMessage(chat.require(id, null, false), body.getOrDefault("text", ""));
+    public ChatTurn guestMessage(@PathVariable String id,
+            @RequestBody ChatMessageRequest body) {
+        return chat.customerMessage(chat.require(id, null, false), body.textOrEmpty());
     }
 
     @GetMapping("/guest/session/{id}/messages")
-    public List<Map<String, Object>> guestMessages(@PathVariable String id) {
+    public List<ChatMessageView> guestMessages(@PathVariable String id) {
         return chat.transcript(chat.require(id, null, false));
     }
 
     @PostMapping("/guest/session/{id}/escalate")
-    public Map<String, Object> guestEscalate(@PathVariable String id,
-            @RequestBody(required = false) Map<String, String> body) {
+    public EscalationReceipt guestEscalate(@PathVariable String id,
+            @RequestBody(required = false) ChatEscalateRequest body) {
         return chat.escalate(chat.require(id, null, false),
-                body == null ? null : body.get("contact"));
+                body == null ? null : body.contact());
     }
 
     /* ---------------- signed-in customer ---------------- */
 
     @PostMapping("/session")
-    public Map<String, Object> open() {
-        return Map.of("id", chat.open(subject()).getId());
+    public ChatSessionOpened open() {
+        return new ChatSessionOpened(chat.open(subject()).getId());
     }
 
     @PostMapping("/session/{id}/message")
-    public Map<String, Object> message(@PathVariable String id,
-            @RequestBody Map<String, String> body) {
+    public ChatTurn message(@PathVariable String id,
+            @RequestBody ChatMessageRequest body) {
         return chat.customerMessage(chat.require(id, subject(), false),
-                body.getOrDefault("text", ""));
+                body.textOrEmpty());
     }
 
     @GetMapping("/session/{id}/messages")
-    public List<Map<String, Object>> messages(@PathVariable String id) {
+    public List<ChatMessageView> messages(@PathVariable String id) {
         return chat.transcript(chat.require(id, subject(), false));
     }
 
     @PostMapping("/session/{id}/escalate")
-    public Map<String, Object> escalate(@PathVariable String id,
-            @RequestBody(required = false) Map<String, String> body) {
+    public EscalationReceipt escalate(@PathVariable String id,
+            @RequestBody(required = false) ChatEscalateRequest body) {
         return chat.escalate(chat.require(id, subject(), false),
-                body == null ? null : body.get("contact"));
+                body == null ? null : body.contact());
     }
 
     /* ---------------- agent desk ---------------- */
 
     @GetMapping("/agent/sessions")
-    public List<Map<String, Object>> agentSessions() {
+    public List<ChatSessionView> agentSessions() {
         return chat.openSessions();
     }
 
     @GetMapping("/agent/session/{id}/messages")
-    public List<Map<String, Object>> agentRead(@PathVariable String id) {
+    public List<ChatMessageView> agentRead(@PathVariable String id) {
         return chat.transcript(chat.require(id, null, true));
     }
 
     @PostMapping("/agent/session/{id}/message")
-    public ResponseEntity<Map<String, Object>> agentReply(@PathVariable String id,
-            @RequestBody Map<String, String> body) {
+    public ResponseEntity<AgentReply> agentReply(@PathVariable String id,
+            @RequestBody ChatMessageRequest body) {
         return ResponseEntity.ok(chat.agentMessage(chat.require(id, null, true),
-                body.getOrDefault("text", "")));
+                body.textOrEmpty()));
     }
 }

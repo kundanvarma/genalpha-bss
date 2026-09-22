@@ -31,6 +31,12 @@ with its suites green.
 - A verdict keeps its domain form (`Boolean ok`) and writes its wire form (`verdict: holds|fails|unknown`) from a `@JsonProperty` getter with `@JsonIgnore` on the component; evaluation context (`resolved`) is `@JsonIgnore`d, so the same record serves the check, the receipt and the MCP result.
 - `@JsonUnwrapped` puts a check's keys beside the action name (`ActionCheck`); one `@JsonPropertyOrder` is the union of every path's order and `NON_NULL` leaves off what a path never wrote — where paths disagreed, the common path wins and the deviation is in the report, not the code. Protocol shapes the server owns (MCP tool schema, JSON-RPC envelope) are records too; `Map.of(...)` had been randomising their key order.
 
+**Worked example: intelligence (22 Sep).** 70 → 0, wire unchanged (TMF915 CTK, copilot/CSR/workforce/control-plane suites, snapshot diff of 59 endpoints: 25 byte-identical, 21 values-only, 11 key-order-only where `Map.of` had been random, 2 model-authored).
+- A store that keeps the caller's document **verbatim** (TMF915 alarm/rule/contract rows) types it as `ObjectNode`, never a record; the projections the service computes (`AiModelView`, `AiModelContractView`) are records rendered to the same tree (`valueToTree`) so one TMF630 filter/`fields=` mechanic serves both halves.
+- What a **model** wrote stays `JsonNode` inside the record (`CopilotReply.proposal`, `forecast`) with `@JsonAnyGetter extensions` for keys the model adds; the parse/normalise code keeps working on trees and converts once at the record boundary. Foreign documents from another component (`ticketById`, `processFlow`, `vocSummary`) are `JsonNode` too.
+- A request whose whole body is pasted into a prompt (customer summary, ticket reply, wrap-up) is a `JsonNode` body — an open console document — not a record with fifty optional fields; validation ports as `path(...)` checks.
+- A record enriched in stages grows by copies (`PriceSimReportView.saved(id,name)`, `withLines(kept)`, `KnowledgeAnswer.cached(true)`); a `Map<String, Record>` keyed by a dynamic name (`byKind`, `workerTypes`) is a keyed collection, not an untyped return.
+
 ## 2. Modules and size
 
 | Rule | Check |

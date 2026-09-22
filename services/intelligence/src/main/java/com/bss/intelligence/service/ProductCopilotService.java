@@ -2,6 +2,7 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.CopilotRequests.CopilotChatRequest;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
@@ -30,20 +31,18 @@ public class ProductCopilotService {
     private static final int HISTORY_TURNS = 12;
 
     private final LlmAdapter llm;
-    private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
     private final com.bss.intelligence.llm.TenantVoice voice;
     private final com.bss.intelligence.sim.PriceSimService priceSim;
     private final com.bss.intelligence.client.BssApiClient bssApi;
 
-    public ProductCopilotService(LlmAdapter llm, Redactor redactor,
+    public ProductCopilotService(LlmAdapter llm,
             com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper,
             com.bss.intelligence.llm.TenantVoice voice,
             com.bss.intelligence.sim.PriceSimService priceSim,
             com.bss.intelligence.client.BssApiClient bssApi) {
         this.llm = llm;
-        this.redactor = redactor;
         this.governor = governor;
         this.objectMapper = objectMapper;
         this.voice = voice;
@@ -55,9 +54,9 @@ public class ProductCopilotService {
     // throw AFTER auditing both attempts, and a wrapping transaction would
     // roll the audit rows back with the failure — the ledger must keep
     // exactly the turns that failed.
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> chat(Map<String, Object> request) {
-        if (!(request.get("messages") instanceof List<?> messages) || messages.isEmpty()) {
+    public CopilotReply chat(CopilotChatRequest request) {
+        List<CopilotChatRequest.Turn> messages = request == null ? null : request.messages();
+        if (messages == null || messages.isEmpty()) {
             throw new BadRequestException("messages [{role, content}] are required");
         }
         String system = """
@@ -163,16 +162,16 @@ public class ProductCopilotService {
                 Keep names short and sellable.""" + voice.instruction();
 
         StringBuilder conversation = new StringBuilder();
-        Object catalog = request.get("catalog");
-        if (catalog != null) {
+        Object catalog = request.catalog();
+        if (catalog != null && !request.catalog().isNull()) {
             conversation.append("Catalog context (what exists today):\n")
                     .append(cap(toJson(catalog))).append("\n---\n");
         }
-        List<Map<String, Object>> turns = (List<Map<String, Object>>) messages;
-        for (Map<String, Object> turn : turns.subList(Math.max(0, turns.size() - HISTORY_TURNS), turns.size())) {
-            conversation.append("owner".equalsIgnoreCase(String.valueOf(turn.get("role"))) || "user".equalsIgnoreCase(String.valueOf(turn.get("role")))
-                    ? "OWNER: " : "COPILOT: ");
-            conversation.append(redactor.redact(String.valueOf(turn.getOrDefault("content", "")))).append("\n");
+        // no call-site redaction: the governor redacts before send and restores
+        // the real values in the answer, so the owner's own words come back whole
+        for (CopilotChatRequest.Turn turn : messages.subList(Math.max(0, messages.size() - HISTORY_TURNS), messages.size())) {
+            conversation.append(turn.fromOwner() ? "OWNER: " : "COPILOT: ");
+            conversation.append(turn.contentOrEmpty()).append("\n");
         }
 
         String raw = governor.complete("product-copilot",
@@ -188,11 +187,10 @@ public class ProductCopilotService {
         if (parsed == null) {
             throw new BadRequestException("the model did not follow the copilot JSON contract");
         }
-        parsed.put("provider", llm.provider());
-        parsed.put("model", llm.model());
         normalize(parsed);
         attachForecast(parsed);
-        return parsed;
+        return JourneyCopilotService.reply(parsed, llm.provider(), llm.model(),
+                parsed.remove("forecast"), objectMapper);
     }
 
     /**
@@ -217,7 +215,7 @@ public class ProductCopilotService {
             for (Map<String, Object> o : bssApi.offerings()) {
                 existing.add(String.valueOf(o.get("name")));
             }
-            List<Map<String, Object>> changes = new java.util.ArrayList<>();
+            List<com.bss.intelligence.sim.PriceSimRequest.PriceChange> changes = new java.util.ArrayList<>();
             for (Map<String, Object> offering : offerings) {
                 String name = String.valueOf(offering.get("name"));
                 if (!existing.contains(name)) {
@@ -244,35 +242,27 @@ public class ProductCopilotService {
                     }
                 }
                 if (any) {
-                    changes.add(Map.of("offeringName", name, "newMonthlyPrice", monthly));
+                    changes.add(new com.bss.intelligence.sim.PriceSimRequest.PriceChange(name,
+                            java.math.BigDecimal.valueOf(monthly)));
                 }
             }
             if (changes.isEmpty()) {
                 return;
             }
-            Map<String, Object> report = priceSim.simulate(Map.of(
-                    "name", "copilot proposal forecast",
-                    "changes", changes));
+            com.bss.intelligence.sim.PriceSimReportView report = priceSim.simulate(
+                    new com.bss.intelligence.sim.PriceSimRequest("copilot proposal forecast", changes, null));
             // a forecast over nobody is noise, not a receipt: keep only lines with subscribers
-            if (report != null && report.get("lines") instanceof List<?> lines) {
-                List<Object> kept = new java.util.ArrayList<>();
-                for (Object l : lines) {
-                    if (l instanceof Map<?, ?> m) {
-                        try {
-                            if (Double.parseDouble(String.valueOf(m.get("subscribers"))) > 0) {
-                                kept.add(l);
-                            }
-                        } catch (NumberFormatException ignored) {
-                            // no subscriber count — not a line worth showing
-                        }
+            if (report != null && report.lines() != null) {
+                List<com.bss.intelligence.sim.PriceSimReportView.Line> kept = new java.util.ArrayList<>();
+                for (com.bss.intelligence.sim.PriceSimReportView.Line l : report.lines()) {
+                    if (l.subscribers() > 0) {
+                        kept.add(l);
                     }
                 }
                 if (kept.isEmpty()) {
                     return;
                 }
-                Map<String, Object> trimmed = new java.util.LinkedHashMap<>(report);
-                trimmed.put("lines", kept);
-                report = trimmed;
+                report = report.withLines(kept);
             }
             parsed.put("forecast", report);
         } catch (RuntimeException e) {

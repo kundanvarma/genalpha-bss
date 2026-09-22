@@ -58,7 +58,7 @@ public class WorkforceKpiService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> kpis() {
+    public WorkforceKpis kpis() {
         String tenant = tenantScope.currentTenantId();
         List<WorkforceTask> all = tasks.findTop200ByTenantIdOrderByLastUpdateDesc(tenant);
 
@@ -123,8 +123,8 @@ public class WorkforceKpiService {
                 if (WorkforceTask.COMPLETED.equals(t.getStatus())
                         && WorkforceService.KIND_TICKET.equals(t.getKind()) && ticketChecked < 25) {
                     ticketChecked++;
-                    Map<String, Object> ticket = bss.ticketById(t.getSubjectRef());
-                    String status = ticket == null ? null : String.valueOf(ticket.get("status"));
+                    com.fasterxml.jackson.databind.JsonNode ticket = bss.ticketById(t.getSubjectRef());
+                    String status = ticket == null ? null : ticket.path("status").asText(null);
                     if ("inProgress".equals(status) || "acknowledged".equals(status)) {
                         ticketReopened++;
                     }
@@ -149,83 +149,61 @@ public class WorkforceKpiService {
             }
         }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("asOf", OffsetDateTime.now().toString());
-        out.put("completed", completed);
-        out.put("escalated", escalated);
-        out.put("deflectionRate", completed + escalated == 0 ? null
-                : Math.round(100.0 * completed / (completed + escalated)) / 100.0);
-        out.put("avgHandleSeconds", handleCount == 0 ? null : handleSecondsSum / handleCount);
-        out.put("reopen", Map.of(
-                "checked", ticketChecked, "reopened", ticketReopened,
-                "rate", ticketChecked == 0 ? 0.0
-                        : Math.round(100.0 * ticketReopened / ticketChecked) / 100.0,
-                "definition", "completed ticket tasks whose ticket is open again — checked live"));
-        out.put("selfReportedCostMicros", selfCostMicros);
-        out.put("selfReportedCostLabel",
-                "the workers' own word about their own models — not control-plane metered");
-        Map<String, Object> saved = new LinkedHashMap<>();
-        saved.put("minutes", minutesSaved);
-        saved.put("estimate", true);
-        saved.put("baselineMinutes", Map.of(
-                WorkforceService.KIND_TICKET, baselineTicketMinutes,
-                WorkforceService.KIND_CASH, baselineCashMinutes));
-        saved.put("definition",
+        WorkforceKpis.Reopen reopen = new WorkforceKpis.Reopen(ticketChecked, ticketReopened,
+                ticketChecked == 0 ? 0.0 : Math.round(100.0 * ticketReopened / ticketChecked) / 100.0,
+                "completed ticket tasks whose ticket is open again — checked live");
+        Map<String, Long> baselines = new LinkedHashMap<>();
+        baselines.put(WorkforceService.KIND_TICKET, baselineTicketMinutes);
+        baselines.put(WorkforceService.KIND_CASH, baselineCashMinutes);
+        WorkforceKpis.HumanMinutesSaved saved = new WorkforceKpis.HumanMinutesSaved(minutesSaved, true,
+                baselines,
                 "completed × operator-set baseline minutes per kind — an estimate, labeled as one");
-        out.put("humanMinutesSaved", saved);
-        out.put("byKind", byKind.entrySet().stream().collect(LinkedHashMap::new,
-                (m, e) -> m.put(e.getKey(), Map.of(
-                        "completed", e.getValue()[0], "escalated", e.getValue()[1])),
-                LinkedHashMap::putAll));
+        Map<String, WorkforceKpis.KindCount> kindCounts = new LinkedHashMap<>();
+        byKind.forEach((kind, v) -> kindCounts.put(kind, new WorkforceKpis.KindCount(v[0], v[1])));
         // THE CREW: one row per worker — its TYPE derived from the kinds it
         // actually works (the ledger's word, not a self-description), whether
         // it holds a live lease right now, and its own numbers.
-        Map<String, Map<String, Object>> byType = new TreeMap<>();
-        List<Map<String, Object>> workers = new java.util.ArrayList<>();
+        Map<String, long[]> byType = new TreeMap<>(); // workers, workingNow, completed, escalated
+        List<WorkforceKpis.WorkerRow> workers = new java.util.ArrayList<>();
         for (String who : workerKinds.keySet()) {
             long[] v = byWorker.getOrDefault(who, new long[5]);
             String type = typeOf(workerKinds.get(who));
-            Map<String, Object> w = new LinkedHashMap<>();
-            w.put("worker", who);
-            w.put("workerName", workerNames.getOrDefault(who, who));
-            w.put("type", type);
-            w.put("kinds", workerKinds.get(who));
-            w.put("workingNow", workerOnTask.getOrDefault(who, false));
-            w.put("lastActiveAt", workerLastActive.get(who));
-            w.put("completed", v[0]);
-            w.put("escalated", v[1]);
-            w.put("avgHandleSeconds", v[3] == 0 ? null : v[2] / v[3]);
-            w.put("selfReportedCostMicros", v[4]);
-            workers.add(w);
-
-            Map<String, Object> tRow = byType.computeIfAbsent(type, x -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("workers", 0L);
-                m.put("workingNow", 0L);
-                m.put("completed", 0L);
-                m.put("escalated", 0L);
-                return m;
-            });
-            tRow.put("workers", (Long) tRow.get("workers") + 1);
-            tRow.put("workingNow", (Long) tRow.get("workingNow")
-                    + (workerOnTask.getOrDefault(who, false) ? 1 : 0));
-            tRow.put("completed", (Long) tRow.get("completed") + v[0]);
-            tRow.put("escalated", (Long) tRow.get("escalated") + v[1]);
+            boolean working = workerOnTask.getOrDefault(who, false);
+            workers.add(new WorkforceKpis.WorkerRow(who, workerNames.getOrDefault(who, who), type,
+                    workerKinds.get(who), working, workerLastActive.get(who), v[0], v[1],
+                    v[3] == 0 ? null : v[2] / v[3], v[4]));
+            long[] tRow = byType.computeIfAbsent(type, x -> new long[4]);
+            tRow[0]++;
+            tRow[1] += working ? 1 : 0;
+            tRow[2] += v[0];
+            tRow[3] += v[1];
         }
-        for (Map<String, Object> tRow : byType.values()) {
-            long c = (Long) tRow.get("completed");
-            long e = (Long) tRow.get("escalated");
-            tRow.put("deflectionRate", c + e == 0 ? null
-                    : Math.round(100.0 * c / (c + e)) / 100.0);
+        Map<String, WorkforceKpis.WorkerTypeRow> workerTypes = new TreeMap<>();
+        for (Map.Entry<String, long[]> e : byType.entrySet()) {
+            long[] t = e.getValue();
+            long c = t[2];
+            long esc = t[3];
+            workerTypes.put(e.getKey(), new WorkforceKpis.WorkerTypeRow(t[0], t[1], c, esc,
+                    c + esc == 0 ? null : Math.round(100.0 * c / (c + esc)) / 100.0));
         }
-        out.put("workers", workers);
-        out.put("workerTypes", byType);
-        out.put("workingNow", workerOnTask.values().stream().filter(Boolean::booleanValue).count());
-        out.put("approvals", Map.of(
-                "pending", pending, "approved", approved, "refused", refused,
-                "avgDecisionSeconds", decisionCount == 0 ? 0 : decisionSecondsSum / decisionCount));
-        out.put("staffing", staffing());
-        return out;
+        return new WorkforceKpis(
+                OffsetDateTime.now().toString(),
+                completed,
+                escalated,
+                completed + escalated == 0 ? null
+                        : Math.round(100.0 * completed / (completed + escalated)) / 100.0,
+                handleCount == 0 ? null : handleSecondsSum / handleCount,
+                reopen,
+                selfCostMicros,
+                "the workers' own word about their own models — not control-plane metered",
+                saved,
+                kindCounts,
+                workers,
+                workerTypes,
+                workerOnTask.values().stream().filter(Boolean::booleanValue).count(),
+                new WorkforceKpis.Approvals(pending, approved, refused,
+                        decisionCount == 0 ? 0 : decisionSecondsSum / decisionCount),
+                staffing());
     }
 
     /**
@@ -235,7 +213,7 @@ public class WorkforceKpiService {
      * scales worker replicas on. The ceiling rides along so a scaler can
      * never aim past what the operator allowed.
      */
-    public Map<String, Object> staffing() {
+    public WorkforceKpis.Staffing staffing() {
         long backlog = workforce.deriveOpen().size();
         long active = workforce.activeWorkers().size();
         var budget = budgets.findByTenantId(tenantScope.currentTenantId()).orElse(null);
@@ -244,16 +222,9 @@ public class WorkforceKpiService {
                 : Math.round(10.0 * backlog / active) / 10.0;
         boolean surge = active == 0 ? backlog > 0
                 : backlog > surgeOpenPerWorker * active;
-        Map<String, Object> s = new LinkedHashMap<>();
-        s.put("backlogDepth", backlog);
-        s.put("activeWorkers", active);
-        s.put("openPerActiveWorker", openPerWorker);
-        s.put("surge", surge);
-        s.put("surgeThresholdOpenPerWorker", surgeOpenPerWorker);
-        s.put("maxWorkers", maxWorkers);
-        s.put("definition", "surge = backlog exceeds threshold × active workers"
-                + " (or any backlog with zero workers); the ceiling caps the crew regardless");
-        return s;
+        return new WorkforceKpis.Staffing(backlog, active, openPerWorker, surge, surgeOpenPerWorker,
+                maxWorkers, "surge = backlog exceeds threshold × active workers"
+                        + " (or any backlog with zero workers); the ceiling caps the crew regardless");
     }
 
     /** A worker's type is what it WORKS, from the ledger: tickets → care,

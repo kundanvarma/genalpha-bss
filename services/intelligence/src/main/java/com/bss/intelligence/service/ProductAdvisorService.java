@@ -207,39 +207,40 @@ public class ProductAdvisorService {
 
     /** A human clicked "adopt": the proposal becomes a DRAFT offering —
      * "In study", visibly born from the advisor, decided by people. */
-    public Map<String, Object> adopt(Map<String, Object> proposal) {
-        if (proposal == null || proposal.get("name") == null) {
+    public AdoptReceipt adopt(CopilotRequests.AdoptProposal proposal) {
+        if (proposal == null || proposal.name() == null) {
             throw new com.bss.intelligence.exception.BadRequestException(
                     "a proposal needs at least a name");
         }
         Map<String, Object> price = catalog.post()
                 .uri("/tmf-api/productCatalogManagement/v4/productOfferingPrice")
                 .header("Content-Type", "application/json")
-                .body(Map.of("name", proposal.get("name") + " monthly",
+                .body(Map.of("name", proposal.name() + " monthly",
                         "priceType", "recurring", "recurringChargePeriodType", "month",
                         "recurringChargePeriodLength", 1, "lifecycleStatus", "In study",
-                        "price", proposal.getOrDefault("price", Map.of("unit", "EUR", "value", 0))))
+                        "price", proposal.price() == null || proposal.price().isNull()
+                                ? Map.of("unit", "EUR", "value", 0) : proposal.price()))
                 .retrieve().body(Map.class);
         Map<String, Object> draft = catalog.post()
                 .uri("/tmf-api/productCatalogManagement/v4/productOffering")
                 .header("Content-Type", "application/json")
-                .body(Map.of("name", proposal.get("name"),
-                        "description", proposal.getOrDefault("description",
-                                "Born in the Product advisor"),
+                .body(Map.of("name", proposal.name(),
+                        "description", proposal.description() == null
+                                ? "Born in the Product advisor" : proposal.description(),
                         "lifecycleStatus", "In study", "isBundle", false,
                         "productOfferingPrice", List.of(Map.of("id", price.get("id"),
-                                "name", proposal.get("name") + " monthly"))))
+                                "name", proposal.name() + " monthly"))))
                 .retrieve().body(Map.class);
         log.info("advisor proposal adopted as DRAFT offering {} ('{}', In study)",
-                draft.get("id"), proposal.get("name"));
+                draft.get("id"), proposal.name());
         // the AGENT ACTION on the governance ledger: which AI wrote what,
         // to which resource — not just what it said
         governor.recordAction("advisor-adopt", "catalog.createDraftOffering",
                 String.valueOf(draft.get("id")), "ok");
-        if (proposal.get("decisionId") != null) {
+        if (proposal.decisionId() != null) {
             // the product owner's adoption is the proposal's outcome
             Map<String, Object> outcome = new LinkedHashMap<>();
-            outcome.put("decisionId", String.valueOf(proposal.get("decisionId")));
+            outcome.put("decisionId", proposal.decisionId());
             outcome.put("outcome", "adopted");
             outcome.put("value", draft.get("id"));
             outcome.put("observedAt", java.time.OffsetDateTime.now().toString());
@@ -250,7 +251,7 @@ public class ProductAdvisorService {
                 log.debug("advisor adoption not logged as an outcome: {}", e.getMessage());
             }
         }
-        return Map.of("offeringId", draft.get("id"), "lifecycleStatus", "In study");
+        return new AdoptReceipt(String.valueOf(draft.get("id")), "In study");
     }
 
     private Map<String, Object> finding(String kind, String offering, String insight,

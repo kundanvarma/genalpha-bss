@@ -2,13 +2,13 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.CopilotRequests.JourneyBrief;
+import com.bss.intelligence.service.JourneyDraft.JourneyStep;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * AI-native journey authoring: describe a journey in a sentence and the model
@@ -46,56 +46,40 @@ public class JourneyDraftService {
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> draftJourney(Map<String, Object> request) {
-        if (request.get("brief") == null || String.valueOf(request.get("brief")).isBlank()) {
+    public JourneyDraft draftJourney(JourneyBrief request) {
+        if (request.brief() == null || request.brief().isBlank()) {
             throw new BadRequestException("brief is required");
         }
-        String brief = redactor.redact(String.valueOf(request.get("brief")));
-        String brandName = request.get("brandName") == null ? "the operator"
-                : redactor.redact(String.valueOf(request.get("brandName")));
+        String brief = redactor.redact(request.brief());
+        String brandName = request.brandName() == null ? "the operator"
+                : redactor.redact(request.brandName());
 
         // stages: caller-supplied [{stage, intent}] or the default scaffold
         List<String[]> stages = new ArrayList<>();
-        if (request.get("stages") instanceof List<?> list && !list.isEmpty()) {
-            for (Object o : list) {
-                if (o instanceof Map<?, ?> m && m.get("stage") != null) {
-                    stages.add(new String[] {String.valueOf(m.get("stage")),
-                            m.get("intent") == null ? "message the customer" : String.valueOf(m.get("intent"))});
+        if (request.stages() != null) {
+            for (JourneyBrief.StageSpec spec : request.stages()) {
+                if (spec != null && spec.stage() != null) {
+                    stages.add(new String[] {spec.stage(),
+                            spec.intent() == null ? "message the customer" : spec.intent()});
                 }
             }
         }
         if (stages.isEmpty()) stages.addAll(DEFAULT_STAGES);
 
-        List<Map<String, Object>> steps = new ArrayList<>();
+        List<JourneyStep> steps = new ArrayList<>();
         for (int i = 0; i < stages.size(); i++) {
             String stage = stages.get(i)[0];
             String intent = stages.get(i)[1];
             String[] copy = draftStageCopy(brandName, brief, stage, intent);
-            Map<String, Object> msg = new LinkedHashMap<>();
-            msg.put("type", "message");
-            msg.put("stage", stage);
-            msg.put("subject", copy[0]);
-            msg.put("content", copy[1]);
-            steps.add(msg);
+            steps.add(JourneyStep.message(stage, copy[0], copy[1]));
             if (i < stages.size() - 1) {
-                Map<String, Object> wait = new LinkedHashMap<>();
-                wait.put("type", "wait");
-                wait.put("stage", stage);
-                wait.put("days", 3);
-                steps.add(wait);
+                steps.add(JourneyStep.wait(stage, 3));
             }
         }
 
-        Map<String, Object> draft = new LinkedHashMap<>();
-        draft.put("name", "Journey: " + trim(brief, 48));
-        draft.put("triggerEventType", "IndividualCreateEvent");
-        draft.put("holdoutPercent", 10);
-        draft.put("steps", steps);
-        draft.put("provider", llm.provider());
-        draft.put("model", llm.model());
-        draft.put("note", "AI draft — review the stages and copy, then Create. Nothing is live until you do.");
-        return draft;
+        return new JourneyDraft("Journey: " + trim(brief, 48), "IndividualCreateEvent", 10, steps,
+                llm.provider(), llm.model(),
+                "AI draft — review the stages and copy, then Create. Nothing is live until you do.");
     }
 
     private String[] draftStageCopy(String brandName, String brief, String stage, String intent) {

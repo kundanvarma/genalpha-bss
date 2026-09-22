@@ -59,7 +59,7 @@ ops/arch/ratchet.sh                                       # architecture ratchet
 - **Tokens are validated in every component** (39 `SecurityConfig` copies), not at the gateway: the gateway stamps the tenant from the hostname and routes. A drift check across the copies is a follow-up.
 - **CI runs CodeQL and dependency review** (`.github/workflows/security.yml`); Dependabot keeps dependencies current. Only a high-severity dependency finding blocks the merge (`fail-on-severity: high`); CodeQL findings appear as code-scanning alerts and block nothing until branch protection requires them — a follow-up.
 - **Every component has a threat model** in `docs/threat-model/`; touching a trust boundary means updating it.
-- Secrets never enter the repo — the secret gate (`ops/scan-secrets.sh`) runs as a pre-commit hook only on clones that ran `ops/install-hooks.sh`; CI has no secret scan yet (follow-up). PII redaction before a model call is the rule; today `AiGovernor` redacts only the ledger copy and the provider receives the prompt as written, and the `Redactor` knows email and phone only — redact-before-send is scheduled in the intelligence typing batch. Every model call is metered and logged.
+- Secrets never enter the repo (pre-commit scan on hooked clones; no CI secret scan yet). Every prompt is redacted before it leaves the process — email, phone, IBAN, account, ICCID, IMEI, card, national id, labelled address — with reversible placeholders so the caller still sees real values; a tenant may opt out with `ai-raw-exposure`, and the ledger row says so. Names are not recognised. Every model call is metered and logged.
 
 ## Discretion and safety
 

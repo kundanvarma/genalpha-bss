@@ -2,7 +2,11 @@ package com.bss.intelligence.controller;
 
 import com.bss.intelligence.aimanagement.AiManagementStore;
 import com.bss.intelligence.exception.BadRequestException;
+import com.bss.intelligence.service.ContractPatch;
 import com.bss.intelligence.service.Tmf915Service;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +34,10 @@ import java.util.Map;
  * tenant-scoped store. Reads are ops-grade (ai:use); every write rides
  * ai:admin, the seam the governance controller always said production
  * would need.
+ *
+ * The wire is the open edge: stored documents are the caller's JSON kept
+ * verbatim; the projections are records, rendered to the same tree so
+ * TMF630 filtering and field selection work on both alike.
  */
 @RestController
 @RequestMapping("/tmf-api/aiManagement/v4")
@@ -41,35 +49,37 @@ public class Tmf915Controller {
 
     private final Tmf915Service service;
     private final AiManagementStore store;
+    private final ObjectMapper objectMapper;
 
-    public Tmf915Controller(Tmf915Service service, AiManagementStore store) {
+    public Tmf915Controller(Tmf915Service service, AiManagementStore store, ObjectMapper objectMapper) {
         this.service = service;
         this.store = store;
+        this.objectMapper = objectMapper;
     }
 
     /* ---------- the registered resources ---------- */
 
     @PostMapping("/" + KIND)
-    public ResponseEntity<Map<String, Object>> create(@PathVariable("kind") String kind,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<ObjectNode> create(@PathVariable("kind") String kind,
+            @RequestBody JsonNode body) {
         return created(store.create(kind, body));
     }
 
     @GetMapping("/" + KIND)
-    public ResponseEntity<List<Map<String, Object>>> list(@PathVariable("kind") String kind,
+    public ResponseEntity<List<ObjectNode>> list(@PathVariable("kind") String kind,
             @RequestParam Map<String, String> params) {
         return page(store.list(kind), params);
     }
 
     @GetMapping("/" + KIND + "/{id}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable("kind") String kind,
+    public ResponseEntity<ObjectNode> get(@PathVariable("kind") String kind,
             @PathVariable("id") String id, @RequestParam(required = false) String fields) {
         return ResponseEntity.ok(AiManagementStore.select(store.find(kind, id), fields));
     }
 
     @PatchMapping("/" + KIND + "/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("kind") String kind,
-            @PathVariable("id") String id, @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<ObjectNode> patch(@PathVariable("kind") String kind,
+            @PathVariable("id") String id, @RequestBody JsonNode patch) {
         return ResponseEntity.ok(store.patch(kind, id, patch));
     }
 
@@ -82,34 +92,35 @@ public class Tmf915Controller {
     /* ---------- aiModel: registered rows beside what the ledger proves ---------- */
 
     @PostMapping("/aiModel")
-    public ResponseEntity<Map<String, Object>> createModel(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<ObjectNode> createModel(@RequestBody JsonNode body) {
         return created(store.create("aiModel", body));
     }
 
     @GetMapping("/aiModel")
-    public ResponseEntity<List<Map<String, Object>>> models(@RequestParam Map<String, String> params) {
-        List<Map<String, Object>> all = new ArrayList<>(store.list("aiModel"));
-        all.addAll(service.listModels());
+    public ResponseEntity<List<ObjectNode>> models(@RequestParam Map<String, String> params) {
+        List<ObjectNode> all = new ArrayList<>(store.list("aiModel"));
+        service.listModels().forEach(m -> all.add(tree(m)));
         return page(all, params);
     }
 
     @GetMapping("/aiModel/{id}")
-    public ResponseEntity<Map<String, Object>> model(@PathVariable("id") String id,
+    public ResponseEntity<ObjectNode> model(@PathVariable("id") String id,
             @RequestParam(required = false) String fields) {
         return ResponseEntity.ok(AiManagementStore.select(store.findModel(id)
-                .orElseGet(() -> service.findModel(id)), fields));
+                .orElseGet(() -> tree(service.findModel(id))), fields));
     }
 
     /** the ledger's ids are provider/model — two segments */
     @GetMapping("/aiModel/{provider}/{model}")
-    public ResponseEntity<Map<String, Object>> servedModel(@PathVariable("provider") String provider,
+    public ResponseEntity<ObjectNode> servedModel(@PathVariable("provider") String provider,
             @PathVariable("model") String model, @RequestParam(required = false) String fields) {
-        return ResponseEntity.ok(AiManagementStore.select(service.findModel(provider + "/" + model), fields));
+        return ResponseEntity.ok(AiManagementStore.select(
+                tree(service.findModel(provider + "/" + model)), fields));
     }
 
     @PatchMapping("/aiModel/{id}")
-    public ResponseEntity<Map<String, Object>> patchModel(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<ObjectNode> patchModel(@PathVariable("id") String id,
+            @RequestBody JsonNode patch) {
         return ResponseEntity.ok(store.patch("aiModel", id, patch));
     }
 
@@ -122,35 +133,40 @@ public class Tmf915Controller {
     /* ---------- aiModelContract: the scenarios, with their numbers ---------- */
 
     @GetMapping("/aiModelContract")
-    public ResponseEntity<List<Map<String, Object>>> contracts(@RequestParam Map<String, String> params) {
-        return page(service.listContracts(), params);
+    public ResponseEntity<List<ObjectNode>> contracts(@RequestParam Map<String, String> params) {
+        return page(service.listContracts().stream().map(this::tree).toList(), params);
     }
 
     @GetMapping("/aiModelContract/{id}")
-    public ResponseEntity<Map<String, Object>> contract(@PathVariable("id") String id,
+    public ResponseEntity<ObjectNode> contract(@PathVariable("id") String id,
             @RequestParam(required = false) String fields) {
-        return ResponseEntity.ok(AiManagementStore.select(service.findContract(id), fields));
+        return ResponseEntity.ok(AiManagementStore.select(tree(service.findContract(id)), fields));
     }
 
     /** The in-life lever: {state: suspended|active, note} — ai:admin only. */
     @PatchMapping("/aiModelContract/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> patch) {
-        return ResponseEntity.ok(service.patchContract(id, patch));
+    public ResponseEntity<ObjectNode> patch(@PathVariable("id") String id,
+            @RequestBody ContractPatch patch) {
+        return ResponseEntity.ok(tree(service.patchContract(id, patch)));
     }
 
     /* ---------- shared shape ---------- */
 
-    private static ResponseEntity<Map<String, Object>> created(Map<String, Object> view) {
-        return ResponseEntity.created(URI.create(String.valueOf(view.get("href")))).body(view);
+    /** A projection record as the same JSON tree a stored document is — one list mechanic for both. */
+    private ObjectNode tree(Object record) {
+        return objectMapper.valueToTree(record);
     }
 
-    private static ResponseEntity<List<Map<String, Object>>> page(List<Map<String, Object>> rows,
+    private static ResponseEntity<ObjectNode> created(ObjectNode view) {
+        return ResponseEntity.created(URI.create(view.path("href").asText())).body(view);
+    }
+
+    private static ResponseEntity<List<ObjectNode>> page(List<ObjectNode> rows,
             Map<String, String> params) {
-        List<Map<String, Object>> matched = AiManagementStore.filter(rows, params);
+        List<ObjectNode> matched = AiManagementStore.filter(rows, params);
         int offset = intParam(params, "offset", 0);
         int limit = intParam(params, "limit", Integer.MAX_VALUE);
-        List<Map<String, Object>> window = offset >= matched.size() ? List.of()
+        List<ObjectNode> window = offset >= matched.size() ? List.of()
                 : matched.subList(offset, (int) Math.min((long) offset + limit, matched.size()));
         return ResponseEntity.ok()
                 .header("X-Total-Count", String.valueOf(matched.size()))

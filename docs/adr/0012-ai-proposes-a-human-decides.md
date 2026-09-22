@@ -30,14 +30,20 @@ it off, and the 146 suites must run on a laptop with no API key.
   tenant and per deployment.
 - Prompts and contracts live in code with the component, versioned; no
   prompt in a front end; no prompt-only guardrails.
-- **Customer data before the model.** The rule is that PII is redacted
-  before any model call. **Today it is not:** `AiGovernor` sends the prompt
-  to the provider as written and redacts only the copy it keeps in the
-  ledger, and the `Redactor` knows email addresses and phone numbers only
-  (no names, national ids or addresses). What stands between customer data
-  and a remote model today is the per-tenant raw-exposure opt-in per use
-  case and the retention canary. Follow-up: redact before send, with a wider
-  redactor — scheduled in the intelligence typing batch.
+- **Customer data before the model — redact before send** (since
+  2026-09-22). `AiGovernor` runs every prompt through the `Redactor` before
+  the provider sees it: email, phone, IBAN and bank account, ICCID, IMEI,
+  card PAN (Luhn), national identity numbers, generic 9–12-digit ids and
+  labelled address lines become typed, stable placeholders (`<email#1>`,
+  `<iban#1>` …) so the model can still refer to them; the answer is
+  un-redacted for the caller by reversing the map within the same call.
+  A tenant with `ai-raw-exposure: true` in `tenants.yml` sends the raw
+  prompt instead, and the ledger row says `rawExposure: true`; the ledger's
+  prompt and response copies are redacted either way and carry
+  `redactedFields`. Names are not recognised (insight's PII firewall twins
+  signals before they reach this component). The earlier 422 refusal for
+  raw use cases without the opt-in is retired: the prompt goes, without the
+  person, and the receipt says `raw-redacted`.
 
 ## Consequences
 
@@ -51,8 +57,10 @@ it off, and the 146 suites must run on a laptop with no API key.
 
 Suites run with `AI_PROVIDER=stub` (`ops/run-all-suites.sh`); the AI
 control-plane suite (metered, budget fail-closed, kill-switch); #125 for
-governed actions; the AI audit page; review for prompt placement. No suite
-yet asserts what reaches the provider.
+governed actions; the AI audit page; review for prompt placement.
+`AiGovernorRedactionTest` (a recording provider) asserts what reaches the
+provider with raw exposure off and on; `RedactorTest` pins the recognisers
+and the reversal.
 
 ## Related
 

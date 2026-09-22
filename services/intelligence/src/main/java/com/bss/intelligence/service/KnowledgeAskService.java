@@ -1,7 +1,9 @@
 package com.bss.intelligence.service;
 
+import com.bss.intelligence.client.KnowledgeArticle;
 import com.bss.intelligence.client.KnowledgeClient;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.KnowledgeAnswer.KnowledgeSource;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -42,7 +44,7 @@ public class KnowledgeAskService {
                 }
             });
 
-    private record Cached(String fingerprint, Map<String, Object> answer, long at) { }
+    private record Cached(String fingerprint, KnowledgeAnswer answer, long at) { }
 
     private final com.bss.intelligence.client.OntologyClient ontology;
 
@@ -59,29 +61,27 @@ public class KnowledgeAskService {
         this.tenantScope = tenantScope;
     }
 
-    public Map<String, Object> ask(String bearerToken, String question) {
+    public KnowledgeAnswer ask(String bearerToken, String question) {
         return ask(bearerToken, question, null);
     }
 
     /** @param screen the screen the question came from (e.g. "pane:approvals") — recorded with a gap. */
     @org.springframework.transaction.annotation.Transactional
-    public Map<String, Object> ask(String bearerToken, String question, String screen) {
+    public KnowledgeAnswer ask(String bearerToken, String question, String screen) {
         Retrieval retrieval = retrieve(bearerToken, question, screen);
         List<Map<String, Object>> hits = retrieval.hits();
-        Map<String, Object> out = new LinkedHashMap<>();
         if (hits.isEmpty()) {
             recordGap(question, screen);
-            out.put("answer", "I could not find anything about that in the knowledge base. "
-                    + "Try other words, or raise a ticket and a human will pick it up.");
-            out.put("sources", List.of());
-            out.put("gap", true);
-            return out;
+            return new KnowledgeAnswer(true, "I could not find anything about that in the knowledge base. "
+                    + "Try other words, or raise a ticket and a human will pick it up.",
+                    List.of(), null, null, null);
         }
+        Boolean gap = null;
         if (!retrieval.questionMatched()) {
             // the screen's own shelf will still try to answer, but nothing matched the
             // question's words — that is a gap for the content team whatever the model says
             recordGap(question, screen);
-            out.put("gap", true);
+            gap = true;
         }
         List<Map<String, Object>> top = hits.subList(0, Math.min(TOP, hits.size()));
         // the cache key is the asker's shelf (what they could read) + the question; the
@@ -95,17 +95,14 @@ public class KnowledgeAskService {
         String key = tenantScope.currentTenantId() + "|" + fp + "|" + normalised;
         Cached c = cache.get(key);
         if (c != null && System.currentTimeMillis() - c.at() < CACHE_TTL_MS) {
-            Map<String, Object> cached = new LinkedHashMap<>(c.answer());
-            cached.put("cached", true);
-            return cached;
+            return c.answer().cached(true);
         }
         StringBuilder context = new StringBuilder();
-        List<Map<String, Object>> sources = new ArrayList<>();
+        List<KnowledgeSource> sources = new ArrayList<>();
         for (Map<String, Object> a : top) {
             context.append("TITLE: ").append(a.get("title")).append('\n')
                     .append(a.get("body")).append("\n---\n");
-            sources.add(Map.of("id", String.valueOf(a.get("id")),
-                    "title", String.valueOf(a.get("title"))));
+            sources.add(new KnowledgeSource(String.valueOf(a.get("id")), String.valueOf(a.get("title"))));
         }
         String where = screen == null || screen.isBlank() ? ""
                 : " The person is asking from the screen \"" + screenName(screen) + "\" of this BSS;"
@@ -122,12 +119,8 @@ public class KnowledgeAskService {
                 + "ARTICLES:\n" + context;
         String answer = governor.complete("knowledge-ask",
                 com.bss.intelligence.llm.LlmAdapter.Tier.FAST, system, question);
-        out.put("answer", answer);
-        out.put("sources", sources);
-        out.put("provider", llm.provider());
-        out.put("model", llm.model());
-        out.put("cached", false);
-        cache.put(key, new Cached(fp.toString(), new LinkedHashMap<>(out), System.currentTimeMillis()));
+        KnowledgeAnswer out = new KnowledgeAnswer(gap, answer, sources, llm.provider(), llm.model(), false);
+        cache.put(key, new Cached(fp.toString(), out, System.currentTimeMillis()));
         return out;
     }
 
@@ -138,6 +131,18 @@ public class KnowledgeAskService {
      * when the words of the question match nothing. Only when both are empty is it a gap.
      */
     record Retrieval(List<Map<String, Object>> hits, boolean questionMatched) { }
+
+    /** The ontology's article in the knowledge base's own document form, so it
+     * can sit beside the retrieved (foreign) articles. */
+    private static Map<String, Object> document(KnowledgeArticle article) {
+        Map<String, Object> a = new LinkedHashMap<>();
+        a.put("id", article.id());
+        a.put("title", article.title());
+        a.put("body", article.body());
+        a.put("tags", article.tags());
+        a.put("lastUpdate", article.lastUpdate());
+        return a;
+    }
 
     Retrieval retrieve(String bearerToken, String question, String screen) {
         List<Map<String, Object>> byWords = new ArrayList<>(knowledge.searchAs(bearerToken, question));
@@ -153,9 +158,9 @@ public class KnowledgeAskService {
         // 0. the ontology's own words for this screen, when it has an entry: what the page
         //    manages and which governed actions it offers — generated from the registry
         if (paged && screen.startsWith("pane:")) {
-            Map<String, Object> structural = ontology.pageArticle(bearerToken, screen.substring("pane:".length()));
+            KnowledgeArticle structural = ontology.pageArticle(bearerToken, screen.substring("pane:".length()));
             if (structural != null) {
-                ordered.put(String.valueOf(structural.get("id")), structural);
+                ordered.put(structural.id(), document(structural));
             }
         }
         // 1. keyword hits that belong to this screen
@@ -259,17 +264,11 @@ public class KnowledgeAskService {
 
     /** The content team's to-do list: what people asked that no article answered. */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<Map<String, Object>> gaps() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<KnowledgeGapView> gaps() {
+        List<KnowledgeGapView> out = new ArrayList<>();
         for (com.bss.intelligence.knowledge.KnowledgeGap g : gaps.findTop50ByTenantIdOrderByAskedDescLastAskedDesc(tenantScope.currentTenantId())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", g.getId());
-            m.put("question", g.getQuestion());
-            m.put("context", g.getContext());
-            m.put("asked", g.getAsked());
-            m.put("firstAsked", g.getFirstAsked().toString());
-            m.put("lastAsked", g.getLastAsked().toString());
-            out.add(m);
+            out.add(new KnowledgeGapView(g.getId(), g.getQuestion(), g.getContext(), g.getAsked(),
+                    g.getFirstAsked().toString(), g.getLastAsked().toString()));
         }
         return out;
     }

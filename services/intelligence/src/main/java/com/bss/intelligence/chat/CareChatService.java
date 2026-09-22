@@ -7,8 +7,13 @@ import com.bss.intelligence.security.TenantScope;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.bss.intelligence.chat.ChatViews.AgentReply;
+import com.bss.intelligence.chat.ChatViews.ChatMessageView;
+import com.bss.intelligence.chat.ChatViews.ChatSessionView;
+import com.bss.intelligence.chat.ChatViews.ChatTurn;
+import com.bss.intelligence.chat.ChatViews.EscalationReceipt;
+
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -94,51 +99,37 @@ public class CareChatService {
         return s;
     }
 
-    public List<Map<String, Object>> transcript(CareChatSession s) {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<ChatMessageView> transcript(CareChatSession s) {
+        List<ChatMessageView> out = new ArrayList<>();
         for (CareChatMessage m : messages.findBySessionIdOrderByCreatedAtAsc(s.getId())) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", m.getId());
-            row.put("author", m.getAuthor());
-            row.put("body", m.getBody());
-            row.put("at", m.getCreatedAt().toString());
-            out.add(row);
+            out.add(new ChatMessageView(m.getId(), m.getAuthor(), m.getBody(),
+                    m.getCreatedAt().toString()));
         }
         return out;
     }
 
-    public List<Map<String, Object>> openSessions() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<ChatSessionView> openSessions() {
+        List<ChatSessionView> out = new ArrayList<>();
         for (CareChatSession s : sessions.findTop50ByTenantIdAndStatusInOrderByUpdatedAtDesc(
                 tenantScope.currentTenantId(), List.of("open", "agent", "escalated"))) {
             List<CareChatMessage> t = messages.findBySessionIdOrderByCreatedAtAsc(s.getId());
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", s.getId());
-            row.put("channel", s.getChannel());
-            row.put("status", s.getStatus());
-            row.put("partyId", s.getPartyId());
-            row.put("ticketId", s.getTicketId());
-            row.put("updatedAt", s.getUpdatedAt().toString());
-            row.put("messages", t.size());
-            row.put("lastMessage", t.isEmpty() ? "" : t.get(t.size() - 1).getBody());
-            out.add(row);
+            out.add(new ChatSessionView(s.getId(), s.getChannel(), s.getStatus(), s.getPartyId(),
+                    s.getTicketId(), s.getUpdatedAt().toString(), t.size(),
+                    t.isEmpty() ? "" : t.get(t.size() - 1).getBody()));
         }
         return out;
     }
 
     /* ---------------- the conversation ---------------- */
 
-    public Map<String, Object> customerMessage(CareChatSession s, String text) {
+    public ChatTurn customerMessage(CareChatSession s, String text) {
         messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "customer", clip(text, 4000)));
         s.touch();
         sessions.save(s);
 
-        Map<String, Object> out = new LinkedHashMap<>();
         // an agent has taken over: the bot stays silent, the human replies
         if ("agent".equals(s.getStatus()) || "escalated".equals(s.getStatus())) {
-            out.put("reply", null);
-            out.put("status", s.getStatus());
-            return out;
+            return new ChatTurn(null, s.getStatus(), null);
         }
 
         String context = s.getPartyId() == null ? guestContext() : accountContext(s.getPartyId());
@@ -175,30 +166,25 @@ public class CareChatService {
         if (reply != null && reply.contains("[ESCALATE]")) {
             // the model may only SIGNAL; the system performs. A real ticket,
             // a real id, spoken truthfully — never a role-played action.
-            Map<String, Object> esc = escalate(s, null);
-            out.put("reply", "I've raised ticket " + esc.get("ticketId")
-                    + " — a human will pick this up shortly.");
-            out.put("status", s.getStatus());
-            out.put("ticketId", esc.get("ticketId"));
-            return out;
+            EscalationReceipt esc = escalate(s, null);
+            return new ChatTurn("I've raised ticket " + esc.ticketId()
+                    + " — a human will pick this up shortly.", s.getStatus(), esc.ticketId());
         }
         messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "bot", clip(reply, 4000)));
         s.touch();
         sessions.save(s);
-        out.put("reply", reply);
-        out.put("status", s.getStatus());
-        return out;
+        return new ChatTurn(reply, s.getStatus(), null);
     }
 
-    public Map<String, Object> agentMessage(CareChatSession s, String text) {
+    public AgentReply agentMessage(CareChatSession s, String text) {
         messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "agent", clip(text, 4000)));
         s.setStatus("agent");
         s.touch();
         sessions.save(s);
-        return Map.of("status", "agent");
+        return new AgentReply("agent");
     }
 
-    public Map<String, Object> escalate(CareChatSession s, String contact) {
+    public EscalationReceipt escalate(CareChatSession s, String contact) {
         StringBuilder transcript = new StringBuilder("Escalated from care chat ")
                 .append(s.getId()).append(contact == null || contact.isBlank() ? "" : " (contact: " + contact + ")")
                 .append("\n\n");
@@ -213,7 +199,7 @@ public class CareChatService {
         sessions.save(s);
         messages.save(new CareChatMessage(s.getId(), s.getTenantId(), "bot",
                 "I've raised ticket " + ticketId + " — a human will pick this up."));
-        return Map.of("ticketId", ticketId, "status", "escalated");
+        return new EscalationReceipt(ticketId, "escalated");
     }
 
     /* ---------------- grounding ---------------- */

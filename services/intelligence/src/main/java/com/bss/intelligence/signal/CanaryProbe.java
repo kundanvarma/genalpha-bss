@@ -11,9 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * T-P4: provable non-retention monitoring. Every exposing call carried a
@@ -53,7 +51,7 @@ public class CanaryProbe {
         }
     }
 
-    public Map<String, Object> probeCurrentTenant(int sampleSize) {
+    public SweepResults.CanaryProbeResult probeCurrentTenant(int sampleSize) {
         List<AiAudit> candidates = audits
                 .findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
         int probed = 0;
@@ -77,9 +75,6 @@ public class CanaryProbe {
             }
             probed++;
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("probed", probed);
-        out.put("retentionSuspected", suspected);
-        return out;
+        return new SweepResults.CanaryProbeResult(probed, suspected);
     }
 }

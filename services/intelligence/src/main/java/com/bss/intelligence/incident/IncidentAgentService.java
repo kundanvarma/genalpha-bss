@@ -146,9 +146,9 @@ public class IncidentAgentService {
            .append('\n');
         ctx.append("FAILED STEP: ").append(taskCode).append(" — ")
            .append(event.getOrDefault("message", "no message")).append('\n');
-        Map<String, Object> flow = bss.processFlow(flowId);
-        ctx.append("TASK STATES: ").append(flow.getOrDefault("taskFlow", "?")).append('\n');
-        ctx.append("CROSS-SYSTEM TIMELINE: ").append(flow.getOrDefault("timeline", "empty"))
+        com.fasterxml.jackson.databind.JsonNode flow = bss.processFlow(flowId);
+        ctx.append("TASK STATES: ").append(flow.has("taskFlow") ? flow.get("taskFlow") : "?").append('\n');
+        ctx.append("CROSS-SYSTEM TIMELINE: ").append(flow.has("timeline") ? flow.get("timeline") : "empty")
            .append('\n');
         return ctx.toString();
     }
@@ -156,28 +156,29 @@ public class IncidentAgentService {
     /* ---------- reads + the mandatory verdict ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<IncidentTraceView> list() {
         return traces.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::view).toList();
+                .stream().map(IncidentTraceView::of).toList();
     }
 
     /** Every trace demands a human verdict — the loop's raw material. */
     @Transactional
-    public Map<String, Object> verdict(String traceId, Map<String, Object> dto) {
+    public IncidentTraceView verdict(String traceId, VerdictRequest dto) {
         IncidentTrace trace = traces.findByIdAndTenantId(traceId, tenantScope.currentTenantId())
                 .orElseThrow(() -> new ResponseStatusException(
                         org.springframework.http.HttpStatus.NOT_FOUND, "no such trace"));
-        if (!(dto.get("useful") instanceof Boolean useful)) {
+        if (dto == null || dto.useful() == null) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST,
                     "useful (true/false) is required — the verdict is mandatory, not optional");
         }
+        boolean useful = dto.useful();
         trace.setVerdict(useful ? "useful" : "not-useful");
-        trace.setVerdictNote(dto.get("note") == null ? null : clip(String.valueOf(dto.get("note")), 500));
+        trace.setVerdictNote(dto.note() == null ? null : clip(dto.note(), 500));
         traces.save(trace);
         if (useful) {
             maybePromote(trace.getSignature()); // the loop closes on evidence, not enthusiasm
         }
-        return view(trace);
+        return IncidentTraceView.of(trace);
     }
 
     /* ---------- the compounding loop ---------- */
@@ -232,14 +233,14 @@ public class IncidentAgentService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listRunbooks() {
+    public List<IncidentRunbookView> listRunbooks() {
         return runbooks.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
-                .stream().map(this::runbookView).toList();
+                .stream().map(IncidentRunbookView::of).toList();
     }
 
     /** approve | reject | revoke — a decision with a name on it. */
     @Transactional
-    public Map<String, Object> decideRunbook(String id, String decision, String note) {
+    public IncidentRunbookView decideRunbook(String id, String decision, String note) {
         IncidentRunbook rb = runbooks.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new ResponseStatusException(
                         org.springframework.http.HttpStatus.NOT_FOUND, "no such runbook"));
@@ -260,71 +261,22 @@ public class IncidentAgentService {
         rb.setDecidedAt(OffsetDateTime.now());
         rb.setDecidedNote(clip(note, 500));
         runbooks.save(rb);
-        return runbookView(rb);
+        return IncidentRunbookView.of(rb);
     }
 
     /** The learning curve as DATA — the number a stateless agent cannot fake. */
     @Transactional(readOnly = true)
-    public Map<String, Object> stats() {
+    public IncidentStats stats() {
         List<IncidentTrace> all =
                 traces.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId());
         long fromRunbook = all.stream().filter(t -> "runbook".equals(t.getSource())).count();
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("traces", all.size());
-        out.put("fromLlm", all.size() - fromRunbook);
-        out.put("fromRunbook", fromRunbook);
-        out.put("autoDiagnosedRate", all.isEmpty() ? 0
-                : Math.round(fromRunbook * 1000.0 / all.size()) / 10.0);
-        out.put("verdicts", Map.of(
-                "useful", all.stream().filter(t -> "useful".equals(t.getVerdict())).count(),
-                "notUseful", all.stream().filter(t -> "not-useful".equals(t.getVerdict())).count(),
-                "pending", all.stream().filter(t -> "pending".equals(t.getVerdict())).count()));
-        out.put("@type", "IncidentStats");
-        return out;
-    }
-
-    private Map<String, Object> runbookView(IncidentRunbook rb) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", rb.getId());
-        map.put("signature", rb.getSignature());
-        map.put("version", rb.getVersion());
-        map.put("status", rb.getStatus());
-        map.put("title", rb.getTitle());
-        map.put("diagnosis", rb.getDiagnosis());
-        map.put("action", rb.getAction());
-        map.put("provenance", rb.getProvenanceJson());
-        map.put("createdAt", rb.getCreatedAt());
-        if (rb.getDecidedAt() != null) {
-            map.put("decidedAt", rb.getDecidedAt());
-            map.put("decidedNote", rb.getDecidedNote());
-        }
-        map.put("@type", "IncidentRunbook");
-        return map;
-    }
-
-    private Map<String, Object> view(IncidentTrace t) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", t.getId());
-        map.put("signature", t.getSignature());
-        map.put("processFlowId", t.getProcessFlowId());
-        map.put("productOrderId", t.getProductOrderId());
-        map.put("hypothesis", t.getHypothesis());
-        map.put("confidence", t.getConfidence());
-        if (t.getProposedAction() != null) {
-            map.put("proposedAction", t.getProposedAction());
-        }
-        map.put("source", t.getSource());
-        if (t.getTicketId() != null) {
-            map.put("ticketId", t.getTicketId());
-        }
-        map.put("verdict", t.getVerdict());
-        if (t.getVerdictNote() != null) {
-            map.put("verdictNote", t.getVerdictNote());
-        }
-        map.put("diagnoseMs", t.getDiagnoseMs());
-        map.put("createdAt", t.getCreatedAt());
-        map.put("@type", "IncidentTrace");
-        return map;
+        return new IncidentStats(all.size(), all.size() - fromRunbook, fromRunbook,
+                all.isEmpty() ? 0 : Math.round(fromRunbook * 1000.0 / all.size()) / 10.0,
+                new IncidentStats.Verdicts(
+                        all.stream().filter(t -> "useful".equals(t.getVerdict())).count(),
+                        all.stream().filter(t -> "not-useful".equals(t.getVerdict())).count(),
+                        all.stream().filter(t -> "pending".equals(t.getVerdict())).count()),
+                "IncidentStats");
     }
 
     /* ---------- parsing ---------- */

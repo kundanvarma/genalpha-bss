@@ -87,7 +87,7 @@ public class SignalClassifier {
         sweepAllTenants();
     }
 
-    public Map<String, Object> sweepAllTenants() {
+    public SweepResults.SignalSweepResult sweepAllTenants() {
         int classified = 0;
         int dropped = 0;
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
@@ -99,7 +99,7 @@ public class SignalClassifier {
                 log.warn("signal sweep skipped tenant '{}': {}", tenant.getId(), e.getMessage());
             }
         }
-        return Map.of("classified", classified, "dropped", dropped);
+        return new SweepResults.SignalSweepResult(classified, dropped);
     }
 
     /** @return {classified, dropped} for the current tenant. */

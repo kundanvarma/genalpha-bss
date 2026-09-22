@@ -1,5 +1,7 @@
 package com.bss.intelligence.controller;
 
+import com.bss.intelligence.risk.RiskAssessmentRequest;
+import com.bss.intelligence.risk.RiskAssessmentView;
 import com.bss.intelligence.risk.RiskService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 /**
  * TMF696 Risk Management: transparent, persisted assessments computed
@@ -31,24 +32,24 @@ public class Tmf696Controller {
     }
 
     @PostMapping("/partyRiskAssessment")
-    public ResponseEntity<Map<String, Object>> assessParty(@RequestBody Map<String, Object> request) {
-        Map<String, Object> created = service.assessParty(request);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<RiskAssessmentView> assessParty(@RequestBody RiskAssessmentRequest request) {
+        RiskAssessmentView created = service.assessParty(request);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @PostMapping("/productOrderRiskAssessment")
-    public ResponseEntity<Map<String, Object>> assessOrder(@RequestBody Map<String, Object> request) {
-        Map<String, Object> created = service.assessOrder(request);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<RiskAssessmentView> assessOrder(@RequestBody RiskAssessmentRequest request) {
+        RiskAssessmentView created = service.assessOrder(request);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping({"/partyRiskAssessment/{id}", "/productOrderRiskAssessment/{id}"})
-    public ResponseEntity<Map<String, Object>> byId(@PathVariable("id") String id) {
+    public ResponseEntity<RiskAssessmentView> byId(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.find(id));
     }
 
     @GetMapping({"/partyRiskAssessment", "/productOrderRiskAssessment"})
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<RiskAssessmentView>> list() {
         return ResponseEntity.ok(service.list());
     }
 }

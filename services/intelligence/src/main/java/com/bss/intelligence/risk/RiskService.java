@@ -3,6 +3,7 @@ package com.bss.intelligence.risk;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,8 @@ import java.util.UUID;
 public class RiskService {
 
     private static final String BASE = "/tmf-api/riskManagement/v4";
+    private static final TypeReference<List<RiskAssessmentView.RiskSignal>> SIGNALS =
+            new TypeReference<>() { };
 
     private final BssApiClient bss;
     private final RiskAssessmentRepository assessments;
@@ -51,32 +54,32 @@ public class RiskService {
     }
 
     @Transactional
-    public Map<String, Object> assessParty(Map<String, Object> request) {
+    public RiskAssessmentView assessParty(RiskAssessmentRequest request) {
         String partyId = partyIdOf(request);
-        List<Map<String, Object>> signals = partySignals(partyId);
+        List<RiskAssessmentView.RiskSignal> signals = partySignals(partyId);
         return persist(RiskAssessment.PARTY, partyId, signals);
     }
 
     @Transactional
-    public Map<String, Object> assessOrder(Map<String, Object> request) {
+    public RiskAssessmentView assessOrder(RiskAssessmentRequest request) {
         String partyId = partyIdOf(request);
-        List<Map<String, Object>> signals = partySignals(partyId);
+        List<RiskAssessmentView.RiskSignal> signals = partySignals(partyId);
 
-        long totalQuantity = longOf(request.get("totalQuantity"), 0);
+        long totalQuantity = longOf(request.totalQuantity(), 0);
         if (totalQuantity >= 5) {
             signals.add(signal("bulkOrder", 10,
                     totalQuantity + " units in one order", Map.of("totalQuantity", totalQuantity)));
         }
         // BankID is the strongest anti-fraud signal the fleet has — a
         // verified SESSION reduces risk. Only the caller knows it.
-        if (Boolean.TRUE.equals(request.get("verifiedIdentity"))) {
+        if (Boolean.TRUE.equals(request.verifiedIdentity())) {
             signals.add(signal("verifiedSession", -20,
                     "the ordering session is BankID-verified", Map.of("verifiedIdentity", true)));
         }
         // freg F-P3: the delivery address, registry-verified or typed by hand.
         // A registry match binds person->address (the classic parcel-redirect
         // fraud lever); a hand-typed address on a home delivery raises risk.
-        Object addressSource = request.get("addressSource");
+        String addressSource = request.addressSource();
         if ("registry".equals(addressSource)) {
             signals.add(signal("registryVerifiedAddress", -10,
                     "the delivery address matches the national registry",
@@ -90,7 +93,7 @@ public class RiskService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> find(String id) {
+    public RiskAssessmentView find(String id) {
         RiskAssessment row = assessments.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "no risk assessment '" + id + "'"));
@@ -98,15 +101,15 @@ public class RiskService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<RiskAssessmentView> list() {
         return assessments.findTop100ByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId())
                 .stream().map(this::view).toList();
     }
 
     /* ---------- the signals the data actually knows ---------- */
 
-    private List<Map<String, Object>> partySignals(String partyId) {
-        List<Map<String, Object>> signals = new ArrayList<>();
+    private List<RiskAssessmentView.RiskSignal> partySignals(String partyId) {
+        List<RiskAssessmentView.RiskSignal> signals = new ArrayList<>();
 
         List<Map<String, Object>> unpaid = bss.unpaidBills(partyId);
         if (!unpaid.isEmpty()) {
@@ -118,7 +121,7 @@ public class RiskService {
                     + (due.compareTo(new BigDecimal("200")) >= 0 ? 10 : 0);
             signals.add(signal("unpaidBills", points,
                     unpaid.size() + " unpaid bill(s), " + due + " due",
-                    Map.of("count", unpaid.size(), "amountDue", due)));
+                    evidence("count", unpaid.size(), "amountDue", due)));
         }
 
         List<Map<String, Object>> creditNotes = bss.creditNotesOf(partyId);
@@ -172,10 +175,10 @@ public class RiskService {
 
     /* ---------- scoring + persistence ---------- */
 
-    private Map<String, Object> persist(String kind, String partyId,
-            List<Map<String, Object>> signals) {
+    private RiskAssessmentView persist(String kind, String partyId,
+            List<RiskAssessmentView.RiskSignal> signals) {
         int score = Math.max(0, Math.min(100, signals.stream()
-                .mapToInt(s -> (int) s.get("points")).sum()));
+                .mapToInt(RiskAssessmentView.RiskSignal::points).sum()));
         String level = score < 30 ? "low" : score < 60 ? "medium" : "high";
 
         RiskAssessment row = new RiskAssessment();
@@ -192,44 +195,41 @@ public class RiskService {
         return view(row);
     }
 
-    private static Map<String, Object> signal(String name, int points, String label,
+    private static RiskAssessmentView.RiskSignal signal(String name, int points, String label,
             Map<String, Object> evidence) {
-        Map<String, Object> s = new LinkedHashMap<>();
-        s.put("name", name);
-        s.put("points", points);
-        s.put("label", label);
-        s.put("evidence", evidence);
-        return s;
+        return new RiskAssessmentView.RiskSignal(name, points, label, evidence);
     }
 
-    private Map<String, Object> view(RiskAssessment row) {
+    /** Two-key evidence in declaration order. */
+    private static Map<String, Object> evidence(String k1, Object v1, String k2, Object v2) {
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put(k1, v1);
+        e.put(k2, v2);
+        return e;
+    }
+
+    private RiskAssessmentView view(RiskAssessment row) {
         String resource = RiskAssessment.PARTY.equals(row.getKind())
                 ? "partyRiskAssessment" : "productOrderRiskAssessment";
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", row.getId());
-        out.put("href", BASE + "/" + resource + "/" + row.getId());
-        out.put("status", "done");
-        out.put("relatedParty", List.of(Map.of("id", row.getPartyId(), "role", "customer")));
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("overallScore", row.getScore());
-        result.put("riskLevel", row.getRiskLevel());
-        result.put("signal", readJson(row.getResultJson()));
-        out.put("riskAssessmentResult", result);
-        out.put("assessedAt", row.getCreatedAt());
-        out.put("@type", RiskAssessment.PARTY.equals(row.getKind())
-                ? "PartyRiskAssessment" : "ProductOrderRiskAssessment");
-        return out;
+        return new RiskAssessmentView(
+                row.getId(),
+                BASE + "/" + resource + "/" + row.getId(),
+                "done",
+                List.of(new PartyRef(row.getPartyId(), "customer")),
+                new RiskAssessmentView.RiskResult(row.getScore(), row.getRiskLevel(),
+                        readJson(row.getResultJson())),
+                row.getCreatedAt(),
+                RiskAssessment.PARTY.equals(row.getKind())
+                        ? "PartyRiskAssessment" : "ProductOrderRiskAssessment");
     }
 
     /* ---------- plumbing ---------- */
 
-    private static String partyIdOf(Map<String, Object> request) {
-        Object related = request.get("relatedParty");
-        if (related instanceof List<?> list && !list.isEmpty()) {
-            related = list.get(0);
-        }
-        if (related instanceof Map<?, ?> ref && ref.get("id") != null) {
-            return String.valueOf(ref.get("id"));
+    private static String partyIdOf(RiskAssessmentRequest request) {
+        List<PartyRef> related = request.relatedParty();
+        if (related != null && !related.isEmpty() && related.get(0) != null
+                && related.get(0).id() != null) {
+            return related.get(0).id();
         }
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "relatedParty.id is required");
     }
@@ -250,10 +250,9 @@ public class RiskService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> readJson(String json) {
+    private List<RiskAssessmentView.RiskSignal> readJson(String json) {
         try {
-            return json == null ? List.of() : objectMapper.readValue(json, List.class);
+            return json == null ? List.of() : objectMapper.readValue(json, SIGNALS);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored assessment result is unreadable", e);
         }

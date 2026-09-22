@@ -1,6 +1,7 @@
 package com.bss.intelligence;
 
 import com.bss.intelligence.churn.ChurnAlertRepository;
+import com.bss.intelligence.churn.ChurnLearning;
 import com.bss.intelligence.churn.ChurnScorer;
 import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.events.DomainEventPublisher;
@@ -126,14 +127,15 @@ class ChurnScorerTest {
     @Test
     void aTrainedModelAddsPredictedAlerts() {
         // Train on synthetic history where imminent-expiry + tickets = churn.
-        java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        java.util.List<ChurnLearning.TrainFromImportRequest.TrainingRow> rows = new java.util.ArrayList<>();
         for (int i = 0; i < 60; i++) {
             boolean churner = i % 2 == 0;
-            rows.add(Map.of("features", List.of(churner ? 10 + i % 20 : 300 + i, 0.5,
-                    churner ? 3 : 0, 0), "churned", churner));
+            rows.add(new ChurnLearning.TrainFromImportRequest.TrainingRow(
+                    List.of((double) (churner ? 10 + i % 20 : 300 + i), 0.5, churner ? 3.0 : 0.0, 0.0),
+                    churner));
         }
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
-            modelService.trainFromImport(Map.of("rows", rows));
+            modelService.trainFromImport(new ChurnLearning.TrainFromImportRequest(rows));
         }
         when(bss.openServiceProblems()).thenReturn(List.of());
         when(bss.usageMeters(anyString())).thenReturn(List.of());

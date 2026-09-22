@@ -69,7 +69,7 @@ class CopilotApiTest {
                     .anyMatch(a -> "ticket-reply".equals(a.getUseCase())
                             && !a.getPrompt().contains("erik@example.com")
                             && !a.getPrompt().contains("111 22 33")
-                            && a.getPrompt().contains("[email]"));
+                            && a.getPrompt().contains("<email#1>"));
         }
     }
 

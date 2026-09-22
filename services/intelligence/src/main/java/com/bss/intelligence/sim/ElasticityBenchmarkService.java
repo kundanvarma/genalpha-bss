@@ -7,9 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * CROSS-TENANT PRIORS: small operators lack the base to support their own
@@ -31,7 +29,7 @@ public class ElasticityBenchmarkService {
         this.tenants = tenants;
     }
 
-    public Map<String, Object> benchmark() {
+    public ElasticityBenchmark benchmark() {
         List<Double> baselines = new ArrayList<>();
         for (TenantRegistry.TenantEntry tenant : tenants.getRegistry()) {
             try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
@@ -46,25 +44,19 @@ public class ElasticityBenchmarkService {
                 // an unreachable tenant simply doesn't contribute
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "ElasticityBenchmark");
         if (baselines.size() < K_ANONYMITY_FLOOR) {
-            out.put("available", false);
-            out.put("reason", "fewer than " + K_ANONYMITY_FLOOR
+            return ElasticityBenchmark.refused("fewer than " + K_ANONYMITY_FLOOR
                     + " tenants contribute — below the k-anonymity floor the benchmark refuses to exist");
-            return out;
         }
         Collections.sort(baselines);
-        out.put("available", true);
-        out.put("contributingTenants", baselines.size());
-        out.put("medianChurnBaselinePct", round1(baselines.get(baselines.size() / 2)));
-        out.put("minPct", round1(baselines.get(0)));
-        out.put("maxPct", round1(baselines.get(baselines.size() - 1)));
-        out.put("assumptions", List.of(
+        return new ElasticityBenchmark("ElasticityBenchmark", true, null, baselines.size(),
+                round1(baselines.get(baselines.size() / 2)),
+                round1(baselines.get(0)),
+                round1(baselines.get(baselines.size() - 1)),
+                List.of(
                 "aggregate ONLY — no tenant is named, no per-tenant number leaves its own context",
                 "k-anonymity floor: " + K_ANONYMITY_FLOOR + " contributing tenants minimum",
                 "baseline = lifetime gone products over base, per tenant — a floor, not a price response"));
-        return out;
     }
 
     private static double round1(double v) {

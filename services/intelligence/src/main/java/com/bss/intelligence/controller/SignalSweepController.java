@@ -2,12 +2,11 @@ package com.bss.intelligence.controller;
 
 import com.bss.intelligence.api.ApiConstants;
 import com.bss.intelligence.signal.SignalClassifier;
+import com.bss.intelligence.signal.SweepResults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /** On-demand signal-classification sweep (SI-P3) — demos and tests don't
  * wait for the schedule; the churnSweep pattern. */
@@ -25,13 +24,13 @@ public class SignalSweepController {
     }
 
     @PostMapping("/signalSweep")
-    public ResponseEntity<Map<String, Object>> sweep() {
+    public ResponseEntity<SweepResults.SignalSweepResult> sweep() {
         return ResponseEntity.ok(classifier.sweepAllTenants());
     }
 
     /** T-P4: probe the provider with stored canaries — on demand. */
     @PostMapping("/canaryProbe")
-    public ResponseEntity<Map<String, Object>> canaryProbe() {
+    public ResponseEntity<SweepResults.CanaryProbeResult> canaryProbe() {
         return ResponseEntity.ok(canaryProbe.probeCurrentTenant(3));
     }
 }

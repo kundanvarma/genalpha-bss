@@ -2,12 +2,11 @@ package com.bss.intelligence.controller;
 
 import com.bss.intelligence.api.ApiConstants;
 import com.bss.intelligence.signal.CltvScorer;
+import com.bss.intelligence.signal.SweepResults;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /** On-demand CLTV sweep (SI-P4) — the churnSweep pattern. */
 @RestController
@@ -21,7 +20,7 @@ public class CltvController {
     }
 
     @PostMapping("/cltvSweep")
-    public ResponseEntity<Map<String, Object>> sweep() {
+    public ResponseEntity<SweepResults.CltvSweepResult> sweep() {
         return ResponseEntity.ok(scorer.sweepAllTenants());
     }
 }

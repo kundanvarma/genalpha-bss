@@ -10,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /** The commercial simulator's door: run a price-change simulation, read the
  *  saved reports. A product owner's tool (catalog:write), like the advisor. */
@@ -25,12 +24,12 @@ public class PriceSimController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> simulate(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<PriceSimReportView> simulate(@RequestBody PriceSimRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(sim.simulate(request));
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<SavedReport>> list() {
         return ResponseEntity.ok(sim.list());
     }
 }

@@ -44,12 +44,12 @@ public class ChurnModelService {
     }
 
     @Transactional
-    public Map<String, Object> recordOutcome(Map<String, Object> request) {
-        if (!(request.get("party") instanceof Map<?, ?> party) || party.get("id") == null) {
+    public ChurnLearning.OutcomeReceipt recordOutcome(ChurnLearning.RecordOutcomeRequest request) {
+        if (request.party() == null || request.party().id() == null) {
             throw new BadRequestException("party {id} is required");
         }
         String tenant = tenantScope.currentTenantId();
-        String partyId = String.valueOf(party.get("id"));
+        String partyId = request.party().id();
         ChurnOutcome outcome = outcomes.findByTenantIdAndPartyId(tenant, partyId)
                 .orElseGet(() -> {
                     ChurnOutcome fresh = new ChurnOutcome();
@@ -58,15 +58,15 @@ public class ChurnModelService {
                     fresh.setPartyId(partyId);
                     return fresh;
                 });
-        outcome.setChurned(!Boolean.FALSE.equals(request.get("churned")));
+        outcome.setChurned(!Boolean.FALSE.equals(request.churned()));
         outcome.setOccurredAt(OffsetDateTime.now());
         outcomes.save(outcome);
-        return Map.of("party", Map.of("id", partyId), "churned", outcome.isChurned());
+        return new ChurnLearning.OutcomeReceipt(new ChurnLearning.PartyRef(partyId), outcome.isChurned());
     }
 
     /** Train from what this deployment has lived through: snapshots + outcomes. */
     @Transactional
-    public Map<String, Object> trainFromHistory() {
+    public ChurnLearning.TrainingResult trainFromHistory() {
         String tenant = tenantScope.currentTenantId();
         Map<String, ChurnFeatureSnapshot> latestPerParty = new LinkedHashMap<>();
         for (ChurnFeatureSnapshot snap : snapshots.findByTenantIdOrderByTakenAtDesc(tenant)) {
@@ -85,40 +85,38 @@ public class ChurnModelService {
 
     /** Train on the operator's old data — production quality on day one. */
     @Transactional
-    public Map<String, Object> trainFromImport(Map<String, Object> request) {
-        if (!(request.get("rows") instanceof List<?> rows) || rows.isEmpty()) {
+    public ChurnLearning.TrainingResult trainFromImport(ChurnLearning.TrainFromImportRequest request) {
+        List<ChurnLearning.TrainFromImportRequest.TrainingRow> rows = request.rows();
+        if (rows == null || rows.isEmpty()) {
             throw new BadRequestException("rows [{features: [" + String.join(", ",
                     LogisticModel.FEATURES) + "], churned}] are required");
         }
         List<double[]> x = new ArrayList<>();
         List<Boolean> y = new ArrayList<>();
-        for (Object row : rows) {
-            if (!(row instanceof Map<?, ?> r) || !(r.get("features") instanceof List<?> f)
-                    || f.size() != LogisticModel.FEATURES.length) {
+        for (ChurnLearning.TrainFromImportRequest.TrainingRow r : rows) {
+            if (r == null || r.features() == null || r.features().size() != LogisticModel.FEATURES.length
+                    || r.features().stream().anyMatch(java.util.Objects::isNull)) {
                 throw new BadRequestException("each row needs features["
                         + LogisticModel.FEATURES.length + "] and churned");
             }
-            x.add(f.stream().mapToDouble(v -> ((Number) v).doubleValue()).toArray());
-            y.add(Boolean.TRUE.equals(r.get("churned")));
+            x.add(r.features().stream().mapToDouble(Double::doubleValue).toArray());
+            y.add(Boolean.TRUE.equals(r.churned()));
         }
         return fitAndStore(tenantScope.currentTenantId(), x, y, "imported-history");
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> status() {
+    public ChurnLearning.ChurnModelStatus status() {
         String tenant = tenantScope.currentTenantId();
-        Map<String, Object> status = new LinkedHashMap<>();
-        status.put("features", List.of(LogisticModel.FEATURES));
-        status.put("snapshots", snapshots.findByTenantIdOrderByTakenAtDesc(tenant).size());
-        status.put("labeledOutcomes", outcomes.findByTenantId(tenant).size());
         Optional<ChurnModelRecord> model = models.findById(tenant);
-        status.put("trained", model.isPresent());
-        model.ifPresent(m -> {
-            status.put("trainedAt", m.getTrainedAt().toString());
-            status.put("sampleCount", m.getSampleCount());
-            status.put("positives", m.getPositives());
-        });
-        return status;
+        return new ChurnLearning.ChurnModelStatus(
+                List.of(LogisticModel.FEATURES),
+                snapshots.findByTenantIdOrderByTakenAtDesc(tenant).size(),
+                outcomes.findByTenantId(tenant).size(),
+                model.isPresent(),
+                model.map(m -> m.getTrainedAt().toString()).orElse(null),
+                model.map(ChurnModelRecord::getSampleCount).orElse(null),
+                model.map(ChurnModelRecord::getPositives).orElse(null));
     }
 
     @Transactional(readOnly = true)
@@ -126,7 +124,7 @@ public class ChurnModelService {
         return models.findById(tenant).map(this::parse);
     }
 
-    private Map<String, Object> fitAndStore(String tenant, List<double[]> x, List<Boolean> y,
+    private ChurnLearning.TrainingResult fitAndStore(String tenant, List<double[]> x, List<Boolean> y,
             String source) {
         long positives = y.stream().filter(Boolean::booleanValue).count();
         long negatives = y.size() - positives;
@@ -164,15 +162,9 @@ public class ChurnModelService {
         record.setTrainedAt(OffsetDateTime.now());
         models.save(record);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("trained", true);
-        result.put("source", source);
-        result.put("sampleCount", y.size());
-        result.put("positives", positives);
-        result.put("trainingAccuracy", BigDecimal.valueOf((double) correct / y.size())
-                .setScale(3, java.math.RoundingMode.HALF_UP));
-        result.put("features", List.of(LogisticModel.FEATURES));
-        return result;
+        return new ChurnLearning.TrainingResult(true, source, y.size(), positives,
+                BigDecimal.valueOf((double) correct / y.size()).setScale(3, java.math.RoundingMode.HALF_UP),
+                List.of(LogisticModel.FEATURES));
     }
 
     @SuppressWarnings("unchecked")

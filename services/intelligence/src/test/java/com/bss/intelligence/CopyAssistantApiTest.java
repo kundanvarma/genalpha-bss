@@ -78,7 +78,7 @@ class CopyAssistantApiTest {
             AiAudit latest = rows.get(rows.size() - 1);
             assertThat(latest.getPrompt()).doesNotContain("anna.svensson@example.com");
             assertThat(latest.getPrompt()).doesNotContain("123 45 67");
-            assertThat(latest.getPrompt()).contains("[email]").contains("[phone]");
+            assertThat(latest.getPrompt()).contains("<email#1>").contains("<phone#1>");
         }
     }
 

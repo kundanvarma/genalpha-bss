@@ -7,9 +7,10 @@ import com.bss.intelligence.llm.LlmAdapter;
 import com.bss.intelligence.security.TenantScope;
 import org.springframework.stereotype.Service;
 
+import com.bss.intelligence.service.ForYouRail.Upsell;
+
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +43,7 @@ public class ForYouService {
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
     private final com.bss.intelligence.llm.TenantVoice voice;
 
-    record CacheEntry(long at, Map<String, Object> value) {
+    record CacheEntry(long at, ForYouRail value) {
     }
 
     public ForYouService(BssApiClient bss, ChurnAlertRepository churnAlerts,
@@ -55,14 +56,12 @@ public class ForYouService {
         this.voice = voice;
     }
 
-    public Map<String, Object> forParty(String partyId) {
+    public ForYouRail forParty(String partyId) {
         String tenant = tenantScope.currentTenantId();
         String key = tenant + ":" + partyId;
         CacheEntry cached = cache.get(key);
         if (cached != null && System.currentTimeMillis() - cached.at() < CACHE_TTL_MS) {
-            Map<String, Object> copy = new LinkedHashMap<>(cached.value());
-            copy.put("cached", true);
-            return copy;
+            return cached.value().cached(true);
         }
 
         List<Map<String, Object>> candidates = bss.recommendationItems(partyId);
@@ -71,29 +70,19 @@ public class ForYouService {
                 .map(p -> String.valueOf(p.get("name"))).limit(6).toList();
         boolean retention = churnAlerts.existsByTenantIdAndPartyId(tenant, partyId);
 
-        List<Map<String, Object>> rail = new ArrayList<>();
+        List<OfferRef> rail = new ArrayList<>();
         for (Map<String, Object> item : candidates) {
             if (item.get("offering") instanceof Map<?, ?> off && off.get("id") != null) {
-                rail.add(Map.of("id", String.valueOf(off.get("id")),
-                        "name", String.valueOf(off.get("name"))));
+                rail.add(new OfferRef(String.valueOf(off.get("id")), String.valueOf(off.get("name"))));
                 if (rail.size() == RAIL_SIZE) {
                     break;
                 }
             }
         }
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("items", rail);
-        out.put("interests", interests);
-        out.put("retentionFlag", retention);
-        Map<String, Object> upsell = upsellOf(partyId);
-        if (upsell != null) {
-            out.put("upsell", upsell);
-        }
-        out.put("caption", rail.isEmpty() ? null
-                : caption(rail, interests, holdings, retention));
-        out.put("generatedAt", OffsetDateTime.now().toString());
-        out.put("cached", false);
+        ForYouRail out = new ForYouRail(rail, interests, retention, upsellOf(partyId),
+                rail.isEmpty() ? null : caption(rail, interests, holdings, retention),
+                OffsetDateTime.now().toString(), false);
         cache.put(key, new CacheEntry(System.currentTimeMillis(), out));
         return out;
     }
@@ -107,7 +96,7 @@ public class ForYouService {
      * comfortable meter: no block. Never an invented deal — just the next
      * rung, named.
      */
-    private Map<String, Object> upsellOf(String partyId) {
+    private Upsell upsellOf(String partyId) {
         List<Map<String, Object>> meters = bss.usageMeters(partyId);
         Map<String, Object> tightest = null;
         double tightestPct = 0;
@@ -128,7 +117,7 @@ public class ForYouService {
         }
         String spec = String.valueOf(tightest.get("name"));
         double current = numberOf(tightest.get("allowedValue"));
-        Map<String, Object> nextRung = null;
+        OfferRef nextRung = null;
         double nextValue = Double.MAX_VALUE;
         for (Map<String, Object> a : bss.usageAllowances()) {
             if (!spec.equals(String.valueOf(a.get("usageType")))) {
@@ -148,21 +137,14 @@ public class ForYouService {
                                 + String.valueOf(a.get("allowance") instanceof Map<?, ?> al2
                                         ? al2.get("units") : "") + " plan"
                         : String.valueOf(name);
-                nextRung = Map.of("id", String.valueOf(off.get("id")), "name", label);
+                nextRung = new OfferRef(String.valueOf(off.get("id")), label);
             }
         }
         if (nextRung == null) {
             return null; // already on the top rung — nothing honest to suggest
         }
-        Map<String, Object> upsell = new LinkedHashMap<>();
-        upsell.put("bucketName", spec);
-        upsell.put("usedPct", Math.round(tightestPct * 100));
-        upsell.put("usedValue", tightest.get("usedValue"));
-        upsell.put("currentAllowance", tightest.get("allowedValue"));
-        upsell.put("units", tightest.get("units"));
-        upsell.put("suggestedOffering", nextRung);
-        upsell.put("suggestedAllowance", nextValue);
-        return upsell;
+        return new Upsell(spec, Math.round(tightestPct * 100), tightest.get("usedValue"),
+                tightest.get("allowedValue"), tightest.get("units"), nextRung, nextValue);
     }
 
     private static String stripTrailingZeros(double v) {
@@ -178,11 +160,11 @@ public class ForYouService {
     }
 
     /** One governed FAST call for one warm sentence — or silence. */
-    private String caption(List<Map<String, Object>> rail, List<String> interests,
+    private String caption(List<OfferRef> rail, List<String> interests,
             List<String> holdings, boolean retention) {
         try {
             StringBuilder user = new StringBuilder();
-            rail.forEach(r -> user.append("OFFER: ").append(r.get("name")).append('\n'));
+            rail.forEach(r -> user.append("OFFER: ").append(r.name()).append('\n'));
             interests.forEach(i -> user.append("INTEREST: ").append(i).append('\n'));
             holdings.forEach(h -> user.append("HOLDING: ").append(h).append('\n'));
             if (retention) {

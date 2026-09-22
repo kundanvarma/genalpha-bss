@@ -57,63 +57,61 @@ public class Tmf915Service {
 
     /* ---------- aiModel: what has actually served ---------- */
 
+    /** A served model accumulates its tiers and scenarios across ledger rows before it freezes. */
+    private static final class ServedModel {
+        final String provider;
+        final String model;
+        final Set<String> tiers = new LinkedHashSet<>();
+        final Set<String> contracts = new LinkedHashSet<>();
+
+        ServedModel(String provider, String model) {
+            this.provider = provider;
+            this.model = model;
+        }
+
+        AiModelView view() {
+            String key = provider + "/" + model;
+            return new AiModelView(key, BASE + "/aiModel/" + key, model, provider, "languageModel", "active",
+                    List.copyOf(tiers), null, List.copyOf(contracts), "AIModel");
+        }
+    }
+
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listModels() {
+    public List<AiModelView> listModels() {
         String tenant = tenantScope.currentTenantId();
         // (provider, model) -> tiers + scenarios, from the ledger
-        Map<String, Map<String, Object>> byModel = new TreeMap<>();
+        Map<String, ServedModel> byModel = new TreeMap<>();
         for (Object[] row : audits.servedModels(tenant)) {
             String provider = String.valueOf(row[0]);
             String model = String.valueOf(row[1]);
-            String key = provider + "/" + model;
-            Map<String, Object> view = byModel.computeIfAbsent(key, k -> {
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("id", k);
-                m.put("href", BASE + "/aiModel/" + k);
-                m.put("name", model);
-                m.put("provider", provider);
-                m.put("category", "languageModel");
-                m.put("state", "active");
-                m.put("tier", new LinkedHashSet<String>());
-                m.put("servedContract", new LinkedHashSet<String>());
-                m.put("@type", "AIModel");
-                return m;
-            });
+            ServedModel served = byModel.computeIfAbsent(provider + "/" + model,
+                    k -> new ServedModel(provider, model));
             if (row[2] != null) {
-                ((Set<String>) view.get("tier")).add(String.valueOf(row[2]));
+                served.tiers.add(String.valueOf(row[2]));
             }
             if (row[3] != null) {
-                ((Set<String>) view.get("servedContract")).add(String.valueOf(row[3]));
+                served.contracts.add(String.valueOf(row[3]));
             }
         }
-        List<Map<String, Object>> out = new ArrayList<>(byModel.values());
+        List<AiModelView> out = new ArrayList<>(byModel.values().stream().map(ServedModel::view).toList());
         // the one genuinely versioned trained artifact: the churn model
         churnModels.findById(tenant).ifPresent(m -> out.add(churnModelView(m)));
         return out;
     }
 
-    private Map<String, Object> churnModelView(ChurnModelRecord record) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", "local/churn-logistic");
-        view.put("href", BASE + "/aiModel/local/churn-logistic");
-        view.put("name", "churn-logistic");
-        view.put("provider", "local");
-        view.put("category", "trainedClassifier");
-        view.put("state", "active");
-        view.put("trainingRecord", Map.of(
-                "sampleCount", record.getSampleCount(),
-                "positives", record.getPositives(),
-                "trainedAt", record.getTrainedAt()));
-        view.put("servedContract", List.of("churn-sweep"));
-        view.put("@type", "AIModel");
-        return view;
+    private AiModelView churnModelView(ChurnModelRecord record) {
+        return new AiModelView("local/churn-logistic", BASE + "/aiModel/local/churn-logistic",
+                "churn-logistic", "local", "trainedClassifier", "active", null,
+                new AiModelView.TrainingRecord(record.getSampleCount(), record.getPositives(),
+                        record.getTrainedAt()),
+                List.of("churn-sweep"), "AIModel");
     }
 
     /** One served model by its ledger id (provider/model, or local/churn-logistic). */
     @Transactional(readOnly = true)
-    public Map<String, Object> findModel(String id) {
+    public AiModelView findModel(String id) {
         return listModels().stream()
-                .filter(m -> id.equals(m.get("id")))
+                .filter(m -> id.equals(m.id()))
                 .findFirst()
                 .orElseThrow(() -> NotFoundException.forResource("AiModel", id));
     }
@@ -121,26 +119,27 @@ public class Tmf915Service {
     /* ---------- aiModelContract: the scenarios, with their numbers ---------- */
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listContracts() {
+    public List<AiModelContractView> listContracts() {
         String tenant = tenantScope.currentTenantId();
         Map<String, AiContract> switches = new LinkedHashMap<>();
         for (AiContract c : contracts.findByTenantId(tenant)) {
             switches.put(c.getUseCase(), c);
         }
-        Map<String, Map<String, Object>> metrics = new TreeMap<>();
-        for (Object[] row : audits.contractMetrics(tenant)) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("calls", ((Number) row[1]).longValue());
-            m.put("promptTokens", ((Number) row[2]).longValue());
-            m.put("completionTokens", ((Number) row[3]).longValue());
-            m.put("costMicros", ((Number) row[4]).longValue());
-            m.put("avgLatencyMs", Math.round(((Number) row[5]).doubleValue()));
-            metrics.put(String.valueOf(row[0]), m);
-        }
         Map<String, Map<String, Long>> outcomes = new LinkedHashMap<>();
         for (Object[] row : audits.contractOutcomes(tenant)) {
             outcomes.computeIfAbsent(String.valueOf(row[0]), k -> new LinkedHashMap<>())
                     .put(String.valueOf(row[1]), ((Number) row[2]).longValue());
+        }
+        Map<String, AiModelContractView.Monitoring> metrics = new TreeMap<>();
+        for (Object[] row : audits.contractMetrics(tenant)) {
+            String useCase = String.valueOf(row[0]);
+            metrics.put(useCase, new AiModelContractView.Monitoring(
+                    ((Number) row[1]).longValue(),
+                    ((Number) row[2]).longValue(),
+                    ((Number) row[3]).longValue(),
+                    ((Number) row[4]).longValue(),
+                    Math.round(((Number) row[5]).doubleValue()),
+                    outcomes.get(useCase)));
         }
         Map<String, Set<String>> models = new LinkedHashMap<>();
         for (Object[] row : audits.servedModels(tenant)) {
@@ -154,18 +153,18 @@ public class Tmf915Service {
         // a contract exists because it RAN (ledger) or was DECIDED (switch row)
         Set<String> useCases = new java.util.TreeSet<>(metrics.keySet());
         useCases.addAll(switches.keySet());
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<AiModelContractView> out = new ArrayList<>();
         for (String useCase : useCases) {
             out.add(contractView(useCase, switches.get(useCase), metrics.get(useCase),
-                    outcomes.get(useCase), models.get(useCase), budget));
+                    models.get(useCase), budget));
         }
         return out;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findContract(String useCase) {
+    public AiModelContractView findContract(String useCase) {
         return listContracts().stream()
-                .filter(c -> useCase.equals(c.get("id")))
+                .filter(c -> useCase.equals(c.id()))
                 .findFirst()
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "no model contract '" + useCase + "' — contracts are born from use"));
@@ -173,9 +172,9 @@ public class Tmf915Service {
 
     /** The in-life lever: suspend or reactivate ONE scenario's contract. */
     @Transactional
-    public Map<String, Object> patchContract(String useCase, Map<String, Object> patch) {
+    public AiModelContractView patchContract(String useCase, ContractPatch patch) {
         String tenant = tenantScope.currentTenantId();
-        Object state = patch.get("state");
+        String state = patch == null ? null : patch.state();
         if (!"suspended".equals(state) && !"active".equals(state)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "state must be 'suspended' or 'active'");
@@ -189,48 +188,27 @@ public class Tmf915Service {
                     return c;
                 });
         row.setEnabled("active".equals(state));
-        row.setNote(patch.get("note") == null ? null : String.valueOf(patch.get("note")));
+        row.setNote(patch.note());
         row.setDecidedAt(OffsetDateTime.now());
         row.setLastUpdate(OffsetDateTime.now());
         contracts.save(row);
         return findContract(useCase);
     }
 
-    private Map<String, Object> contractView(String useCase, AiContract sw,
-            Map<String, Object> metrics, Map<String, Long> outcomes,
-            Set<String> servedBy, AiBudget budget) {
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("id", useCase);
-        view.put("href", BASE + "/aiModelContract/" + useCase);
-        view.put("name", useCase);
+    private AiModelContractView contractView(String useCase, AiContract sw,
+            AiModelContractView.Monitoring monitoring, Set<String> servedBy, AiBudget budget) {
         boolean suspended = sw != null && !sw.isEnabled();
         boolean tenantDisabled = budget != null && !budget.isEnabled();
-        view.put("state", suspended ? "suspended" : tenantDisabled ? "haltedByKillSwitch" : "active");
-        if (sw != null) {
-            Map<String, Object> decision = new LinkedHashMap<>();
-            decision.put("decidedAt", sw.getDecidedAt());
-            if (sw.getNote() != null) {
-                decision.put("note", sw.getNote());
-            }
-            view.put("lastDecision", decision);
-        }
-        if (servedBy != null && !servedBy.isEmpty()) {
-            view.put("servedBy", servedBy.stream().map(id -> Map.of(
-                    "id", id, "@referredType", "AIModel")).toList());
-        }
-        if (metrics != null) {
-            Map<String, Object> monitoring = new LinkedHashMap<>(metrics);
-            if (outcomes != null) {
-                monitoring.put("outcome", outcomes);
-            }
-            view.put("monitoring", monitoring);
-        }
-        Map<String, Object> guardrail = new LinkedHashMap<>();
-        guardrail.put("tenantKillSwitch", budget == null || budget.isEnabled() ? "armed" : "thrown");
-        guardrail.put("budgetMicros", budget == null ? 0 : budget.getBudgetMicros());
-        guardrail.put("windowHours", budget == null ? 720 : budget.getWindowHours());
-        view.put("guardrail", guardrail);
-        view.put("@type", "AIModelContract");
-        return view;
+        String state = suspended ? "suspended" : tenantDisabled ? "haltedByKillSwitch" : "active";
+        AiModelContractView.LastDecision decision = sw == null ? null
+                : new AiModelContractView.LastDecision(sw.getDecidedAt(), sw.getNote());
+        List<AiModelContractView.ModelRef> served = servedBy == null || servedBy.isEmpty() ? null
+                : servedBy.stream().map(id -> new AiModelContractView.ModelRef(id, "AIModel")).toList();
+        AiModelContractView.Guardrail guardrail = new AiModelContractView.Guardrail(
+                budget == null || budget.isEnabled() ? "armed" : "thrown",
+                budget == null ? 0 : budget.getBudgetMicros(),
+                budget == null ? 720 : budget.getWindowHours());
+        return new AiModelContractView(useCase, BASE + "/aiModelContract/" + useCase, useCase, state,
+                decision, served, monitoring, guardrail, "AIModelContract");
     }
 }

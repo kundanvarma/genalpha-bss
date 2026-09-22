@@ -2,11 +2,9 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.CopilotRequests.CopyBrief;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * First AI feature: draft a campaign message from a one-line brief. The
@@ -33,17 +31,15 @@ public class CopyAssistantService {
     }
 
     @Transactional
-    public Map<String, Object> draftCampaignCopy(Map<String, Object> request) {
-        if (request.get("brief") == null || String.valueOf(request.get("brief")).isBlank()) {
+    public CampaignCopy draftCampaignCopy(CopyBrief request) {
+        if (request.brief() == null || request.brief().isBlank()) {
             throw new BadRequestException("brief is required");
         }
-        String brief = redactor.redact(String.valueOf(request.get("brief")));
-        String brandName = request.get("brandName") == null ? "the operator"
-                : redactor.redact(String.valueOf(request.get("brandName")));
-        String trigger = request.get("triggerEventType") == null ? null
-                : String.valueOf(request.get("triggerEventType"));
-        boolean hasPromo = request.get("promotionCode") != null
-                && !String.valueOf(request.get("promotionCode")).isBlank();
+        String brief = redactor.redact(request.brief());
+        String brandName = request.brandName() == null ? "the operator"
+                : redactor.redact(request.brandName());
+        String trigger = request.triggerEventType();
+        boolean hasPromo = request.promotionCode() != null && !request.promotionCode().isBlank();
 
         String system = "You write short, warm marketing messages for " + brandName
                 + ", a telecom brand. Respond with ONLY two lines and nothing else, exactly:\n"
@@ -86,12 +82,7 @@ public class CopyAssistantService {
             body = body + " Use code {code}.";
         }
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("subject", subject);
-        result.put("content", body);
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new CampaignCopy(subject, body, llm.provider(), llm.model());
     }
 
     /** Tolerant of markdown-happy models: "**SUBJECT:** hi" still parses. */

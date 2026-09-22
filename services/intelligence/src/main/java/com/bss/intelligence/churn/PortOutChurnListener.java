@@ -57,7 +57,8 @@ public class PortOutChurnListener {
                 return;
             }
             try (TenantContext ignored = TenantContext.actAs(tenant)) {
-                models.recordOutcome(Map.of("party", Map.of("id", party), "churned", true));
+                models.recordOutcome(new ChurnLearning.RecordOutcomeRequest(
+                        new ChurnLearning.PartyRef(party), true));
                 log.info("port-out recorded as churn outcome for {}", party);
             }
         } catch (Exception e) {

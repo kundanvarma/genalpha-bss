@@ -2,16 +2,15 @@ package com.bss.intelligence.service;
 
 import com.bss.intelligence.exception.BadRequestException;
 import com.bss.intelligence.llm.LlmAdapter;
+import com.bss.intelligence.service.CopilotRequests.IntentAsk;
+import com.bss.intelligence.service.IntentDraft.IntentExpression;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
  * The CSR copilot: summarize a customer's 360 and draft ticket replies.
@@ -25,20 +24,19 @@ public class CopilotService {
     private static final int CONTEXT_CHARS = 3000;
 
     private final LlmAdapter llm;
-    private final Redactor redactor;
     private final com.bss.intelligence.llm.AiGovernor governor;
     private final ObjectMapper objectMapper;
 
-    public CopilotService(LlmAdapter llm, Redactor redactor,
+    public CopilotService(LlmAdapter llm,
             com.bss.intelligence.llm.AiGovernor governor, ObjectMapper objectMapper) {
         this.llm = llm;
-        this.redactor = redactor;
         this.governor = governor;
         this.objectMapper = objectMapper;
     }
 
+    /** @param request the slice of the 360 the console sent — an open document, serialised as is */
     @Transactional
-    public Map<String, Object> summarizeCustomer(Map<String, Object> request) {
+    public CustomerSummary summarizeCustomer(JsonNode request) {
         String context = contextOf(request);
         String system = "You are a telecom customer-service copilot. From the customer data,"
                 + " tell the agent what is going on and what to do next. Respond with ONLY"
@@ -60,12 +58,8 @@ public class CopilotService {
         if (summary == null || next.isEmpty()) {
             throw new BadRequestException("the model did not follow the SUMMARY/NEXT contract");
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("summary", summary);
-        result.put("nextActions", next.subList(0, Math.min(3, next.size())));
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new CustomerSummary(summary, next.subList(0, Math.min(3, next.size())),
+                llm.provider(), llm.model());
     }
 
     /**
@@ -75,11 +69,13 @@ public class CopilotService {
      * no swivel-chairing into a form.
      */
     @Transactional
-    public Map<String, Object> draftIntent(Map<String, Object> request) {
-        if (request.get("ask") == null || String.valueOf(request.get("ask")).isBlank()) {
+    public IntentDraft draftIntent(IntentAsk request) {
+        if (request.ask() == null || request.ask().isBlank()) {
             throw new BadRequestException("ask (the business need in plain language) is required");
         }
-        String ask = redactor.redact(String.valueOf(request.get("ask")));
+        // no call-site redaction: the governor redacts before send and
+        // restores the real values in the answer
+        String ask = request.ask();
         String system = "You turn a telecom B2B sales ask into a network intent. Infer sensible"
                 + " numbers from context (a stadium AI experience needs very low latency and high"
                 + " bandwidth). Respond with ONLY these labeled lines:\n"
@@ -94,20 +90,12 @@ public class CopilotService {
         if (place == null || latency == null) {
             throw new BadRequestException("the model did not return a usable intent expression");
         }
-        Map<String, Object> expression = new LinkedHashMap<>();
-        expression.put("place", place);
-        expression.put("latencyMs", digits(latency, 20));
-        expression.put("bandwidthMbps", digits(lineAfter(raw, "BANDWIDTH_MBPS:"), 1000));
         long tokens = digits(lineAfter(raw, "AI_TOKENS_MILLIONS:"), 0);
-        if (tokens > 0) {
-            expression.put("aiTokensMillions", tokens);
-        }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("name", lineAfter(raw, "NAME:") == null ? "B2B network intent" : lineAfter(raw, "NAME:"));
-        result.put("expression", expression);
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        IntentExpression expression = new IntentExpression(place, digits(latency, 20),
+                digits(lineAfter(raw, "BANDWIDTH_MBPS:"), 1000), tokens > 0 ? tokens : null);
+        return new IntentDraft(
+                lineAfter(raw, "NAME:") == null ? "B2B network intent" : lineAfter(raw, "NAME:"),
+                expression, llm.provider(), llm.model());
     }
 
     private static long digits(String value, long fallback) {
@@ -119,7 +107,7 @@ public class CopilotService {
     }
 
     @Transactional
-    public Map<String, Object> draftQuoteNarrative(Map<String, Object> request) {
+    public QuoteNarrative draftQuoteNarrative(JsonNode request) {
         if (request == null || request.isEmpty()) {
             throw new BadRequestException("a quote context payload is required");
         }
@@ -133,16 +121,13 @@ public class CopilotService {
         if (narrative == null) {
             throw new BadRequestException("the model did not follow the NARRATIVE contract");
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("narrative", narrative);
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new QuoteNarrative(narrative, llm.provider(), llm.model());
     }
 
     @Transactional
-    public Map<String, Object> draftTicketReply(Map<String, Object> request) {
-        if (!(request.get("ticket") instanceof Map<?, ?> ticket) || ticket.get("name") == null) {
+    public TicketReplyDraft draftTicketReply(JsonNode request) {
+        JsonNode ticket = request == null ? null : request.get("ticket");
+        if (ticket == null || !ticket.isObject() || ticket.get("name") == null || ticket.get("name").isNull()) {
             throw new BadRequestException("ticket {name, ...} is required");
         }
         String system = "You are a telecom customer-service copilot. Draft a short, empathetic"
@@ -156,19 +141,16 @@ public class CopilotService {
         if (reply == null) {
             throw new BadRequestException("the model did not follow the REPLY contract");
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("reply", reply);
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new TicketReplyDraft(reply, llm.provider(), llm.model());
     }
 
     /** Live intent on a care chat: what the customer is really asking, from the
      * transcript so far. FAST tier, strict labeled lines; the desk shows the
      * intent as a chip and the suggested reply as a draft the agent may use. */
     @Transactional
-    public Map<String, Object> chatIntent(Map<String, Object> request) {
-        if (!(request.get("messages") instanceof List<?> messages) || messages.isEmpty()) {
+    public ChatIntent chatIntent(JsonNode request) {
+        JsonNode messages = request == null ? null : request.get("messages");
+        if (messages == null || !messages.isArray() || messages.isEmpty()) {
             throw new BadRequestException("messages [{author, body}] are required");
         }
         String system = "You are a chat intent classifier for a telecom care desk. Read the"
@@ -192,21 +174,15 @@ public class CopilotService {
         } catch (Exception e) {
             confidence = 0.5;
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("intent", intent.trim().toLowerCase().replaceAll("[^a-z-]", ""));
-        result.put("confidence", confidence);
-        result.put("summary", summary);
-        result.put("reply", reply);
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new ChatIntent(intent.trim().toLowerCase().replaceAll("[^a-z-]", ""), confidence,
+                summary, reply, llm.provider(), llm.model());
     }
 
     /** After-call work drafted from what actually happened: the situation the
      * desk saw, the actions logged during the call, the notes. The agent edits
      * and logs it; nothing is written by the model. */
     @Transactional
-    public Map<String, Object> wrapUp(Map<String, Object> request) {
+    public WrapUp wrapUp(JsonNode request) {
         String system = "You are a telecom customer-service copilot writing the after-call note."
                 + " From the call record, write what the customer contacted us about, what was"
                 + " done, and what is still open. Only state what the record shows. Respond with"
@@ -220,18 +196,17 @@ public class CopilotService {
         if (note == null) {
             throw new BadRequestException("the model did not follow the NOTE contract");
         }
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("note", note);
-        result.put("disposition", String.valueOf(lineAfter(raw, "DISPOSITION:") == null ? "informational" : lineAfter(raw, "DISPOSITION:")).trim().toLowerCase());
         String follow = lineAfter(raw, "FOLLOWUP:");
-        result.put("followUp", follow == null || follow.trim().equalsIgnoreCase("none") ? null : follow.trim());
-        result.put("provider", llm.provider());
-        result.put("model", llm.model());
-        return result;
+        return new WrapUp(note,
+                String.valueOf(lineAfter(raw, "DISPOSITION:") == null ? "informational" : lineAfter(raw, "DISPOSITION:")).trim().toLowerCase(),
+                follow == null || follow.trim().equalsIgnoreCase("none") ? null : follow.trim(),
+                llm.provider(), llm.model());
     }
 
-    /** Serialize, cap and redact whatever slice of the 360 the console sent. */
-    private String contextOf(Map<String, Object> request) {
+    /** Serialize and cap whatever slice of the 360 the console sent. Personal
+     * values are redacted by the governor before the prompt leaves — and put
+     * back into the answer — so nothing is masked here any more. */
+    private String contextOf(JsonNode request) {
         if (request == null || request.isEmpty()) {
             throw new BadRequestException("a context payload is required");
         }
@@ -240,7 +215,7 @@ public class CopilotService {
             if (json.length() > CONTEXT_CHARS) {
                 json = json.substring(0, CONTEXT_CHARS);
             }
-            return redactor.redact(json);
+            return json;
         } catch (Exception e) {
             throw new BadRequestException("context payload is not serializable");
         }

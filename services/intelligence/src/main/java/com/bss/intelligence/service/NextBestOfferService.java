@@ -4,7 +4,6 @@ import com.bss.intelligence.client.BssApiClient;
 import com.bss.intelligence.llm.LlmAdapter;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,14 +29,11 @@ public class NextBestOfferService {
         this.governor = governor;
     }
 
-    public Map<String, Object> nextBestOffer(String partyId) {
+    public NextBestOffer nextBestOffer(String partyId) {
         List<Map<String, Object>> candidates = bss.recommendationItems(partyId);
-        Map<String, Object> out = new LinkedHashMap<>();
         if (candidates.isEmpty()) {
-            out.put("offer", null);
-            out.put("reason", "No candidates: the customer either owns the whole shelf or the"
-                    + " recommendation component is not deployed.");
-            return out;
+            return new NextBestOffer(null, "No candidates: the customer either owns the whole shelf or the"
+                    + " recommendation component is not deployed.", null, null, null);
         }
         List<String> interests = bss.interestsOf(partyId);
         List<String> holdings = bss.holdingsOf(partyId).stream()
@@ -61,22 +57,21 @@ public class NextBestOfferService {
         String answer = governor.complete("next-best-offer",
                 com.bss.intelligence.llm.LlmAdapter.Tier.SMART, system, user.toString());
         Map<String, Object> parsed = parse(answer);
-        Map<String, Object> first = candidates.get(0).get("offering") instanceof Map<?, ?> off
-                ? Map.of("id", String.valueOf(off.get("id")), "name", String.valueOf(off.get("name")))
-                : Map.of();
+        OfferRef first = candidates.get(0).get("offering") instanceof Map<?, ?> off
+                ? new OfferRef(String.valueOf(off.get("id")), String.valueOf(off.get("name")))
+                : OfferRef.NONE;
+        OfferRef offer;
+        String reason;
         if (parsed != null && parsed.get("offerName") != null) {
-            out.put("offer", Map.of("id", String.valueOf(parsed.getOrDefault("offerId", first.get("id"))),
-                    "name", String.valueOf(parsed.get("offerName"))));
-            out.put("reason", String.valueOf(parsed.getOrDefault("reason", "")));
+            offer = new OfferRef(String.valueOf(parsed.getOrDefault("offerId", first.id())),
+                    String.valueOf(parsed.get("offerName")));
+            reason = String.valueOf(parsed.getOrDefault("reason", ""));
         } else {
             // the model misbehaved: the ranking still stands on its own
-            out.put("offer", first);
-            out.put("reason", "Top of the ranking for this customer.");
+            offer = first;
+            reason = "Top of the ranking for this customer.";
         }
-        out.put("interests", interests);
-        out.put("provider", llm.provider());
-        out.put("model", llm.model());
-        return out;
+        return new NextBestOffer(offer, reason, interests, llm.provider(), llm.model());
     }
 
     @SuppressWarnings("unchecked")

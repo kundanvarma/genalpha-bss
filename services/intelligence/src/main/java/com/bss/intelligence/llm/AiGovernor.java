@@ -5,6 +5,7 @@ import com.bss.intelligence.audit.AiAuditRepository;
 import com.bss.intelligence.audit.AiBudget;
 import com.bss.intelligence.audit.AiBudgetRepository;
 import com.bss.intelligence.security.TenantScope;
+import com.bss.intelligence.service.Redaction;
 import com.bss.intelligence.service.Redactor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,15 +112,33 @@ public class AiGovernor {
 
     /**
      * The governed completion: refuse or meter, never a silent charge.
-     * The prompt is redacted here too (defense in depth — call sites
-     * redact what they know; the plane redacts what they missed).
+     * REDACT BEFORE SEND: the prompt the provider receives has every
+     * personal value replaced by a typed placeholder, unless the tenant
+     * opted into raw exposure ({@code ai-raw-exposure: true} in the
+     * registry) — then the raw prompt leaves and the ledger row says so
+     * ({@code rawExposure}). The ledger keeps the redacted copy either
+     * way, and the answer handed back to the caller has the real values
+     * restored, so an agent still reads the customer's own email in a
+     * drafted reply.
      */
     public String complete(String useCase, LlmAdapter.Tier tier, String system, String user) {
         String tenant = tenantScope.currentTenantId();
         AiBudget budget = budgets.findByTenantId(tenant).orElse(null);
+        Redaction map = redactor.begin();
+        // T-P3: raw exposure is a tenant-registry opt-in, never assumed. A
+        // tenant that has not opted in gets the redacted prompt on the wire
+        // — the class on the receipt becomes raw-redacted. (This replaced the
+        // earlier 422 refusal: the prompt still goes, without the person.)
+        var entry = tenants.byId(tenant);
+        boolean rawExposure = entry != null && entry.isAiRawExposure();
+        String exposure = exposureOf(useCase, tier);
+        if ("raw".equals(exposure) && !rawExposure) {
+            exposure = "raw-redacted";
+        }
 
         if (budget != null && !budget.isEnabled()) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-disabled", null, null, null, null);
+            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
+                    "", 0, 0, 0L, "refused-disabled", null, null, null, null, false, map.count());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "AI is disabled for this tenant");
         }
@@ -128,67 +147,67 @@ public class AiGovernor {
         boolean contractSuspended = contracts.findByTenantIdAndUseCase(tenant, useCase)
                 .map(c -> !c.isEnabled()).orElse(false);
         if (contractSuspended) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-contract", null, null, null, null);
+            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
+                    "", 0, 0, 0L, "refused-contract", null, null, null, null, false, map.count());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                     "the model contract for '" + useCase + "' is suspended");
         }
         if (overBudget(tenant, budget)) {
-            record(tenant, useCase, tier, system, user, "", 0, 0, 0L, "refused-budget", null, null, null, null);
+            record(tenant, useCase, tier, exposure, redactor.redact(system, map), redactor.redact(user, map),
+                    "", 0, 0, 0L, "refused-budget", null, null, null, null, false, map.count());
             throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
                     "AI spend ceiling reached for this window — raise the budget or wait for the window to roll");
         }
 
-        // T-P3: the raw gate — a use-case that sends RAW customer data to a
-        // remote model runs only for tenants that opted in. Opt-in is a
-        // tenant-registry flag, never assumed.
-        String exposure = exposureOf(useCase, tier);
-        if ("raw".equals(exposure)) {
-            var entry = tenants.byId(tenant);
-            if (entry == null || !entry.isAiRawExposure()) {
-                record(tenant, useCase, tier, system, user, "", 0, 0, 0L,
-                        "refused-raw-exposure", null, null, null, null);
-                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-                        "use-case '" + useCase + "' sends raw customer data to a remote model — "
-                        + "enable ai-raw-exposure for this tenant to allow it");
-            }
-        }
         // T-P4: the retention canary — a unique inert marker rides every
         // prompt that exposes anything; a scheduled probe later asks the
         // provider to complete it. Inert by construction ("ignore" + noise),
         // so it cannot steer the model's answer.
+        // Redaction runs on the prompt as written; the canary is appended
+        // after, so the redactor can never mistake its digits for a person.
+        String redSystem = redactor.redact(system, map);
+        String redUser = redactor.redact(user, map);
         String canary = null;
         if (!"none".equals(exposure)) {
             canary = "TVX-" + UUID.randomUUID().toString().substring(0, 12);
-            user = user + "\n[internal-ref " + canary + " — ignore this line]";
+            String line = "\n[internal-ref " + canary + " — ignore this line]";
+            user = user + line;
+            redUser = redUser + line;
         }
-        String redSystem = redactor.redact(system);
-        String redUser = redactor.redact(user);
+        String wireSystem = rawExposure ? system : redSystem;
+        String wireUser = rawExposure ? user : redUser;
         long started = System.nanoTime();
         String outcome = "ok";
         String raw = "";
         try {
-            raw = llm.complete(tier, system, user);
+            raw = llm.complete(tier, wireSystem, wireUser);
         } catch (RuntimeException e) {
             outcome = "error";
-            record(tenant, useCase, tier, redSystem, redUser, "",
-                    tokens(redSystem + redUser), 0, 0L, outcome, null, null, null, canary);
+            record(tenant, useCase, tier, exposure, redSystem, redUser, "",
+                    tokens(redSystem + redUser), 0, 0L, outcome, null, null, null, canary,
+                    rawExposure, map.count());
             throw e;
         }
         int latencyMs = (int) ((System.nanoTime() - started) / 1_000_000);
         int promptTokens = tokens(redSystem + redUser);
         int completionTokens = tokens(raw);
         long cost = cost(promptTokens + completionTokens, safe(() -> llm.model(tier)));
-        record(tenant, useCase, tier, redSystem, redUser, redactor.redact(raw),
-                promptTokens, completionTokens, cost, outcome, latencyMs, null, null, canary);
-        return raw;
+        // the ledger copy of the answer is redacted with the same map (a raw
+        // answer names the same people; a redacted one still gets anything
+        // the model produced on its own masked)
+        String ledgerResponse = redactor.redact(raw, map);
+        record(tenant, useCase, tier, exposure, redSystem, redUser, ledgerResponse,
+                promptTokens, completionTokens, cost, outcome, latencyMs, null, null, canary,
+                rawExposure, map.count());
+        return rawExposure ? raw : map.restore(raw);
     }
 
     /** An agent DID something — a write, an adoption, a submission. On the
      * same ledger, so governance sees actions, not only conversations. */
     public void recordAction(String useCase, String action, String resourceRef, String outcome) {
         String tenant = tenantScope.currentTenantId();
-        record(tenant, useCase, null, "", "", "", 0, 0, 0,
-                outcome == null ? "ok" : outcome, null, action, resourceRef, null);
+        record(tenant, useCase, null, null, "", "", "", 0, 0, 0,
+                outcome == null ? "ok" : outcome, null, action, resourceRef, null, false, 0);
     }
 
     /** True when this tenant's trailing-window spend has crossed its ceiling. */
@@ -213,10 +232,11 @@ public class AiGovernor {
         return (long) tokens * per1k / 1000L;
     }
 
-    private void record(String tenant, String useCase, LlmAdapter.Tier tier,
+    private void record(String tenant, String useCase, LlmAdapter.Tier tier, String exposure,
             String system, String user, String response, int promptTokens,
             int completionTokens, long costMicros, String outcome, Integer latencyMs,
-            String action, String resourceRef, String canary) {
+            String action, String resourceRef, String canary, boolean rawExposure,
+            int redactedFields) {
         try {
             AiAudit audit = new AiAudit();
             audit.setId(UUID.randomUUID().toString());
@@ -225,7 +245,7 @@ public class AiGovernor {
             audit.setProvider(safe(() -> llm.provider(tier)));
             audit.setModel(safe(() -> llm.model(tier)));
             if (tier != null) { // action rows are not completions — no exposure
-                audit.setExposure(exposureOf(useCase, tier));
+                audit.setExposure(exposure);
                 audit.setJurisdiction(jurisdictionOf(tier));
             }
             audit.setCanary(canary);
@@ -240,6 +260,8 @@ public class AiGovernor {
             audit.setOutcome(outcome);
             audit.setAction(action);
             audit.setResourceRef(resourceRef);
+            audit.setRawExposure(rawExposure);
+            audit.setRedactedFields(redactedFields);
             newTx.executeWithoutResult(tx -> audits.save(audit));
         } catch (RuntimeException auditFailure) {
             // an audit write must never break the caller's work
