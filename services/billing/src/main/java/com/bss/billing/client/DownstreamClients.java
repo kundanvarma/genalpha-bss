@@ -1,5 +1,7 @@
 package com.bss.billing.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +28,11 @@ public final class DownstreamClients {
     }
 
     public interface CatalogClient {
-        Map<String, Object> offering(String id);
+        /** The offering as the catalog serves it — a foreign document, read as a tree; null when unknown. */
+        JsonNode offering(String id);
 
-        Map<String, Object> price(String id);
+        /** A price as the catalog serves it — a foreign document, read as a tree; null when unknown. */
+        JsonNode price(String id);
 
         /**
          * The ONE pricing oracle (TMF760 checkProductConfiguration) for a product as configured: the
@@ -131,7 +135,7 @@ public final class DownstreamClients {
     public interface DirectDebitClient {
         /** One cycle claim to the direct-debit rail. Throws on refusal —
          * the claim row is only written when the rail accepted it. */
-        void sendClaim(Map<String, Object> claim);
+        void sendClaim(com.bss.billing.dto.DirectDebitDtos.Claim claim);
     }
 
     public interface PaymentClient {

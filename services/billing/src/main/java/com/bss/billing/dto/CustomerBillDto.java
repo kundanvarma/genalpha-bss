@@ -1,13 +1,22 @@
 package com.bss.billing.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 
+/**
+ * TMF678 CustomerBill: the wire face of a bill, and the PATCH body that
+ * settles one. Mutable because both the mapper and the settle path build it
+ * field by field; every nested value is a typed record.
+ */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonPropertyOrder({"id", "href", "billNo", "state", "billingAccount", "billDocument", "amountDue", "installmentPlan",
+        "dispute", "billingPeriod", "relatedParty", "payment", "distributionChannel", "billDate", "lastUpdate", "@type"})
 public class CustomerBillDto {
 
     @JsonProperty("id")
@@ -23,30 +32,28 @@ public class CustomerBillDto {
     private String state;
 
     @JsonProperty("billingAccount")
-    private java.util.Map<String, Object> billingAccount;
+    private EntityRef billingAccount;
 
     @JsonProperty("billDocument")
-    private java.util.List<Object> billDocument = new java.util.ArrayList<>();
+    private List<AttachmentRef> billDocument = new java.util.ArrayList<>();
 
     @JsonProperty("amountDue")
     private MoneyDto amountDue;
 
-    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     @JsonProperty("installmentPlan")
-    private java.util.Map<String, Object> installmentPlan;
+    private InstallmentPlanView installmentPlan;
 
-    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
     @JsonProperty("dispute")
-    private java.util.Map<String, Object> dispute;
+    private DisputeChip dispute;
 
     @JsonProperty("billingPeriod")
-    private Map<String, Object> billingPeriod;
+    private TimePeriod billingPeriod;
 
     @JsonProperty("relatedParty")
-    private List<Map<String, Object>> relatedParty;
+    private List<RelatedPartyRef> relatedParty;
 
     @JsonProperty("payment")
-    private List<Map<String, Object>> payment;
+    private List<PaymentRef> payment;
 
     @JsonProperty("distributionChannel")
     private String distributionChannel;
@@ -103,28 +110,33 @@ public class CustomerBillDto {
         this.amountDue = amountDue;
     }
 
-    public Map<String, Object> getBillingPeriod() {
+    public TimePeriod getBillingPeriod() {
         return billingPeriod;
     }
 
-    public void setBillingPeriod(Map<String, Object> billingPeriod) {
+    public void setBillingPeriod(TimePeriod billingPeriod) {
         this.billingPeriod = billingPeriod;
     }
 
-    public List<Map<String, Object>> getRelatedParty() {
+    public List<RelatedPartyRef> getRelatedParty() {
         return relatedParty;
     }
 
-    public void setRelatedParty(List<Map<String, Object>> relatedParty) {
+    public void setRelatedParty(List<RelatedPartyRef> relatedParty) {
         this.relatedParty = relatedParty;
     }
 
-    public List<Map<String, Object>> getPayment() {
+    public List<PaymentRef> getPayment() {
         return payment;
     }
 
-    public void setPayment(List<Map<String, Object>> payment) {
+    public void setPayment(List<PaymentRef> payment) {
         this.payment = payment;
+    }
+
+    /** The settling payment's id, or null when the patch names none. */
+    public String paymentId() {
+        return payment == null || payment.isEmpty() || payment.get(0) == null ? null : payment.get(0).id();
     }
 
     public String getDistributionChannel() {
@@ -159,14 +171,14 @@ public class CustomerBillDto {
         this.type = type;
     }
 
-    public java.util.List<Object> getBillDocument() { return billDocument; }
-    public void setBillDocument(java.util.List<Object> billDocument) { this.billDocument = billDocument; }
+    public List<AttachmentRef> getBillDocument() { return billDocument; }
+    public void setBillDocument(List<AttachmentRef> billDocument) { this.billDocument = billDocument; }
 
-    public java.util.Map<String, Object> getBillingAccount() { return billingAccount; }
-    public void setBillingAccount(java.util.Map<String, Object> billingAccount) { this.billingAccount = billingAccount; }
+    public EntityRef getBillingAccount() { return billingAccount; }
+    public void setBillingAccount(EntityRef billingAccount) { this.billingAccount = billingAccount; }
 
-    public java.util.Map<String, Object> getInstallmentPlan() { return installmentPlan; }
-    public void setInstallmentPlan(java.util.Map<String, Object> v) { this.installmentPlan = v; }
-    public java.util.Map<String, Object> getDispute() { return dispute; }
-    public void setDispute(java.util.Map<String, Object> v) { this.dispute = v; }
+    public InstallmentPlanView getInstallmentPlan() { return installmentPlan; }
+    public void setInstallmentPlan(InstallmentPlanView v) { this.installmentPlan = v; }
+    public DisputeChip getDispute() { return dispute; }
+    public void setDispute(DisputeChip v) { this.dispute = v; }
 }

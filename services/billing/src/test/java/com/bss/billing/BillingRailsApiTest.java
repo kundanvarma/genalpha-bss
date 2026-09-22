@@ -208,9 +208,7 @@ class BillingRailsApiTest {
                 "contactMedium", List.of(Map.of(
                         "mediumType", "postalAddress",
                         "characteristic", Map.of("postCode", "0567", "city", "Oslo"))));
-        Map<String, Object> letter = BillDistributionService.letterOf(
-                masked, bill, List.of(), "123456");
-        String content = String.valueOf(letter.get("content"));
+        String content = BillDistributionService.letterOf(masked, bill, List.of(), "123456").content();
         assertThat(content).doesNotContainIgnoringCase("street");
         assertThat(content).contains("0567").contains("Oslo");
 
@@ -221,8 +219,7 @@ class BillingRailsApiTest {
                         "mediumType", "postalAddress",
                         "characteristic", Map.of("street1", "Storgata 1",
                                 "postCode", "0150", "city", "Oslo"))));
-        Map<String, Object> openLetter = BillDistributionService.letterOf(
-                plain, bill, List.of(), "123456");
-        assertThat(String.valueOf(openLetter.get("content"))).contains("Storgata 1");
+        assertThat(BillDistributionService.letterOf(plain, bill, List.of(), "123456").content())
+                .contains("Storgata 1");
     }
 }

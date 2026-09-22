@@ -1,6 +1,11 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.CreditNoteRequest;
+import com.bss.billing.dto.DisputeRequest;
+import com.bss.billing.dto.DisputeResolution;
+import com.bss.billing.dto.DisputeView;
+import com.bss.billing.dto.RelatedPartyRef;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.BillDispute;
 import com.bss.billing.entity.CustomerBill;
@@ -65,7 +70,7 @@ public class DisputeService {
     }
 
     @Transactional
-    public Map<String, Object> open(String billId, Map<String, Object> dto) {
+    public DisputeView open(String billId, DisputeRequest dto) {
         String tenant = tenantScope.currentTenantId();
         CustomerBill bill = bills.findByIdAndTenantId(billId, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("CustomerBill", billId));
@@ -74,7 +79,7 @@ public class DisputeService {
                 throw NotFoundException.forResource("CustomerBill", billId);
             }
         });
-        String reason = dto.get("reason") == null ? null : String.valueOf(dto.get("reason")).trim();
+        String reason = dto == null || dto.reason() == null ? null : dto.reason().trim();
         if (reason == null || reason.isEmpty()) {
             throw new BadRequestException("a dispute needs a reason — what looks wrong?");
         }
@@ -91,7 +96,7 @@ public class DisputeService {
         dispute.setCreatedAt(OffsetDateTime.now());
         dispute.setLastUpdate(OffsetDateTime.now());
         disputes.save(dispute);
-        Map<String, Object> view = toMap(dispute, bill);
+        DisputeView view = toView(dispute, bill);
         events.publish("DisputeOpenedEvent", "dispute", view);
         log.info("dispute opened on bill {} ({}): {}", bill.getBillNo(), billId, reason);
         return view;
@@ -100,7 +105,7 @@ public class DisputeService {
     /** Someone DECIDES: credit (an amount, with the money moving the right
      * way for the bill's state) or uphold (with the reason written down). */
     @Transactional
-    public Map<String, Object> resolve(String disputeId, Map<String, Object> dto) {
+    public DisputeView resolve(String disputeId, DisputeResolution dto) {
         String tenant = tenantScope.currentTenantId();
         BillDispute dispute = disputes.findByIdAndTenantId(disputeId, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("Dispute", disputeId));
@@ -109,13 +114,12 @@ public class DisputeService {
         }
         CustomerBill bill = bills.findByIdAndTenantId(dispute.getBillId(), tenant)
                 .orElseThrow(() -> NotFoundException.forResource("CustomerBill", dispute.getBillId()));
-        String outcome = String.valueOf(dto.getOrDefault("outcome", ""));
-        String note = dto.get("note") == null ? null : String.valueOf(dto.get("note"));
+        String outcome = dto.outcome() == null ? "" : dto.outcome();
+        String note = dto.note();
         if ("uphold".equals(outcome)) {
             dispute.setStatus(BillDispute.UPHELD);
         } else if ("credit".equals(outcome)) {
-            BigDecimal amount = dto.get("amount") == null ? null
-                    : new BigDecimal(String.valueOf(dto.get("amount")));
+            BigDecimal amount = dto.amount();
             if (amount == null || amount.signum() <= 0
                     || amount.compareTo(bill.getAmountDueValue()) > 0) {
                 throw new BadRequestException("credit must be 0 < amount <= the bill's "
@@ -124,9 +128,8 @@ public class DisputeService {
             // every dispute credit is DOCUMENT-BACKED: the credit note owns
             // both mechanics (reduced due on unpaid, PSP refund on settled),
             // the gapless number, and the CreditNoteIssuedEvent
-            creditNoteService.issue(bill.getId(), Map.of(
-                    "amount", amount,
-                    "reason", "Dispute credit — " + (note != null ? note : dispute.getReason())),
+            creditNoteService.issue(bill.getId(), CreditNoteRequest.of(amount,
+                    "Dispute credit — " + (note != null ? note : dispute.getReason())),
                     dispute.getId());
             dispute.setStatus(BillDispute.CREDITED);
             dispute.setCreditAmount(amount);
@@ -137,8 +140,7 @@ public class DisputeService {
         dispute.setResolvedAt(OffsetDateTime.now());
         dispute.setLastUpdate(OffsetDateTime.now());
         disputes.save(dispute);
-        Map<String, Object> view = toMap(dispute, bill);
-        view.put("billState", bill.getState());
+        DisputeView view = toView(dispute, bill).resolved(bill.getState());
         events.publish("DisputeResolvedEvent", "dispute", view);
         log.info("dispute {} on bill {} resolved: {} {}", disputeId, bill.getBillNo(),
                 dispute.getStatus(), dispute.getCreditAmount());
@@ -146,10 +148,10 @@ public class DisputeService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list() {
+    public List<DisputeView> list() {
         String tenant = tenantScope.currentTenantId();
         return disputes.findByTenantIdOrderByCreatedAtDesc(tenant).stream()
-                .map(d -> toMap(d, bills.findByIdAndTenantId(d.getBillId(), tenant).orElse(null)))
+                .map(d -> toView(d, bills.findByIdAndTenantId(d.getBillId(), tenant).orElse(null)))
                 .toList();
     }
 
@@ -170,27 +172,12 @@ public class DisputeService {
         }
     }
 
-    private Map<String, Object> toMap(BillDispute d, CustomerBill bill) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", d.getId());
-        map.put("billId", d.getBillId());
-        if (bill != null) {
-            map.put("billNo", bill.getBillNo());
-        }
-        map.put("reason", d.getReason());
-        map.put("status", d.getStatus());
-        if (d.getCreditAmount() != null) {
-            map.put("creditAmount", d.getCreditAmount());
-        }
-        if (d.getResolutionNote() != null) {
-            map.put("resolutionNote", d.getResolutionNote());
-        }
-        map.put("createdAt", d.getCreatedAt().toString());
-        if (d.getPartyId() != null) {
-            map.put("partyId", d.getPartyId());
-            map.put("relatedParty", List.of(Map.of("id", d.getPartyId(), "role", "customer")));
-        }
-        map.put("@type", "BillDispute");
-        return map;
+    private DisputeView toView(BillDispute d, CustomerBill bill) {
+        return new DisputeView(d.getId(), d.getBillId(),
+                bill == null ? null : bill.getBillNo(),
+                d.getReason(), d.getStatus(), d.getCreditAmount(), d.getResolutionNote(),
+                d.getCreatedAt().toString(), d.getPartyId(),
+                d.getPartyId() == null ? null : List.of(RelatedPartyRef.customer(d.getPartyId())),
+                "BillDispute", null);
     }
 }

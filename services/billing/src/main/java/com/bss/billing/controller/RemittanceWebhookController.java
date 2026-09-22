@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.bss.billing.dto.WebhookRefused;
 
 /**
  * The door the BANK knocks on: POST /bank/v1/remittance takes an ISO
@@ -34,11 +34,11 @@ public class RemittanceWebhookController {
      * detected from the content, the accounting is identical. */
     @PostMapping(value = "/bank/v1/remittance",
             consumes = {"application/xml", "text/xml", "text/plain", "application/octet-stream"})
-    public ResponseEntity<Map<String, Object>> ingest(@RequestBody String body,
+    public ResponseEntity<?> ingest(@RequestBody String body,
             @RequestHeader(value = "X-Bank-Token", required = false) String token) {
         TenantRegistry.TenantEntry tenant = tenantOf(token);
         if (tenant == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "unknown bank credential"));
+            return ResponseEntity.status(401).body(new WebhookRefused("unknown bank credential"));
         }
         try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
             return ResponseEntity.ok(remittance.ingest(tenant.getId(), body));

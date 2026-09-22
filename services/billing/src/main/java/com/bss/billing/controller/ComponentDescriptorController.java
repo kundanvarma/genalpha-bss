@@ -6,10 +6,10 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
+import com.bss.billing.dto.ComponentDescriptor;
+
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.TreeSet;
 
 /**
@@ -32,13 +32,7 @@ public class ComponentDescriptorController {
     }
 
     @GetMapping(WELL_KNOWN)
-    public Map<String, Object> describe() {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("component", "billing");
-        out.put("meaning", "Rates the month into bills — prorating a plan change at its date — and runs collections and distribution.");
-        out.put("manages", List.of("Bill"));
-        out.put("events", EVENTS);
-        out.put("topic", "bss.billing.events");
+    public ComponentDescriptor describe() {
         TreeSet<String> routes = new TreeSet<>();
         for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
             if (info.getPathPatternsCondition() == null) {
@@ -49,8 +43,8 @@ public class ComponentDescriptorController {
                 routes.add(methods + " " + p.getPatternString());
             }
         }
-        out.put("routes", new ArrayList<>(routes));
-        out.put("@type", "GenAlphaComponent");
-        return out;
+        return new ComponentDescriptor("billing",
+                "Rates the month into bills — prorating a plan change at its date — and runs collections and distribution.",
+                List.of("Bill"), EVENTS, "bss.billing.events", new ArrayList<>(routes), "GenAlphaComponent");
     }
 }

@@ -3,13 +3,32 @@ package com.bss.billing.controller;
 import com.bss.billing.api.ApiConstants;
 import com.bss.billing.api.FieldSelector;
 import com.bss.billing.api.PagedResult;
+import com.bss.billing.dto.AppliedBillingRateView;
+import com.bss.billing.dto.ApplyUnappliedRequest;
+import com.bss.billing.dto.BillFormatProfileRequest;
+import com.bss.billing.dto.BillFormatProfileView;
+import com.bss.billing.dto.CreditNoteRequest;
+import com.bss.billing.dto.CreditNoteView;
 import com.bss.billing.dto.CustomerBillDto;
+import com.bss.billing.dto.DisputeRequest;
+import com.bss.billing.dto.DisputeResolution;
+import com.bss.billing.dto.DisputeView;
+import com.bss.billing.dto.DistributionDtos.LedgerRow;
+import com.bss.billing.dto.DistributionDtos.RetryReceipt;
+import com.bss.billing.dto.DunningRow;
+import com.bss.billing.dto.InstallmentPaymentRequest;
+import com.bss.billing.dto.InstallmentPlanRequest;
+import com.bss.billing.dto.InstallmentPlanView;
+import com.bss.billing.dto.RemittanceApplied;
+import com.bss.billing.dto.ResendReceipt;
+import com.bss.billing.dto.UnappliedRemittanceView;
 import com.bss.billing.service.CustomerBillService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -86,22 +105,23 @@ public class CustomerBillController {
 
     // ---- TMF678 CustomerBillOnDemand ----
 
+    /** The caller's document, kept verbatim: an open tree in, the same tree with server fields out. */
     @PostMapping("/customerBillOnDemand")
-    public ResponseEntity<Map<String, Object>> createOnDemand(@RequestBody Map<String, Object> body) {
-        Map<String, Object> created = service.createOnDemand(body);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<ObjectNode> createOnDemand(@RequestBody JsonNode body) {
+        ObjectNode created = service.createOnDemand(body);
+        return ResponseEntity.created(URI.create(created.path("href").asText())).body(created);
     }
 
     @GetMapping("/customerBillOnDemand")
     public ResponseEntity<List<?>> listOnDemand(
             @RequestParam(name = "fields", required = false) String fields,
             @RequestParam Map<String, String> allParams) {
-        List<Map<String, Object>> items = service.findOnDemand(clean(allParams));
+        List<ObjectNode> items = service.findOnDemand(clean(allParams));
         return ResponseEntity.ok(fields == null ? items : fieldSelector.select(items, fields));
     }
 
     @GetMapping("/customerBillOnDemand/{id}")
-    public ResponseEntity<Map<String, Object>> getOnDemand(@PathVariable("id") String id) {
+    public ResponseEntity<ObjectNode> getOnDemand(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findOnDemandById(id));
     }
 
@@ -111,12 +131,12 @@ public class CustomerBillController {
     public ResponseEntity<List<?>> listRates(
             @RequestParam(name = "fields", required = false) String fields,
             @RequestParam Map<String, String> allParams) {
-        List<Map<String, Object>> items = service.findAllRates(clean(allParams));
+        List<AppliedBillingRateView> items = service.findAllRates(clean(allParams));
         return ResponseEntity.ok(fields == null ? items : fieldSelector.select(items, fields));
     }
 
     @GetMapping("/appliedCustomerBillingRate/{id}")
-    public ResponseEntity<Map<String, Object>> getRate(@PathVariable("id") String id) {
+    public ResponseEntity<AppliedBillingRateView> getRate(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.findRateById(id));
     }
 
@@ -133,7 +153,7 @@ public class CustomerBillController {
 
     /** TMF678 appliedCustomerBillingRate, scoped through its bill. */
     @GetMapping("/customerBill/{id}/appliedCustomerBillingRate")
-    public ResponseEntity<List<Map<String, Object>>> rates(@PathVariable("id") String id) {
+    public ResponseEntity<List<AppliedBillingRateView>> rates(@PathVariable("id") String id) {
         return ResponseEntity.ok(service.ratesOf(id));
     }
 
@@ -155,28 +175,28 @@ public class CustomerBillController {
     /** "Send me a copy of my invoice" — emails the PDF to the address on
      * file, from the CSR console or self-served. */
     @PostMapping("/customerBill/{id}/resend")
-    public ResponseEntity<Map<String, Object>> resend(@PathVariable("id") String id) {
+    public ResponseEntity<ResendReceipt> resend(@PathVariable("id") String id) {
         return ResponseEntity.accepted().body(documentService.resend(id));
     }
 
     /** The reversing DOCUMENT: numbered, gapless, reason required.
      * Unpaid bill: the due comes down. Settled: the PSP pays it back. */
     @PostMapping("/customerBill/{id}/creditNote")
-    public ResponseEntity<Map<String, Object>> issueCreditNote(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<CreditNoteView> issueCreditNote(@PathVariable("id") String id,
+            @RequestBody CreditNoteRequest dto) {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
                 .body(creditNoteService.issue(id, dto));
     }
 
     @GetMapping("/creditNote")
-    public ResponseEntity<List<Map<String, Object>>> creditNotes(
+    public ResponseEntity<List<CreditNoteView>> creditNotes(
             @RequestParam(name = "billId", required = false) String billId,
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(creditNoteService.list(billId, relatedPartyId));
     }
 
     @GetMapping("/creditNote/{id}")
-    public ResponseEntity<Map<String, Object>> creditNote(@PathVariable("id") String id) {
+    public ResponseEntity<CreditNoteView> creditNote(@PathVariable("id") String id) {
         return ResponseEntity.ok(creditNoteService.byId(id));
     }
 
@@ -195,8 +215,8 @@ public class CustomerBillController {
 
     /** "This charge is wrong": open a dispute (customer or agent). */
     @PostMapping("/customerBill/{id}/dispute")
-    public ResponseEntity<Map<String, Object>> dispute(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<DisputeView> dispute(@PathVariable("id") String id,
+            @RequestBody DisputeRequest dto) {
         return ResponseEntity.ok(disputeService.open(id, dto));
     }
 
@@ -204,84 +224,83 @@ public class CustomerBillController {
      * readable by anyone with billing read, editable by the tenant admin.
      * Adding a country is a POST here, not a deploy. */
     @GetMapping("/billFormatProfile")
-    public ResponseEntity<java.util.List<Map<String, Object>>> formatProfiles() {
+    public ResponseEntity<List<BillFormatProfileView>> formatProfiles() {
         return ResponseEntity.ok(formatProfileService.findAll());
     }
 
     @GetMapping("/billFormatProfile/{code}")
-    public ResponseEntity<Map<String, Object>> formatProfile(@PathVariable("code") String code) {
+    public ResponseEntity<BillFormatProfileView> formatProfile(@PathVariable("code") String code) {
         return ResponseEntity.ok(formatProfileService.findByCode(code));
     }
 
     @PatchMapping("/billFormatProfile/{code}")
-    public ResponseEntity<Map<String, Object>> upsertFormatProfile(
-            @PathVariable("code") String code, @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<BillFormatProfileView> upsertFormatProfile(
+            @PathVariable("code") String code, @RequestBody BillFormatProfileRequest dto) {
         return ResponseEntity.ok(formatProfileService.upsert(code, dto));
     }
 
     /** Adding a country IS a create here — a row, not a deploy. */
     @PostMapping("/billFormatProfile")
-    public ResponseEntity<Map<String, Object>> createFormatProfile(
-            @RequestBody Map<String, Object> dto) {
-        if (dto.get("code") == null || String.valueOf(dto.get("code")).isBlank()) {
+    public ResponseEntity<BillFormatProfileView> createFormatProfile(
+            @RequestBody BillFormatProfileRequest dto) {
+        if (dto.code() == null || dto.code().isBlank()) {
             throw new com.bss.billing.exception.BadRequestException(
                     "a profile needs a code — the key the tenant's distribution format points at");
         }
-        Map<String, Object> created = formatProfileService.upsert(
-                String.valueOf(dto.get("code")), dto);
+        BillFormatProfileView created = formatProfileService.upsert(dto.code(), dto);
         return ResponseEntity.created(URI.create(ApiConstants.BASE_PATH
-                + "/billFormatProfile/" + created.get("code"))).body(created);
+                + "/billFormatProfile/" + created.code())).body(created);
     }
 
     /** UNAPPLIED CASH: money the bank reported that no bill cleanly
      * claims — the AR worklist a human resolves. */
     @GetMapping("/remittance/unapplied")
-    public ResponseEntity<java.util.List<Map<String, Object>>> unappliedCash() {
+    public ResponseEntity<List<UnappliedRemittanceView>> unappliedCash() {
         return ResponseEntity.ok(remittanceService.unappliedView(tenantScope.currentTenantId()));
     }
 
     /** Resolve ONE parked row to the bill it belongs to — back-office (or a
      * badged digital worker); the automatic path's guarantees apply. */
     @PostMapping("/remittance/unapplied/{id}/apply")
-    public ResponseEntity<Map<String, Object>> applyUnapplied(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<RemittanceApplied> applyUnapplied(@PathVariable("id") String id,
+            @RequestBody ApplyUnappliedRequest body) {
         return ResponseEntity.ok(remittanceService.applyUnapplied(
-                tenantScope.currentTenantId(), id, String.valueOf(body.get("billId"))));
+                tenantScope.currentTenantId(), id, body.billId()));
     }
 
     /** THE DELIVERY LEDGER: what left for the distribution partner, when,
      * after how many tries — and what is still owed a retry. */
     @GetMapping("/billDistribution")
-    public ResponseEntity<java.util.List<Map<String, Object>>> distributionLedger(
+    public ResponseEntity<List<LedgerRow>> distributionLedger(
             @RequestParam(name = "status", required = false) String status) {
         return ResponseEntity.ok(distributionService.ledgerView(tenantScope.currentTenantId(), status));
     }
 
     /** An admin's second chance for a FAILED delivery. */
     @PostMapping("/billDistribution/{id}/retry")
-    public ResponseEntity<Map<String, Object>> retryDistribution(@PathVariable("id") String id) {
+    public ResponseEntity<RetryReceipt> retryDistribution(@PathVariable("id") String id) {
         return ResponseEntity.accepted()
                 .body(distributionService.retry(tenantScope.currentTenantId(), id));
     }
 
     /** The disputes worklist (staff). */
     @GetMapping("/dispute")
-    public ResponseEntity<List<Map<String, Object>>> disputes() {
+    public ResponseEntity<List<DisputeView>> disputes() {
         return ResponseEntity.ok(disputeService.list());
     }
 
     /** The decision: credit an amount, or uphold with the reason. */
     @PostMapping("/dispute/{id}/resolve")
-    public ResponseEntity<Map<String, Object>> resolve(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<DisputeView> resolve(@PathVariable("id") String id,
+            @RequestBody DisputeResolution dto) {
         return ResponseEntity.ok(disputeService.resolve(id, dto));
     }
 
     /** The DUNNING window: who is overdue, who broke, what is still owed —
      * installment stragglers plus every account's collection case. */
     @GetMapping("/dunning")
-    public ResponseEntity<List<Map<String, Object>>> dunning() {
-        List<Map<String, Object>> rows = new java.util.ArrayList<>(
+    public ResponseEntity<List<DunningRow>> dunning() {
+        List<DunningRow> rows = new java.util.ArrayList<>(
                 dunningService.dunningView(tenantScope.currentTenantId()));
         rows.addAll(collectionService.findCases(null));
         return ResponseEntity.ok(rows);
@@ -289,15 +308,16 @@ public class CustomerBillController {
 
     /** PAY IN PARTS: split an unpaid bill into 2-12 monthly installments. */
     @PostMapping("/customerBill/{id}/installmentPlan")
-    public ResponseEntity<Map<String, Object>> installmentPlan(@PathVariable("id") String id,
-            @RequestBody(required = false) Map<String, Object> dto) {
-        return ResponseEntity.ok(service.createInstallmentPlan(id, dto == null ? Map.of() : dto));
+    public ResponseEntity<InstallmentPlanView> installmentPlan(@PathVariable("id") String id,
+            @RequestBody(required = false) InstallmentPlanRequest dto) {
+        return ResponseEntity.ok(service.createInstallmentPlan(id,
+                dto == null ? InstallmentPlanRequest.EMPTY : dto));
     }
 
     /** One part lands: an authorized payment covering THIS installment. */
     @PostMapping("/customerBill/{id}/installmentPlan/pay")
-    public ResponseEntity<Map<String, Object>> payInstallment(@PathVariable("id") String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<InstallmentPlanView> payInstallment(@PathVariable("id") String id,
+            @RequestBody InstallmentPaymentRequest dto) {
         return ResponseEntity.ok(service.payInstallment(id, dto));
     }
 }

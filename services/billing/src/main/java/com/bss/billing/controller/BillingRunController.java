@@ -7,7 +7,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.bss.billing.dto.BillingRunResult;
+import com.bss.billing.dto.BillingRunView;
 
 /** Back-office task: cut this period's bills. Customers cannot trigger it. */
 @RestController
@@ -21,13 +22,13 @@ public class BillingRunController {
     }
 
     @PostMapping("/billingRun")
-    public ResponseEntity<Map<String, Object>> run() {
+    public ResponseEntity<BillingRunResult> run() {
         return ResponseEntity.ok(service.run());
     }
 
     /** The run ledger: every recent run's face, newest first. */
     @org.springframework.web.bind.annotation.GetMapping("/billingRun")
-    public ResponseEntity<java.util.List<Map<String, Object>>> recent() {
+    public ResponseEntity<java.util.List<BillingRunView>> recent() {
         return ResponseEntity.ok(service.recentRuns());
     }
 }

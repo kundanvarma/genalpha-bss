@@ -89,10 +89,10 @@ public class SlaViolationListener {
                     log.warn("SLA credit for {} has no bill to land on (party {})", violationId, party);
                     return;
                 }
-                Map<String, Object> note = creditNotes.issue(bill.getId(),
-                        Map.of("amount", amount, "reason", reason));
+                com.bss.billing.dto.CreditNoteView note = creditNotes.issue(bill.getId(),
+                        com.bss.billing.dto.CreditNoteRequest.of(amount, reason));
                 log.info("SLA compensation: credit note {} ({} EUR) for violation {} on bill {}",
-                        note.get("creditNoteNo"), amount, violationId, bill.getBillNo());
+                        note.creditNoteNo(), amount, violationId, bill.getBillNo());
             }
         } catch (Exception e) {
             log.warn("billing: skipping unprocessable assurance event: {}", e.getMessage());

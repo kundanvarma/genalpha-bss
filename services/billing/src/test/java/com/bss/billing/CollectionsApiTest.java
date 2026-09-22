@@ -42,6 +42,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class CollectionsApiTest {
 
+    /** A foreign catalog document, as the client reads it: a tree. */
+    private static com.fasterxml.jackson.databind.JsonNode tree(Object o) {
+        return new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(o);
+    }
+
     private static final String BASE = "/tmf-api/customerBillManagement/v4";
 
     @Autowired
@@ -114,9 +119,9 @@ class CollectionsApiTest {
                         "productOffering", Map.of("id", "po-fiber"),
                         "relatedParty", List.of(Map.of("id", owner, "role", "customer")))));
         given(catalogClient.offering("po-fiber")).willReturn(
-                Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber"))));
+                tree(Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber")))));
         given(catalogClient.price("price-fiber")).willReturn(
-                Map.of("priceType", "recurring", "price", Map.of("unit", "NOK", "value", 399.00)));
+                tree(Map.of("priceType", "recurring", "price", Map.of("unit", "NOK", "value", 399.00))));
     }
 
     private static final String VALID_STEPS = """

@@ -1,5 +1,7 @@
 package com.bss.billing.service;
 
+import com.bss.billing.dto.BillFormatProfileRequest;
+import com.bss.billing.dto.BillFormatProfileView;
 import com.bss.billing.entity.BillFormatProfile;
 import com.bss.billing.exception.NotFoundException;
 import com.bss.billing.repository.BillFormatProfileRepository;
@@ -8,9 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -32,13 +32,14 @@ public class BillFormatProfileService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<BillFormatProfileView> findAll() {
         return profiles.findByTenantIdOrderByCode(tenantScope.currentTenantId())
-                .stream().map(this::toMap).toList();
+                .stream().map(this::toView).toList();
     }
 
+    /** Merge: absent leaves a field alone; an explicit null clears the ids. */
     @Transactional
-    public Map<String, Object> upsert(String code, Map<String, Object> dto) {
+    public BillFormatProfileView upsert(String code, BillFormatProfileRequest dto) {
         String tenant = tenantScope.currentTenantId();
         BillFormatProfile profile = profiles.findByTenantIdAndCode(tenant, code)
                 .orElseGet(() -> {
@@ -50,11 +51,11 @@ public class BillFormatProfileService {
                     fresh.setSyntax("ubl");
                     return fresh;
                 });
-        if (dto.get("name") != null) {
-            profile.setName(String.valueOf(dto.get("name")));
+        if (dto.name() != null) {
+            profile.setName(dto.name());
         }
-        if (dto.get("syntax") != null) {
-            String syntax = String.valueOf(dto.get("syntax"));
+        if (dto.syntax() != null) {
+            String syntax = dto.syntax();
             if (!java.util.Set.of("ubl", "cii", "edifact", "facturx").contains(syntax)) {
                 throw new com.bss.billing.exception.BadRequestException(
                         "syntax is one of: ubl, cii (the EN 16931 syntaxes), edifact"
@@ -62,40 +63,30 @@ public class BillFormatProfileService {
             }
             profile.setSyntax(syntax);
         }
-        if (dto.containsKey("customizationId")) {
-            profile.setCustomizationId(dto.get("customizationId") == null
-                    ? null : String.valueOf(dto.get("customizationId")));
+        if (BillFormatProfileRequest.given(dto.customizationId())) {
+            profile.setCustomizationId(BillFormatProfileRequest.textOf(dto.customizationId()));
         }
-        if (dto.containsKey("profileId")) {
-            profile.setProfileId(dto.get("profileId") == null
-                    ? null : String.valueOf(dto.get("profileId")));
+        if (BillFormatProfileRequest.given(dto.profileId())) {
+            profile.setProfileId(BillFormatProfileRequest.textOf(dto.profileId()));
         }
-        if (dto.get("paymentReference") != null) {
-            profile.setPaymentReference(Boolean.parseBoolean(String.valueOf(dto.get("paymentReference"))));
+        if (dto.paymentReference() != null) {
+            profile.setPaymentReference(dto.paymentReference());
         }
         profile.setLastUpdate(OffsetDateTime.now());
-        return toMap(profiles.save(profile));
+        return toView(profiles.save(profile));
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findByCode(String code) {
+    public BillFormatProfileView findByCode(String code) {
         return profiles.findByTenantIdAndCode(tenantScope.currentTenantId(), code)
-                .map(this::toMap)
+                .map(this::toView)
                 .orElseThrow(() -> NotFoundException.forResource("BillFormatProfile", code));
     }
 
-    private Map<String, Object> toMap(BillFormatProfile p) {
-        Map<String, Object> map = new LinkedHashMap<>();
+    private BillFormatProfileView toView(BillFormatProfile p) {
         // the code IS the public identity (the tenant's format points at it)
-        map.put("id", p.getCode());
-        map.put("code", p.getCode());
-        map.put("name", p.getName());
-        map.put("syntax", p.getSyntax());
-        map.put("customizationId", p.getCustomizationId());
-        map.put("profileId", p.getProfileId());
-        map.put("paymentReference", p.isPaymentReference());
-        map.put("lastUpdate", p.getLastUpdate() == null ? null : p.getLastUpdate().toString());
-        map.put("@type", "BillFormatProfile");
-        return map;
+        return new BillFormatProfileView(p.getCode(), p.getCode(), p.getName(), p.getSyntax(),
+                p.getCustomizationId(), p.getProfileId(), p.isPaymentReference(),
+                p.getLastUpdate() == null ? null : p.getLastUpdate().toString(), "BillFormatProfile");
     }
 }

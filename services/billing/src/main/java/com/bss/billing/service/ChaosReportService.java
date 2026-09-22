@@ -1,5 +1,6 @@
 package com.bss.billing.service;
 
+import com.bss.billing.dto.ChaosReport;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.TenantScope;
@@ -8,9 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * THE CHAOS TWIN: price a failure mode in currency, read-only, off the real
@@ -34,7 +33,7 @@ public class ChaosReportService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> pspOutage(int days) {
+    public ChaosReport pspOutage(int days) {
         String tenant = tenantScope.currentTenantId();
         LocalDate horizon = clock.today().plusDays(days);
         BigDecimal atRisk = BigDecimal.ZERO;
@@ -54,21 +53,11 @@ public class ChaosReportService {
                 agedBeyondTerms++;
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "ChaosReport");
-        out.put("scenario", "psp-outage");
-        out.put("outageDays", days);
-        out.put("openBills", open);
-        out.put("revenueAtRisk", atRisk);
-        if (currency != null) {
-            out.put("currency", currency);
-        }
-        out.put("billsAgedBeyondTermsAtHorizon", agedBeyondTerms);
-        out.put("assumptions", List.of(
+        return new ChaosReport("ChaosReport", "psp-outage", days, open, atRisk, currency, agedBeyondTerms,
+                List.of(
                 "for " + days + " days no payment collects — every open bill is exposure",
                 "payment terms assumed " + PAYMENT_TERMS_DAYS + " days from bill date",
                 "the horizon reads the TENANT clock — in a sandbox clone this composes with time compression",
                 "read-only: nothing was changed, billed or messaged"));
-        return out;
     }
 }

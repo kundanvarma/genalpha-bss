@@ -1,9 +1,17 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.MigrationRehearsalDtos.Exceptions;
+import com.bss.billing.dto.MigrationRehearsalDtos.LegacyRow;
+import com.bss.billing.dto.MigrationRehearsalDtos.Missing;
+import com.bss.billing.dto.MigrationRehearsalDtos.Priced;
+import com.bss.billing.dto.MigrationRehearsalDtos.Report;
+import com.bss.billing.dto.MigrationRehearsalDtos.Request;
+import com.bss.billing.dto.MigrationRehearsalDtos.Summary;
 import com.bss.billing.entity.MigrationRehearsal;
 import com.bss.billing.repository.MigrationRehearsalRepository;
 import com.bss.billing.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,7 +20,6 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,27 +54,24 @@ public class MigrationRehearsalService {
     }
 
     @Transactional
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> rehearse(Map<String, Object> request) {
-        if (!(request.get("rows") instanceof List<?> rawRows) || rawRows.isEmpty()) {
+    public Report rehearse(Request request) {
+        List<LegacyRow> rawRows = request == null ? null : request.rows();
+        if (rawRows == null || rawRows.isEmpty()) {
             throw new IllegalArgumentException(
                     "rows [{externalRef, offeringName, expectedMonthly}] are required");
         }
-        BigDecimal tolerance = request.get("tolerance") == null ? new BigDecimal("0.01")
-                : new BigDecimal(String.valueOf(request.get("tolerance")));
+        BigDecimal tolerance = request.tolerance() == null ? new BigDecimal("0.01") : request.tolerance();
 
         Map<String, BigDecimal> monthlyByName = new HashMap<>();
         Map<String, String> unitCache = new HashMap<>();
-        List<Map<String, Object>> matched = new ArrayList<>();
-        List<Map<String, Object>> differs = new ArrayList<>();
-        List<Map<String, Object>> missing = new ArrayList<>();
+        List<Priced> matched = new ArrayList<>();
+        List<Priced> differs = new ArrayList<>();
+        List<Missing> missing = new ArrayList<>();
 
-        for (Object raw : rawRows) {
-            Map<String, Object> row = (Map<String, Object>) raw;
-            String externalRef = String.valueOf(row.get("externalRef"));
-            String offeringName = String.valueOf(row.get("offeringName"));
-            BigDecimal expected = row.get("expectedMonthly") == null ? null
-                    : new BigDecimal(String.valueOf(row.get("expectedMonthly")));
+        for (LegacyRow row : rawRows) {
+            String externalRef = String.valueOf(row.externalRef());
+            String offeringName = String.valueOf(row.offeringName());
+            BigDecimal expected = row.expectedMonthly();
             BigDecimal current = monthlyByName.computeIfAbsent(offeringName, name -> {
                 List<Map<String, Object>> found = catalog.offeringsByName(name);
                 if (found.isEmpty()) {
@@ -76,18 +80,13 @@ public class MigrationRehearsalService {
                 String id = String.valueOf(found.get(0).get("id"));
                 return runService.monthlyFor(id, new java.util.TreeMap<>(), unitCache);
             });
-            Map<String, Object> out = new LinkedHashMap<>();
-            out.put("externalRef", externalRef);
-            out.put("offeringName", offeringName);
-            out.put("expectedMonthly", expected);
             if (current == null || current.signum() <= 0) {
-                out.put("reason", "no offering with this name carries a recurring price in this catalog");
-                missing.add(out);
+                missing.add(new Missing(externalRef, offeringName, expected,
+                        "no offering with this name carries a recurring price in this catalog"));
                 continue;
             }
-            out.put("currentMonthly", current);
             BigDecimal delta = expected == null ? null : current.subtract(expected);
-            out.put("delta", delta);
+            Priced out = new Priced(externalRef, offeringName, expected, current, delta);
             if (expected != null && delta.abs().compareTo(tolerance) <= 0) {
                 matched.add(out);
             } else {
@@ -95,24 +94,18 @@ public class MigrationRehearsalService {
             }
         }
 
-        Map<String, Object> report = new LinkedHashMap<>();
-        report.put("@type", "MigrationRehearsal");
-        report.put("rows", rawRows.size());
-        report.put("matched", matched.size());
-        report.put("priceDiffers", differs.size());
-        report.put("offeringMissing", missing.size());
-        report.put("readyToCutOver", differs.isEmpty() && missing.isEmpty());
-        report.put("exceptions", Map.of("priceDiffers", differs, "offeringMissing", missing));
-        report.put("assumptions", List.of(
+        Report report = new Report("MigrationRehearsal", rawRows.size(), matched.size(), differs.size(),
+                missing.size(), differs.isEmpty() && missing.isEmpty(), new Exceptions(differs, missing),
+                List.of(
                 "priced by the SAME engine that cuts real bills (base recurring, no characteristics)",
                 "tolerance " + tolerance + " per month",
-                "read-only: nothing was migrated, billed or changed — the report is the only write"));
+                "read-only: nothing was migrated, billed or changed — the report is the only write"),
+                null, null);
 
         MigrationRehearsal row = new MigrationRehearsal();
         row.setId(UUID.randomUUID().toString());
         row.setTenantId(tenantScope.currentTenantId());
-        row.setName(request.get("name") == null
-                ? "Rehearsal: " + rawRows.size() + " rows" : String.valueOf(request.get("name")));
+        row.setName(request.name() == null ? "Rehearsal: " + rawRows.size() + " rows" : request.name());
         try {
             row.setReportJson(objectMapper.writeValueAsString(report));
         } catch (Exception e) {
@@ -120,33 +113,26 @@ public class MigrationRehearsalService {
         }
         row.setCreatedAt(OffsetDateTime.now());
         reports.save(row);
-        report.put("id", row.getId());
-        report.put("name", row.getName());
-        return report;
+        return report.saved(row.getId(), row.getName());
     }
 
+    /** The saved reports, newest first; the stored report rides along as the tree it was written as. */
     @Transactional(readOnly = true)
-    @SuppressWarnings("unchecked")
-    public List<Map<String, Object>> list() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<Summary> list() {
+        List<Summary> out = new ArrayList<>();
         for (MigrationRehearsal r : reports.findTop50ByTenantIdOrderByCreatedAtDesc(
                 tenantScope.currentTenantId())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", r.getId());
-            m.put("name", r.getName());
-            m.put("createdAt", r.getCreatedAt());
+            JsonNode report = null;
             try {
-                Map<String, Object> report = objectMapper.readValue(r.getReportJson(), Map.class);
-                m.put("rows", report.get("rows"));
-                m.put("matched", report.get("matched"));
-                m.put("priceDiffers", report.get("priceDiffers"));
-                m.put("offeringMissing", report.get("offeringMissing"));
-                m.put("readyToCutOver", report.get("readyToCutOver"));
-                m.put("report", report);
+                report = objectMapper.readTree(r.getReportJson());
             } catch (Exception ignored) {
                 // unreadable stored report still lists by name
             }
-            out.add(m);
+            out.add(report == null
+                    ? new Summary(r.getId(), r.getName(), r.getCreatedAt(), null, null, null, null, null, null)
+                    : new Summary(r.getId(), r.getName(), r.getCreatedAt(), report.get("rows"),
+                            report.get("matched"), report.get("priceDiffers"), report.get("offeringMissing"),
+                            report.get("readyToCutOver"), report));
         }
         return out;
     }

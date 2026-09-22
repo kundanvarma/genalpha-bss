@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.bss.billing.dto.PortfolioDiff;
 
 /** The clone's answer sheet: two portfolios, one pricing engine, the
  *  difference by name. Billing-admin (host desk) ground. */
@@ -23,7 +23,7 @@ public class PortfolioDiffController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> diff(@RequestParam String tenantA,
+    public ResponseEntity<PortfolioDiff> diff(@RequestParam String tenantA,
             @RequestParam String tenantB) {
         return ResponseEntity.ok(diff.diff(tenantA, tenantB));
     }

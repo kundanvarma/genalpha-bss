@@ -10,8 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.bss.billing.dto.MigrationRehearsalDtos.Report;
+import com.bss.billing.dto.MigrationRehearsalDtos.Request;
+import com.bss.billing.dto.MigrationRehearsalDtos.Summary;
+
 import java.util.List;
-import java.util.Map;
 
 /** The rehearsal door: run a legacy export against this catalog, read the
  *  saved receipts. Billing-admin ground. */
@@ -26,12 +29,12 @@ public class MigrationRehearsalController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> rehearse(@RequestBody Map<String, Object> request) {
+    public ResponseEntity<Report> rehearse(@RequestBody Request request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(rehearsal.rehearse(request));
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<Summary>> list() {
         return ResponseEntity.ok(rehearsal.list());
     }
 }

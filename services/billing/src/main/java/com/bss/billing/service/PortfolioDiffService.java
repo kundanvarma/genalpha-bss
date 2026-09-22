@@ -1,6 +1,7 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.PortfolioDiff;
 import com.bss.billing.security.TenantContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -52,10 +53,10 @@ public class PortfolioDiffService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> diff(String tenantA, String tenantB) {
+    public PortfolioDiff diff(String tenantA, String tenantB) {
         Map<String, BigDecimal> a = monthlyByName(tenantA);
         Map<String, BigDecimal> b = monthlyByName(tenantB);
-        List<Map<String, Object>> changed = new ArrayList<>();
+        List<PortfolioDiff.OfferingDelta> changed = new ArrayList<>();
         List<String> onlyInA = new ArrayList<>();
         List<String> onlyInB = new ArrayList<>();
         BigDecimal totalA = BigDecimal.ZERO;
@@ -70,12 +71,8 @@ public class PortfolioDiffService {
             }
             matched++;
             if (other.compareTo(e.getValue()) != 0) {
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("name", e.getKey());
-                row.put("monthlyA", e.getValue());
-                row.put("monthlyB", other);
-                row.put("delta", other.subtract(e.getValue()));
-                changed.add(row);
+                changed.add(new PortfolioDiff.OfferingDelta(e.getKey(), e.getValue(), other,
+                        other.subtract(e.getValue())));
             }
         }
         for (Map.Entry<String, BigDecimal> e : b.entrySet()) {
@@ -84,21 +81,10 @@ public class PortfolioDiffService {
                 onlyInB.add(e.getKey());
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "PortfolioDiff");
-        out.put("tenantA", tenantA);
-        out.put("tenantB", tenantB);
-        out.put("matched", matched);
-        out.put("changed", changed);
-        out.put("onlyInA", onlyInA);
-        out.put("onlyInB", onlyInB);
-        out.put("portfolioMonthlyA", totalA);
-        out.put("portfolioMonthlyB", totalB);
-        out.put("portfolioDelta", totalB.subtract(totalA));
-        out.put("assumptions", List.of(
+        return new PortfolioDiff("PortfolioDiff", tenantA, tenantB, matched, changed, onlyInA, onlyInB,
+                totalA, totalB, totalB.subtract(totalA), List.of(
                 "priced by the SAME engine that cuts real bills (base recurring, no characteristics)",
                 "matched by offering NAME; unpriceable offerings are absent, not zero",
                 "read-only: nothing was billed or changed"));
-        return out;
     }
 }

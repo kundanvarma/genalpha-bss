@@ -1,6 +1,15 @@
 package com.bss.billing.controller;
 
 import com.bss.billing.api.ApiConstants;
+import com.bss.billing.dto.ChannelConsentResult;
+import com.bss.billing.dto.ChannelConsentResult.PartyBillingChannelView;
+import com.bss.billing.dto.DirectDebitDtos.ClaimRunReceipt;
+import com.bss.billing.dto.DirectDebitDtos.ClaimView;
+import com.bss.billing.dto.DirectDebitDtos.MandateFile;
+import com.bss.billing.dto.DirectDebitDtos.MandateFileReceipt;
+import com.bss.billing.dto.DirectDebitDtos.MandateView;
+import com.bss.billing.dto.DirectDebitDtos.SettlementFileReceipt;
+import com.bss.billing.dto.PartyBillingChannelRequest;
 import com.bss.billing.security.TenantScope;
 import com.bss.billing.service.BillChannelService;
 import com.bss.billing.service.DirectDebitService;
@@ -13,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * Back-office doors for the channel chain and the direct-debit loop.
@@ -38,39 +46,39 @@ public class BillChannelController {
     }
 
     @GetMapping("/partyBillingChannel")
-    public List<Map<String, Object>> listChannels(@RequestParam String partyId) {
+    public List<PartyBillingChannelView> listChannels(@RequestParam String partyId) {
         return channels.list(tenantScope.currentTenantId(), partyId);
     }
 
     @PostMapping("/partyBillingChannel")
-    public ResponseEntity<Map<String, Object>> upsertChannel(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<ChannelConsentResult> upsertChannel(@RequestBody PartyBillingChannelRequest dto) {
         return ResponseEntity.ok(channels.upsert(tenantScope.currentTenantId(), dto));
     }
 
     @PostMapping("/directDebit/mandateFile")
-    public ResponseEntity<Map<String, Object>> mandateFile(@RequestBody Map<String, Object> file) {
+    public ResponseEntity<MandateFileReceipt> mandateFile(@RequestBody MandateFile file) {
         return ResponseEntity.ok(directDebit.ingestMandateFile(tenantScope.currentTenantId(), file));
     }
 
     @PostMapping("/directDebit/claimRun")
-    public ResponseEntity<Map<String, Object>> claimRun() {
+    public ResponseEntity<ClaimRunReceipt> claimRun() {
         return ResponseEntity.ok(directDebit.claimRun(tenantScope.currentTenantId()));
     }
 
     @PostMapping(value = "/directDebit/settlementFile",
             consumes = {"text/plain", "application/octet-stream", "application/json"})
-    public ResponseEntity<Map<String, Object>> settlementFile(@RequestBody String body) {
+    public ResponseEntity<SettlementFileReceipt> settlementFile(@RequestBody String body) {
         return ResponseEntity.ok(
                 directDebit.applySettlementFile(tenantScope.currentTenantId(), body));
     }
 
     @GetMapping("/directDebit/mandate")
-    public List<Map<String, Object>> mandates(@RequestParam(required = false) String partyId) {
+    public List<MandateView> mandates(@RequestParam(required = false) String partyId) {
         return directDebit.mandateView(tenantScope.currentTenantId(), partyId);
     }
 
     @GetMapping("/directDebit/claim")
-    public List<Map<String, Object>> claims() {
+    public List<ClaimView> claims() {
         return directDebit.claimView(tenantScope.currentTenantId());
     }
 }

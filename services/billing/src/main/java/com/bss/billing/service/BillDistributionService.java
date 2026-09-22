@@ -1,5 +1,13 @@
 package com.bss.billing.service;
 
+import com.bss.billing.dto.CreditedLine;
+import com.bss.billing.dto.DistributionDtos.InvoiceMeta;
+import com.bss.billing.dto.DistributionDtos.InvoiceResponseReceipt;
+import com.bss.billing.dto.DistributionDtos.LedgerRow;
+import com.bss.billing.dto.DistributionDtos.Letter;
+import com.bss.billing.dto.DistributionDtos.RequestForPayment;
+import com.bss.billing.dto.DistributionDtos.RetryReceipt;
+import com.bss.billing.dto.Money;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.BillDistribution;
 import com.bss.billing.entity.CustomerBill;
@@ -122,7 +130,7 @@ public class BillDistributionService {
             String channel = consent.get().channel();
             String kid = bill.getPaymentReference() != null ? bill.getPaymentReference()
                     : bill.getBillNo().replaceAll("\\D", "");
-            Map<String, Object> payload = "efaktura".equals(channel)
+            Object payload = "efaktura".equals(channel)
                     ? rfpOf(bill, kid, consent.get().aliasRef())
                     : letterOf(orgs.partyOf(bill.getOwnerPartyId()).orElse(null), bill, lines, kid);
             enqueue(tenantId, bill, channel, payload);
@@ -206,8 +214,7 @@ public class BillDistributionService {
 
     /** A rail send rides the SAME outbox-backed ledger as the partner path
      * — written with the bill, drained by the relay, retried honestly. */
-    private void enqueue(String tenantId, CustomerBill bill, String channel,
-            Map<String, Object> payload) {
+    private void enqueue(String tenantId, CustomerBill bill, String channel, Object payload) {
         BillDistribution row = new BillDistribution();
         row.setId(java.util.UUID.randomUUID().toString());
         row.setTenantId(tenantId);
@@ -228,16 +235,10 @@ public class BillDistributionService {
 
     /** The e-invoice rail's request-for-payment: the KID IS the bill's
      * payment reference — the settlement file comes home on the same digits. */
-    static Map<String, Object> rfpOf(CustomerBill bill, String kid, String aliasRef) {
-        Map<String, Object> rfp = new java.util.LinkedHashMap<>();
-        rfp.put("kid", kid);
-        rfp.put("billNo", bill.getBillNo());
-        rfp.put("aliasRef", aliasRef);
-        rfp.put("partyRef", bill.getOwnerPartyId());
-        rfp.put("amount", Map.of("value", bill.getAmountDueValue(), "unit", bill.getAmountDueUnit()));
-        rfp.put("issueDate", bill.getPeriodEnd().toString());
-        rfp.put("dueDate", bill.getPeriodEnd().plusDays(14).toString());
-        return rfp;
+    static RequestForPayment rfpOf(CustomerBill bill, String kid, String aliasRef) {
+        return new RequestForPayment(kid, bill.getBillNo(), aliasRef, bill.getOwnerPartyId(),
+                new Money(bill.getAmountDueUnit(), bill.getAmountDueValue()),
+                bill.getPeriodEnd().toString(), bill.getPeriodEnd().plusDays(14).toString());
     }
 
     /**
@@ -246,11 +247,8 @@ public class BillDistributionService {
      * carries no street by construction (postCode/city survive for routing).
      * The addressing is the mailbox provider's job; ours is honest content.
      */
-    public static Map<String, Object> letterOf(Map<String, Object> party, CustomerBill bill,
+    public static Letter letterOf(Map<String, Object> party, CustomerBill bill,
             List<AppliedBillingRate> lines, String kid) {
-        Map<String, Object> letter = new java.util.LinkedHashMap<>();
-        letter.put("partyRef", bill.getOwnerPartyId());
-        letter.put("subject", "Your invoice " + bill.getBillNo());
         StringBuilder content = new StringBuilder();
         String name = party == null ? null : ((String.valueOf(party.getOrDefault("givenName", ""))
                 + " " + String.valueOf(party.getOrDefault("familyName", ""))).trim());
@@ -271,13 +269,10 @@ public class BillDistributionService {
             content.append("  ").append(line.getName()).append(": ")
                     .append(line.getAmountValue()).append(' ').append(line.getAmountUnit()).append('\n');
         }
-        letter.put("content", content.toString());
-        letter.put("invoiceMeta", Map.of(
-                "kid", kid,
-                "billNo", bill.getBillNo(),
-                "amount", Map.of("value", bill.getAmountDueValue(), "unit", bill.getAmountDueUnit()),
-                "dueDate", bill.getPeriodEnd().plusDays(14).toString()));
-        return letter;
+        return new Letter(bill.getOwnerPartyId(), "Your invoice " + bill.getBillNo(), content.toString(),
+                new InvoiceMeta(kid, bill.getBillNo(),
+                        new Money(bill.getAmountDueUnit(), bill.getAmountDueValue()),
+                        bill.getPeriodEnd().plusDays(14).toString()));
     }
 
     @SuppressWarnings("unchecked")
@@ -294,9 +289,9 @@ public class BillDistributionService {
         return Map.of();
     }
 
-    private static String toJson(Map<String, Object> map) {
+    private static String toJson(Object payload) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(map);
+            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(payload);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("unserializable distribution payload", e);
         }
@@ -389,27 +384,16 @@ public class BillDistributionService {
 
     /** The delivery ledger as a worklist (payloads stay out — they are
      * large and the partner already has or will get them). */
-    public List<Map<String, Object>> ledgerView(String tenantId, String status) {
+    public List<LedgerRow> ledgerView(String tenantId, String status) {
         List<BillDistribution> rows = status == null
                 ? ledger.findTop100ByTenantIdOrderByCreatedAtDesc(tenantId)
                 : ledger.findTop100ByTenantIdAndStatusOrderByCreatedAtDesc(tenantId, status);
-        return rows.stream().map(r -> {
-            Map<String, Object> map = new java.util.LinkedHashMap<String, Object>();
-            map.put("id", r.getId());
-            map.put("billNo", r.getBillNo());
-            map.put("format", r.getFormat());
-            map.put("channel", r.getChannel());
-            map.put("status", r.getStatus());
-            map.put("attempts", r.getAttempts());
-            map.put("lastError", r.getLastError());
-            map.put("createdAt", r.getCreatedAt().toString());
-            map.put("sentAt", r.getSentAt() == null ? null : r.getSentAt().toString());
-            map.put("buyerStatus", r.getBuyerStatus());
-            map.put("buyerNote", r.getBuyerNote());
-            map.put("respondedAt", r.getRespondedAt() == null ? null : r.getRespondedAt().toString());
-            map.put("@type", "BillDistribution");
-            return (Map<String, Object>) map;
-        }).toList();
+        return rows.stream().map(r -> new LedgerRow(r.getId(), r.getBillNo(), r.getFormat(), r.getChannel(),
+                r.getStatus(), r.getAttempts(), r.getLastError(), r.getCreatedAt().toString(),
+                r.getSentAt() == null ? null : r.getSentAt().toString(),
+                r.getBuyerStatus(), r.getBuyerNote(),
+                r.getRespondedAt() == null ? null : r.getRespondedAt().toString(),
+                "BillDistribution")).toList();
     }
 
     /**
@@ -421,7 +405,7 @@ public class BillDistributionService {
      * bank's remittance says so; the two paths stay separate on purpose.
      */
     @org.springframework.transaction.annotation.Transactional
-    public Map<String, Object> applyInvoiceResponse(String tenantId, String xml) {
+    public InvoiceResponseReceipt applyInvoiceResponse(String tenantId, String xml) {
         Response response = parseInvoiceResponse(xml);
         List<BillDistribution> rows = ledger.findByTenantIdAndBillNo(tenantId, response.billNo());
         int updated = 0;
@@ -438,8 +422,7 @@ public class BillDistributionService {
             log.info("invoice response: {} is now '{}' by the buyer{}", row.getBillNo(),
                     response.status(), response.note() == null ? "" : " — " + response.note());
         }
-        return Map.of("billNo", response.billNo(), "buyerStatus", response.status(),
-                "updated", updated);
+        return new InvoiceResponseReceipt(response.billNo(), response.status(), updated);
     }
 
     record Response(String billNo, String status, String note) {
@@ -501,7 +484,7 @@ public class BillDistributionService {
     }
 
     /** An admin's second chance for a FAILED row — back to pending, due now. */
-    public Map<String, Object> retry(String tenantId, String id) {
+    public RetryReceipt retry(String tenantId, String id) {
         BillDistribution row = ledger.findById(id)
                 .filter(r -> tenantId.equals(r.getTenantId()))
                 .orElseThrow(() -> com.bss.billing.exception.NotFoundException
@@ -510,7 +493,7 @@ public class BillDistributionService {
         row.setNextAttemptAt(OffsetDateTime.now());
         row.setLastUpdate(OffsetDateTime.now());
         ledger.save(row);
-        return Map.of("status", "pending", "billNo", row.getBillNo());
+        return new RetryReceipt("pending", row.getBillNo());
     }
 
     /** UBL 2.1 Invoice — the EN 16931 core wearing whatever customization
@@ -521,7 +504,7 @@ public class BillDistributionService {
      * lines. The same profile row (CustomizationID/ProfileID) that
      * dresses invoices dresses their reversals. */
     public String creditNoteXml(String tenantId, com.bss.billing.entity.CreditNote note,
-            List<Map<String, Object>> creditedLines) {
+            List<CreditedLine> creditedLines) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         String format = tenant == null || tenant.getBillDistributionFormat() == null
                 ? "ehf" : tenant.getBillDistributionFormat();
@@ -554,15 +537,15 @@ public class BillDistributionService {
            .append(note.getAmountUnit()).append("\">")
            .append(note.getAmountValue()).append("</cbc:PayableAmount></cac:LegalMonetaryTotal>\n");
         int lineNo = 1;
-        List<Map<String, Object>> ublLines = creditedLines == null || creditedLines.isEmpty()
-                ? List.of(Map.of("name", note.getReason(), "amount", note.getAmountValue()))
+        List<CreditedLine> ublLines = creditedLines == null || creditedLines.isEmpty()
+                ? List.of(new CreditedLine(null, note.getReason(), note.getAmountValue()))
                 : creditedLines;
-        for (Map<String, Object> line : ublLines) {
+        for (CreditedLine line : ublLines) {
             xml.append("  <cac:CreditNoteLine><cbc:ID>").append(lineNo++).append("</cbc:ID>")
                .append("<cbc:CreditedQuantity unitCode=\"C62\">1</cbc:CreditedQuantity>")
                .append("<cbc:LineExtensionAmount currencyID=\"").append(note.getAmountUnit()).append("\">")
-               .append(line.get("amount")).append("</cbc:LineExtensionAmount>")
-               .append("<cac:Item><cbc:Name>").append(escape(String.valueOf(line.get("name"))))
+               .append(line.amount()).append("</cbc:LineExtensionAmount>")
+               .append("<cac:Item><cbc:Name>").append(escape(String.valueOf(line.name())))
                .append("</cbc:Name></cac:Item>")
                .append("</cac:CreditNoteLine>\n");
         }
@@ -574,7 +557,7 @@ public class BillDistributionService {
      * reverses — when the tenant is partner-wired for e-invoicing, the
      * kreditnota ships as structured XML too. Fail-open otherwise. */
     public void distributeCreditNote(String tenantId, com.bss.billing.entity.CreditNote note,
-            List<Map<String, Object>> creditedLines) {
+            List<CreditedLine> creditedLines) {
         TenantRegistry.TenantEntry tenant = tenants.byId(tenantId);
         if (tenant == null || !"partner".equalsIgnoreCase(tenant.getBillDistributionProvider())
                 || tenant.getBillDistributionUrl() == null

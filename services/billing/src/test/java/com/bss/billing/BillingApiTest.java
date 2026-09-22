@@ -34,6 +34,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class BillingApiTest {
 
+    /** A foreign catalog document, as the client reads it: a tree. */
+    private static com.fasterxml.jackson.databind.JsonNode tree(Object o) {
+        return new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(o);
+    }
+
     private static final String BASE = "/tmf-api/customerBillManagement/v4";
 
     @Autowired
@@ -82,13 +87,13 @@ class BillingApiTest {
                         "productOffering", Map.of("id", "po-tv"),
                         "relatedParty", List.of(Map.of("id", owner, "role", "customer")))));
         given(catalogClient.offering("po-fiber")).willReturn(
-                Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber"))));
+                tree(Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber")))));
         given(catalogClient.offering("po-tv")).willReturn(
-                Map.of("id", "po-tv", "productOfferingPrice", List.of(Map.of("id", "price-tv"))));
+                tree(Map.of("id", "po-tv", "productOfferingPrice", List.of(Map.of("id", "price-tv")))));
         given(catalogClient.price("price-fiber")).willReturn(
-                Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 39.99)));
+                tree(Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 39.99))));
         given(catalogClient.price("price-tv")).willReturn(
-                Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 14.99)));
+                tree(Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 14.99))));
     }
 
     private String runAndGetBillId(String owner) throws Exception {

@@ -1,6 +1,7 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.ShadowBillDriftView;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.entity.ShadowBillDrift;
@@ -81,13 +82,13 @@ public class ShadowBillingService {
 
     /** One tenant's shadow pass; returns the fresh drift rows it raised. */
     @Transactional
-    public List<Map<String, Object>> sweep(String tenant) {
+    public List<ShadowBillDriftView> sweep(String tenant) {
         return sweep(tenant, null);
     }
 
     /** Targeted (partyId) or rotating-window pass. */
     @Transactional
-    public List<Map<String, Object>> sweep(String tenant, String partyId) {
+    public List<ShadowBillDriftView> sweep(String tenant, String partyId) {
         List<Map<String, Object>> products = partyId != null
                 ? inventory.productsOf(partyId) : inventory.activeProducts();
         if (partyId == null && products.size() > sampleCap) {
@@ -106,7 +107,7 @@ public class ShadowBillingService {
         Map<String, List<AppliedBillingRate>> ratesOfBill = new HashMap<>();
         Map<String, String> unitCache = new HashMap<>();
         Map<String, BigDecimal> priceCache = new HashMap<>();
-        List<Map<String, Object>> raised = new ArrayList<>();
+        List<ShadowBillDriftView> raised = new ArrayList<>();
 
         for (Map<String, Object> product : products) {
             if (!(product.get("productOffering") instanceof Map<?, ?> ref) || ref.get("id") == null) {
@@ -165,7 +166,7 @@ public class ShadowBillingService {
             row.setUnit(unitCache.get(offeringId));
             row.setDetectedAt(OffsetDateTime.now());
             drifts.save(row);
-            Map<String, Object> payload = toMap(row);
+            ShadowBillDriftView payload = toView(row);
             events.publish("BillDriftDetectedEvent", "shadowBillDrift", payload, tenant);
             raised.add(payload);
             log.info("shadow billing: {} on {} will bill {} next cycle (was {}) — drift {}",
@@ -175,9 +176,9 @@ public class ShadowBillingService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String tenant) {
+    public List<ShadowBillDriftView> list(String tenant) {
         return drifts.findTop200ByTenantIdOrderByDetectedAtDesc(tenant)
-                .stream().map(this::toMap).toList();
+                .stream().map(this::toView).toList();
     }
 
     /** The billed line scaled back to a FULL month using the bill period and
@@ -222,19 +223,9 @@ public class ShadowBillingService {
         return null;
     }
 
-    private Map<String, Object> toMap(ShadowBillDrift d) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", d.getId());
-        m.put("ownerPartyId", d.getOwnerPartyId());
-        m.put("billId", d.getBillId());
-        m.put("offeringId", d.getOfferingId());
-        m.put("offeringName", d.getOfferingName());
-        m.put("billedMonthly", d.getBilledMonthly());
-        m.put("currentMonthly", d.getCurrentMonthly());
-        m.put("delta", d.getDelta());
-        m.put("unit", d.getUnit());
-        m.put("detectedAt", d.getDetectedAt());
-        m.put("@type", "ShadowBillDrift");
-        return m;
+    private ShadowBillDriftView toView(ShadowBillDrift d) {
+        return new ShadowBillDriftView(d.getId(), d.getOwnerPartyId(), d.getBillId(), d.getOfferingId(),
+                d.getOfferingName(), d.getBilledMonthly(), d.getCurrentMonthly(), d.getDelta(), d.getUnit(),
+                d.getDetectedAt(), "ShadowBillDrift");
     }
 }

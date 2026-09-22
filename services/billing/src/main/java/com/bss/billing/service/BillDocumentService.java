@@ -72,7 +72,7 @@ public class BillDocumentService {
      * the PDF itself, so a customer can also self-serve it.
      */
     @Transactional
-    public java.util.Map<String, Object> resend(String billId) {
+    public com.bss.billing.dto.ResendReceipt resend(String billId) {
         String tenant = tenantScope.currentTenantId();
         CustomerBill bill = bills.findByIdAndTenantId(billId, tenant)
                 .orElseThrow(() -> NotFoundException.forResource("CustomerBill", billId));
@@ -93,7 +93,7 @@ public class BillDocumentService {
                 "id", bill.getOwnerPartyId(), "role", "customer")));
         view.put("@type", "BillResend");
         events.publish("CustomerBillResendEvent", "billResend", view);
-        return java.util.Map.of("sent", bill.getBillNo());
+        return new com.bss.billing.dto.ResendReceipt(bill.getBillNo());
     }
 
     /** Also used by the distribution seam for the PRINT channel. */

@@ -1,6 +1,8 @@
 package com.bss.billing.service;
 
 import com.bss.billing.exception.BadRequestException;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -18,10 +20,12 @@ import java.util.Map;
  * reachable under any restriction). Unlisted countries get the permissive
  * default: policy is purely the tenant's.
  */
+@JsonPropertyOrder({"country", "reminderFeeGateDays", "reminderFeeCap", "maxFeeBearingReminders",
+        "enforcementNoticeDays", "minActionableAmount", "mrcStopsWhileSuspended", "emergencyAlwaysReachable"})
 public record CountryStatutoryPack(
         String country,
         int reminderFeeGateDays,
-        BigDecimal reminderFeeCap,
+        @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal reminderFeeCap,
         int maxFeeBearingReminders,
         int enforcementNoticeDays,
         BigDecimal minActionableAmount,
@@ -87,19 +91,7 @@ public record CountryStatutoryPack(
         }
     }
 
-    /** The floor, readable — the console renders it next to the editor. */
-    public Map<String, Object> view() {
-        Map<String, Object> m = new java.util.LinkedHashMap<>();
-        m.put("country", country);
-        m.put("reminderFeeGateDays", reminderFeeGateDays);
-        if (reminderFeeCap != null) {
-            m.put("reminderFeeCap", reminderFeeCap);
-        }
-        m.put("maxFeeBearingReminders", maxFeeBearingReminders);
-        m.put("enforcementNoticeDays", enforcementNoticeDays);
-        m.put("minActionableAmount", minActionableAmount);
-        m.put("mrcStopsWhileSuspended", mrcStopsWhileSuspended);
-        m.put("emergencyAlwaysReachable", emergencyAlwaysReachable);
-        return m;
-    }
+    // The floor is readable as-is: the policy view carries the pack next to
+    // the editor, its components in declaration order, the cap left off
+    // where a country has none.
 }

@@ -4,8 +4,20 @@ import com.bss.billing.api.ApiConstants;
 import com.bss.billing.api.OffsetPageRequest;
 import com.bss.billing.api.PagedResult;
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.AppliedBillingRateView;
+import com.bss.billing.dto.AttachmentRef;
 import com.bss.billing.dto.CustomerBillDto;
+import com.bss.billing.dto.DisputeChip;
+import com.bss.billing.dto.EntityRef;
+import com.bss.billing.dto.InstallmentPaymentRequest;
+import com.bss.billing.dto.InstallmentPlanEvent;
+import com.bss.billing.dto.InstallmentPlanRequest;
+import com.bss.billing.dto.InstallmentPlanView;
+import com.bss.billing.dto.Money;
 import com.bss.billing.dto.MoneyDto;
+import com.bss.billing.dto.PaymentRef;
+import com.bss.billing.dto.RelatedPartyRef;
+import com.bss.billing.dto.TimePeriod;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.events.DomainEventPublisher;
@@ -18,7 +30,9 @@ import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -32,7 +46,7 @@ import java.util.Map;
 public class CustomerBillService {
 
     private static final String RESOURCE = "CustomerBill";
-    private static final TypeReference<List<Map<String, Object>>> JSON_ARRAY = new TypeReference<>() {
+    private static final TypeReference<List<PaymentRef>> PAYMENT_REFS = new TypeReference<>() {
     };
 
     private final CustomerBillRepository repository;
@@ -71,52 +85,58 @@ public class CustomerBillService {
 
     // ---- TMF678 CustomerBillOnDemand resource ----
 
+    /**
+     * The request is the caller's document, kept VERBATIM (the open edge):
+     * the store holds it as sent, the view is that tree with the server's
+     * fields written over it.
+     */
     @Transactional
-    public Map<String, Object> createOnDemand(Map<String, Object> body) {
+    public ObjectNode createOnDemand(JsonNode body) {
         com.bss.billing.entity.CustomerBillOnDemand e = new com.bss.billing.entity.CustomerBillOnDemand();
         String id = java.util.UUID.randomUUID().toString();
         e.setId(id);
         e.setHref(ApiConstants.BASE_PATH + "/customerBillOnDemand/" + id);
         e.setTenantId(tenantScope.currentTenantId());
-        e.setState(body.get("state") == null ? "done" : String.valueOf(body.get("state")));
+        JsonNode state = body == null ? null : body.get("state");
+        e.setState(state == null || state.isNull() ? "done" : state.asText());
         e.setPayloadJson(writeJsonValue(body));
         e.setCreatedAt(OffsetDateTime.now());
         e.setLastUpdate(OffsetDateTime.now());
-        return onDemandToMap(onDemandRepository.save(e));
+        return onDemandView(onDemandRepository.save(e));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findOnDemand(Map<String, String> filters) {
+    public List<ObjectNode> findOnDemand(Map<String, String> filters) {
         return onDemandRepository.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(o -> filters.get("id") == null || filters.get("id").equals(o.getId()))
                 .filter(o -> filters.get("href") == null || filters.get("href").equals(o.getHref()))
-                .map(this::onDemandToMap).toList();
+                .map(this::onDemandView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findOnDemandById(String id) {
-        return onDemandToMap(onDemandRepository.findByIdAndTenantId(id, tenantScope.currentTenantId())
+    public ObjectNode findOnDemandById(String id) {
+        return onDemandView(onDemandRepository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("CustomerBillOnDemand", id)));
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> onDemandToMap(com.bss.billing.entity.CustomerBillOnDemand e) {
-        Map<String, Object> map = new java.util.LinkedHashMap<>();
+    private ObjectNode onDemandView(com.bss.billing.entity.CustomerBillOnDemand e) {
+        ObjectNode view = objectMapper.createObjectNode();
         try {
-            Object stored = e.getPayloadJson() == null ? null
-                    : objectMapper.readValue(e.getPayloadJson(), Object.class);
-            if (stored instanceof Map<?, ?> m) {
-                map.putAll((Map<String, Object>) m);
+            JsonNode stored = e.getPayloadJson() == null ? null : objectMapper.readTree(e.getPayloadJson());
+            if (stored instanceof ObjectNode o) {
+                view.setAll(o);
             }
         } catch (Exception ignored) {
             // fall through with server fields only
         }
-        map.put("id", e.getId());
-        map.put("href", e.getHref());
-        map.put("state", e.getState());
-        map.putIfAbsent("billDocument", java.util.List.of());
-        map.put("@type", "CustomerBillOnDemand");
-        return map;
+        view.put("id", e.getId());
+        view.put("href", e.getHref());
+        view.put("state", e.getState());
+        if (!view.has("billDocument")) {
+            view.putArray("billDocument");
+        }
+        view.put("@type", "CustomerBillOnDemand");
+        return view;
     }
 
     private String writeJsonValue(Object o) {
@@ -162,12 +182,12 @@ public class CustomerBillService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> ratesOf(String billId) {
+    public List<AppliedBillingRateView> ratesOf(String billId) {
         String tenantId = tenantScope.currentTenantId();
         CustomerBill bill = repository.findByIdAndTenantId(billId, tenantId)
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
         requireOwn(bill);
-        return rateRepository.findByTenantIdAndBillId(tenantId, billId).stream().map(this::rateToMap).toList();
+        return rateRepository.findByTenantIdAndBillId(tenantId, billId).stream().map(this::rateView).toList();
     }
 
     /**
@@ -202,19 +222,17 @@ public class CustomerBillService {
                 && !(CustomerBill.PARTIALLY_PAID.equals(entity.getState()) && brokenPlan)) {
             throw new ConflictException("bill is '" + entity.getState() + "' and cannot be settled again");
         }
-        Object paymentId = patch.getPayment() == null || patch.getPayment().isEmpty()
-                ? null : patch.getPayment().get(0).get("id");
+        String paymentId = patch.paymentId();
         if (paymentId == null) {
             throw new BadRequestException("settling a bill requires a payment reference");
         }
         java.math.BigDecimal owed = brokenPlan
                 ? plan.remainingOf(entity.getAmountDueValue()) : entity.getAmountDueValue();
-        String problem = paymentClient.validateAuthorized(String.valueOf(paymentId),
-                entity.getOwnerPartyId(), owed);
+        String problem = paymentClient.validateAuthorized(paymentId, entity.getOwnerPartyId(), owed);
         if (!problem.isEmpty()) {
             throw new ConflictException(problem);
         }
-        paymentClient.capture(String.valueOf(paymentId));
+        paymentClient.capture(paymentId);
 
         entity.setState(CustomerBill.SETTLED);
         entity.setPaymentJson(writeJsonArray(patch.getPayment()));
@@ -233,7 +251,7 @@ public class CustomerBillService {
      * bill; the customer is told the terms in plain numbers.
      */
     @Transactional
-    public Map<String, Object> createInstallmentPlan(String billId, Map<String, Object> dto) {
+    public InstallmentPlanView createInstallmentPlan(String billId, InstallmentPlanRequest dto) {
         CustomerBill bill = repository.findByIdAndTenantId(billId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
         requireOwn(bill);
@@ -243,8 +261,7 @@ public class CustomerBillService {
         if (plans.findByTenantIdAndBillId(bill.getTenantId(), billId).isPresent()) {
             throw new ConflictException("this bill already has an installment plan");
         }
-        int n = dto.get("installments") == null ? 3
-                : Integer.parseInt(String.valueOf(dto.get("installments")));
+        int n = dto.installments() == null ? 3 : dto.installments();
         if (n < 2 || n > 12) {
             throw new BadRequestException("installments must be 2-12");
         }
@@ -260,9 +277,9 @@ public class CustomerBillService {
         plan.setStatus(com.bss.billing.entity.InstallmentPlan.ACTIVE);
         // operators align the first part to payday; default one month out
         OffsetDateTime firstDue = OffsetDateTime.now().plusMonths(1);
-        if (dto.get("firstDueAt") != null) {
+        if (dto.firstDueAt() != null) {
             try {
-                firstDue = OffsetDateTime.parse(String.valueOf(dto.get("firstDueAt")));
+                firstDue = OffsetDateTime.parse(dto.firstDueAt());
             } catch (Exception e) {
                 throw new BadRequestException("firstDueAt must be an ISO date-time");
             }
@@ -274,18 +291,16 @@ public class CustomerBillService {
         plan.setCreatedAt(OffsetDateTime.now());
         plan.setLastUpdate(OffsetDateTime.now());
         plans.save(plan);
-        Map<String, Object> view = planView(plan, bill);
-        Map<String, Object> event = new java.util.LinkedHashMap<>(view);
-        event.put("billNo", bill.getBillNo());
-        event.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
-        events.publish("InstallmentPlanCreatedEvent", "installmentPlan", event);
+        InstallmentPlanView view = planView(plan, bill);
+        events.publish("InstallmentPlanCreatedEvent", "installmentPlan", new InstallmentPlanEvent(
+                view, bill.getBillNo(), null, List.of(RelatedPartyRef.customer(bill.getOwnerPartyId()))));
         return view;
     }
 
     /** One part lands: an authorized payment covering THIS installment is
      * captured; the last part settles the bill itself. */
     @Transactional
-    public Map<String, Object> payInstallment(String billId, Map<String, Object> dto) {
+    public InstallmentPlanView payInstallment(String billId, InstallmentPaymentRequest dto) {
         CustomerBill bill = repository.findByIdAndTenantId(billId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource(RESOURCE, billId));
         requireOwn(bill);
@@ -293,18 +308,16 @@ public class CustomerBillService {
                 .findByTenantIdAndBillId(bill.getTenantId(), billId)
                 .filter(p -> com.bss.billing.entity.InstallmentPlan.ACTIVE.equals(p.getStatus()))
                 .orElseThrow(() -> new BadRequestException("this bill has no active installment plan"));
-        Object paymentId = dto.get("payment") instanceof List<?> refs && !refs.isEmpty()
-                && refs.get(0) instanceof Map<?, ?> ref ? ref.get("id") : null;
+        String paymentId = dto == null ? null : dto.paymentId();
         if (paymentId == null) {
             throw new BadRequestException("an installment needs a payment reference");
         }
         java.math.BigDecimal due = plan.amountOf(plan.getPaidCount(), bill.getAmountDueValue());
-        String problem = paymentClient.validateAuthorized(String.valueOf(paymentId),
-                bill.getOwnerPartyId(), due);
+        String problem = paymentClient.validateAuthorized(paymentId, bill.getOwnerPartyId(), due);
         if (!problem.isEmpty()) {
             throw new ConflictException(problem);
         }
-        paymentClient.capture(String.valueOf(paymentId));
+        paymentClient.capture(paymentId);
         plan.setPaidCount(plan.getPaidCount() + 1);
         plan.setRemindedAt(null); // a payment resets the dunning clock
         boolean done = plan.getPaidCount() >= plan.getInstallments();
@@ -316,12 +329,9 @@ public class CustomerBillService {
         bill.setState(done ? CustomerBill.SETTLED : CustomerBill.PARTIALLY_PAID);
         bill.setLastUpdate(OffsetDateTime.now());
         CustomerBillDto updated = toDto(repository.save(bill));
-        Map<String, Object> view = planView(plan, bill);
-        Map<String, Object> event = new java.util.LinkedHashMap<>(view);
-        event.put("billNo", bill.getBillNo());
-        event.put("paidAmount", due);
-        event.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
-        events.publish("InstallmentPaidEvent", "installmentPlan", event);
+        InstallmentPlanView view = planView(plan, bill);
+        events.publish("InstallmentPaidEvent", "installmentPlan", new InstallmentPlanEvent(
+                view, bill.getBillNo(), due, List.of(RelatedPartyRef.customer(bill.getOwnerPartyId()))));
         if (done) {
             events.publish("CustomerBillStateChangeEvent", "customerBill", updated);
         }
@@ -331,26 +341,19 @@ public class CustomerBillService {
     }
 
     /** The plan as both surfaces read it. */
-    private Map<String, Object> planView(com.bss.billing.entity.InstallmentPlan plan, CustomerBill bill) {
-        Map<String, Object> view = new java.util.LinkedHashMap<>();
-        view.put("billId", bill.getId());
-        view.put("installments", plan.getInstallments());
-        view.put("paidCount", plan.getPaidCount());
-        view.put("amountPer", plan.getAmountPer());
-        view.put("lastAmount", plan.amountOf(plan.getInstallments() - 1, bill.getAmountDueValue()));
-        view.put("nextAmount", plan.getPaidCount() < plan.getInstallments()
-                ? plan.amountOf(plan.getPaidCount(), bill.getAmountDueValue()) : null);
-        view.put("currency", plan.getCurrency());
-        view.put("status", plan.getStatus());
-        if (plan.getNextDueAt() != null) {
-            view.put("nextDueAt", plan.getNextDueAt().toString());
-        }
-        view.put("@type", "InstallmentPlan");
-        return view;
+    private InstallmentPlanView planView(com.bss.billing.entity.InstallmentPlan plan, CustomerBill bill) {
+        return new InstallmentPlanView(bill.getId(), plan.getInstallments(), plan.getPaidCount(),
+                plan.getAmountPer(),
+                plan.amountOf(plan.getInstallments() - 1, bill.getAmountDueValue()),
+                plan.getPaidCount() < plan.getInstallments()
+                        ? plan.amountOf(plan.getPaidCount(), bill.getAmountDueValue()) : null,
+                plan.getCurrency(), plan.getStatus(),
+                plan.getNextDueAt() == null ? null : plan.getNextDueAt().toString(),
+                "InstallmentPlan");
     }
 
     /** Attach the plan (when one exists) to a bill DTO for the UIs. */
-    public Map<String, Object> planOf(String tenantId, String billId,
+    public InstallmentPlanView planOf(String tenantId, String billId,
             java.math.BigDecimal total, String unit) {
         return plans.findByTenantIdAndBillId(tenantId, billId).map(plan -> {
             CustomerBill shim = new CustomerBill();
@@ -379,33 +382,20 @@ public class CustomerBillService {
                 entity.getAmountDueValue(), entity.getAmountDueUnit()));
         disputeChips.findFirstByTenantIdAndBillIdOrderByCreatedAtDesc(
                 entity.getTenantId(), entity.getId()).ifPresent(d ->
-                dto.setDispute(java.util.Map.of("id", d.getId(), "status", d.getStatus(),
-                        "reason", d.getReason())));
+                dto.setDispute(new DisputeChip(d.getId(), d.getStatus(), d.getReason())));
         dto.setId(entity.getId());
         dto.setHref(entity.getHref());
         dto.setBillNo(entity.getBillNo());
         dto.setState(entity.getState());
         dto.setAmountDue(new MoneyDto(entity.getAmountDueUnit(), entity.getAmountDueValue()));
-        dto.setBillingPeriod(Map.of(
-                "startDateTime", entity.getPeriodStart().toString(),
-                "endDateTime", entity.getPeriodEnd().toString()));
-        dto.setRelatedParty(List.of(Map.of(
-                "id", entity.getOwnerPartyId(), "role", "customer", "@referredType", "Individual")));
+        dto.setBillingPeriod(TimePeriod.ofDates(entity.getPeriodStart(), entity.getPeriodEnd()));
+        dto.setRelatedParty(List.of(RelatedPartyRef.individual(entity.getOwnerPartyId())));
         // TMF678 requires a billingAccount (or financialAccount) reference.
-        dto.setBillingAccount(Map.of(
-                "id", entity.getOwnerPartyId() + "-account",
-                "@referredType", "BillingAccount",
-                "@type", "BillingAccountRef"));
-        dto.setPayment(readJsonArray(entity.getPaymentJson()));
+        dto.setBillingAccount(EntityRef.billingAccount(entity.getOwnerPartyId() + "-account"));
+        dto.setPayment(readPaymentRefs(entity.getPaymentJson()));
         // The bill's rendered document (TMF678 billDocument): one attachment
         // per bill, addressable so the customer can fetch the PDF.
-        dto.setBillDocument(List.of(Map.of(
-                "id", entity.getId() + "-document",
-                "name", "Bill " + entity.getBillNo(),
-                "mimeType", "application/pdf",
-                "@type", "AttachmentRefOrValue",
-                "href", entity.getHref() + "/document.pdf",
-                "url", entity.getHref() + "/document.pdf")));
+        dto.setBillDocument(List.of(AttachmentRef.pdfOf(entity.getId(), entity.getBillNo(), entity.getHref())));
         dto.setDistributionChannel(entity.getDistributionChannel());
         dto.setBillDate(entity.getBillDate());
         dto.setLastUpdate(entity.getLastUpdate());
@@ -413,51 +403,42 @@ public class CustomerBillService {
         return dto;
     }
 
-    private Map<String, Object> rateToMap(AppliedBillingRate rate) {
-        Map<String, Object> m = new java.util.LinkedHashMap<>();
-        m.put("id", rate.getId());
-        m.put("href", ApiConstants.BASE_PATH + "/appliedCustomerBillingRate/" + rate.getId());
-        m.put("name", rate.getName());
-        m.put("@type", "AppliedCustomerBillingRate");
-        m.put("type", rate.getRateType());
-        m.put("taxExcludedAmount", Map.of("unit", String.valueOf(rate.getAmountUnit()),
-                "value", rate.getAmountValue()));
-        // TMF678 appliedTax: only when the catalog price declared a rate for this line
-        if (rate.getAppliedTaxRate() != null) {
-            m.put("appliedTax", List.of(Map.of("taxCategory", "VAT", "taxRate", rate.getAppliedTaxRate())));
-        }
-        // TMF678: a rate on a bill is billed; a standalone/unbilled rate is not.
-        m.put("isBilled", rate.getBillId() != null);
-        // Consolidated org invoices: which member this line belongs to.
-        if (rate.getOwnerPartyId() != null) {
-            m.put("forParty", Map.of("id", rate.getOwnerPartyId()));
-        }
-        if (rate.getBillId() != null) {
-            m.put("bill", Map.of("id", rate.getBillId()));
-        }
-        m.put("date", String.valueOf(rate.getRateDate()));
-        return m;
+    private AppliedBillingRateView rateView(AppliedBillingRate rate) {
+        return new AppliedBillingRateView(rate.getId(),
+                ApiConstants.BASE_PATH + "/appliedCustomerBillingRate/" + rate.getId(),
+                rate.getName(), "AppliedCustomerBillingRate", rate.getRateType(),
+                // the unit as the line stores it (a missing unit has always read "null" here)
+                new Money(String.valueOf(rate.getAmountUnit()), rate.getAmountValue()),
+                // TMF678 appliedTax: only when the catalog price declared a rate for this line
+                rate.getAppliedTaxRate() == null ? null
+                        : List.of(new AppliedBillingRateView.AppliedTax("VAT", rate.getAppliedTaxRate())),
+                // TMF678: a rate on a bill is billed; a standalone/unbilled rate is not.
+                rate.getBillId() != null,
+                // Consolidated org invoices: which member this line belongs to.
+                rate.getOwnerPartyId() == null ? null : EntityRef.of(rate.getOwnerPartyId()),
+                rate.getBillId() == null ? null : EntityRef.of(rate.getBillId()),
+                String.valueOf(rate.getRateDate()));
     }
 
     /** Top-level TMF678 appliedCustomerBillingRate list, with an isBilled filter. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAllRates(Map<String, String> filters) {
+    public List<AppliedBillingRateView> findAllRates(Map<String, String> filters) {
         String tenantId = tenantScope.currentTenantId();
         return rateRepository.findByTenantId(tenantId).stream()
                 .filter(r -> filters.get("id") == null || filters.get("id").equals(r.getId()))
                 .filter(r -> filters.get("isBilled") == null
                         || Boolean.parseBoolean(filters.get("isBilled")) == (r.getBillId() != null))
-                .map(this::rateToMap).toList();
+                .map(this::rateView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findRateById(String id) {
+    public AppliedBillingRateView findRateById(String id) {
         AppliedBillingRate rate = rateRepository.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("AppliedCustomerBillingRate", id));
-        return rateToMap(rate);
+        return rateView(rate);
     }
 
-    private String writeJsonArray(List<Map<String, Object>> value) {
+    private String writeJsonArray(List<PaymentRef> value) {
         try {
             return value == null ? null : objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException e) {
@@ -465,9 +446,9 @@ public class CustomerBillService {
         }
     }
 
-    private List<Map<String, Object>> readJsonArray(String json) {
+    private List<PaymentRef> readPaymentRefs(String json) {
         try {
-            return json == null ? null : objectMapper.readValue(json, JSON_ARRAY);
+            return json == null ? null : objectMapper.readValue(json, PAYMENT_REFS);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("stored JSON array is unreadable", e);
         }

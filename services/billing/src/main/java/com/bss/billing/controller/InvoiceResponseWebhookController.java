@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.bss.billing.dto.WebhookRefused;
 
 /**
  * The door the DISTRIBUTION PARTNER knocks on with the buyer's answer:
@@ -32,11 +32,11 @@ public class InvoiceResponseWebhookController {
     }
 
     @PostMapping(value = "/distribution/v1/response", consumes = {"application/xml", "text/xml"})
-    public ResponseEntity<Map<String, Object>> respond(@RequestBody String xml,
+    public ResponseEntity<?> respond(@RequestBody String xml,
             @RequestHeader(value = "X-Distribution-Token", required = false) String token) {
         TenantRegistry.TenantEntry tenant = tenantOf(token);
         if (tenant == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "unknown distribution credential"));
+            return ResponseEntity.status(401).body(new WebhookRefused("unknown distribution credential"));
         }
         try (TenantContext ignored = TenantContext.actAs(tenant.getId())) {
             return ResponseEntity.ok(distribution.applyInvoiceResponse(tenant.getId(), xml));

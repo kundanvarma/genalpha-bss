@@ -1,6 +1,13 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.CaseActionRequests;
+import com.bss.billing.dto.CollectionCaseView;
+import com.bss.billing.dto.DunningPolicyRequest;
+import com.bss.billing.dto.DunningPolicyView;
+import com.bss.billing.dto.DunningStepReached;
+import com.bss.billing.dto.Money;
+import com.bss.billing.dto.RelatedPartyRef;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.CollectionCase;
 import com.bss.billing.entity.CustomerBill;
@@ -278,10 +285,8 @@ public class CollectionService {
         c.setStepIndex(c.getStepIndex() + 1);
         c.setLastUpdate(now);
         cases.save(c);
-        Map<String, Object> event = caseView(c);
-        event.put("step", stepView(step, feeCharged, c, pack));
-        event.put("billNo", overdue.oldestBillNo());
-        events.publish("DunningStepReachedEvent", "collectionCase", event);
+        events.publish("DunningStepReachedEvent", "collectionCase", new DunningStepReached(
+                caseView(c), stepView(step, feeCharged, c, pack), overdue.oldestBillNo()));
         log.info("collections: account {} stepped to {} ({} overdue {})",
                 accountId, c.getState(), overdue.total(), c.getCurrency());
     }
@@ -475,7 +480,7 @@ public class CollectionService {
     // ---- the faces ----
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findCases(String state) {
+    public List<CollectionCaseView> findCases(String state) {
         String tenantId = tenantScope.currentTenantId();
         java.util.Optional<String> own = partyScope.scopedPartyId();
         if (own.isPresent()) {
@@ -488,12 +493,12 @@ public class CollectionService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findCase(String id) {
+    public CollectionCaseView findCase(String id) {
         return caseView(requireOwnCase(id));
     }
 
     @Transactional
-    public Map<String, Object> promiseToPay(String caseId, Map<String, Object> dto) {
+    public CollectionCaseView promiseToPay(String caseId, CaseActionRequests.PromiseToPay dto) {
         CollectionCase c = requireOwnCase(caseId);
         if (CollectionCase.WRITTEN_OFF.equals(c.getState())
                 || CollectionCase.TERMINATED.equals(c.getState())) {
@@ -514,13 +519,11 @@ public class CollectionService {
             throw new ConflictException("the promise-to-pay allowance ("
                     + policy.getPromiseMaxPerPeriod() + " per period) is used up");
         }
-        int days = dto.get("days") == null ? policy.getPromiseMaxDays()
-                : Integer.parseInt(String.valueOf(dto.get("days")));
+        int days = dto.days() == null ? policy.getPromiseMaxDays() : dto.days();
         if (days < 1 || days > policy.getPromiseMaxDays()) {
             throw new BadRequestException("a promise can run 1-" + policy.getPromiseMaxDays() + " days");
         }
-        BigDecimal amount = dto.get("amount") == null ? c.getOverdueValue()
-                : new BigDecimal(String.valueOf(dto.get("amount")));
+        BigDecimal amount = dto.amount() == null ? c.getOverdueValue() : dto.amount();
         if (amount.signum() <= 0) {
             throw new BadRequestException("the promised amount must be positive");
         }
@@ -536,12 +539,11 @@ public class CollectionService {
     /** Staff holds: an amount-scoped dispute freeze (the rest still ages) or
      * a manual hardship hold. */
     @Transactional
-    public Map<String, Object> hold(String caseId, Map<String, Object> dto) {
+    public CollectionCaseView hold(String caseId, CaseActionRequests.Hold dto) {
         CollectionCase c = requireCase(caseId);
-        String type = String.valueOf(dto.getOrDefault("type", ""));
+        String type = dto.type() == null ? "" : dto.type();
         if ("dispute".equals(type)) {
-            BigDecimal amount = dto.get("amount") == null ? null
-                    : new BigDecimal(String.valueOf(dto.get("amount")));
+            BigDecimal amount = dto.amount();
             if (amount == null || amount.signum() <= 0) {
                 throw new BadRequestException("a dispute hold freezes an AMOUNT — name it");
             }
@@ -556,9 +558,9 @@ public class CollectionService {
     }
 
     @Transactional
-    public Map<String, Object> release(String caseId, Map<String, Object> dto) {
+    public CollectionCaseView release(String caseId, CaseActionRequests.Hold dto) {
         CollectionCase c = requireCase(caseId);
-        String type = String.valueOf(dto.getOrDefault("type", ""));
+        String type = dto.type() == null ? "" : dto.type();
         if ("dispute".equals(type)) {
             c.setDisputeHoldValue(null);
         } else if ("hardship".equals(type)) {
@@ -573,12 +575,12 @@ public class CollectionService {
     /** WRITE-OFF, the human decision at the ladder's end: only under the
      * policy threshold, only with a reason, only billing:admin (the route). */
     @Transactional
-    public Map<String, Object> writeOff(String caseId, Map<String, Object> dto) {
+    public CollectionCaseView writeOff(String caseId, CaseActionRequests.WriteOff dto) {
         CollectionCase c = requireCase(caseId);
         if (CollectionCase.WRITTEN_OFF.equals(c.getState())) {
             throw new ConflictException("this case is already written off");
         }
-        String reason = dto.get("reason") == null ? null : String.valueOf(dto.get("reason")).trim();
+        String reason = dto.reason() == null ? null : dto.reason().trim();
         if (reason == null || reason.isEmpty()) {
             throw new BadRequestException("a write-off needs a reason — the auditors will ask");
         }
@@ -602,7 +604,7 @@ public class CollectionService {
         c.setWriteOffReason(reason);
         c.setLastUpdate(now);
         cases.save(c);
-        Map<String, Object> view = caseView(c);
+        CollectionCaseView view = caseView(c);
         events.publish("DebtWrittenOffEvent", "collectionCase", view);
         log.info("collections: account {} written off ({} {}): {}",
                 c.getAccountId(), c.getOverdueValue(), c.getCurrency(), reason);
@@ -612,19 +614,19 @@ public class CollectionService {
     // ---- policy CRUD ----
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findPolicies() {
+    public List<DunningPolicyView> findPolicies() {
         return policies.findByTenantId(tenantScope.currentTenantId()).stream()
                 .map(this::policyView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findPolicy(String id) {
+    public DunningPolicyView findPolicy(String id) {
         return policyView(policies.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("DunningPolicy", id)));
     }
 
     @Transactional
-    public Map<String, Object> createPolicy(Map<String, Object> dto) {
+    public DunningPolicyView createPolicy(DunningPolicyRequest dto) {
         DunningPolicy policy = new DunningPolicy();
         policy.setId(UUID.randomUUID().toString());
         policy.setTenantId(tenantScope.currentTenantId());
@@ -634,7 +636,7 @@ public class CollectionService {
     }
 
     @Transactional
-    public Map<String, Object> patchPolicy(String id, Map<String, Object> dto) {
+    public DunningPolicyView patchPolicy(String id, DunningPolicyRequest dto) {
         DunningPolicy policy = policies.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("DunningPolicy", id));
         apply(policy, dto);
@@ -643,54 +645,54 @@ public class CollectionService {
 
     /** Merge + validate: the statutory pack has the last word, always on the
      * MERGED result, so no sequence of patches sneaks under the floor. */
-    private void apply(DunningPolicy policy, Map<String, Object> dto) {
-        if (dto.get("name") != null) {
-            policy.setName(String.valueOf(dto.get("name")));
+    private void apply(DunningPolicy policy, DunningPolicyRequest dto) {
+        if (dto.name() != null) {
+            policy.setName(dto.name());
         }
         if (policy.getName() == null || policy.getName().isBlank()) {
             throw new BadRequestException("a policy needs a name");
         }
-        if (dto.get("country") != null) {
-            policy.setCountry(String.valueOf(dto.get("country")).toUpperCase());
+        if (dto.country() != null) {
+            policy.setCountry(dto.country().toUpperCase());
         }
         if (policy.getCountry() == null) {
             policy.setCountry("NO");
         }
-        if (dto.get("paymentTermDays") != null) {
-            policy.setPaymentTermDays(Integer.parseInt(String.valueOf(dto.get("paymentTermDays"))));
+        if (dto.paymentTermDays() != null) {
+            policy.setPaymentTermDays(dto.paymentTermDays());
         }
-        if (dto.get("entryThreshold") != null) {
-            policy.setEntryThreshold(new BigDecimal(String.valueOf(dto.get("entryThreshold"))));
+        if (dto.entryThreshold() != null) {
+            policy.setEntryThreshold(dto.entryThreshold());
         }
-        if (dto.get("currency") != null) {
-            policy.setCurrency(String.valueOf(dto.get("currency")));
+        if (dto.currency() != null) {
+            policy.setCurrency(dto.currency());
         }
-        if (dto.get("steps") != null) {
-            policy.setStepsJson(writeJson(dto.get("steps")));
+        if (dto.hasSteps()) {
+            policy.setStepsJson(writeJson(dto.steps()));
         }
         if (policy.getStepsJson() == null) {
             throw new BadRequestException("a policy needs steps — the ladder itself");
         }
-        if (dto.get("reconnectionFee") != null) {
-            policy.setReconnectionFee(new BigDecimal(String.valueOf(dto.get("reconnectionFee"))));
+        if (dto.reconnectionFee() != null) {
+            policy.setReconnectionFee(dto.reconnectionFee());
         }
-        if (dto.get("writeOffThreshold") != null) {
-            policy.setWriteOffThreshold(new BigDecimal(String.valueOf(dto.get("writeOffThreshold"))));
+        if (dto.writeOffThreshold() != null) {
+            policy.setWriteOffThreshold(dto.writeOffThreshold());
         }
-        if (dto.get("promiseMaxPerPeriod") != null) {
-            policy.setPromiseMaxPerPeriod(Integer.parseInt(String.valueOf(dto.get("promiseMaxPerPeriod"))));
+        if (dto.promiseMaxPerPeriod() != null) {
+            policy.setPromiseMaxPerPeriod(dto.promiseMaxPerPeriod());
         }
-        if (dto.get("promisePeriodDays") != null) {
-            policy.setPromisePeriodDays(Integer.parseInt(String.valueOf(dto.get("promisePeriodDays"))));
+        if (dto.promisePeriodDays() != null) {
+            policy.setPromisePeriodDays(dto.promisePeriodDays());
         }
-        if (dto.get("promiseMaxDays") != null) {
-            policy.setPromiseMaxDays(Integer.parseInt(String.valueOf(dto.get("promiseMaxDays"))));
+        if (dto.promiseMaxDays() != null) {
+            policy.setPromiseMaxDays(dto.promiseMaxDays());
         }
-        if (dto.get("autoRefundThreshold") != null) {
-            policy.setAutoRefundThreshold(new BigDecimal(String.valueOf(dto.get("autoRefundThreshold"))));
+        if (dto.autoRefundThreshold() != null) {
+            policy.setAutoRefundThreshold(dto.autoRefundThreshold());
         }
-        if (dto.get("active") != null) {
-            policy.setActive(Boolean.parseBoolean(String.valueOf(dto.get("active"))));
+        if (dto.active() != null) {
+            policy.setActive(dto.active());
         }
         List<Step> steps = parseSteps(policy.getStepsJson());
         if (steps.isEmpty()) {
@@ -700,32 +702,19 @@ public class CollectionService {
         policy.setLastUpdate(OffsetDateTime.now());
     }
 
-    private Map<String, Object> policyView(DunningPolicy p) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", p.getId());
-        m.put("name", p.getName());
-        m.put("country", p.getCountry());
-        m.put("paymentTermDays", p.getPaymentTermDays());
-        m.put("entryThreshold", p.getEntryThreshold());
-        if (p.getCurrency() != null) {
-            m.put("currency", p.getCurrency());
-        }
+    private DunningPolicyView policyView(DunningPolicy p) {
+        com.fasterxml.jackson.databind.JsonNode steps;
         try {
-            m.put("steps", json.readValue(p.getStepsJson(), Object.class));
+            steps = json.readTree(p.getStepsJson());
         } catch (Exception e) {
-            m.put("steps", List.of());
+            steps = json.createArrayNode();
         }
-        m.put("reconnectionFee", p.getReconnectionFee());
-        m.put("writeOffThreshold", p.getWriteOffThreshold());
-        m.put("promiseMaxPerPeriod", p.getPromiseMaxPerPeriod());
-        m.put("promisePeriodDays", p.getPromisePeriodDays());
-        m.put("promiseMaxDays", p.getPromiseMaxDays());
-        m.put("autoRefundThreshold", p.getAutoRefundThreshold());
-        m.put("active", p.isActive());
-        // the floor the tenant cannot undercut, read-only beside the editor
-        m.put("statutory", CountryStatutoryPack.of(p.getCountry()).view());
-        m.put("@type", "DunningPolicy");
-        return m;
+        return new DunningPolicyView(p.getId(), p.getName(), p.getCountry(), p.getPaymentTermDays(),
+                p.getEntryThreshold(), p.getCurrency(), steps, p.getReconnectionFee(), p.getWriteOffThreshold(),
+                p.getPromiseMaxPerPeriod(), p.getPromisePeriodDays(), p.getPromiseMaxDays(),
+                p.getAutoRefundThreshold(), p.isActive(),
+                // the floor the tenant cannot undercut, read-only beside the editor
+                CountryStatutoryPack.of(p.getCountry()), "DunningPolicy");
     }
 
     // ---- plumbing ----
@@ -787,45 +776,25 @@ public class CollectionService {
         }
     }
 
-    private Map<String, Object> caseView(CollectionCase c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("accountId", c.getAccountId());
-        m.put("state", c.getState());
-        m.put("overdueBalance", Map.of(
-                "unit", c.getCurrency() == null ? "" : c.getCurrency(),
-                "value", c.getOverdueValue()));
-        if (c.getOldestDueAt() != null) {
-            m.put("oldestDueAt", c.getOldestDueAt().toString());
-        }
-        m.put("stepIndex", c.getStepIndex());
-        m.put("feeCount", c.getFeeCount());
-        if (c.getWarnedAt() != null) {
-            m.put("warnedAt", c.getWarnedAt().toString());
-        }
-        Map<String, Object> holds = new LinkedHashMap<>();
-        if (c.getPromiseDueAt() != null) {
-            holds.put("promiseToPay", Map.of(
-                    "amount", c.getPromiseValue(), "dueAt", c.getPromiseDueAt().toString()));
-        }
-        if (c.getDisputeHoldValue() != null) {
-            holds.put("dispute", Map.of("amount", c.getDisputeHoldValue()));
-        }
-        if (c.isHardshipHold()) {
-            holds.put("hardship", true);
-        }
-        m.put("holds", holds);
-        m.put("enforcedServices", readEnforced(c));
-        if (c.getCuredAt() != null) {
-            m.put("curedAt", c.getCuredAt().toString());
-        }
-        if (c.getWrittenOffAt() != null) {
-            m.put("writtenOffAt", c.getWrittenOffAt().toString());
-            m.put("writeOffReason", c.getWriteOffReason());
-        }
-        m.put("relatedParty", List.of(Map.of("id", c.getAccountId(), "role", "customer")));
-        m.put("@type", "CollectionCase");
-        return m;
+    private CollectionCaseView caseView(CollectionCase c) {
+        CollectionCaseView.Holds holds = new CollectionCaseView.Holds(
+                c.getPromiseDueAt() == null ? null
+                        : new CollectionCaseView.PromiseHold(c.getPromiseValue(), c.getPromiseDueAt().toString()),
+                c.getDisputeHoldValue() == null ? null
+                        : new CollectionCaseView.DisputeHold(c.getDisputeHoldValue()),
+                c.isHardshipHold() ? Boolean.TRUE : null);
+        return new CollectionCaseView(c.getId(), c.getAccountId(), c.getState(),
+                new Money(c.getCurrency() == null ? "" : c.getCurrency(), c.getOverdueValue()),
+                c.getOldestDueAt() == null ? null : c.getOldestDueAt().toString(),
+                c.getStepIndex(), c.getFeeCount(),
+                c.getWarnedAt() == null ? null : c.getWarnedAt().toString(),
+                holds, readEnforced(c),
+                c.getCuredAt() == null ? null : c.getCuredAt().toString(),
+                c.getWrittenOffAt() == null ? null : c.getWrittenOffAt().toString(),
+                // the reason rides only with the write-off date, as it always did
+                c.getWrittenOffAt() == null ? null : c.getWriteOffReason(),
+                List.of(RelatedPartyRef.customer(c.getAccountId())),
+                "CollectionCase");
     }
 
     private Map<String, Object> promiseView(CollectionCase c) {
@@ -840,22 +809,12 @@ public class CollectionService {
         return m;
     }
 
-    private Map<String, Object> stepView(Step step, BigDecimal feeCharged,
+    private DunningStepReached.Step stepView(Step step, BigDecimal feeCharged,
             CollectionCase c, CountryStatutoryPack pack) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("action", step.action());
-        m.put("offsetDays", step.offsetDays());
-        if (step.templateId() != null) {
-            m.put("templateId", step.templateId());
-        }
-        if (feeCharged != null) {
-            m.put("feeCharged", feeCharged);
-        }
-        if ("warn".equals(step.action()) && c.getWarnedAt() != null) {
-            // the advance warning must name the real date enforcement CAN start
-            m.put("enforceableAt", c.getWarnedAt().plus(span(pack.enforcementNoticeDays())).toString());
-        }
-        return m;
+        return new DunningStepReached.Step(step.action(), step.offsetDays(), step.templateId(), feeCharged,
+                // the advance warning must name the real date enforcement CAN start
+                "warn".equals(step.action()) && c.getWarnedAt() != null
+                        ? c.getWarnedAt().plus(span(pack.enforcementNoticeDays())).toString() : null);
     }
 
     private List<String> readEnforced(CollectionCase c) {

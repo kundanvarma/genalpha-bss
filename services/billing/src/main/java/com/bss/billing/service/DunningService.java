@@ -1,5 +1,7 @@
 package com.bss.billing.service;
 
+import com.bss.billing.dto.DunningCaseView;
+import com.bss.billing.dto.RelatedPartyRef;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.entity.InstallmentPlan;
 import com.bss.billing.events.DomainEventPublisher;
@@ -16,9 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * DUNNING, the polite kind first: an overdue installment gets exactly ONE
@@ -112,8 +112,8 @@ public class DunningService {
 
     /** The staff window: who is overdue, who broke, what is still owed. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> dunningView(String tenantId) {
-        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+    public List<DunningCaseView> dunningView(String tenantId) {
+        List<DunningCaseView> rows = new java.util.ArrayList<>();
         for (InstallmentPlan plan : plans.findByTenantIdAndStatusIn(tenantId,
                 List.of(InstallmentPlan.ACTIVE, InstallmentPlan.BROKEN))) {
             boolean overdue = InstallmentPlan.BROKEN.equals(plan.getStatus())
@@ -130,25 +130,14 @@ public class DunningService {
         return rows;
     }
 
-    private Map<String, Object> dunningEvent(InstallmentPlan plan, CustomerBill bill) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("billId", bill.getId());
-        map.put("billNo", bill.getBillNo());
-        map.put("partyId", bill.getOwnerPartyId());
-        map.put("installments", plan.getInstallments());
-        map.put("paidCount", plan.getPaidCount());
-        map.put("remaining", plan.remainingOf(bill.getAmountDueValue()));
-        map.put("currency", plan.getCurrency());
-        map.put("status", plan.getStatus());
-        if (plan.getNextDueAt() != null) {
-            map.put("nextDueAt", plan.getNextDueAt().toString());
-        }
-        if (plan.getRemindedAt() != null) {
-            map.put("remindedAt", plan.getRemindedAt().toString());
-        }
-        map.put("graceDays", Math.max(1, grace.toDays()));
-        map.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
-        map.put("@type", "DunningCase");
-        return map;
+    /** The same record is the staff window's row and the dunning events' payload. */
+    private DunningCaseView dunningEvent(InstallmentPlan plan, CustomerBill bill) {
+        return new DunningCaseView(bill.getId(), bill.getBillNo(), bill.getOwnerPartyId(),
+                plan.getInstallments(), plan.getPaidCount(), plan.remainingOf(bill.getAmountDueValue()),
+                plan.getCurrency(), plan.getStatus(),
+                plan.getNextDueAt() == null ? null : plan.getNextDueAt().toString(),
+                plan.getRemindedAt() == null ? null : plan.getRemindedAt().toString(),
+                Math.max(1, grace.toDays()),
+                List.of(RelatedPartyRef.customer(bill.getOwnerPartyId())), "DunningCase");
     }
 }

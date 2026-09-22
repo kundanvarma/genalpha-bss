@@ -37,6 +37,11 @@ with its suites green.
 - A request whose whole body is pasted into a prompt (customer summary, ticket reply, wrap-up) is a `JsonNode` body — an open console document — not a record with fifty optional fields; validation ports as `path(...)` checks.
 - A record enriched in stages grows by copies (`PriceSimReportView.saved(id,name)`, `withLines(kept)`, `KnowledgeAnswer.cached(true)`); a `Map<String, Record>` keyed by a dynamic name (`byKind`, `workerTypes`) is a keyed collection, not an untyped return.
 
+**Worked example: billing (22 Sep).** 43 → 0 (raw-map bodies 16 → 0), wire unchanged (37 endpoints snapshotted: 31 byte-identical, 6 key-order-only where `Map.of` had been random; TMF678 CTK). Money is the entity's `BigDecimal` as stored, never re-scaled — `0.00` stays `0.00`, a stored `49.90` stays `49.90`; the `DtoRoundTripTest` pins the scale, and a value read back from a stored JSON blob (credited lines) is parsed as `BigDecimal`, not through a `Double`.
+- An event that is the API view plus a few keys (`DunningStepReachedEvent` = case + `step` + `billNo`, `InstallmentPaidEvent` = plan + `billNo` + `paidAmount`) is a record with the view `@JsonUnwrapped` — and the unwrapped component must be named FIRST in `@JsonPropertyOrder`, or Jackson writes the added keys before the view's. Event-only maps (`promiseView`, `letterOf` internals) that no public method returns stay maps: events are a standing rule, and a map that serialises identically is not debt.
+- Absent-vs-explicit-null on a PATCH (`customizationId: null` clears the row) cannot ride `Optional` — Jackson gives `Optional.empty()` for an absent creator parameter too — so the field is a `JsonNode`: absent → Java null (leave alone), JSON null → `NullNode` (clear).
+- A handler with two honest answers is a sealed interface, not a map with different keys: `BillingRunResult` (`Receipt` | `Busy`), `ChannelConsentResult` (row | `Withdrawn`), `DunningRow` (`DunningCase` | `CollectionCase`), rehearsal rows (`Priced` | `Missing`). The foreign catalog documents the run prices from (`offering`, `price`) became `JsonNode` on the client interface; the run's arithmetic reads `path(...)`/`decimalValue()` and the test mocks build trees with `valueToTree`.
+
 ## 2. Modules and size
 
 | Rule | Check |

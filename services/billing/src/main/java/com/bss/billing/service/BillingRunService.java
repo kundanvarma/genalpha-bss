@@ -2,6 +2,9 @@ package com.bss.billing.service;
 
 import com.bss.billing.api.ApiConstants;
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.BillingRunResult;
+import com.bss.billing.dto.BillingRunView;
+import com.bss.billing.dto.TimePeriod;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.BillingRunRecord;
 import com.bss.billing.entity.CustomerBill;
@@ -12,6 +15,7 @@ import com.bss.billing.repository.BillingRunRecordRepository;
 import com.bss.billing.repository.CustomerBillRepository;
 import com.bss.billing.security.PartyScope;
 import com.bss.billing.security.TenantScope;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -115,8 +119,7 @@ public class BillingRunService {
      * construction — every billed account skips on its period check. The
      * run itself is a ledger row anyone can read.
      */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> run() {
+    public BillingRunResult run() {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("billing runs are a back-office operation");
         }
@@ -126,8 +129,8 @@ public class BillingRunService {
         // The lease is SHORT and heartbeated per account below, so a
         // crashed run frees it in minutes, not a run-length.
         if (!tickGuard.claim("billing-run", java.time.Duration.ofMinutes(2))) {
-            return Map.of("busy", true,
-                    "note", "a billing run is already in progress — its ledger row shows the progress");
+            return new BillingRunResult.Busy(true,
+                    "a billing run is already in progress — its ledger row shows the progress");
         }
         try {
             return doRun();
@@ -137,7 +140,7 @@ public class BillingRunService {
     }
 
     @SuppressWarnings("unchecked")
-    private Map<String, Object> doRun() {
+    private BillingRunResult.Receipt doRun() {
         // The run is triggered by an authenticated staff request, so the
         // caller's tenant scopes everything the run reads and creates.
         String tenantId = tenantScope.currentTenantId();
@@ -372,10 +375,8 @@ public class BillingRunService {
             pool.shutdownNow();
         }
         progress(runId, created.get(), skipped.get(), failed.get(), lastError.get(), true);
-        return Map.of("billsCreated", created.get(), "customersSkipped", skipped.get(),
-                "accountsFailed", failed.get(), "runId", runId,
-                "billingPeriod", Map.of("startDateTime", defaultStart.toString(),
-                        "endDateTime", defaultEnd.toString()));
+        return new BillingRunResult.Receipt(created.get(), skipped.get(), failed.get(), runId,
+                TimePeriod.ofDates(defaultStart, defaultEnd));
     }
 
     private enum Outcome { CREATED, SKIPPED, EMPTY }
@@ -399,24 +400,15 @@ public class BillingRunService {
     }
 
     /** Everything recent runs did, newest first — the operator's view. */
-    public List<Map<String, Object>> recentRuns() {
+    public List<BillingRunView> recentRuns() {
         if (partyScope.scopedPartyId().isPresent()) {
             throw new BadRequestException("billing runs are a back-office operation");
         }
-        List<Map<String, Object>> out = new ArrayList<>();
+        List<BillingRunView> out = new ArrayList<>();
         for (BillingRunRecord r : runs.findTop20ByTenantIdOrderByStartedAtDesc(
                 tenantScope.currentTenantId())) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", r.getId());
-            m.put("status", r.getStatus());
-            m.put("startedAt", r.getStartedAt());
-            m.put("finishedAt", r.getFinishedAt());
-            m.put("accountsTotal", r.getAccountsTotal());
-            m.put("billsCreated", r.getBillsCreated());
-            m.put("customersSkipped", r.getSkipped());
-            m.put("accountsFailed", r.getFailed());
-            m.put("lastError", r.getLastError());
-            out.add(m);
+            out.add(new BillingRunView(r.getId(), r.getStatus(), r.getStartedAt(), r.getFinishedAt(),
+                    r.getAccountsTotal(), r.getBillsCreated(), r.getSkipped(), r.getFailed(), r.getLastError()));
         }
         return out;
     }
@@ -780,21 +772,27 @@ public class BillingRunService {
      * Fails open to no categories — an unreachable catalog means no co-pay
      * split, never a stopped billing run.
      */
-    @SuppressWarnings("unchecked")
     private java.util.Set<String> categoriesOf(String offeringId, Map<String, java.util.Set<String>> cache) {
         return cache.computeIfAbsent(offeringId, id -> {
             try {
-                Map<String, Object> offering = catalog.offering(id);
-                if (offering == null || !(offering.get("category") instanceof List<?> categories)) {
+                JsonNode offering = catalog.offering(id);
+                if (offering == null || !offering.path("category").isArray()) {
                     return java.util.Set.of();
                 }
-                return ((List<Map<String, Object>>) categories).stream()
-                        .map(c -> String.valueOf(c.getOrDefault("name", "")).toLowerCase())
-                        .collect(java.util.stream.Collectors.toSet());
+                java.util.Set<String> names = new java.util.HashSet<>();
+                for (JsonNode c : offering.path("category")) {
+                    names.add((c.has("name") ? c.get("name").asText() : "").toLowerCase());
+                }
+                return names;
             } catch (RuntimeException e) {
                 return java.util.Set.of();
             }
         });
+    }
+
+    /** A JSON number as the decimal it was written as (a double reads as its shortest form, as before). */
+    private static BigDecimal decimalOf(JsonNode n) {
+        return n.isNumber() ? n.decimalValue() : new BigDecimal(n.asText());
     }
 
     /**
@@ -843,24 +841,26 @@ public class BillingRunService {
                 return monthly;
             }
         }
-        Map<String, Object> offering = catalog.offering(offeringId);
+        JsonNode offering = catalog.offering(offeringId);
         if (offering == null) {
             return BigDecimal.ZERO;
         }
         BigDecimal total = BigDecimal.ZERO;
-        for (Map<String, Object> priceRef
-                : (List<Map<String, Object>>) offering.getOrDefault("productOfferingPrice", List.of())) {
-            Map<String, Object> price = catalog.price(String.valueOf(priceRef.get("id")));
-            if (price == null || !"recurring".equals(price.get("priceType"))
-                    || !(price.get("price") instanceof Map<?, ?> money) || money.get("value") == null) {
+        for (JsonNode priceRef : offering.path("productOfferingPrice")) {
+            JsonNode price = catalog.price(priceRef.path("id").asText());
+            if (price == null || !"recurring".equals(price.path("priceType").asText(null))) {
+                continue;
+            }
+            JsonNode money = price.path("price");
+            if (!money.isObject() || !money.hasNonNull("value")) {
                 continue;
             }
             if (!priceApplies(price, characteristics)) {
                 continue;
             }
-            total = total.add(new BigDecimal(String.valueOf(money.get("value"))));
-            if (money.get("unit") != null) {
-                unitCache.put(offeringId, String.valueOf(money.get("unit")));
+            total = total.add(decimalOf(money.get("value")));
+            if (money.hasNonNull("unit")) {
+                unitCache.put(offeringId, money.get("unit").asText());
             }
         }
         return total;
@@ -871,27 +871,26 @@ public class BillingRunService {
      * One rate when every applying price agrees; null when none declares one or they
      * disagree — then the tenant's default applies at posting. Cached per offering.
      */
-    @SuppressWarnings("unchecked")
     BigDecimal taxRateFor(String offeringId, Map<String, String> characteristics,
             Map<String, java.util.Optional<BigDecimal>> taxCache) {
         return taxCache.computeIfAbsent(offeringId + "|" + characteristics, k -> {
-            Map<String, Object> offering = catalog.offering(offeringId);
+            JsonNode offering = catalog.offering(offeringId);
             if (offering == null) {
                 return java.util.Optional.empty();
             }
             BigDecimal agreed = null;
             boolean any = false;
-            for (Map<String, Object> priceRef
-                    : (List<Map<String, Object>>) offering.getOrDefault("productOfferingPrice", List.of())) {
-                Map<String, Object> price = catalog.price(String.valueOf(priceRef.get("id")));
-                if (price == null || !"recurring".equals(price.get("priceType")) || !priceApplies(price, characteristics)) {
+            for (JsonNode priceRef : offering.path("productOfferingPrice")) {
+                JsonNode price = catalog.price(priceRef.path("id").asText());
+                if (price == null || !"recurring".equals(price.path("priceType").asText(null))
+                        || !priceApplies(price, characteristics)) {
                     continue;
                 }
                 BigDecimal declared = null;
-                if (price.get("tax") instanceof List<?> taxes) {
-                    for (Object t : taxes) {
-                        if (t instanceof Map<?, ?> tm && tm.get("taxRate") != null) {
-                            declared = new BigDecimal(String.valueOf(tm.get("taxRate")));
+                if (price.path("tax").isArray()) {
+                    for (JsonNode t : price.path("tax")) {
+                        if (t.isObject() && t.hasNonNull("taxRate")) {
+                            declared = decimalOf(t.get("taxRate"));
                         }
                     }
                 }
@@ -910,17 +909,24 @@ public class BillingRunService {
 
     /** An unconditioned price always applies; a conditioned one needs every
      * named characteristic to hold one of its listed values. */
-    @SuppressWarnings("unchecked")
-    private boolean priceApplies(Map<String, Object> price, Map<String, String> characteristics) {
-        if (!(price.get("prodSpecCharValueUse") instanceof List<?> conditions) || conditions.isEmpty()) {
+    private boolean priceApplies(JsonNode price, Map<String, String> characteristics) {
+        JsonNode conditions = price.path("prodSpecCharValueUse");
+        if (!conditions.isArray() || conditions.isEmpty()) {
             return true;
         }
-        for (Map<String, Object> condition : (List<Map<String, Object>>) conditions) {
+        for (JsonNode condition : conditions) {
             String pick = characteristics == null ? null
-                    : characteristics.get(String.valueOf(condition.get("name")));
-            List<Map<String, Object>> allowed = condition.get("productSpecCharacteristicValue") instanceof List<?> l
-                    ? (List<Map<String, Object>>) l : List.of();
-            if (pick == null || allowed.stream().noneMatch(v -> pick.equals(String.valueOf(v.get("value"))))) {
+                    : characteristics.get(condition.path("name").asText());
+            if (pick == null) {
+                return false;
+            }
+            boolean allowed = false;
+            for (JsonNode v : condition.path("productSpecCharacteristicValue")) {
+                if (pick.equals(v.path("value").asText())) {
+                    allowed = true;
+                }
+            }
+            if (!allowed) {
                 return false;
             }
         }
@@ -1008,28 +1014,31 @@ public class BillingRunService {
                 return null; // the customer left because we changed the deal: the law says no charge
             }
         }
-        Map<String, Object> offering = catalog.offering(offeringId);
+        JsonNode offering = catalog.offering(offeringId);
         if (offering == null) {
             return null;
         }
-        Map<String, Object> penalty = null;
-        for (Map<String, Object> ref : (List<Map<String, Object>>) offering.getOrDefault("productOfferingPrice", List.of())) {
-            Map<String, Object> price = catalog.price(String.valueOf(ref.get("id")));
-            if (price != null && "penalty".equals(price.get("priceType"))) {
+        JsonNode penalty = null;
+        for (JsonNode ref : offering.path("productOfferingPrice")) {
+            JsonNode price = catalog.price(ref.path("id").asText());
+            if (price != null && "penalty".equals(price.path("priceType").asText(null))) {
                 penalty = price;
                 break;
             }
         }
-        if (penalty == null || !(penalty.get("price") instanceof Map<?, ?> money) || money.get("value") == null) {
+        if (penalty == null || !penalty.path("price").isObject() || !penalty.path("price").hasNonNull("value")) {
             return null;
         }
+        JsonNode money = penalty.get("price");
         int termMonths = 0;
-        if (penalty.get("unitOfMeasure") instanceof Map<?, ?> uom && uom.get("amount") != null) {
-            termMonths = (int) Double.parseDouble(String.valueOf(uom.get("amount")));
+        JsonNode uom = penalty.path("unitOfMeasure");
+        if (uom.isObject() && uom.hasNonNull("amount")) {
+            termMonths = (int) Double.parseDouble(uom.get("amount").asText());
         }
-        for (Map<String, Object> term : (List<Map<String, Object>>) offering.getOrDefault("productOfferingTerm", List.of())) {
-            if (termMonths == 0 && term.get("duration") instanceof Map<?, ?> d && d.get("amount") != null) {
-                termMonths = (int) Double.parseDouble(String.valueOf(d.get("amount")));
+        for (JsonNode term : offering.path("productOfferingTerm")) {
+            JsonNode d = term.path("duration");
+            if (termMonths == 0 && d.isObject() && d.hasNonNull("amount")) {
+                termMonths = (int) Double.parseDouble(d.get("amount").asText());
             }
         }
         if (termMonths <= 0 || product.get("startDate") == null) {
@@ -1046,13 +1055,13 @@ public class BillingRunService {
         if (remaining <= 0) {
             return null; // the commitment was honoured
         }
-        BigDecimal full = new BigDecimal(String.valueOf(money.get("value")));
+        BigDecimal full = decimalOf(money.get("value"));
         BigDecimal owed = full.multiply(BigDecimal.valueOf(remaining))
                 .divide(BigDecimal.valueOf(termMonths), 2, java.math.RoundingMode.HALF_UP);
         AppliedBillingRate rate = rateOf(tenantId, ownerParty, product,
-                String.valueOf(penalty.getOrDefault("name", "Early termination")) + " — " + remaining + " of " + termMonths
-                        + " months remaining (" + full + " declining)", owed,
-                money.get("unit") == null ? unit : String.valueOf(money.get("unit")));
+                (penalty.has("name") ? penalty.get("name").asText() : "Early termination") + " — " + remaining
+                        + " of " + termMonths + " months remaining (" + full + " declining)", owed,
+                money.hasNonNull("unit") ? money.get("unit").asText() : unit);
         rate.setRateType("oneTimeCharge");
         return rate;
     }

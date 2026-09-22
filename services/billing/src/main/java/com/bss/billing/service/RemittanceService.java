@@ -2,6 +2,12 @@ package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
 import com.bss.billing.dto.CustomerBillDto;
+import com.bss.billing.dto.Money;
+import com.bss.billing.dto.PaymentRef;
+import com.bss.billing.dto.RelatedPartyRef;
+import com.bss.billing.dto.RemittanceApplied;
+import com.bss.billing.dto.RemittanceReceipt;
+import com.bss.billing.dto.UnappliedRemittanceView;
 import com.bss.billing.entity.CustomerBill;
 import com.bss.billing.entity.UnappliedRemittance;
 import com.bss.billing.events.DomainEventPublisher;
@@ -75,7 +81,7 @@ public class RemittanceService {
      * matching, the settle guarantee, unapplied cash — is identical.
      * Caller has already authenticated the bank and put us inside the
      * tenant. */
-    public Map<String, Object> ingest(String tenantId, String body) {
+    public RemittanceReceipt ingest(String tenantId, String body) {
         String content = body == null ? "" : body.trim();
         ParsedFile file;
         if (content.startsWith("<")) {
@@ -103,8 +109,7 @@ public class RemittanceService {
             }
         }
         log.info("remittance batch {}: {} applied, {} parked as unapplied cash", batchRef, applied, parked);
-        return Map.of("batchRef", batchRef == null ? "" : batchRef,
-                "entries", entries.size(), "applied", applied, "unapplied", parked);
+        return new RemittanceReceipt(batchRef == null ? "" : batchRef, entries.size(), applied, parked);
     }
 
     private boolean apply(String tenantId, String batchRef, CreditEntry entry) {
@@ -142,14 +147,11 @@ public class RemittanceService {
                 entry.bankRef(), correlator);
         CustomerBillDto patch = new CustomerBillDto();
         patch.setState(CustomerBill.SETTLED);
-        patch.setPayment(List.of(Map.of("id", paymentId, "@referredType", "Payment")));
+        patch.setPayment(List.of(PaymentRef.of(paymentId)));
         billService.settle(bill.getId(), patch);
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("billNo", bill.getBillNo());
-        view.put("amount", entry.amount() + " " + entry.currency());
-        view.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
-        view.put("@type", "RemittanceApplied");
-        events.publish("RemittanceAppliedEvent", "remittance", view);
+        events.publish("RemittanceAppliedEvent", "remittance", new RemittanceApplied(bill.getBillNo(),
+                entry.amount() + " " + entry.currency(),
+                List.of(RelatedPartyRef.customer(bill.getOwnerPartyId())), "RemittanceApplied"));
         log.info("remittance applied: {} settled by bank transfer (ref {})",
                 bill.getBillNo(), entry.reference());
         return true;
@@ -179,7 +181,7 @@ public class RemittanceService {
      * parked with its reason.
      */
     @org.springframework.transaction.annotation.Transactional
-    public Map<String, Object> applyUnapplied(String tenantId, String unappliedId, String billId) {
+    public RemittanceApplied applyUnapplied(String tenantId, String unappliedId, String billId) {
         UnappliedRemittance row = unapplied.findById(unappliedId)
                 .filter(r -> tenantId.equals(r.getTenantId()))
                 .orElseThrow(() -> com.bss.billing.exception.NotFoundException
@@ -212,14 +214,12 @@ public class RemittanceService {
                 row.getReference(), correlator);
         CustomerBillDto patch = new CustomerBillDto();
         patch.setState(CustomerBill.SETTLED);
-        patch.setPayment(List.of(Map.of("id", paymentId, "@referredType", "Payment")));
+        patch.setPayment(List.of(PaymentRef.of(paymentId)));
         billService.settle(bill.getId(), patch);
         unapplied.delete(row);
-        Map<String, Object> view = new LinkedHashMap<>();
-        view.put("billNo", bill.getBillNo());
-        view.put("amount", row.getAmountValue() + " " + row.getAmountUnit());
-        view.put("relatedParty", List.of(Map.of("id", bill.getOwnerPartyId(), "role", "customer")));
-        view.put("@type", "RemittanceApplied");
+        RemittanceApplied view = new RemittanceApplied(bill.getBillNo(),
+                row.getAmountValue() + " " + row.getAmountUnit(),
+                List.of(RelatedPartyRef.customer(bill.getOwnerPartyId())), "RemittanceApplied");
         events.publish("RemittanceAppliedEvent", "remittance", view);
         log.info("unapplied cash {} resolved to {} by back-office", unappliedId, bill.getBillNo());
         return view;
@@ -227,19 +227,12 @@ public class RemittanceService {
 
     /** The unapplied-cash worklist — the AR queue a human resolves. */
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public List<Map<String, Object>> unappliedView(String tenantId) {
+    public List<UnappliedRemittanceView> unappliedView(String tenantId) {
         return unapplied.findTop100ByTenantIdOrderByReceivedAtDesc(tenantId).stream()
-                .map(r -> {
-                    Map<String, Object> map = new LinkedHashMap<String, Object>();
-                    map.put("id", r.getId());
-                    map.put("batchRef", r.getBatchRef());
-                    map.put("reference", r.getReference());
-                    map.put("amount", Map.of("unit", r.getAmountUnit(), "value", r.getAmountValue()));
-                    map.put("reason", r.getReason());
-                    map.put("receivedAt", r.getReceivedAt().toString());
-                    map.put("@type", "UnappliedRemittance");
-                    return (Map<String, Object>) map;
-                }).toList();
+                .map(r -> new UnappliedRemittanceView(r.getId(), r.getBatchRef(), r.getReference(),
+                        new Money(r.getAmountUnit(), r.getAmountValue()), r.getReason(),
+                        r.getReceivedAt().toString(), "UnappliedRemittance"))
+                .toList();
     }
 
     /** ISO 20022 camt.054: credit entries with their structured creditor

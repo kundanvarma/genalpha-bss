@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+import com.bss.billing.dto.ChaosReport;
 
 /** The chaos twin's door: a failure mode priced off the real ledger. */
 @RestController
@@ -22,7 +22,7 @@ public class ChaosReportController {
     }
 
     @GetMapping
-    public ResponseEntity<Map<String, Object>> report(
+    public ResponseEntity<ChaosReport> report(
             @RequestParam(defaultValue = "psp-outage") String scenario,
             @RequestParam(defaultValue = "7") int days) {
         return ResponseEntity.ok(chaos.pspOutage(days));

@@ -36,6 +36,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class BillingTenancyTest {
 
+    /** A foreign catalog document, as the client reads it: a tree. */
+    private static com.fasterxml.jackson.databind.JsonNode tree(Object o) {
+        return new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(o);
+    }
+
     private static final String BASE = "/tmf-api/customerBillManagement/v4";
     private static final String ISSUER_A = "https://idp.tenant-a.test/realms/bss";
     private static final String ISSUER_B = "https://idp.tenant-b.test/realms/bss";
@@ -83,9 +88,9 @@ class BillingTenancyTest {
                         "productOffering", Map.of("id", "po-fiber"),
                         "relatedParty", List.of(Map.of("id", owner, "role", "customer")))));
         given(catalogClient.offering("po-fiber")).willReturn(
-                Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber"))));
+                tree(Map.of("id", "po-fiber", "productOfferingPrice", List.of(Map.of("id", "price-fiber")))));
         given(catalogClient.price("price-fiber")).willReturn(
-                Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 39.99)));
+                tree(Map.of("priceType", "recurring", "price", Map.of("unit", "EUR", "value", 39.99))));
     }
 
     private String runAndGetBillId(String issuer, String owner) throws Exception {

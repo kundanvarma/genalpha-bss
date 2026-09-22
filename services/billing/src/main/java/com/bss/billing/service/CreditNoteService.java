@@ -1,6 +1,11 @@
 package com.bss.billing.service;
 
 import com.bss.billing.client.DownstreamClients;
+import com.bss.billing.dto.CreditNoteRequest;
+import com.bss.billing.dto.CreditNoteView;
+import com.bss.billing.dto.CreditedLine;
+import com.bss.billing.dto.Money;
+import com.bss.billing.dto.RelatedPartyRef;
 import com.bss.billing.entity.AppliedBillingRate;
 import com.bss.billing.entity.CreditNote;
 import com.bss.billing.entity.CustomerBill;
@@ -81,14 +86,14 @@ public class CreditNoteService {
     }
 
     @Transactional
-    public Map<String, Object> issue(String billId, Map<String, Object> dto) {
+    public CreditNoteView issue(String billId, CreditNoteRequest dto) {
         return issue(billId, dto, null);
     }
 
     @Transactional
-    public Map<String, Object> issue(String billId, Map<String, Object> dto, String disputeId) {
+    public CreditNoteView issue(String billId, CreditNoteRequest dto, String disputeId) {
         String tenant = tenantScope.currentTenantId();
-        String reason = dto.get("reason") == null ? null : String.valueOf(dto.get("reason")).trim();
+        String reason = dto.reason() == null ? null : dto.reason().trim();
         if (reason == null || reason.isBlank()) {
             throw new BadRequestException("reason is required — a reversing document has a cause");
         }
@@ -96,12 +101,10 @@ public class CreditNoteService {
                 .orElseThrow(() -> NotFoundException.forResource("CustomerBill", billId));
         // per-LINE credits: name the rate lines being reversed; each may
         // carry its own partial amount (default = the full line)
-        List<Map<String, Object>> creditedLines = resolveLines(bill, dto.get("lines"));
+        List<CreditedLine> creditedLines = resolveLines(bill, dto.lines());
         BigDecimal amount = !creditedLines.isEmpty()
-                ? creditedLines.stream().map(l -> (BigDecimal) l.get("amount"))
-                        .reduce(BigDecimal.ZERO, BigDecimal::add)
-                : dto.get("amount") == null ? bill.getAmountDueValue()
-                        : new BigDecimal(String.valueOf(dto.get("amount")));
+                ? creditedLines.stream().map(CreditedLine::amount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                : dto.amount() == null ? bill.getAmountDueValue() : dto.amount();
         if (amount.signum() <= 0 || amount.compareTo(bill.getAmountDueValue()) > 0) {
             throw new BadRequestException("credit must be 0 < amount <= the bill's remaining "
                     + bill.getAmountDueValue());
@@ -132,16 +135,15 @@ public class CreditNoteService {
         } else {
             // unpaid: the numbered document AND the smaller due, atomically —
             // one negative rate line per credited line (or one for the lot)
-            List<Map<String, Object>> negatives = creditedLines.isEmpty()
-                    ? List.of(Map.of("name", reason, "amount", amount)) : creditedLines;
-            for (Map<String, Object> lineCredit : negatives) {
+            List<CreditedLine> negatives = creditedLines.isEmpty()
+                    ? List.of(new CreditedLine(null, reason, amount)) : creditedLines;
+            for (CreditedLine lineCredit : negatives) {
                 AppliedBillingRate credit = new AppliedBillingRate();
                 credit.setId(UUID.randomUUID().toString());
                 credit.setTenantId(tenant);
-                credit.setName("Credit note " + note.getCreditNoteNo() + " — "
-                        + lineCredit.get("name"));
+                credit.setName("Credit note " + note.getCreditNoteNo() + " — " + lineCredit.name());
                 credit.setRateType("creditNote");
-                credit.setAmountValue(((BigDecimal) lineCredit.get("amount")).negate());
+                credit.setAmountValue(lineCredit.amount().negate());
                 credit.setAmountUnit(bill.getAmountDueUnit());
                 credit.setBillId(bill.getId());
                 credit.setOwnerPartyId(bill.getOwnerPartyId());
@@ -162,7 +164,7 @@ public class CreditNoteService {
         creditNotes.save(note);
         // the kreditnota ships the same wire as the invoice it reverses
         distribution.distributeCreditNote(tenant, note, creditedLines);
-        Map<String, Object> view = toMap(note);
+        CreditNoteView view = toView(note);
         events.publish("CreditNoteIssuedEvent", "creditNote", view);
         log.info("credit note {} issued on bill {}: {} {} ({})", note.getCreditNoteNo(),
                 bill.getBillNo(), amount, note.getAmountUnit(), note.getSettlement());
@@ -170,7 +172,7 @@ public class CreditNoteService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> list(String billId, String relatedPartyId) {
+    public List<CreditNoteView> list(String billId, String relatedPartyId) {
         String tenant = tenantScope.currentTenantId();
         // customers stay self-scoped; a machine caller (risk engine) may ask
         // per party — the finder existed since the credit-note arc, this is
@@ -184,12 +186,12 @@ public class CreditNoteService {
                         : creditNotes.findByTenantIdOrderByIssuedAtDesc(tenant));
         return found.stream()
                 .filter(n -> billId == null || billId.equals(n.getBillId()))
-                .map(this::toMap).toList();
+                .map(this::toView).toList();
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> byId(String id) {
-        return toMap(requireOwn(id));
+    public CreditNoteView byId(String id) {
+        return toView(requireOwn(id));
     }
 
     @Transactional(readOnly = true)
@@ -240,34 +242,32 @@ public class CreditNoteService {
 
     /* ---------- internals ---------- */
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> resolveLines(CustomerBill bill, Object linesDto) {
-        if (!(linesDto instanceof List<?> requested) || requested.isEmpty()) {
+    private List<CreditedLine> resolveLines(CustomerBill bill, List<CreditNoteRequest.Line> requested) {
+        if (requested == null || requested.isEmpty()) {
             return List.of();
         }
         Map<String, AppliedBillingRate> byId = new LinkedHashMap<>();
         for (AppliedBillingRate r : rates.findByTenantIdAndBillId(bill.getTenantId(), bill.getId())) {
             byId.put(r.getId(), r);
         }
-        List<Map<String, Object>> out = new java.util.ArrayList<>();
-        for (Object o : requested) {
-            if (!(o instanceof Map<?, ?> req) || req.get("id") == null) {
+        List<CreditedLine> out = new java.util.ArrayList<>();
+        for (CreditNoteRequest.Line req : requested) {
+            if (req == null || req.id() == null) {
                 throw new BadRequestException("each line needs the rate line's id");
             }
-            AppliedBillingRate rate = byId.get(String.valueOf(req.get("id")));
+            AppliedBillingRate rate = byId.get(req.id());
             if (rate == null) {
-                throw new BadRequestException("rate line " + req.get("id") + " is not on this bill");
+                throw new BadRequestException("rate line " + req.id() + " is not on this bill");
             }
             if (rate.getAmountValue().signum() <= 0) {
                 throw new BadRequestException("only positive charge lines can be credited");
             }
-            BigDecimal lineAmount = req.get("amount") == null ? rate.getAmountValue()
-                    : new BigDecimal(String.valueOf(req.get("amount")));
+            BigDecimal lineAmount = req.amount() == null ? rate.getAmountValue() : req.amount();
             if (lineAmount.signum() <= 0 || lineAmount.compareTo(rate.getAmountValue()) > 0) {
                 throw new BadRequestException("line credit must be 0 < amount <= the line's "
                         + rate.getAmountValue());
             }
-            out.add(Map.of("id", rate.getId(), "name", rate.getName(), "amount", lineAmount));
+            out.add(new CreditedLine(rate.getId(), rate.getName(), lineAmount));
         }
         return out;
     }
@@ -280,17 +280,17 @@ public class CreditNoteService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> readLines(String json) {
+    /** The stored lines back as decimals — the amount as written, never a double. */
+    private List<CreditedLine> readLines(String json) {
         if (json == null || json.isBlank()) {
             return List.of();
         }
         try {
-            List<Map<String, Object>> raw = objectMapper.readValue(json, List.class);
-            // amounts come back as doubles from JSON — normalise for the XML
-            return raw.stream().map(m -> (Map<String, Object>) (Map<?, ?>) Map.of(
-                    "id", m.getOrDefault("id", ""), "name", m.getOrDefault("name", ""),
-                    "amount", new BigDecimal(String.valueOf(m.get("amount"))))).toList();
+            List<CreditedLine> raw = objectMapper.readValue(json,
+                    new com.fasterxml.jackson.core.type.TypeReference<List<CreditedLine>>() {
+                    });
+            return raw.stream().map(l -> new CreditedLine(
+                    l.id() == null ? "" : l.id(), l.name() == null ? "" : l.name(), l.amount())).toList();
         } catch (Exception e) {
             return List.of();
         }
@@ -337,34 +337,15 @@ public class CreditNoteService {
         }
     }
 
-    private Map<String, Object> toMap(CreditNote n) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", n.getId());
-        map.put("href", "/tmf-api/customerBillManagement/v4/creditNote/" + n.getId());
-        map.put("creditNoteNo", n.getCreditNoteNo());
-        map.put("billId", n.getBillId());
-        map.put("billNo", n.getBillNo());
-        map.put("amount", Map.of("value", n.getAmountValue(), "unit",
-                n.getAmountUnit() == null ? "EUR" : n.getAmountUnit()));
-        map.put("reason", n.getReason());
-        map.put("settlement", n.getSettlement());
-        if (n.getRefundRef() != null) {
-            map.put("refundRef", n.getRefundRef());
-        }
-        if (n.getDisputeId() != null) {
-            map.put("disputeId", n.getDisputeId());
-        }
-        List<Map<String, Object>> creditedLines = readLines(n.getLinesJson());
-        if (!creditedLines.isEmpty()) {
-            map.put("creditedLines", creditedLines);
-        }
-        if (n.getOwnerPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", n.getOwnerPartyId(), "role", "customer",
-                    "@referredType", "Individual")));
-        }
-        map.put("issuedAt", n.getIssuedAt());
-        map.put("@type", "CreditNote");
-        return map;
+    private CreditNoteView toView(CreditNote n) {
+        return new CreditNoteView(n.getId(),
+                "/tmf-api/customerBillManagement/v4/creditNote/" + n.getId(),
+                n.getCreditNoteNo(), n.getBillId(), n.getBillNo(),
+                new Money(n.getAmountUnit() == null ? "EUR" : n.getAmountUnit(), n.getAmountValue()),
+                n.getReason(), n.getSettlement(), n.getRefundRef(), n.getDisputeId(),
+                readLines(n.getLinesJson()),
+                n.getOwnerPartyId() == null ? null : List.of(RelatedPartyRef.individual(n.getOwnerPartyId())),
+                n.getIssuedAt(), "CreditNote");
     }
 
     private static PdfPCell headCell(String text) {
