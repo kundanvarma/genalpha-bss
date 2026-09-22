@@ -40,7 +40,7 @@ jobs:
         run: docker build -t bss/${{ matrix.service }}:${{ github.sha }} .
 
       - name: Upload jar artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.service }}-jar
           path: services/${{ matrix.service }}/target/*.jar
