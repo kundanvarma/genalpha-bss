@@ -20,8 +20,8 @@ public class Journey {
     public static final String PAUSED = "paused";
     /** The full lifecycle; only ACTIVE triggers and runs. draft/scheduled sit
      *  before go-live, archived is a soft delete hidden from the default list. */
-    public static final java.util.Set<String> LIFECYCLE =
-            java.util.Set.of("draft", "scheduled", ACTIVE, PAUSED, "archived");
+    public static final java.util.Set<String> LIFECYCLE = java.util.Collections.unmodifiableSet(
+            new java.util.LinkedHashSet<>(java.util.List.of("draft", "scheduled", ACTIVE, PAUSED, "archived")));
     public static final String ARCHIVED = "archived";
 
     @Id

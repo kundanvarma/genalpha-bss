@@ -8,12 +8,11 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.util.List;
-import java.util.Map;
 
 @Component
 public class RestInsightClient implements InsightClient {
 
-    private static final TypeReference<List<Map<String, Object>>> JSON_LIST = new TypeReference<>() {
+    private static final TypeReference<List<SegmentMember>> MEMBERS = new TypeReference<>() {
     };
 
     private final RestClient restClient;
@@ -29,13 +28,13 @@ public class RestInsightClient implements InsightClient {
     /** Fails CLOSED: an unreachable insight component means an empty
      * segment — a blast must never guess its audience. */
     @Override
-    public List<Map<String, Object>> segmentMembers(String segment) {
+    public List<SegmentMember> segmentMembers(String segment) {
         try {
             String body = restClient.get()
                     .uri(uri -> uri.path("/insight/v1/segmentMembers")
                             .queryParam("segment", segment).build())
                     .retrieve().body(String.class);
-            return body == null ? List.of() : objectMapper.readValue(body, JSON_LIST);
+            return body == null ? List.of() : objectMapper.readValue(body, MEMBERS);
         } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
             return List.of();
         }
@@ -43,12 +42,12 @@ public class RestInsightClient implements InsightClient {
 
     /** Fails CLOSED, same as segmentMembers: an unreachable audience is empty. */
     @Override
-    public List<Map<String, Object>> audienceMembers(String audienceId) {
+    public List<SegmentMember> audienceMembers(String audienceId) {
         try {
             String body = restClient.get()
                     .uri("/insight/v1/audience/{id}/members", audienceId)
                     .retrieve().body(String.class);
-            return body == null ? List.of() : objectMapper.readValue(body, JSON_LIST);
+            return body == null ? List.of() : objectMapper.readValue(body, MEMBERS);
         } catch (RestClientException | com.fasterxml.jackson.core.JsonProcessingException e) {
             return List.of();
         }

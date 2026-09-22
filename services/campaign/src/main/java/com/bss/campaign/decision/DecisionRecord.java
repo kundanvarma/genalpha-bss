@@ -1,7 +1,8 @@
 package com.bss.campaign.decision;
 
+import com.bss.campaign.dto.DecisionView;
+
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,28 +32,10 @@ public record DecisionRecord(
         OffsetDateTime decidedAt,
         String contract) {
 
-    public Map<String, Object> toMap() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("decisionId", decisionId);
-        m.put("decisionPoint", decisionPoint);
-        m.put("subjectType", subjectType);
-        m.put("subjectId", subjectId);
-        m.put("candidates", candidates);
-        m.put("eligibleActions", eligibleActions);
-        m.put("constraints", constraints);
-        m.put("action", action);
-        m.put("propensity", propensity);
-        m.put("policy", policy);
-        m.put("policyVersion", policyVersion);
-        m.put("reason", reason);
-        m.put("context", context);
-        m.put("evidence", evidence);
-        m.put("autonomy", autonomy);
-        m.put("fallback", fallback);
-        m.put("source", source);
-        m.put("contract", contract);
-        m.put("decidedAt", decidedAt.toString());
-        m.put("@type", "Decision");
-        return m;
+    /** The wire form: what is published and what a dry run answers with. */
+    public DecisionView view() {
+        return new DecisionView(decisionId, decisionPoint, subjectType, subjectId, candidates, eligibleActions,
+                constraints, action, propensity, policy, policyVersion, reason, context, evidence, autonomy, fallback,
+                source, contract, decidedAt.toString(), "Decision");
     }
 }

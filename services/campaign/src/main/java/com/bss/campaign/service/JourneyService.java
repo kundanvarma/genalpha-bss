@@ -3,6 +3,18 @@ package com.bss.campaign.service;
 import com.bss.campaign.api.ApiConstants;
 import com.bss.campaign.client.CommunicationClient;
 import com.bss.campaign.client.InsightClient;
+import com.bss.campaign.client.SegmentMember;
+import com.bss.campaign.dto.ArbitrationDecisionView;
+import com.bss.campaign.dto.ArmRow;
+import com.bss.campaign.dto.ConversionReceipt;
+import com.bss.campaign.dto.Conversions;
+import com.bss.campaign.dto.EnrollmentReceipt;
+import com.bss.campaign.dto.JourneyRequest;
+import com.bss.campaign.dto.JourneyStats;
+import com.bss.campaign.dto.JourneyView;
+import com.bss.campaign.dto.SegmentEnrollmentReceipt;
+import com.bss.campaign.dto.TuneEntry;
+import com.bss.campaign.dto.TuneResult;
 import com.bss.campaign.entity.Journey;
 import com.bss.campaign.entity.JourneyEnrollment;
 import com.bss.campaign.exception.BadRequestException;
@@ -13,6 +25,7 @@ import com.bss.campaign.security.TenantContext;
 import com.bss.campaign.security.TenantRegistry;
 import com.bss.campaign.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +54,10 @@ public class JourneyService {
 
     private static final Logger log = LoggerFactory.getLogger(JourneyService.class);
     private static final TypeReference<List<Map<String, Object>>> STEP_LIST = new TypeReference<>() {
+    };
+    private static final TypeReference<List<TuneEntry>> TUNE_LOG = new TypeReference<>() {
+    };
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() {
     };
 
     private final JourneyRepository journeys;
@@ -89,40 +106,44 @@ public class JourneyService {
     // ---------------- authoring ----------------
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        if (dto.get("name") == null || dto.get("steps") == null) {
+    public JourneyView create(JourneyRequest dto) {
+        if (dto.name() == null || absent(dto.steps())) {
             throw new BadRequestException("name and steps are required");
         }
-        List<Map<String, Object>> steps = parseSteps(dto.get("steps"));
+        List<Map<String, Object>> steps = parseSteps(dto.steps());
         validateSteps(steps);
         Journey entity = new Journey();
         String id = UUID.randomUUID().toString();
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/journey/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setStatus(dto.get("status") == null ? Journey.ACTIVE : requireLifecycle(dto.get("status")));
-        entity.setTriggerEventType(str(dto.get("triggerEventType")));
-        entity.setTriggerState(str(dto.get("triggerState")));
-        entity.setSegmentName(str(dto.get("segmentName")));
-        entity.setConversionEvent(str(dto.get("conversionEvent")));
-        if (dto.get("holdoutPercent") != null) {
-            entity.setHoldoutPercent(requireHoldout(dto.get("holdoutPercent")));
+        entity.setName(dto.name());
+        entity.setStatus(dto.status() == null ? Journey.ACTIVE : requireLifecycle(dto.status()));
+        entity.setTriggerEventType(JourneyRequest.text(dto.triggerEventType()));
+        entity.setTriggerState(JourneyRequest.text(dto.triggerState()));
+        entity.setSegmentName(JourneyRequest.text(dto.segmentName()));
+        entity.setConversionEvent(JourneyRequest.text(dto.conversionEvent()));
+        if (dto.holdoutPercent() != null) {
+            entity.setHoldoutPercent(requireHoldout(dto.holdoutPercent()));
         }
-        if (dto.get("category") != null) {
-            entity.setCategory(requireCategory(dto.get("category")));
+        if (dto.category() != null) {
+            entity.setCategory(requireCategory(dto.category()));
         }
-        applyArms(entity, dto.containsKey("arms") ? dto.get("arms") : dto.get("messageVariants"), true);
-        if (dto.get("autoTune") != null) {
-            entity.setAutoTune(Boolean.parseBoolean(String.valueOf(dto.get("autoTune"))));
+        applyArms(entity, dto.armsDocument(), true);
+        if (dto.autoTune() != null) {
+            entity.setAutoTune(dto.autoTune());
         }
-        if (dto.get("priority") != null) {
-            entity.setPriority(Integer.parseInt(String.valueOf(dto.get("priority"))));
+        if (dto.priority() != null) {
+            entity.setPriority(dto.priority());
         }
         entity.setSteps(serializeSteps(steps));
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(journeys.save(entity));
+        return view(journeys.save(entity));
+    }
+
+    private static boolean absent(JsonNode node) {
+        return node == null || node.isNull();
     }
 
     /** One rulebook for steps, shared by create and edit. */
@@ -182,16 +203,15 @@ public class JourneyService {
         }
     }
 
-    private String requireCategory(Object value) {
-        String v = String.valueOf(value).trim().toLowerCase();
+    private String requireCategory(String value) {
+        String v = value.trim().toLowerCase();
         if (!Journey.MARKETING.equals(v) && !Journey.TRANSACTIONAL.equals(v)) {
             throw new BadRequestException("category must be 'marketing' or 'transactional'");
         }
         return v;
     }
 
-    private int requireHoldout(Object value) {
-        int holdout = Integer.parseInt(String.valueOf(value));
+    private int requireHoldout(int holdout) {
         if (holdout < 0 || holdout > 90) {
             throw new BadRequestException("holdoutPercent must be 0-90");
         }
@@ -207,11 +227,11 @@ public class JourneyService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<JourneyView> findAll() {
         // archived journeys are a soft delete: hidden from the default list
         return journeys.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(j -> !Journey.ARCHIVED.equals(j.getStatus()))
-                .map(this::toMap).toList();
+                .map(this::view).toList();
     }
 
     /**
@@ -224,48 +244,49 @@ public class JourneyService {
      * lift/funnel reads stay honest about mixing step versions.
      */
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public JourneyView patch(String id, JourneyRequest patch) {
         Journey entity = journeys.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", id));
-        if (patch.get("status") != null) {
-            entity.setStatus(requireLifecycle(patch.get("status")));
+        if (patch.status() != null) {
+            entity.setStatus(requireLifecycle(patch.status()));
         }
-        if (patch.get("priority") != null) {
-            entity.setPriority(Integer.parseInt(String.valueOf(patch.get("priority"))));
+        if (patch.priority() != null) {
+            entity.setPriority(patch.priority());
         }
-        if (patch.get("name") != null) {
-            entity.setName(String.valueOf(patch.get("name")));
+        if (patch.name() != null) {
+            entity.setName(patch.name());
         }
         // trigger/segment/conversion edits govern FUTURE enrollment and exits;
-        // people already in flight continue their journey (Customer.io rule)
-        if (patch.containsKey("triggerEventType")) {
-            entity.setTriggerEventType(str(patch.get("triggerEventType")));
+        // people already in flight continue their journey (Customer.io rule) —
+        // a key that is present, even as null, is an edit; an absent key is not
+        if (patch.triggerEventType() != null) {
+            entity.setTriggerEventType(JourneyRequest.text(patch.triggerEventType()));
         }
-        if (patch.containsKey("triggerState")) {
-            entity.setTriggerState(str(patch.get("triggerState")));
+        if (patch.triggerState() != null) {
+            entity.setTriggerState(JourneyRequest.text(patch.triggerState()));
         }
-        if (patch.containsKey("segmentName")) {
-            entity.setSegmentName(str(patch.get("segmentName")));
+        if (patch.segmentName() != null) {
+            entity.setSegmentName(JourneyRequest.text(patch.segmentName()));
         }
-        if (patch.containsKey("conversionEvent")) {
-            entity.setConversionEvent(str(patch.get("conversionEvent")));
+        if (patch.conversionEvent() != null) {
+            entity.setConversionEvent(JourneyRequest.text(patch.conversionEvent()));
         }
         // variants are stamped at enrollment, so a holdout change only
         // buckets NEW entrants — per-variant lift math stays valid
-        if (patch.containsKey("arms") || patch.containsKey("messageVariants")) {
-            applyArms(entity, patch.containsKey("arms") ? patch.get("arms") : patch.get("messageVariants"), true);
+        if (patch.mentionsArms()) {
+            applyArms(entity, patch.armsDocument(), true);
         }
-        if (patch.get("autoTune") != null) {
-            entity.setAutoTune(Boolean.parseBoolean(String.valueOf(patch.get("autoTune"))));
+        if (patch.autoTune() != null) {
+            entity.setAutoTune(patch.autoTune());
         }
-        if (patch.get("holdoutPercent") != null) {
-            entity.setHoldoutPercent(requireHoldout(patch.get("holdoutPercent")));
+        if (patch.holdoutPercent() != null) {
+            entity.setHoldoutPercent(requireHoldout(patch.holdoutPercent()));
         }
-        if (patch.get("category") != null) {
-            entity.setCategory(requireCategory(patch.get("category")));
+        if (patch.category() != null) {
+            entity.setCategory(requireCategory(patch.category()));
         }
-        if (patch.get("steps") != null) {
-            List<Map<String, Object>> steps = parseSteps(patch.get("steps"));
+        if (!absent(patch.steps())) {
+            List<Map<String, Object>> steps = parseSteps(patch.steps());
             validateSteps(steps);
             String serialized = serializeSteps(steps);
             if (!serialized.equals(entity.getSteps())) {
@@ -274,7 +295,7 @@ public class JourneyService {
             }
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(journeys.save(entity));
+        return view(journeys.save(entity));
     }
 
     /** Delete a journey and its enrollment ledger. */
@@ -286,8 +307,7 @@ public class JourneyService {
         journeys.delete(entity);
     }
 
-    private String requireLifecycle(Object status) {
-        String value = String.valueOf(status);
+    private String requireLifecycle(String value) {
         if (!Journey.LIFECYCLE.contains(value)) {
             throw new BadRequestException("status must be one of " + Journey.LIFECYCLE);
         }
@@ -298,7 +318,7 @@ public class JourneyService {
 
     /** Segment enrollment: everyone insight puts in the segment, once. */
     @Transactional
-    public Map<String, Object> enrollSegment(String journeyId) {
+    public SegmentEnrollmentReceipt enrollSegment(String journeyId) {
         Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
         if (journey.getSegmentName() == null || journey.getSegmentName().isBlank()) {
@@ -308,13 +328,12 @@ public class JourneyService {
             throw new BadRequestException("only an active journey can enroll");
         }
         int enrolled = 0;
-        for (Map<String, Object> member : insight.segmentMembers(journey.getSegmentName())) {
-            if (enroll(journey, String.valueOf(member.get("partyId")), java.util.Map.of())) {
+        for (SegmentMember member : insight.segmentMembers(journey.getSegmentName())) {
+            if (enroll(journey, String.valueOf(member.partyId()), java.util.Map.of())) {
                 enrolled++;
             }
         }
-        return Map.of("journeyId", journeyId, "segment", journey.getSegmentName(),
-                "enrolled", enrolled);
+        return new SegmentEnrollmentReceipt(journeyId, journey.getSegmentName(), enrolled);
     }
 
     /** Event entry: business events enroll customers into matching journeys. */
@@ -553,20 +572,12 @@ public class JourneyService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> arbitrationDecisions(String partyId) {
+    public List<ArbitrationDecisionView> arbitrationDecisions(String partyId) {
         List<com.bss.campaign.entity.ArbitrationDecision> rows = partyId == null
                 ? arbitration.findTop200ByTenantIdOrderByDecidedAtDesc(tenantScope.currentTenantId())
                 : arbitration.findByTenantIdAndPartyIdOrderByDecidedAtDesc(tenantScope.currentTenantId(), partyId);
-        return rows.stream().map(d -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("partyId", d.getPartyId());
-            m.put("winnerJourneyId", d.getWinnerJourneyId());
-            m.put("heldJourneyId", d.getHeldJourneyId());
-            m.put("reason", d.getReason());
-            m.put("decidedAt", d.getDecidedAt());
-            if (d.getDecisionId() != null) m.put("decisionId", d.getDecisionId());
-            return m;
-        }).toList();
+        return rows.stream().map(d -> new ArbitrationDecisionView(d.getPartyId(), d.getWinnerJourneyId(),
+                d.getHeldJourneyId(), d.getReason(), d.getDecidedAt(), d.getDecisionId())).toList();
     }
 
     /** Run steps from where they stand until a wait parks them or the end. */
@@ -656,7 +667,7 @@ public class JourneyService {
         String segment = String.valueOf(step.get("inSegment"));
         try {
             return insight.segmentMembers(segment).stream()
-                    .anyMatch(m -> enrollment.getPartyId().equals(String.valueOf(m.get("partyId"))));
+                    .anyMatch(m -> enrollment.getPartyId().equals(String.valueOf(m.partyId())));
         } catch (Exception e) {
             log.warn("journey '{}' decision on '{}' could not read insight — taking 'else': {}",
                     journey.getName(), segment, e.getMessage());
@@ -758,7 +769,7 @@ public class JourneyService {
     // ---------------- the funnel ----------------
 
     @Transactional(readOnly = true)
-    public Map<String, Object> statsOf(String journeyId) {
+    public JourneyStats statsOf(String journeyId) {
         Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
         List<JourneyEnrollment> all =
@@ -785,75 +796,51 @@ public class JourneyService {
             String stage = idx >= 0 && idx < steps.size() ? str(steps.get(idx).get("stage")) : null;
             if (stage != null) byStage.merge(stage, 1L, Long::sum);
         });
-        Map<String, Object> stats = new LinkedHashMap<>();
-        stats.put("journeyId", journeyId);
-        stats.put("entered", (long) all.size());
-        stats.put("treated", treated);
-        stats.put("heldOut", heldOut);
-        stats.put("activeAtStep", atStep);
-        if (!byStage.isEmpty()) stats.put("stageFunnel", byStage);
         // BB2 — Journey Insights: a per-node funnel. For each node, how many
         // enrollments REACHED it (are at or beyond it) and how many are ACTIVE
         // there right now. The drop between consecutive nodes is where people
         // fall out — the number a journey owner reads to find the leak.
-        List<Map<String, Object>> funnel = new java.util.ArrayList<>();
+        List<JourneyStats.FunnelNode> funnel = new java.util.ArrayList<>();
         for (int i = 0; i < steps.size(); i++) {
             final int idx = i;
             long reached = all.stream().filter(e -> effectiveStep(e, steps.size()) >= idx).count();
             long activeHere = all.stream()
                     .filter(e -> "active".equals(e.getStatus()) && e.getStepIndex() == idx).count();
-            Map<String, Object> node = new LinkedHashMap<>();
-            node.put("index", idx);
-            node.put("type", steps.get(idx).get("type"));
-            if (steps.get(idx).get("stage") != null) node.put("stage", steps.get(idx).get("stage"));
-            node.put("reached", reached);
-            node.put("active", activeHere);
-            funnel.add(node);
+            funnel.add(new JourneyStats.FunnelNode(idx, str(steps.get(idx).get("type")),
+                    str(steps.get(idx).get("stage")), reached, activeHere));
         }
-        stats.put("funnel", funnel);
-        stats.put("completedUnconverted",
-                all.stream().filter(e -> "completed".equals(e.getStatus())).count());
-        stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
         List<Map<String, Object>> armDefs = armsOf(journey);
-        if (!armDefs.isEmpty()) {
-            stats.put("arms", armRows(journey, armDefs, all));
-            stats.put("autoTune", journey.isAutoTune());
-            stats.put("tuningLog", tuningLogOf(journey));
-        }
+        boolean hasArms = !armDefs.isEmpty();
         Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
         Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
-        if (treatedRate != null) {
-            stats.put("treatedRate", Math.round(treatedRate * 1000) / 10.0);
-        }
-        if (holdoutRate != null) {
-            stats.put("holdoutRate", Math.round(holdoutRate * 1000) / 10.0);
-        }
-        if (treatedRate != null && holdoutRate != null) {
-            stats.put("liftPoints", Math.round((treatedRate - holdoutRate) * 1000) / 10.0);
-        }
-        if (heldOut > 0 && heldOut < 5) {
-            stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
-        }
         // attributed revenue, per exposed customer (see the campaign readout)
         java.math.BigDecimal treatedRevenue = enrollmentRevenue(all, false);
         java.math.BigDecimal holdoutRevenue = enrollmentRevenue(all, true);
+        JourneyStats.Revenue revenue = null;
         if (treatedRevenue.signum() != 0 || holdoutRevenue.signum() != 0) {
-            Map<String, Object> revenue = new LinkedHashMap<>();
-            revenue.put("treated", treatedRevenue);
-            revenue.put("holdout", holdoutRevenue);
-            if (treated > 0 && heldOut > 0) {
-                revenue.put("liftPerCustomer", perCustomer(treatedRevenue, treated)
-                        .subtract(perCustomer(holdoutRevenue, heldOut)));
-            }
-            revenue.put("basis", "monthly recurring value of converting orders");
-            stats.put("revenue", revenue);
+            revenue = new JourneyStats.Revenue(treatedRevenue, holdoutRevenue,
+                    treated > 0 && heldOut > 0
+                            ? perCustomer(treatedRevenue, treated).subtract(perCustomer(holdoutRevenue, heldOut))
+                            : null,
+                    "monthly recurring value of converting orders");
         }
         // honesty marker: an edited journey's funnel/lift mixes step versions
-        if (journey.getStepsEditedAt() != null) {
-            stats.put("stepsEditedAt", journey.getStepsEditedAt());
-            stats.put("editNote", "steps were edited after launch — earlier enrollees walked a different version");
-        }
-        return stats;
+        boolean edited = journey.getStepsEditedAt() != null;
+        return new JourneyStats(journeyId, all.size(), treated, heldOut, atStep, byStage, funnel,
+                all.stream().filter(e -> "completed".equals(e.getStatus())).count(),
+                new Conversions(treatedConv, holdoutConv),
+                hasArms ? armRows(journey, armDefs, all) : null,
+                hasArms ? journey.isAutoTune() : null,
+                hasArms ? tuningLogOf(journey) : null,
+                treatedRate == null ? null : Math.round(treatedRate * 1000) / 10.0,
+                holdoutRate == null ? null : Math.round(holdoutRate * 1000) / 10.0,
+                treatedRate == null || holdoutRate == null ? null
+                        : Math.round((treatedRate - holdoutRate) * 1000) / 10.0,
+                heldOut > 0 && heldOut < 5
+                        ? "holdout under 5 people — the lift is an anecdote, not a measurement" : null,
+                revenue,
+                edited ? journey.getStepsEditedAt() : null,
+                edited ? "steps were edited after launch — earlier enrollees walked a different version" : null);
     }
 
     private java.math.BigDecimal enrollmentRevenue(List<JourneyEnrollment> all, boolean holdout) {
@@ -871,14 +858,23 @@ public class JourneyService {
 
     // ---------------- helpers ----------------
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> parseSteps(Object steps) {
+    /** The stored steps column. */
+    private List<Map<String, Object>> parseSteps(String steps) {
         try {
-            if (steps instanceof List<?> list) {
-                return (List<Map<String, Object>>) list;
-            }
-            return objectMapper.readValue(String.valueOf(steps), STEP_LIST);
+            return objectMapper.readValue(steps, STEP_LIST);
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new BadRequestException("steps must be a JSON array of {type, ...}");
+        }
+    }
+
+    /** The author's steps document: a JSON array, or the same array as a string. */
+    private List<Map<String, Object>> parseSteps(JsonNode steps) {
+        try {
+            if (steps.isArray()) {
+                return objectMapper.convertValue(steps, STEP_LIST);
+            }
+            return objectMapper.readValue(steps.isTextual() ? steps.asText() : steps.toString(), STEP_LIST);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | IllegalArgumentException e) {
             throw new BadRequestException("steps must be a JSON array of {type, ...}");
         }
     }
@@ -896,48 +892,38 @@ public class JourneyService {
         return o == null ? null : String.valueOf(o);
     }
 
-    private Map<String, Object> toMap(Journey j) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", j.getId());
-        map.put("href", j.getHref());
-        map.put("name", j.getName());
-        map.put("status", j.getStatus());
-        if (j.getTriggerEventType() != null) map.put("triggerEventType", j.getTriggerEventType());
-        if (j.getTriggerState() != null) map.put("triggerState", j.getTriggerState());
-        if (j.getSegmentName() != null) map.put("segmentName", j.getSegmentName());
-        if (j.getConversionEvent() != null) map.put("conversionEvent", j.getConversionEvent());
-        map.put("holdoutPercent", j.getHoldoutPercent());
-        map.put("category", j.getCategory());
-        map.put("priority", j.getPriority());
+    private JourneyView view(Journey j) {
         List<Map<String, Object>> arms = armsOf(j);
-        if (!arms.isEmpty()) {
-            map.put("arms", arms);
-            map.put("autoTune", j.isAutoTune());
-            map.put("armWeights", weightsOf(j, arms));
-            map.put("tuningLog", tuningLogOf(j));
-        }
+        boolean hasArms = !arms.isEmpty();
+        JsonNode steps;
         try {
-            map.put("steps", objectMapper.readValue(j.getSteps(), STEP_LIST));
+            steps = objectMapper.readTree(j.getSteps());
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            map.put("steps", j.getSteps());
+            steps = objectMapper.getNodeFactory().textNode(j.getSteps());
         }
-        if (j.getStepsEditedAt() != null) map.put("stepsEditedAt", j.getStepsEditedAt());
-        map.put("lastUpdate", j.getLastUpdate());
-        map.put("@type", "Journey");
-        return map;
+        return new JourneyView(j.getId(), j.getHref(), j.getName(), j.getStatus(), j.getTriggerEventType(),
+                j.getTriggerState(), j.getSegmentName(), j.getConversionEvent(), j.getHoldoutPercent(),
+                j.getCategory(), j.getPriority(),
+                hasArms ? objectMapper.valueToTree(arms) : null,
+                hasArms ? j.isAutoTune() : null,
+                hasArms ? weightsOf(j, arms) : null,
+                hasArms ? tuningLogOf(j) : null,
+                steps, j.getStepsEditedAt(), j.getLastUpdate(), "Journey");
     }
 
     // ---------------- A/B arms + auto-tuning ----------------
 
     /** Enrol a list of parties by hand (an offline list, a store's walk-ins, a test cohort). */
     @Transactional
-    public Map<String, Object> enrollParties(String journeyId, List<String> partyIds, Map<String, Object> context) {
+    public EnrollmentReceipt enrollParties(String journeyId, List<String> partyIds, JsonNode context) {
         Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
+        Map<String, Object> tokens = context != null && context.isObject()
+                ? objectMapper.convertValue(context, OBJECT) : null;
         int n = 0;
         Map<String, String> dealt = new LinkedHashMap<>(); // who got which arm (holdout: "holdout")
         for (String p : partyIds == null ? List.<String>of() : partyIds) {
-            if (p != null && !p.isBlank() && enroll(journey, p.trim(), context)) {
+            if (p != null && !p.isBlank() && enroll(journey, p.trim(), tokens)) {
                 n++;
                 JourneyEnrollment e = enrollments.findByTenantIdAndJourneyId(journey.getTenantId(), journey.getId()).stream()
                         .filter(x -> p.trim().equals(x.getPartyId())).findFirst().orElse(null);
@@ -946,18 +932,17 @@ public class JourneyService {
                 }
             }
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("journeyId", journeyId);
-        out.put("enrolled", n);
-        out.put("dealt", dealt);
-        return out;
+        return new EnrollmentReceipt(journeyId, n, dealt);
     }
 
     /** Record a conversion that did not arrive as an event (a store sale, a call-centre close). */
     @Transactional
-    public Map<String, Object> recordConversion(String journeyId, String partyId, java.math.BigDecimal value) {
+    public ConversionReceipt recordConversion(String journeyId, String partyId, java.math.BigDecimal value) {
         String tenant = tenantScope.currentTenantId();
         journeys.findByIdAndTenantId(journeyId, tenant).orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
+        if (partyId == null) {
+            throw new BadRequestException("partyId is required");
+        }
         JourneyEnrollment e = enrollments.findByTenantIdAndJourneyId(tenant, journeyId).stream()
                 .filter(x -> partyId.equals(x.getPartyId())).findFirst().orElse(null);
         if (e == null) {
@@ -970,15 +955,15 @@ public class JourneyService {
             enrollments.save(e);
             decisions.outcome(e.getDecisionId(), "conversion", value);
         }
-        return Map.of("journeyId", journeyId, "partyId", partyId, "status", e.getStatus(), "arm", e.getArm() == null ? "" : e.getArm());
+        return new ConversionReceipt(journeyId, partyId, e.getStatus(), e.getArm() == null ? "" : e.getArm());
     }
 
     /** The tuner, on demand: judge the arms and shift traffic if the evidence is there. */
     @Transactional
-    public Map<String, Object> tune(String journeyId) {
+    public TuneResult tune(String journeyId) {
         Journey journey = journeys.findByIdAndTenantId(journeyId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Journey", journeyId));
-        return tuneJourney(journey);
+        return new TuneResult(tuneJourney(journey), journeyId);
     }
 
     /** The tuner, on a clock: every auto-tune journey of every tenant. */
@@ -1011,20 +996,18 @@ public class JourneyService {
      * with a one-sided z above the threshold. Otherwise nothing moves. Every call
      * writes a ledger entry — shift, hold, or waiting — with the numbers it saw.
      */
-    private Map<String, Object> tuneJourney(Journey journey) {
+    private TuneEntry tuneJourney(Journey journey) {
         List<Map<String, Object>> arms = armsOf(journey);
         List<JourneyEnrollment> all = enrollments.findByTenantIdAndJourneyId(journey.getTenantId(), journey.getId());
-        List<Map<String, Object>> rows = armRows(journey, arms, all);
+        List<ArmRow> rows = armRows(journey, arms, all);
         Map<String, Integer> before = weightsOf(journey, arms);
-        Map<String, Object> entry = new LinkedHashMap<>();
-        entry.put("at", OffsetDateTime.now().toString());
-        entry.put("arms", rows);
-        entry.put("before", before);
+        String at = OffsetDateTime.now().toString();
         // the rule lives in ZThresholdTunerPolicy behind the seam; this method
-        // only feeds it the numbers and keeps the journey's ledger
+        // only feeds it the numbers (as the open context the policy reads) and
+        // keeps the journey's ledger
         Map<String, Object> ctx = new LinkedHashMap<>();
         ctx.put("journeyId", journey.getId());
-        ctx.put("rows", rows);
+        ctx.put("rows", objectMapper.convertValue(rows, STEP_LIST));
         ctx.put("before", before);
         ctx.put("minPerArm", tuneMinPerArm);
         ctx.put("floorPercent", tuneFloorPercent);
@@ -1037,21 +1020,18 @@ public class JourneyService {
         if (judged.evidence().get("after") instanceof Map<?, ?> a) {
             a.forEach((k, v) -> after.put(String.valueOf(k), ((Number) v).intValue()));
         }
-        if (judged.evidence().containsKey("z")) {
-            entry.put("z", judged.evidence().get("z"));
-            entry.put("threshold", tuneZ);
-        }
-        entry.put("why", judged.reason());
-        entry.put("decision", decision);
-        entry.put("after", after);
-        entry.put("decisionId", judged.decisionId());
+        boolean judgedZ = judged.evidence().get("z") instanceof Number;
+        TuneEntry entry = new TuneEntry(at, rows, before,
+                judgedZ ? ((Number) judged.evidence().get("z")).doubleValue() : null,
+                judgedZ ? tuneZ : null,
+                judged.reason(), decision, after, judged.decisionId());
         if ("shift".equals(decision)) {
             try {
                 journey.setArmWeights(objectMapper.writeValueAsString(after));
             } catch (Exception ignore) { /* keep the previous weights */ }
-            log.info("journey '{}' tuned: {} → {} — {}", journey.getName(), before, after, entry.get("why"));
+            log.info("journey '{}' tuned: {} → {} — {}", journey.getName(), before, after, entry.why());
         }
-        List<Map<String, Object>> logRows = new java.util.ArrayList<>(tuningLogOf(journey));
+        List<TuneEntry> logRows = new java.util.ArrayList<>(tuningLogOf(journey));
         logRows.add(entry);
         while (logRows.size() > 30) {
             logRows.remove(0);
@@ -1066,12 +1046,10 @@ public class JourneyService {
         } catch (Exception ignore) { /* the ledger is best-effort */ }
         journey.setLastUpdate(OffsetDateTime.now());
         journeys.save(journey);
-        Map<String, Object> out = new LinkedHashMap<>(entry);
-        out.put("journeyId", journey.getId());
-        return out;
+        return entry;
     }
 
-    private void applyArms(Journey entity, Object raw, boolean resetWeights) {
+    private void applyArms(Journey entity, JsonNode raw, boolean resetWeights) {
         List<Map<String, Object>> arms = parseArms(raw);
         try {
             entity.setArms(arms.isEmpty() ? null : objectMapper.writeValueAsString(arms));
@@ -1090,14 +1068,14 @@ public class JourneyService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> parseArms(Object raw) {
-        if (raw == null) {
+    /** The author's arms document: a JSON array, the same array as a string, or nothing. */
+    private List<Map<String, Object>> parseArms(JsonNode raw) {
+        if (absent(raw)) {
             return List.of();
         }
         try {
-            List<Map<String, Object>> list = raw instanceof String s
-                    ? (s.isBlank() ? List.of() : objectMapper.readValue(s, STEP_LIST))
+            List<Map<String, Object>> list = raw.isTextual()
+                    ? (raw.asText().isBlank() ? List.of() : objectMapper.readValue(raw.asText(), STEP_LIST))
                     : objectMapper.convertValue(raw, STEP_LIST);
             java.util.Set<String> names = new java.util.HashSet<>();
             for (Map<String, Object> a : list) {
@@ -1145,12 +1123,12 @@ public class JourneyService {
         return w;
     }
 
-    private List<Map<String, Object>> tuningLogOf(Journey j) {
+    private List<TuneEntry> tuningLogOf(Journey j) {
         if (j.getTuningLog() == null || j.getTuningLog().isBlank()) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(j.getTuningLog(), STEP_LIST);
+            return objectMapper.readValue(j.getTuningLog(), TUNE_LOG);
         } catch (Exception e) {
             return List.of();
         }
@@ -1182,23 +1160,17 @@ public class JourneyService {
         return step;
     }
 
-    private List<Map<String, Object>> armRows(Journey journey, List<Map<String, Object>> arms, List<JourneyEnrollment> all) {
+    private List<ArmRow> armRows(Journey journey, List<Map<String, Object>> arms, List<JourneyEnrollment> all) {
         Map<String, Integer> w = weightsOf(journey, arms);
-        List<Map<String, Object>> rows = new java.util.ArrayList<>();
+        List<ArmRow> rows = new java.util.ArrayList<>();
         for (Map<String, Object> a : arms) {
             String name = str(a.get("name"));
             List<JourneyEnrollment> mine = all.stream().filter(e -> name.equals(e.getArm()) && !"holdout".equals(e.getVariant())).toList();
             long conv = mine.stream().filter(e -> "converted".equals(e.getStatus())).count();
             java.math.BigDecimal revenue = mine.stream().filter(e -> e.getConversionValue() != null)
                     .map(JourneyEnrollment::getConversionValue).reduce(java.math.BigDecimal.ZERO, java.math.BigDecimal::add);
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", name);
-            row.put("weight", w.getOrDefault(name, 0));
-            row.put("enrolled", (long) mine.size());
-            row.put("converted", conv);
-            row.put("rate", mine.isEmpty() ? 0.0 : Math.round((double) conv / mine.size() * 1000) / 10.0);
-            row.put("revenue", revenue);
-            rows.add(row);
+            rows.add(new ArmRow(name, w.getOrDefault(name, 0), mine.size(), conv,
+                    mine.isEmpty() ? 0.0 : Math.round((double) conv / mine.size() * 1000) / 10.0, revenue));
         }
         return rows;
     }

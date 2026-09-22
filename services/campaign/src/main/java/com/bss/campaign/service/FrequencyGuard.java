@@ -1,5 +1,7 @@
 package com.bss.campaign.service;
 
+import com.bss.campaign.dto.MartechSettingsRequest;
+import com.bss.campaign.dto.MartechSettingsView;
 import com.bss.campaign.entity.MarketingTouch;
 import com.bss.campaign.entity.MartechSetting;
 import com.bss.campaign.exception.BadRequestException;
@@ -10,8 +12,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -103,24 +103,22 @@ public class FrequencyGuard {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> settingsOf() {
+    public MartechSettingsView settingsOf() {
         MartechSetting setting = settings.findById(tenantScope.currentTenantId()).orElse(null);
-        return toMap(setting);
+        return view(setting);
     }
 
     /** Upsert — the settings row IS the tenant's guardrail. */
     @Transactional
-    public Map<String, Object> save(Map<String, Object> dto) {
-        int max = dto.get("maxMarketingMessages") == null ? 0
-                : Integer.parseInt(String.valueOf(dto.get("maxMarketingMessages")));
-        int days = dto.get("perDays") == null ? 1
-                : Integer.parseInt(String.valueOf(dto.get("perDays")));
+    public MartechSettingsView save(MartechSettingsRequest dto) {
+        int max = dto.maxMarketingMessages() == null ? 0 : dto.maxMarketingMessages();
+        int days = dto.perDays() == null ? 1 : dto.perDays();
         if (max < 0 || days < 1) {
             throw new BadRequestException("maxMarketingMessages must be >= 0 (0 = off), perDays >= 1");
         }
-        String quietStart = str(dto.get("quietStart"));
-        String quietEnd = str(dto.get("quietEnd"));
-        String zone = str(dto.get("timeZone"));
+        String quietStart = str(dto.quietStart());
+        String quietEnd = str(dto.quietEnd());
+        String zone = str(dto.timeZone());
         if ((quietStart == null) != (quietEnd == null)) {
             throw new BadRequestException("quietStart and quietEnd come as a pair (HH:mm)");
         }
@@ -145,27 +143,23 @@ public class FrequencyGuard {
         setting.setQuietEnd(quietEnd);
         setting.setTimeZone(zone);
         setting.setLastUpdate(OffsetDateTime.now());
-        return toMap(settings.save(setting));
+        return view(settings.save(setting));
     }
 
-    private String str(Object v) {
-        return v == null || String.valueOf(v).isBlank() ? null : String.valueOf(v);
+    private String str(String v) {
+        return v == null || v.isBlank() ? null : v;
     }
 
-    private Map<String, Object> toMap(MartechSetting setting) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("maxMarketingMessages", setting == null ? 0 : setting.getMaxMarketingMessages());
-        map.put("perDays", setting == null ? 1 : setting.getPerDays());
-        map.put("capActive", setting != null && setting.getMaxMarketingMessages() > 0);
-        if (setting != null && setting.getQuietStart() != null) {
-            map.put("quietStart", setting.getQuietStart());
-            map.put("quietEnd", setting.getQuietEnd());
-            if (setting.getTimeZone() != null) {
-                map.put("timeZone", setting.getTimeZone());
-            }
-        }
-        map.put("quietActive", setting != null && setting.getQuietStart() != null);
-        map.put("@type", "MartechSetting");
-        return map;
+    private MartechSettingsView view(MartechSetting setting) {
+        boolean quiet = setting != null && setting.getQuietStart() != null;
+        return new MartechSettingsView(
+                setting == null ? 0 : setting.getMaxMarketingMessages(),
+                setting == null ? 1 : setting.getPerDays(),
+                setting != null && setting.getMaxMarketingMessages() > 0,
+                quiet ? setting.getQuietStart() : null,
+                quiet ? setting.getQuietEnd() : null,
+                quiet ? setting.getTimeZone() : null,
+                quiet,
+                "MartechSetting");
     }
 }

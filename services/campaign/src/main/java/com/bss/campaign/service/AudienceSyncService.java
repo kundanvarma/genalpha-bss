@@ -1,16 +1,17 @@
 package com.bss.campaign.service;
 
 import com.bss.campaign.client.InsightClient;
+import com.bss.campaign.client.SegmentMember;
 import com.bss.campaign.client.SocialClient;
+import com.bss.campaign.dto.AudienceSyncRequest;
+import com.bss.campaign.dto.AudienceSyncResult;
 import com.bss.campaign.exception.BadRequestException;
 import com.bss.campaign.security.TenantScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * AUDIENCE ACTIVATION: push an insight segment to the tenant's own
@@ -35,9 +36,9 @@ public class AudienceSyncService {
         this.tenantScope = tenantScope;
     }
 
-    public Map<String, Object> sync(Map<String, Object> dto) {
-        String segment = dto.get("segmentName") == null ? null : String.valueOf(dto.get("segmentName"));
-        String audienceId = dto.get("audienceId") == null ? null : String.valueOf(dto.get("audienceId"));
+    public AudienceSyncResult sync(AudienceSyncRequest dto) {
+        String segment = dto.segmentName();
+        String audienceId = dto.audienceId();
         if (segment == null || segment.isBlank() || audienceId == null || audienceId.isBlank()) {
             throw new BadRequestException("segmentName and audienceId are required");
         }
@@ -46,21 +47,14 @@ public class AudienceSyncService {
             throw new BadRequestException(
                     "no social platform is configured for this tenant — the seam is per-tenant");
         }
-        List<Map<String, Object>> members = insight.segmentMembers(segment);
+        List<SegmentMember> members = insight.segmentMembers(segment);
         List<String> emails = members.stream()
-                .map(m -> social.emailOf(String.valueOf(m.get("partyId"))))
+                .map(m -> social.emailOf(String.valueOf(m.partyId())))
                 .filter(java.util.Objects::nonNull)
                 .toList();
         int pushed = emails.isEmpty() ? 0 : social.pushAudience(tenant, audienceId, emails);
         log.info("segment '{}' pushed to social audience '{}': {} members, {} with email, {} accepted",
                 segment, audienceId, members.size(), emails.size(), pushed);
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("segment", segment);
-        result.put("audienceId", audienceId);
-        result.put("members", members.size());
-        result.put("withEmail", emails.size());
-        result.put("pushed", pushed);
-        result.put("schema", "EMAIL_SHA256");
-        return result;
+        return new AudienceSyncResult(segment, audienceId, members.size(), emails.size(), pushed, "EMAIL_SHA256");
     }
 }

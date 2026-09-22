@@ -1,6 +1,10 @@
 package com.bss.campaign.controller;
 
 import com.bss.campaign.api.ApiConstants;
+import com.bss.campaign.dto.DecisionDryRun;
+import com.bss.campaign.dto.DryRunRequest;
+import com.bss.campaign.dto.LearningContractRequest;
+import com.bss.campaign.dto.LearningContractView;
 import com.bss.campaign.service.LearningContractService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -13,7 +17,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 /** Learning contracts: the intent per DecisionPoint, as configuration. Reads need campaign:read, writes campaign:write. */
 @RestController
@@ -28,18 +31,18 @@ public class LearningContractController {
 
     /** Every point with its contract, or the defaults marked as such. */
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<LearningContractView>> list() {
         return ResponseEntity.ok(service.effective());
     }
 
     @GetMapping("/{decisionPoint}")
-    public ResponseEntity<Map<String, Object>> get(@PathVariable String decisionPoint) {
+    public ResponseEntity<LearningContractView> get(@PathVariable String decisionPoint) {
         return ResponseEntity.ok(service.get(decisionPoint));
     }
 
     @PutMapping("/{decisionPoint}")
-    public ResponseEntity<Map<String, Object>> put(@PathVariable String decisionPoint,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<LearningContractView> put(@PathVariable String decisionPoint,
+            @RequestBody LearningContractRequest dto) {
         return ResponseEntity.ok(service.put(decisionPoint, dto));
     }
 
@@ -52,8 +55,8 @@ public class LearningContractController {
 
     /** What the point would decide for a sample context under the current contract — nothing recorded. */
     @PostMapping("/{decisionPoint}/dryRun")
-    public ResponseEntity<Map<String, Object>> dryRun(@PathVariable String decisionPoint,
-            @RequestBody Map<String, Object> body) {
+    public ResponseEntity<DecisionDryRun> dryRun(@PathVariable String decisionPoint,
+            @RequestBody DryRunRequest body) {
         return ResponseEntity.ok(service.dryRun(decisionPoint, body));
     }
 }

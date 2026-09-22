@@ -1,5 +1,7 @@
 package com.bss.campaign.service;
 
+import com.bss.campaign.dto.AttributionReport;
+import com.bss.campaign.dto.Conversions;
 import com.bss.campaign.entity.Campaign;
 import com.bss.campaign.entity.CampaignExecution;
 import com.bss.campaign.entity.Journey;
@@ -49,7 +51,7 @@ public class AttributionService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> report() {
+    public AttributionReport report() {
         String tenantId = tenantScope.currentTenantId();
         List<Measured> programs = new ArrayList<>();
 
@@ -88,14 +90,11 @@ public class AttributionService {
         // Leaderboard: the programs that earned the most attributed revenue first.
         programs.sort(Comparator.comparing((Measured m) -> m.treatedRev).reversed());
 
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("programs", programs.stream().map(Measured::toMap).toList());
-        out.put("portfolio", portfolio(programs));
-        out.put("byChannel", byChannel(programs));
-        return out;
+        return new AttributionReport(programs.stream().map(Measured::view).toList(), portfolio(programs),
+                byChannel(programs));
     }
 
-    private Map<String, Object> portfolio(List<Measured> programs) {
+    private AttributionReport.Portfolio portfolio(List<Measured> programs) {
         long treated = programs.stream().mapToLong(m -> m.treated).sum();
         long heldOut = programs.stream().mapToLong(m -> m.heldOut).sum();
         long treatedConv = programs.stream().mapToLong(m -> m.treatedConv).sum();
@@ -109,47 +108,29 @@ public class AttributionService {
         BigDecimal incremental = programs.stream().map(Measured::incremental)
                 .filter(java.util.Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        Map<String, Object> p = new LinkedHashMap<>();
-        p.put("programs", programs.size());
-        p.put("totalReached", treated);
-        p.put("totalHeldOut", heldOut);
-        p.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
         Double tRate = rate(treatedConv, treated);
         Double hRate = rate(holdoutConv, heldOut);
-        if (tRate != null) {
-            p.put("blendedTreatedRate", pct(tRate));
-        }
-        if (hRate != null) {
-            p.put("blendedHoldoutRate", pct(hRate));
-        }
-        if (tRate != null && hRate != null) {
-            p.put("blendedLiftPoints", pct(tRate - hRate));
-        }
-        Map<String, Object> revenue = new LinkedHashMap<>();
-        revenue.put("grossAttributed", grossTreated);
-        revenue.put("holdout", grossHoldout);
-        revenue.put("incremental", incremental);
-        revenue.put("basis", "monthly recurring value of converting orders; incremental = holdout-adjusted");
-        p.put("revenue", revenue);
-        if (heldOut > 0 && heldOut < 5) {
-            p.put("note", "portfolio holdout under 5 people — treat the blended lift as an anecdote");
-        }
-        return p;
+        return new AttributionReport.Portfolio(programs.size(), treated, heldOut,
+                new Conversions(treatedConv, holdoutConv),
+                tRate == null ? null : pct(tRate),
+                hRate == null ? null : pct(hRate),
+                tRate == null || hRate == null ? null : pct(tRate - hRate),
+                new AttributionReport.PortfolioRevenue(grossTreated, grossHoldout, incremental,
+                        "monthly recurring value of converting orders; incremental = holdout-adjusted"),
+                heldOut > 0 && heldOut < 5
+                        ? "portfolio holdout under 5 people — treat the blended lift as an anecdote" : null);
     }
 
-    private Map<String, Object> byChannel(List<Measured> programs) {
-        Map<String, Object> out = new LinkedHashMap<>();
+    private Map<String, AttributionReport.ChannelTotals> byChannel(List<Measured> programs) {
+        Map<String, AttributionReport.ChannelTotals> out = new LinkedHashMap<>();
         for (String channel : List.of("campaign", "journey")) {
             List<Measured> rows = programs.stream().filter(m -> m.type.equals(channel)).toList();
             if (rows.isEmpty()) {
                 continue;
             }
-            Map<String, Object> c = new LinkedHashMap<>();
-            c.put("programs", rows.size());
-            c.put("reached", rows.stream().mapToLong(m -> m.treated).sum());
-            c.put("attributedRevenue", rows.stream().map(m -> m.treatedRev)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add));
-            out.put(channel, c);
+            out.put(channel, new AttributionReport.ChannelTotals(rows.size(),
+                    rows.stream().mapToLong(m -> m.treated).sum(),
+                    rows.stream().map(m -> m.treatedRev).reduce(BigDecimal.ZERO, BigDecimal::add)));
         }
         return out;
     }
@@ -183,36 +164,17 @@ public class AttributionService {
                     .setScale(2, RoundingMode.HALF_UP);
         }
 
-        Map<String, Object> toMap() {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("type", type);
-            m.put("id", id);
-            m.put("name", name);
-            m.put("status", status);
-            m.put("conversionEvent", conversionEvent);
-            m.put("reached", treated);
-            m.put("heldOut", heldOut);
-            m.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
+        AttributionReport.Program view() {
             Double tRate = rate(treatedConv, treated);
             Double hRate = rate(holdoutConv, heldOut);
-            if (tRate != null) {
-                m.put("treatedRate", pct(tRate));
-            }
-            if (hRate != null) {
-                m.put("holdoutRate", pct(hRate));
-            }
-            if (tRate != null && hRate != null) {
-                m.put("liftPoints", pct(tRate - hRate));
-            }
-            if (treatedRev.signum() != 0 || holdoutRev.signum() != 0) {
-                Map<String, Object> revenue = new LinkedHashMap<>();
-                revenue.put("treated", treatedRev);
-                revenue.put("holdout", holdoutRev);
-                BigDecimal inc = incremental();
-                revenue.put("incremental", inc); // null when there is no control group
-                m.put("revenue", revenue);
-            }
-            return m;
+            return new AttributionReport.Program(type, id, name, status, conversionEvent, treated, heldOut,
+                    new Conversions(treatedConv, holdoutConv),
+                    tRate == null ? null : pct(tRate),
+                    hRate == null ? null : pct(hRate),
+                    tRate == null || hRate == null ? null : pct(tRate - hRate),
+                    treatedRev.signum() != 0 || holdoutRev.signum() != 0
+                            // incremental is null when there is no control group
+                            ? new AttributionReport.ProgramRevenue(treatedRev, holdoutRev, incremental()) : null);
         }
     }
 }

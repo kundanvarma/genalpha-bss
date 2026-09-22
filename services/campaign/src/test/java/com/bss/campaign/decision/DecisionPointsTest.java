@@ -2,6 +2,7 @@ package com.bss.campaign.decision;
 
 import com.bss.campaign.decision.policy.HoldoutThenWeightedHashPolicy;
 import com.bss.campaign.decision.policy.ZThresholdTunerPolicy;
+import com.bss.campaign.dto.DecisionView;
 import com.bss.campaign.events.DomainEventPublisher;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -23,7 +24,6 @@ class DecisionPointsTest {
     private final DecisionPoints points = new DecisionPoints(events, point -> Optional.ofNullable(contract));
 
     @Test
-    @SuppressWarnings("unchecked")
     void enrolmentSplitIsDeterministicCarriesPropensityAndIsPublished() {
         Map<String, Object> ctx = Map.of("seed", "j1", "partyId", "p-42", "holdoutPercent", 10,
                 "weights", Map.of("A", 70, "B", 30));
@@ -43,10 +43,11 @@ class DecisionPointsTest {
         assertThat(first.fallback()).isFalse();
         ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
         verify(events, Mockito.times(2)).publish(eq("DecisionRecordedEvent"), eq("decision"), payload.capture());
-        Map<String, Object> published = (Map<String, Object>) payload.getAllValues().get(0);
-        assertThat(published.get("decisionId")).isEqualTo(first.decisionId());
-        assertThat(published.get("eligibleActions")).isEqualTo(List.of("holdout", "A", "B"));
-        assertThat(published.get("autonomy")).isEqualTo("high");
+        DecisionView published = (DecisionView) payload.getAllValues().get(0);
+        assertThat(published.decisionId()).isEqualTo(first.decisionId());
+        assertThat(published.eligibleActions()).isEqualTo(List.of("holdout", "A", "B"));
+        assertThat(published.autonomy()).isEqualTo("high");
+        assertThat(published.type()).isEqualTo("Decision");
     }
 
     @Test

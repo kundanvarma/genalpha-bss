@@ -2,6 +2,15 @@ package com.bss.campaign.service;
 
 import com.bss.campaign.api.ApiConstants;
 import com.bss.campaign.client.CommunicationClient;
+import com.bss.campaign.client.SegmentMember;
+import com.bss.campaign.dto.ArmSpec;
+import com.bss.campaign.dto.CampaignExecutionView;
+import com.bss.campaign.dto.CampaignPatch;
+import com.bss.campaign.dto.CampaignRequest;
+import com.bss.campaign.dto.CampaignStats;
+import com.bss.campaign.dto.CampaignView;
+import com.bss.campaign.dto.Conversions;
+import com.bss.campaign.dto.ExecutionReceipt;
 import com.bss.campaign.entity.Campaign;
 import com.bss.campaign.entity.CampaignExecution;
 import com.bss.campaign.events.DomainEventPublisher;
@@ -17,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,10 +44,11 @@ public class CampaignService {
     private static final Logger log = LoggerFactory.getLogger(CampaignService.class);
     // Full lifecycle; only ACTIVE triggers/executes. archived = soft delete.
     private static final String ARCHIVED = "archived";
-    private static final Set<String> STATUSES =
-            Set.of("draft", "scheduled", Campaign.ACTIVE, Campaign.PAUSED, ARCHIVED);
+    // declaration order, so the refusal names the states the same way on every JVM
+    private static final Set<String> STATUSES = java.util.Collections.unmodifiableSet(
+            new java.util.LinkedHashSet<>(List.of("draft", "scheduled", Campaign.ACTIVE, Campaign.PAUSED, ARCHIVED)));
 
-    private static final com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>
+    private static final com.fasterxml.jackson.core.type.TypeReference<List<ArmSpec>>
             ARM_LIST = new com.fasterxml.jackson.core.type.TypeReference<>() { };
 
     private final CampaignRepository campaigns;
@@ -72,15 +81,13 @@ public class CampaignService {
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        List<Map<String, Object>> arms = parseArms(dto.get("messageVariants"));
-        Map<?, ?> message = dto.get("message") instanceof Map<?, ?> m ? m
-                : arms != null ? arms.get(0) : null;
-        if (dto.get("name") == null
-                || (dto.get("triggerEventType") == null && dto.get("segmentName") == null
-                    && dto.get("audienceRef") == null)
-                || message == null
-                || message.get("subject") == null || message.get("content") == null) {
+    public CampaignView create(CampaignRequest dto) {
+        List<ArmSpec> arms = parseArms(dto.messageVariants());
+        String subject = dto.message() != null ? dto.message().subject() : arms != null ? arms.get(0).subject() : null;
+        String content = dto.message() != null ? dto.message().content() : arms != null ? arms.get(0).content() : null;
+        if (dto.name() == null
+                || (dto.triggerEventType() == null && dto.segmentName() == null && dto.audienceRef() == null)
+                || subject == null || content == null) {
             throw new BadRequestException(
                     "name, message {subject, content} (or messageVariants) and a trigger"
                     + " (triggerEventType, segmentName or audienceRef) are required");
@@ -90,26 +97,21 @@ public class CampaignService {
         entity.setId(id);
         entity.setTenantId(tenantScope.currentTenantId());
         entity.setHref(ApiConstants.BASE_PATH + "/campaign/" + id);
-        entity.setName(String.valueOf(dto.get("name")));
-        entity.setStatus(dto.get("status") == null ? Campaign.ACTIVE : requireStatus(dto.get("status")));
-        entity.setTriggerEventType(dto.get("triggerEventType") == null ? null
-                : String.valueOf(dto.get("triggerEventType")));
-        entity.setSegmentName(dto.get("segmentName") == null ? null
-                : String.valueOf(dto.get("segmentName")));
-        entity.setAudienceRef(dto.get("audienceRef") == null ? null
-                : String.valueOf(dto.get("audienceRef")));
-        entity.setTriggerState(dto.get("triggerState") == null ? null : String.valueOf(dto.get("triggerState")));
-        entity.setMessageSubject(String.valueOf(message.get("subject")));
-        entity.setMessageContent(String.valueOf(message.get("content")));
-        entity.setPromotionCode(dto.get("promotionCode") == null ? null
-                : String.valueOf(dto.get("promotionCode")));
-        entity.setConversionEvent(dto.get("conversionEvent") == null ? null
-                : String.valueOf(dto.get("conversionEvent")));
-        if (dto.get("conversionWindowDays") != null) {
-            entity.setConversionWindowDays(Integer.parseInt(String.valueOf(dto.get("conversionWindowDays"))));
+        entity.setName(dto.name());
+        entity.setStatus(dto.status() == null ? Campaign.ACTIVE : requireStatus(dto.status()));
+        entity.setTriggerEventType(dto.triggerEventType());
+        entity.setSegmentName(dto.segmentName());
+        entity.setAudienceRef(dto.audienceRef());
+        entity.setTriggerState(dto.triggerState());
+        entity.setMessageSubject(subject);
+        entity.setMessageContent(content);
+        entity.setPromotionCode(dto.promotionCode());
+        entity.setConversionEvent(dto.conversionEvent());
+        if (dto.conversionWindowDays() != null) {
+            entity.setConversionWindowDays(dto.conversionWindowDays());
         }
-        if (dto.get("holdoutPercent") != null) {
-            int holdout = Integer.parseInt(String.valueOf(dto.get("holdoutPercent")));
+        if (dto.holdoutPercent() != null) {
+            int holdout = dto.holdoutPercent();
             if (holdout < 0 || holdout > 90) {
                 throw new BadRequestException("holdoutPercent must be 0-90");
             }
@@ -124,26 +126,26 @@ public class CampaignService {
         }
         entity.setCreatedAt(OffsetDateTime.now());
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(campaigns.save(entity));
+        return view(campaigns.save(entity));
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll() {
+    public List<CampaignView> findAll() {
         // archived campaigns are a soft delete: hidden from the default list
         return campaigns.findByTenantId(tenantScope.currentTenantId()).stream()
                 .filter(c -> !ARCHIVED.equals(c.getStatus()))
-                .map(this::toMap).toList();
+                .map(this::view).toList();
     }
 
     @Transactional
-    public Map<String, Object> patch(String id, Map<String, Object> patch) {
+    public CampaignView patch(String id, CampaignPatch patch) {
         Campaign entity = campaigns.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Campaign", id));
-        if (patch.get("status") != null) {
-            entity.setStatus(requireStatus(patch.get("status")));
+        if (patch.status() != null) {
+            entity.setStatus(requireStatus(patch.status()));
         }
         entity.setLastUpdate(OffsetDateTime.now());
-        return toMap(campaigns.save(entity));
+        return view(campaigns.save(entity));
     }
 
     /** Delete a campaign and its execution ledger. */
@@ -198,7 +200,7 @@ public class CampaignService {
 
     /** The readout: reached / held out / conversions per variant / LIFT. */
     @Transactional(readOnly = true)
-    public Map<String, Object> statsOf(String campaignId) {
+    public CampaignStats statsOf(String campaignId) {
         Campaign campaign = campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
         java.util.List<CampaignExecution> all =
@@ -211,52 +213,33 @@ public class CampaignService {
                 .filter(e -> "holdout".equals(e.getVariant()) && e.getConvertedAt() != null).count();
         Double treatedRate = treated == 0 ? null : (double) treatedConv / treated;
         Double holdoutRate = heldOut == 0 ? null : (double) holdoutConv / heldOut;
-        Map<String, Object> stats = new java.util.LinkedHashMap<>();
-        stats.put("campaignId", campaignId);
-        stats.put("reached", treated);
-        stats.put("heldOut", heldOut);
-        stats.put("conversions", Map.of("treated", treatedConv, "holdout", holdoutConv));
-        if (treatedRate != null) {
-            stats.put("treatedRate", Math.round(treatedRate * 1000) / 10.0);
-        }
-        if (holdoutRate != null) {
-            stats.put("holdoutRate", Math.round(holdoutRate * 1000) / 10.0);
-        }
-        if (treatedRate != null && holdoutRate != null) {
-            stats.put("liftPoints", Math.round((treatedRate - holdoutRate) * 1000) / 10.0);
-        }
-        stats.put("conversionWindowDays", campaign.getConversionWindowDays());
-        if (heldOut > 0 && heldOut < 5) {
-            stats.put("note", "holdout under 5 people — the lift is an anecdote, not a measurement");
-        }
         // ATTRIBUTED REVENUE: the monthly money conversions carry, read per
         // EXPOSED customer (incrementality is per person reached, not per
         // converter) — the revenue lift is what one more treated customer
         // is worth versus leaving them alone
         java.math.BigDecimal treatedRevenue = revenueOf(all, false);
         java.math.BigDecimal holdoutRevenue = revenueOf(all, true);
+        CampaignStats.Revenue revenue = null;
         if (treatedRevenue.signum() != 0 || holdoutRevenue.signum() != 0) {
-            Map<String, Object> revenue = new java.util.LinkedHashMap<>();
-            revenue.put("treated", treatedRevenue);
-            revenue.put("holdout", holdoutRevenue);
-            if (treated > 0) {
-                revenue.put("treatedPerCustomer", perCustomer(treatedRevenue, treated));
-            }
-            if (heldOut > 0) {
-                revenue.put("holdoutPerCustomer", perCustomer(holdoutRevenue, heldOut));
-            }
-            if (treated > 0 && heldOut > 0) {
-                revenue.put("liftPerCustomer", perCustomer(treatedRevenue, treated)
-                        .subtract(perCustomer(holdoutRevenue, heldOut)));
-            }
-            revenue.put("basis", "monthly recurring value of converting orders");
-            stats.put("revenue", revenue);
+            revenue = new CampaignStats.Revenue(treatedRevenue, holdoutRevenue,
+                    treated > 0 ? perCustomer(treatedRevenue, treated) : null,
+                    heldOut > 0 ? perCustomer(holdoutRevenue, heldOut) : null,
+                    treated > 0 && heldOut > 0
+                            ? perCustomer(treatedRevenue, treated).subtract(perCustomer(holdoutRevenue, heldOut))
+                            : null,
+                    "monthly recurring value of converting orders");
         }
-        List<Map<String, Object>> arms = armsOf(campaign);
-        if (arms != null) {
-            stats.put("arms", armStats(arms, all));
-        }
-        return stats;
+        List<ArmSpec> arms = armsOf(campaign);
+        return new CampaignStats(campaignId, treated, heldOut, new Conversions(treatedConv, holdoutConv),
+                treatedRate == null ? null : Math.round(treatedRate * 1000) / 10.0,
+                holdoutRate == null ? null : Math.round(holdoutRate * 1000) / 10.0,
+                treatedRate == null || holdoutRate == null ? null
+                        : Math.round((treatedRate - holdoutRate) * 1000) / 10.0,
+                campaign.getConversionWindowDays(),
+                heldOut > 0 && heldOut < 5
+                        ? "holdout under 5 people — the lift is an anecdote, not a measurement" : null,
+                revenue,
+                arms == null ? null : armStats(arms, all));
     }
 
     private java.math.BigDecimal revenueOf(List<CampaignExecution> all, boolean holdout) {
@@ -278,45 +261,36 @@ public class CampaignService {
      * gap is a finding or noise (with tiny samples it is ALWAYS noise, and
      * the readout says so instead of crowning a winner).
      */
-    private Map<String, Object> armStats(List<Map<String, Object>> arms,
-            List<CampaignExecution> all) {
-        List<Map<String, Object>> rows = new java.util.ArrayList<>();
-        for (Map<String, Object> arm : arms) {
-            String name = String.valueOf(arm.get("name"));
+    private CampaignStats.ArmReadout armStats(List<ArmSpec> arms, List<CampaignExecution> all) {
+        List<CampaignStats.ArmStat> rows = new java.util.ArrayList<>();
+        for (ArmSpec arm : arms) {
+            String name = String.valueOf(arm.name());
             long sent = all.stream().filter(e -> name.equals(e.getArm())).count();
             long conv = all.stream()
                     .filter(e -> name.equals(e.getArm()) && e.getConvertedAt() != null).count();
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("name", name);
-            row.put("subject", arm.get("subject"));
-            row.put("sent", sent);
-            row.put("conversions", conv);
-            row.put("rate", sent == 0 ? null : Math.round((double) conv / sent * 1000) / 10.0);
-            rows.add(row);
+            rows.add(new CampaignStats.ArmStat(name, arm.subject(), sent, conv,
+                    sent == 0 ? null : Math.round((double) conv / sent * 1000) / 10.0));
         }
-        Map<String, Object> best = rows.stream()
-                .filter(r -> r.get("rate") != null)
+        CampaignStats.ArmStat best = rows.stream()
+                .filter(r -> r.rate() != null)
                 .max(java.util.Comparator
-                        .comparingDouble((Map<String, Object> r) -> (Double) r.get("rate"))
-                        .thenComparingLong(r -> (Long) r.get("conversions")))
+                        .comparingDouble((CampaignStats.ArmStat r) -> r.rate())
+                        .thenComparingLong(CampaignStats.ArmStat::conversions))
                 .orElse(null);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("arms", rows);
+        String leader = null;
+        String verdict = null;
         if (best != null && rows.size() >= 2) {
-            List<Map<String, Object>> sorted = rows.stream()
-                    .filter(r -> r.get("rate") != null)
-                    .sorted(java.util.Comparator.comparingDouble(
-                            (Map<String, Object> r) -> (Double) r.get("rate")).reversed())
+            List<CampaignStats.ArmStat> sorted = rows.stream()
+                    .filter(r -> r.rate() != null)
+                    .sorted(java.util.Comparator.comparingDouble((CampaignStats.ArmStat r) -> r.rate()).reversed())
                     .toList();
-            out.put("leader", best.get("name"));
+            leader = best.name();
             if (sorted.size() >= 2) {
-                long n1 = (Long) sorted.get(0).get("sent"), n2 = (Long) sorted.get(1).get("sent");
-                long c1 = (Long) sorted.get(0).get("conversions"),
-                        c2 = (Long) sorted.get(1).get("conversions");
-                out.put("verdict", verdictOf(n1, c1, n2, c2, String.valueOf(best.get("name"))));
+                verdict = verdictOf(sorted.get(0).sent(), sorted.get(0).conversions(),
+                        sorted.get(1).sent(), sorted.get(1).conversions(), best.name());
             }
         }
-        return out;
+        return new CampaignStats.ArmReadout(rows, leader, verdict);
     }
 
     private String verdictOf(long n1, long c1, long n2, long c2, String leader) {
@@ -342,7 +316,7 @@ public class CampaignService {
      * again and only the newcomers hear it.
      */
     @Transactional
-    public Map<String, Object> executeSegment(String campaignId) {
+    public ExecutionReceipt executeSegment(String campaignId) {
         Campaign campaign = campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
         boolean hasAudience = campaign.getAudienceRef() != null && !campaign.getAudienceRef().isBlank();
@@ -353,18 +327,17 @@ public class CampaignService {
             throw new BadRequestException("only an active campaign can be executed");
         }
         // a saved Audience (rule tree) takes precedence over the bare segment string
-        List<Map<String, Object>> members = hasAudience
+        List<SegmentMember> members = hasAudience
                 ? insight.audienceMembers(campaign.getAudienceRef())
                 : insight.segmentMembers(campaign.getSegmentName());
         int reached = 0;
-        for (Map<String, Object> member : members) {
-            if (reach(campaign, String.valueOf(member.get("partyId")))) {
+        for (SegmentMember member : members) {
+            if (reach(campaign, String.valueOf(member.partyId()))) {
                 reached++;
             }
         }
-        return Map.of("campaignId", campaignId,
-                "audience", hasAudience ? campaign.getAudienceRef() : campaign.getSegmentName(),
-                "reached", reached);
+        return new ExecutionReceipt(campaignId,
+                hasAudience ? campaign.getAudienceRef() : campaign.getSegmentName(), reached);
     }
 
     /** One customer, once: the shared delivery step for events and blasts.
@@ -394,13 +367,13 @@ public class CampaignService {
         // record carries the eligible set, the policy and the propensity, and
         // the conversion later joins back by id. The guards above are the
         // constraints that ran first; they are named in the record.
-        List<Map<String, Object>> arms = armsOf(campaign);
+        List<ArmSpec> arms = armsOf(campaign);
         List<String> candidates = new java.util.ArrayList<>();
         candidates.add("holdout");
         if (arms == null || arms.isEmpty()) {
             candidates.add("message");
         } else {
-            arms.forEach(a -> candidates.add(String.valueOf(a.get("name"))));
+            arms.forEach(a -> candidates.add(String.valueOf(a.name())));
         }
         Map<String, Object> ctx = new java.util.LinkedHashMap<>();
         ctx.put("seed", campaign.getId());
@@ -412,9 +385,9 @@ public class CampaignService {
                 com.bss.campaign.decision.DecisionPoints.CAMPAIGN_TREATMENT, partyId, ctx, candidates,
                 List.of(), "holdout");
         boolean holdout = "holdout".equals(dealt.action());
-        Map<String, Object> arm = null;
+        ArmSpec arm = null;
         if (!holdout && arms != null) {
-            arm = arms.stream().filter(a -> dealt.action().equals(String.valueOf(a.get("name"))))
+            arm = arms.stream().filter(a -> dealt.action().equals(String.valueOf(a.name())))
                     .findFirst().orElse(null);
         }
         CampaignExecution execution = new CampaignExecution();
@@ -425,7 +398,7 @@ public class CampaignService {
         execution.setVariant(holdout ? "holdout" : "treated");
         execution.setDecisionId(dealt.decisionId());
         if (arm != null) {
-            execution.setArm(String.valueOf(arm.get("name")));
+            execution.setArm(String.valueOf(arm.name()));
         }
         execution.setExecutedAt(OffsetDateTime.now());
         try {
@@ -434,9 +407,9 @@ public class CampaignService {
             return false; // concurrent duplicate delivery lost the race — fine
         }
         if (!holdout) {
-            String subject = arm != null ? String.valueOf(arm.get("subject"))
+            String subject = arm != null ? String.valueOf(arm.subject())
                     : campaign.getMessageSubject();
-            String body = arm != null ? String.valueOf(arm.get("content"))
+            String body = arm != null ? String.valueOf(arm.content())
                     : campaign.getMessageContent();
             String content = campaign.getPromotionCode() == null
                     ? body : body.replace("{code}", campaign.getPromotionCode());
@@ -460,15 +433,13 @@ public class CampaignService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> executionsOf(String campaignId) {
+    public List<CampaignExecutionView> executionsOf(String campaignId) {
         campaigns.findByIdAndTenantId(campaignId, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("Campaign", campaignId));
         return executions.findByTenantIdAndCampaignId(tenantScope.currentTenantId(), campaignId)
-                .stream().map(e -> Map.<String, Object>of(
-                        "id", e.getId(),
-                        "party", Map.of("id", e.getPartyId()),
-                        "executedAt", e.getExecutedAt().toString(),
-                        "@type", "CampaignExecution"))
+                .stream().map(e -> new CampaignExecutionView(e.getId(),
+                        new CampaignExecutionView.PartyRef(e.getPartyId()),
+                        e.getExecutedAt().toString(), "CampaignExecution"))
                 .toList();
     }
 
@@ -491,33 +462,28 @@ public class CampaignService {
     }
 
     /** A/B arms: 2-4 variants, each a complete message with a name. */
-    private List<Map<String, Object>> parseArms(Object raw) {
+    private List<ArmSpec> parseArms(List<ArmSpec> raw) {
         if (raw == null) {
             return null;
         }
-        if (!(raw instanceof List<?> list) || list.size() < 2 || list.size() > 4) {
+        if (raw.size() < 2 || raw.size() > 4) {
             throw new BadRequestException("messageVariants must be a list of 2-4 arms");
         }
-        List<Map<String, Object>> arms = new java.util.ArrayList<>();
+        List<ArmSpec> arms = new java.util.ArrayList<>();
         Set<String> names = new java.util.HashSet<>();
-        for (Object o : list) {
-            if (!(o instanceof Map<?, ?> arm) || arm.get("name") == null
-                    || arm.get("subject") == null || arm.get("content") == null) {
+        for (ArmSpec arm : raw) {
+            if (arm == null || arm.name() == null || arm.subject() == null || arm.content() == null) {
                 throw new BadRequestException("every arm needs name, subject and content");
             }
-            if (!names.add(String.valueOf(arm.get("name")))) {
+            if (!names.add(arm.name())) {
                 throw new BadRequestException("arm names must be unique");
             }
-            Map<String, Object> clean = new LinkedHashMap<>();
-            clean.put("name", String.valueOf(arm.get("name")));
-            clean.put("subject", String.valueOf(arm.get("subject")));
-            clean.put("content", String.valueOf(arm.get("content")));
-            arms.add(clean);
+            arms.add(new ArmSpec(arm.name(), arm.subject(), arm.content()));
         }
         return arms;
     }
 
-    private List<Map<String, Object>> armsOf(Campaign campaign) {
+    private List<ArmSpec> armsOf(Campaign campaign) {
         if (campaign.getArms() == null || campaign.getArms().isBlank()) {
             return null;
         }
@@ -538,24 +504,10 @@ public class CampaignService {
         return value;
     }
 
-    private Map<String, Object> toMap(Campaign c) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", c.getId());
-        map.put("href", c.getHref());
-        map.put("name", c.getName());
-        map.put("status", c.getStatus());
-        map.put("triggerEventType", c.getTriggerEventType());
-        if (c.getTriggerState() != null) map.put("triggerState", c.getTriggerState());
-        map.put("message", Map.of("subject", c.getMessageSubject(), "content", c.getMessageContent()));
-        if (c.getPromotionCode() != null) map.put("promotionCode", c.getPromotionCode());
-        if (c.getSegmentName() != null) map.put("segmentName", c.getSegmentName());
-        if (c.getAudienceRef() != null) map.put("audienceRef", c.getAudienceRef());
-        List<Map<String, Object>> arms = armsOf(c);
-        if (arms != null) map.put("messageVariants", arms);
-        map.put("holdoutPercent", c.getHoldoutPercent());
-        map.put("conversionWindowDays", c.getConversionWindowDays());
-        if (c.getConversionEvent() != null) map.put("conversionEvent", c.getConversionEvent());
-        map.put("@type", "Campaign");
-        return map;
+    private CampaignView view(Campaign c) {
+        return new CampaignView(c.getId(), c.getHref(), c.getName(), c.getStatus(), c.getTriggerEventType(),
+                c.getTriggerState(), new CampaignView.Message(c.getMessageSubject(), c.getMessageContent()),
+                c.getPromotionCode(), c.getSegmentName(), c.getAudienceRef(), armsOf(c), c.getHoldoutPercent(),
+                c.getConversionWindowDays(), c.getConversionEvent(), "Campaign");
     }
 }

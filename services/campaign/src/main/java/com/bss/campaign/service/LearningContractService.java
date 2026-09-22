@@ -4,11 +4,18 @@ import com.bss.campaign.decision.Contract;
 import com.bss.campaign.decision.ContractProvider;
 import com.bss.campaign.decision.DecisionPoints;
 import com.bss.campaign.decision.DecisionRecord;
+import com.bss.campaign.dto.ContractView;
+import com.bss.campaign.dto.DecisionDryRun;
+import com.bss.campaign.dto.DecisionPointView;
+import com.bss.campaign.dto.DryRunRequest;
+import com.bss.campaign.dto.LearningContractRequest;
+import com.bss.campaign.dto.LearningContractView;
 import com.bss.campaign.entity.LearningContract;
 import com.bss.campaign.exception.BadRequestException;
 import com.bss.campaign.repository.LearningContractRepository;
 import com.bss.campaign.security.TenantScope;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -36,6 +43,7 @@ public class LearningContractService implements ContractProvider {
 
     public static final Set<String> AUTONOMY = Set.of("high", "medium", "low");
     private static final TypeReference<List<String>> STRINGS = new TypeReference<>() { };
+    private static final TypeReference<Map<String, Object>> OBJECT = new TypeReference<>() { };
 
     private final LearningContractRepository contracts;
     private final TenantScope tenantScope;
@@ -59,39 +67,33 @@ public class LearningContractService implements ContractProvider {
 
     /** Every registered point with its contract — or the defaults, marked as such. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> effective() {
+    public List<LearningContractView> effective() {
         String tenant = tenantScope.currentTenantId();
         Map<String, LearningContract> byPoint = new LinkedHashMap<>();
         for (LearningContract c : contracts.findByTenantIdOrderByDecisionPoint(tenant)) {
             byPoint.put(c.getDecisionPoint(), c);
         }
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (Map<String, Object> point : decisions.registryView()) {
-            String name = String.valueOf(point.get("name"));
-            Map<String, Object> m = new LinkedHashMap<>(point);
-            LearningContract c = byPoint.get(name);
-            m.put("contract", c == null ? defaults(name) : view(c));
-            m.put("@type", "LearningContract");
-            out.add(m);
+        List<LearningContractView> out = new ArrayList<>();
+        for (DecisionPointView point : decisions.registryView()) {
+            LearningContract c = byPoint.get(point.name());
+            out.add(LearningContractView.of(point, c == null ? defaults(point.name()) : view(c)));
         }
         return out;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> get(String decisionPoint) {
+    public LearningContractView get(String decisionPoint) {
         requireKnown(decisionPoint);
-        Map<String, Object> point = decisions.registryView().stream()
-                .filter(p -> decisionPoint.equals(p.get("name"))).findFirst().orElseThrow();
-        Map<String, Object> m = new LinkedHashMap<>(point);
-        m.put("contract", contracts.findByTenantIdAndDecisionPoint(tenantScope.currentTenantId(), decisionPoint)
-                .map(this::view).orElse(defaults(decisionPoint)));
-        m.put("@type", "LearningContract");
-        return m;
+        DecisionPointView point = decisions.registryView().stream()
+                .filter(p -> decisionPoint.equals(p.name())).findFirst().orElseThrow();
+        return LearningContractView.of(point,
+                contracts.findByTenantIdAndDecisionPoint(tenantScope.currentTenantId(), decisionPoint)
+                        .map(this::view).orElse(defaults(decisionPoint)));
     }
 
     /** Upsert: a new version each time; the previous intent stays attributable through old records' "id@version". */
     @Transactional
-    public Map<String, Object> put(String decisionPoint, Map<String, Object> dto) {
+    public LearningContractView put(String decisionPoint, LearningContractRequest dto) {
         requireKnown(decisionPoint);
         String tenant = tenantScope.currentTenantId();
         LearningContract c = contracts.findByTenantIdAndDecisionPoint(tenant, decisionPoint).orElse(null);
@@ -102,14 +104,15 @@ public class LearningContractService implements ContractProvider {
             c.setDecisionPoint(decisionPoint);
             c.setVersion(0);
         }
-        String autonomy = str(dto.get("autonomy"));
+        String autonomy = str(dto.autonomy());
         if (autonomy != null && !AUTONOMY.contains(autonomy)) {
             throw new BadRequestException("autonomy must be high, medium or low");
         }
         Integer cap = null;
-        if (dto.get("explorationMaxPercent") != null && !String.valueOf(dto.get("explorationMaxPercent")).isBlank()) {
+        String capText = text(dto.explorationMaxPercent());
+        if (capText != null && !capText.isBlank()) {
             try {
-                cap = Integer.valueOf(String.valueOf(dto.get("explorationMaxPercent")).trim());
+                cap = Integer.valueOf(capText.trim());
             } catch (NumberFormatException e) {
                 throw new BadRequestException("explorationMaxPercent must be a whole number 0–90");
             }
@@ -117,15 +120,15 @@ public class LearningContractService implements ContractProvider {
                 throw new BadRequestException("explorationMaxPercent must be 0–90");
             }
         }
-        c.setObjective(str(dto.get("objective")));
-        c.setSecondaryMetrics(encodeList(dto.get("secondaryMetrics")));
-        c.setGuardrails(encodeList(dto.get("guardrails")));
-        c.setAllowedActions(dto.get("allowedActions") == null ? null : encodeList(dto.get("allowedActions")));
+        c.setObjective(str(dto.objective()));
+        c.setSecondaryMetrics(encodeList(dto.secondaryMetrics()));
+        c.setGuardrails(encodeList(dto.guardrails()));
+        c.setAllowedActions(absent(dto.allowedActions()) ? null : encodeList(dto.allowedActions()));
         c.setExplorationMaxPercent(cap);
         c.setAutonomy(autonomy);
-        c.setFallbackAction(str(dto.get("fallbackAction")));
-        c.setEnabled(dto.get("enabled") == null || Boolean.parseBoolean(String.valueOf(dto.get("enabled"))));
-        c.setNotes(str(dto.get("notes")));
+        c.setFallbackAction(str(dto.fallbackAction()));
+        c.setEnabled(absent(dto.enabled()) || Boolean.parseBoolean(dto.enabled().asText()));
+        c.setNotes(str(dto.notes()));
         c.setVersion(c.getVersion() + 1);
         c.setUpdatedBy(caller());
         c.setLastUpdate(OffsetDateTime.now());
@@ -141,28 +144,25 @@ public class LearningContractService implements ContractProvider {
 
     /** Dry run: what the point WOULD decide for a sample context under the current contract — nothing recorded. */
     @Transactional(readOnly = true)
-    public Map<String, Object> dryRun(String decisionPoint, Map<String, Object> body) {
+    public DecisionDryRun dryRun(String decisionPoint, DryRunRequest body) {
         requireKnown(decisionPoint);
-        Map<String, Object> context = body.get("context") instanceof Map<?, ?> m ? castMap(m) : new LinkedHashMap<>();
-        List<String> candidates = body.get("candidates") instanceof List<?> l
-                ? l.stream().map(String::valueOf).toList() : List.of();
+        Map<String, Object> context = body.context() != null && body.context().isObject()
+                ? json.convertValue(body.context(), OBJECT) : new LinkedHashMap<>();
+        List<String> candidates = body.candidates() == null ? List.of() : body.candidates();
         if (candidates.isEmpty()) {
             throw new BadRequestException("candidates is required — the actions the point could take");
         }
-        String subject = str(body.get("subjectId"));
+        String subject = str(body.subjectId());
         if (subject == null) {
             subject = str(context.get("partyId"));
         }
         if (context.get("seed") == null) {
             context.put("seed", str(context.getOrDefault("journeyId", context.getOrDefault("campaignId", "dry-run"))));
         }
+        String fallback = body.fallbackAction() == null ? candidates.get(0) : str(body.fallbackAction());
         DecisionRecord r = decisions.preview(decisionPoint, subject == null ? "dry-run" : subject, context, candidates,
-                str(body.getOrDefault("fallbackAction", candidates.get(0))));
-        Map<String, Object> out = r.toMap();
-        out.remove("decisionId"); // nothing was recorded
-        out.put("dryRun", true);
-        out.put("@type", "DecisionDryRun");
-        return out;
+                fallback);
+        return DecisionDryRun.of(r.view());
     }
 
     /* ------------------------------------------------------------------ helpers */
@@ -173,46 +173,32 @@ public class LearningContractService implements ContractProvider {
                 c.getExplorationMaxPercent(), c.getAutonomy(), c.getFallbackAction(), c.isEnabled());
     }
 
-    private Map<String, Object> view(LearningContract c) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", c.getId());
-        m.put("version", c.getVersion());
-        m.put("ref", c.getId() + "@" + c.getVersion());
-        m.put("objective", c.getObjective());
-        m.put("secondaryMetrics", decodeList(c.getSecondaryMetrics()));
-        m.put("guardrails", decodeList(c.getGuardrails()));
-        m.put("allowedActions", c.getAllowedActions() == null ? null : decodeList(c.getAllowedActions()));
-        m.put("explorationMaxPercent", c.getExplorationMaxPercent());
-        m.put("autonomy", c.getAutonomy());
-        m.put("fallbackAction", c.getFallbackAction());
-        m.put("enabled", c.isEnabled());
-        m.put("notes", c.getNotes());
-        m.put("updatedBy", c.getUpdatedBy());
-        m.put("lastUpdate", c.getLastUpdate());
-        m.put("defaults", false);
-        return m;
+    private ContractView view(LearningContract c) {
+        return new ContractView.Stored(c.getId(), c.getVersion(), c.getId() + "@" + c.getVersion(), c.getObjective(),
+                decodeList(c.getSecondaryMetrics()), decodeList(c.getGuardrails()),
+                c.getAllowedActions() == null ? null : decodeList(c.getAllowedActions()),
+                c.getExplorationMaxPercent(), c.getAutonomy(), c.getFallbackAction(), c.isEnabled(), c.getNotes(),
+                c.getUpdatedBy(), c.getLastUpdate(), false);
     }
 
-    private Map<String, Object> defaults(String point) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("objective", DecisionPoints.JOURNEY_ENROLMENT.equals(point) || DecisionPoints.CAMPAIGN_TREATMENT.equals(point)
-                ? "conversion" : null);
-        m.put("secondaryMetrics", List.of());
-        m.put("guardrails", List.of());
-        m.put("allowedActions", null);
-        m.put("explorationMaxPercent", null);
-        m.put("autonomy", null);
-        m.put("fallbackAction", null);
-        m.put("enabled", true);
-        m.put("version", 0);
-        m.put("defaults", true);
-        return m;
+    private ContractView defaults(String point) {
+        return ContractView.Defaults.withObjective(
+                DecisionPoints.JOURNEY_ENROLMENT.equals(point) || DecisionPoints.CAMPAIGN_TREATMENT.equals(point)
+                        ? "conversion" : null);
     }
 
-    private String encodeList(Object o) {
-        List<String> list = o instanceof List<?> l ? l.stream().map(String::valueOf).map(String::trim)
-                .filter(s -> !s.isEmpty()).toList()
-                : o instanceof String s && !s.isBlank() ? List.of(s.split("\\s*[\\n,]\\s*")) : List.of();
+    /** A list field as the desk sends it: a JSON list, or one string split on commas/newlines. */
+    private String encodeList(JsonNode o) {
+        List<String> list;
+        if (o != null && o.isArray()) {
+            List<String> items = new ArrayList<>();
+            o.forEach(n -> items.add(text(n)));
+            list = items.stream().map(s -> s == null ? "" : s.trim()).filter(s -> !s.isEmpty()).toList();
+        } else if (o != null && o.isTextual() && !o.asText().isBlank()) {
+            list = List.of(o.asText().split("\\s*[\\n,]\\s*"));
+        } else {
+            list = List.of();
+        }
         try {
             return json.writeValueAsString(list);
         } catch (Exception e) {
@@ -231,9 +217,15 @@ public class LearningContractService implements ContractProvider {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Map<?, ?> m) {
-        return new LinkedHashMap<>((Map<String, Object>) m);
+    private static boolean absent(JsonNode n) {
+        return n == null || n.isNull();
+    }
+
+    private static String text(JsonNode n) {
+        if (absent(n)) {
+            return null;
+        }
+        return n.isValueNode() ? n.asText() : n.toString();
     }
 
     private static String str(Object o) {

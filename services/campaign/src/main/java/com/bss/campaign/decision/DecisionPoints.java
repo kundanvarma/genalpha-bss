@@ -3,6 +3,7 @@ package com.bss.campaign.decision;
 import com.bss.campaign.decision.policy.HoldoutThenWeightedHashPolicy;
 import com.bss.campaign.decision.policy.PriorityFirstPolicy;
 import com.bss.campaign.decision.policy.ZThresholdTunerPolicy;
+import com.bss.campaign.dto.DecisionPointView;
 import com.bss.campaign.events.DomainEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,19 +73,11 @@ public class DecisionPoints {
         return spec;
     }
 
-    public List<Map<String, Object>> registryView() {
-        List<Map<String, Object>> out = new ArrayList<>();
+    public List<DecisionPointView> registryView() {
+        List<DecisionPointView> out = new ArrayList<>();
         for (DecisionPointSpec s : registry.values()) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("name", s.name());
-            m.put("subjectType", s.subjectType());
-            m.put("autonomy", s.autonomy());
-            m.put("description", s.description());
-            m.put("policy", s.policy().name());
-            m.put("policyVersion", s.policy().version());
-            m.put("source", SOURCE);
-            m.put("@type", "DecisionPoint");
-            out.add(m);
+            out.add(new DecisionPointView(s.name(), s.subjectType(), s.autonomy(), s.description(),
+                    s.policy().name(), s.policy().version(), SOURCE, "DecisionPoint"));
         }
         return out;
     }
@@ -212,7 +205,7 @@ public class DecisionPoints {
 
     private void publish(DecisionRecord record) {
         try {
-            events.publish("DecisionRecordedEvent", "decision", record.toMap());
+            events.publish("DecisionRecordedEvent", "decision", record.view());
         } catch (RuntimeException e) {
             // the decision stands; the log is at-least-once via the outbox, never a reason to fail the choice
             log.warn("decision {} not published: {}", record.decisionId(), e.getMessage());

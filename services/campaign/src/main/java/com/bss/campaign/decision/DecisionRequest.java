@@ -1,5 +1,7 @@
 package com.bss.campaign.decision;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -17,7 +19,9 @@ public record DecisionRequest(
         List<String> eligibleActions) {
 
     public DecisionRequest {
-        context = context == null ? Map.of() : Map.copyOf(context);
+        // an unmodifiable copy in the caller's key order — Map.copyOf would
+        // shuffle the keys per JVM, and the whole context lands in the log
+        context = context == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(context));
         eligibleActions = eligibleActions == null ? List.of() : List.copyOf(eligibleActions);
     }
 

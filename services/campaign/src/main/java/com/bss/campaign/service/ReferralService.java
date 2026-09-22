@@ -1,5 +1,12 @@
 package com.bss.campaign.service;
 
+import com.bss.campaign.dto.ClubLinkReceipt;
+import com.bss.campaign.dto.ClubTally;
+import com.bss.campaign.dto.CommunityGoalRequest;
+import com.bss.campaign.dto.CommunityGoalView;
+import com.bss.campaign.dto.RedeemReceipt;
+import com.bss.campaign.dto.ReferralCodeView;
+import com.bss.campaign.dto.ReferralReport;
 import com.bss.campaign.entity.ReferralCode;
 import com.bss.campaign.entity.ReferralConversion;
 import com.bss.campaign.events.DomainEventPublisher;
@@ -72,7 +79,7 @@ public class ReferralService {
 
     /** The caller's own code — minted on first ask, theirs from then on. */
     @Transactional
-    public Map<String, Object> myCode() {
+    public ReferralCodeView myCode() {
         String tenant = tenantScope.currentTenantId();
         String party = requireSelf();
         ReferralCode code = codes.findByTenantIdAndReferrerPartyId(tenant, party)
@@ -85,23 +92,19 @@ public class ReferralService {
                     return codes.save(fresh);
                 });
         List<ReferralConversion> mine = conversions.findByTenantIdAndCode(tenant, code.getCode());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("code", code.getCode());
-        out.put("rewardGb", rewardGb);
-        out.put("joined", mine.size());
-        out.put("rewarded", mine.stream().filter(c -> ReferralConversion.REWARDED.equals(c.getStatus())).count());
-        out.put("pending", mine.stream().filter(c -> ReferralConversion.PENDING.equals(c.getStatus())).count());
-        return out;
+        return new ReferralCodeView(code.getCode(), rewardGb, mine.size(),
+                mine.stream().filter(c -> ReferralConversion.REWARDED.equals(c.getStatus())).count(),
+                mine.stream().filter(c -> ReferralConversion.PENDING.equals(c.getStatus())).count());
     }
 
     /** A joiner redeems a code — once, never their own. Pays on first order. */
     @Transactional
-    public Map<String, Object> redeem(String rawCode) {
+    public RedeemReceipt redeem(String rawCode) {
         return redeem(rawCode, null);
     }
 
     @Transactional
-    public Map<String, Object> redeem(String rawCode, String areaCode) {
+    public RedeemReceipt redeem(String rawCode, String areaCode) {
         String tenant = tenantScope.currentTenantId();
         String joiner = requireSelf();
         String normalized = rawCode == null ? "" : rawCode.trim().toUpperCase();
@@ -126,9 +129,8 @@ public class ReferralService {
             conversion.setAreaCode(areaCode.trim());
         }
         conversions.save(conversion);
-        return Map.of("code", code.getCode(), "status", conversion.getStatus(),
-                "rewardGb", rewardGb,
-                "note", "the reward lands for BOTH of you when your first order completes");
+        return new RedeemReceipt(code.getCode(), conversion.getStatus(), rewardGb,
+                "the reward lands for BOTH of you when your first order completes");
     }
 
     /** The event hook: a completed order turns a pending referral into GBs. */
@@ -172,95 +174,76 @@ public class ReferralService {
 
     /** The staff readout: every code, its conversions, the program's GB cost. */
     @Transactional(readOnly = true)
-    public Map<String, Object> report() {
+    public ReferralReport report() {
         String tenant = tenantScope.currentTenantId();
         List<ReferralConversion> all = conversions.findByTenantId(tenant);
         long rewarded = all.stream().filter(c -> ReferralConversion.REWARDED.equals(c.getStatus())).count();
         long held = all.stream().filter(c -> ReferralConversion.HELD.equals(c.getStatus())).count();
-        List<Map<String, Object>> rows = new ArrayList<>();
+        List<ReferralReport.Row> rows = new ArrayList<>();
         for (ReferralConversion c : all) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("code", c.getCode());
-            row.put("referrerPartyId", c.getReferrerPartyId());
-            row.put("joinerPartyId", c.getJoinerPartyId());
-            row.put("status", c.getStatus());
-            row.put("createdAt", c.getCreatedAt());
-            rows.add(row);
+            rows.add(new ReferralReport.Row(c.getCode(), c.getReferrerPartyId(), c.getJoinerPartyId(),
+                    c.getStatus(), c.getCreatedAt()));
         }
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("@type", "ReferralReport");
-        out.put("conversions", all.size());
-        out.put("rewarded", rewarded);
-        out.put("pending", all.size() - rewarded - held);
-        out.put("held", held);
         // the honest cost line: what the program has PAID, in data
-        out.put("rewardCostGb", rewardGb.multiply(BigDecimal.valueOf(rewarded * 2)));
-        out.put("rows", rows);
-        return out;
+        return new ReferralReport("ReferralReport", all.size(), rewarded, all.size() - rewarded - held, held,
+                rewardGb.multiply(BigDecimal.valueOf(rewarded * 2)), rows);
     }
 
     /** G3 — tie MY code to my local club: every conversion counts for them. */
     @Transactional
-    public Map<String, Object> linkClub(String clubOrgId) {
+    public ClubLinkReceipt linkClub(String clubOrgId) {
         String tenant = tenantScope.currentTenantId();
         String party = requireSelf();
         ReferralCode code = codes.findByTenantIdAndReferrerPartyId(tenant, party)
                 .orElseThrow(() -> new NotFoundException("mint your code first (GET /referral/myCode)"));
         code.setClubOrgId(clubOrgId == null || clubOrgId.isBlank() ? null : clubOrgId.trim());
         codes.save(code);
-        return Map.of("code", code.getCode(), "clubOrgId",
-                code.getClubOrgId() == null ? "" : code.getClubOrgId());
+        return new ClubLinkReceipt(code.getCode(), code.getClubOrgId() == null ? "" : code.getClubOrgId());
     }
 
     /** G3 — the street's game: create a goal (staff) and read its public score. */
     @Transactional
-    public Map<String, Object> createGoal(Map<String, Object> dto) {
-        if (dto.get("name") == null || dto.get("areaCode") == null || dto.get("target") == null) {
+    public CommunityGoalView createGoal(CommunityGoalRequest dto) {
+        if (dto.name() == null || dto.areaCode() == null || dto.target() == null) {
             throw new BadRequestException("name, areaCode and target are required");
         }
         com.bss.campaign.entity.CommunityGoal goal = new com.bss.campaign.entity.CommunityGoal();
         goal.setId(UUID.randomUUID().toString());
         goal.setTenantId(tenantScope.currentTenantId());
-        goal.setName(String.valueOf(dto.get("name")));
-        goal.setAreaCode(String.valueOf(dto.get("areaCode")).trim());
-        goal.setTarget(Integer.parseInt(String.valueOf(dto.get("target"))));
+        goal.setName(dto.name());
+        goal.setAreaCode(dto.areaCode().trim());
+        goal.setTarget(dto.target());
         goal.setCreatedAt(OffsetDateTime.now());
         goals.save(goal);
         return progressOf(goal);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> listGoals() {
+    public List<CommunityGoalView> listGoals() {
         return goals.findByTenantId(tenantScope.currentTenantId())
                 .stream().map(this::progressOf).toList();
     }
 
     /** The PUBLIC face: joined / target / percent — a score, never a person. */
     @Transactional(readOnly = true)
-    public Map<String, Object> progress(String goalId) {
+    public CommunityGoalView progress(String goalId) {
         com.bss.campaign.entity.CommunityGoal goal = goals
                 .findByIdAndTenantId(goalId, tenantScope.currentTenantId())
                 .orElseThrow(() -> new NotFoundException("no such community goal"));
         return progressOf(goal);
     }
 
-    private Map<String, Object> progressOf(com.bss.campaign.entity.CommunityGoal goal) {
+    private CommunityGoalView progressOf(com.bss.campaign.entity.CommunityGoal goal) {
         long joined = conversions.countByTenantIdAndAreaCode(goal.getTenantId(), goal.getAreaCode());
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("id", goal.getId());
-        out.put("name", goal.getName());
-        out.put("areaCode", goal.getAreaCode());
-        out.put("target", goal.getTarget());
-        out.put("joined", joined);
-        out.put("percent", goal.getTarget() == 0 ? 0
-                : Math.min(100, Math.round(joined * 100.0 / goal.getTarget())));
-        out.put("unlocked", joined >= goal.getTarget());
-        return out;
+        long percent = goal.getTarget() == 0 ? 0
+                : Math.min(100, Math.round(joined * 100.0 / goal.getTarget()));
+        return new CommunityGoalView(goal.getId(), goal.getName(), goal.getAreaCode(), goal.getTarget(), joined,
+                percent, joined >= goal.getTarget());
     }
 
     /** G3 — Klubbdugnad: every club's season tally, from its codes' conversions. */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> clubReport() {
+    public List<ClubTally> clubReport() {
         String tenant = tenantScope.currentTenantId();
         Map<String, Long> joinedByClub = new LinkedHashMap<>();
         Map<String, Long> rewardedByClub = new LinkedHashMap<>();
@@ -275,15 +258,9 @@ public class ReferralService {
                         }
                     });
         }
-        List<Map<String, Object>> out = new ArrayList<>();
-        joinedByClub.forEach((club, joined) -> {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("clubOrgId", club);
-            row.put("joined", joined);
-            row.put("rewarded", rewardedByClub.getOrDefault(club, 0L));
-            out.add(row);
-        });
-        out.sort((a, b) -> Long.compare((long) b.get("joined"), (long) a.get("joined")));
+        List<ClubTally> out = new ArrayList<>();
+        joinedByClub.forEach((club, joined) -> out.add(new ClubTally(club, joined, rewardedByClub.getOrDefault(club, 0L))));
+        out.sort((a, b) -> Long.compare(b.joined(), a.joined()));
         return out;
     }
 

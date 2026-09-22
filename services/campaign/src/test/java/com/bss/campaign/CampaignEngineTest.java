@@ -1,6 +1,8 @@
 package com.bss.campaign;
 
 import com.bss.campaign.client.CommunicationClient;
+import com.bss.campaign.dto.CampaignPatch;
+import com.bss.campaign.dto.CampaignRequest;
 import com.bss.campaign.security.TenantContext;
 import com.bss.campaign.service.CampaignService;
 import org.junit.jupiter.api.Test;
@@ -8,8 +10,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
-
-import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
@@ -30,14 +30,16 @@ class CampaignEngineTest {
     @MockBean
     private CommunicationClient communicationClient;
 
+    private static CampaignRequest campaign(String name, String triggerEventType, String triggerState,
+            String promotionCode, String subject, String content) {
+        return new CampaignRequest(name, null, triggerEventType, triggerState, null, null,
+                new CampaignRequest.Message(subject, content), null, promotionCode, null, null, null);
+    }
+
     private String createWelcomeCampaign(String tenant, String triggerEventType) {
         try (TenantContext ignored = TenantContext.actAs(tenant)) {
-            return String.valueOf(service.create(Map.of(
-                    "name", "Welcome journey",
-                    "triggerEventType", triggerEventType,
-                    "promotionCode", "WELCOME10",
-                    "message", Map.of("subject", "Welcome!",
-                            "content", "Use {code} on your next order."))).get("id"));
+            return service.create(campaign("Welcome journey", triggerEventType, null, "WELCOME10",
+                    "Welcome!", "Use {code} on your next order.")).id();
         }
     }
 
@@ -65,7 +67,7 @@ class CampaignEngineTest {
 
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
             service.onEvent("SomeOtherEvent", null, "party-engine-3", java.util.List.of());
-            service.patch(campaignId, Map.of("status", "paused"));
+            service.patch(campaignId, new CampaignPatch("paused"));
             service.onEvent("PausedProbeEvent", null, "party-engine-3", java.util.List.of());
             verify(communicationClient, never()).send(eq("party-engine-3"), any(), any(), anyMap());
         }
@@ -74,11 +76,8 @@ class CampaignEngineTest {
     @Test
     void triggerStateFiltersWhenSet() {
         try (TenantContext ignored = TenantContext.actAs("genalpha")) {
-            service.create(Map.of(
-                    "name", "Order completed nudge",
-                    "triggerEventType", "ProductOrderStateChangeEvent",
-                    "triggerState", "completed",
-                    "message", Map.of("subject", "Enjoy!", "content", "Your order is live.")));
+            service.create(campaign("Order completed nudge", "ProductOrderStateChangeEvent", "completed", null,
+                    "Enjoy!", "Your order is live."));
 
             service.onEvent("ProductOrderStateChangeEvent", "inProgress", "party-engine-4", java.util.List.of());
             verify(communicationClient, never()).send(eq("party-engine-4"), any(), any(), anyMap());

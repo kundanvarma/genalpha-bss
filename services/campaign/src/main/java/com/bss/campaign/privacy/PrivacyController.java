@@ -1,5 +1,8 @@
 package com.bss.campaign.privacy;
 
+import com.bss.campaign.dto.EraseReceipt;
+import com.bss.campaign.dto.EraseRequest;
+import com.bss.campaign.dto.PrivacyExport;
 import com.bss.campaign.repository.JourneyEnrollmentRepository;
 import com.bss.campaign.repository.MarketingTouchRepository;
 import com.bss.campaign.security.TenantScope;
@@ -13,8 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
-
-import java.util.Map;
 
 /**
  * The GDPR corner of the campaign engine: a person's marketing shadow —
@@ -38,7 +39,7 @@ public class PrivacyController {
     }
 
     @GetMapping("/export")
-    public Map<String, Object> export(@RequestParam(required = false) String partyId) {
+    public PrivacyExport export(@RequestParam(required = false) String partyId) {
         String subject = subject();
         String target = partyId == null || partyId.isBlank() ? subject : partyId;
         if (!target.equals(subject) && !isDpo()) {
@@ -47,24 +48,22 @@ public class PrivacyController {
         String tenant = tenantScope.currentTenantId();
         var enrolled = enrollments.findByTenantIdAndPartyId(tenant, target);
         var touched = touches.findByTenantIdAndPartyId(tenant, target);
-        return Map.of("category", "marketing",
-                "count", enrolled.size() + touched.size(),
-                "items", Map.of("journeyEnrollments", enrolled, "marketingTouches", touched));
+        return new PrivacyExport("marketing", enrolled.size() + touched.size(),
+                new PrivacyExport.Items(enrolled, touched));
     }
 
     @PostMapping("/erase")
-    public Map<String, Object> erase(@RequestBody Map<String, Object> request) {
+    public EraseReceipt erase(@RequestBody EraseRequest request) {
         if (!isDpo()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND);
         }
-        String target = String.valueOf(request.get("partyId"));
+        String target = request.partyId();
         String tenant = tenantScope.currentTenantId();
         var enrolled = enrollments.findByTenantIdAndPartyId(tenant, target);
         var touched = touches.findByTenantIdAndPartyId(tenant, target);
         enrollments.deleteAll(enrolled);
         touches.deleteAll(touched);
-        return Map.of("category", "marketing",
-                "deleted", enrolled.size() + touched.size(), "retained", 0);
+        return new EraseReceipt("marketing", enrolled.size() + touched.size(), 0);
     }
 
     private String subject() {

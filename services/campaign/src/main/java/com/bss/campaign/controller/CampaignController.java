@@ -1,6 +1,13 @@
 package com.bss.campaign.controller;
 
 import com.bss.campaign.api.ApiConstants;
+import com.bss.campaign.dto.AttributionReport;
+import com.bss.campaign.dto.CampaignExecutionView;
+import com.bss.campaign.dto.CampaignPatch;
+import com.bss.campaign.dto.CampaignRequest;
+import com.bss.campaign.dto.CampaignStats;
+import com.bss.campaign.dto.CampaignView;
+import com.bss.campaign.dto.ExecutionReceipt;
 import com.bss.campaign.service.AttributionService;
 import com.bss.campaign.service.CampaignService;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH + "/campaign")
@@ -30,26 +36,25 @@ public class CampaignController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = service.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<CampaignView> create(@RequestBody CampaignRequest dto) {
+        CampaignView created = service.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping
-    public ResponseEntity<List<Map<String, Object>>> list() {
+    public ResponseEntity<List<CampaignView>> list() {
         return ResponseEntity.ok(service.findAll());
     }
 
     /** Portfolio attribution: lift + incremental revenue across EVERY campaign
      * and journey, one marketer readout (literal path — precedes /{id}/... rules). */
     @GetMapping("/attribution")
-    public ResponseEntity<Map<String, Object>> attribution() {
+    public ResponseEntity<AttributionReport> attribution() {
         return ResponseEntity.ok(attribution.report());
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> patch(@PathVariable String id,
-            @RequestBody Map<String, Object> patch) {
+    public ResponseEntity<CampaignView> patch(@PathVariable String id, @RequestBody CampaignPatch patch) {
         return ResponseEntity.ok(service.patch(id, patch));
     }
 
@@ -61,20 +66,18 @@ public class CampaignController {
 
     /** Segment blast: reach everyone in the campaign's insight segment, once. */
     @PostMapping("/{id}/execute")
-    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> execute(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
-        return org.springframework.http.ResponseEntity.ok(service.executeSegment(id));
+    public ResponseEntity<ExecutionReceipt> execute(@PathVariable String id) {
+        return ResponseEntity.ok(service.executeSegment(id));
     }
 
     /** The measurement readout: reached / held out / conversions / lift. */
     @GetMapping("/{id}/stats")
-    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> stats(
-            @org.springframework.web.bind.annotation.PathVariable String id) {
-        return org.springframework.http.ResponseEntity.ok(service.statsOf(id));
+    public ResponseEntity<CampaignStats> stats(@PathVariable String id) {
+        return ResponseEntity.ok(service.statsOf(id));
     }
 
     @GetMapping("/{id}/execution")
-    public ResponseEntity<List<Map<String, Object>>> executions(@PathVariable String id) {
+    public ResponseEntity<List<CampaignExecutionView>> executions(@PathVariable String id) {
         return ResponseEntity.ok(service.executionsOf(id));
     }
 }
