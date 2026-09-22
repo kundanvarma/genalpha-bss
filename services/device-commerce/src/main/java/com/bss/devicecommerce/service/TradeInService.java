@@ -2,6 +2,14 @@ package com.bss.devicecommerce.service;
 
 import com.bss.devicecommerce.api.ApiConstants;
 import com.bss.devicecommerce.client.PaymentClient;
+import com.bss.devicecommerce.dto.DeviceChargeRequest;
+import com.bss.devicecommerce.dto.DeviceFlagRequest;
+import com.bss.devicecommerce.dto.DeviceFlagView;
+import com.bss.devicecommerce.dto.GradingRequest;
+import com.bss.devicecommerce.dto.ResidualRequest;
+import com.bss.devicecommerce.dto.TradeInQuoteRequest;
+import com.bss.devicecommerce.dto.TradeInResidualView;
+import com.bss.devicecommerce.dto.TradeInValuationView;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import com.bss.devicecommerce.entity.DeviceFlag;
 import com.bss.devicecommerce.entity.GradingEvent;
@@ -11,6 +19,7 @@ import com.bss.devicecommerce.events.DomainEventPublisher;
 import com.bss.devicecommerce.exception.BadRequestException;
 import com.bss.devicecommerce.exception.ConflictException;
 import com.bss.devicecommerce.exception.NotFoundException;
+import com.bss.devicecommerce.mapper.TradeInMapper;
 import com.bss.devicecommerce.repository.DeviceAgreementRepository;
 import com.bss.devicecommerce.repository.DeviceFlagRepository;
 import com.bss.devicecommerce.repository.GradingEventRepository;
@@ -18,7 +27,7 @@ import com.bss.devicecommerce.repository.TradeInResidualRepository;
 import com.bss.devicecommerce.repository.TradeInValuationRepository;
 import com.bss.devicecommerce.security.PartyScope;
 import com.bss.devicecommerce.security.TenantScope;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +40,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -47,12 +57,17 @@ public class TradeInService {
     private static final Logger log = LoggerFactory.getLogger(TradeInService.class);
 
     /** Guided-assessment defects and the share of value each one costs.
-     * Deterministic and tenant-visible in the response — no black box. */
-    private static final Map<String, BigDecimal> DEFECT_HAIRCUTS = Map.of(
-            "screenCracked", new BigDecimal("0.40"),
-            "backCracked", new BigDecimal("0.20"),
-            "batteryWorn", new BigDecimal("0.15"),
-            "notPoweringOn", new BigDecimal("0.80"));
+     * Deterministic and tenant-visible in the response — no black box. In
+     * declaration order, so the estimate's note lists them the same way on
+     * every JVM (a {@code Map.of} had been listing them at random). */
+    private static final Map<String, BigDecimal> DEFECT_HAIRCUTS = new LinkedHashMap<>();
+
+    static {
+        DEFECT_HAIRCUTS.put("screenCracked", new BigDecimal("0.40"));
+        DEFECT_HAIRCUTS.put("backCracked", new BigDecimal("0.20"));
+        DEFECT_HAIRCUTS.put("batteryWorn", new BigDecimal("0.15"));
+        DEFECT_HAIRCUTS.put("notPoweringOn", new BigDecimal("0.80"));
+    }
 
     private final TradeInValuationRepository valuations;
     private final GradingEventRepository gradings;
@@ -63,14 +78,14 @@ public class TradeInService {
     private final DomainEventPublisher events;
     private final TenantScope tenantScope;
     private final PartyScope partyScope;
-    private final ObjectMapper objectMapper;
+    private final TradeInMapper mapper;
     private final int offerDays;
 
     public TradeInService(TradeInValuationRepository valuations, GradingEventRepository gradings,
             TradeInResidualRepository residuals, DeviceFlagRepository flags,
             DeviceAgreementRepository agreements, PaymentClient payments,
             DomainEventPublisher events, TenantScope tenantScope, PartyScope partyScope,
-            ObjectMapper objectMapper, @Value("${bss.device.offer-days:30}") int offerDays) {
+            TradeInMapper mapper, @Value("${bss.device.offer-days:30}") int offerDays) {
         this.valuations = valuations;
         this.gradings = gradings;
         this.residuals = residuals;
@@ -80,15 +95,15 @@ public class TradeInService {
         this.events = events;
         this.tenantScope = tenantScope;
         this.partyScope = partyScope;
-        this.objectMapper = objectMapper;
+        this.mapper = mapper;
         this.offerDays = offerDays;
     }
 
     /* ---------- the valuation flow ---------- */
 
     @Transactional
-    public Map<String, Object> quote(Map<String, Object> dto) {
-        if (dto.get("imei") == null || dto.get("deviceRef") == null) {
+    public TradeInValuationView quote(TradeInQuoteRequest dto) {
+        if (dto.imei() == null || dto.deviceRef() == null) {
             throw new BadRequestException("imei and deviceRef are required");
         }
         String tenant = tenantScope.currentTenantId();
@@ -96,13 +111,12 @@ public class TradeInService {
         v.setId(UUID.randomUUID().toString());
         v.setTenantId(tenant);
         v.setHref(ApiConstants.BASE_PATH + "/tradeInValuation/" + v.getId());
-        v.setPartyId(relatedPartyId(dto));
+        v.setPartyId(dto.relatedPartyId());
         partyScope.scopedPartyId().ifPresent(v::setPartyId);
-        v.setImei(String.valueOf(dto.get("imei")).replaceAll("\\s", ""));
-        v.setDeviceRef(String.valueOf(dto.get("deviceRef")));
-        Map<String, Object> answers = dto.get("conditionAnswers") instanceof Map<?, ?> m
-                ? castMap(m) : Map.of();
-        v.setConditionJson(writeJson(answers));
+        v.setImei(dto.imei().replaceAll("\\s", ""));
+        v.setDeviceRef(dto.deviceRef());
+        JsonNode answers = mapper.answers(dto.conditionAnswers());
+        v.setConditionJson(mapper.writeJson(answers));
         boolean blacklisted = flags.existsByTenantIdAndImeiAndFlag(tenant, v.getImei(),
                 DeviceFlag.BLACKLISTED);
         Estimate estimate = blacklisted
@@ -111,15 +125,14 @@ public class TradeInService {
         v.setEstimatedValue(estimate.value());
         v.setCurrency(estimate.currency());
         v.setOfferExpiry(OffsetDateTime.now().plusDays(offerDays));
-        v.setChannel(dto.get("channel") == null ? "shop" : String.valueOf(dto.get("channel")));
-        v.setPaymentRef(dto.get("paymentRef") == null ? null : String.valueOf(dto.get("paymentRef")));
-        v.setAgreementRef(dto.get("agreementRef") == null ? null : String.valueOf(dto.get("agreementRef")));
+        v.setChannel(dto.channel() == null ? "shop" : dto.channel());
+        v.setPaymentRef(dto.paymentRef());
+        v.setAgreementRef(dto.agreementRef());
         v.setStatus(TradeInValuation.QUOTED);
         v.setCreatedAt(OffsetDateTime.now());
         v.setLastUpdate(OffsetDateTime.now());
         valuations.save(v);
-        Map<String, Object> view = view(v);
-        view.put("note", estimate.note());
+        TradeInValuationView view = view(v).withNote(estimate.note());
         events.publish("TradeInQuoted", "tradeInValuation", view);
         log.info("trade-in {} quoted {} {} for {} ({})", v.getId(), v.getEstimatedValue(),
                 v.getCurrency(), v.getDeviceRef(), blacklisted ? "BLACKLISTED" : "clean");
@@ -127,7 +140,7 @@ public class TradeInService {
     }
 
     @Transactional
-    public Map<String, Object> accept(String id) {
+    public TradeInValuationView accept(String id) {
         TradeInValuation v = own(id);
         if (TradeInValuation.ACCEPTED.equals(v.getStatus())) {
             return view(v);   // idempotent
@@ -141,14 +154,14 @@ public class TradeInService {
         v.setStatus(TradeInValuation.ACCEPTED);
         v.setLastUpdate(OffsetDateTime.now());
         valuations.save(v);
-        Map<String, Object> view = view(v);
+        TradeInValuationView view = view(v);
         events.publish("TradeInAccepted", "tradeInValuation", view);
         return view;
     }
 
     /** The device is on its way (drop-off scan / return-parcel event). */
     @Transactional
-    public Map<String, Object> inTransit(String id) {
+    public TradeInValuationView inTransit(String id) {
         TradeInValuation v = own(id);
         if (TradeInValuation.IN_TRANSIT.equals(v.getStatus())) {
             return view(v);
@@ -169,26 +182,26 @@ public class TradeInService {
      * value or takes the device back.
      */
     @Transactional
-    public Map<String, Object> grade(String id, Map<String, Object> dto) {
+    public TradeInValuationView grade(String id, GradingRequest dto) {
         TradeInValuation v = own(id);
         if (!List.of(TradeInValuation.ACCEPTED, TradeInValuation.IN_TRANSIT).contains(v.getStatus())) {
             throw new ConflictException("grading needs an accepted/in-transit valuation (is "
                     + v.getStatus() + ")");
         }
-        if (dto == null || dto.get("finalValue") == null) {
+        if (dto == null || dto.finalValue() == null) {
             throw new BadRequestException("finalValue is required");
         }
-        BigDecimal finalValue = money(dto.get("finalValue"));
+        BigDecimal finalValue = money(dto.finalValue());
         BigDecimal delta = finalValue.subtract(v.getEstimatedValue());
         GradingEvent g = new GradingEvent();
         g.setId(UUID.randomUUID().toString());
         g.setTenantId(v.getTenantId());
         g.setValuationRef(v.getId());
-        g.setPartnerRef(dto.get("partnerRef") == null ? "in-house" : String.valueOf(dto.get("partnerRef")));
-        g.setFinalGrade(dto.get("finalGrade") == null ? null : String.valueOf(dto.get("finalGrade")));
+        g.setPartnerRef(dto.partnerRef() == null ? "in-house" : dto.partnerRef());
+        g.setFinalGrade(dto.finalGrade());
         g.setFinalValue(finalValue);
         g.setDelta(delta);
-        g.setNote(dto.get("note") == null ? null : String.valueOf(dto.get("note")));
+        g.setNote(dto.note());
         g.setCreatedAt(OffsetDateTime.now());
         gradings.save(g);
 
@@ -201,7 +214,7 @@ public class TradeInService {
         if (delta.signum() == 0) {
             v.setStatus(TradeInValuation.SETTLED);
             valuations.save(v);
-            Map<String, Object> view = view(v);
+            TradeInValuationView view = view(v);
             events.publish("TradeInSettled", "tradeInValuation", view);
             return view;
         }
@@ -213,15 +226,8 @@ public class TradeInService {
         } else {
             // the charge is billing's to collect — we publish the request and
             // expose the delta on the linked agreement while it waits
-            Map<String, Object> charge = new LinkedHashMap<>();
-            charge.put("tradeInValuationId", v.getId());
-            charge.put("amount", delta.negate());
-            charge.put("currency", v.getCurrency());
-            if (v.getPartyId() != null) {
-                charge.put("relatedParty", List.of(Map.of("id", v.getPartyId(), "role", "customer")));
-            }
-            charge.put("@type", "DeviceChargeRequest");
-            events.publish("DeviceChargeRequestedEvent", "deviceChargeRequest", charge);
+            events.publish("DeviceChargeRequestedEvent", "deviceChargeRequest",
+                    DeviceChargeRequest.of(v.getId(), delta.negate(), v.getCurrency(), v.getPartyId()));
             linkedAgreement(v).ifPresent(a -> {
                 a.setTradeInDelta(delta);
                 a.setLastUpdate(OffsetDateTime.now());
@@ -233,7 +239,7 @@ public class TradeInService {
 
     /** The customer takes the revised (lower) value — money moves, done. */
     @Transactional
-    public Map<String, Object> acceptRevaluation(String id) {
+    public TradeInValuationView acceptRevaluation(String id) {
         TradeInValuation v = own(id);
         if (TradeInValuation.SETTLED.equals(v.getStatus())) {
             return view(v);
@@ -245,14 +251,14 @@ public class TradeInService {
         v.setLastUpdate(OffsetDateTime.now());
         valuations.save(v);
         clearAgreementDelta(v);
-        Map<String, Object> view = view(v);
+        TradeInValuationView view = view(v);
         events.publish("TradeInSettled", "tradeInValuation", view);
         return view;
     }
 
     /** The customer refuses the revised value — the device goes back. */
     @Transactional
-    public Map<String, Object> rejectRevaluation(String id) {
+    public TradeInValuationView rejectRevaluation(String id) {
         TradeInValuation v = own(id);
         if (TradeInValuation.REJECTED_RETURNED.equals(v.getStatus())) {
             return view(v);
@@ -268,7 +274,7 @@ public class TradeInService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String relatedPartyId, String status) {
+    public List<TradeInValuationView> findAll(String relatedPartyId, String status) {
         String scoped = partyScope.scopedPartyId().orElse(relatedPartyId);
         return valuations.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(v -> scoped == null || scoped.equals(v.getPartyId()))
@@ -277,30 +283,29 @@ public class TradeInService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public TradeInValuationView findById(String id) {
         TradeInValuation v = own(id);
-        Map<String, Object> view = view(v);
-        List<Map<String, Object>> history = gradings
+        return view(v).withGrading(gradings
                 .findByTenantIdAndValuationRefOrderByCreatedAtAsc(v.getTenantId(), v.getId())
-                .stream().map(this::gradingView).toList();
-        if (!history.isEmpty()) {
-            view.put("gradingEvent", history);
-        }
-        return view;
+                .stream().map(mapper::view).toList());
     }
 
     /* ---------- the residual table (staff-curated) ---------- */
 
     @Transactional
-    public Map<String, Object> upsertResidual(Map<String, Object> dto) {
-        for (String required : List.of("deviceRef", "ageMonths", "baseValue")) {
-            if (dto.get(required) == null) {
-                throw new BadRequestException(required + " is required");
-            }
+    public TradeInResidualView upsertResidual(ResidualRequest dto) {
+        if (dto.deviceRef() == null) {
+            throw new BadRequestException("deviceRef is required");
+        }
+        if (dto.ageMonths() == null) {
+            throw new BadRequestException("ageMonths is required");
+        }
+        if (dto.baseValue() == null) {
+            throw new BadRequestException("baseValue is required");
         }
         String tenant = tenantScope.currentTenantId();
-        String deviceRef = String.valueOf(dto.get("deviceRef"));
-        int ageMonths = Integer.parseInt(String.valueOf(dto.get("ageMonths")));
+        String deviceRef = dto.deviceRef();
+        int ageMonths = dto.ageMonths();
         TradeInResidual row = residuals
                 .findByTenantIdAndDeviceRefOrderByAgeMonthsAsc(tenant, deviceRef).stream()
                 .filter(r -> r.getAgeMonths() == ageMonths)
@@ -313,20 +318,20 @@ public class TradeInService {
                     fresh.setCreatedAt(OffsetDateTime.now());
                     return fresh;
                 });
-        row.setBaseValue(money(dto.get("baseValue")));
-        row.setCurrency(dto.get("currency") == null ? "EUR" : String.valueOf(dto.get("currency")));
+        row.setBaseValue(money(dto.baseValue()));
+        row.setCurrency(dto.currency() == null ? "EUR" : dto.currency());
         row.setLastUpdate(OffsetDateTime.now());
         residuals.save(row);
-        return residualView(row);
+        return mapper.view(row);
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> residualTable(String deviceRef) {
+    public List<TradeInResidualView> residualTable(String deviceRef) {
         String tenant = tenantScope.currentTenantId();
         List<TradeInResidual> rows = deviceRef == null
                 ? residuals.findByTenantIdOrderByDeviceRefAscAgeMonthsAsc(tenant)
                 : residuals.findByTenantIdAndDeviceRefOrderByAgeMonthsAsc(tenant, deviceRef);
-        return rows.stream().map(this::residualView).toList();
+        return rows.stream().map(mapper::view).toList();
     }
 
     @Transactional
@@ -339,21 +344,21 @@ public class TradeInService {
     /* ---------- the blacklist flag stub ---------- */
 
     @Transactional
-    public Map<String, Object> flag(Map<String, Object> dto) {
-        if (dto.get("imei") == null) {
+    public DeviceFlagView flag(DeviceFlagRequest dto) {
+        if (dto.imei() == null) {
             throw new BadRequestException("imei is required");
         }
-        return flagImei(String.valueOf(dto.get("imei")).replaceAll("\\s", ""),
-                dto.get("reason") == null ? "lost" : String.valueOf(dto.get("reason")),
-                dto.get("sourceRef") == null ? "manual" : String.valueOf(dto.get("sourceRef")));
+        return flagImei(dto.imei().replaceAll("\\s", ""),
+                dto.reason() == null ? "lost" : dto.reason(),
+                dto.sourceRef() == null ? "manual" : dto.sourceRef());
     }
 
     /** Also the SIM-block listener's entry point (already tenant-contexted). */
     @Transactional
-    public Map<String, Object> flagImei(String imei, String reason, String sourceRef) {
+    public DeviceFlagView flagImei(String imei, String reason, String sourceRef) {
         String tenant = tenantScope.currentTenantId();
         if (flags.existsByTenantIdAndImeiAndFlag(tenant, imei, DeviceFlag.BLACKLISTED)) {
-            return flagView(flags.findByTenantIdAndImei(tenant, imei).get(0));   // idempotent
+            return mapper.view(flags.findByTenantIdAndImei(tenant, imei).get(0));   // idempotent
         }
         DeviceFlag f = new DeviceFlag();
         f.setId(UUID.randomUUID().toString());
@@ -364,7 +369,7 @@ public class TradeInService {
         f.setSourceRef(sourceRef);
         f.setCreatedAt(OffsetDateTime.now());
         flags.save(f);
-        Map<String, Object> view = flagView(f);
+        DeviceFlagView view = mapper.view(f);
         // the registry push (EIR/GSMA) is an adapter someone deploys; the
         // EVENT is the seam — mock deployments stop here, honestly
         events.publish("DeviceBlacklistRequested", "deviceFlag", view);
@@ -373,12 +378,12 @@ public class TradeInService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> flagsOf(String imei) {
+    public List<DeviceFlagView> flagsOf(String imei) {
         String tenant = tenantScope.currentTenantId();
         List<DeviceFlag> rows = imei == null
                 ? flags.findByTenantIdOrderByCreatedAtDesc(tenant)
                 : flags.findByTenantIdAndImei(tenant, imei);
-        return rows.stream().map(this::flagView).toList();
+        return rows.stream().map(mapper::view).toList();
     }
 
     /* ---------- internals ---------- */
@@ -388,14 +393,13 @@ public class TradeInService {
 
     /** Base value = the residual row at the device's age (nearest not-younger
      * row wins); each declared defect takes its published haircut. */
-    private Estimate estimate(String tenant, String deviceRef, Map<String, Object> answers) {
+    private Estimate estimate(String tenant, String deviceRef, JsonNode answers) {
         List<TradeInResidual> rows = residuals.findByTenantIdAndDeviceRefOrderByAgeMonthsAsc(tenant, deviceRef);
         if (rows.isEmpty()) {
             return new Estimate(BigDecimal.ZERO, "EUR",
                     "no residual row for '" + deviceRef + "' — staff curate the table");
         }
-        int age = answers.get("ageMonths") == null ? 0
-                : Integer.parseInt(String.valueOf(answers.get("ageMonths")));
+        int age = answers.hasNonNull("ageMonths") ? Integer.parseInt(answers.get("ageMonths").asText()) : 0;
         TradeInResidual match = rows.get(0);
         for (TradeInResidual row : rows) {
             if (row.getAgeMonths() <= age) {
@@ -406,7 +410,7 @@ public class TradeInService {
         StringBuilder note = new StringBuilder("base " + match.getBaseValue()
                 + " at age " + match.getAgeMonths() + "m");
         for (Map.Entry<String, BigDecimal> defect : DEFECT_HAIRCUTS.entrySet()) {
-            if (Boolean.parseBoolean(String.valueOf(answers.get(defect.getKey())))) {
+            if (Boolean.parseBoolean(answers.path(defect.getKey()).asText())) {
                 haircut = haircut.add(defect.getValue());
                 note.append(", ").append(defect.getKey()).append(" −")
                         .append(defect.getValue().movePointRight(2).stripTrailingZeros().toPlainString())
@@ -431,16 +435,16 @@ public class TradeInService {
         v.setStatus(TradeInValuation.SETTLED);
         v.setLastUpdate(OffsetDateTime.now());
         valuations.save(v);
-        Map<String, Object> view = view(v);
+        TradeInValuationView view = view(v);
         if (refundRef == null) {
-            view.put("note", "no reachable payment to refund against — delta stays owed to the customer");
+            view = view.withNote("no reachable payment to refund against — delta stays owed to the customer");
         }
         events.publish("TradeInSettled", "tradeInValuation", view);
     }
 
-    private java.util.Optional<DeviceAgreement> linkedAgreement(TradeInValuation v) {
+    private Optional<DeviceAgreement> linkedAgreement(TradeInValuation v) {
         if (v.getAgreementRef() == null) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         return agreements.findByIdAndTenantId(v.getAgreementRef(), v.getTenantId());
     }
@@ -464,99 +468,12 @@ public class TradeInService {
         return v;
     }
 
-    private Map<String, Object> view(TradeInValuation v) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", v.getId());
-        map.put("href", v.getHref());
-        map.put("imei", v.getImei());
-        map.put("deviceRef", v.getDeviceRef());
-        map.put("status", v.getStatus());
-        map.put("estimatedValue", v.getEstimatedValue());
-        if (v.getFinalValue() != null) map.put("finalValue", v.getFinalValue());
-        if (v.getDelta() != null) map.put("delta", v.getDelta());
-        map.put("currency", v.getCurrency());
-        map.put("offerExpiry", v.getOfferExpiry().toString());
-        if (v.getChannel() != null) map.put("channel", v.getChannel());
-        if (v.getConditionJson() != null) map.put("conditionAnswers", readJson(v.getConditionJson()));
-        if (v.getPaymentRef() != null) map.put("paymentRef", v.getPaymentRef());
-        if (v.getRefundRef() != null) map.put("refundRef", v.getRefundRef());
-        if (v.getAgreementRef() != null) map.put("agreementRef", v.getAgreementRef());
-        if (v.getPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", v.getPartyId(), "role", "customer")));
-        }
-        map.put("@type", "TradeInValuation");
-        return map;
+    private TradeInValuationView view(TradeInValuation v) {
+        return mapper.view(v);
     }
 
-    private Map<String, Object> gradingView(GradingEvent g) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", g.getId());
-        map.put("partnerRef", g.getPartnerRef());
-        if (g.getFinalGrade() != null) map.put("finalGrade", g.getFinalGrade());
-        map.put("finalValue", g.getFinalValue());
-        map.put("delta", g.getDelta());
-        if (g.getNote() != null) map.put("note", g.getNote());
-        map.put("createdAt", g.getCreatedAt().toString());
-        return map;
-    }
-
-    private Map<String, Object> residualView(TradeInResidual r) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", r.getId());
-        map.put("deviceRef", r.getDeviceRef());
-        map.put("ageMonths", r.getAgeMonths());
-        map.put("baseValue", r.getBaseValue());
-        map.put("currency", r.getCurrency());
-        map.put("@type", "TradeInResidual");
-        return map;
-    }
-
-    private Map<String, Object> flagView(DeviceFlag f) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", f.getId());
-        map.put("imei", f.getImei());
-        map.put("flag", f.getFlag());
-        if (f.getReason() != null) map.put("reason", f.getReason());
-        if (f.getSourceRef() != null) map.put("sourceRef", f.getSourceRef());
-        map.put("createdAt", f.getCreatedAt().toString());
-        map.put("@type", "DeviceFlag");
-        return map;
-    }
-
-    private static String relatedPartyId(Map<String, Object> dto) {
-        if (dto.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            return String.valueOf(party.get("id"));
-        }
-        return null;
-    }
-
-    private String writeJson(Object value) {
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (Exception e) {
-            return "{}";
-        }
-    }
-
-    private Object readJson(String json) {
-        try {
-            return objectMapper.readValue(json, Map.class);
-        } catch (Exception e) {
-            return Map.of();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> castMap(Object m) {
-        return (Map<String, Object>) m;
-    }
-
-    private static BigDecimal money(Object v) {
-        try {
-            return new BigDecimal(String.valueOf(v)).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("'" + v + "' is not an amount");
-        }
+    /** Money as the entity stores it: two decimals, half up. */
+    private static BigDecimal money(BigDecimal v) {
+        return v.setScale(2, RoundingMode.HALF_UP);
     }
 }

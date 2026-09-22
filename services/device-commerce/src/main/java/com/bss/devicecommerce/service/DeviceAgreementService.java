@@ -1,6 +1,19 @@
 package com.bss.devicecommerce.service;
 
 import com.bss.devicecommerce.api.ApiConstants;
+import com.bss.devicecommerce.dto.DeviceAgreementRequest;
+import com.bss.devicecommerce.dto.DeviceAgreementView;
+import com.bss.devicecommerce.dto.DeviceInstallmentUnwind;
+import com.bss.devicecommerce.dto.EarlySettlementQuote;
+import com.bss.devicecommerce.dto.FinancingQuote;
+import com.bss.devicecommerce.dto.FinancingSettlement;
+import com.bss.devicecommerce.dto.FinancingTerms;
+import com.bss.devicecommerce.dto.SettleReceipt;
+import com.bss.devicecommerce.dto.SettleRequest;
+import com.bss.devicecommerce.dto.SwapReceipt;
+import com.bss.devicecommerce.dto.SwapRequest;
+import com.bss.devicecommerce.dto.UpgradeEligibility;
+import com.bss.devicecommerce.dto.UpgradeRule;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import com.bss.devicecommerce.entity.TradeInValuation;
 import com.bss.devicecommerce.events.DomainEventPublisher;
@@ -10,6 +23,7 @@ import com.bss.devicecommerce.exception.NotFoundException;
 import com.bss.devicecommerce.financing.FinancingMath;
 import com.bss.devicecommerce.financing.FinancingProvider;
 import com.bss.devicecommerce.financing.FinancingProviders;
+import com.bss.devicecommerce.mapper.DeviceAgreementMapper;
 import com.bss.devicecommerce.repository.DeviceAgreementRepository;
 import com.bss.devicecommerce.repository.TradeInValuationRepository;
 import com.bss.devicecommerce.security.PartyScope;
@@ -22,9 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,7 +50,8 @@ public class DeviceAgreementService {
 
     private static final Logger log = LoggerFactory.getLogger(DeviceAgreementService.class);
 
-    private static final Set<String> MODELS = Set.of(DeviceAgreement.OPERATOR_BOOK,
+    /** In declaration order, so the refusal names them the same way on every JVM. */
+    private static final List<String> MODELS = List.of(DeviceAgreement.OPERATOR_BOOK,
             DeviceAgreement.THIRD_PARTY_LOAN, DeviceAgreement.BNPL);
     /** Valuation states that stand behind a swap (money not yet moved is fine;
      * the grading delta settles separately). */
@@ -65,27 +78,31 @@ public class DeviceAgreementService {
     }
 
     /** Price a financing across models — the checkout's chooser face. */
-    public Map<String, Object> quote(Map<String, Object> terms) {
-        if (terms.get("principal") == null || terms.get("termMonths") == null) {
+    public FinancingQuote quote(FinancingTerms terms) {
+        if (terms.principal() == null || terms.termMonths() == null) {
             throw new BadRequestException("principal and termMonths are required");
         }
-        String model = terms.get("financingModel") == null ? DeviceAgreement.OPERATOR_BOOK
-                : String.valueOf(terms.get("financingModel"));
+        String model = terms.financingModel() == null ? DeviceAgreement.OPERATOR_BOOK : terms.financingModel();
         return providers.forModel(model).quote(terms);
     }
 
     @Transactional
-    public Map<String, Object> create(Map<String, Object> dto) {
-        for (String required : List.of("principal", "termMonths", "financingModel",
-                "totalCostOfOwnership")) {
-            if (dto.get(required) == null) {
-                // TCO is deliberately not derived: the channel must have SHOWN it
-                throw new BadRequestException(required + " is required"
-                        + ("totalCostOfOwnership".equals(required)
-                        ? " — the total cost belongs on the offer face, not fine print" : ""));
-            }
+    public DeviceAgreementView create(DeviceAgreementRequest dto) {
+        if (dto.principal() == null) {
+            throw new BadRequestException("principal is required");
         }
-        String model = String.valueOf(dto.get("financingModel"));
+        if (dto.termMonths() == null) {
+            throw new BadRequestException("termMonths is required");
+        }
+        if (dto.financingModel() == null) {
+            throw new BadRequestException("financingModel is required");
+        }
+        if (dto.totalCostOfOwnership() == null) {
+            // TCO is deliberately not derived: the channel must have SHOWN it
+            throw new BadRequestException("totalCostOfOwnership is required"
+                    + " — the total cost belongs on the offer face, not fine print");
+        }
+        String model = dto.financingModel();
         if (!MODELS.contains(model)) {
             throw new BadRequestException("financingModel must be one of " + MODELS);
         }
@@ -93,44 +110,40 @@ public class DeviceAgreementService {
         a.setId(UUID.randomUUID().toString());
         a.setTenantId(tenantScope.currentTenantId());
         a.setHref(ApiConstants.BASE_PATH + "/deviceAgreement/" + a.getId());
-        a.setPartyId(relatedPartyId(dto));
+        a.setPartyId(dto.relatedPartyId());
         // a customer signs only their own agreement, whatever they send
         partyScope.scopedPartyId().ifPresent(a::setPartyId);
         if (a.getPartyId() == null) {
             throw new BadRequestException("relatedParty is required");
         }
-        a.setSubscriptionRef(str(dto.get("subscriptionRef")));
-        a.setOrderRef(str(dto.get("orderRef")));
-        a.setDeviceRef(str(dto.get("deviceRef")));
-        a.setImei(str(dto.get("imei")));
-        a.setSerialNo(str(dto.get("serialNo")));
-        a.setPrincipal(money(dto.get("principal")));
-        a.setTermMonths(Integer.parseInt(String.valueOf(dto.get("termMonths"))));
+        a.setSubscriptionRef(dto.subscriptionRef());
+        a.setOrderRef(dto.orderRef());
+        a.setDeviceRef(dto.deviceRef());
+        a.setImei(dto.imei());
+        a.setSerialNo(dto.serialNo());
+        a.setPrincipal(money(dto.principal()));
+        a.setTermMonths(dto.termMonths());
         if (a.getPrincipal().signum() <= 0 || a.getTermMonths() < 1) {
             throw new BadRequestException("principal must be positive and termMonths >= 1");
         }
-        a.setMonthlyAmount(dto.get("monthlyAmount") == null
+        a.setMonthlyAmount(dto.monthlyAmount() == null
                 ? FinancingMath.monthly(a.getPrincipal(), a.getTermMonths())
-                : money(dto.get("monthlyAmount")));
+                : money(dto.monthlyAmount()));
         a.setFinancingModel(model);
-        a.setFinancierRef(str(dto.get("financierRef")));
-        a.setExternalAgreementNo(str(dto.get("externalAgreementNo")));
-        a.setTitleHolder(str(dto.get("titleHolder")));
-        if (dto.get("upgradeRule") instanceof Map<?, ?> rule) {
-            if (rule.get("paidSharePct") != null) {
-                a.setUpgradeRuleType("paidSharePct");
-                a.setUpgradeRuleValue(money(rule.get("paidSharePct")));
-            } else if (rule.get("month") != null) {
-                a.setUpgradeRuleType("month");
-                a.setUpgradeRuleValue(money(rule.get("month")));
-            }
+        a.setFinancierRef(dto.financierRef());
+        a.setExternalAgreementNo(dto.externalAgreementNo());
+        a.setTitleHolder(dto.titleHolder());
+        UpgradeRule rule = dto.upgradeRule();
+        if (rule != null && rule.type() != null) {
+            a.setUpgradeRuleType(rule.type());
+            a.setUpgradeRuleValue(money(rule.value()));
         }
-        a.setResidualValue(dto.get("residualValue") == null ? null : money(dto.get("residualValue")));
-        a.setTotalCostOfOwnership(money(dto.get("totalCostOfOwnership")));
-        a.setSubsidyAmount(dto.get("subsidyAmount") == null ? null : money(dto.get("subsidyAmount")));
-        a.setShippingCost(dto.get("shippingCost") == null ? null : money(dto.get("shippingCost")));
-        a.setCurrency(dto.get("currency") == null ? "EUR" : String.valueOf(dto.get("currency")));
-        a.setPaymentRef(str(dto.get("paymentRef")));
+        a.setResidualValue(money(dto.residualValue()));
+        a.setTotalCostOfOwnership(money(dto.totalCostOfOwnership()));
+        a.setSubsidyAmount(money(dto.subsidyAmount()));
+        a.setShippingCost(money(dto.shippingCost()));
+        a.setCurrency(dto.currency() == null ? "EUR" : dto.currency());
+        a.setPaymentRef(dto.paymentRef());
         a.setInstallmentsPaid(0);
         a.setStatus(DeviceAgreement.ACTIVE);
         a.setCreatedAt(OffsetDateTime.now());
@@ -139,7 +152,7 @@ public class DeviceAgreementService {
         FinancingProvider provider = providers.forModel(model);
         provider.originate(a, dto);
         agreements.save(a);
-        Map<String, Object> view = view(a);
+        DeviceAgreementView view = view(a);
         events.publish("DeviceAgreementActivated", "deviceAgreement", view);
         // the mock bank approves and pays out in-process (deterministic for
         // e2e); a real bank hits the payoutWebhook endpoint instead
@@ -155,7 +168,7 @@ public class DeviceAgreementService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String relatedPartyId, String status) {
+    public List<DeviceAgreementView> findAll(String relatedPartyId, String status) {
         String scoped = partyScope.scopedPartyId().orElse(relatedPartyId);
         return agreements.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(a -> scoped == null || scoped.equals(a.getPartyId()))
@@ -164,7 +177,7 @@ public class DeviceAgreementService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public DeviceAgreementView findById(String id) {
         return view(own(id));
     }
 
@@ -175,7 +188,7 @@ public class DeviceAgreementService {
      * remainder so the unwinds sum exactly to the subsidy.
      */
     @Transactional
-    public Map<String, Object> recordInstallment(String id) {
+    public DeviceAgreementView recordInstallment(String id) {
         DeviceAgreement a = own(id);
         if (!DeviceAgreement.ACTIVE.equals(a.getStatus())) {
             throw new ConflictException("agreement is " + a.getStatus() + " — no schedule to advance");
@@ -192,15 +205,11 @@ public class DeviceAgreementService {
         agreements.save(a);
         if (a.getSubsidyAmount() != null && a.getSubsidyAmount().signum() > 0
                 && DeviceAgreement.OPERATOR_BOOK.equals(a.getFinancingModel())) {
-            Map<String, Object> unwind = new LinkedHashMap<>();
-            unwind.put("agreementId", a.getId());
-            unwind.put("installmentNo", a.getInstallmentsPaid());
-            unwind.put("unwindAmount", unwindAmount(a));
-            unwind.put("currency", a.getCurrency());
-            unwind.put("@type", "DeviceInstallment");
-            events.publish("DeviceInstallmentRecordedEvent", "deviceInstallment", unwind);
+            events.publish("DeviceInstallmentRecordedEvent", "deviceInstallment",
+                    DeviceInstallmentUnwind.of(a.getId(), a.getInstallmentsPaid(), unwindAmount(a),
+                            a.getCurrency()));
         }
-        Map<String, Object> view = view(a);
+        DeviceAgreementView view = view(a);
         if (complete) {
             events.publish("DeviceAgreementSettled", "deviceAgreement", view);
         }
@@ -209,38 +218,33 @@ public class DeviceAgreementService {
 
     /** Early termination without a swap: the ETF recovers the unearned subsidy. */
     @Transactional
-    public Map<String, Object> settle(String id, Map<String, Object> dto) {
+    public SettleReceipt settle(String id, SettleRequest dto) {
         DeviceAgreement a = own(id);
         if (DeviceAgreement.SETTLED.equals(a.getStatus())) {
-            return view(a);   // idempotent
+            return SettleReceipt.unchanged(view(a));   // idempotent
         }
         if (!DeviceAgreement.ACTIVE.equals(a.getStatus())) {
             throw new ConflictException("only active agreements settle (is " + a.getStatus() + ")");
         }
-        BigDecimal etf = dto != null && dto.get("etfAmount") != null
-                ? money(dto.get("etfAmount")) : BigDecimal.ZERO;
+        BigDecimal etf = dto != null && dto.etfAmount() != null ? money(dto.etfAmount()) : BigDecimal.ZERO;
         a.setStatus(DeviceAgreement.SETTLED);
         a.setLastUpdate(OffsetDateTime.now());
         agreements.save(a);
-        Map<String, Object> view = view(a);
-        view.put("etfAmount", etf);
-        view.put("remainingSubsidy", remainingSubsidy(a));
-        events.publish("DeviceAgreementSettled", "deviceAgreement", view);
-        return view;
+        SettleReceipt receipt = new SettleReceipt(view(a), etf, remainingSubsidy(a));
+        events.publish("DeviceAgreementSettled", "deviceAgreement", receipt);
+        return receipt;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> earlySettlementQuote(String id) {
+    public EarlySettlementQuote earlySettlementQuote(String id) {
         DeviceAgreement a = own(id);
-        Map<String, Object> quote = providers.forModel(a.getFinancingModel()).earlySettlementQuote(a);
-        quote.put("agreementId", a.getId());
-        quote.put("currency", a.getCurrency());
-        return quote;
+        return providers.forModel(a.getFinancingModel()).earlySettlementQuote(a)
+                .forAgreement(a.getId(), a.getCurrency());
     }
 
     /** A real financier's payout callback (machine). Idempotent. */
     @Transactional
-    public Map<String, Object> payoutWebhook(String id) {
+    public DeviceAgreementView payoutWebhook(String id) {
         DeviceAgreement a = own(id);
         if (a.getPayoutReceivedAt() != null) {
             return view(a);
@@ -248,7 +252,7 @@ public class DeviceAgreementService {
         providers.forModel(a.getFinancingModel()).payoutReceived(a);
         a.setLastUpdate(OffsetDateTime.now());
         agreements.save(a);
-        Map<String, Object> view = view(a);
+        DeviceAgreementView view = view(a);
         events.publish("FinancingPayoutReceived", "deviceAgreement", view);
         return view;
     }
@@ -260,19 +264,19 @@ public class DeviceAgreementService {
      * swapped. Replaying a completed swap returns the same answer.
      */
     @Transactional
-    public Map<String, Object> swap(String id, Map<String, Object> dto) {
+    public SwapReceipt swap(String id, SwapRequest dto) {
         DeviceAgreement a = own(id);
         if (DeviceAgreement.SWAPPED.equals(a.getStatus())) {
-            return view(a);   // idempotent replay
+            return SwapReceipt.unchanged(view(a));   // idempotent replay
         }
         if (!DeviceAgreement.ACTIVE.equals(a.getStatus())) {
             throw new ConflictException("only active agreements swap (is " + a.getStatus() + ")");
         }
-        Map<String, Object> eligibility = eligibility(a);
-        if (!Boolean.TRUE.equals(eligibility.get("eligible"))) {
-            throw new ConflictException("not yet upgrade-eligible: " + eligibility.get("reason"));
+        UpgradeEligibility eligibility = eligibility(a);
+        if (!eligibility.eligible()) {
+            throw new ConflictException("not yet upgrade-eligible: " + eligibility.reason());
         }
-        String valuationId = dto == null ? null : str(dto.get("tradeInValuationId"));
+        String valuationId = dto == null ? null : dto.tradeInValuationId();
         if (valuationId == null) {
             throw new BadRequestException("tradeInValuationId is required — a swap trades the old device in");
         }
@@ -282,7 +286,7 @@ public class DeviceAgreementService {
             throw new ConflictException("trade-in valuation must be accepted (is " + v.getStatus() + ")");
         }
         BigDecimal tradeInValue = v.getFinalValue() != null ? v.getFinalValue() : v.getEstimatedValue();
-        Map<String, Object> settlement = providers.forModel(a.getFinancingModel())
+        FinancingSettlement settlement = providers.forModel(a.getFinancingModel())
                 .settle(a, tradeInValue);
         a.setStatus(DeviceAgreement.SWAPPED);
         a.setLastUpdate(OffsetDateTime.now());
@@ -290,48 +294,38 @@ public class DeviceAgreementService {
         v.setAgreementRef(a.getId());
         v.setLastUpdate(OffsetDateTime.now());
         valuations.save(v);
-        Map<String, Object> view = view(a);
-        view.put("settlement", settlement);
-        view.put("tradeInValuationId", v.getId());
-        view.put("remainingSubsidy", remainingSubsidy(a));
-        events.publish("DeviceAgreementSwapped", "deviceAgreement", view);
+        SwapReceipt receipt = new SwapReceipt(view(a), settlement, v.getId(), remainingSubsidy(a));
+        events.publish("DeviceAgreementSwapped", "deviceAgreement", receipt);
         log.info("device agreement {} swapped ({}): trade-in {} at {}", a.getId(),
                 a.getFinancingModel(), v.getId(), tradeInValue);
-        return view;
+        return receipt;
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> eligibilityOf(String id) {
+    public UpgradeEligibility eligibilityOf(String id) {
         return eligibility(own(id));
     }
 
     /* ---------- internals shared with listeners/withdrawal ---------- */
 
-    Map<String, Object> eligibility(DeviceAgreement a) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("agreementId", a.getId());
-        out.put("paidSharePct", FinancingMath.paidSharePct(a));
-        out.put("installmentsPaid", a.getInstallmentsPaid());
+    UpgradeEligibility eligibility(DeviceAgreement a) {
+        BigDecimal paidShare = FinancingMath.paidSharePct(a);
         if (a.getUpgradeRuleType() == null) {
-            out.put("eligible", true);
-            out.put("reason", "no upgrade rule on the agreement");
-            return out;
+            return new UpgradeEligibility(a.getId(), paidShare, a.getInstallmentsPaid(), true,
+                    "no upgrade rule on the agreement");
         }
         boolean eligible;
         String reason;
-        if ("paidSharePct".equals(a.getUpgradeRuleType())) {
-            eligible = FinancingMath.paidSharePct(a).compareTo(a.getUpgradeRuleValue()) >= 0;
-            reason = "paid share " + FinancingMath.paidSharePct(a) + "% vs required "
-                    + a.getUpgradeRuleValue() + "%";
+        if (UpgradeRule.PAID_SHARE_PCT.equals(a.getUpgradeRuleType())) {
+            eligible = paidShare.compareTo(a.getUpgradeRuleValue()) >= 0;
+            reason = "paid share " + paidShare + "% vs required " + a.getUpgradeRuleValue() + "%";
         } else {
             eligible = BigDecimal.valueOf(a.getInstallmentsPaid())
                     .compareTo(a.getUpgradeRuleValue()) >= 0;
             reason = a.getInstallmentsPaid() + " instalments vs required month "
                     + a.getUpgradeRuleValue().stripTrailingZeros().toPlainString();
         }
-        out.put("eligible", eligible);
-        out.put("reason", reason);
-        return out;
+        return new UpgradeEligibility(a.getId(), paidShare, a.getInstallmentsPaid(), eligible, reason);
     }
 
     /** This month's unwind slice; the LAST instalment takes the remainder. */
@@ -369,67 +363,12 @@ public class DeviceAgreementService {
         return a;
     }
 
-    Map<String, Object> view(DeviceAgreement a) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", a.getId());
-        map.put("href", a.getHref());
-        map.put("financingModel", a.getFinancingModel());
-        map.put("status", a.getStatus());
-        if (a.getSubscriptionRef() != null) map.put("subscriptionRef", a.getSubscriptionRef());
-        if (a.getOrderRef() != null) map.put("orderRef", a.getOrderRef());
-        if (a.getDeviceRef() != null) map.put("device", deviceRef(a));
-        map.put("principal", a.getPrincipal());
-        map.put("termMonths", a.getTermMonths());
-        map.put("monthlyAmount", a.getMonthlyAmount());
-        map.put("totalCostOfOwnership", a.getTotalCostOfOwnership());
-        map.put("currency", a.getCurrency());
-        map.put("installmentsPaid", a.getInstallmentsPaid());
-        map.put("paidSharePct", FinancingMath.paidSharePct(a));
-        map.put("remainingPrincipal", FinancingMath.remainingPrincipal(a));
-        if (a.getFinancierRef() != null) map.put("financierRef", a.getFinancierRef());
-        if (a.getExternalAgreementNo() != null) map.put("externalAgreementNo", a.getExternalAgreementNo());
-        if (a.getTitleHolder() != null) map.put("titleHolder", a.getTitleHolder());
-        if (a.getUpgradeRuleType() != null) {
-            map.put("upgradeRule", Map.of(a.getUpgradeRuleType(), a.getUpgradeRuleValue()));
-        }
-        if (a.getResidualValue() != null) map.put("residualValue", a.getResidualValue());
-        if (a.getSubsidyAmount() != null) map.put("subsidyAmount", a.getSubsidyAmount());
-        if (a.getShippingCost() != null) map.put("shippingCost", a.getShippingCost());
-        if (a.getPaymentRef() != null) map.put("paymentRef", a.getPaymentRef());
-        if (a.getPayoutReceivedAt() != null) map.put("payoutReceivedAt", a.getPayoutReceivedAt().toString());
-        if (a.getDeliveredAt() != null) map.put("deliveredAt", a.getDeliveredAt().toString());
-        if (a.getTradeInDelta() != null) map.put("tradeInDelta", a.getTradeInDelta());
-        map.put("relatedParty", List.of(Map.of("id", a.getPartyId(), "role", "customer")));
-        map.put("@type", "DeviceAgreement");
-        return map;
+    DeviceAgreementView view(DeviceAgreement a) {
+        return DeviceAgreementMapper.view(a);
     }
 
-    private Map<String, Object> deviceRef(DeviceAgreement a) {
-        Map<String, Object> device = new LinkedHashMap<>();
-        device.put("id", a.getDeviceRef());
-        if (a.getImei() != null) device.put("imei", a.getImei());
-        if (a.getSerialNo() != null) device.put("serialNumber", a.getSerialNo());
-        device.put("@referredType", "LogicalResource");
-        return device;
-    }
-
-    private static String relatedPartyId(Map<String, Object> dto) {
-        if (dto.get("relatedParty") instanceof List<?> parties && !parties.isEmpty()
-                && parties.get(0) instanceof Map<?, ?> party && party.get("id") != null) {
-            return String.valueOf(party.get("id"));
-        }
-        return null;
-    }
-
-    private static String str(Object v) {
-        return v == null ? null : String.valueOf(v);
-    }
-
-    private static BigDecimal money(Object v) {
-        try {
-            return new BigDecimal(String.valueOf(v)).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("'" + v + "' is not an amount");
-        }
+    /** Money as the entity stores it: two decimals, half up; null stays null. */
+    private static BigDecimal money(BigDecimal v) {
+        return v == null ? null : v.setScale(2, RoundingMode.HALF_UP);
     }
 }

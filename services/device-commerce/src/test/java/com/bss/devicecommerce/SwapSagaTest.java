@@ -1,8 +1,19 @@
 package com.bss.devicecommerce;
 
 import com.bss.devicecommerce.client.PaymentClient;
+import com.bss.devicecommerce.dto.DeviceAgreementRequest;
+import com.bss.devicecommerce.dto.DeviceAgreementView;
+import com.bss.devicecommerce.dto.FinancingSettlement;
+import com.bss.devicecommerce.dto.RelatedPartyRef;
+import com.bss.devicecommerce.dto.ResidualRequest;
+import com.bss.devicecommerce.dto.SwapReceipt;
+import com.bss.devicecommerce.dto.SwapRequest;
+import com.bss.devicecommerce.dto.TradeInQuoteRequest;
+import com.bss.devicecommerce.dto.TradeInValuationView;
+import com.bss.devicecommerce.dto.UpgradeRule;
 import com.bss.devicecommerce.service.DeviceAgreementService;
 import com.bss.devicecommerce.service.TradeInService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,26 +40,25 @@ class SwapSagaTest {
     @Autowired
     private TradeInService tradeIns;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @MockitoBean
     private PaymentClient payments;
 
-    private Map<String, Object> agreement(String model, String party, Map<String, Object> extra) {
-        java.util.Map<String, Object> dto = new java.util.LinkedHashMap<>();
-        dto.put("principal", 720);
-        dto.put("termMonths", 24);
-        dto.put("financingModel", model);
-        dto.put("totalCostOfOwnership", 720);
-        dto.put("upgradeRule", Map.of("paidSharePct", 50));
-        dto.put("relatedParty", List.of(Map.of("id", party, "role", "customer")));
-        dto.putAll(extra);
-        return agreements.create(dto);
+    private DeviceAgreementView agreement(String model, String party, BigDecimal residualValue, String paymentRef) {
+        return agreements.create(new DeviceAgreementRequest(new BigDecimal("720"), 24, model,
+                new BigDecimal("720"), List.of(RelatedPartyRef.customer(party)), null, null, null, null, null,
+                null, null, null, null, new UpgradeRule(new BigDecimal("50"), null), residualValue, null, null,
+                null, paymentRef));
     }
 
     private String acceptedValuation(String imei) {
-        tradeIns.upsertResidual(Map.of("deviceRef", "phone-saga", "ageMonths", 0, "baseValue", 250));
-        Map<String, Object> v = tradeIns.quote(Map.of("imei", imei, "deviceRef", "phone-saga"));
-        tradeIns.accept(String.valueOf(v.get("id")));
-        return String.valueOf(v.get("id"));
+        tradeIns.upsertResidual(new ResidualRequest("phone-saga", 0, new BigDecimal("250"), null));
+        TradeInValuationView v = tradeIns.quote(new TradeInQuoteRequest(imei, "phone-saga", null, null, null,
+                null, null));
+        tradeIns.accept(v.id());
+        return v.id();
     }
 
     private void payToEligibility(String agreementId) {
@@ -59,57 +69,51 @@ class SwapSagaTest {
 
     @Test
     void operatorBookSwap_writesOffRemainderAgainstGradedValue() {
-        Map<String, Object> a = agreement("OPERATOR_BOOK", "saga-ob", Map.of());
-        String id = String.valueOf(a.get("id"));
-        payToEligibility(id);
+        DeviceAgreementView a = agreement("OPERATOR_BOOK", "saga-ob", null, null);
+        payToEligibility(a.id());
         String valuation = acceptedValuation("353000000000001");
 
-        Map<String, Object> swapped = agreements.swap(id, Map.of("tradeInValuationId", valuation));
-        assertThat(swapped.get("status")).isEqualTo("swapped");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settlement = (Map<String, Object>) swapped.get("settlement");
+        SwapReceipt swapped = agreements.swap(a.id(), new SwapRequest(valuation));
+        assertThat(swapped.agreement().status()).isEqualTo("swapped");
+        FinancingSettlement settlement = swapped.settlement();
         // 360 remaining − 250 trade-in = 110 written off by the program
-        assertThat((BigDecimal) settlement.get("remainingPrincipal"))
-                .isEqualByComparingTo("360.00");
-        assertThat((BigDecimal) settlement.get("writeOff")).isEqualByComparingTo("110.00");
+        assertThat(settlement.remainingPrincipal()).isEqualByComparingTo("360.00");
+        assertThat(settlement.writeOff()).isEqualByComparingTo("110.00");
 
-        // replay is free — the saga is idempotent
-        Map<String, Object> replay = agreements.swap(id, Map.of("tradeInValuationId", valuation));
-        assertThat(replay.get("status")).isEqualTo("swapped");
+        // replay is free — the saga is idempotent, and carries no settlement facts
+        SwapReceipt replay = agreements.swap(a.id(), new SwapRequest(valuation));
+        assertThat(replay.agreement().status()).isEqualTo("swapped");
+        assertThat(replay.settlement()).isNull();
     }
 
     @Test
     void mockBankSwap_settlesTheEarlySettlementQuote() {
-        Map<String, Object> a = agreement("THIRD_PARTY_LOAN", "saga-bank", Map.of("residualValue", 100));
-        String id = String.valueOf(a.get("id"));
-        assertThat(a.get("payoutReceivedAt")).isNotNull();   // the bank paid the operator out
-        payToEligibility(id);
+        DeviceAgreementView a = agreement("THIRD_PARTY_LOAN", "saga-bank", new BigDecimal("100"), null);
+        assertThat(a.payoutReceivedAt()).isNotNull();   // the bank paid the operator out
+        payToEligibility(a.id());
         String valuation = acceptedValuation("353000000000002");
 
-        Map<String, Object> swapped = agreements.swap(id, Map.of("tradeInValuationId", valuation));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settlement = (Map<String, Object>) swapped.get("settlement");
+        SwapReceipt swapped = agreements.swap(a.id(), new SwapRequest(valuation));
+        FinancingSettlement settlement = swapped.settlement();
         // bank quote: 360 remaining + 49 flat fee; the 250 trade-in leaves 159
-        assertThat((BigDecimal) settlement.get("settlementAmount")).isEqualByComparingTo("409.00");
-        assertThat((BigDecimal) settlement.get("shortfall")).isEqualByComparingTo("159.00");
+        assertThat(settlement.settlementAmount()).isEqualByComparingTo("409.00");
+        assertThat(settlement.shortfall()).isEqualByComparingTo("159.00");
     }
 
     @Test
     void bnplSwap_delegatesSettlementToTheProvider() {
-        Mockito.when(payments.payment("pay-bnpl-1")).thenReturn(Map.of(
-                "id", "pay-bnpl-1", "status", "captured", "pspProvider", "klarna"));
-        Map<String, Object> a = agreement("BNPL", "saga-bnpl", Map.of("paymentRef", "pay-bnpl-1"));
-        String id = String.valueOf(a.get("id"));
-        assertThat(a.get("titleHolder")).isEqualTo("provider");
-        payToEligibility(id);
+        Mockito.when(payments.payment("pay-bnpl-1")).thenReturn(objectMapper.valueToTree(Map.of(
+                "id", "pay-bnpl-1", "status", "captured", "pspProvider", "klarna")));
+        DeviceAgreementView a = agreement("BNPL", "saga-bnpl", null, "pay-bnpl-1");
+        assertThat(a.titleHolder()).isEqualTo("provider");
+        payToEligibility(a.id());
         String valuation = acceptedValuation("353000000000003");
 
-        Map<String, Object> swapped = agreements.swap(id, Map.of("tradeInValuationId", valuation));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> settlement = (Map<String, Object>) swapped.get("settlement");
-        assertThat(settlement.get("settlementDelegated")).isEqualTo(true);
-        assertThat(settlement.get("providerSettlementStatus")).isEqualTo("settled");
+        SwapReceipt swapped = agreements.swap(a.id(), new SwapRequest(valuation));
+        FinancingSettlement settlement = swapped.settlement();
+        assertThat(settlement.settlementDelegated()).isTrue();
+        assertThat(settlement.providerSettlementStatus()).isEqualTo("settled");
         // never an operator write-off on this model
-        assertThat(settlement).doesNotContainKey("writeOff");
+        assertThat(settlement.writeOff()).isNull();
     }
 }

@@ -2,12 +2,16 @@ package com.bss.devicecommerce.service;
 
 import com.bss.devicecommerce.api.ApiConstants;
 import com.bss.devicecommerce.client.PaymentClient;
+import com.bss.devicecommerce.dto.WithdrawalCaseView;
+import com.bss.devicecommerce.dto.WithdrawalReceipt;
+import com.bss.devicecommerce.dto.WithdrawalRequest;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import com.bss.devicecommerce.entity.WithdrawalCase;
 import com.bss.devicecommerce.events.DomainEventPublisher;
 import com.bss.devicecommerce.exception.BadRequestException;
 import com.bss.devicecommerce.exception.ConflictException;
 import com.bss.devicecommerce.exception.NotFoundException;
+import com.bss.devicecommerce.mapper.WithdrawalMapper;
 import com.bss.devicecommerce.repository.DeviceAgreementRepository;
 import com.bss.devicecommerce.repository.WithdrawalCaseRepository;
 import com.bss.devicecommerce.security.PartyScope;
@@ -21,9 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -59,9 +61,8 @@ public class WithdrawalService {
     }
 
     @Transactional
-    public Map<String, Object> open(Map<String, Object> dto) {
-        String agreementId = dto.get("agreementId") == null ? null
-                : String.valueOf(dto.get("agreementId"));
+    public WithdrawalReceipt open(WithdrawalRequest dto) {
+        String agreementId = dto.agreementId();
         if (agreementId == null) {
             throw new BadRequestException("agreementId is required");
         }
@@ -75,7 +76,7 @@ public class WithdrawalService {
         });
         WithdrawalCase existing = cases.findByTenantIdAndAgreementRef(tenant, agreementId).orElse(null);
         if (existing != null) {
-            return view(existing);   // idempotent — one withdrawal per agreement
+            return WithdrawalReceipt.unchanged(view(existing));   // idempotent — one withdrawal per agreement
         }
         if (!DeviceAgreement.ACTIVE.equals(a.getStatus())) {
             throw new ConflictException("only active agreements withdraw (is " + a.getStatus() + ")");
@@ -85,8 +86,9 @@ public class WithdrawalService {
             throw new ConflictException("the " + withdrawalDays + "-day withdrawal window closed on "
                     + clockStart.plusDays(withdrawalDays).toLocalDate());
         }
-        BigDecimal deduction = dto.get("deduction") == null ? BigDecimal.ZERO : money(dto.get("deduction"));
-        String returnGrade = dto.get("returnGrade") == null ? null : String.valueOf(dto.get("returnGrade"));
+        BigDecimal deduction = dto.deduction() == null ? BigDecimal.ZERO
+                : dto.deduction().setScale(2, RoundingMode.HALF_UP);
+        String returnGrade = dto.returnGrade();
         if (deduction.signum() > 0 && returnGrade == null) {
             throw new BadRequestException(
                     "a deduction needs a recorded returnGrade — diminished value must be documented");
@@ -120,21 +122,17 @@ public class WithdrawalService {
         a.setLastUpdate(OffsetDateTime.now());
         agreements.save(a);
 
-        Map<String, Object> view = view(w);
-        view.put("subsidyAmount", a.getSubsidyAmount());
-        view.put("financingModel", a.getFinancingModel());
-        view.put("currency", a.getCurrency());
-        if (refundRef == null) {
-            view.put("note", "no PSP payment on the agreement — refund recorded, paid out manually");
-        }
-        events.publish("DeviceAgreementWithdrawn", "withdrawalCase", view);
+        WithdrawalReceipt receipt = new WithdrawalReceipt(view(w),
+                new WithdrawalReceipt.AgreementFacts(a.getSubsidyAmount(), a.getFinancingModel(), a.getCurrency()),
+                refundRef == null ? "no PSP payment on the agreement — refund recorded, paid out manually" : null);
+        events.publish("DeviceAgreementWithdrawn", "withdrawalCase", receipt);
         log.info("withdrawal {} for agreement {}: refund {} (shipping {} deduction {})",
                 w.getId(), a.getId(), refund, shipping, deduction);
-        return view;
+        return receipt;
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> findAll(String relatedPartyId) {
+    public List<WithdrawalCaseView> findAll(String relatedPartyId) {
         String scoped = partyScope.scopedPartyId().orElse(relatedPartyId);
         return cases.findByTenantIdOrderByCreatedAtDesc(tenantScope.currentTenantId()).stream()
                 .filter(w -> scoped == null || scoped.equals(w.getPartyId()))
@@ -142,7 +140,7 @@ public class WithdrawalService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> findById(String id) {
+    public WithdrawalCaseView findById(String id) {
         WithdrawalCase w = cases.findByIdAndTenantId(id, tenantScope.currentTenantId())
                 .orElseThrow(() -> NotFoundException.forResource("WithdrawalCase", id));
         partyScope.scopedPartyId().ifPresent(party -> {
@@ -153,30 +151,7 @@ public class WithdrawalService {
         return view(w);
     }
 
-    private Map<String, Object> view(WithdrawalCase w) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", w.getId());
-        map.put("href", w.getHref());
-        map.put("agreementRef", w.getAgreementRef());
-        if (w.getOrderRef() != null) map.put("orderRef", w.getOrderRef());
-        map.put("status", w.getStatus());
-        map.put("clockStart", w.getClockStart().toString());
-        if (w.getReturnGrade() != null) map.put("returnGrade", w.getReturnGrade());
-        if (w.getDeduction() != null) map.put("deduction", w.getDeduction());
-        if (w.getRefundAmount() != null) map.put("refundAmount", w.getRefundAmount());
-        if (w.getRefundRef() != null) map.put("refundRef", w.getRefundRef());
-        if (w.getPartyId() != null) {
-            map.put("relatedParty", List.of(Map.of("id", w.getPartyId(), "role", "customer")));
-        }
-        map.put("@type", "WithdrawalCase");
-        return map;
-    }
-
-    private static BigDecimal money(Object v) {
-        try {
-            return new BigDecimal(String.valueOf(v)).setScale(2, RoundingMode.HALF_UP);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("'" + v + "' is not an amount");
-        }
+    private WithdrawalCaseView view(WithdrawalCase w) {
+        return WithdrawalMapper.view(w);
     }
 }

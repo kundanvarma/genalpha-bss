@@ -1,11 +1,14 @@
 package com.bss.devicecommerce.financing;
 
+import com.bss.devicecommerce.dto.DeviceAgreementRequest;
+import com.bss.devicecommerce.dto.EarlySettlementQuote;
+import com.bss.devicecommerce.dto.FinancingQuote;
+import com.bss.devicecommerce.dto.FinancingSettlement;
+import com.bss.devicecommerce.dto.FinancingTerms;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * OPERATOR_BOOK: the operator carries the receivable and the schedule lives
@@ -24,20 +27,13 @@ public class InternalFinancingProvider implements FinancingProvider {
     }
 
     @Override
-    public Map<String, Object> quote(Map<String, Object> terms) {
-        BigDecimal principal = new BigDecimal(String.valueOf(terms.get("principal")));
-        int months = Integer.parseInt(String.valueOf(terms.get("termMonths")));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("monthlyAmount", FinancingMath.monthly(principal, months));
-        out.put("totalCostOfOwnership", principal);
-        out.put("titleHolder", "operator");
-        out.put("note", "0% instalments on the operator's own book");
-        return out;
+    public FinancingQuote quote(FinancingTerms terms) {
+        return FinancingQuote.of(model(), FinancingMath.monthly(terms.principal(), terms.termMonths()),
+                terms.principal(), "operator", "0% instalments on the operator's own book");
     }
 
     @Override
-    public void originate(DeviceAgreement agreement, Map<String, Object> dto) {
+    public void originate(DeviceAgreement agreement, DeviceAgreementRequest request) {
         agreement.setTitleHolder(agreement.getTitleHolder() == null ? "operator" : agreement.getTitleHolder());
         agreement.setStatus(DeviceAgreement.ACTIVE);
     }
@@ -48,28 +44,20 @@ public class InternalFinancingProvider implements FinancingProvider {
     }
 
     @Override
-    public Map<String, Object> earlySettlementQuote(DeviceAgreement agreement) {
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("amount", FinancingMath.remainingPrincipal(agreement));
-        out.put("fee", BigDecimal.ZERO);
-        out.put("note", "remaining instalments at face value — the operator holds the book");
-        return out;
+    public EarlySettlementQuote earlySettlementQuote(DeviceAgreement agreement) {
+        return EarlySettlementQuote.operatorBook(model(), FinancingMath.remainingPrincipal(agreement),
+                BigDecimal.ZERO, "remaining instalments at face value — the operator holds the book");
     }
 
     @Override
-    public Map<String, Object> settle(DeviceAgreement agreement, BigDecimal tradeInValue) {
+    public FinancingSettlement settle(DeviceAgreement agreement, BigDecimal tradeInValue) {
         BigDecimal remaining = FinancingMath.remainingPrincipal(agreement);
         // swap economics: remaining instalments write off against the graded
         // device coming in; a shortfall is the program's cost, a surplus is
         // credit toward the new device.
         BigDecimal writeOff = remaining.subtract(tradeInValue);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("remainingPrincipal", remaining);
-        out.put("tradeInValue", tradeInValue);
-        out.put("writeOff", writeOff.signum() > 0 ? writeOff : BigDecimal.ZERO);
-        out.put("customerCredit", writeOff.signum() < 0 ? writeOff.negate() : BigDecimal.ZERO);
-        return out;
+        return FinancingSettlement.writeOff(model(), remaining, tradeInValue,
+                writeOff.signum() > 0 ? writeOff : BigDecimal.ZERO,
+                writeOff.signum() < 0 ? writeOff.negate() : BigDecimal.ZERO);
     }
 }

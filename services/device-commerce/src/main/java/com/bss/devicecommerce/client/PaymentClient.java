@@ -1,5 +1,6 @@
 package com.bss.devicecommerce.client;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -12,7 +13,8 @@ import java.util.Map;
  * payment validation go through the payment component's TMF676 face, as a
  * machine caller under the acting tenant's own identity. Fail-soft: a
  * refund that cannot reach the PSP records "no refundRef" instead of
- * failing the business change that earned it.
+ * failing the business change that earned it. The payment component's
+ * documents are foreign: they come back as trees, never re-shaped here.
  */
 @Component
 public class PaymentClient {
@@ -24,32 +26,33 @@ public class PaymentClient {
         this.rest = builder.baseUrl(baseUrl).requestInterceptor(tokenInterceptor).build();
     }
 
-    /** The payment, or null when it does not exist / payment is unreachable. */
-    @SuppressWarnings("unchecked")
-    public Map<String, Object> payment(String paymentId) {
+    /** The TMF676 payment as the payment component holds it, or null when it does not exist / payment is unreachable. */
+    public JsonNode payment(String paymentId) {
         try {
             return rest.get().uri("/tmf-api/paymentManagement/v4/payment/{id}", paymentId)
-                    .retrieve().body(Map.class);
+                    .retrieve().body(JsonNode.class);
         } catch (Exception e) {
             return null;
         }
     }
 
     /** Refund (partial or full) against a captured payment; null on failure. */
-    @SuppressWarnings("unchecked")
     public String refund(String paymentId, BigDecimal amount, String reason) {
         try {
-            Map<String, Object> result = rest.post()
+            JsonNode result = rest.post()
                     .uri("/tmf-api/paymentManagement/v4/payment/{id}/refund", paymentId)
                     .header("Content-Type", "application/json")
                     .body(Map.of("amount", Map.of("value", amount), "reason", reason))
-                    .retrieve().body(Map.class);
+                    .retrieve().body(JsonNode.class);
             if (result == null) {
                 return null;
             }
-            Object ref = result.getOrDefault("refundRef",
-                    result.getOrDefault("settlementRef", result.get("id")));
-            return ref == null ? null : String.valueOf(ref);
+            for (String key : new String[] {"refundRef", "settlementRef", "id"}) {
+                if (result.hasNonNull(key)) {
+                    return result.get(key).asText();
+                }
+            }
+            return null;
         } catch (Exception e) {
             return null;
         }

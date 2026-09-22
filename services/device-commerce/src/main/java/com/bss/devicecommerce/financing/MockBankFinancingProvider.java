@@ -1,12 +1,15 @@
 package com.bss.devicecommerce.financing;
 
+import com.bss.devicecommerce.dto.DeviceAgreementRequest;
+import com.bss.devicecommerce.dto.EarlySettlementQuote;
+import com.bss.devicecommerce.dto.FinancingQuote;
+import com.bss.devicecommerce.dto.FinancingSettlement;
+import com.bss.devicecommerce.dto.FinancingTerms;
 import com.bss.devicecommerce.entity.DeviceAgreement;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * THIRD_PARTY_LOAN, in-process mock for demos/e2e: the partner bank
@@ -32,21 +35,14 @@ public class MockBankFinancingProvider implements FinancingProvider {
     }
 
     @Override
-    public Map<String, Object> quote(Map<String, Object> terms) {
-        BigDecimal principal = new BigDecimal(String.valueOf(terms.get("principal")));
-        int months = Integer.parseInt(String.valueOf(terms.get("termMonths")));
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("monthlyAmount", FinancingMath.monthly(principal, months));
-        out.put("totalCostOfOwnership", principal);
-        out.put("titleHolder", "financier");
-        out.put("earlySettlementFee", settlementFee);
-        out.put("note", "partner bank originates, owns the receivable, pays the operator upfront");
-        return out;
+    public FinancingQuote quote(FinancingTerms terms) {
+        return new FinancingQuote(model(), FinancingMath.monthly(terms.principal(), terms.termMonths()),
+                terms.principal(), "financier", settlementFee,
+                "partner bank originates, owns the receivable, pays the operator upfront");
     }
 
     @Override
-    public void originate(DeviceAgreement agreement, Map<String, Object> dto) {
+    public void originate(DeviceAgreement agreement, DeviceAgreementRequest request) {
         agreement.setFinancierRef(agreement.getFinancierRef() == null
                 ? "mock-bank" : agreement.getFinancierRef());
         agreement.setExternalAgreementNo("MB-" + agreement.getId().substring(0, 8).toUpperCase());
@@ -60,33 +56,21 @@ public class MockBankFinancingProvider implements FinancingProvider {
     }
 
     @Override
-    public Map<String, Object> earlySettlementQuote(DeviceAgreement agreement) {
+    public EarlySettlementQuote earlySettlementQuote(DeviceAgreement agreement) {
         BigDecimal remaining = FinancingMath.remainingPrincipal(agreement);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("amount", remaining.add(settlementFee));
-        out.put("remainingPrincipal", remaining);
-        out.put("fee", settlementFee);
-        out.put("financierRef", agreement.getFinancierRef());
-        out.put("externalAgreementNo", agreement.getExternalAgreementNo());
-        return out;
+        return EarlySettlementQuote.bank(model(), remaining.add(settlementFee), remaining, settlementFee,
+                agreement.getFinancierRef(), agreement.getExternalAgreementNo());
     }
 
     @Override
-    public Map<String, Object> settle(DeviceAgreement agreement, BigDecimal tradeInValue) {
-        Map<String, Object> quote = earlySettlementQuote(agreement);
-        BigDecimal settlementAmount = (BigDecimal) quote.get("amount");
+    public FinancingSettlement settle(DeviceAgreement agreement, BigDecimal tradeInValue) {
+        BigDecimal settlementAmount = earlySettlementQuote(agreement).amount();
         // the trade-in's graded value goes toward the bank's settlement;
         // whatever it does not cover is the customer's (or the program's).
         BigDecimal shortfall = settlementAmount.subtract(tradeInValue);
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("financingModel", model());
-        out.put("settlementAmount", settlementAmount);
-        out.put("tradeInValue", tradeInValue);
-        out.put("shortfall", shortfall.signum() > 0 ? shortfall : BigDecimal.ZERO);
-        out.put("customerCredit", shortfall.signum() < 0 ? shortfall.negate() : BigDecimal.ZERO);
-        out.put("externalAgreementNo", agreement.getExternalAgreementNo());
-        out.put("note", "mock bank confirmed early settlement");
-        return out;
+        return FinancingSettlement.bank(model(), settlementAmount, tradeInValue,
+                shortfall.signum() > 0 ? shortfall : BigDecimal.ZERO,
+                shortfall.signum() < 0 ? shortfall.negate() : BigDecimal.ZERO,
+                agreement.getExternalAgreementNo(), "mock bank confirmed early settlement");
     }
 }

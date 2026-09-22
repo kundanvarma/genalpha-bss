@@ -1,6 +1,26 @@
 package com.bss.devicecommerce.controller;
 
 import com.bss.devicecommerce.api.ApiConstants;
+import com.bss.devicecommerce.dto.DeviceAgreementRequest;
+import com.bss.devicecommerce.dto.DeviceAgreementView;
+import com.bss.devicecommerce.dto.DeviceFlagRequest;
+import com.bss.devicecommerce.dto.DeviceFlagView;
+import com.bss.devicecommerce.dto.EarlySettlementQuote;
+import com.bss.devicecommerce.dto.FinancingQuote;
+import com.bss.devicecommerce.dto.FinancingTerms;
+import com.bss.devicecommerce.dto.GradingRequest;
+import com.bss.devicecommerce.dto.ResidualRequest;
+import com.bss.devicecommerce.dto.SettleReceipt;
+import com.bss.devicecommerce.dto.SettleRequest;
+import com.bss.devicecommerce.dto.SwapReceipt;
+import com.bss.devicecommerce.dto.SwapRequest;
+import com.bss.devicecommerce.dto.TradeInQuoteRequest;
+import com.bss.devicecommerce.dto.TradeInResidualView;
+import com.bss.devicecommerce.dto.TradeInValuationView;
+import com.bss.devicecommerce.dto.UpgradeEligibility;
+import com.bss.devicecommerce.dto.WithdrawalCaseView;
+import com.bss.devicecommerce.dto.WithdrawalReceipt;
+import com.bss.devicecommerce.dto.WithdrawalRequest;
 import com.bss.devicecommerce.service.DeviceAgreementService;
 import com.bss.devicecommerce.service.TradeInService;
 import com.bss.devicecommerce.service.WithdrawalService;
@@ -16,7 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping(ApiConstants.BASE_PATH)
@@ -37,121 +56,121 @@ public class DeviceCommerceController {
 
     /** The checkout chooser: per-model monthly and total cost, before signing. */
     @PostMapping("/financingQuote")
-    public ResponseEntity<Map<String, Object>> financingQuote(@RequestBody Map<String, Object> terms) {
+    public ResponseEntity<FinancingQuote> financingQuote(@RequestBody FinancingTerms terms) {
         return ResponseEntity.ok(agreements.quote(terms));
     }
 
     @PostMapping("/deviceAgreement")
-    public ResponseEntity<Map<String, Object>> createAgreement(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = agreements.create(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<DeviceAgreementView> createAgreement(@RequestBody DeviceAgreementRequest dto) {
+        DeviceAgreementView created = agreements.create(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping("/deviceAgreement")
-    public ResponseEntity<List<Map<String, Object>>> listAgreements(
+    public ResponseEntity<List<DeviceAgreementView>> listAgreements(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
             @RequestParam(name = "status", required = false) String status) {
         return ResponseEntity.ok(agreements.findAll(relatedPartyId, status));
     }
 
     @GetMapping("/deviceAgreement/{id}")
-    public ResponseEntity<Map<String, Object>> agreementById(@PathVariable String id) {
+    public ResponseEntity<DeviceAgreementView> agreementById(@PathVariable String id) {
         return ResponseEntity.ok(agreements.findById(id));
     }
 
     @GetMapping("/deviceAgreement/{id}/upgradeEligibility")
-    public ResponseEntity<Map<String, Object>> upgradeEligibility(@PathVariable String id) {
+    public ResponseEntity<UpgradeEligibility> upgradeEligibility(@PathVariable String id) {
         return ResponseEntity.ok(agreements.eligibilityOf(id));
     }
 
     @GetMapping("/deviceAgreement/{id}/earlySettlementQuote")
-    public ResponseEntity<Map<String, Object>> earlySettlementQuote(@PathVariable String id) {
+    public ResponseEntity<EarlySettlementQuote> earlySettlementQuote(@PathVariable String id) {
         return ResponseEntity.ok(agreements.earlySettlementQuote(id));
     }
 
     /** Bill run / dunning feed: one instalment landed (staff/machine). */
     @PostMapping("/deviceAgreement/{id}/recordInstallment")
-    public ResponseEntity<Map<String, Object>> recordInstallment(@PathVariable String id) {
+    public ResponseEntity<DeviceAgreementView> recordInstallment(@PathVariable String id) {
         return ResponseEntity.ok(agreements.recordInstallment(id));
     }
 
     /** Early termination without a swap — the ETF path. */
     @PostMapping("/deviceAgreement/{id}/settle")
-    public ResponseEntity<Map<String, Object>> settle(@PathVariable String id,
-            @RequestBody(required = false) Map<String, Object> dto) {
-        return ResponseEntity.ok(agreements.settle(id, dto));
+    public ResponseEntity<SettleReceipt> settle(@PathVariable String id,
+            @RequestBody(required = false) SettleRequest dto) {
+        return ResponseEntity.ok(agreements.settle(id, dto == null ? SettleRequest.EMPTY : dto));
     }
 
     /** The financier's payout callback (machine face; mock drivers self-serve). */
     @PostMapping("/deviceAgreement/{id}/payoutWebhook")
-    public ResponseEntity<Map<String, Object>> payoutWebhook(@PathVariable String id) {
+    public ResponseEntity<DeviceAgreementView> payoutWebhook(@PathVariable String id) {
         return ResponseEntity.ok(agreements.payoutWebhook(id));
     }
 
     /** The upgrade/swap saga: eligibility, trade-in, model-specific settlement. */
     @PostMapping("/deviceAgreement/{id}/swap")
-    public ResponseEntity<Map<String, Object>> swap(@PathVariable String id,
-            @RequestBody(required = false) Map<String, Object> dto) {
-        return ResponseEntity.ok(agreements.swap(id, dto));
+    public ResponseEntity<SwapReceipt> swap(@PathVariable String id,
+            @RequestBody(required = false) SwapRequest dto) {
+        return ResponseEntity.ok(agreements.swap(id, dto == null ? SwapRequest.EMPTY : dto));
     }
 
     /* ---------- trade-in ---------- */
 
     @PostMapping("/tradeInValuation")
-    public ResponseEntity<Map<String, Object>> quoteTradeIn(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = tradeIns.quote(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<TradeInValuationView> quoteTradeIn(@RequestBody TradeInQuoteRequest dto) {
+        TradeInValuationView created = tradeIns.quote(dto);
+        return ResponseEntity.created(URI.create(created.href())).body(created);
     }
 
     @GetMapping("/tradeInValuation")
-    public ResponseEntity<List<Map<String, Object>>> listTradeIns(
+    public ResponseEntity<List<TradeInValuationView>> listTradeIns(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId,
             @RequestParam(name = "status", required = false) String status) {
         return ResponseEntity.ok(tradeIns.findAll(relatedPartyId, status));
     }
 
     @GetMapping("/tradeInValuation/{id}")
-    public ResponseEntity<Map<String, Object>> tradeInById(@PathVariable String id) {
+    public ResponseEntity<TradeInValuationView> tradeInById(@PathVariable String id) {
         return ResponseEntity.ok(tradeIns.findById(id));
     }
 
     @PostMapping("/tradeInValuation/{id}/accept")
-    public ResponseEntity<Map<String, Object>> acceptTradeIn(@PathVariable String id) {
+    public ResponseEntity<TradeInValuationView> acceptTradeIn(@PathVariable String id) {
         return ResponseEntity.ok(tradeIns.accept(id));
     }
 
     @PostMapping("/tradeInValuation/{id}/inTransit")
-    public ResponseEntity<Map<String, Object>> tradeInInTransit(@PathVariable String id) {
+    public ResponseEntity<TradeInValuationView> tradeInInTransit(@PathVariable String id) {
         return ResponseEntity.ok(tradeIns.inTransit(id));
     }
 
     /** The grading partner's verdict (staff/machine). */
     @PostMapping("/tradeInValuation/{id}/grading")
-    public ResponseEntity<Map<String, Object>> grade(@PathVariable String id,
-            @RequestBody Map<String, Object> dto) {
+    public ResponseEntity<TradeInValuationView> grade(@PathVariable String id,
+            @RequestBody GradingRequest dto) {
         return ResponseEntity.ok(tradeIns.grade(id, dto));
     }
 
     @PostMapping("/tradeInValuation/{id}/acceptRevaluation")
-    public ResponseEntity<Map<String, Object>> acceptRevaluation(@PathVariable String id) {
+    public ResponseEntity<TradeInValuationView> acceptRevaluation(@PathVariable String id) {
         return ResponseEntity.ok(tradeIns.acceptRevaluation(id));
     }
 
     @PostMapping("/tradeInValuation/{id}/rejectRevaluation")
-    public ResponseEntity<Map<String, Object>> rejectRevaluation(@PathVariable String id) {
+    public ResponseEntity<TradeInValuationView> rejectRevaluation(@PathVariable String id) {
         return ResponseEntity.ok(tradeIns.rejectRevaluation(id));
     }
 
     /* ---------- residual table (staff-curated) ---------- */
 
     @GetMapping("/tradeInResidual")
-    public ResponseEntity<List<Map<String, Object>>> residualTable(
+    public ResponseEntity<List<TradeInResidualView>> residualTable(
             @RequestParam(name = "deviceRef", required = false) String deviceRef) {
         return ResponseEntity.ok(tradeIns.residualTable(deviceRef));
     }
 
     @PostMapping("/tradeInResidual")
-    public ResponseEntity<Map<String, Object>> upsertResidual(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<TradeInResidualView> upsertResidual(@RequestBody ResidualRequest dto) {
         return ResponseEntity.ok(tradeIns.upsertResidual(dto));
     }
 
@@ -164,12 +183,12 @@ public class DeviceCommerceController {
     /* ---------- blacklist flag stub ---------- */
 
     @PostMapping("/deviceFlag")
-    public ResponseEntity<Map<String, Object>> flag(@RequestBody Map<String, Object> dto) {
+    public ResponseEntity<DeviceFlagView> flag(@RequestBody DeviceFlagRequest dto) {
         return ResponseEntity.ok(tradeIns.flag(dto));
     }
 
     @GetMapping("/deviceFlag")
-    public ResponseEntity<List<Map<String, Object>>> flags(
+    public ResponseEntity<List<DeviceFlagView>> flags(
             @RequestParam(name = "imei", required = false) String imei) {
         return ResponseEntity.ok(tradeIns.flagsOf(imei));
     }
@@ -177,19 +196,19 @@ public class DeviceCommerceController {
     /* ---------- withdrawal ---------- */
 
     @PostMapping("/withdrawalCase")
-    public ResponseEntity<Map<String, Object>> openWithdrawal(@RequestBody Map<String, Object> dto) {
-        Map<String, Object> created = withdrawals.open(dto);
-        return ResponseEntity.created(URI.create(String.valueOf(created.get("href")))).body(created);
+    public ResponseEntity<WithdrawalReceipt> openWithdrawal(@RequestBody WithdrawalRequest dto) {
+        WithdrawalReceipt created = withdrawals.open(dto);
+        return ResponseEntity.created(URI.create(created.withdrawal().href())).body(created);
     }
 
     @GetMapping("/withdrawalCase")
-    public ResponseEntity<List<Map<String, Object>>> listWithdrawals(
+    public ResponseEntity<List<WithdrawalCaseView>> listWithdrawals(
             @RequestParam(name = "relatedPartyId", required = false) String relatedPartyId) {
         return ResponseEntity.ok(withdrawals.findAll(relatedPartyId));
     }
 
     @GetMapping("/withdrawalCase/{id}")
-    public ResponseEntity<Map<String, Object>> withdrawalById(@PathVariable String id) {
+    public ResponseEntity<WithdrawalCaseView> withdrawalById(@PathVariable String id) {
         return ResponseEntity.ok(withdrawals.findById(id));
     }
 }
