@@ -46,7 +46,7 @@ for free — a thing that does not currently exist.
 
 Home: `services/campaign` (port 8108, `/tmf-api/campaignManagement/v4`). Collaborators:
 `communication` (TMF681 delivery), `insight` (segments/consent), `promotion` (TMF671
-offers), `event-hub` (TMF688 bus). Admin UI: `apps/admin-console/site/app.js`
+offers), `event-hub` (TMF688 bus). Admin UI: `apps/admin-console/site/` (one classic script per desk since 22 Sep)
 (Campaigns / Journeys tabs). Customer sees a read-only inbox
 (`apps/storefront/src/pages/Notifications.jsx`).
 
