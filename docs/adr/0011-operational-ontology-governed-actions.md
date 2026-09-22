@@ -24,11 +24,25 @@ follows.
   executes it, effects and events.
 - `check` evaluates and names every verdict in words, changing nothing.
   `execute` runs the mapped TM Forum capability **with the caller's own
-  token and channel** — the registry never lends a machine identity, except
-  one client that holds `policy:evaluate` and nothing else — and writes a
-  **decision receipt** (`DecisionRecordedEvent`) into the decision log.
+  token and channel** and writes a **decision receipt**
+  (`DecisionRecordedEvent`) into the decision log. The intent is that the
+  registry lends its own machine identity for policy evaluation and nothing
+  else. **Today it lends more:** an action whose `executes.as` is `registry`
+  (`issueCredit` under its threshold) runs with the registry's machine
+  client, and the same client files approval rows on the workforce desk;
+  that service account (`bss-ontology`) holds `policy:evaluate`,
+  `insight:read`, `inventory:read`, `billing:admin`, `workforce:use` and
+  `assurance:read` in the realm. The receipt names the human caller either
+  way. Follow-up: narrow the service account to exactly what `as: registry`
+  actions and approval filing need, per action.
 - A tenant overlay may add and may tighten; it may never remove a core
   precondition or change `executes`, `inputs`, `permissions`, `emits`.
+  **Today** the loader (`Registry.OVERLAY_MAY_REPLACE`) refuses those four
+  keys and appends preconditions as intended, but lets an overlay replace
+  `governance` and `policy` wholesale — so an overlay can also loosen
+  autonomy, approval or a threshold. Follow-up: merge those two keys
+  tighten-only (autonomy may only fall, approval may only be added,
+  thresholds may only drop).
 - The same definitions generate the MCP tools, the TypeScript SDK, the
   console's "What the BSS can do", the ? drawer's explanations and each
   component's `/.well-known/genalpha-component.json`.
@@ -55,3 +69,5 @@ actions end to end with receipts); `RegistryLoadTest` in CI.
 
 `docs/ontology-seam.md`, `docs/ontology-research.md`, ADR 0013 (receipts
 land in the decision log), ADR 0012.
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).

@@ -17,7 +17,15 @@ the repo and must not be precious.
   installed by one script (`ops/cloud/aws-demo/install.sh`).
 - **Caddy** in front with automatic HTTPS; the security group opens only
   22 (own IPs), 80 and 443 — Compose publishes many ports, the group is the
-  fence.
+  fence. A basic-auth gate on the staff hosts (`console.`, `csr.`, `biz.`)
+  exists but is **opt-in** (`DEMO_GATE_USER`/`DEMO_GATE_PASSWORD` at
+  install) and, so the apps' own API calls get through, is skipped for any
+  request carrying an `Authorization: Bearer` header — it stops a browser
+  landing on the page, not a caller who sends any bearer value. The shop
+  hosts are public by design. What actually holds the box is the security
+  group and each component's own token validation. Follow-up: gate the
+  page with a signed cookie instead of an Authorization-header exception,
+  and make the gate always-on for the staff hosts.
 - **One hostname per tenant** (`shop.`, `csr.`, `console.`, `biz.` under
   the tenant's domain; `*.taranga.no` A-record to the Elastic IP), so the
   gateway's hostname-to-tenant rule (ADR 0003) works unchanged; the PSP
@@ -50,3 +58,5 @@ the box is built; the deploy list in each arc's notes; review.
 `ops/cloud/aws-demo/README.md`, `docs/demo-script.md`,
 `docs/migration-plan.md` "Demo-safety rules", `README.md` Quickstart
 (Taranga row).
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).

@@ -49,16 +49,17 @@ ops/arch/ratchet.sh                                       # architecture ratchet
 - **No business logic in a front end.** Channels ask; the catalog's configurator prices, policy decides, the ontology governs.
 - **Seams for anything vendor-specific**, one adapter per vendor, a stand-in in the fleet, chosen per tenant in `tenants.yml`.
 - **AI proposes, a human decides.** Copilots return a card; Create is a click. Agents act only through registered ontology actions with a receipt.
-- **UI**: React with components under 300 lines for channels; no new vanilla-JS files; the vanilla consoles shrink desk by desk (see conventions).
+- **UI**: React with components under 300 lines for channels; no new vanilla-JS files; the vanilla consoles shrink desk by desk (see conventions). Vanilla consoles build DOM with `createElement`: true for admin-console (40 `innerHTML` uses remain); partner-console still renders with `innerHTML` in 14 places — a follow-up.
 - **Prices are positive; discounts are rules.** Laws are data a tenant cannot undercut.
 
 ## Security with teeth
 
 - **A request body is a record, never a raw map.** A record cannot carry a field it does not declare, so mass assignment is impossible by construction. The ratchet counts PATCH/PUT/POST handlers with a raw `Map` body; the count may only fall.
 - **Tenant, owner and state come from the token and the store, never from the body.** Row-level security is the wall; the service is the door.
-- **CI runs CodeQL and dependency review** (`.github/workflows/security.yml`); Dependabot keeps dependencies current. A finding blocks the merge.
+- **Tokens are validated in every component** (39 `SecurityConfig` copies), not at the gateway: the gateway stamps the tenant from the hostname and routes. A drift check across the copies is a follow-up.
+- **CI runs CodeQL and dependency review** (`.github/workflows/security.yml`); Dependabot keeps dependencies current. Only a high-severity dependency finding blocks the merge (`fail-on-severity: high`); CodeQL findings appear as code-scanning alerts and block nothing until branch protection requires them — a follow-up.
 - **Every component has a threat model** in `docs/threat-model/`; touching a trust boundary means updating it.
-- Secrets never enter the repo (pre-commit scan); PII is redacted before any model call; every model call is metered and logged.
+- Secrets never enter the repo — the secret gate (`ops/scan-secrets.sh`) runs as a pre-commit hook only on clones that ran `ops/install-hooks.sh`; CI has no secret scan yet (follow-up). PII redaction before a model call is the rule; today `AiGovernor` redacts only the ledger copy and the provider receives the prompt as written, and the `Redactor` knows email and phone only — redact-before-send is scheduled in the intelligence typing batch. Every model call is metered and logged.
 
 ## Discretion and safety
 

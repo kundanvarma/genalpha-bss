@@ -40,11 +40,23 @@ something the caller cannot forge.
 
 ## Enforced by
 
-RLS proofs in `mvn test` per component; `tenant_test.js` (second operator
-live, isolation proven in the browser); `PostgresMigrationTest` fails a table
-without RLS; the gateway `TenantHostFilter`.
+`tenant_test.js` (second operator live, isolation proven in the browser);
+the gateway `TenantHostFilter`; `RlsPolicyTest` in product-catalog (the
+policy proven as the `catalog_app` role, not the owner).
+
+**Honest status.** `PostgresMigrationTest` (ten components) counts the
+applied Flyway migrations and checks the entities validate; it does not
+fail a table that has no RLS policy. Only product-catalog tests its policy.
+No migration sets `FORCE ROW LEVEL SECURITY`, so a service that still
+connects as the table owner (no `DB_USERNAME` app role in Compose) is not
+subject to the policy at all — the second lock holds only where the
+restricted role is actually used. Follow-up: an RLS policy test per
+component, `FORCE ROW LEVEL SECURITY` on every tenant table, and a non-owner
+application role for every service.
 
 ## Related
 
 `docs/architecture.md` §2 (tenancy view), `README.md` "Multitenancy",
 `docs/engineering-conventions.md` §3, `infra/tenants/tenants.yml`.
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).

@@ -30,6 +30,14 @@ it off, and the 146 suites must run on a laptop with no API key.
   tenant and per deployment.
 - Prompts and contracts live in code with the component, versioned; no
   prompt in a front end; no prompt-only guardrails.
+- **Customer data before the model.** The rule is that PII is redacted
+  before any model call. **Today it is not:** `AiGovernor` sends the prompt
+  to the provider as written and redacts only the copy it keeps in the
+  ledger, and the `Redactor` knows email addresses and phone numbers only
+  (no names, national ids or addresses). What stands between customer data
+  and a remote model today is the per-tenant raw-exposure opt-in per use
+  case and the retention canary. Follow-up: redact before send, with a wider
+  redactor — scheduled in the intelligence typing batch.
 
 ## Consequences
 
@@ -43,10 +51,13 @@ it off, and the 146 suites must run on a laptop with no API key.
 
 Suites run with `AI_PROVIDER=stub` (`ops/run-all-suites.sh`); the AI
 control-plane suite (metered, budget fail-closed, kill-switch); #125 for
-governed actions; the AI audit page; review for prompt placement.
+governed actions; the AI audit page; review for prompt placement. No suite
+yet asserts what reaches the provider.
 
 ## Related
 
 `docs/ai-control-plane-plan.md`, `docs/agentic-workforce-plan.md`,
 `docs/contextual-help.md` (honest 403/429), `docs/launch-governance.md`
 (`ai-proposals`), `docs/engineering-conventions.md` §5.
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).

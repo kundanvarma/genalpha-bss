@@ -14,13 +14,19 @@ decide what a channel may see — forty times, forty ways.
 - All traffic enters through one Spring Cloud Gateway (`:8080`). Channels
   and agents never call a component directly.
 - **Tokens** are validated per tenant issuer (multi-issuer resource server,
-  per-tenant JWKS). Machine callers use the acting tenant's client.
+  per-tenant JWKS) — **in each component, not at the gateway.** The gateway
+  has no security dependency: it stamps the tenant and routes; every one of
+  the 39 components carries its own copy of `SecurityConfig` and validates
+  the token itself. Machine callers use the acting tenant's client.
+  Follow-up: a drift check across the 39 copies (or one shared starter).
 - **Tenant for guests** is stamped from the `Host` header as `X-Tenant-Id`
   at highest precedence; inbound copies of the header are stripped.
 - **`X-Channel`** is sent by every front end and forwarded downstream; the
   catalog enforces sellability per channel and ordering refuses what the
   channel cannot see. **`X-GenAlpha-Agent`** names the acting agent and is
-  receipted by the ontology.
+  receipted by the ontology; today it is self-declared — nothing at the
+  gateway or in a suite validates it (follow-up: bind it to the agent
+  registry and check it).
 - **Rate limits** run in two rings (per-partner buckets for dealers, a
   fleet-wide ceiling for everyone) behind a `RateLimitStore` seam; Redis
   when shared, in-memory otherwise; an unreachable Redis fails open.
@@ -42,7 +48,8 @@ decide what a channel may see — forty times, forty ways.
 
 ## Enforced by
 
-`channel_availability_test.js` (#118); the browse-cache suite (cache HIT,
+`channel_availability_test.js` (#118 — it tests `X-Channel`; no suite
+covers `X-GenAlpha-Agent`); the browse-cache suite (cache HIT,
 tenant isolation, authenticated browse not cached); `hardening_test.js`
 (#57, rate-limit resurrection); `ontology_test.js` (#125, gateway routes).
 
@@ -51,3 +58,5 @@ tenant isolation, authenticated browse not cached); `hardening_test.js`
 `docs/architecture.md` §1 and "The browse cache is anonymous-only",
 `docs/browse-cache-plan.md`, `docs/hardening.md`, `docs/launch-governance.md`
 "Channels", `docs/engineering-conventions.md` §4.
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).

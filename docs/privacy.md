@@ -87,9 +87,25 @@ region-agnostic), Kafka MirrorMaker or a managed equivalent — the
 runbook lives in [hardening.md](hardening.md). Drill on a schedule; an
 untested region is an untested backup at continental scale.
 
+## What reaches an AI model today — stated plainly
+
+The rule is that personal data is redacted before any model call. Today
+it is not: the intelligence component's `AiGovernor` sends the prompt to
+the provider as written and redacts only the copy it stores in the AI
+ledger, and its `Redactor` recognises email addresses and phone numbers
+only — not names, national ids or addresses. What stands between a
+customer's data and a remote model today is the per-tenant raw-exposure
+opt-in per use case (a use case that sends raw customer data refuses
+unless the tenant enabled it) and the stub provider in every suite. No
+retention sweep deletes AI ledger rows, so stored prompts are kept until
+someone removes them, and neither `ai_audit` nor the decision log is yet
+a category in the passport or the erase fan-out. Redact-before-send with a wider redactor is
+scheduled in the intelligence typing batch.
+
 ## Still on the ledger
 
 Third-party penetration test; GDPR records-of-processing (Art. 30
 register, an operator document); DPIA templates; per-tenant retention in
 the registry; consent-lifecycle UI surfaces beyond the existing DNC/
-marketing-consent seams.
+marketing-consent seams; redaction before the model call and the AI
+ledger in the passport and erasure (see above).

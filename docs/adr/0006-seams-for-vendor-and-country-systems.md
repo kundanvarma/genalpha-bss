@@ -22,7 +22,17 @@ Anything vendor- or country-specific sits behind a **seam** with one shape:
    `mock-hss`, `mock-sonata`, `mock-freg`) so every leg is provable offline.
 4. **Selection per tenant** in `infra/tenants/tenants.yml` (`ocs-provider`,
    `ocs-base-url`, a `secret_ref` naming an env var, never a key), with a
-   deployment default so an unbound tenant behaves as before.
+   deployment default so an unbound tenant behaves as before. **Today that
+   is intent, not fact:** most credential keys hold the value itself as a
+   `${ENV:default}` placeholder (`ocs-password`, `esp-api-key`,
+   `social-access-token`, `bank-token`, `ai-api-key`, with dev defaults such
+   as `bss-secret` committed); only `whatsapp-token-ref` is a reference. Five
+   seams — PSP, national registry, carrier, field service, CMS — are bound by
+   DB rows written over REST (`base_url` + `secret_ref`), so a binding can be
+   repointed by an API call under the right role, not only by a file change.
+   Follow-up: `*-ref` keys throughout, a secret scan that refuses any
+   `*-password`/`*-token`/`*-key` value that is not a `${…}` reference, and
+   a receipt on every seam-binding write.
 5. **Fail soft**: a quiet vendor never blocks the customer's action; the gap
    is logged and reconciled later (an unreachable OCS never blocks
    activation; a dead legacy catalog never breaks the native list).
@@ -46,10 +56,13 @@ degrades.
 Every seam has a `mock-*` container and a suite that runs against it
 (#123 SigScale OCS, #124 entitlement, #129 equipment, #112 field service,
 `norway_rails_test.js`); the suite asserts the action completes with the
-stand-in down where fail-soft is the contract.
+stand-in down where fail-soft is the contract. Nothing yet refuses a
+literal credential in `tenants.yml`.
 
 ## Related
 
 `docs/ocs-seam.md`, `docs/equipment-seam.md`, `docs/entitlement-seam.md`,
 `docs/field-service-seam.md`, `docs/architecture.md` "Boundary notes",
 `docs/engineering-conventions.md` §6.
+
+Corrected 2026-09-22 after the threat model (docs/threat-model/README.md).
